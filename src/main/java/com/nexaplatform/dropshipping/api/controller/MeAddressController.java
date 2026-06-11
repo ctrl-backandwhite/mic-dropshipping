@@ -3,7 +3,8 @@ package com.nexaplatform.dropshipping.api.controller;
 import com.nexaplatform.dropshipping.api.MeAddressApi;
 import com.nexaplatform.dropshipping.api.dto.in.AddressDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.AddressDtoOut;
-import com.nexaplatform.dropshipping.application.service.MeAddressService;
+import com.nexaplatform.dropshipping.api.mapper.MeAddressDtoMapper;
+import com.nexaplatform.dropshipping.application.usecase.UserAddressUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,34 +17,41 @@ import java.util.UUID;
 
 /**
  * Authenticated user's addresses controller. Pure implementation of
- * {@link MeAddressApi}: no business logic and no manual mapping — delegates to
- * {@link MeAddressService} and wraps the result in a {@link ResponseEntity}.
+ * {@link MeAddressApi}: no business logic. Each method maps the DTO to the
+ * domain model, delegates to {@link UserAddressUseCase} (scoped to the
+ * authenticated user) and maps the result back to a {@link AddressDtoOut}.
  */
 @RestController
 @RequestMapping("/api/me/addresses")
 @RequiredArgsConstructor
 public class MeAddressController implements MeAddressApi {
 
-    private final MeAddressService service;
+    private final MeAddressDtoMapper mapper;
+    private final UserAddressUseCase useCase;
 
     @Override
     public ResponseEntity<List<AddressDtoOut>> list(Authentication auth) {
-        return new ResponseEntity<>(service.list(UUID.fromString(auth.getName())), HttpStatus.OK);
+        return new ResponseEntity<>(
+                mapper.toDtoOutList(useCase.findAll(UUID.fromString(auth.getName()))), HttpStatus.OK);
     }
 
     @Override
     public ResponseEntity<AddressDtoOut> create(Authentication auth, AddressDtoIn req) {
-        return new ResponseEntity<>(service.create(UUID.fromString(auth.getName()), req), HttpStatus.CREATED);
+        return new ResponseEntity<>(
+                mapper.toDtoOut(useCase.save(UUID.fromString(auth.getName()), mapper.toDomain(req))),
+                HttpStatus.CREATED);
     }
 
     @Override
     public ResponseEntity<AddressDtoOut> update(Authentication auth, UUID id, AddressDtoIn req) {
-        return new ResponseEntity<>(service.update(UUID.fromString(auth.getName()), id, req), HttpStatus.OK);
+        return new ResponseEntity<>(
+                mapper.toDtoOut(useCase.update(UUID.fromString(auth.getName()), id, mapper.toDomain(req))),
+                HttpStatus.OK);
     }
 
     @Override
     public ResponseEntity<Void> delete(Authentication auth, UUID id) {
-        service.delete(UUID.fromString(auth.getName()), id);
+        useCase.delete(UUID.fromString(auth.getName()), id);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 }

@@ -77,9 +77,19 @@ public class WebhookDispatcherService {
      */
     @Transactional
     public void publishTest(WebhookSubscriptionEntity subscription) {
+        publishTest(subscription.getId());
+    }
+
+    /**
+     * Id-based overload used by the hexagonal webhook use case so it can dispatch
+     * a test without leaking JPA entities into the application layer. Fires the
+     * same synthetic {@code test.ping} event as {@link #publishTest(WebhookSubscriptionEntity)}.
+     */
+    @Transactional
+    public void publishTest(UUID subscriptionId) {
         publish("test.ping", "test-" + UUID.randomUUID(), Map.of(
                 "message", "NX036 webhook test event",
-                "subscriptionId", subscription.getId().toString(),
+                "subscriptionId", subscriptionId.toString(),
                 "at", Instant.now().toString()));
     }
 

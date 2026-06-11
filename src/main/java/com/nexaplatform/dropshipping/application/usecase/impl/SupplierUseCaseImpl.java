@@ -1,11 +1,9 @@
-package com.nexaplatform.dropshipping.application.service;
+package com.nexaplatform.dropshipping.application.usecase.impl;
 
-import com.nexaplatform.dropshipping.api.dto.out.AdminSupplierDtoOut;
-import com.nexaplatform.dropshipping.api.dto.out.AdminSupplierToggleDtoOut;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
-import com.nexaplatform.dropshipping.api.mapper.AdminSupplierMapper;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierEntity;
-import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierRepository;
+import com.nexaplatform.dropshipping.application.usecase.SupplierUseCase;
+import com.nexaplatform.dropshipping.domain.model.Supplier;
+import com.nexaplatform.dropshipping.domain.repository.SupplierRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -17,28 +15,28 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Use-case service for the Admin Suppliers endpoints. Holds all logic that used
- * to
- * live inside {@code AdminSupplierController}: listing with cached product
- * counts and
+ * Admin Suppliers use case. Operates on the {@link Supplier} model and delegates
+ * persistence to the domain port. Holds the logic that used to live in
+ * {@code AdminSupplierService}: listing with cached product counts and
  * rating-derived KPIs, plus the verified / trustPass toggles.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class AdminSupplierService {
+public class SupplierUseCaseImpl implements SupplierUseCase {
 
     private final SupplierRepository supplierRepository;
-    private final AdminSupplierMapper adminSupplierMapper;
 
     @PersistenceContext
     private EntityManager em;
 
+    @Override
     @Transactional(readOnly = true)
-    public List<AdminSupplierDtoOut> list() {
+    public List<Supplier> findAll() {
         Map<UUID, Long> productCount = productCountBySupplier();
         return supplierRepository.findAll().stream()
                 .map(s -> {
@@ -48,9 +46,12 @@ public class AdminSupplierService {
                     double defectRate = Math.round((5.0 - r) * 80) / 100.0; // r=5.0 -> 0.0, r=4.0 -> 0.8
                     int responseHours = r >= 4.7 ? 4 : (r >= 4.3 ? 12 : 24);
                     int leadTimeDays = r >= 4.7 ? 3 : (r >= 4.3 ? 7 : 14);
-                    return adminSupplierMapper.toView(s,
-                            productCount.getOrDefault(s.getId(), 0L),
-                            onTimePct, defectRate, responseHours, leadTimeDays);
+                    return s
+                            .withProductCount(productCount.getOrDefault(s.getId(), 0L))
+                            .withOnTimePct(onTimePct)
+                            .withDefectRate(defectRate)
+                            .withResponseHours(responseHours)
+                            .withLeadTimeDays(leadTimeDays);
                 })
                 .toList();
     }
@@ -59,22 +60,28 @@ public class AdminSupplierService {
      * DROP-585: alterna el flag {@code verified} del proveedor desde el panel
      * admin.
      */
+    @Override
     @Transactional
-    public AdminSupplierToggleDtoOut toggleVerified(UUID id) {
-        SupplierEntity s = supplierRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Supplier"));
+    public Supplier toggleVerified(UUID id) {
+        Supplier s = getById(id);
         s.setVerified(!s.isVerified());
-        supplierRepository.save(s);
-        return adminSupplierMapper.toVerifiedToggle(s);
+        return supplierRepository.update(s);
     }
 
+    @Override
     @Transactional
-    public AdminSupplierToggleDtoOut toggleTrustPass(UUID id) {
-        SupplierEntity s = supplierRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Supplier"));
+    public Supplier toggleTrustPass(UUID id) {
+        Supplier s = getById(id);
         s.setTrustPass(!s.isTrustPass());
-        supplierRepository.save(s);
-        return adminSupplierMapper.toTrustPassToggle(s);
+        return supplierRepository.update(s);
+    }
+
+    private Supplier getById(UUID id) {
+        Supplier model = supplierRepository.getById(id);
+        if (Objects.isNull(model)) {
+            throw new NotFoundException("Supplier");
+        }
+        return model;
     }
 
     private Map<UUID, Long> productCountBySupplier() {

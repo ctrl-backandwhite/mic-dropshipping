@@ -2,51 +2,50 @@ package com.nexaplatform.dropshipping.api.mapper;
 
 import com.nexaplatform.dropshipping.api.dto.out.AdminSupplierDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminSupplierToggleDtoOut;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierEntity;
+import com.nexaplatform.dropshipping.domain.model.Supplier;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+
+import java.util.List;
 
 /**
- * MapStruct mapper for the Admin Suppliers API boundary.
- * Assembles the supplier view from the entity plus an externally computed product
- * count and derived performance KPIs.
- * Combined with Lombok: entity getters and DtoOut builders are Lombok-generated.
+ * API-layer mapper for the Admin Suppliers boundary: translates the
+ * {@link Supplier} domain model into the transport DTOs. Injected in the
+ * controller. The model already carries the product count and rating-derived
+ * KPIs (filled by the use case); the toggle outputs expose only the flipped flag
+ * so each endpoint serializes exactly {@code {id, verified}} or {@code {id, trustPass}}.
  */
 @Mapper(componentModel = "spring")
 public interface AdminSupplierMapper {
 
-    /**
-     * Assembles the admin supplier view. Product count and derived KPIs are computed
-     * by the service (aggregate query + rating-based formula) and supplied here.
-     */
-    default AdminSupplierDtoOut toView(SupplierEntity s, long productCount,
-                                       long onTimePct, double defectRate,
-                                       int responseHours, int leadTimeDays) {
-        return AdminSupplierDtoOut.builder()
-                .id(s.getId())
-                .externalId(s.getExternalId())
-                .source(s.getSource())
-                .name(s.getName())
-                .nameZh(s.getNameZh())
-                .country(s.getCountry())
-                .city(s.getCity())
-                .rating(s.getRating())
-                .yearsActive(s.getYearsActive())
-                .verified(s.isVerified())
-                .trustPass(s.isTrustPass())
-                .profileUrl(s.getProfileUrl())
-                .productCount(productCount)
-                .onTimePct(onTimePct)
-                .defectRate(defectRate)
-                .responseHours(responseHours)
-                .leadTimeDays(leadTimeDays)
-                .build();
-    }
+    @Mapping(target = "id", source = "id")
+    @Mapping(target = "externalId", source = "externalId")
+    @Mapping(target = "source", source = "source")
+    @Mapping(target = "name", source = "name")
+    @Mapping(target = "nameZh", source = "nameZh")
+    @Mapping(target = "country", source = "country")
+    @Mapping(target = "city", source = "city")
+    @Mapping(target = "rating", source = "rating")
+    @Mapping(target = "yearsActive", source = "yearsActive")
+    @Mapping(target = "verified", source = "verified")
+    @Mapping(target = "trustPass", source = "trustPass")
+    @Mapping(target = "profileUrl", source = "profileUrl")
+    @Mapping(target = "productCount", source = "productCount")
+    @Mapping(target = "onTimePct", source = "onTimePct")
+    @Mapping(target = "defectRate", source = "defectRate")
+    @Mapping(target = "responseHours", source = "responseHours")
+    @Mapping(target = "leadTimeDays", source = "leadTimeDays")
+    AdminSupplierDtoOut toDtoOut(Supplier model);
 
-    default AdminSupplierToggleDtoOut toVerifiedToggle(SupplierEntity s) {
-        return AdminSupplierToggleDtoOut.builder().id(s.getId()).verified(s.isVerified()).build();
-    }
+    List<AdminSupplierDtoOut> toDtoOutList(List<Supplier> models);
 
-    default AdminSupplierToggleDtoOut toTrustPassToggle(SupplierEntity s) {
-        return AdminSupplierToggleDtoOut.builder().id(s.getId()).trustPass(s.isTrustPass()).build();
-    }
+    @Mapping(target = "id", source = "id")
+    @Mapping(target = "verified", source = "verified")
+    @Mapping(target = "trustPass", ignore = true)
+    AdminSupplierToggleDtoOut toVerifiedToggle(Supplier model);
+
+    @Mapping(target = "id", source = "id")
+    @Mapping(target = "verified", ignore = true)
+    @Mapping(target = "trustPass", source = "trustPass")
+    AdminSupplierToggleDtoOut toTrustPassToggle(Supplier model);
 }

@@ -3,7 +3,8 @@ package com.nexaplatform.dropshipping.api.controller;
 import com.nexaplatform.dropshipping.api.AdminSupplierApi;
 import com.nexaplatform.dropshipping.api.dto.out.AdminSupplierDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminSupplierToggleDtoOut;
-import com.nexaplatform.dropshipping.application.service.AdminSupplierService;
+import com.nexaplatform.dropshipping.api.mapper.AdminSupplierMapper;
+import com.nexaplatform.dropshipping.application.usecase.SupplierUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -12,16 +13,22 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Admin Suppliers controller. Pure implementation of {@link AdminSupplierApi}:
+ * injects the {@link AdminSupplierMapper} + {@link SupplierUseCase}; maps the
+ * domain model to DtoOut; no business logic, no manual mapping.
+ */
 @RestController
 @RequestMapping("/api/admin/catalog/suppliers")
 @RequiredArgsConstructor
 public class AdminSupplierController implements AdminSupplierApi {
 
-    private final AdminSupplierService adminSupplierService;
+    private final AdminSupplierMapper mapper;
+    private final SupplierUseCase useCase;
 
     @Override
     public ResponseEntity<List<AdminSupplierDtoOut>> list() {
-        return ResponseEntity.ok(adminSupplierService.list());
+        return ResponseEntity.ok(mapper.toDtoOutList(useCase.findAll()));
     }
 
     /**
@@ -30,11 +37,11 @@ public class AdminSupplierController implements AdminSupplierApi {
      */
     @Override
     public ResponseEntity<AdminSupplierToggleDtoOut> toggleVerified(UUID id) {
-        return ResponseEntity.ok(adminSupplierService.toggleVerified(id));
+        return ResponseEntity.ok(mapper.toVerifiedToggle(useCase.toggleVerified(id)));
     }
 
     @Override
     public ResponseEntity<AdminSupplierToggleDtoOut> toggleTrustPass(UUID id) {
-        return ResponseEntity.ok(adminSupplierService.toggleTrustPass(id));
+        return ResponseEntity.ok(mapper.toTrustPassToggle(useCase.toggleTrustPass(id)));
     }
 }
