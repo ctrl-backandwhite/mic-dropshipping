@@ -48,7 +48,7 @@ public class DemoOperationsSeedRunner {
     private final ShippingZoneRepository zoneRepository;
     private final ShippingRateRepository rateRepository;
     private final ProductHistoryRepository historyRepository;
-    private final com.nexaplatform.dropshipping.application.service.CatalogService catalogService;
+    private final com.nexaplatform.dropshipping.application.usecase.CatalogUseCase catalogService;
     private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.AgentProfileRepository agentProfileRepo;
     private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.AcademyCourseRepository courseRepo;
     private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.MentorProfileRepository mentorProfileRepo;

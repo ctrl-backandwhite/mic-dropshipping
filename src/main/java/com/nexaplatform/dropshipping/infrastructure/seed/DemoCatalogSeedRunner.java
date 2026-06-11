@@ -1,6 +1,5 @@
 package com.nexaplatform.dropshipping.infrastructure.seed;
 
-import com.nexaplatform.dropshipping.api.dto.AuthDtos.CreateAdminUserRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestPriceTier;
@@ -9,10 +8,11 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariant;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariantOption;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariantValue;
-import com.nexaplatform.dropshipping.application.service.AuthService;
-import com.nexaplatform.dropshipping.application.service.CatalogService;
+import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
+import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.domain.enums.UserRole;
+import com.nexaplatform.dropshipping.domain.model.User;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
@@ -47,9 +47,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 @RequiredArgsConstructor
 public class DemoCatalogSeedRunner {
 
-    private final CatalogService catalogService;
+    private final CatalogUseCase catalogService;
     private final ProductRepository productRepository;
-    private final AuthService authService;
+    private final UserUseCase userUseCase;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
@@ -82,7 +82,8 @@ public class DemoCatalogSeedRunner {
     private void ensureUser(String email, String password, UserRole role, String displayName) {
         if (userRepository.existsByEmail(email)) return;
         try {
-            authService.createAdminUser(new CreateAdminUserRequest(email, password, role.name(), displayName));
+            userUseCase.createAdminUser(
+                    User.builder().email(email).displayName(displayName).build(), password, role.name());
             log.info("Demo user created: {} ({})", email, role);
         } catch (Exception e) {
             log.warn("Could not create demo user {} via service: {} — falling back to direct save", email, e.getMessage());

@@ -1,6 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.security;
 
-import com.nexaplatform.dropshipping.application.service.AuthService;
+import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.security.authentication.event.AbstractAuthenticationFailureEvent;
@@ -11,13 +11,13 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class LoginAuditListener {
 
-    private final AuthService authService;
+    private final UserUseCase userUseCase;
 
     @EventListener
     public void onSuccess(AuthenticationSuccessEvent event) {
         String name = event.getAuthentication().getName();
         if (name != null) {
-            authService.recordSuccessfulLogin(name);
+            userUseCase.recordSuccessfulLogin(name);
         }
     }
 
@@ -25,7 +25,7 @@ public class LoginAuditListener {
     public void onFailure(AbstractAuthenticationFailureEvent event) {
         Object principal = event.getAuthentication().getPrincipal();
         if (principal instanceof String s) {
-            authService.recordFailedLogin(s);
+            userUseCase.recordFailedLogin(s);
         }
     }
 }

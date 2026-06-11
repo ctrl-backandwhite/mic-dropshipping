@@ -3,11 +3,11 @@ package com.nexaplatform.dropshipping.application;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
-import com.nexaplatform.dropshipping.application.service.CatalogService;
+import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontMapper;
+import com.nexaplatform.dropshipping.application.usecase.impl.CatalogUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierEntity;
-import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductImageRepository;
@@ -30,24 +30,31 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+/**
+ * Mockito unit test for {@link CatalogUseCaseImpl}, mirroring the deleted
+ * {@code CatalogServiceTest}. Mocks the domain port and the legacy collaborators
+ * used by the ingest/read flows.
+ */
 @ExtendWith(MockitoExtension.class)
-class CatalogServiceTest {
+class CatalogUseCaseImplTest {
 
-    @Mock ProductRepository productRepository;
+    @Mock com.nexaplatform.dropshipping.domain.repository.ProductRepository productRepository;
     @Mock SupplierRepository supplierRepository;
     @Mock CategoryRepository categoryRepository;
     @Mock ProductPriceTierRepository priceTierRepository;
     @Mock ProductImageRepository imageRepository;
+    @Mock ProductRepository productJpaRepository;
     @Mock ProductMapper productMapper;
     @Mock CatalogStorefrontMapper catalogStorefrontMapper;
     @Mock KafkaTemplate<String, Object> kafkaTemplate;
 
-    CatalogService catalogService;
+    CatalogUseCaseImpl useCase;
 
     @BeforeEach
     void setup() {
-        catalogService = new CatalogService(productRepository, supplierRepository, categoryRepository,
-                priceTierRepository, imageRepository, productMapper, catalogStorefrontMapper, kafkaTemplate);
+        useCase = new CatalogUseCaseImpl(productRepository, supplierRepository, categoryRepository,
+                priceTierRepository, imageRepository, productJpaRepository, productMapper,
+                catalogStorefrontMapper, kafkaTemplate);
     }
 
     @Test
@@ -59,7 +66,7 @@ class CatalogServiceTest {
             return s;
         });
 
-        SupplierEntity s = catalogService.upsertSupplier(new IngestSupplierRequest(
+        SupplierEntity s = useCase.upsertSupplier(new IngestSupplierRequest(
                 "1688", "S1", "Acme", "艾克米", "CN", "Yiwu",
                 new BigDecimal("4.7"), 5, true, true, null));
 
@@ -74,8 +81,8 @@ class CatalogServiceTest {
                 .source("1688").externalId("OFFER-1").status(ProductStatus.DRAFT)
                 .titleZh("Old title").slug("old-slug-offer-1").moq(1).build();
         existing.setId(UUID.randomUUID());
-        when(productRepository.findBySourceAndExternalId("1688", "OFFER-1")).thenReturn(Optional.of(existing));
-        when(productRepository.save(any(ProductEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(productJpaRepository.findBySourceAndExternalId("1688", "OFFER-1")).thenReturn(Optional.of(existing));
+        when(productJpaRepository.save(any(ProductEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
         IngestProductRequest req = new IngestProductRequest(
                 "1688", "OFFER-1", "Nuevo título",
@@ -86,7 +93,7 @@ class CatalogServiceTest {
                 List.of(new IngestImage("https://cbu01.alicdn.com/img.jpg", 0, "GALLERY")),
                 null, null, null);
 
-        ProductEntity saved = catalogService.upsertProduct(req);
+        ProductEntity saved = useCase.upsertProduct(req);
         assertThat(saved.getTitleZh()).isEqualTo("Nuevo título");
         assertThat(saved.getMoq()).isEqualTo(2);
         assertThat(saved.getImages()).hasSize(1);
@@ -101,7 +108,7 @@ class CatalogServiceTest {
         when(imageRepository.findByProductIdOrderByPositionAsc(id)).thenReturn(List.of());
         when(catalogStorefrontMapper.toImageDtos(List.of())).thenReturn(List.of());
 
-        assertThat(catalogService.listProductImages(id)).isEmpty();
+        assertThat(useCase.listProductImages(id)).isEmpty();
     }
 
     @Test
@@ -110,7 +117,7 @@ class CatalogServiceTest {
         when(priceTierRepository.findByProductIdOrderByMinQtyAsc(id)).thenReturn(List.of());
         when(catalogStorefrontMapper.toPriceTierDtos(List.of())).thenReturn(List.of());
 
-        assertThat(catalogService.listProductPriceTiers(id)).isEmpty();
+        assertThat(useCase.listProductPriceTiers(id)).isEmpty();
     }
 
     @Test
@@ -121,7 +128,7 @@ class CatalogServiceTest {
                 .repurchaseRate(new BigDecimal("30"))
                 .reviewCount(100)
                 .build();
-        BigDecimal score = catalogService.computeTrendScore(p);
+        BigDecimal score = useCase.computeTrendScore(p);
         assertThat(score).isGreaterThan(BigDecimal.ZERO).isLessThanOrEqualTo(BigDecimal.ONE);
     }
 }

@@ -1,6 +1,6 @@
 package com.nexaplatform.dropshipping.api;
 
-import com.nexaplatform.dropshipping.api.dto.AuthDtos.CreateAdminUserRequest;
+import com.nexaplatform.dropshipping.api.dto.in.CreateAdminUserDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.AdminUserCreatedDtoOut;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -21,5 +21,5 @@ public interface AdminUserApi {
     @Operation(summary = "Create an admin user")
     @ApiResponse(responseCode = "201", description = "Admin user created")
     @PostMapping
-    ResponseEntity<AdminUserCreatedDtoOut> create(@Valid @RequestBody CreateAdminUserRequest req);
+    ResponseEntity<AdminUserCreatedDtoOut> create(@Valid @RequestBody CreateAdminUserDtoIn req);
 }

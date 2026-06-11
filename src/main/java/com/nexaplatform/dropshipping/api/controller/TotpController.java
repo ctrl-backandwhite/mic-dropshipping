@@ -7,7 +7,8 @@ import com.nexaplatform.dropshipping.api.dto.out.TotpBackupCodesDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.TotpEnableDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.TotpSetupDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.TotpStatusDtoOut;
-import com.nexaplatform.dropshipping.application.service.TotpService;
+import com.nexaplatform.dropshipping.api.mapper.TotpDtoMapper;
+import com.nexaplatform.dropshipping.application.usecase.TotpUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,40 +20,47 @@ import java.util.UUID;
 
 /**
  * TOTP two-factor authentication controller. Pure implementation of
- * {@link TotpApi}: no business logic and no manual mapping — delegates to
- * {@link TotpService} and wraps the result in a {@link ResponseEntity}.
+ * {@link TotpApi}: injects the {@link TotpDtoMapper} + {@link TotpUseCase};
+ * delegates each operation and maps the result to the DtoOut. No business logic,
+ * no manual mapping.
  */
 @RestController
 @RequestMapping("/api/me/2fa")
 @RequiredArgsConstructor
 public class TotpController implements TotpApi {
 
-    private final TotpService totp;
+    private final TotpDtoMapper mapper;
+    private final TotpUseCase useCase;
 
     @Override
     public ResponseEntity<TotpSetupDtoOut> setup(Authentication auth) {
-        return new ResponseEntity<>(totp.setupDto(UUID.fromString(auth.getName())), HttpStatus.OK);
+        return new ResponseEntity<>(mapper.toSetupDtoOut(useCase.setup(UUID.fromString(auth.getName()))),
+                HttpStatus.OK);
     }
 
     @Override
     public ResponseEntity<TotpEnableDtoOut> verifyAndEnable(Authentication auth, TotpVerifyDtoIn req) {
-        return new ResponseEntity<>(totp.verifyAndEnableDto(UUID.fromString(auth.getName()), req.getOtp()),
+        return new ResponseEntity<>(
+                mapper.toEnableDtoOut(useCase.verifyAndEnable(UUID.fromString(auth.getName()), req.getOtp())),
                 HttpStatus.OK);
     }
 
     @Override
     public ResponseEntity<Void> disable(Authentication auth, TotpDisableDtoIn req) {
-        totp.disableWithPassword(UUID.fromString(auth.getName()), req.getPassword());
+        useCase.disableWithPassword(UUID.fromString(auth.getName()), req.getPassword());
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
     @Override
     public ResponseEntity<TotpBackupCodesDtoOut> regenerate(Authentication auth) {
-        return new ResponseEntity<>(totp.regenerateBackupCodesDto(UUID.fromString(auth.getName())), HttpStatus.OK);
+        return new ResponseEntity<>(
+                mapper.toBackupCodesDtoOut(useCase.regenerateBackupCodes(UUID.fromString(auth.getName()))),
+                HttpStatus.OK);
     }
 
     @Override
     public ResponseEntity<TotpStatusDtoOut> status(Authentication auth) {
-        return new ResponseEntity<>(totp.status(UUID.fromString(auth.getName())), HttpStatus.OK);
+        return new ResponseEntity<>(mapper.toStatusDtoOut(useCase.isEnabled(UUID.fromString(auth.getName()))),
+                HttpStatus.OK);
     }
 }

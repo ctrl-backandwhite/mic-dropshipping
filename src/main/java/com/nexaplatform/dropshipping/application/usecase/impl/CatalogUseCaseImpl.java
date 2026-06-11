@@ -1,4 +1,4 @@
-package com.nexaplatform.dropshipping.application.service;
+package com.nexaplatform.dropshipping.application.usecase.impl;
 
 import com.github.slugify.Slugify;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
@@ -7,13 +7,17 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariantOption;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
+import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
+import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontMapper;
-import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductImageRepository;
+import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
+import com.nexaplatform.dropshipping.domain.model.Product;
+import com.nexaplatform.dropshipping.domain.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.messaging.ImageMirrorEvent;
 import com.nexaplatform.dropshipping.infrastructure.messaging.NexaTopics;
 import com.nexaplatform.dropshipping.infrastructure.messaging.ProductIngestedEvent;
@@ -28,29 +32,45 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantOp
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductImageRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
-import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRICING_AMOUNT;
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_DETAIL;
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_SUMMARY;
+
+/**
+ * Catalog use case. Holds the logic that used to live in {@code CatalogService}
+ * and the catalog controllers: supplier/category/product ingest, admin listing
+ * (paging + status tolerance), the PDP/summary read projections (priced through
+ * {@link ProductMapper}) and the admin mutations (status, quick-edit, duplicate).
+ * Mutations go through the {@link ProductRepository} domain port operating on the
+ * {@link Product} model; the legacy collaborators are kept for the ingest upsert
+ * flow (managed supplier/category, separate price-tier table, Kafka events) and
+ * the live-pricing read projections.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class CatalogService {
+public class CatalogUseCaseImpl implements CatalogUseCase {
 
     private static final Slugify SLUG = Slugify.builder().lowerCase(true).build();
 
@@ -59,12 +79,14 @@ public class CatalogService {
     private final CategoryRepository categoryRepository;
     private final ProductPriceTierRepository priceTierRepository;
     private final ProductImageRepository imageRepository;
+    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository productJpaRepository;
     private final ProductMapper productMapper;
     private final CatalogStorefrontMapper catalogStorefrontMapper;
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
     /* ============ Suppliers ============ */
 
+    @Override
     @Transactional
     public SupplierEntity upsertSupplier(IngestSupplierRequest req) {
         SupplierEntity entity = supplierRepository.findBySourceAndExternalId(req.source(), req.externalId())
@@ -86,20 +108,16 @@ public class CatalogService {
 
     /* ============ Categories ============ */
 
-    /**
-     * Admin variant of {@link #upsertCategory(IngestCategoryRequest)} that rejects
-     * a duplicate slug with a 409 before creating a brand-new category. Moved out of
-     * {@code AdminCatalogController} so the controller carries no business logic.
-     */
+    @Override
     @Transactional
     public CategoryEntity createCategoryRejectingDuplicateSlug(IngestCategoryRequest req) {
         if (categoryRepository.findBySlug(req.slug()).isPresent()) {
-            throw new com.nexaplatform.dropshipping.api.exception.BusinessException(
-                    "Ya existe una categoría con slug \"" + req.slug() + "\"");
+            throw new BusinessException("Ya existe una categoría con slug \"" + req.slug() + "\"");
         }
         return upsertCategory(req);
     }
 
+    @Override
     @Transactional
     public CategoryEntity upsertCategory(IngestCategoryRequest req) {
         CategoryEntity entity = categoryRepository.findBySlug(req.slug())
@@ -131,20 +149,20 @@ public class CatalogService {
         if (existing.isPresent()) {
             existing.get().setName(name);
         } else {
-            CategoryTranslationEntity tr = CategoryTranslationEntity.builder()
+            cat.getTranslations().add(CategoryTranslationEntity.builder()
                     .category(cat)
                     .language(lang)
                     .name(name)
-                    .build();
-            cat.getTranslations().add(tr);
+                    .build());
         }
     }
 
     /* ============ Products ============ */
 
+    @Override
     @Transactional
     public ProductEntity upsertProduct(IngestProductRequest req) {
-        ProductEntity product = productRepository.findBySourceAndExternalId(req.source(), req.externalId())
+        ProductEntity product = productJpaRepository.findBySourceAndExternalId(req.source(), req.externalId())
                 .orElseGet(() -> ProductEntity.builder()
                         .source(req.source())
                         .externalId(req.externalId())
@@ -235,7 +253,7 @@ public class CatalogService {
             }
         }
 
-        product = productRepository.save(product);
+        product = productJpaRepository.save(product);
 
         // Price tiers separately
         if (req.priceTiers() != null) {
@@ -269,96 +287,95 @@ public class CatalogService {
         return product;
     }
 
-    /**
-     * Admin product listing. Holds the paging + status-parsing logic that used to
-     * live in {@code AdminCatalogController}: caps the page size and tolerates
-     * 'ALL'/''/'undefined'/'null' and invalid status strings (full listing then).
-     */
+    @Override
     @Transactional(readOnly = true)
     public Page<ProductSummaryView> listProductsForAdmin(String status, int page, int size, String language) {
-        Pageable pageable = org.springframework.data.domain.PageRequest.of(page, Math.min(size, 200));
-        // DROP-453: tolerate 'ALL', '', 'undefined' (axios sometimes serializes
-        // undefined as a string) and invalid values — full listing in those cases.
-        ProductStatus s = null;
-        if (status != null && !status.isBlank()
-                && !"ALL".equalsIgnoreCase(status)
-                && !"undefined".equalsIgnoreCase(status)
-                && !"null".equalsIgnoreCase(status)) {
-            try {
-                s = ProductStatus.valueOf(status.toUpperCase());
-            } catch (IllegalArgumentException ignored) {
-                s = null;
-            }
-        }
-        return listProducts(s, pageable, language);
+        Pageable pageable = PageRequest.of(page, Math.min(size, 200));
+        return listProducts(parseStatusTolerant(status), pageable, language);
     }
 
-    /**
-     * Updates a product status from its string representation. Holds the parsing
-     * logic that used to live in {@code AdminCatalogController}.
-     */
-    @Transactional
-    public void updateStatus(UUID id, String status) {
-        updateStatus(id, ProductStatus.valueOf(status.toUpperCase()));
-    }
-
+    @Override
     @Transactional(readOnly = true)
     public Page<ProductSummaryView> listProducts(ProductStatus status, Pageable pageable, String language) {
         Page<ProductEntity> page = (status == null)
-                ? productRepository.findAll(pageable)
-                : productRepository.findByStatus(status, pageable);
+                ? productJpaRepository.findAll(pageable)
+                : productJpaRepository.findByStatus(status, pageable);
         return page.map(p -> productMapper.toSummary(p, language));
     }
 
-    /** Exposes the language-aware summary projection so controllers can render filtered slices. */
-    public ProductSummaryView toSummaryView(ProductEntity p, String language) {
-        return productMapper.toSummary(p, language);
+    @Override
+    public ProductSummaryView toSummaryView(Product product, String language) {
+        ProductEntity entity = product == null || product.getId() == null ? null
+                : productJpaRepository.findById(product.getId()).orElse(null);
+        return entity == null ? null : productMapper.toSummary(entity, language);
     }
 
-    /** Storefront: ordered image projections for a product. */
+    @Override
+    @Transactional(readOnly = true)
+    public Product getProductModelById(UUID id) {
+        Product model = productRepository.getById(id);
+        if (model == null) {
+            throw new NotFoundException("Product not found: " + id);
+        }
+        return model;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Product getProductModelBySlug(String slug) {
+        return productRepository.findBySlug(slug)
+                .orElseThrow(() -> new NotFoundException("Product not found: " + slug));
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<CatalogImageDtoOut> listProductImages(UUID productId) {
-        return catalogStorefrontMapper.toImageDtos(
-                imageRepository.findByProductIdOrderByPositionAsc(productId));
+        return catalogStorefrontMapper.toImageDtos(imageRepository.findByProductIdOrderByPositionAsc(productId));
     }
 
-    /** Storefront: ordered price-tier projections for a product. */
+    @Override
     @Transactional(readOnly = true)
     public List<CatalogPriceTierDtoOut> listProductPriceTiers(UUID productId) {
-        return catalogStorefrontMapper.toPriceTierDtos(
-                priceTierRepository.findByProductIdOrderByMinQtyAsc(productId));
+        return catalogStorefrontMapper.toPriceTierDtos(priceTierRepository.findByProductIdOrderByMinQtyAsc(productId));
     }
 
+    @Override
     @Transactional(readOnly = true)
     public Page<ProductSummaryView> listBestsellers(UUID categoryId, Pageable pageable, String language) {
         Page<ProductEntity> page = categoryId == null
-                ? productRepository.findTopByTrendScore(ProductStatus.ACTIVE, pageable)
-                : productRepository.findByCategoryOrderByTrend(categoryId, ProductStatus.ACTIVE, pageable);
+                ? productJpaRepository.findTopByTrendScore(ProductStatus.ACTIVE, pageable)
+                : productJpaRepository.findByCategoryOrderByTrend(categoryId, ProductStatus.ACTIVE, pageable);
         return page.map(p -> productMapper.toSummary(p, language));
     }
 
-    // Plan 300k: PDP cacheado por (slug, lang, currency). Invalidamos en
-    // quickEdit/updateStatus/duplicate desde el mismo servicio.
+    @Override
     @Transactional(readOnly = true)
-    @org.springframework.cache.annotation.Cacheable(
-            value = com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_DETAIL,
+    @Cacheable(value = CACHE_PRODUCT_DETAIL,
             key = "#slug + ':' + #language + ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get()")
     public ProductDetailView getProductBySlug(String slug, String language) {
-        ProductEntity p = productRepository.findWithDetailsBySlug(slug)
+        ProductEntity p = productJpaRepository.findWithDetailsBySlug(slug)
                 .orElseThrow(() -> new NotFoundException("Product not found: " + slug));
         forceLoadCollections(p);
         return productMapper.toDetail(p, language, priceTierRepository.findByProductIdOrderByMinQtyAsc(p.getId()));
     }
 
+    @Override
     @Transactional(readOnly = true)
-    @org.springframework.cache.annotation.Cacheable(
-            value = com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_DETAIL,
+    @Cacheable(value = CACHE_PRODUCT_DETAIL,
             key = "'id:' + #id + ':' + #language + ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get()")
     public ProductDetailView getProductById(UUID id, String language) {
-        ProductEntity p = productRepository.findWithDetailsById(id)
+        ProductEntity p = productJpaRepository.findWithDetailsById(id)
                 .orElseThrow(() -> new NotFoundException("Product not found: " + id));
         forceLoadCollections(p);
         return productMapper.toDetail(p, language, priceTierRepository.findByProductIdOrderByMinQtyAsc(p.getId()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProductDetailView getProductByExternal(String source, String externalId, String language) {
+        ProductEntity p = productJpaRepository.findBySourceAndExternalId(source, externalId)
+                .orElseThrow(() -> new NotFoundException("Product"));
+        return getProductById(p.getId(), language);
     }
 
     /** Trigger lazy collections while still inside the transaction (open-in-view=false). */
@@ -369,37 +386,39 @@ public class CatalogService {
         p.getTranslations().size();
     }
 
-    // Plan 300k: cualquier mutación de producto desaloja TODO el namespace de
-    // pdp/summary — más simple que computar la key exacta por idioma+divisa
-    // y a 5 min de TTL el coste de un re-warm es despreciable.
+    @Override
     @Transactional
-    @org.springframework.cache.annotation.Caching(evict = {
-        @org.springframework.cache.annotation.CacheEvict(value = com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_DETAIL,  allEntries = true),
-        @org.springframework.cache.annotation.CacheEvict(value = com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_SUMMARY, allEntries = true),
-        @org.springframework.cache.annotation.CacheEvict(value = com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRICING_AMOUNT,  allEntries = true)
-    })
-    public ProductEntity updateStatus(UUID id, ProductStatus status) {
-        ProductEntity p = productRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Product not found: " + id));
-        p.setStatus(status);
-        return productRepository.save(p);
+    public void updateStatus(UUID id, String status) {
+        updateStatus(id, ProductStatus.valueOf(status.toUpperCase()));
     }
 
-    /** DROP-499: edición rápida desde /admin/catalog/{id} — sólo los campos editables a "golpe rápido". */
+    @Override
     @Transactional
-    @org.springframework.cache.annotation.Caching(evict = {
-        @org.springframework.cache.annotation.CacheEvict(value = com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_DETAIL,  allEntries = true),
-        @org.springframework.cache.annotation.CacheEvict(value = com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_SUMMARY, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)
     })
-    public ProductDetailView quickEdit(UUID id,
-            com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn req,
-            String lang) {
-        ProductEntity p = productRepository.findById(id)
+    public void updateStatus(UUID id, ProductStatus status) {
+        ProductEntity p = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Product not found: " + id));
-        if (req.getBrand()        != null) p.setBrand(req.getBrand());
-        if (req.getBasePrice()    != null) p.setBasePrice(req.getBasePrice());
-        if (req.getCurrency()     != null && !req.getCurrency().isBlank()) p.setCurrency(req.getCurrency());
-        if (req.getMoq()          != null) p.setMoq(req.getMoq());
+        p.setStatus(status);
+        productJpaRepository.save(p);
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true)
+    })
+    public ProductDetailView quickEdit(UUID id, AdminProductQuickEditDtoIn req, String lang) {
+        ProductEntity p = productJpaRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Product not found: " + id));
+        if (req.getBrand() != null) p.setBrand(req.getBrand());
+        if (req.getBasePrice() != null) p.setBasePrice(req.getBasePrice());
+        if (req.getCurrency() != null && !req.getCurrency().isBlank()) p.setCurrency(req.getCurrency());
+        if (req.getMoq() != null) p.setMoq(req.getMoq());
         if (req.getTitle() != null && !req.getTitle().isBlank()) {
             // Update the active language translation, not the canonical title_zh.
             var trOpt = p.getTranslations().stream()
@@ -409,21 +428,20 @@ public class CatalogService {
                 if (req.getShortDescription() != null) trOpt.get().setShortDescription(req.getShortDescription());
             } else {
                 p.getTranslations().add(
-                    com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity.builder()
-                        .product(p).language(lang).title(req.getTitle())
-                        .shortDescription(req.getShortDescription())
-                        .provider("admin").build());
+                        com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity.builder()
+                                .product(p).language(lang).title(req.getTitle())
+                                .shortDescription(req.getShortDescription())
+                                .provider("admin").build());
             }
         }
-        productRepository.save(p);
+        productJpaRepository.save(p);
         return productMapper.toDetail(p, lang, priceTierRepository.findByProductIdOrderByMinQtyAsc(p.getId()));
     }
 
-    /** DROP-499: duplica un producto (mismo supplier/categoría) con nuevo externalId y slug.
-     *  Copia básica: campos planos + traducciones (no clona imágenes ni variantes). */
+    @Override
     @Transactional
     public ProductDetailView duplicateProduct(UUID id, String lang) {
-        ProductEntity src = productRepository.findById(id)
+        ProductEntity src = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Product not found: " + id));
         String newExt = src.getExternalId() + "-COPY-" + System.currentTimeMillis() % 100000;
         ProductEntity copy = ProductEntity.builder()
@@ -441,33 +459,49 @@ public class CatalogService {
                 .status(ProductStatus.DRAFT)
                 .slug(buildSlug(src.getTitleZh(), newExt))
                 .build();
-        ProductEntity saved = productRepository.save(copy);
-        // Copia traducciones existentes
+        ProductEntity saved = productJpaRepository.save(copy);
         for (var tr : src.getTranslations()) {
             saved.getTranslations().add(
-                com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity.builder()
-                    .product(saved).language(tr.getLanguage())
-                    .title((tr.getTitle() != null ? tr.getTitle() : "") + " (copy)")
-                    .shortDescription(tr.getShortDescription())
-                    .description(tr.getDescription())
-                    .provider("admin-duplicate")
-                    .build());
+                    com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity.builder()
+                            .product(saved).language(tr.getLanguage())
+                            .title((tr.getTitle() != null ? tr.getTitle() : "") + " (copy)")
+                            .shortDescription(tr.getShortDescription())
+                            .description(tr.getDescription())
+                            .provider("admin-duplicate")
+                            .build());
         }
-        productRepository.save(saved);
+        productJpaRepository.save(saved);
         return productMapper.toDetail(saved, lang, java.util.Collections.emptyList());
     }
 
-    /**
-     * Trend-score = 0.4 * normalized monthly_sales + 0.3 * rating + 0.2 * repurchase_rate + 0.1 * review_count
-     * Normalized scales: monthly_sales/1000, rating/5, repurchase_rate/100, review_count/500.
-     */
-    public BigDecimal computeTrendScore(ProductEntity p) {
+    @Override
+    public java.math.BigDecimal computeTrendScore(ProductEntity p) {
         double salesNorm = Math.min(1.0, (p.getMonthlySales()) / 1000.0);
         double rating = p.getRating() != null ? p.getRating().doubleValue() / 5.0 : 0.0;
         double repurchase = p.getRepurchaseRate() != null ? p.getRepurchaseRate().doubleValue() / 100.0 : 0.0;
         double reviews = Math.min(1.0, p.getReviewCount() / 500.0);
         double score = 0.4 * salesNorm + 0.3 * rating + 0.2 * repurchase + 0.1 * reviews;
-        return BigDecimal.valueOf(score).setScale(4, BigDecimal.ROUND_HALF_UP);
+        return java.math.BigDecimal.valueOf(score).setScale(4, java.math.RoundingMode.HALF_UP);
+    }
+
+    /* ============ helpers ============ */
+
+    /**
+     * Tolerates 'ALL', '', 'undefined' (axios sometimes serializes undefined as a
+     * string), 'null' and invalid status strings — full listing in those cases.
+     */
+    private ProductStatus parseStatusTolerant(String status) {
+        if (status == null || status.isBlank()
+                || "ALL".equalsIgnoreCase(status)
+                || "undefined".equalsIgnoreCase(status)
+                || "null".equalsIgnoreCase(status)) {
+            return null;
+        }
+        try {
+            return ProductStatus.valueOf(status.toUpperCase());
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     private String buildSlug(String title, String externalId) {

@@ -2,10 +2,6 @@ package com.nexaplatform.dropshipping.application.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.nexaplatform.dropshipping.api.dto.out.TotpBackupCodesDtoOut;
-import com.nexaplatform.dropshipping.api.dto.out.TotpEnableDtoOut;
-import com.nexaplatform.dropshipping.api.dto.out.TotpSetupDtoOut;
-import com.nexaplatform.dropshipping.api.dto.out.TotpStatusDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.TotpSecretEntity;
@@ -69,33 +65,6 @@ public class TotpService {
 
     public record SetupResult(String base32Secret, String otpauthUrl) {}
     public record EnableResult(List<String> backupCodes) {}
-
-    /* ============================ DTO-facing facade ============================ */
-
-    /** Start 2FA setup and return the secret + otpauth URL as a transport DTO. */
-    public TotpSetupDtoOut setupDto(UUID userId) {
-        SetupResult result = setup(userId);
-        return TotpSetupDtoOut.builder()
-                .base32Secret(result.base32Secret())
-                .otpauthUrl(result.otpauthUrl())
-                .build();
-    }
-
-    /** Verify the OTP, enable 2FA and return the backup codes as a transport DTO. */
-    public TotpEnableDtoOut verifyAndEnableDto(UUID userId, String otp) {
-        EnableResult result = verifyAndEnable(userId, otp);
-        return TotpEnableDtoOut.builder().backupCodes(result.backupCodes()).build();
-    }
-
-    /** Regenerate the backup codes and return them as a transport DTO. */
-    public TotpBackupCodesDtoOut regenerateBackupCodesDto(UUID userId) {
-        return TotpBackupCodesDtoOut.builder().backupCodes(regenerateBackupCodes(userId)).build();
-    }
-
-    /** Return the current 2FA status of the user as a transport DTO. */
-    public TotpStatusDtoOut status(UUID userId) {
-        return TotpStatusDtoOut.builder().enabled(isEnabled(userId)).build();
-    }
 
     /**
      * Disable 2FA after re-checking the user's account password. Moves the

@@ -11,11 +11,10 @@ import com.nexaplatform.dropshipping.api.dto.out.MeDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.RegisterDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.mapper.UserDtoMapper;
-import com.nexaplatform.dropshipping.application.service.AuthService;
 import com.nexaplatform.dropshipping.application.usecase.AuthUseCase;
+import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
+import com.nexaplatform.dropshipping.domain.model.User;
 import com.nexaplatform.dropshipping.infrastructure.integration.storage.StorageService;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
-import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -43,18 +42,19 @@ import java.util.stream.Collectors;
 
 /**
  * Default implementation of {@link AuthUseCase}: authentication, session/
- * SecurityContext handling and authenticated-user profile management. All logic
- * previously inlined in {@code AuthController} / {@code MeController} lives here.
+ * SecurityContext handling and authenticated-user profile management. Operates
+ * on the {@link User} domain model and delegates all persistence/auth logic to
+ * the {@link UserUseCase} (which replaced the former {@code AuthService}). The
+ * {@link UserDtoMapper} translates the model into the transport DtoOuts.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthUseCaseImpl implements AuthUseCase {
 
-    private final AuthService authService;
+    private final UserUseCase userUseCase;
     private final AuthenticationManager authenticationManager;
     private final PasswordEncoder passwordEncoder;
-    private final UserRepository userRepository;
     private final StorageService storageService;
     private final UserDtoMapper mapper;
 
@@ -63,7 +63,7 @@ public class AuthUseCaseImpl implements AuthUseCase {
 
     @Override
     public RegisterDtoOut register(RegisterDtoIn req) {
-        UserEntity user = authService.register(mapper.toRegisterRequest(req));
+        User user = userUseCase.register(mapper.toDomain(req), req.getPassword());
         return RegisterDtoOut.builder()
                 .userId(user.getId())
                 .message("Account created. Check your email to activate.")
@@ -83,7 +83,7 @@ public class AuthUseCaseImpl implements AuthUseCase {
             securityContextRepository.saveContext(context, httpRequest, httpResponse);
 
             UUID id = UUID.fromString(auth.getName());
-            UserEntity user = authService.findById(id);
+            User user = userUseCase.findById(id);
             return mapper.toMeDtoOut(user, authorities(auth));
         } catch (DisabledException e) {
             throw new BusinessException("Account not yet activated. Check your email.");
@@ -95,17 +95,17 @@ public class AuthUseCaseImpl implements AuthUseCase {
 
     @Override
     public void activate(ActivateDtoIn req) {
-        authService.activate(req.getCode());
+        userUseCase.activate(req.getCode());
     }
 
     @Override
     public void requestReset(PasswordResetRequestDtoIn req) {
-        authService.requestPasswordReset(req.getEmail());
+        userUseCase.requestPasswordReset(req.getEmail());
     }
 
     @Override
     public void confirmReset(PasswordResetConfirmDtoIn req) {
-        authService.confirmPasswordReset(req.getToken(), req.getNewPassword());
+        userUseCase.confirmPasswordReset(req.getToken(), req.getNewPassword());
     }
 
     @Override
@@ -117,9 +117,9 @@ public class AuthUseCaseImpl implements AuthUseCase {
         try {
             id = UUID.fromString(authentication.getName());
         } catch (IllegalArgumentException e) {
-            id = authService.findByEmail(authentication.getName()).getId();
+            id = userUseCase.findByEmail(authentication.getName()).getId();
         }
-        UserEntity user = authService.findById(id);
+        User user = userUseCase.findById(id);
         return mapper.toMeDtoOut(user, authorities(authentication));
     }
 
@@ -130,24 +130,24 @@ public class AuthUseCaseImpl implements AuthUseCase {
             throw new BusinessException("Not authenticated");
         }
         UUID id = UUID.fromString(authentication.getName());
-        UserEntity user = authService.findById(id);
+        User user = userUseCase.findById(id);
         if (!passwordEncoder.matches(req.getCurrentPassword(), user.getPasswordHash())) {
             throw new BusinessException("Current password does not match");
         }
-        authService.changePassword(user, req.getNewPassword());
+        userUseCase.changePassword(user, req.getNewPassword());
     }
 
     @Override
     @Transactional
     public MeDtoOut updateProfile(Authentication authentication, UpdateProfileDtoIn req) {
         UUID id = UUID.fromString(authentication.getName());
-        UserEntity user = authService.findById(id);
+        User user = userUseCase.findById(id);
         if (req.getDisplayName() != null) user.setDisplayName(req.getDisplayName().trim());
         if (req.getCompanyName() != null) user.setCompanyName(req.getCompanyName().trim());
         if (req.getCountry() != null) user.setCountry(req.getCountry().trim().toUpperCase());
         if (req.getLanguage() != null) user.setLanguage(req.getLanguage());
-        userRepository.save(user);
-        return mapper.toMeDtoOut(user, authorities(authentication));
+        User saved = userUseCase.updateUser(user);
+        return mapper.toMeDtoOut(saved, authorities(authentication));
     }
 
     @Override
@@ -167,14 +167,14 @@ public class AuthUseCaseImpl implements AuthUseCase {
         }
 
         UUID id = UUID.fromString(authentication.getName());
-        UserEntity user = authService.findById(id);
+        User user = userUseCase.findById(id);
 
         try {
             // Cache-buster with epoch so the browser refreshes the image on change.
             String key = "avatars/" + user.getId() + "-" + Instant.now().getEpochSecond() + "." + ext;
             String url = storageService.putBytes(key, file.getBytes(), contentType);
             user.setAvatarUrl(url);
-            userRepository.save(user);
+            user = userUseCase.updateUser(user);
         } catch (IOException e) {
             throw new BusinessException("Could not read uploaded file: " + e.getMessage());
         }

@@ -10,7 +10,7 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariant;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariantOption;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariantValue;
-import com.nexaplatform.dropshipping.application.service.CatalogService;
+import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierEntity;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,7 +34,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ProductRawConsumer {
 
-    private final CatalogService catalogService;
+    private final CatalogUseCase catalogService;
     private final ObjectMapper objectMapper;
 
     @KafkaListener(topics = NexaTopics.PRODUCT_RAW, groupId = "nexadrop-backend-raw")
