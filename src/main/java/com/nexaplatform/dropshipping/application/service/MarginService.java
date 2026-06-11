@@ -1,9 +1,5 @@
 package com.nexaplatform.dropshipping.application.service;
 
-import com.nexaplatform.dropshipping.api.dto.in.PriceRuleDtoIn;
-import com.nexaplatform.dropshipping.api.dto.out.PriceRuleDtoOut;
-import com.nexaplatform.dropshipping.api.exception.NotFoundException;
-import com.nexaplatform.dropshipping.api.mapper.PriceRuleDtoMapper;
 import com.nexaplatform.dropshipping.domain.enums.MarginType;
 import com.nexaplatform.dropshipping.domain.enums.PriceRuleScope;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PriceRuleEntity;
@@ -41,7 +37,6 @@ public class MarginService {
     private static final Duration CACHE_TTL = Duration.ofMinutes(5);
 
     private final PriceRuleRepository repository;
-    private final PriceRuleDtoMapper priceRuleDtoMapper;
     private final List<PriceRuleEntity> cache = new CopyOnWriteArrayList<>();
     private volatile Instant cacheStamp = Instant.EPOCH;
 
@@ -118,30 +113,6 @@ public class MarginService {
     public List<PriceRuleEntity> listAll() {
         ensureFresh();
         return List.copyOf(cache);
-    }
-
-    /* ============ Admin CRUD use-cases (moved out of AdminPricingController) ============ */
-
-    /** Returns every active price rule as transport DTOs, ordered by position. */
-    public List<PriceRuleDtoOut> listRules() {
-        return priceRuleDtoMapper.toDtoOutList(listAll());
-    }
-
-    /** Creates a new price rule from the request payload and returns it as a DTO. */
-    @Transactional
-    public PriceRuleDtoOut createRule(PriceRuleDtoIn dtoIn) {
-        PriceRuleEntity entity = new PriceRuleEntity();
-        priceRuleDtoMapper.applyToEntity(dtoIn, entity);
-        return priceRuleDtoMapper.toDtoOut(save(entity));
-    }
-
-    /** Updates an existing price rule in place and returns the saved DTO. */
-    @Transactional
-    public PriceRuleDtoOut updateRule(UUID id, PriceRuleDtoIn dtoIn) {
-        PriceRuleEntity entity = repository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Price rule not found: " + id));
-        priceRuleDtoMapper.applyToEntity(dtoIn, entity);
-        return priceRuleDtoMapper.toDtoOut(save(entity));
     }
 
     /* ============ helpers ============ */
