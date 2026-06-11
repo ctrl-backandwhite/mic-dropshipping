@@ -1,210 +1,106 @@
 package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.AcademyApi;
-import com.nexaplatform.dropshipping.api.exception.NotFoundException;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
-import com.nexaplatform.dropshipping.infrastructure.persistence.repository.*;
-import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
+import com.nexaplatform.dropshipping.api.dto.in.BookingDtoIn;
+import com.nexaplatform.dropshipping.api.dto.out.AffiliateDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.BookingDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.CourseDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.EnrollmentDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.MentorDtoOut;
+import com.nexaplatform.dropshipping.api.mapper.AcademyCourseDtoMapper;
+import com.nexaplatform.dropshipping.api.mapper.AcademyEnrollmentDtoMapper;
+import com.nexaplatform.dropshipping.api.mapper.AffiliateDtoMapper;
+import com.nexaplatform.dropshipping.api.mapper.MentorBookingDtoMapper;
+import com.nexaplatform.dropshipping.api.mapper.MentorProfileDtoMapper;
+import com.nexaplatform.dropshipping.application.usecase.AcademyCourseUseCase;
+import com.nexaplatform.dropshipping.application.usecase.AcademyEnrollmentUseCase;
+import com.nexaplatform.dropshipping.application.usecase.AffiliateUseCase;
+import com.nexaplatform.dropshipping.application.usecase.MentorBookingUseCase;
+import com.nexaplatform.dropshipping.application.usecase.MentorProfileUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Academy, Mentors and Affiliates controller. Pure implementation of
+ * {@link AcademyApi}: no routing/documentation annotations here (they live on the
+ * interface), no business logic — injects the per-aggregate DtoMappers + use
+ * cases and, for each endpoint, maps DtoIn -> domain -> use case -> DtoOut. The
+ * me/* endpoints resolve the authenticated user id from the {@link Authentication}.
+ */
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
 public class AcademyController implements AcademyApi {
 
-    private final AcademyCourseRepository courseRepo;
-    private final AcademyEnrollmentRepository enrolRepo;
-    private final MentorProfileRepository mentorRepo;
-    private final MentorBookingRepository bookingRepo;
-    private final AffiliateRepository affRepo;
-    private final UserRepository userRepo;
+    private final AcademyCourseDtoMapper courseMapper;
+    private final AcademyCourseUseCase courseUseCase;
+    private final AcademyEnrollmentDtoMapper enrollmentMapper;
+    private final AcademyEnrollmentUseCase enrollmentUseCase;
+    private final MentorProfileDtoMapper mentorMapper;
+    private final MentorProfileUseCase mentorUseCase;
+    private final MentorBookingDtoMapper bookingMapper;
+    private final MentorBookingUseCase bookingUseCase;
+    private final AffiliateDtoMapper affiliateMapper;
+    private final AffiliateUseCase affiliateUseCase;
 
-    public record CourseView(UUID id, String slug, String title, String description, String instructor,
-            Integer durationMinutes, String coverUrl, String videoUrl, String locale,
-            String level, Instant createdAt) {
-    }
-
-    public record EnrollmentView(UUID id, UUID courseId, String courseSlug, String courseTitle,
-            BigDecimal progressPct, Instant completedAt) {
+    @Override
+    public List<CourseDtoOut> courses(String locale, String level) {
+        return courseMapper.toDtoOutList(courseUseCase.listPublished(locale, level));
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public List<CourseView> courses(String locale,
-            String level) {
-        return courseRepo.findByPublishedTrueOrderByCreatedAtDesc().stream()
-                .filter(c -> locale == null || locale.equalsIgnoreCase(c.getLocale()))
-                .filter(c -> level == null || level.equalsIgnoreCase(c.getLevel()))
-                .map(this::toCourse).toList();
+    public CourseDtoOut course(String slug) {
+        return courseMapper.toDtoOut(courseUseCase.getBySlug(slug));
     }
 
     @Override
-    public CourseView course(String slug) {
-        return toCourse(courseRepo.findBySlug(slug).orElseThrow(() -> new NotFoundException("Course")));
-    }
-
-    @Override
-    @Transactional
-    public EnrollmentView enroll(Authentication auth, UUID courseId) {
+    public EnrollmentDtoOut enroll(Authentication auth, UUID courseId) {
         UUID userId = UUID.fromString(auth.getName());
-        AcademyCourseEntity c = courseRepo.findById(courseId).orElseThrow(() -> new NotFoundException("Course"));
-        UserEntity u = userRepo.findById(userId).orElseThrow();
-        AcademyEnrollmentEntity e = enrolRepo.findByUser_IdAndCourse_Id(userId, courseId)
-                .orElseGet(() -> enrolRepo.save(AcademyEnrollmentEntity.builder().user(u).course(c).build()));
-        return toEnrol(e);
+        return enrollmentMapper.toDtoOut(enrollmentUseCase.enroll(userId, courseId));
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public List<EnrollmentView> myEnrollments(Authentication auth) {
+    public List<EnrollmentDtoOut> myEnrollments(Authentication auth) {
         UUID userId = UUID.fromString(auth.getName());
-        return enrolRepo.findByUser_Id(userId).stream().map(this::toEnrol).toList();
+        return enrollmentMapper.toDtoOutList(enrollmentUseCase.findByUser(userId));
     }
 
     @Override
-    @Transactional
-    public EnrollmentView updateProgress(UUID id, Map<String, Number> body) {
-        AcademyEnrollmentEntity e = enrolRepo.findById(id).orElseThrow(() -> new NotFoundException("Enrollment"));
-        Number pct = body.get("progressPct");
-        if (pct != null) {
-            BigDecimal p = new BigDecimal(pct.toString()).min(new BigDecimal("100"));
-            e.setProgressPct(p);
-            if (p.compareTo(new BigDecimal("100")) >= 0 && e.getCompletedAt() == null) {
-                e.setCompletedAt(Instant.now());
-            }
-        }
-        return toEnrol(enrolRepo.save(e));
-    }
-
-    /* ====================== MENTORS ====================== */
-
-    public record MentorView(UUID id, UUID userId, String displayName, String headline, String bio,
-            List<String> expertise, List<String> languages,
-            int hourlyRateUsdCents, String timezone, boolean active) {
-    }
-
-    public record BookingRequest(UUID mentorId, Instant startsAt, Integer durationMin, String topic) {
-    }
-
-    public record BookingView(UUID id, UUID mentorId, String mentorName, Instant startsAt,
-            int durationMin, String status, String topic) {
+    public EnrollmentDtoOut updateProgress(UUID id, Map<String, Number> body) {
+        return enrollmentMapper.toDtoOut(enrollmentUseCase.updateProgress(id, body));
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public List<MentorView> mentors() {
-        // DROP-575: filtrar mentores "fake" sembrados desde las cuentas de
-        // sistema (NX036 Admin, NX036 Operator, NX036 Customer, NX036 Partner
-        // y empresas partner como "Demo Partner — Sandbox"). No son mentores
-        // reales — son seeds que se colaron al popular la tabla. Los
-        // ocultamos del listado público hasta que el equipo decida si los
-        // borra del dataset o crea mentores reales.
-        return mentorRepo.findByActiveTrueOrderByCreatedAtDesc().stream()
-                .filter(m -> {
-                    String name = (m.getUser() != null && m.getUser().getDisplayName() != null)
-                            ? m.getUser().getDisplayName()
-                            : "";
-                    String email = (m.getUser() != null && m.getUser().getEmail() != null)
-                            ? m.getUser().getEmail().toLowerCase()
-                            : "";
-                    if (name.startsWith("NX036 "))
-                        return false;
-                    if (email.startsWith("admin@") || email.startsWith("operator@")
-                            || email.startsWith("customer@") || email.startsWith("partner@"))
-                        return false;
-                    if (email.endsWith("@partners.nx036.local"))
-                        return false;
-                    return true;
-                })
-                .map(this::toMentor).toList();
+    public List<MentorDtoOut> mentors() {
+        return mentorMapper.toDtoOutList(mentorUseCase.listActive());
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public MentorView mentorDetail(UUID id) {
-        return toMentor(mentorRepo.findById(id).orElseThrow(() -> new NotFoundException("Mentor")));
+    public MentorDtoOut mentorDetail(UUID id) {
+        return mentorMapper.toDtoOut(mentorUseCase.getById(id));
     }
 
     @Override
-    @Transactional
-    public BookingView book(Authentication auth, BookingRequest req) {
+    public BookingDtoOut book(Authentication auth, BookingDtoIn req) {
         UUID userId = UUID.fromString(auth.getName());
-        UserEntity learner = userRepo.findById(userId).orElseThrow();
-        MentorProfileEntity mentor = mentorRepo.findById(req.mentorId())
-                .orElseThrow(() -> new NotFoundException("Mentor"));
-        MentorBookingEntity b = MentorBookingEntity.builder()
-                .mentor(mentor).learner(learner)
-                .startsAt(req.startsAt()).durationMin(req.durationMin() == null ? 60 : req.durationMin())
-                .topic(req.topic()).status("REQUESTED").build();
-        return toBooking(bookingRepo.save(b));
+        return bookingMapper.toDtoOut(bookingUseCase.book(userId, bookingMapper.toDomain(req)));
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public List<BookingView> myBookings(Authentication auth) {
+    public List<BookingDtoOut> myBookings(Authentication auth) {
         UUID userId = UUID.fromString(auth.getName());
-        return bookingRepo.findByLearner_IdOrderByStartsAtDesc(userId).stream().map(this::toBooking).toList();
-    }
-
-    /* ====================== AFFILIATES ====================== */
-
-    public record AffiliateView(UUID id, String code, long earningsUsdCents, long payoutUsdCents,
-            int referralsCount, boolean active) {
+        return bookingMapper.toDtoOutList(bookingUseCase.findByLearner(userId));
     }
 
     @Override
-    @Transactional
-    public AffiliateView affiliate(Authentication auth) {
+    public AffiliateDtoOut affiliate(Authentication auth) {
         UUID userId = UUID.fromString(auth.getName());
-        UserEntity u = userRepo.findById(userId).orElseThrow();
-        AffiliateEntity a = affRepo.findByUser_Id(userId).orElseGet(
-                () -> affRepo.save(AffiliateEntity.builder().user(u).code(generateCode(u)).active(true).build()));
-        return new AffiliateView(a.getId(), a.getCode(), a.getEarningsUsdCents(), a.getPayoutUsdCents(),
-                a.getReferralsCount(), a.isActive());
-    }
-
-    /* ---------- helpers ---------- */
-
-    private CourseView toCourse(AcademyCourseEntity c) {
-        return new CourseView(c.getId(), c.getSlug(), c.getTitle(), c.getDescription(), c.getInstructor(),
-                c.getDurationMinutes(), c.getCoverUrl(), c.getVideoUrl(), c.getLocale(), c.getLevel(),
-                c.getCreatedAt());
-    }
-
-    private EnrollmentView toEnrol(AcademyEnrollmentEntity e) {
-        return new EnrollmentView(e.getId(), e.getCourse().getId(), e.getCourse().getSlug(),
-                e.getCourse().getTitle(), e.getProgressPct(), e.getCompletedAt());
-    }
-
-    private MentorView toMentor(MentorProfileEntity m) {
-        UserEntity u = m.getUser();
-        return new MentorView(m.getId(), u.getId(),
-                u.getDisplayName() != null ? u.getDisplayName() : u.getEmail(),
-                m.getHeadline(), m.getBio(), m.getExpertise(), m.getLanguages(),
-                m.getHourlyRateUsdCents(), m.getTimezone(), m.isActive());
-    }
-
-    private BookingView toBooking(MentorBookingEntity b) {
-        UserEntity mu = b.getMentor().getUser();
-        return new BookingView(b.getId(), b.getMentor().getId(),
-                mu.getDisplayName() != null ? mu.getDisplayName() : mu.getEmail(),
-                b.getStartsAt(), b.getDurationMin(), b.getStatus(), b.getTopic());
-    }
-
-    private static String generateCode(UserEntity u) {
-        String base = (u.getDisplayName() == null ? u.getEmail() : u.getDisplayName())
-                .toLowerCase().replaceAll("[^a-z0-9]", "");
-        if (base.length() > 8)
-            base = base.substring(0, 8);
-        return base + "-" + UUID.randomUUID().toString().substring(0, 6);
+        return affiliateMapper.toDtoOut(affiliateUseCase.getOrCreate(userId));
     }
 }

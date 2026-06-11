@@ -1,11 +1,11 @@
 package com.nexaplatform.dropshipping.api;
 
-import com.nexaplatform.dropshipping.api.controller.AcademyController.AffiliateView;
-import com.nexaplatform.dropshipping.api.controller.AcademyController.BookingRequest;
-import com.nexaplatform.dropshipping.api.controller.AcademyController.BookingView;
-import com.nexaplatform.dropshipping.api.controller.AcademyController.CourseView;
-import com.nexaplatform.dropshipping.api.controller.AcademyController.EnrollmentView;
-import com.nexaplatform.dropshipping.api.controller.AcademyController.MentorView;
+import com.nexaplatform.dropshipping.api.dto.in.BookingDtoIn;
+import com.nexaplatform.dropshipping.api.dto.out.AffiliateDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.BookingDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.CourseDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.EnrollmentDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.MentorDtoOut;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.security.core.Authentication;
@@ -23,49 +23,51 @@ import java.util.UUID;
 /**
  * API contract + OpenAPI documentation for the Academy, Mentors and Affiliates
  * endpoints (DROP-10). The controller only implements these methods; all routing
- * and Swagger documentation live here (springdoc "API interface" pattern).
+ * and Swagger documentation live here (springdoc "API interface" pattern). The
+ * transport types are the {@code api.dto.in}/{@code api.dto.out} DTO classes that
+ * replaced the old inline {@code *View} records.
  */
 @Tag(name = "Academy, Mentors, Affiliates")
 public interface AcademyApi {
 
     @Operation(summary = "List published academy courses, optionally filtered by locale and level")
     @GetMapping("/storefront/academy/courses")
-    List<CourseView> courses(@RequestParam(required = false) String locale,
-                             @RequestParam(required = false) String level);
+    List<CourseDtoOut> courses(@RequestParam(required = false) String locale,
+                               @RequestParam(required = false) String level);
 
     @Operation(summary = "Get a published academy course by slug")
     @GetMapping("/storefront/academy/courses/{slug}")
-    CourseView course(@PathVariable String slug);
+    CourseDtoOut course(@PathVariable String slug);
 
     @Operation(summary = "Enroll the current user in a course")
     @PostMapping("/me/academy/enroll/{courseId}")
-    EnrollmentView enroll(Authentication auth, @PathVariable UUID courseId);
+    EnrollmentDtoOut enroll(Authentication auth, @PathVariable UUID courseId);
 
     @Operation(summary = "List the current user's course enrollments")
     @GetMapping("/me/academy/enrollments")
-    List<EnrollmentView> myEnrollments(Authentication auth);
+    List<EnrollmentDtoOut> myEnrollments(Authentication auth);
 
     @Operation(summary = "Update the progress of an enrollment")
     @PutMapping("/me/academy/enrollments/{id}/progress")
-    EnrollmentView updateProgress(@PathVariable UUID id, @RequestBody Map<String, Number> body);
+    EnrollmentDtoOut updateProgress(@PathVariable UUID id, @RequestBody Map<String, Number> body);
 
     @Operation(summary = "List active mentors")
     @GetMapping("/storefront/mentors")
-    List<MentorView> mentors();
+    List<MentorDtoOut> mentors();
 
     @Operation(summary = "Get a mentor profile by id")
     @GetMapping("/storefront/mentors/{id}")
-    MentorView mentorDetail(@PathVariable UUID id);
+    MentorDtoOut mentorDetail(@PathVariable UUID id);
 
     @Operation(summary = "Book a session with a mentor")
     @PostMapping("/me/mentors/bookings")
-    BookingView book(Authentication auth, @RequestBody BookingRequest req);
+    BookingDtoOut book(Authentication auth, @RequestBody BookingDtoIn req);
 
     @Operation(summary = "List the current user's mentor bookings")
     @GetMapping("/me/mentors/bookings")
-    List<BookingView> myBookings(Authentication auth);
+    List<BookingDtoOut> myBookings(Authentication auth);
 
     @Operation(summary = "Get or create the current user's affiliate account")
     @GetMapping("/me/affiliate")
-    AffiliateView affiliate(Authentication auth);
+    AffiliateDtoOut affiliate(Authentication auth);
 }
