@@ -1,0 +1,190 @@
+package com.nexaplatform.dropshipping.infrastructure.persistence.entity;
+
+import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+
+@Entity
+@Table(name = "product",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"source", "external_id"}))
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class ProductEntity extends BaseEntity {
+
+    @Column(nullable = false, unique = true, length = 220)
+    private String slug;
+
+    @Column(name = "external_id", nullable = false, length = 120)
+    private String externalId;
+
+    @Column(nullable = false, length = 40)
+    private String source;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supplier_id")
+    private SupplierEntity supplier;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    private CategoryEntity category;
+
+    @Column(name = "title_zh", nullable = false, length = 500)
+    private String titleZh;
+
+    @Column(name = "short_description_zh", length = 2000)
+    private String shortDescriptionZh;
+
+    @Column(name = "description_zh", columnDefinition = "TEXT")
+    private String descriptionZh;
+
+    @Column(length = 200)
+    private String brand;
+
+    @Column(nullable = false)
+    private int moq;
+
+    @Column(name = "base_price", precision = 12, scale = 4)
+    private BigDecimal basePrice;
+
+    @Column(length = 8)
+    private String currency;
+
+    @Column(name = "weight_grams")
+    private Integer weightGrams;
+
+    @Column(name = "length_mm")
+    private Integer lengthMm;
+
+    @Column(name = "width_mm")
+    private Integer widthMm;
+
+    @Column(name = "height_mm")
+    private Integer heightMm;
+
+    @Column(name = "hs_code", length = 40)
+    private String hsCode;
+
+    @Column(name = "package_weight_grams")
+    private Integer packageWeightGrams;
+
+    @Column(name = "lead_time_days")
+    private Integer leadTimeDays;
+
+    @Column(name = "warranty_months")
+    private Integer warrantyMonths;
+
+    @Column(name = "country_of_origin", length = 2)
+    private String countryOfOrigin;
+
+    @Column(name = "return_policy_days")
+    private Integer returnPolicyDays;
+
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private java.util.List<String> certifications;
+
+    @Column(name = "ship_from", length = 2)
+    private String shipFrom;
+
+    @Column(name = "free_shipping")
+    private Boolean freeShipping;
+
+    @Column(name = "self_pickup")
+    private Boolean selfPickup;
+
+    @Column(name = "has_video")
+    private Boolean hasVideo;
+
+    @Column(name = "video_url", length = 800)
+    private String videoUrl;
+
+    @Column(name = "inventory_count")
+    private Integer inventoryCount;
+
+    @Column(name = "pod_enabled")
+    private Boolean podEnabled;
+
+    @Column(name = "brand_selected")
+    private Boolean brandSelected;
+
+    @Column(name = "ready_to_ship")
+    private Boolean readyToShip;
+
+    @Column(name = "ar_model_url", length = 800)
+    private String arModelUrl;
+
+    @Column(name = "reviews_summary", columnDefinition = "TEXT")
+    private String reviewsSummary;
+
+    @Column(name = "reviews_sentiment", precision = 3, scale = 2)
+    private java.math.BigDecimal reviewsSentiment;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private ProductStatus status;
+
+    @Column(precision = 3, scale = 2)
+    private BigDecimal rating;
+
+    @Column(name = "review_count")
+    private int reviewCount;
+
+    @Column(name = "monthly_sales")
+    private int monthlySales;
+
+    @Column(name = "repurchase_rate", precision = 5, scale = 2)
+    private BigDecimal repurchaseRate;
+
+    @Column(name = "trend_score", precision = 8, scale = 4)
+    private BigDecimal trendScore;
+
+    @Column(name = "source_url", length = 800)
+    private String sourceUrl;
+
+    @Column(name = "ingested_at")
+    private Instant ingestedAt;
+
+    @Column(name = "last_synced_at")
+    private Instant lastSyncedAt;
+
+    @Builder.Default
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("position ASC")
+    private List<ProductImageEntity> images = new ArrayList<>();
+
+    @Builder.Default
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<ProductVariantEntity> variants = new ArrayList<>();
+
+    @Builder.Default
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<ProductTranslationEntity> translations = new ArrayList<>();
+
+    @Builder.Default
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("position ASC")
+    private List<VariantOptionEntity> variantOptions = new ArrayList<>();
+}

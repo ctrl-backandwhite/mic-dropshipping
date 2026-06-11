@@ -1,0 +1,85 @@
+databaseChangeLog:
+  - changeSet:
+      id: 008-crawl-job
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: crawl_job
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: code, type: VARCHAR(80), constraints: { nullable: false, unique: true } }
+              - column: { name: kind, type: VARCHAR(40), constraints: { nullable: false } }
+              - column: { name: source, type: VARCHAR(40), constraints: { nullable: false } }
+              - column: { name: config_json, type: JSONB }
+              - column: { name: cron_expression, type: VARCHAR(100) }
+              - column: { name: enabled, type: BOOLEAN, defaultValueBoolean: true }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+
+  - changeSet:
+      id: 008-crawl-job-run
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: crawl_job_run
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: job_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: status, type: VARCHAR(20), defaultValue: "RUNNING", constraints: { nullable: false } }
+              - column: { name: started_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: finished_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: items_in, type: INT, defaultValueNumeric: 0 }
+              - column: { name: items_out, type: INT, defaultValueNumeric: 0 }
+              - column: { name: errors, type: INT, defaultValueNumeric: 0 }
+              - column: { name: log, type: TEXT }
+        - addForeignKeyConstraint:
+            baseTableName: crawl_job_run
+            baseColumnNames: job_id
+            referencedTableName: crawl_job
+            referencedColumnNames: id
+            constraintName: fk_cjrun_job
+            onDelete: CASCADE
+
+  - changeSet:
+      id: 008-outbound-email
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: outbound_email
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: to_address, type: VARCHAR(254), constraints: { nullable: false } }
+              - column: { name: subject, type: VARCHAR(300), constraints: { nullable: false } }
+              - column: { name: body_html, type: TEXT, constraints: { nullable: false } }
+              - column: { name: template, type: VARCHAR(80) }
+              - column: { name: status, type: VARCHAR(20), defaultValue: "PENDING", constraints: { nullable: false } }
+              - column: { name: attempt_count, type: INT, defaultValueNumeric: 0 }
+              - column: { name: sent_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: error_message, type: VARCHAR(2000) }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - createIndex:
+            tableName: outbound_email
+            indexName: idx_oemail_pending
+            columns:
+              - { column: { name: status } }
+              - { column: { name: created_at } }
+
+  - changeSet:
+      id: 008-outbound-event
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: outbound_event
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: aggregate_id, type: VARCHAR(80), constraints: { nullable: false } }
+              - column: { name: event_type, type: VARCHAR(80), constraints: { nullable: false } }
+              - column: { name: payload, type: TEXT, constraints: { nullable: false } }
+              - column: { name: topic, type: VARCHAR(100), constraints: { nullable: false } }
+              - column: { name: published_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: attempt_count, type: INT, defaultValueNumeric: 0 }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - createIndex:
+            tableName: outbound_event
+            indexName: idx_oevent_pending
+            columns: [{ column: { name: published_at } }]

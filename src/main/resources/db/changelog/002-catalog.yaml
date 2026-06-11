@@ -1,0 +1,328 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-supplier
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: supplier
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: external_id, type: VARCHAR(100), constraints: { nullable: false } }
+              - column: { name: source, type: VARCHAR(40), constraints: { nullable: false } }
+              - column: { name: name, type: VARCHAR(300) }
+              - column: { name: name_zh, type: VARCHAR(300) }
+              - column: { name: country, type: VARCHAR(60), defaultValue: "CN" }
+              - column: { name: city, type: VARCHAR(120) }
+              - column: { name: rating, type: NUMERIC(3,2) }
+              - column: { name: years_active, type: INT }
+              - column: { name: verified, type: BOOLEAN, defaultValueBoolean: false }
+              - column: { name: trust_pass, type: BOOLEAN, defaultValueBoolean: false }
+              - column: { name: profile_url, type: VARCHAR(500) }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addUniqueConstraint:
+            tableName: supplier
+            columnNames: source, external_id
+            constraintName: ux_supplier_source_external
+
+  - changeSet:
+      id: 002-category
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: category
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: slug, type: VARCHAR(200), constraints: { nullable: false, unique: true } }
+              - column: { name: parent_id, type: UUID }
+              - column: { name: source, type: VARCHAR(40), defaultValue: "1688" }
+              - column: { name: external_id, type: VARCHAR(100) }
+              - column: { name: name_zh, type: VARCHAR(200) }
+              - column: { name: position, type: INT, defaultValueNumeric: 0 }
+              - column: { name: active, type: BOOLEAN, defaultValueBoolean: true }
+              - column: { name: icon, type: VARCHAR(120) }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addForeignKeyConstraint:
+            baseTableName: category
+            baseColumnNames: parent_id
+            referencedTableName: category
+            referencedColumnNames: id
+            constraintName: fk_category_parent
+        - createIndex:
+            tableName: category
+            indexName: idx_category_parent
+            columns: [{ column: { name: parent_id } }]
+
+  - changeSet:
+      id: 002-category-translation
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: category_translation
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: category_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: language, type: VARCHAR(8), constraints: { nullable: false } }
+              - column: { name: name, type: VARCHAR(200), constraints: { nullable: false } }
+              - column: { name: description, type: TEXT }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addForeignKeyConstraint:
+            baseTableName: category_translation
+            baseColumnNames: category_id
+            referencedTableName: category
+            referencedColumnNames: id
+            constraintName: fk_cattr_category
+            onDelete: CASCADE
+        - addUniqueConstraint:
+            tableName: category_translation
+            columnNames: category_id, language
+            constraintName: ux_cattr_cat_lang
+
+  - changeSet:
+      id: 002-product
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: product
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: slug, type: VARCHAR(220), constraints: { nullable: false, unique: true } }
+              - column: { name: external_id, type: VARCHAR(120), constraints: { nullable: false } }
+              - column: { name: source, type: VARCHAR(40), defaultValue: "1688", constraints: { nullable: false } }
+              - column: { name: supplier_id, type: UUID }
+              - column: { name: category_id, type: UUID }
+              - column: { name: title_zh, type: VARCHAR(500), constraints: { nullable: false } }
+              - column: { name: short_description_zh, type: VARCHAR(2000) }
+              - column: { name: description_zh, type: TEXT }
+              - column: { name: brand, type: VARCHAR(200) }
+              - column: { name: moq, type: INT, defaultValueNumeric: 1 }
+              - column: { name: base_price, type: NUMERIC(12,4) }
+              - column: { name: currency, type: VARCHAR(8), defaultValue: "CNY" }
+              - column: { name: weight_grams, type: INT }
+              - column: { name: length_mm, type: INT }
+              - column: { name: width_mm, type: INT }
+              - column: { name: height_mm, type: INT }
+              - column: { name: hs_code, type: VARCHAR(40) }
+              - column: { name: status, type: VARCHAR(20), defaultValue: "DRAFT", constraints: { nullable: false } }
+              - column: { name: rating, type: NUMERIC(3,2) }
+              - column: { name: review_count, type: INT, defaultValueNumeric: 0 }
+              - column: { name: monthly_sales, type: INT, defaultValueNumeric: 0 }
+              - column: { name: repurchase_rate, type: NUMERIC(5,2) }
+              - column: { name: trend_score, type: NUMERIC(8,4), defaultValueNumeric: 0 }
+              - column: { name: source_url, type: VARCHAR(800) }
+              - column: { name: ingested_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: last_synced_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addUniqueConstraint:
+            tableName: product
+            columnNames: source, external_id
+            constraintName: ux_product_source_external
+        - addForeignKeyConstraint:
+            baseTableName: product
+            baseColumnNames: supplier_id
+            referencedTableName: supplier
+            referencedColumnNames: id
+            constraintName: fk_product_supplier
+        - addForeignKeyConstraint:
+            baseTableName: product
+            baseColumnNames: category_id
+            referencedTableName: category
+            referencedColumnNames: id
+            constraintName: fk_product_category
+        - createIndex:
+            tableName: product
+            indexName: idx_product_supplier
+            columns: [{ column: { name: supplier_id } }]
+        - createIndex:
+            tableName: product
+            indexName: idx_product_category
+            columns: [{ column: { name: category_id } }]
+        - createIndex:
+            tableName: product
+            indexName: idx_product_status
+            columns: [{ column: { name: status } }]
+        - createIndex:
+            tableName: product
+            indexName: idx_product_trend_score
+            columns: [{ column: { name: trend_score, descending: true } }]
+
+  - changeSet:
+      id: 002-product-translation
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: product_translation
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: product_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: language, type: VARCHAR(8), constraints: { nullable: false } }
+              - column: { name: title, type: VARCHAR(500) }
+              - column: { name: short_description, type: VARCHAR(2000) }
+              - column: { name: description, type: TEXT }
+              - column: { name: meta_title, type: VARCHAR(200) }
+              - column: { name: meta_description, type: VARCHAR(400) }
+              - column: { name: provider, type: VARCHAR(40) }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addForeignKeyConstraint:
+            baseTableName: product_translation
+            baseColumnNames: product_id
+            referencedTableName: product
+            referencedColumnNames: id
+            constraintName: fk_prodtr_product
+            onDelete: CASCADE
+        - addUniqueConstraint:
+            tableName: product_translation
+            columnNames: product_id, language
+            constraintName: ux_prodtr_prod_lang
+
+  - changeSet:
+      id: 002-product-image
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: product_image
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: product_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: position, type: INT, defaultValueNumeric: 0 }
+              - column: { name: role, type: VARCHAR(30), defaultValue: "GALLERY" }
+              - column: { name: source_url, type: VARCHAR(800), constraints: { nullable: false } }
+              - column: { name: cdn_url, type: VARCHAR(800) }
+              - column: { name: width, type: INT }
+              - column: { name: height, type: INT }
+              - column: { name: bytes, type: BIGINT }
+              - column: { name: hash, type: VARCHAR(80) }
+              - column: { name: mirror_status, type: VARCHAR(20), defaultValue: "PENDING" }
+              - column: { name: mirrored_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addForeignKeyConstraint:
+            baseTableName: product_image
+            baseColumnNames: product_id
+            referencedTableName: product
+            referencedColumnNames: id
+            constraintName: fk_image_product
+            onDelete: CASCADE
+        - createIndex:
+            tableName: product_image
+            indexName: idx_image_product
+            columns: [{ column: { name: product_id } }]
+
+  - changeSet:
+      id: 002-product-variant
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: product_variant
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: product_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: external_id, type: VARCHAR(120) }
+              - column: { name: sku, type: VARCHAR(120) }
+              - column: { name: title, type: VARCHAR(400) }
+              - column: { name: price, type: NUMERIC(12,4) }
+              - column: { name: stock, type: INT, defaultValueNumeric: 0 }
+              - column: { name: weight_grams, type: INT }
+              - column: { name: barcode, type: VARCHAR(80) }
+              - column: { name: image_source_url, type: VARCHAR(800) }
+              - column: { name: image_cdn_url, type: VARCHAR(800) }
+              - column: { name: options_json, type: JSONB }
+              - column: { name: active, type: BOOLEAN, defaultValueBoolean: true }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addForeignKeyConstraint:
+            baseTableName: product_variant
+            baseColumnNames: product_id
+            referencedTableName: product
+            referencedColumnNames: id
+            constraintName: fk_variant_product
+            onDelete: CASCADE
+        - createIndex:
+            tableName: product_variant
+            indexName: idx_variant_product
+            columns: [{ column: { name: product_id } }]
+        - createIndex:
+            tableName: product_variant
+            indexName: idx_variant_sku
+            columns: [{ column: { name: sku } }]
+
+  - changeSet:
+      id: 002-variant-option
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: variant_option
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: product_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: name_zh, type: VARCHAR(120), constraints: { nullable: false } }
+              - column: { name: name, type: VARCHAR(120) }
+              - column: { name: position, type: INT, defaultValueNumeric: 0 }
+        - addForeignKeyConstraint:
+            baseTableName: variant_option
+            baseColumnNames: product_id
+            referencedTableName: product
+            referencedColumnNames: id
+            constraintName: fk_voption_product
+            onDelete: CASCADE
+
+  - changeSet:
+      id: 002-variant-value
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: variant_value
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: option_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: value_zh, type: VARCHAR(200), constraints: { nullable: false } }
+              - column: { name: value, type: VARCHAR(200) }
+              - column: { name: image_source_url, type: VARCHAR(800) }
+              - column: { name: image_cdn_url, type: VARCHAR(800) }
+              - column: { name: position, type: INT, defaultValueNumeric: 0 }
+        - addForeignKeyConstraint:
+            baseTableName: variant_value
+            baseColumnNames: option_id
+            referencedTableName: variant_option
+            referencedColumnNames: id
+            constraintName: fk_vvalue_option
+            onDelete: CASCADE
+
+  - changeSet:
+      id: 002-product-tag
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: product_tag
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: slug, type: VARCHAR(80), constraints: { nullable: false, unique: true } }
+              - column: { name: name, type: VARCHAR(120), constraints: { nullable: false } }
+              - column: { name: kind, type: VARCHAR(20), defaultValue: "TAG" }
+        - createTable:
+            tableName: product_tag_link
+            columns:
+              - column: { name: product_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: tag_id, type: UUID, constraints: { nullable: false } }
+        - addPrimaryKey:
+            tableName: product_tag_link
+            columnNames: product_id, tag_id
+            constraintName: pk_product_tag_link
+        - addForeignKeyConstraint:
+            baseTableName: product_tag_link
+            baseColumnNames: product_id
+            referencedTableName: product
+            referencedColumnNames: id
+            constraintName: fk_taglink_product
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: product_tag_link
+            baseColumnNames: tag_id
+            referencedTableName: product_tag
+            referencedColumnNames: id
+            constraintName: fk_taglink_tag
+            onDelete: CASCADE

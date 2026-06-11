@@ -1,0 +1,143 @@
+databaseChangeLog:
+  - changeSet:
+      id: 005-subscription-plan
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: subscription_plan
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: code, type: VARCHAR(40), constraints: { nullable: false, unique: true } }
+              - column: { name: name, type: VARCHAR(120), constraints: { nullable: false } }
+              - column: { name: description, type: VARCHAR(1000) }
+              - column: { name: price_monthly_cents, type: INT, defaultValueNumeric: 0 }
+              - column: { name: price_yearly_cents, type: INT, defaultValueNumeric: 0 }
+              - column: { name: currency, type: VARCHAR(8), defaultValue: "USD" }
+              - column: { name: stripe_monthly_price_id, type: VARCHAR(120) }
+              - column: { name: stripe_yearly_price_id, type: VARCHAR(120) }
+              - column: { name: active, type: BOOLEAN, defaultValueBoolean: true }
+              - column: { name: position, type: INT, defaultValueNumeric: 0 }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+
+  - changeSet:
+      id: 005-plan-feature
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: plan_feature
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: plan_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: feature_key, type: VARCHAR(60), constraints: { nullable: false } }
+              - column: { name: int_value, type: BIGINT }
+              - column: { name: bool_value, type: BOOLEAN }
+              - column: { name: text_value, type: VARCHAR(400) }
+        - addForeignKeyConstraint:
+            baseTableName: plan_feature
+            baseColumnNames: plan_id
+            referencedTableName: subscription_plan
+            referencedColumnNames: id
+            constraintName: fk_planfeat_plan
+            onDelete: CASCADE
+        - addUniqueConstraint:
+            tableName: plan_feature
+            columnNames: plan_id, feature_key
+            constraintName: ux_planfeat_plan_key
+
+  - changeSet:
+      id: 005-customer-subscription
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: customer_subscription
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: user_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: plan_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: status, type: VARCHAR(30), constraints: { nullable: false } }
+              - column: { name: billing_period, type: VARCHAR(10), defaultValue: "MONTHLY" }
+              - column: { name: stripe_customer_id, type: VARCHAR(120) }
+              - column: { name: stripe_subscription_id, type: VARCHAR(120) }
+              - column: { name: current_period_start, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: current_period_end, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: cancel_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: canceled_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: trial_ends_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addForeignKeyConstraint:
+            baseTableName: customer_subscription
+            baseColumnNames: user_id
+            referencedTableName: users
+            referencedColumnNames: id
+            constraintName: fk_subs_user
+        - addForeignKeyConstraint:
+            baseTableName: customer_subscription
+            baseColumnNames: plan_id
+            referencedTableName: subscription_plan
+            referencedColumnNames: id
+            constraintName: fk_subs_plan
+        - createIndex:
+            tableName: customer_subscription
+            indexName: idx_subs_user
+            columns: [{ column: { name: user_id } }]
+
+  - changeSet:
+      id: 005-usage-counter
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: usage_counter
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: subscription_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: metric, type: VARCHAR(40), constraints: { nullable: false } }
+              - column: { name: period_start, type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: period_end, type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: value, type: BIGINT, defaultValueNumeric: 0 }
+        - addForeignKeyConstraint:
+            baseTableName: usage_counter
+            baseColumnNames: subscription_id
+            referencedTableName: customer_subscription
+            referencedColumnNames: id
+            constraintName: fk_usage_subs
+            onDelete: CASCADE
+        - addUniqueConstraint:
+            tableName: usage_counter
+            columnNames: subscription_id, metric, period_start
+            constraintName: ux_usage_subs_metric_period
+
+  - changeSet:
+      id: 005-invoice
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: invoice
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: subscription_id, type: UUID }
+              - column: { name: user_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: stripe_invoice_id, type: VARCHAR(120) }
+              - column: { name: amount_cents, type: INT, constraints: { nullable: false } }
+              - column: { name: currency, type: VARCHAR(8), defaultValue: "USD" }
+              - column: { name: status, type: VARCHAR(30), constraints: { nullable: false } }
+              - column: { name: paid_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: pdf_url, type: VARCHAR(800) }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+
+  - changeSet:
+      id: 005-stripe-event
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: stripe_event
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: stripe_event_id, type: VARCHAR(120), constraints: { nullable: false, unique: true } }
+              - column: { name: event_type, type: VARCHAR(80), constraints: { nullable: false } }
+              - column: { name: payload, type: TEXT, constraints: { nullable: false } }
+              - column: { name: processed, type: BOOLEAN, defaultValueBoolean: false }
+              - column: { name: processed_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: error_message, type: VARCHAR(2000) }
+              - column: { name: received_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }

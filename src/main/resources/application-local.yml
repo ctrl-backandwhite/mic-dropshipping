@@ -1,0 +1,12 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+nexadrop:
+  oauth:
+    issuer: http://localhost:18082
+  demo:
+    # local-only: lets the admin UI create synthetic orders for QA.
+    orders-enabled: true

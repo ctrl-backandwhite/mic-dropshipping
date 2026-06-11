@@ -1,0 +1,122 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-partner-app
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: partner_app
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: owner_user_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: name, type: VARCHAR(160), constraints: { nullable: false } }
+              - column: { name: description, type: VARCHAR(1000) }
+              - column: { name: client_id, type: VARCHAR(80), constraints: { nullable: false, unique: true } }
+              - column: { name: client_secret_hash, type: VARCHAR(255), constraints: { nullable: false } }
+              - column: { name: scopes, type: VARCHAR(500), defaultValue: "catalog.read" }
+              - column: { name: webhook_url, type: VARCHAR(500) }
+              - column: { name: webhook_secret, type: VARCHAR(120) }
+              - column: { name: active, type: BOOLEAN, defaultValueBoolean: true }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addForeignKeyConstraint:
+            baseTableName: partner_app
+            baseColumnNames: owner_user_id
+            referencedTableName: users
+            referencedColumnNames: id
+            constraintName: fk_partapp_user
+
+  - changeSet:
+      id: 006-partner-webhook
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: partner_webhook_delivery
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: partner_app_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: event_type, type: VARCHAR(80), constraints: { nullable: false } }
+              - column: { name: payload, type: TEXT, constraints: { nullable: false } }
+              - column: { name: status, type: VARCHAR(20), defaultValue: "PENDING", constraints: { nullable: false } }
+              - column: { name: attempt_count, type: INT, defaultValueNumeric: 0 }
+              - column: { name: last_attempt_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: next_attempt_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: response_code, type: INT }
+              - column: { name: response_body, type: VARCHAR(2000) }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addForeignKeyConstraint:
+            baseTableName: partner_webhook_delivery
+            baseColumnNames: partner_app_id
+            referencedTableName: partner_app
+            referencedColumnNames: id
+            constraintName: fk_phook_partner
+            onDelete: CASCADE
+        - createIndex:
+            tableName: partner_webhook_delivery
+            indexName: idx_phook_pending
+            columns:
+              - { column: { name: status } }
+              - { column: { name: next_attempt_at } }
+
+  - changeSet:
+      id: 006-shop-connection
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: shop_connection
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: partner_app_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: platform, type: VARCHAR(40), constraints: { nullable: false } }
+              - column: { name: shop_handle, type: VARCHAR(200), constraints: { nullable: false } }
+              - column: { name: access_token_enc, type: VARCHAR(2000) }
+              - column: { name: refresh_token_enc, type: VARCHAR(2000) }
+              - column: { name: settings_json, type: JSONB }
+              - column: { name: active, type: BOOLEAN, defaultValueBoolean: true }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addForeignKeyConstraint:
+            baseTableName: shop_connection
+            baseColumnNames: partner_app_id
+            referencedTableName: partner_app
+            referencedColumnNames: id
+            constraintName: fk_shop_partner
+            onDelete: CASCADE
+        - addUniqueConstraint:
+            tableName: shop_connection
+            columnNames: platform, shop_handle
+            constraintName: ux_shop_platform_handle
+
+  - changeSet:
+      id: 006-product-sync-state
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: product_sync_state
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: shop_connection_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: product_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: remote_product_id, type: VARCHAR(120) }
+              - column: { name: status, type: VARCHAR(20), defaultValue: "PENDING" }
+              - column: { name: last_synced_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: error_message, type: VARCHAR(2000) }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addForeignKeyConstraint:
+            baseTableName: product_sync_state
+            baseColumnNames: shop_connection_id
+            referencedTableName: shop_connection
+            referencedColumnNames: id
+            constraintName: fk_psync_shop
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: product_sync_state
+            baseColumnNames: product_id
+            referencedTableName: product
+            referencedColumnNames: id
+            constraintName: fk_psync_product
+            onDelete: CASCADE
+        - addUniqueConstraint:
+            tableName: product_sync_state
+            columnNames: shop_connection_id, product_id
+            constraintName: ux_psync_shop_product

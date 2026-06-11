@@ -1,0 +1,275 @@
+spring:
+  application:
+    name: nexadrop-backend
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  threads:
+    virtual:
+      enabled: true
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5532}/${DB_NAME:nexadrop}
+    username: ${DB_USER:nexadrop}
+    password: ${DB_PASSWORD:nexadrop}
+    hikari:
+      # Plan 300k req/min: con virtual threads y 4 instancias necesitamos pool
+      # generoso. PgBouncer en transaction mode delante absorberá los picos.
+      maximum-pool-size: ${DB_POOL_MAX:50}
+      minimum-idle: ${DB_POOL_MIN:10}
+      connection-timeout: 5000
+      idle-timeout: 60000
+      max-lifetime: 1800000
+      leak-detection-threshold: 30000
+      data-source-properties:
+        cachePrepStmts: true
+        prepStmtCacheSize: 500
+        prepStmtCacheSqlLimit: 2048
+        useServerPrepStmts: true
+        reWriteBatchedInserts: true
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          batch_size: 50
+          time_zone: UTC
+        order_inserts: true
+        order_updates: true
+        # L2 cache via JCache (Caffeine provider) — habilitable por env.
+        cache:
+          use_second_level_cache: ${HIBERNATE_L2:false}
+          use_query_cache: false
+    open-in-view: false
+
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6479}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:19192}
+    consumer:
+      group-id: nexadrop-backend
+      auto-offset-reset: latest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: "*"
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: java.util.HashMap
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      properties:
+        spring.json.add.type.headers: true
+
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1125}
+    username: ${SMTP_USER:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SMTP_AUTH:false}
+          starttls:
+            enable: ${SMTP_TLS:false}
+
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
+
+  thymeleaf:
+    prefix: classpath:/templates/
+    suffix: .html
+    cache: false
+
+  # Plan 300k: graceful shutdown — el LB necesita 30s para drenar in-flight.
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 10MB
+
+server:
+  port: ${SERVER_PORT:18082}
+  forward-headers-strategy: framework
+  max-http-request-header-size: 16KB
+  # Plan 300k: graceful shutdown para que el LB drene tráfico antes del kill.
+  shutdown: graceful
+  tomcat:
+    # Con virtual threads habilitados, el thread pool clásico es menos crítico
+    # pero seguimos subiendo el techo para los IO blocking calls que aún quedan.
+    threads:
+      max: ${TOMCAT_THREADS_MAX:800}
+      min-spare: ${TOMCAT_THREADS_MIN:50}
+    accept-count: 200
+    max-connections: 16384
+    connection-timeout: 5s
+    keep-alive-timeout: 30s
+    max-keep-alive-requests: 200
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/css,text/plain
+    min-response-size: 1024
+  http2:
+    enabled: true
+  error:
+    include-message: always
+    include-binding-errors: always
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        secure: false  # set true behind HTTPS
+        same-site: lax
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+      # Plan 300k: separar readiness (BD/Redis/Kafka) de liveness (proceso vivo)
+      # para que el LB pueda drenar tráfico sin matar la JVM.
+      probes:
+        enabled: true
+      # `validate-group-membership: false` permite que los contributors opcionales
+      # (opensearch, redis) se omitan en dev cuando el servicio no está corriendo.
+      validate-group-membership: false
+      group:
+        readiness:
+          include: db,redis,opensearch
+        liveness:
+          include: livenessState
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+
+# ============ NexaDrop-specific config ============
+nexadrop:
+  # Plan 300k: toggles para activar/desactivar lo nuevo en cada entorno.
+  cache:
+    distributed: ${CACHE_DISTRIBUTED:false}     # Redis CacheManager en prod
+  db:
+    replica-enabled: ${DB_REPLICA_ENABLED:false} # routing primary/replica
+  ratelimit:
+    redis-enabled: ${RATELIMIT_REDIS_ENABLED:false} # Bucket4j sobre Redis
+  outbox:
+    poll-ms: ${OUTBOX_POLL_MS:500}              # dispatcher polling interval
+  # ============================ (legado abajo) ============================
+  oauth:
+    issuer: ${OAUTH_ISSUER:http://localhost:18082}
+    admin-spa:
+      client-id: nexadrop-admin
+      redirect-uri: http://localhost:3003/auth/callback
+      post-logout-redirect-uri: http://localhost:3003/
+    storefront-spa:
+      client-id: nexadrop-storefront
+      redirect-uri: http://localhost:3003/auth/callback
+      post-logout-redirect-uri: http://localhost:3003/
+    partner-api:
+      default-secret: ${PARTNER_DEFAULT_SECRET:dev-partner-secret-change-me}
+
+  # AES-256-GCM key encryption for at-rest secrets (shop access tokens, webhook secrets).
+  # Comma-separated list of Base64-encoded 32-byte keys. First entry is the active KEK.
+  # Older entries still decrypt previously-encrypted records, enabling rotation.
+  # Generate with: openssl rand -base64 32
+  # If empty in dev, an ephemeral key is generated at startup (NOT for production).
+  crypto:
+    token-keks: ${NX_TOKEN_KEKS:}
+
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:3003}
+
+  storage:
+    endpoint: ${S3_ENDPOINT:http://localhost:9100}
+    region: ${S3_REGION:us-east-1}
+    access-key: ${S3_ACCESS_KEY:nexadrop}
+    secret-key: ${S3_SECRET_KEY:nexadrop-secret}
+    bucket: ${S3_BUCKET:product-images}
+    public-base-url: ${S3_PUBLIC_URL:http://localhost:9100/product-images}
+    path-style-access: true
+
+  opensearch:
+    uris: ${OPENSEARCH_URIS:http://localhost:9400}
+    products-index: products
+
+  crawler:
+    base-url: ${CRAWLER_URL:http://localhost:8001}
+    timeout-seconds: 60
+
+  translation:
+    enabled: ${TRANSLATION_ENABLED:false}
+    project-id: ${GOOGLE_PROJECT_ID:}
+    default-source: zh
+    target-languages: es,en,pt
+
+  stripe:
+    enabled: ${STRIPE_ENABLED:false}
+    secret-key: ${STRIPE_SECRET_KEY:}
+    webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+    # Identificadores que se inyectan como metadata en cada PaymentIntent.
+    # Útil cuando varias plataformas comparten la misma cuenta Stripe — filtras en el dashboard
+    # por metadata['platform'] = "nexadrop-dropshipping" para aislar lo de esta plataforma.
+    platform-id: ${STRIPE_PLATFORM_ID:nexadrop-dropshipping}
+    platform-env: ${STRIPE_PLATFORM_ENV:dev}
+
+  bestseller:
+    refresh-cron: "0 0 3 * * *"
+    sources:
+      - https://kj.1688.com/best_seller.html
+      - https://kj.1688.com/ranking_list.html
+      - https://kj.1688.com/pdt_ranking.html
+
+  demo-seed:
+    enabled: ${DEMO_SEED_ENABLED:true}
+
+  currency:
+    access-key: ${NEXADROP_CURRENCY_ACCESS_KEY:}
+    api-url: ${NEXADROP_CURRENCY_API_URL:https://api.currencylayer.com/live}
+    sync-cron: "0 30 4 * * *"
+
+  paypal:
+    enabled: ${PAYPAL_ENABLED:false}
+    client-id: ${PAYPAL_CLIENT_ID:}
+    client-secret: ${PAYPAL_CLIENT_SECRET:}
+    webhook-secret: ${PAYPAL_WEBHOOK_SECRET:}
+    base-url: ${PAYPAL_BASE_URL:https://api-m.sandbox.paypal.com}
+    return-url: ${PAYPAL_RETURN_URL:http://localhost:3003/wallet/paypal-return}
+    cancel-url: ${PAYPAL_CANCEL_URL:http://localhost:3003/wallet/recharge?cancelled=1}
+
+  coinbase:
+    api-key: ${COINBASE_API_KEY:}
+    webhook-secret: ${COINBASE_WEBHOOK_SECRET:}
+
+  usdt:
+    enabled: ${USDT_ENABLED:true}
+    manual-address: ${USDT_MANUAL_ADDRESS:TBd5jH7XPM2QwG1pVxLqkRtjY8bD3sxA1Z}
+    chain: ${USDT_DEFAULT_CHAIN:TRC20}
+    expiry-minutes: 30
+
+logging:
+  level:
+    root: INFO
+    com.nexaplatform.dropshipping: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: WARN

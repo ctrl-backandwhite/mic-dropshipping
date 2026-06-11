@@ -1,0 +1,80 @@
+spring:
+  profiles:
+    active: test
+  datasource:
+    url: jdbc:h2:mem:nexadrop;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        jdbc:
+          time_zone: UTC
+    open-in-view: false
+  liquibase:
+    enabled: false
+  data:
+    redis:
+      repositories:
+        enabled: false
+  kafka:
+    bootstrap-servers: 127.0.0.1:1
+    listener:
+      auto-startup: false
+  mail:
+    host: localhost
+    port: 1025
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.data.redis.autoconfigure.RedisAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.RedisRepositoriesAutoConfiguration
+      - org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
+
+server:
+  port: 0
+
+nexadrop:
+  oauth:
+    issuer: http://localhost:18082
+    admin-spa:
+      client-id: nexadrop-admin
+      redirect-uri: http://localhost:3003/auth/callback
+      post-logout-redirect-uri: http://localhost:3003/
+    storefront-spa:
+      client-id: nexadrop-storefront
+      redirect-uri: http://localhost:3003/auth/callback
+      post-logout-redirect-uri: http://localhost:3003/
+    partner-api:
+      default-secret: test-partner-secret-very-long-12chars
+  cors:
+    allowed-origins: http://localhost:3003
+  storage:
+    endpoint: http://localhost:9000
+    region: us-east-1
+    access-key: test
+    secret-key: test
+    bucket: test
+    public-base-url: http://localhost:9000/test
+    path-style-access: true
+  opensearch:
+    uris: http://localhost:9200
+    products-index: products-test
+  crawler:
+    base-url: http://localhost:8001
+    timeout-seconds: 30
+  translation:
+    enabled: false
+    project-id:
+    default-source: zh
+    target-languages: es,en
+  stripe:
+    enabled: false
+
+logging:
+  level:
+    root: WARN
+    com.nexaplatform.dropshipping: INFO

@@ -1,0 +1,53 @@
+databaseChangeLog:
+  - changeSet:
+      id: 009-seed-plans
+      author: nexadrop
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO subscription_plan (id, code, name, description, price_monthly_cents, price_yearly_cents, currency, active, position)
+              VALUES
+                (gen_random_uuid(), 'FREE', 'Free', 'Test the API. 100 catalog reads/day.', 0, 0, 'USD', true, 1),
+                (gen_random_uuid(), 'STARTER', 'Starter', 'Up to 500 products synced, 5k API requests/day.', 2900, 29000, 'USD', true, 2),
+                (gen_random_uuid(), 'PRO', 'Pro', 'Up to 5,000 products synced, 50k API requests/day, priority support.', 9900, 99000, 'USD', true, 3),
+                (gen_random_uuid(), 'ENTERPRISE', 'Enterprise', 'Unlimited. Dedicated infra, SLA.', 0, 0, 'USD', true, 4)
+              ON CONFLICT (code) DO NOTHING;
+
+  - changeSet:
+      id: 009-seed-plan-features
+      author: nexadrop
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO plan_feature (id, plan_id, feature_key, int_value)
+              SELECT gen_random_uuid(), p.id, f.key, f.value::bigint
+              FROM subscription_plan p
+              CROSS JOIN (VALUES
+                  ('FREE',       'max_products_sync',        50),
+                  ('FREE',       'max_api_requests_day',     100),
+                  ('FREE',       'max_shops',                1),
+                  ('STARTER',    'max_products_sync',        500),
+                  ('STARTER',    'max_api_requests_day',     5000),
+                  ('STARTER',    'max_shops',                3),
+                  ('PRO',        'max_products_sync',        5000),
+                  ('PRO',        'max_api_requests_day',     50000),
+                  ('PRO',        'max_shops',                10),
+                  ('ENTERPRISE', 'max_products_sync',        1000000),
+                  ('ENTERPRISE', 'max_api_requests_day',     10000000),
+                  ('ENTERPRISE', 'max_shops',                100)
+              ) AS f(code, key, value)
+              WHERE p.code = f.code
+              ON CONFLICT (plan_id, feature_key) DO NOTHING;
+
+  - changeSet:
+      id: 009-seed-tags
+      author: nexadrop
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO product_tag (id, slug, name, kind) VALUES
+                (gen_random_uuid(), 'bestseller', 'Bestseller', 'BADGE'),
+                (gen_random_uuid(), 'new', 'New Arrival', 'BADGE'),
+                (gen_random_uuid(), 'trending', 'Trending', 'BADGE'),
+                (gen_random_uuid(), 'cross-border', 'Cross-border ready', 'BADGE')
+              ON CONFLICT (slug) DO NOTHING;

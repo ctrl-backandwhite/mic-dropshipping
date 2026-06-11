@@ -1,0 +1,165 @@
+databaseChangeLog:
+  - changeSet:
+      id: 007-address
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: address
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: full_name, type: VARCHAR(200), constraints: { nullable: false } }
+              - column: { name: phone, type: VARCHAR(40) }
+              - column: { name: email, type: VARCHAR(254) }
+              - column: { name: line1, type: VARCHAR(300), constraints: { nullable: false } }
+              - column: { name: line2, type: VARCHAR(300) }
+              - column: { name: city, type: VARCHAR(200), constraints: { nullable: false } }
+              - column: { name: state, type: VARCHAR(200) }
+              - column: { name: postal_code, type: VARCHAR(40) }
+              - column: { name: country, type: VARCHAR(60), constraints: { nullable: false } }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+
+  - changeSet:
+      id: 007-order
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: customer_order
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: order_number, type: VARCHAR(40), constraints: { nullable: false, unique: true } }
+              - column: { name: partner_app_id, type: UUID }
+              - column: { name: user_id, type: UUID }
+              - column: { name: external_order_id, type: VARCHAR(120) }
+              - column: { name: shipping_address_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: billing_address_id, type: UUID }
+              - column: { name: status, type: VARCHAR(30), defaultValue: "PENDING", constraints: { nullable: false } }
+              - column: { name: subtotal_cents, type: INT, defaultValueNumeric: 0 }
+              - column: { name: shipping_cents, type: INT, defaultValueNumeric: 0 }
+              - column: { name: tax_cents, type: INT, defaultValueNumeric: 0 }
+              - column: { name: total_cents, type: INT, defaultValueNumeric: 0 }
+              - column: { name: currency, type: VARCHAR(8), defaultValue: "USD" }
+              - column: { name: notes, type: VARCHAR(2000) }
+              - column: { name: placed_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: forwarded_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: shipped_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: delivered_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: cancelled_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addForeignKeyConstraint:
+            baseTableName: customer_order
+            baseColumnNames: shipping_address_id
+            referencedTableName: address
+            referencedColumnNames: id
+            constraintName: fk_order_ship_addr
+        - addForeignKeyConstraint:
+            baseTableName: customer_order
+            baseColumnNames: billing_address_id
+            referencedTableName: address
+            referencedColumnNames: id
+            constraintName: fk_order_bill_addr
+        - addForeignKeyConstraint:
+            baseTableName: customer_order
+            baseColumnNames: partner_app_id
+            referencedTableName: partner_app
+            referencedColumnNames: id
+            constraintName: fk_order_partner
+        - createIndex:
+            tableName: customer_order
+            indexName: idx_order_status
+            columns: [{ column: { name: status } }]
+        - createIndex:
+            tableName: customer_order
+            indexName: idx_order_partner
+            columns: [{ column: { name: partner_app_id } }]
+
+  - changeSet:
+      id: 007-order-item
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: order_item
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: order_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: product_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: variant_id, type: UUID }
+              - column: { name: title_snapshot, type: VARCHAR(500) }
+              - column: { name: image_url_snapshot, type: VARCHAR(800) }
+              - column: { name: sku_snapshot, type: VARCHAR(120) }
+              - column: { name: unit_price_cents, type: INT, constraints: { nullable: false } }
+              - column: { name: cost_cents, type: INT, constraints: { nullable: false } }
+              - column: { name: quantity, type: INT, constraints: { nullable: false } }
+              - column: { name: line_total_cents, type: INT, constraints: { nullable: false } }
+        - addForeignKeyConstraint:
+            baseTableName: order_item
+            baseColumnNames: order_id
+            referencedTableName: customer_order
+            referencedColumnNames: id
+            constraintName: fk_oitem_order
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: order_item
+            baseColumnNames: product_id
+            referencedTableName: product
+            referencedColumnNames: id
+            constraintName: fk_oitem_product
+        - addForeignKeyConstraint:
+            baseTableName: order_item
+            baseColumnNames: variant_id
+            referencedTableName: product_variant
+            referencedColumnNames: id
+            constraintName: fk_oitem_variant
+
+  - changeSet:
+      id: 007-shipment
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: shipment
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: order_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: carrier, type: VARCHAR(80) }
+              - column: { name: tracking_number, type: VARCHAR(120) }
+              - column: { name: tracking_url, type: VARCHAR(800) }
+              - column: { name: status, type: VARCHAR(30), defaultValue: "PENDING" }
+              - column: { name: shipped_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: delivered_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: updated_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addForeignKeyConstraint:
+            baseTableName: shipment
+            baseColumnNames: order_id
+            referencedTableName: customer_order
+            referencedColumnNames: id
+            constraintName: fk_ship_order
+            onDelete: CASCADE
+
+  - changeSet:
+      id: 007-tracking-event
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: tracking_event
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: shipment_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: code, type: VARCHAR(40) }
+              - column: { name: description, type: VARCHAR(500) }
+              - column: { name: location, type: VARCHAR(200) }
+              - column: { name: event_at, type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addForeignKeyConstraint:
+            baseTableName: tracking_event
+            baseColumnNames: shipment_id
+            referencedTableName: shipment
+            referencedColumnNames: id
+            constraintName: fk_tevent_shipment
+            onDelete: CASCADE
+        - createIndex:
+            tableName: tracking_event
+            indexName: idx_tevent_shipment_time
+            columns:
+              - { column: { name: shipment_id } }
+              - { column: { name: event_at, descending: true } }

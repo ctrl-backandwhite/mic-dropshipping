@@ -1,0 +1,59 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-price-tier
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: product_price_tier
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: product_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: variant_id, type: UUID }
+              - column: { name: min_qty, type: INT, constraints: { nullable: false } }
+              - column: { name: max_qty, type: INT }
+              - column: { name: unit_price, type: NUMERIC(12,4), constraints: { nullable: false } }
+              - column: { name: currency, type: VARCHAR(8), defaultValue: "CNY" }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addForeignKeyConstraint:
+            baseTableName: product_price_tier
+            baseColumnNames: product_id
+            referencedTableName: product
+            referencedColumnNames: id
+            constraintName: fk_pricetier_product
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: product_price_tier
+            baseColumnNames: variant_id
+            referencedTableName: product_variant
+            referencedColumnNames: id
+            constraintName: fk_pricetier_variant
+            onDelete: CASCADE
+        - createIndex:
+            tableName: product_price_tier
+            indexName: idx_pricetier_product
+            columns: [{ column: { name: product_id } }]
+
+  - changeSet:
+      id: 003-inventory-snapshot
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: inventory_snapshot
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: variant_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: stock, type: INT, constraints: { nullable: false } }
+              - column: { name: captured_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addForeignKeyConstraint:
+            baseTableName: inventory_snapshot
+            baseColumnNames: variant_id
+            referencedTableName: product_variant
+            referencedColumnNames: id
+            constraintName: fk_invsnap_variant
+            onDelete: CASCADE
+        - createIndex:
+            tableName: inventory_snapshot
+            indexName: idx_invsnap_variant_time
+            columns:
+              - { column: { name: variant_id } }
+              - { column: { name: captured_at, descending: true } }

@@ -1,0 +1,89 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-trend-signal
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: trend_signal
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: product_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: source, type: VARCHAR(40), constraints: { nullable: false } }
+              - column: { name: signal_type, type: VARCHAR(40), constraints: { nullable: false } }
+              - column: { name: value, type: NUMERIC(14,4) }
+              - column: { name: rank_position, type: INT }
+              - column: { name: captured_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: meta_json, type: JSONB }
+        - addForeignKeyConstraint:
+            baseTableName: trend_signal
+            baseColumnNames: product_id
+            referencedTableName: product
+            referencedColumnNames: id
+            constraintName: fk_trend_product
+            onDelete: CASCADE
+        - createIndex:
+            tableName: trend_signal
+            indexName: idx_trend_prod_source
+            columns:
+              - { column: { name: product_id } }
+              - { column: { name: source } }
+              - { column: { name: captured_at, descending: true } }
+
+  - changeSet:
+      id: 004-bestseller-ranking
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: bestseller_ranking
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: list_code, type: VARCHAR(60), constraints: { nullable: false } }
+              - column: { name: product_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: rank_position, type: INT, constraints: { nullable: false } }
+              - column: { name: captured_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+              - column: { name: source_url, type: VARCHAR(800) }
+        - addForeignKeyConstraint:
+            baseTableName: bestseller_ranking
+            baseColumnNames: product_id
+            referencedTableName: product
+            referencedColumnNames: id
+            constraintName: fk_bsr_product
+            onDelete: CASCADE
+        - createIndex:
+            tableName: bestseller_ranking
+            indexName: idx_bsr_list_time
+            columns:
+              - { column: { name: list_code } }
+              - { column: { name: captured_at, descending: true } }
+              - { column: { name: rank_position } }
+
+  - changeSet:
+      id: 004-category-ranking
+      author: nexadrop
+      changes:
+        - createTable:
+            tableName: category_ranking
+            columns:
+              - column: { name: id, type: UUID, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: category_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: product_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: rank_position, type: INT, constraints: { nullable: false } }
+              - column: { name: captured_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: now(), constraints: { nullable: false } }
+        - addForeignKeyConstraint:
+            baseTableName: category_ranking
+            baseColumnNames: category_id
+            referencedTableName: category
+            referencedColumnNames: id
+            constraintName: fk_catr_category
+        - addForeignKeyConstraint:
+            baseTableName: category_ranking
+            baseColumnNames: product_id
+            referencedTableName: product
+            referencedColumnNames: id
+            constraintName: fk_catr_product
+        - createIndex:
+            tableName: category_ranking
+            indexName: idx_catr_cat_time
+            columns:
+              - { column: { name: category_id } }
+              - { column: { name: captured_at, descending: true } }

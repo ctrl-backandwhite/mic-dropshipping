@@ -1,0 +1,94 @@
+package com.nexaplatform.dropshipping.infrastructure.persistence.entity;
+
+import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+@Entity
+@Table(name = "customer_order")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class CustomerOrderEntity extends BaseEntity {
+
+    @Column(name = "order_number", nullable = false, unique = true, length = 40)
+    private String orderNumber;
+
+    @Column(name = "partner_app_id")
+    private UUID partnerAppId;
+
+    @Column(name = "user_id")
+    private UUID userId;
+
+    @Column(name = "external_order_id", length = 120)
+    private String externalOrderId;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "shipping_address_id", nullable = false)
+    private AddressEntity shippingAddress;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "billing_address_id")
+    private AddressEntity billingAddress;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private OrderStatus status;
+
+    @Column(name = "subtotal_cents", nullable = false)
+    private int subtotalCents;
+
+    @Column(name = "shipping_cents", nullable = false)
+    private int shippingCents;
+
+    @Column(name = "tax_cents", nullable = false)
+    private int taxCents;
+
+    @Column(name = "total_cents", nullable = false)
+    private int totalCents;
+
+    @Column(length = 8)
+    private String currency;
+
+    @Column(length = 2000)
+    private String notes;
+
+    @Column(name = "placed_at")
+    private Instant placedAt;
+
+    @Column(name = "forwarded_at")
+    private Instant forwardedAt;
+
+    @Column(name = "shipped_at")
+    private Instant shippedAt;
+
+    @Column(name = "delivered_at")
+    private Instant deliveredAt;
+
+    @Column(name = "cancelled_at")
+    private Instant cancelledAt;
+
+    @Builder.Default
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<OrderItemEntity> items = new ArrayList<>();
+}
