@@ -1,15 +1,18 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
 import com.nexaplatform.dropshipping.api.dto.out.CurrencyDtoOut;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CurrencyRateEntity;
+import com.nexaplatform.dropshipping.api.dto.out.CurrencySyncResultDtoOut;
+import com.nexaplatform.dropshipping.domain.model.CurrencyRate;
+import com.nexaplatform.dropshipping.domain.model.CurrencySyncResult;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
 import java.util.List;
 
 /**
- * API-layer mapper: translates the currency rate entity into its transport DTO.
- * Every field is mapped explicitly, following the project mapper pattern.
+ * API-layer mapper for currency rates: translates between the {@link CurrencyRate}
+ * domain model and the transport DTOs. Injected in the controller. Every field is
+ * mapped explicitly, following the project mapper pattern.
  */
 @Mapper(componentModel = "spring")
 public interface CurrencyDtoMapper {
@@ -23,7 +26,11 @@ public interface CurrencyDtoMapper {
     @Mapping(target = "rateVsUsd", source = "rateVsUsd")
     @Mapping(target = "active", source = "active")
     @Mapping(target = "lastSyncedAt", source = "lastSyncedAt")
-    CurrencyDtoOut toDtoOut(CurrencyRateEntity entity);
+    CurrencyDtoOut toDtoOut(CurrencyRate model);
 
-    List<CurrencyDtoOut> toDtoOutList(List<CurrencyRateEntity> entities);
+    List<CurrencyDtoOut> toDtoOutList(List<CurrencyRate> models);
+
+    @Mapping(target = "updated", source = "updated")
+    @Mapping(target = "message", source = "message")
+    CurrencySyncResultDtoOut toDtoOut(CurrencySyncResult model);
 }

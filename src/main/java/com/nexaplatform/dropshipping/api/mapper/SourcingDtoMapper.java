@@ -4,36 +4,40 @@ import com.nexaplatform.dropshipping.api.dto.out.SourcingAgentDetailDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SourcingAgentLiteDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SourcingQuoteDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SourcingRequestDtoOut;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.AgentProfileEntity;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SourcingQuoteEntity;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SourcingRequestEntity;
+import com.nexaplatform.dropshipping.domain.model.SourcingAgent;
+import com.nexaplatform.dropshipping.domain.model.SourcingQuote;
+import com.nexaplatform.dropshipping.domain.model.SourcingRequest;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
+import java.util.List;
+
 /**
- * MapStruct mapper for the Sourcing API boundary. Translates JPA entities into
+ * API-layer mapper for the Sourcing resource: translates the domain models
+ * ({@link SourcingRequest}, {@link SourcingQuote}, {@link SourcingAgent}) into the
  * transport DtoOut classes, preserving the exact JSON field names of the
- * previous {@code RequestView}/{@code QuoteView}/{@code AgentLite}/{@code AgentFull}
- * records. The quotes count is computed outside the mapper and supplied as an
- * argument.
+ * {@code RequestView}/{@code QuoteView}/{@code AgentLite}/{@code AgentFull}
+ * contract. Injected in the controller.
  */
 @Mapper(componentModel = "spring")
 public interface SourcingDtoMapper {
 
-    @Mapping(target = "id", source = "request.id")
-    @Mapping(target = "sourceUrl", source = "request.sourceUrl")
-    @Mapping(target = "source", source = "request.source")
-    @Mapping(target = "externalId", source = "request.externalId")
-    @Mapping(target = "status", source = "request.status")
-    @Mapping(target = "titleHint", source = "request.titleHint")
-    @Mapping(target = "notes", source = "request.notes")
-    @Mapping(target = "selectedQuoteId", source = "request.selectedQuoteId")
-    @Mapping(target = "createdAt", source = "request.createdAt")
-    @Mapping(target = "quotesCount", source = "quotesCount")
-    SourcingRequestDtoOut toRequest(SourcingRequestEntity request, int quotesCount);
+    @Mapping(target = "id", source = "id")
+    @Mapping(target = "sourceUrl", source = "sourceUrl")
+    @Mapping(target = "source", source = "source")
+    @Mapping(target = "externalId", source = "externalId")
+    @Mapping(target = "status", source = "status")
+    @Mapping(target = "titleHint", source = "titleHint")
+    @Mapping(target = "notes", source = "notes")
+    @Mapping(target = "selectedQuoteId", source = "selectedQuoteId")
+    @Mapping(target = "createdAt", source = "createdAt")
+    @Mapping(target = "quotesCount", expression = "java((int) model.getQuotesCount())")
+    SourcingRequestDtoOut toRequest(SourcingRequest model);
+
+    List<SourcingRequestDtoOut> toRequestList(List<SourcingRequest> models);
 
     @Mapping(target = "id", source = "id")
-    @Mapping(target = "requestId", source = "request.id")
+    @Mapping(target = "requestId", source = "requestId")
     @Mapping(target = "agent", source = "agent")
     @Mapping(target = "priceUsdCents", source = "priceUsdCents")
     @Mapping(target = "etaDays", source = "etaDays")
@@ -41,7 +45,9 @@ public interface SourcingDtoMapper {
     @Mapping(target = "notes", source = "notes")
     @Mapping(target = "status", source = "status")
     @Mapping(target = "createdAt", source = "createdAt")
-    SourcingQuoteDtoOut toQuote(SourcingQuoteEntity quote);
+    SourcingQuoteDtoOut toQuote(SourcingQuote model);
+
+    List<SourcingQuoteDtoOut> toQuoteList(List<SourcingQuote> models);
 
     @Mapping(target = "id", source = "id")
     @Mapping(target = "displayName", source = "displayName")
@@ -49,7 +55,9 @@ public interface SourcingDtoMapper {
     @Mapping(target = "satisfaction", source = "satisfaction")
     @Mapping(target = "completedJobs", source = "completedJobs")
     @Mapping(target = "avatarUrl", source = "avatarUrl")
-    SourcingAgentLiteDtoOut toAgentLite(AgentProfileEntity agent);
+    SourcingAgentLiteDtoOut toAgentLite(SourcingAgent model);
+
+    List<SourcingAgentLiteDtoOut> toAgentLiteList(List<SourcingAgent> models);
 
     @Mapping(target = "id", source = "id")
     @Mapping(target = "displayName", source = "displayName")
@@ -62,5 +70,5 @@ public interface SourcingDtoMapper {
     @Mapping(target = "satisfaction", source = "satisfaction")
     @Mapping(target = "completedJobs", source = "completedJobs")
     @Mapping(target = "hourlyRateUsdCents", source = "hourlyRateUsdCents")
-    SourcingAgentDetailDtoOut toAgentDetail(AgentProfileEntity agent);
+    SourcingAgentDetailDtoOut toAgentDetail(SourcingAgent model);
 }
