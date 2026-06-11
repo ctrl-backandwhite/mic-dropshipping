@@ -1,9 +1,9 @@
 package com.nexaplatform.dropshipping.application;
 
-import com.nexaplatform.dropshipping.api.dto.out.AdminDashboardSeriesDtoOut;
-import com.nexaplatform.dropshipping.api.mapper.AdminDashboardMapper;
-import com.nexaplatform.dropshipping.application.service.AdminDashboardService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.usecase.impl.AdminDashboardUseCaseImpl;
+import com.nexaplatform.dropshipping.domain.model.DashboardRecentOrder;
+import com.nexaplatform.dropshipping.domain.model.DashboardSeries;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomerOrderEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CustomerSubscriptionRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderRepository;
@@ -13,8 +13,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Suppl
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -23,12 +22,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class AdminDashboardServiceTest {
+class AdminDashboardUseCaseImplTest {
 
     @Mock ProductRepository productRepository;
     @Mock OrderRepository orderRepository;
@@ -37,14 +34,8 @@ class AdminDashboardServiceTest {
     @Mock SubscriptionPlanRepository planRepository;
     @Mock CustomerSubscriptionRepository subscriptionRepository;
     @Mock PricingService pricingService;
-    @Mock AdminDashboardMapper adminDashboardMapper;
 
-    @Captor ArgumentCaptor<List<CustomerOrderEntity>> ordersCaptor;
-
-    private AdminDashboardService service() {
-        return new AdminDashboardService(productRepository, orderRepository, supplierRepository,
-                userRepository, planRepository, subscriptionRepository, pricingService, adminDashboardMapper);
-    }
+    @InjectMocks AdminDashboardUseCaseImpl useCase;
 
     @Test
     void series_bucketsRecentOrdersByDay() {
@@ -55,22 +46,23 @@ class AdminDashboardServiceTest {
                 .placedAt(Instant.now().minus(90, ChronoUnit.DAYS)).totalCents(999).build();
         when(orderRepository.findAll()).thenReturn(List.of(order, stale));
 
-        AdminDashboardSeriesDtoOut result = service().series();
+        DashboardSeries result = useCase.series();
 
         assertThat(result.getOrdersByDay()).containsEntry(day, 1L);
         assertThat(result.getGmvCentsByDay()).containsEntry(day, 500L);
     }
 
     @Test
-    void recentOrders_sortsByPlacedAtDescAndDelegatesToMapper() {
-        var older = CustomerOrderEntity.builder().placedAt(Instant.now().minus(5, ChronoUnit.DAYS)).build();
-        var newer = CustomerOrderEntity.builder().placedAt(Instant.now().minus(1, ChronoUnit.DAYS)).build();
+    void recentOrders_sortsByPlacedAtDescAndProjectsToModel() {
+        var older = CustomerOrderEntity.builder()
+                .orderNumber("OLD").placedAt(Instant.now().minus(5, ChronoUnit.DAYS)).totalCents(100).build();
+        var newer = CustomerOrderEntity.builder()
+                .orderNumber("NEW").placedAt(Instant.now().minus(1, ChronoUnit.DAYS)).totalCents(200).build();
         when(orderRepository.findAll()).thenReturn(List.of(older, newer));
-        when(adminDashboardMapper.toRecentOrderDtos(any())).thenReturn(List.of());
 
-        service().recentOrders();
+        List<DashboardRecentOrder> result = useCase.recentOrders();
 
-        verify(adminDashboardMapper).toRecentOrderDtos(ordersCaptor.capture());
-        assertThat(ordersCaptor.getValue()).containsExactly(newer, older);
+        assertThat(result).extracting(DashboardRecentOrder::getOrderNumber).containsExactly("NEW", "OLD");
+        assertThat(result.get(0).getTotalCents()).isEqualTo(200);
     }
 }

@@ -1,9 +1,10 @@
-package com.nexaplatform.dropshipping.application.service;
+package com.nexaplatform.dropshipping.application.usecase.impl;
 
-import com.nexaplatform.dropshipping.api.dto.out.AdminOAuthClientDtoOut;
-import com.nexaplatform.dropshipping.api.dto.out.AdminPartnerAppDtoOut;
-import com.nexaplatform.dropshipping.api.dto.out.AdminPartnerWebhookDtoOut;
-import com.nexaplatform.dropshipping.api.dto.out.AdminShopConnectionDtoOut;
+import com.nexaplatform.dropshipping.application.usecase.AdminPartnerUseCase;
+import com.nexaplatform.dropshipping.domain.model.AdminOAuthClient;
+import com.nexaplatform.dropshipping.domain.model.AdminPartnerApp;
+import com.nexaplatform.dropshipping.domain.model.AdminShopConnection;
+import com.nexaplatform.dropshipping.domain.model.AdminPartnerWebhook;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -17,25 +18,26 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * Use-case service backing the Admin Partners endpoints. Encapsulates the
- * low-level JDBC access that previously lived in the controller and maps each
- * row into a typed DtoOut, preserving the exact JSON contract (column labels).
+ * Admin Partners read-projection use case. Encapsulates the low-level JDBC access
+ * that previously lived in {@code PartnerAdminService} and maps each row into a
+ * domain projection model. Pure reads: no domain port is required, the existing
+ * {@link JdbcTemplate} is injected directly as the read collaborator.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class PartnerAdminService {
+public class AdminPartnerUseCaseImpl implements AdminPartnerUseCase {
 
     private final JdbcTemplate jdbc;
 
-    /** Lists OAuth2 registered clients (admin-spa, storefront-spa, demo-partner, ...). */
+    @Override
     @Transactional(readOnly = true)
-    public List<AdminOAuthClientDtoOut> listOAuthClients() {
+    public List<AdminOAuthClient> listOAuthClients() {
         return jdbc.query(
                 "SELECT id, client_id, client_name, client_authentication_methods AS auth_methods, " +
                         "authorization_grant_types AS grant_types, redirect_uris, scopes " +
                         "FROM oauth2_registered_client ORDER BY client_id",
-                (rs, rowNum) -> AdminOAuthClientDtoOut.builder()
+                (rs, rowNum) -> AdminOAuthClient.builder()
                         .id(rs.getString("id"))
                         .clientId(rs.getString("client_id"))
                         .clientName(rs.getString("client_name"))
@@ -46,13 +48,13 @@ public class PartnerAdminService {
                         .build());
     }
 
-    /** Recent webhook deliveries. */
+    @Override
     @Transactional(readOnly = true)
-    public List<AdminPartnerWebhookDtoOut> listWebhooks() {
+    public List<AdminPartnerWebhook> listWebhooks() {
         return jdbc.query(
                 "SELECT id, partner_app_id, event_type, status, attempt_count, response_code, created_at " +
                         "FROM partner_webhook_delivery ORDER BY created_at DESC LIMIT 50",
-                (rs, rowNum) -> AdminPartnerWebhookDtoOut.builder()
+                (rs, rowNum) -> AdminPartnerWebhook.builder()
                         .id(rs.getObject("id"))
                         .partnerAppId(rs.getObject("partner_app_id"))
                         .eventType(rs.getString("event_type"))
@@ -63,12 +65,13 @@ public class PartnerAdminService {
                         .build());
     }
 
+    @Override
     @Transactional(readOnly = true)
-    public List<AdminPartnerAppDtoOut> listPartnerApps() {
+    public List<AdminPartnerApp> listPartnerApps() {
         return jdbc.query(
                 "SELECT id, name, description, client_id, scopes, webhook_url, active, created_at " +
                         "FROM partner_app ORDER BY created_at DESC",
-                (rs, rowNum) -> AdminPartnerAppDtoOut.builder()
+                (rs, rowNum) -> AdminPartnerApp.builder()
                         .id(rs.getObject("id"))
                         .name(rs.getString("name"))
                         .description(rs.getString("description"))
@@ -80,12 +83,13 @@ public class PartnerAdminService {
                         .build());
     }
 
+    @Override
     @Transactional(readOnly = true)
-    public List<AdminShopConnectionDtoOut> listShopConnections() {
+    public List<AdminShopConnection> listShopConnections() {
         return jdbc.query(
                 "SELECT id, partner_app_id, platform, shop_handle, active, created_at " +
                         "FROM shop_connection ORDER BY created_at DESC",
-                (rs, rowNum) -> AdminShopConnectionDtoOut.builder()
+                (rs, rowNum) -> AdminShopConnection.builder()
                         .id(rs.getObject("id"))
                         .partnerAppId(rs.getObject("partner_app_id"))
                         .platform(rs.getString("platform"))

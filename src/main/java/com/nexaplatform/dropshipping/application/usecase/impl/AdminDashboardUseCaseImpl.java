@@ -1,10 +1,11 @@
-package com.nexaplatform.dropshipping.application.service;
+package com.nexaplatform.dropshipping.application.usecase.impl;
 
-import com.nexaplatform.dropshipping.api.dto.out.AdminDashboardMetricsDtoOut;
-import com.nexaplatform.dropshipping.api.dto.out.AdminDashboardRecentOrderDtoOut;
-import com.nexaplatform.dropshipping.api.dto.out.AdminDashboardSeriesDtoOut;
-import com.nexaplatform.dropshipping.api.mapper.AdminDashboardMapper;
+import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.usecase.AdminDashboardUseCase;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
+import com.nexaplatform.dropshipping.domain.model.DashboardMetrics;
+import com.nexaplatform.dropshipping.domain.model.DashboardRecentOrder;
+import com.nexaplatform.dropshipping.domain.model.DashboardSeries;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomerOrderEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CustomerSubscriptionRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderRepository;
@@ -27,14 +28,16 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Use-case service that aggregates admin dashboard data (KPI metrics, time-series
- * buckets and recent orders) from the various repositories. Holds all the logic
- * previously inlined in {@code AdminDashboardController}.
+ * Admin-dashboard use case. Aggregates KPI metrics, time-series buckets and recent
+ * orders from the various repositories and returns domain projection models. Holds
+ * all the logic previously inlined in the dashboard controller/service. Pure reads,
+ * so the existing Spring Data repositories are injected directly as read
+ * collaborators (no domain port).
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class AdminDashboardService {
+public class AdminDashboardUseCaseImpl implements AdminDashboardUseCase {
 
     private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
@@ -43,13 +46,12 @@ public class AdminDashboardService {
     private final SubscriptionPlanRepository planRepository;
     private final CustomerSubscriptionRepository subscriptionRepository;
     private final PricingService pricingService;
-    private final AdminDashboardMapper adminDashboardMapper;
 
+    @Override
     @Transactional(readOnly = true)
-    public AdminDashboardMetricsDtoOut metrics() {
+    public DashboardMetrics metrics() {
         long activeProducts = productRepository.findByStatus(ProductStatus.ACTIVE, PageRequest.of(0, 1)).getTotalElements();
         long allProducts = productRepository.count();
-        long draftProducts = Math.max(0, allProducts - activeProducts);
         long totalOrders = orderRepository.count();
         long totalUsers = userRepository.count();
         long totalSuppliers = supplierRepository.count();
@@ -68,7 +70,7 @@ public class AdminDashboardService {
                 .mapToLong(s -> s.getPlan().getPriceMonthlyCents()).sum();
         BigDecimal mrrUsd = BigDecimal.valueOf(mrrCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
 
-        return AdminDashboardMetricsDtoOut.builder()
+        return DashboardMetrics.builder()
                 .activeProducts(activeProducts)
                 .totalProducts(allProducts)
                 .draftProducts(allProducts - activeProducts)
@@ -85,8 +87,9 @@ public class AdminDashboardService {
                 .build();
     }
 
+    @Override
     @Transactional(readOnly = true)
-    public AdminDashboardSeriesDtoOut series() {
+    public DashboardSeries series() {
         // Bucket orders by day for the last 30 days
         Instant from = Instant.now().minus(30, ChronoUnit.DAYS);
         List<CustomerOrderEntity> orders = orderRepository.findAll().stream()
@@ -99,22 +102,35 @@ public class AdminDashboardService {
             ordersByDay.merge(day, 1L, Long::sum);
             gmvByDay.merge(day, (long) o.getTotalCents(), Long::sum);
         }
-        return AdminDashboardSeriesDtoOut.builder()
+        return DashboardSeries.builder()
                 .ordersByDay(ordersByDay)
                 .gmvCentsByDay(gmvByDay)
                 .build();
     }
 
+    @Override
     @Transactional(readOnly = true)
-    public List<AdminDashboardRecentOrderDtoOut> recentOrders() {
-        List<CustomerOrderEntity> recent = orderRepository.findAll().stream()
+    public List<DashboardRecentOrder> recentOrders() {
+        return orderRepository.findAll().stream()
                 .sorted((a, b) -> {
                     Instant ai = a.getPlacedAt() != null ? a.getPlacedAt() : a.getCreatedAt();
                     Instant bi = b.getPlacedAt() != null ? b.getPlacedAt() : b.getCreatedAt();
                     return bi.compareTo(ai);
                 })
                 .limit(10)
+                .map(this::toRecentOrder)
                 .toList();
-        return adminDashboardMapper.toRecentOrderDtos(recent);
+    }
+
+    /** Projects a persisted order entity into the read-only recent-order model. */
+    private DashboardRecentOrder toRecentOrder(CustomerOrderEntity entity) {
+        return DashboardRecentOrder.builder()
+                .id(entity.getId())
+                .orderNumber(entity.getOrderNumber())
+                .status(entity.getStatus() != null ? entity.getStatus().name() : null)
+                .totalCents(entity.getTotalCents())
+                .currency(entity.getCurrency())
+                .placedAt(entity.getPlacedAt())
+                .build();
     }
 }

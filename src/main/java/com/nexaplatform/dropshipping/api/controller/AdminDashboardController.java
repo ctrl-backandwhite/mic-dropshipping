@@ -4,7 +4,8 @@ import com.nexaplatform.dropshipping.api.AdminDashboardApi;
 import com.nexaplatform.dropshipping.api.dto.out.AdminDashboardMetricsDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminDashboardRecentOrderDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminDashboardSeriesDtoOut;
-import com.nexaplatform.dropshipping.application.service.AdminDashboardService;
+import com.nexaplatform.dropshipping.api.mapper.AdminDashboardMapper;
+import com.nexaplatform.dropshipping.application.usecase.AdminDashboardUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,7 +17,8 @@ import java.util.List;
 /**
  * Admin Dashboard controller. Pure implementation of {@link AdminDashboardApi}:
  * no business logic and no manual mapping — delegates to
- * {@link AdminDashboardService} and wraps every result in a standardized
+ * {@link AdminDashboardUseCase}, maps the domain projection models to DtoOuts via
+ * {@link AdminDashboardMapper} and wraps every result in a standardized
  * {@link ResponseEntity}.
  */
 @RestController
@@ -24,20 +26,21 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AdminDashboardController implements AdminDashboardApi {
 
-    private final AdminDashboardService adminDashboardService;
+    private final AdminDashboardMapper mapper;
+    private final AdminDashboardUseCase useCase;
 
     @Override
     public ResponseEntity<AdminDashboardMetricsDtoOut> metrics() {
-        return new ResponseEntity<>(adminDashboardService.metrics(), HttpStatus.OK);
+        return new ResponseEntity<>(mapper.toDtoOut(useCase.metrics()), HttpStatus.OK);
     }
 
     @Override
     public ResponseEntity<AdminDashboardSeriesDtoOut> series() {
-        return new ResponseEntity<>(adminDashboardService.series(), HttpStatus.OK);
+        return new ResponseEntity<>(mapper.toDtoOut(useCase.series()), HttpStatus.OK);
     }
 
     @Override
     public ResponseEntity<List<AdminDashboardRecentOrderDtoOut>> recentOrders() {
-        return new ResponseEntity<>(adminDashboardService.recentOrders(), HttpStatus.OK);
+        return new ResponseEntity<>(mapper.toRecentOrderDtoList(useCase.recentOrders()), HttpStatus.OK);
     }
 }

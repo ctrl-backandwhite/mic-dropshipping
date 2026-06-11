@@ -1,11 +1,10 @@
 package com.nexaplatform.dropshipping.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.nexaplatform.dropshipping.api.dto.in.PartnerApiKeyCreateDtoIn;
-import com.nexaplatform.dropshipping.api.dto.out.PartnerApiKeyCreatedDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
-import com.nexaplatform.dropshipping.application.service.PartnerApiKeyService;
+import com.nexaplatform.dropshipping.application.usecase.impl.PartnerApiKeyUseCaseImpl;
+import com.nexaplatform.dropshipping.domain.model.ApiKey;
 import com.nexaplatform.dropshipping.infrastructure.security.oauth.JwtRevocationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,7 +28,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class PartnerApiKeyServiceTest {
+class PartnerApiKeyUseCaseImplTest {
 
     @Mock RegisteredClientRepository repo;
     @Mock PasswordEncoder passwordEncoder;
@@ -37,8 +36,8 @@ class PartnerApiKeyServiceTest {
     @Mock ObjectMapper mapper;
     @Mock JwtRevocationService revocationService;
 
-    private PartnerApiKeyService service() {
-        return new PartnerApiKeyService(repo, passwordEncoder, jdbc, mapper, revocationService);
+    private PartnerApiKeyUseCaseImpl useCase() {
+        return new PartnerApiKeyUseCaseImpl(repo, passwordEncoder, jdbc, mapper, revocationService);
     }
 
     @Test
@@ -46,9 +45,9 @@ class PartnerApiKeyServiceTest {
         UUID userId = UUID.randomUUID();
         when(jdbc.queryForObject(anyString(), eq(Long.class), any())).thenReturn(0L);
         when(passwordEncoder.encode(anyString())).thenReturn("hashed");
-        var req = new PartnerApiKeyCreateDtoIn("My key", List.of("catalog.read"));
+        ApiKey command = ApiKey.builder().name("My key").scopes(List.of("catalog.read")).build();
 
-        PartnerApiKeyCreatedDtoOut result = service().create(userId, req);
+        ApiKey result = useCase().create(userId, command);
 
         assertThat(result.getName()).isEqualTo("My key");
         assertThat(result.getClientSecret()).startsWith("sk_");
@@ -61,10 +60,10 @@ class PartnerApiKeyServiceTest {
     void create_rejectsWhenQuotaExceeded() {
         UUID userId = UUID.randomUUID();
         when(jdbc.queryForObject(anyString(), eq(Long.class), any())).thenReturn(5L);
-        var req = new PartnerApiKeyCreateDtoIn("Another", null);
-        PartnerApiKeyService svc = service();
+        ApiKey command = ApiKey.builder().name("Another").build();
+        PartnerApiKeyUseCaseImpl uc = useCase();
 
-        assertThatThrownBy(() -> svc.create(userId, req))
+        assertThatThrownBy(() -> uc.create(userId, command))
                 .isInstanceOf(BusinessException.class);
         verify(repo, never()).save(any());
     }
@@ -73,10 +72,10 @@ class PartnerApiKeyServiceTest {
     void create_rejectsUnknownScope() {
         UUID userId = UUID.randomUUID();
         when(jdbc.queryForObject(anyString(), eq(Long.class), any())).thenReturn(0L);
-        var req = new PartnerApiKeyCreateDtoIn("Bad", List.of("admin.everything"));
-        PartnerApiKeyService svc = service();
+        ApiKey command = ApiKey.builder().name("Bad").scopes(List.of("admin.everything")).build();
+        PartnerApiKeyUseCaseImpl uc = useCase();
 
-        assertThatThrownBy(() -> svc.create(userId, req))
+        assertThatThrownBy(() -> uc.create(userId, command))
                 .isInstanceOf(BusinessException.class);
         verify(repo, never()).save(any());
     }
@@ -94,7 +93,7 @@ class PartnerApiKeyServiceTest {
                 .build();
         when(repo.findByClientId("pk_abc")).thenReturn(client);
 
-        service().revoke(userId, "pk_abc");
+        useCase().revoke(userId, "pk_abc");
 
         verify(jdbc).update(anyString(), eq("pk_abc"));
         verify(revocationService).revokeAllForClient("pk_abc");
@@ -104,9 +103,9 @@ class PartnerApiKeyServiceTest {
     void revoke_throwsWhenNotFound() {
         UUID userId = UUID.randomUUID();
         when(repo.findByClientId("ghost")).thenReturn(null);
-        PartnerApiKeyService svc = service();
+        PartnerApiKeyUseCaseImpl uc = useCase();
 
-        assertThatThrownBy(() -> svc.revoke(userId, "ghost"))
+        assertThatThrownBy(() -> uc.revoke(userId, "ghost"))
                 .isInstanceOf(NotFoundException.class);
     }
 }
