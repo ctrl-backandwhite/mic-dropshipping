@@ -2,7 +2,7 @@ package com.nexaplatform.dropshipping.api.mapper;
 
 import com.nexaplatform.dropshipping.api.dto.out.BillingPlanDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SubscribeDtoOut;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomerSubscriptionEntity;
+import com.nexaplatform.dropshipping.domain.model.SubscribeResult;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PlanFeatureEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SubscriptionPlanEntity;
 import org.mapstruct.Mapper;
@@ -14,10 +14,13 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * API-layer mapper for the storefront billing endpoints. Translates the
- * subscription plan entity into its public projection and builds the
- * subscribe response. Replaces the hand-written {@code toView}/{@code new
- * SubscribeResponse(...)} logic that previously lived in the controller/service.
+ * API-layer mapper for the storefront billing endpoints. The subscribe response
+ * is projected from the {@link SubscribeResult} domain model. The public plan
+ * projection is kept on the {@link SubscriptionPlanEntity} because the
+ * frontend-facing {@code limits} map is derived from the plan's feature rows,
+ * which the migrated {@code SubscriptionPlan} domain model does not carry;
+ * preserving that JSON is a hard requirement, so the use case sources the public
+ * list from the plan entity directly. Injected in the controller.
  */
 @Mapper(componentModel = "spring")
 public interface BillingDtoMapper {
@@ -41,7 +44,7 @@ public interface BillingDtoMapper {
      */
     @Mapping(target = "checkoutUrl", source = "checkoutUrl")
     @Mapping(target = "sessionId", source = "sessionId")
-    SubscribeDtoOut toSubscribeDtoOut(String checkoutUrl, String sessionId);
+    SubscribeDtoOut toSubscribeDtoOut(SubscribeResult result);
 
     @Named("featuresToLimits")
     default Map<String, Long> featuresToLimits(List<PlanFeatureEntity> features) {
