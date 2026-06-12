@@ -47,6 +47,10 @@ public class AffiliateCommissionEntity extends BaseEntity {
     @Column(name = "wallet_tx_id", columnDefinition = "uuid")
     private UUID walletTxId;
 
+    /** The payout that settled this commission (DROP-651), for reconciliation. */
+    @Column(name = "payout_id", columnDefinition = "uuid")
+    private UUID payoutId;
+
     @Column(length = 300)
     private String note;
 }

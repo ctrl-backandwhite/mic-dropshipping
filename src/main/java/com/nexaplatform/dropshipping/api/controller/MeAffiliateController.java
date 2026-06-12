@@ -33,8 +33,17 @@ public class MeAffiliateController {
     @PostMapping("/join")
     public ResponseEntity<AffiliateDashboardView> join(Authentication auth) {
         UUID userId = UUID.fromString(auth.getName());
-        service.getOrCreateForUser(userId); // creates the affiliate + first code
+        service.joinProgram(userId); // records explicit terms acceptance + activates
         return ResponseEntity.ok(buildDashboard(userId));
+    }
+
+    /** DROP-651: the affiliate requests a payout of their approved commissions. */
+    @PostMapping("/payout-request")
+    public ResponseEntity<java.util.Map<String, Object>> requestPayout(Authentication auth) {
+        UUID userId = UUID.fromString(auth.getName());
+        var p = service.requestPayout(userId);
+        return ResponseEntity.ok(java.util.Map.of("id", p.getId(), "amountCents", p.getAmountCents(), "status",
+                p.getStatus()));
     }
 
     @PostMapping("/codes")
@@ -66,9 +75,13 @@ public class MeAffiliateController {
         var config = service.config();
         var pct = a.getCommissionPercentOverride() != null ? a.getCommissionPercentOverride()
                 : config.getDefaultPercent();
-        return new AffiliateDashboardView(a.getId(), a.getStatus(), pct, "",
-                codes.stream().map(mapper::toCodeView).toList(),
-                mapper.stats(codes, convs, comms, config.getCurrency()),
+        var stats = mapper.stats(codes, convs, comms, config.getCurrency());
+        boolean joined = a.getAcceptedTermsAt() != null;
+        boolean payoutRequested = service.payoutsForAffiliate(a.getId()).stream()
+                .anyMatch(p -> "REQUESTED".equals(p.getStatus()));
+        boolean canRequestPayout = !payoutRequested && stats.approvedCents() >= config.getMinPayoutCents();
+        return new AffiliateDashboardView(a.getId(), a.getStatus(), pct, joined, canRequestPayout,
+                config.getMinPayoutCents(), payoutRequested, codes.stream().map(mapper::toCodeView).toList(), stats,
                 comms.stream().limit(20).map(c -> mapper.toCommissionView(c, convById)).toList());
     }
 }

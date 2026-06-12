@@ -33,8 +33,44 @@ public class AffiliateProgramService {
     private final AffiliateConversionRepository conversionRepo;
     private final AffiliateCommissionRepository commissionRepo;
     private final AffiliateProgramConfigRepository configRepo;
+    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.AffiliatePayoutRepository payoutRepo;
     private final UserRepository userRepository;
+    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.NotificationJpaRepositoryAdapter notificationRepo;
     private final WalletUseCase walletUseCase;
+
+    /* ============================ Notifications (DROP-653) ============================ */
+
+    /** Writes an in-app notification (reuses the existing notification center). */
+    private void notify(java.util.UUID userId, String eventType, String title, String body) {
+        if (userId == null) {
+            return;
+        }
+        try {
+            com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity u = userRepository
+                    .findById(userId).orElse(null);
+            if (u == null) {
+                return;
+            }
+            notificationRepo.save(
+                    com.nexaplatform.dropshipping.infrastructure.persistence.entity.NotificationEntity.builder().user(u)
+                            .eventType(eventType).title(title).body(body).channel("IN_APP")
+                            .payload(new java.util.HashMap<>()).build());
+        } catch (RuntimeException e) {
+            log.warn("affiliate notify failed for {}: {}", userId, e.getMessage());
+        }
+    }
+
+    /** Alerts staff (admin/operator) — used for payout requests and fraud reviews (DROP-653). */
+    private void notifyStaff(String eventType, String title, String body) {
+        try {
+            userRepository.findAll().stream()
+                    .filter(u -> u.getRole() != null
+                            && ("ADMIN".equals(u.getRole().name()) || "OPERATOR".equals(u.getRole().name())))
+                    .forEach(u -> notify(u.getId(), eventType, title, body));
+        } catch (RuntimeException e) {
+            log.warn("affiliate notifyStaff failed: {}", e.getMessage());
+        }
+    }
 
     /* ============================ Config ============================ */
 
@@ -47,7 +83,7 @@ public class AffiliateProgramService {
 
     @Transactional
     public AffiliateProgramConfigEntity updateConfig(BigDecimal defaultPercent, Integer windowDays, Integer returnDays,
-            Long minPayoutCents, String currency) {
+            Long minPayoutCents, String currency, Long maxCommissionPeriodCents) {
         AffiliateProgramConfigEntity c = configRepo.findFirstByOrderByCreatedAtAsc()
                 .orElseGet(() -> configRepo.save(config()));
         if (defaultPercent != null) c.setDefaultPercent(defaultPercent);
@@ -55,6 +91,7 @@ public class AffiliateProgramService {
         if (returnDays != null) c.setReturnPeriodDays(returnDays);
         if (minPayoutCents != null) c.setMinPayoutCents(minPayoutCents);
         if (currency != null && !currency.isBlank()) c.setCurrency(currency);
+        if (maxCommissionPeriodCents != null) c.setMaxCommissionPeriodCents(maxCommissionPeriodCents);
         return configRepo.save(c);
     }
 
@@ -83,6 +120,22 @@ public class AffiliateProgramService {
                     .label("Primary").active(true).build());
         }
         return affiliate;
+    }
+
+    /** DROP-650: explicit opt-in to the program (records terms acceptance, activates, notifies). */
+    @Transactional
+    public AffiliateEntity joinProgram(UUID userId) {
+        AffiliateEntity a = getOrCreateForUser(userId);
+        if (a.getAcceptedTermsAt() == null) {
+            a.setAcceptedTermsAt(Instant.now());
+            a.setStatus("ACTIVE");
+            a.setActive(true);
+            affiliateRepo.save(a);
+            notify(userId, "AFFILIATE_JOINED", "Te has unido al programa de afiliados",
+                    "Tu cuenta de afiliado está activa. Comparte tu enlace para empezar a ganar comisiones.");
+            notifyStaff("AFFILIATE_JOIN", "Nuevo afiliado", "Un cliente se ha unido al programa de afiliados.");
+        }
+        return a;
     }
 
     @Transactional(readOnly = true)
@@ -137,13 +190,23 @@ public class AffiliateProgramService {
         if (!"ACTIVE".equals(rc.getAffiliate().getStatus())) {
             return Optional.empty();
         }
+        Instant now = Instant.now();
+        var cfg = config();
+        // DROP-652: de-duplicate clicks — repeated clicks of the same code by the same visitor
+        // within the dedup window refresh the existing attribution instead of inflating metrics.
+        if (visitorToken != null && !visitorToken.isBlank()) {
+            Instant since = now.minus(Duration.ofMinutes(Math.max(1, cfg.getClickDedupMinutes())));
+            var recent = attrRepo.findTopByVisitorTokenAndExpiresAtAfterOrderByClickedAtDesc(visitorToken, now);
+            if (recent.isPresent() && rc.getId().equals(recent.get().getReferralCodeId())
+                    && recent.get().getClickedAt() != null && recent.get().getClickedAt().isAfter(since)) {
+                return recent; // duplicate click within the window → no new attribution, no click bump
+            }
+        }
         rc.setClicks(rc.getClicks() + 1);
         codeRepo.save(rc);
-        Instant now = Instant.now();
-        int windowDays = config().getAttributionWindowDays();
         AffiliateAttributionEntity attr = AffiliateAttributionEntity.builder().referralCodeId(rc.getId())
                 .affiliateId(rc.getAffiliate().getId()).visitorToken(visitorToken).clickedAt(now)
-                .expiresAt(now.plus(Duration.ofDays(windowDays))).build();
+                .expiresAt(now.plus(Duration.ofDays(cfg.getAttributionWindowDays()))).build();
         return Optional.of(attrRepo.save(attr));
     }
 
@@ -200,20 +263,52 @@ public class AffiliateProgramService {
                 .affiliateId(affiliate.getId()).referralCodeId(attr.getReferralCodeId()).referredUserId(userId)
                 .orderId(orderId).baseAmountCents(subtotalCents).currency(ccy).status("CONFIRMED").build());
 
+        var cfg = config();
         BigDecimal pct = affiliate.getCommissionPercentOverride() != null
                 ? affiliate.getCommissionPercentOverride()
-                : config().getDefaultPercent();
+                : cfg.getDefaultPercent();
         long amount = BigDecimal.valueOf(subtotalCents).multiply(pct).divide(BigDecimal.valueOf(100), 0,
                 RoundingMode.HALF_UP).longValue();
-        commissionRepo.save(AffiliateCommissionEntity.builder().affiliateId(affiliate.getId())
-                .conversionId(conv.getId()).amountCents(amount).currency(ccy).percentage(pct).status("PENDING")
-                .note("Auto: " + pct + "% de " + subtotalCents + " " + ccy).build());
 
+        // DROP-652: cap on commission per affiliate within the period → flag for manual REVIEW
+        // instead of auto-approving when the limit is exceeded.
+        boolean review = false;
+        if (cfg.getMaxCommissionPeriodCents() > 0) {
+            Instant since = Instant.now().minus(Duration.ofDays(Math.max(1, cfg.getMaxPeriodDays())));
+            long periodSum = commissionRepo.findByAffiliateIdOrderByCreatedAtDesc(affiliate.getId()).stream()
+                    .filter(c -> c.getCreatedAt() != null && c.getCreatedAt().isAfter(since))
+                    .filter(c -> !"REJECTED".equals(c.getStatus()))
+                    .mapToLong(AffiliateCommissionEntity::getAmountCents).sum();
+            if (periodSum + amount > cfg.getMaxCommissionPeriodCents()) {
+                review = true;
+            }
+        }
+        String status = review ? "REVIEW" : "PENDING";
+        commissionRepo.save(AffiliateCommissionEntity.builder().affiliateId(affiliate.getId())
+                .conversionId(conv.getId()).amountCents(amount).currency(ccy).percentage(pct).status(status)
+                .note((review ? "REVISIÓN (límite de periodo): " : "Auto: ") + pct + "% de " + subtotalCents + " " + ccy)
+                .build());
+
+        boolean firstConversion = affiliate.getReferralsCount() == 0;
         affiliate.setReferralsCount(affiliate.getReferralsCount() + 1);
         affiliate.setEarningsUsdCents(affiliate.getEarningsUsdCents() + amount);
         affiliateRepo.save(affiliate);
-        log.info("::> [AFFILIATE] Conversion {} → commission {} {} for affiliate {}", conv.getId(), amount, ccy,
-                affiliate.getId());
+        log.info("::> [AFFILIATE] Conversion {} → commission {} {} ({}) for affiliate {}", conv.getId(), amount, ccy,
+                status, affiliate.getId());
+
+        // DROP-653: notify the affiliate (first sale / commission earned) and staff if flagged.
+        UUID affUser = affiliate.getUser() != null ? affiliate.getUser().getId() : null;
+        if (firstConversion) {
+            notify(affUser, "AFFILIATE_FIRST_CONVERSION", "¡Tu primera venta referida!",
+                    "Has generado tu primera conversión como afiliado. Tu comisión está en proceso.");
+        } else {
+            notify(affUser, "AFFILIATE_COMMISSION", "Nueva comisión",
+                    "Has generado una nueva comisión por una venta referida.");
+        }
+        if (review) {
+            notifyStaff("AFFILIATE_FRAUD_REVIEW", "Comisión en revisión",
+                    "Una comisión superó el límite del periodo y quedó en revisión manual.");
+        }
     }
 
     /** Cancels the conversion and rejects its commission (unless already paid) on order cancel/refund. */
@@ -248,44 +343,154 @@ public class AffiliateProgramService {
                 comm.setApprovedAt(Instant.now());
                 commissionRepo.save(comm);
                 approved++;
+                affiliateRepo.findById(comm.getAffiliateId()).ifPresent(a -> notify(
+                        a.getUser() != null ? a.getUser().getId() : null, "AFFILIATE_COMMISSION_APPROVED",
+                        "Comisión aprobada", "Una de tus comisiones ha sido aprobada y está lista para liquidar."));
             }
         }
         return approved;
     }
 
-    /* ============================ Payout to wallet ============================ */
+    /** A commission flagged for manual REVIEW can be approved or rejected by the operator (DROP-652). */
+    @Transactional
+    public void resolveReview(UUID commissionId, boolean approve) {
+        AffiliateCommissionEntity comm = commissionRepo.findById(commissionId).orElseThrow(
+                () -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("Commission not found"));
+        if (!"REVIEW".equals(comm.getStatus())) {
+            throw new com.nexaplatform.dropshipping.api.exception.BusinessException("La comisión no está en revisión");
+        }
+        if (approve) {
+            comm.setStatus("APPROVED");
+            comm.setApprovedAt(Instant.now());
+        } else {
+            comm.setStatus("REJECTED");
+            comm.setNote("Rechazada en revisión anti-fraude");
+            affiliateRepo.findById(comm.getAffiliateId()).ifPresent(a -> {
+                a.setEarningsUsdCents(Math.max(0, a.getEarningsUsdCents() - comm.getAmountCents()));
+                affiliateRepo.save(a);
+            });
+        }
+        commissionRepo.save(comm);
+    }
+
+    /* ============================ Payout / settlement (DROP-651) ============================ */
+
+    /** Affiliate requests a payout of their APPROVED commissions (must meet the minimum). */
+    @Transactional
+    public AffiliatePayoutEntity requestPayout(UUID userId) {
+        AffiliateEntity affiliate = affiliateRepo.findByUser_Id(userId).orElseThrow(
+                () -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("Affiliate not found"));
+        if (payoutRepo.existsByAffiliateIdAndStatus(affiliate.getId(), "REQUESTED")) {
+            throw new com.nexaplatform.dropshipping.api.exception.BusinessException(
+                    "Ya tienes una solicitud de pago pendiente");
+        }
+        List<AffiliateCommissionEntity> approved = commissionRepo.findByAffiliateIdAndStatus(affiliate.getId(), "APPROVED");
+        long total = approved.stream().mapToLong(AffiliateCommissionEntity::getAmountCents).sum();
+        var cfg = config();
+        if (total < cfg.getMinPayoutCents()) {
+            throw new com.nexaplatform.dropshipping.api.exception.BusinessException(
+                    "Saldo aprobado por debajo del pago mínimo");
+        }
+        AffiliatePayoutEntity payout = payoutRepo.save(AffiliatePayoutEntity.builder().affiliateId(affiliate.getId())
+                .amountCents(total).currency(cfg.getCurrency()).status("REQUESTED").method("WALLET")
+                .commissionCount(approved.size()).requestedAt(Instant.now())
+                .note("Solicitud del afiliado").build());
+        notifyStaff("AFFILIATE_PAYOUT_REQUEST", "Solicitud de pago de afiliado",
+                "Un afiliado ha solicitado el pago de sus comisiones aprobadas.");
+        return payout;
+    }
 
     /**
-     * Settles APPROVED commissions for an affiliate by crediting their wallet, provided the total
-     * meets the minimum payout. Returns the credited amount in cents (0 if below threshold).
+     * Operator approves & executes a payout: credits the affiliate's wallet and marks the APPROVED
+     * commissions as PAID. No automatic payment happens without this explicit approval (DROP-651).
      */
     @Transactional
-    public long payoutApproved(UUID affiliateId, boolean force) {
-        AffiliateEntity affiliate = affiliateRepo.findById(affiliateId).orElseThrow(
+    public AffiliatePayoutEntity approvePayout(UUID payoutId) {
+        AffiliatePayoutEntity payout = payoutRepo.findById(payoutId).orElseThrow(
+                () -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("Payout not found"));
+        if ("PAID".equals(payout.getStatus())) {
+            return payout; // idempotent — never pay twice
+        }
+        if ("REJECTED".equals(payout.getStatus())) {
+            throw new com.nexaplatform.dropshipping.api.exception.BusinessException("El pago fue rechazado");
+        }
+        AffiliateEntity affiliate = affiliateRepo.findById(payout.getAffiliateId()).orElseThrow(
                 () -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("Affiliate not found"));
-        List<AffiliateCommissionEntity> approved = commissionRepo.findByAffiliateIdAndStatus(affiliateId, "APPROVED");
+        List<AffiliateCommissionEntity> approved = commissionRepo.findByAffiliateIdAndStatus(affiliate.getId(), "APPROVED");
         long total = approved.stream().mapToLong(AffiliateCommissionEntity::getAmountCents).sum();
         if (total <= 0) {
-            return 0;
-        }
-        if (!force && total < config().getMinPayoutCents()) {
-            return 0; // below minimum payout threshold
+            payout.setStatus("REJECTED");
+            payout.setNote("Sin comisiones aprobadas que liquidar");
+            return payoutRepo.save(payout);
         }
         UUID userId = affiliate.getUser().getId();
         var tx = walletUseCase.adminTopup(userId, total, "Affiliate commission payout",
-                "affiliate-payout-" + affiliateId + "-" + Instant.now().toEpochMilli());
+                "affiliate-payout-" + payout.getId());
         UUID txId = tx != null ? tx.getId() : null;
         Instant now = Instant.now();
         for (AffiliateCommissionEntity comm : approved) {
             comm.setStatus("PAID");
             comm.setPaidAt(now);
             comm.setWalletTxId(txId);
+            comm.setPayoutId(payout.getId());
             commissionRepo.save(comm);
         }
         affiliate.setPayoutUsdCents(affiliate.getPayoutUsdCents() + total);
         affiliateRepo.save(affiliate);
-        log.info("::> [AFFILIATE] Paid out {} cents to affiliate {} (wallet tx {})", total, affiliateId, txId);
-        return total;
+        payout.setStatus("PAID");
+        payout.setAmountCents(total);
+        payout.setWalletTxId(txId);
+        payout.setProcessedAt(now);
+        payout.setCommissionCount(approved.size());
+        payoutRepo.save(payout);
+        notify(userId, "AFFILIATE_PAYOUT_PAID", "Pago de comisiones realizado",
+                "Tus comisiones se han abonado a tu wallet.");
+        log.info("::> [AFFILIATE] Payout {} paid {} cents to affiliate {} (wallet tx {})", payout.getId(), total,
+                affiliate.getId(), txId);
+        return payout;
+    }
+
+    @Transactional
+    public AffiliatePayoutEntity rejectPayout(UUID payoutId, String reason) {
+        AffiliatePayoutEntity payout = payoutRepo.findById(payoutId).orElseThrow(
+                () -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("Payout not found"));
+        if ("PAID".equals(payout.getStatus())) {
+            throw new com.nexaplatform.dropshipping.api.exception.BusinessException("El pago ya se ejecutó");
+        }
+        payout.setStatus("REJECTED");
+        payout.setProcessedAt(Instant.now());
+        payout.setNote(reason != null ? reason : "Rechazado por el operador");
+        return payoutRepo.save(payout);
+    }
+
+    /** Admin direct settlement: creates an approved payout and executes it in one step. */
+    @Transactional
+    public long payoutApproved(UUID affiliateId, boolean force) {
+        AffiliateEntity affiliate = affiliateRepo.findById(affiliateId).orElseThrow(
+                () -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("Affiliate not found"));
+        long approvedTotal = commissionRepo.findByAffiliateIdAndStatus(affiliateId, "APPROVED").stream()
+                .mapToLong(AffiliateCommissionEntity::getAmountCents).sum();
+        if (approvedTotal <= 0) {
+            return 0;
+        }
+        if (!force && approvedTotal < config().getMinPayoutCents()) {
+            return 0;
+        }
+        AffiliatePayoutEntity payout = payoutRepo.save(AffiliatePayoutEntity.builder().affiliateId(affiliateId)
+                .amountCents(approvedTotal).currency(config().getCurrency()).status("APPROVED").method("WALLET")
+                .requestedAt(Instant.now()).note("Pago directo del operador").build());
+        AffiliatePayoutEntity done = approvePayout(payout.getId());
+        return "PAID".equals(done.getStatus()) ? done.getAmountCents() : 0;
+    }
+
+    @Transactional(readOnly = true)
+    public List<AffiliatePayoutEntity> payoutsForAffiliate(UUID affiliateId) {
+        return payoutRepo.findByAffiliateIdOrderByCreatedAtDesc(affiliateId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AffiliatePayoutEntity> pendingPayouts() {
+        return payoutRepo.findByStatusOrderByCreatedAtDesc("REQUESTED");
     }
 
     /* ============================ Queries ============================ */

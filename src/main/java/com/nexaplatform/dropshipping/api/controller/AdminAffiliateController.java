@@ -66,6 +66,33 @@ public class AdminAffiliateController {
         return ResponseEntity.ok(Map.of("approved", service.approveDueCommissions()));
     }
 
+    /* ---- DROP-651: payout requests (operator approval required) ---- */
+
+    @GetMapping("/payouts/pending")
+    public ResponseEntity<List<com.nexaplatform.dropshipping.infrastructure.persistence.entity.AffiliatePayoutEntity>> pendingPayouts() {
+        return ResponseEntity.ok(service.pendingPayouts());
+    }
+
+    @PostMapping("/payouts/{payoutId}/approve")
+    public ResponseEntity<Map<String, Object>> approvePayout(@PathVariable UUID payoutId) {
+        var p = service.approvePayout(payoutId);
+        return ResponseEntity.ok(Map.of("status", p.getStatus(), "amountCents", p.getAmountCents()));
+    }
+
+    @PostMapping("/payouts/{payoutId}/reject")
+    public ResponseEntity<Void> rejectPayout(@PathVariable UUID payoutId, @RequestBody(required = false) Map<String, String> body) {
+        service.rejectPayout(payoutId, body != null ? body.get("reason") : null);
+        return ResponseEntity.noContent().build();
+    }
+
+    /* ---- DROP-652: resolve a commission flagged for fraud review ---- */
+
+    @PostMapping("/commissions/{commissionId}/review")
+    public ResponseEntity<Void> resolveReview(@PathVariable UUID commissionId, @RequestParam boolean approve) {
+        service.resolveReview(commissionId, approve);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/config")
     public ResponseEntity<ProgramConfigView> getConfig() {
         return ResponseEntity.ok(mapper.toConfigView(service.config()));
@@ -74,7 +101,7 @@ public class AdminAffiliateController {
     @PutMapping("/config")
     public ResponseEntity<ProgramConfigView> updateConfig(@RequestBody ConfigUpdateRequest req) {
         var c = service.updateConfig(req.defaultPercent(), req.attributionWindowDays(), req.returnPeriodDays(),
-                req.minPayoutCents(), req.currency());
+                req.minPayoutCents(), req.currency(), req.maxCommissionPeriodCents());
         return ResponseEntity.ok(mapper.toConfigView(c));
     }
 }

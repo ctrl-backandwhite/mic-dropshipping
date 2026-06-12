@@ -54,6 +54,7 @@ public class AffiliateViewMapper {
 
     public ProgramConfigView toConfigView(AffiliateProgramConfigEntity c) {
         return new ProgramConfigView(c.getDefaultPercent(), c.getAttributionWindowDays(), c.getReturnPeriodDays(),
-                c.getMinPayoutCents(), c.getCurrency(), c.getAttributionModel());
+                c.getMinPayoutCents(), c.getCurrency(), c.getAttributionModel(), c.getMaxCommissionPeriodCents(),
+                c.getMaxPeriodDays(), c.getClickDedupMinutes());
     }
 }

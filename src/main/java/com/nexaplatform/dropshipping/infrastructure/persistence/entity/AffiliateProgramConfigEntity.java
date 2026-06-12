@@ -34,4 +34,18 @@ public class AffiliateProgramConfigEntity extends BaseEntity {
     @Column(name = "attribution_model", nullable = false, length = 20)
     @Builder.Default
     private String attributionModel = "LAST_CLICK";
+
+    /** Anti-fraud (DROP-652): cap on commission per affiliate within max_period_days (0 = no cap). */
+    @Column(name = "max_commission_period_cents", nullable = false)
+    @Builder.Default
+    private long maxCommissionPeriodCents = 0;
+
+    @Column(name = "max_period_days", nullable = false)
+    @Builder.Default
+    private int maxPeriodDays = 30;
+
+    /** Repeated clicks of the same code+visitor within this window do not create a new attribution. */
+    @Column(name = "click_dedup_minutes", nullable = false)
+    @Builder.Default
+    private int clickDedupMinutes = 30;
 }

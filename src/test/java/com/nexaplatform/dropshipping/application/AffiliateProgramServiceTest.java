@@ -34,7 +34,9 @@ class AffiliateProgramServiceTest {
     @Mock AffiliateConversionRepository conversionRepo;
     @Mock AffiliateCommissionRepository commissionRepo;
     @Mock AffiliateProgramConfigRepository configRepo;
+    @Mock AffiliatePayoutRepository payoutRepo;
     @Mock UserRepository userRepository;
+    @Mock com.nexaplatform.dropshipping.infrastructure.persistence.repository.NotificationJpaRepositoryAdapter notificationRepo;
     @Mock WalletUseCase walletUseCase;
 
     AffiliateProgramService service;
@@ -47,7 +49,7 @@ class AffiliateProgramServiceTest {
     @BeforeEach
     void setup() {
         service = new AffiliateProgramService(affiliateRepo, codeRepo, attrRepo, conversionRepo, commissionRepo,
-                configRepo, userRepository, walletUseCase);
+                configRepo, payoutRepo, userRepository, notificationRepo, walletUseCase);
         AffiliateProgramConfigEntity config = AffiliateProgramConfigEntity.builder()
                 .defaultPercent(new BigDecimal("10.000")).attributionWindowDays(30).returnPeriodDays(14)
                 .minPayoutCents(5000).currency("EUR").attributionModel("LAST_CLICK").build();
@@ -151,6 +153,14 @@ class AffiliateProgramServiceTest {
         WalletTransaction tx = new WalletTransaction();
         tx.setId(UUID.randomUUID());
         when(walletUseCase.adminTopup(eq(affiliateUserId), eq(5500L), any(), any())).thenReturn(tx);
+        // DROP-651: payoutApproved now creates+executes a payout record.
+        com.nexaplatform.dropshipping.infrastructure.persistence.entity.AffiliatePayoutEntity[] saved = new com.nexaplatform.dropshipping.infrastructure.persistence.entity.AffiliatePayoutEntity[1];
+        when(payoutRepo.save(any())).thenAnswer(i -> {
+            var p = (com.nexaplatform.dropshipping.infrastructure.persistence.entity.AffiliatePayoutEntity) i.getArgument(0);
+            if (p.getId() == null) p.setId(UUID.randomUUID());
+            saved[0] = p; return p;
+        });
+        when(payoutRepo.findById(any())).thenAnswer(i -> Optional.ofNullable(saved[0]));
 
         long paid = service.payoutApproved(affiliateId, false); // 55.00 EUR ≥ 50.00 min
 
@@ -158,6 +168,41 @@ class AffiliateProgramServiceTest {
         assertThat(c1.getStatus()).isEqualTo("PAID");
         assertThat(c2.getStatus()).isEqualTo("PAID");
         verify(walletUseCase).adminTopup(eq(affiliateUserId), eq(5500L), any(), any());
+    }
+
+    @Test
+    void onOrderPlaced_over_period_cap_flags_review() {
+        // cap of 1.00 → a 3.20 commission must be flagged for manual review, not auto-pending
+        AffiliateProgramConfigEntity capped = AffiliateProgramConfigEntity.builder()
+                .defaultPercent(new BigDecimal("10.000")).attributionWindowDays(30).returnPeriodDays(14)
+                .minPayoutCents(5000).currency("EUR").attributionModel("LAST_CLICK").maxCommissionPeriodCents(100)
+                .maxPeriodDays(30).clickDedupMinutes(30).build();
+        when(configRepo.findFirstByOrderByCreatedAtAsc()).thenReturn(Optional.of(capped));
+        when(conversionRepo.existsByOrderId(orderId)).thenReturn(false);
+        when(attrRepo.findTopByReferredUserIdAndExpiresAtAfterOrderByClickedAtDesc(eq(customerId), any()))
+                .thenReturn(Optional.of(liveAttribution()));
+        when(affiliateRepo.findById(affiliateId)).thenReturn(Optional.of(affiliate()));
+        when(commissionRepo.findByAffiliateIdOrderByCreatedAtDesc(affiliateId)).thenReturn(List.of());
+
+        service.onOrderPlaced(orderId, customerId, 3200, "EUR");
+
+        ArgumentCaptor<AffiliateCommissionEntity> cap = ArgumentCaptor.forClass(AffiliateCommissionEntity.class);
+        verify(commissionRepo).save(cap.capture());
+        assertThat(cap.getValue().getStatus()).isEqualTo("REVIEW");
+    }
+
+    @Test
+    void requestPayout_below_minimum_throws() {
+        when(affiliateRepo.findByUser_Id(affiliateUserId)).thenReturn(Optional.of(affiliate()));
+        when(payoutRepo.existsByAffiliateIdAndStatus(affiliateId, "REQUESTED")).thenReturn(false);
+        AffiliateCommissionEntity c = AffiliateCommissionEntity.builder().affiliateId(affiliateId)
+                .conversionId(UUID.randomUUID()).amountCents(1000).currency("EUR").percentage(java.math.BigDecimal.TEN)
+                .status("APPROVED").build();
+        when(commissionRepo.findByAffiliateIdAndStatus(affiliateId, "APPROVED")).thenReturn(List.of(c));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.requestPayout(affiliateUserId))
+                .isInstanceOf(com.nexaplatform.dropshipping.api.exception.BusinessException.class);
+        verify(payoutRepo, never()).save(any());
     }
 
     @Test

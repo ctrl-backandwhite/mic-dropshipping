@@ -87,3 +87,5 @@ databaseChangeLog:
       file: db/changelog/schema-v38-variant-images.sql
   - include:
       file: db/changelog/schema-v39-affiliate-program.sql
+  - include:
+      file: db/changelog/schema-v40-affiliate-payouts-fraud.sql

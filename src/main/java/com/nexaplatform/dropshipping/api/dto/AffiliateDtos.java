@@ -22,9 +22,10 @@ public final class AffiliateDtos {
             String currency) {
     }
 
-    /** Customer-facing affiliate dashboard (DROP-649). */
-    public record AffiliateDashboardView(UUID id, String status, BigDecimal commissionPercent, String shareBaseUrl,
-            List<ReferralCodeView> codes, AffiliateStats stats, List<CommissionView> recentCommissions) {
+    /** Customer-facing affiliate dashboard (DROP-649/650/651). */
+    public record AffiliateDashboardView(UUID id, String status, BigDecimal commissionPercent, boolean joined,
+            boolean canRequestPayout, long minPayoutCents, boolean payoutRequested, List<ReferralCodeView> codes,
+            AffiliateStats stats, List<CommissionView> recentCommissions) {
     }
 
     /** Admin row (DROP-648). */
@@ -38,7 +39,8 @@ public final class AffiliateDtos {
     }
 
     public record ProgramConfigView(BigDecimal defaultPercent, int attributionWindowDays, int returnPeriodDays,
-            long minPayoutCents, String currency, String attributionModel) {
+            long minPayoutCents, String currency, String attributionModel, long maxCommissionPeriodCents,
+            int maxPeriodDays, int clickDedupMinutes) {
     }
 
     /* -------- request bodies -------- */
@@ -59,6 +61,6 @@ public final class AffiliateDtos {
     }
 
     public record ConfigUpdateRequest(BigDecimal defaultPercent, Integer attributionWindowDays, Integer returnPeriodDays,
-            Long minPayoutCents, String currency) {
+            Long minPayoutCents, String currency, Long maxCommissionPeriodCents) {
     }
 }
