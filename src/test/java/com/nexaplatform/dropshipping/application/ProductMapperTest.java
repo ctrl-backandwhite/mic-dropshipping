@@ -8,15 +8,12 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductIm
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.SupplierMapper;
-import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CurrencyRateRepository;
-import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PriceRuleRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;

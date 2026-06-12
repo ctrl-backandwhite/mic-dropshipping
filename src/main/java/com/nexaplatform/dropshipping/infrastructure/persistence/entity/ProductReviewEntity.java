@@ -3,7 +3,6 @@ package com.nexaplatform.dropshipping.infrastructure.persistence.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.util.UUID;
 
 /** DROP-445: reseña de un producto. */
 @Entity

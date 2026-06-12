@@ -4,7 +4,6 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.JwkKeyEnt
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.JwkKeyRepository;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
-import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
 import jakarta.annotation.PostConstruct;

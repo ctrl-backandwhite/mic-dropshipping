@@ -2,7 +2,6 @@ package com.nexaplatform.dropshipping.infrastructure.messaging;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.nexaplatform.dropshipping.api.dto.CatalogDtos;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestPriceTier;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;

@@ -1,6 +1,5 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository;
 
-import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PaymentEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 

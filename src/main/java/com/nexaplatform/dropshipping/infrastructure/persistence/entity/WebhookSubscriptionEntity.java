@@ -7,7 +7,6 @@ import org.hibernate.type.SqlTypes;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * Partner-configurable HTTPS endpoint that NX036 calls with HMAC-SHA256-signed payloads
