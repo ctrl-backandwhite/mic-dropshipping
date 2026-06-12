@@ -89,3 +89,7 @@ databaseChangeLog:
       file: db/changelog/schema-v39-affiliate-program.sql
   - include:
       file: db/changelog/schema-v40-affiliate-payouts-fraud.sql
+  - include:
+      file: db/changelog/schema-v41-affiliate-seed-fix.sql
+  - include:
+      file: db/changelog/schema-v42-pricing-image-fix.sql

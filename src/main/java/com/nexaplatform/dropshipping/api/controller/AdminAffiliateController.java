@@ -29,8 +29,7 @@ public class AdminAffiliateController {
         String currency = service.config().getCurrency();
         List<AdminAffiliateRow> rows = service.allAffiliates().stream().map(a -> {
             List<AffiliateCommissionEntity> comms = service.commissionsForAffiliate(a.getId());
-            int codes = service.listCodes(a.getId()).size();
-            return mapper.toAdminRow(a, codes, comms, currency);
+            return mapper.toAdminRow(a, service.listCodes(a.getId()), comms, currency);
         }).toList();
         return ResponseEntity.ok(rows);
     }
@@ -44,7 +43,7 @@ public class AdminAffiliateController {
         List<AffiliateConversionEntity> convs = service.conversionsForAffiliate(id);
         List<AffiliateCommissionEntity> comms = service.commissionsForAffiliate(id);
         Map<UUID, AffiliateConversionEntity> convById = mapper.indexByConversionId(convs);
-        var row = mapper.toAdminRow(a, codes.size(), comms, currency);
+        var row = mapper.toAdminRow(a, codes, comms, currency);
         return ResponseEntity.ok(new AdminAffiliateDetail(row, codes.stream().map(mapper::toCodeView).toList(),
                 comms.stream().map(c -> mapper.toCommissionView(c, convById)).toList()));
     }

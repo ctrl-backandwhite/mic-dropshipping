@@ -43,13 +43,15 @@ public class AffiliateViewMapper {
         return conversions.stream().collect(Collectors.toMap(AffiliateConversionEntity::getId, c -> c, (a, b) -> a));
     }
 
-    public AdminAffiliateRow toAdminRow(AffiliateEntity a, int codesCount, List<AffiliateCommissionEntity> commissions,
-            String currency) {
+    public AdminAffiliateRow toAdminRow(AffiliateEntity a, List<AffiliateReferralCodeEntity> codes,
+            List<AffiliateCommissionEntity> commissions, String currency) {
+        int clicks = codes.stream().mapToInt(AffiliateReferralCodeEntity::getClicks).sum();
         return new AdminAffiliateRow(a.getId(), a.getUser() != null ? a.getUser().getId() : null,
                 a.getUser() != null ? a.getUser().getDisplayName() : null,
-                a.getUser() != null ? a.getUser().getEmail() : null, a.getStatus(), codesCount, a.getReferralsCount(),
-                a.getEarningsUsdCents(), a.getPayoutUsdCents(), sumByStatus(commissions, "PENDING"),
-                sumByStatus(commissions, "APPROVED"), a.getCommissionPercentOverride(), currency);
+                a.getUser() != null ? a.getUser().getEmail() : null, a.getStatus(), codes.size(), clicks,
+                a.getReferralsCount(), a.getEarningsUsdCents(), a.getPayoutUsdCents(),
+                sumByStatus(commissions, "PENDING"), sumByStatus(commissions, "APPROVED"),
+                a.getCommissionPercentOverride(), currency);
     }
 
     public ProgramConfigView toConfigView(AffiliateProgramConfigEntity c) {

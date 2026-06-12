@@ -30,7 +30,7 @@ public final class AffiliateDtos {
 
     /** Admin row (DROP-648). */
     public record AdminAffiliateRow(UUID id, UUID userId, String name, String email, String status, int codesCount,
-            int referralsCount, long earningsCents, long paidCents, long pendingCents, long approvedCents,
+            int clicks, int referralsCount, long earningsCents, long paidCents, long pendingCents, long approvedCents,
             BigDecimal commissionPercentOverride, String currency) {
     }
 

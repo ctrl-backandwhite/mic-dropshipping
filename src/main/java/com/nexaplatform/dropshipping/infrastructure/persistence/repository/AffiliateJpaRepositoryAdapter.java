@@ -13,7 +13,13 @@ public interface AffiliateJpaRepositoryAdapter extends JpaRepository<AffiliateEn
 
     Optional<AffiliateEntity> findByUser_Id(UUID userId);
 
-    /** Eagerly fetch the user so admin row mapping works outside the service transaction. */
-    @Query("select a from AffiliateEntity a join fetch a.user order by a.earningsUsdCents desc")
+    /**
+     * Eagerly fetch the user so admin row mapping works outside the service transaction.
+     * DROP-643: admin/operator accounts are never affiliates — excluded defensively.
+     */
+    @Query("select a from AffiliateEntity a join fetch a.user u "
+            + "where u.role <> com.nexaplatform.dropshipping.domain.enums.UserRole.ADMIN "
+            + "and u.role <> com.nexaplatform.dropshipping.domain.enums.UserRole.OPERATOR "
+            + "order by a.earningsUsdCents desc")
     List<AffiliateEntity> findAllWithUser();
 }
