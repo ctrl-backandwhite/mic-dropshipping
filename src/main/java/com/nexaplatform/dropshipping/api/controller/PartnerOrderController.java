@@ -3,7 +3,8 @@ package com.nexaplatform.dropshipping.api.controller;
 import com.nexaplatform.dropshipping.api.PartnerOrderApi;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.CreateOrderRequest;
 import com.nexaplatform.dropshipping.api.dto.out.PartnerOrderDtoOut;
-import com.nexaplatform.dropshipping.application.service.OrderService;
+import com.nexaplatform.dropshipping.api.mapper.PartnerOrderDtoMapper;
+import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,30 +16,31 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Partner orders controller. Pure implementation of {@link PartnerOrderApi}:
- * no business logic and no manual mapping — delegates to {@link OrderService}
- * (which resolves the partner from the JWT and maps to DTOs) and wraps the
- * result in a standardized {@link ResponseEntity}.
+ * Partner orders controller. Pure implementation of {@link PartnerOrderApi}: injects
+ * the use case (which resolves the partner from the JWT) and the DtoMapper; no business
+ * logic and no manual mapping.
  */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/partner/orders")
 public class PartnerOrderController implements PartnerOrderApi {
 
-    private final OrderService orderService;
+    private final OrderUseCase orderUseCase;
+    private final PartnerOrderDtoMapper partnerOrderDtoMapper;
 
     @Override
     public ResponseEntity<PartnerOrderDtoOut> create(Jwt jwt, CreateOrderRequest req) {
-        return new ResponseEntity<>(orderService.createOrderForPartner(jwt, req), HttpStatus.CREATED);
+        return new ResponseEntity<>(partnerOrderDtoMapper.toDtoOut(orderUseCase.createOrderForPartner(jwt, req)),
+                HttpStatus.CREATED);
     }
 
     @Override
     public ResponseEntity<List<PartnerOrderDtoOut>> list(Jwt jwt) {
-        return new ResponseEntity<>(orderService.listForPartner(jwt), HttpStatus.OK);
+        return new ResponseEntity<>(partnerOrderDtoMapper.toDtoOutList(orderUseCase.listForPartner(jwt)), HttpStatus.OK);
     }
 
     @Override
     public ResponseEntity<PartnerOrderDtoOut> get(UUID id) {
-        return new ResponseEntity<>(orderService.getPartnerOrder(id), HttpStatus.OK);
+        return new ResponseEntity<>(partnerOrderDtoMapper.toDtoOut(orderUseCase.getPartnerOrder(id)), HttpStatus.OK);
     }
 }

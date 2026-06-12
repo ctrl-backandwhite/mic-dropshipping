@@ -1,6 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.seed;
 
-import com.nexaplatform.dropshipping.application.service.WalletService;
+import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.domain.enums.MarginType;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
@@ -57,7 +57,7 @@ public class DemoOperationsSeedRunner {
     private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.NotificationRepository notificationRepo;
     private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductWarehouseStockRepository pwsRepo;
     private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopConnectionRepository shopConnectionRepo;
-    private final WalletService walletService;
+    private final WalletUseCase walletUseCase;
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
     private final PaymentRepository paymentRepository;
@@ -184,7 +184,7 @@ public class DemoOperationsSeedRunner {
             out.add(userRepository.save(u));
         }
         // ensure wallets exist (the bootstrap listener handles this for new boots, but seed re-creates them just in case)
-        out.forEach(u -> walletService.getOrCreate(u.getId()));
+        out.forEach(u -> walletUseCase.getOrCreate(u.getId()));
         log.info("Seeded {} customers", out.size());
         return out;
     }
@@ -224,7 +224,7 @@ public class DemoOperationsSeedRunner {
                     .build();
             out.add(userRepository.save(u));
         }
-        out.forEach(u -> walletService.getOrCreate(u.getId()));
+        out.forEach(u -> walletUseCase.getOrCreate(u.getId()));
         log.info("Seeded {} partners", out.size());
         return out;
     }
@@ -312,7 +312,8 @@ public class DemoOperationsSeedRunner {
     }
 
     private void createDeposit(UserEntity u, long cents, PaymentMethod method) {
-        WalletEntity w = walletRepository.findByUser_Id(u.getId()).orElseGet(() -> walletService.getOrCreate(u.getId()));
+        walletUseCase.getOrCreate(u.getId());
+        WalletEntity w = walletRepository.findByUser_Id(u.getId()).orElseThrow();
         PaymentEntity p = PaymentEntity.builder()
                 .user(u).wallet(w)
                 .method(method).status(PaymentStatus.SUCCEEDED)
@@ -324,7 +325,7 @@ public class DemoOperationsSeedRunner {
                 .idempotencyKey("seed-dep-" + UUID.randomUUID())
                 .build();
         paymentRepository.save(p);
-        walletService.deposit(u.getId(), cents, p.getId(), "seed-tx-" + UUID.randomUUID(),
+        walletUseCase.deposit(u.getId(), cents, p.getId(), "seed-tx-" + UUID.randomUUID(),
                 "Recarga de prueba (" + method.name() + ")");
     }
 
@@ -444,7 +445,7 @@ public class DemoOperationsSeedRunner {
                     || status == OrderStatus.SHIPPED || status == OrderStatus.DELIVERED) {
                 WalletEntity w = walletRepository.findByUser_Id(customer.getId()).orElse(null);
                 if (w != null && (w.getBalanceUsdCents() - w.getHoldUsdCents()) >= saved.getTotalCents()) {
-                    walletService.charge(customer.getId(), saved.getTotalCents(), saved.getId(),
+                    walletUseCase.charge(customer.getId(), saved.getTotalCents(), saved.getId(),
                             "seed-charge-" + saved.getId(), "Order " + saved.getOrderNumber());
                 }
             }

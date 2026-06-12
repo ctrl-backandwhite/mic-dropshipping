@@ -1,7 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.PaymentWebhookApi;
-import com.nexaplatform.dropshipping.application.service.PaymentService;
+import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.model.Event;
 import com.stripe.net.Webhook;
@@ -19,7 +19,7 @@ import java.util.HexFormat;
 
 /**
  * Webhook endpoints — signature verified per provider (transport security stays
- * here); payload parsing and dispatch are delegated to {@link PaymentService}.
+ * here); payload parsing and dispatch are delegated to {@link PaymentUseCase}.
  */
 @Slf4j
 @RestController
@@ -27,7 +27,7 @@ import java.util.HexFormat;
 @RequiredArgsConstructor
 public class PaymentWebhookController implements PaymentWebhookApi {
 
-    private final PaymentService paymentService;
+    private final PaymentUseCase paymentUseCase;
 
     @Value("${nexadrop.stripe.webhook-secret:}") private String stripeWebhookSecret;
     @Value("${nexadrop.paypal.webhook-secret:}") private String paypalWebhookSecret;
@@ -47,7 +47,7 @@ public class PaymentWebhookController implements PaymentWebhookApi {
             return ResponseEntity.status(400).body("bad signature");
         }
         log.info("Stripe webhook: {}", event.getType());
-        return ResponseEntity.ok(paymentService.handleStripeEvent(event.getType(), payload));
+        return ResponseEntity.ok(paymentUseCase.handleStripeEvent(event.getType(), payload));
     }
 
     @Override
@@ -56,7 +56,7 @@ public class PaymentWebhookController implements PaymentWebhookApi {
         if (!verifyHmac(payload, sig, paypalWebhookSecret)) {
             return ResponseEntity.status(400).body("bad signature");
         }
-        return ResponseEntity.ok(paymentService.handlePayPalEvent(payload));
+        return ResponseEntity.ok(paymentUseCase.handlePayPalEvent(payload));
     }
 
     @Override
@@ -65,7 +65,7 @@ public class PaymentWebhookController implements PaymentWebhookApi {
         if (!verifyHmac(payload, sig, coinbaseWebhookSecret)) {
             return ResponseEntity.status(400).body("bad signature");
         }
-        return ResponseEntity.ok(paymentService.handleCoinbaseEvent(payload));
+        return ResponseEntity.ok(paymentUseCase.handleCoinbaseEvent(payload));
     }
 
     private boolean verifyHmac(String payload, String signature, String secret) {

@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.With;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -32,6 +33,13 @@ public class Wallet {
     // Read-only enrichment (filled by the use case from the user relation).
     private String userEmail;
     private String userName;
+
+    // Read-only enrichment for the "me wallet" snapshot, filled by the use case:
+    // available balance plus the display-currency conversion.
+    private long availableUsdCents;
+    private BigDecimal balanceDisplay;
+    private String displayCurrency;
+    private String displaySymbol;
 
     private Instant createdAt;
     private Instant updatedAt;

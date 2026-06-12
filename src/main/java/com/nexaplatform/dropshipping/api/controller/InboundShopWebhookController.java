@@ -8,7 +8,8 @@ import com.nexaplatform.dropshipping.api.dto.PartnerDtos.CreateOrderRequest;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.OrderItemInput;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.OrderView;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
-import com.nexaplatform.dropshipping.application.service.OrderService;
+import com.nexaplatform.dropshipping.api.mapper.PartnerOrderDtoMapper;
+import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ShopConnectionEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ShopProductListingEntity;
@@ -35,7 +36,8 @@ public class InboundShopWebhookController implements InboundShopWebhookApi {
     private final ShopConnectionRepository shopRepo;
     private final ShopProductListingRepository listingRepo;
     private final ProductRepository productRepo;
-    private final OrderService orderService;
+    private final OrderUseCase orderUseCase;
+    private final PartnerOrderDtoMapper partnerOrderDtoMapper;
     private final HmacVerifier hmac;
     private final ObjectMapper json;
 
@@ -71,7 +73,7 @@ public class InboundShopWebhookController implements InboundShopWebhookApi {
 
         // userId del owner de la shop_connection → la orden queda asociada a su cuenta.
         UUID userId = shop.getUser().getId();
-        OrderView view = orderService.createOrder(null, userId, req);
+        OrderView view = partnerOrderDtoMapper.toOrderView(orderUseCase.createOrder(null, userId, req));
         log.info("Inbound order created from shop {} platform={} externalId={} orderId={}",
                 shopId, shop.getPlatform(), req.externalOrderId(), view.id());
         return ResponseEntity.status(201).body(view);

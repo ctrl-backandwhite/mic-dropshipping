@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.With;
 
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -30,4 +31,18 @@ public class OrderItem {
     private int costCents;
     private int quantity;
     private int lineTotalCents;
+
+    // Read-only resolved fields (filled by the repository adapter from the managed
+    // product/variant relations) so the api mappers can build line details without
+    // touching the entity.
+    private String productTitleZh;
+    private String variantName;
+    private String supplierName;
+
+    // Live catalog image (cdnUrl preferred over sourceUrl), resolved by the adapter.
+    private String productImageUrl;
+
+    // Language -> product translation title, resolved by the adapter; the use case
+    // picks the request-language title with the legacy fallback chain.
+    private Map<String, String> productTitles;
 }

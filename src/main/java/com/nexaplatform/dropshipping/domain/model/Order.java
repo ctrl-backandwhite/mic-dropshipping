@@ -48,6 +48,36 @@ public class Order {
     @Builder.Default
     private List<OrderItem> items = new ArrayList<>();
 
+    // Read-only enrichment (filled by the use case from cross-aggregate relations).
+    private String customerEmail;
+    private String shopName;
+    private String shopHandle;
+    private String supplierName;
+
+    // Flattened shipping-address snapshot (resolved by the repository adapter from
+    // the managed AddressEntity) so the api mappers can build the address blocks
+    // without touching the entity.
+    private String shippingFullName;
+    private String shippingPhone;
+    private String shippingEmail;
+    private String shippingLine1;
+    private String shippingLine2;
+    private String shippingCity;
+    private String shippingState;
+    private String shippingPostalCode;
+    private String shippingCountry;
+
+    // Flattened billing-address snapshot (nullable; resolved by the adapter).
+    private String billingFullName;
+    private String billingPhone;
+    private String billingEmail;
+    private String billingLine1;
+    private String billingLine2;
+    private String billingCity;
+    private String billingState;
+    private String billingPostalCode;
+    private String billingCountry;
+
     private Instant createdAt;
     private Instant updatedAt;
     private String createdBy;

@@ -5,15 +5,14 @@ import com.nexaplatform.dropshipping.api.dto.PartnerDtos.CreateOrderRequest;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.OrderItemInput;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
-import com.nexaplatform.dropshipping.application.service.OrderService;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.AddressEntity;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomerOrderEntity;
+import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
+import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
+import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
+import com.nexaplatform.dropshipping.application.usecase.impl.OrderUseCaseImpl;
+import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
+import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
-import com.nexaplatform.dropshipping.api.mapper.AdminOrderMapper;
-import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
-import com.nexaplatform.dropshipping.infrastructure.persistence.repository.AddressRepository;
-import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopConnectionRepository;
@@ -36,28 +35,25 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class OrderServiceTest {
+class OrderUseCaseImplTest {
 
-    @Mock OrderRepository orderRepository;
-    @Mock AddressRepository addressRepository;
+    @Mock com.nexaplatform.dropshipping.domain.repository.OrderRepository orderRepository;
     @Mock ProductRepository productRepository;
     @Mock ProductVariantRepository variantRepository;
     @Mock UserRepository userRepository;
     @Mock ShopConnectionRepository shopConnectionRepository;
     @Mock UserAddressRepository userAddressRepository;
-    @Mock AdminOrderMapper adminOrderMapper;
-    @Mock com.nexaplatform.dropshipping.api.mapper.PartnerOrderDtoMapper partnerOrderDtoMapper;
-    @Mock com.nexaplatform.dropshipping.application.service.WebhookDispatcherService webhooks;
-    @Mock com.nexaplatform.dropshipping.application.service.WalletService walletService;
+    @Mock WebhookDispatcherService webhooks;
+    @Mock WalletUseCase walletUseCase;
     @Mock NotificationsPublisher notificationsPublisher;
 
-    OrderService orderService;
+    OrderUseCaseImpl orderUseCase;
 
     @BeforeEach
     void setup() {
-        orderService = new OrderService(orderRepository, addressRepository, productRepository, variantRepository,
-                userRepository, shopConnectionRepository, userAddressRepository, adminOrderMapper,
-                partnerOrderDtoMapper, webhooks, walletService, notificationsPublisher);
+        orderUseCase = new OrderUseCaseImpl(orderRepository, productRepository, variantRepository,
+                userRepository, shopConnectionRepository, userAddressRepository, webhooks, walletUseCase,
+                notificationsPublisher);
     }
 
     @Test
@@ -70,12 +66,7 @@ class OrderServiceTest {
                 .build();
         product.setId(productId);
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
-        when(addressRepository.save(any(AddressEntity.class))).thenAnswer(inv -> {
-            AddressEntity a = inv.getArgument(0);
-            a.setId(UUID.randomUUID());
-            return a;
-        });
-        when(orderRepository.save(any(CustomerOrderEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         var req = new CreateOrderRequest(
                 "EXT-001",
@@ -84,13 +75,13 @@ class OrderServiceTest {
                 List.of(new OrderItemInput(productId, null, 3)),
                 null);
 
-        var view = orderService.createOrder(UUID.randomUUID(), null, req);
+        Order order = orderUseCase.createOrder(UUID.randomUUID(), null, req);
 
-        assertThat(view.items()).hasSize(1);
-        assertThat(view.subtotal()).isEqualByComparingTo("37.50"); // 12.50 * 3
-        assertThat(view.total()).isEqualByComparingTo("37.50");
-        assertThat(view.status()).isEqualTo("PENDING");
-        assertThat(view.orderNumber()).startsWith("NX-");
+        assertThat(order.getItems()).hasSize(1);
+        assertThat(order.getSubtotalCents()).isEqualTo(3750); // 12.50 * 3
+        assertThat(order.getTotalCents()).isEqualTo(3750);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(order.getOrderNumber()).startsWith("NX-");
     }
 
     @Test
@@ -99,17 +90,12 @@ class OrderServiceTest {
         ProductEntity product = ProductEntity.builder().titleZh("noprice").moq(1).build();
         product.setId(productId);
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
-        when(addressRepository.save(any(AddressEntity.class))).thenAnswer(inv -> {
-            AddressEntity a = inv.getArgument(0);
-            a.setId(UUID.randomUUID());
-            return a;
-        });
 
         var req = new CreateOrderRequest(
                 "EXT", new AddressInput("X", null, null, "L1", null, "C", null, "00000", "ES"),
                 null, List.of(new OrderItemInput(productId, null, 1)), null);
 
-        assertThatThrownBy(() -> orderService.createOrder(UUID.randomUUID(), null, req))
+        assertThatThrownBy(() -> orderUseCase.createOrder(UUID.randomUUID(), null, req))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("no price");
     }
@@ -118,17 +104,12 @@ class OrderServiceTest {
     void create_order_fails_if_product_missing() {
         UUID productId = UUID.randomUUID();
         when(productRepository.findById(productId)).thenReturn(Optional.empty());
-        when(addressRepository.save(any(AddressEntity.class))).thenAnswer(inv -> {
-            AddressEntity a = inv.getArgument(0);
-            a.setId(UUID.randomUUID());
-            return a;
-        });
 
         var req = new CreateOrderRequest(
                 "EXT", new AddressInput("X", null, null, "L1", null, "C", null, "00000", "ES"),
                 null, List.of(new OrderItemInput(productId, null, 1)), null);
 
-        assertThatThrownBy(() -> orderService.createOrder(UUID.randomUUID(), null, req))
+        assertThatThrownBy(() -> orderUseCase.createOrder(UUID.randomUUID(), null, req))
                 .isInstanceOf(NotFoundException.class);
     }
 
@@ -145,34 +126,27 @@ class OrderServiceTest {
 
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
         when(variantRepository.findById(variantId)).thenReturn(Optional.of(variant));
-        when(addressRepository.save(any(AddressEntity.class))).thenAnswer(inv -> {
-            AddressEntity a = inv.getArgument(0);
-            a.setId(UUID.randomUUID());
-            return a;
-        });
-        when(orderRepository.save(any(CustomerOrderEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         var req = new CreateOrderRequest(
                 "EXT", new AddressInput("X", null, null, "L1", null, "C", null, "00000", "ES"),
                 null, List.of(new OrderItemInput(productId, variantId, 2)), null);
 
-        var v = orderService.createOrder(UUID.randomUUID(), null, req);
-        assertThat(v.subtotal()).isEqualByComparingTo("30");
+        Order order = orderUseCase.createOrder(UUID.randomUUID(), null, req);
+        assertThat(order.getSubtotalCents()).isEqualTo(3000); // 15 * 2 * 100
     }
 
     @Test
     void forwardOrder_setsForwardedAndPublishesWebhook() {
         UUID id = UUID.randomUUID();
-        var order = CustomerOrderEntity.builder()
-                .status(com.nexaplatform.dropshipping.domain.enums.OrderStatus.PAID).build();
+        Order order = Order.builder().status(OrderStatus.PAID).build();
         order.setId(id);
         when(orderRepository.findById(id)).thenReturn(Optional.of(order));
-        when(adminOrderMapper.toRow(order)).thenReturn(
-                com.nexaplatform.dropshipping.api.dto.out.AdminOrderRowDtoOut.builder().id(id).build());
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        orderService.forwardOrder(id);
+        orderUseCase.forwardOrder(id);
 
-        assertThat(order.getStatus()).isEqualTo(com.nexaplatform.dropshipping.domain.enums.OrderStatus.FORWARDED);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.FORWARDED);
         org.mockito.Mockito.verify(orderRepository).save(order);
         org.mockito.Mockito.verify(webhooks).publish(
                 org.mockito.ArgumentMatchers.eq("order.forwarded"),
@@ -184,19 +158,15 @@ class OrderServiceTest {
     void refundOrder_creditsWalletAndMarksRefunded() {
         UUID id = UUID.randomUUID();
         UUID buyer = UUID.randomUUID();
-        var order = CustomerOrderEntity.builder()
-                .status(com.nexaplatform.dropshipping.domain.enums.OrderStatus.PAID)
-                .userId(buyer).orderNumber("NX-1").build();
+        Order order = Order.builder().status(OrderStatus.PAID).userId(buyer).orderNumber("NX-1").totalCents(2500).build();
         order.setId(id);
-        order.setTotalCents(2500);
         when(orderRepository.findById(id)).thenReturn(Optional.of(order));
-        when(adminOrderMapper.toRow(order)).thenReturn(
-                com.nexaplatform.dropshipping.api.dto.out.AdminOrderRowDtoOut.builder().id(id).build());
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        orderService.refundOrder(id);
+        orderUseCase.refundOrder(id);
 
-        assertThat(order.getStatus()).isEqualTo(com.nexaplatform.dropshipping.domain.enums.OrderStatus.REFUNDED);
-        org.mockito.Mockito.verify(walletService).deposit(
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
+        org.mockito.Mockito.verify(walletUseCase).deposit(
                 org.mockito.ArgumentMatchers.eq(buyer), org.mockito.ArgumentMatchers.eq(2500L),
                 org.mockito.ArgumentMatchers.eq(id), org.mockito.ArgumentMatchers.eq("refund-" + id),
                 org.mockito.ArgumentMatchers.anyString());

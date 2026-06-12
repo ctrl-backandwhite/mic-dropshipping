@@ -1,0 +1,63 @@
+package com.nexaplatform.dropshipping.application;
+
+import com.nexaplatform.dropshipping.application.service.AuditLogger;
+import com.nexaplatform.dropshipping.application.usecase.impl.WalletUseCaseImpl;
+import com.nexaplatform.dropshipping.domain.model.Wallet;
+import com.nexaplatform.dropshipping.domain.model.WalletTransaction;
+import com.nexaplatform.dropshipping.domain.repository.WalletRepository;
+import com.nexaplatform.dropshipping.domain.repository.WalletTransactionRepository;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class WalletUseCaseImplTest {
+
+    @Mock WalletRepository walletRepository;
+    @Mock WalletTransactionRepository txRepository;
+    @Mock AuditLogger auditLogger;
+    @Mock CurrencyRateService currencyService;
+
+    private WalletUseCaseImpl useCase() {
+        return new WalletUseCaseImpl(walletRepository, txRepository, auditLogger, currencyService);
+    }
+
+    @Test
+    void adminTopup_recordsDepositAndReturnsTransaction() {
+        UUID userId = UUID.randomUUID();
+        Wallet wallet = Wallet.builder().balanceUsdCents(0L).holdUsdCents(0L).status("ACTIVE").build();
+        wallet.setId(UUID.randomUUID());
+        when(walletRepository.findByUserId(userId)).thenReturn(Optional.of(wallet));
+        when(txRepository.findByIdempotencyKey("key-1")).thenReturn(Optional.empty());
+        when(walletRepository.save(any())).thenReturn(wallet);
+        when(txRepository.save(any())).thenAnswer(inv -> {
+            WalletTransaction t = inv.getArgument(0);
+            t.setId(UUID.randomUUID());
+            return t;
+        });
+
+        WalletTransaction result = useCase().adminTopup(userId, 1000L, null, "key-1");
+
+        assertThat(result.getAmountUsdCents()).isEqualTo(1000L);
+        assertThat(result.getKind()).isEqualTo("DEPOSIT");
+        assertThat(result.getBalanceAfterCents()).isEqualTo(1000L);
+    }
+
+    @Test
+    void adminAdjustEntry_requiresDescription() {
+        WalletUseCaseImpl svc = useCase();
+        UUID userId = UUID.randomUUID();
+        assertThatThrownBy(() -> svc.adminAdjustEntry(userId, -500L, "  ", "key-2"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+}

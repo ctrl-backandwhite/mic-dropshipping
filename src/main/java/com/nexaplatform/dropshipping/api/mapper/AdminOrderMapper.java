@@ -1,52 +1,121 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
 import com.nexaplatform.dropshipping.api.dto.out.AdminOrderAddressDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.AdminOrderDetailDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminOrderLineDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminOrderRowDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MeOrderRowDtoOut;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.AddressEntity;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomerOrderEntity;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderItemEntity;
+import com.nexaplatform.dropshipping.domain.model.Order;
+import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
-import org.mapstruct.NullValuePropertyMappingStrategy;
 
 import java.util.List;
 
 /**
- * MapStruct mapper for the Admin Orders API boundary. Maps the JPA entity into
- * the flat DtoOut contract; cross-entity fields (customerEmail, shopName,
- * shopHandle, supplierName) are enriched by {@code OrderService} via the
- * Lombok {@code toBuilder()} after the base mapping runs.
+ * API-layer mapper for the Admin Orders boundary. Translates the enriched
+ * {@link Order} domain model into the flat DtoOut contract. Injected in the
+ * controller. The cross-aggregate fields (customerEmail, shopName, shopHandle,
+ * supplierName) are read-only enrichment filled by the use case; the shipping
+ * address block is built from the flat snapshot fields the repository adapter
+ * resolved from the managed {@code AddressEntity}.
  */
-@Mapper(componentModel = "spring", nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+@Mapper(componentModel = "spring")
 public interface AdminOrderMapper {
 
-    @Mapping(target = "status", expression = "java(order.getStatus().name())")
-    @Mapping(target = "itemCount", expression = "java(order.getItems().size())")
-    AdminOrderRowDtoOut toRow(CustomerOrderEntity order);
+    @Mapping(target = "id", source = "id")
+    @Mapping(target = "orderNumber", source = "orderNumber")
+    @Mapping(target = "status", expression = "java(order.getStatus() != null ? order.getStatus().name() : null)")
+    @Mapping(target = "partnerAppId", source = "partnerAppId")
+    @Mapping(target = "subtotalCents", source = "subtotalCents")
+    @Mapping(target = "shippingCents", source = "shippingCents")
+    @Mapping(target = "totalCents", source = "totalCents")
+    @Mapping(target = "currency", source = "currency")
+    @Mapping(target = "itemCount", expression = "java(order.getItems() != null ? order.getItems().size() : 0)")
+    @Mapping(target = "placedAt", source = "placedAt")
+    @Mapping(target = "forwardedAt", source = "forwardedAt")
+    @Mapping(target = "shippedAt", source = "shippedAt")
+    @Mapping(target = "deliveredAt", source = "deliveredAt")
+    @Mapping(target = "cancelledAt", source = "cancelledAt")
+    @Mapping(target = "customerEmail", source = "customerEmail")
+    @Mapping(target = "shopName", source = "shopName")
+    @Mapping(target = "shopHandle", source = "shopHandle")
+    @Mapping(target = "supplierName", source = "supplierName")
+    AdminOrderRowDtoOut toRow(Order order);
 
+    List<AdminOrderRowDtoOut> toRows(List<Order> orders);
+
+    @Mapping(target = "id", source = "id")
+    @Mapping(target = "orderNumber", source = "orderNumber")
+    @Mapping(target = "status", expression = "java(order.getStatus() != null ? order.getStatus().name() : null)")
+    @Mapping(target = "partnerAppId", source = "partnerAppId")
+    @Mapping(target = "subtotalCents", source = "subtotalCents")
+    @Mapping(target = "shippingCents", source = "shippingCents")
+    @Mapping(target = "totalCents", source = "totalCents")
+    @Mapping(target = "currency", source = "currency")
+    @Mapping(target = "itemCount", expression = "java(order.getItems() != null ? order.getItems().size() : 0)")
+    @Mapping(target = "placedAt", source = "placedAt")
+    @Mapping(target = "forwardedAt", source = "forwardedAt")
+    @Mapping(target = "shippedAt", source = "shippedAt")
+    @Mapping(target = "deliveredAt", source = "deliveredAt")
+    @Mapping(target = "cancelledAt", source = "cancelledAt")
+    @Mapping(target = "customerEmail", source = "customerEmail")
+    @Mapping(target = "shopName", source = "shopName")
+    @Mapping(target = "shopHandle", source = "shopHandle")
+    @Mapping(target = "supplierName", source = "supplierName")
+    @Mapping(target = "items", source = "items")
+    @Mapping(target = "shippingAddress", expression = "java(toAddress(order))")
+    @Mapping(target = "notes", source = "notes")
+    @Mapping(target = "trackingNumber", source = "externalOrderId")
+    AdminOrderDetailDtoOut toDetail(Order order);
+
+    @Mapping(target = "id", source = "id")
     @Mapping(target = "sku", source = "skuSnapshot")
     @Mapping(target = "title", expression = "java(resolveTitle(item))")
     @Mapping(target = "qty", source = "quantity")
-    AdminOrderLineDtoOut toLine(OrderItemEntity item);
+    @Mapping(target = "unitPriceCents", source = "unitPriceCents")
+    @Mapping(target = "lineTotalCents", source = "lineTotalCents")
+    AdminOrderLineDtoOut toLine(OrderItem item);
 
-    List<AdminOrderLineDtoOut> toLines(List<OrderItemEntity> items);
+    List<AdminOrderLineDtoOut> toLines(List<OrderItem> items);
 
-    @Mapping(target = "region", source = "state")
-    AdminOrderAddressDtoOut toAddress(AddressEntity address);
+    @Mapping(target = "id", source = "id")
+    @Mapping(target = "orderNumber", source = "orderNumber")
+    @Mapping(target = "status", expression = "java(order.getStatus() != null ? order.getStatus().name() : null)")
+    @Mapping(target = "totalCents", source = "totalCents")
+    @Mapping(target = "currency", source = "currency")
+    @Mapping(target = "itemCount", expression = "java(order.getItems() != null ? order.getItems().size() : 0)")
+    @Mapping(target = "placedAt", source = "placedAt")
+    @Mapping(target = "shippedAt", source = "shippedAt")
+    @Mapping(target = "deliveredAt", source = "deliveredAt")
+    MeOrderRowDtoOut toMeRow(Order order);
 
-    @Mapping(target = "status", expression = "java(order.getStatus().name())")
-    @Mapping(target = "itemCount", expression = "java(order.getItems().size())")
-    MeOrderRowDtoOut toMeRow(CustomerOrderEntity order);
+    List<MeOrderRowDtoOut> toMeRows(List<Order> orders);
+
+    /** Builds the shipping address block from the order's flat snapshot fields ({@code state -> region}). */
+    default AdminOrderAddressDtoOut toAddress(Order order) {
+        if (order.getShippingFullName() == null && order.getShippingLine1() == null) {
+            return null;
+        }
+        return AdminOrderAddressDtoOut.builder()
+                .fullName(order.getShippingFullName())
+                .line1(order.getShippingLine1())
+                .line2(order.getShippingLine2())
+                .city(order.getShippingCity())
+                .region(order.getShippingState())
+                .postalCode(order.getShippingPostalCode())
+                .country(order.getShippingCountry())
+                .phone(order.getShippingPhone())
+                .build();
+    }
 
     /** Title fallback: explicit snapshot, then live product titleZh, then sku. */
-    default String resolveTitle(OrderItemEntity item) {
+    default String resolveTitle(OrderItem item) {
         if (item.getTitleSnapshot() != null) {
             return item.getTitleSnapshot();
         }
-        if (item.getProduct() != null) {
-            return item.getProduct().getTitleZh();
+        if (item.getProductTitleZh() != null) {
+            return item.getProductTitleZh();
         }
         return item.getSkuSnapshot();
     }

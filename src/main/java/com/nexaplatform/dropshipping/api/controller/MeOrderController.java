@@ -4,7 +4,9 @@ import com.nexaplatform.dropshipping.api.MeOrderApi;
 import com.nexaplatform.dropshipping.api.dto.in.MeCheckoutDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.MeOrderDetailDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MeOrderRowDtoOut;
-import com.nexaplatform.dropshipping.application.service.OrderService;
+import com.nexaplatform.dropshipping.api.mapper.AdminOrderMapper;
+import com.nexaplatform.dropshipping.api.mapper.MeOrderDtoMapper;
+import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,31 +19,33 @@ import java.util.UUID;
 
 /**
  * Authenticated user's orders controller. Pure implementation of {@link MeOrderApi}:
- * no business logic and no manual mapping — delegates to {@link OrderService}
- * and wraps the result in a {@link ResponseEntity}.
+ * injects the use case and DtoMappers; no business logic and no manual mapping.
  */
 @RestController
 @RequestMapping("/api/me/orders")
 @RequiredArgsConstructor
 public class MeOrderController implements MeOrderApi {
 
-    private final OrderService orderService;
+    private final OrderUseCase orderUseCase;
+    private final MeOrderDtoMapper meOrderDtoMapper;
+    private final AdminOrderMapper adminOrderMapper;
 
     @Override
     public ResponseEntity<MeOrderDetailDtoOut> checkout(Authentication auth, MeCheckoutDtoIn req, String idem) {
         UUID userId = UUID.fromString(auth.getName());
-        return new ResponseEntity<>(orderService.checkout(userId, req, idem), HttpStatus.CREATED);
+        return new ResponseEntity<>(meOrderDtoMapper.toDetailDtoOut(orderUseCase.checkout(userId, req, idem)),
+                HttpStatus.CREATED);
     }
 
     @Override
     public ResponseEntity<List<MeOrderRowDtoOut>> list(Authentication auth) {
         UUID userId = UUID.fromString(auth.getName());
-        return ResponseEntity.ok(orderService.listMyOrders(userId));
+        return ResponseEntity.ok(adminOrderMapper.toMeRows(orderUseCase.listMyOrders(userId)));
     }
 
     @Override
     public ResponseEntity<MeOrderDetailDtoOut> detail(Authentication auth, UUID id, String lang) {
         UUID userId = UUID.fromString(auth.getName());
-        return ResponseEntity.ok(orderService.getMyOrderDetail(userId, id, lang));
+        return ResponseEntity.ok(meOrderDtoMapper.toDetailDtoOut(orderUseCase.getMyOrderDetail(userId, id, lang)));
     }
 }

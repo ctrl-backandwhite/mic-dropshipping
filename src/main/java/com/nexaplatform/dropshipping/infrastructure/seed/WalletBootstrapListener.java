@@ -1,6 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.seed;
 
-import com.nexaplatform.dropshipping.application.service.WalletService;
+import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -9,14 +9,14 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Ensures every existing user has a wallet. New registrations also call WalletService directly. */
+/** Ensures every existing user has a wallet. New registrations also call WalletUseCase directly. */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class WalletBootstrapListener {
 
     private final UserRepository userRepository;
-    private final WalletService walletService;
+    private final WalletUseCase walletUseCase;
 
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
@@ -24,7 +24,7 @@ public class WalletBootstrapListener {
         int created = 0;
         for (var u : userRepository.findAll()) {
             try {
-                walletService.getOrCreate(u.getId());
+                walletUseCase.getOrCreate(u.getId());
                 created++;
             } catch (Exception e) {
                 log.warn("Could not ensure wallet for {}: {}", u.getEmail(), e.getMessage());
