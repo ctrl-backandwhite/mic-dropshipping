@@ -14,7 +14,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         "com.nexaplatform.dropshipping.infrastructure.persistence.entity",
         "com.nexaplatform.dropshipping.infrastructure.messaging.outbox"
 })
-@EnableJpaRepositories(basePackages = {
+@EnableJpaRepositories(repositoryImplementationPostfix = "JpaCustomImpl", basePackages = {
         "com.nexaplatform.dropshipping.infrastructure.persistence.repository",
         "com.nexaplatform.dropshipping.infrastructure.messaging.outbox"
 })
