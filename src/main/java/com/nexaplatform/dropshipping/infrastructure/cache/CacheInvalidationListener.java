@@ -25,11 +25,7 @@ public class CacheInvalidationListener {
 
     private final CacheManager cacheManager;
 
-    @KafkaListener(
-        topics = com.nexaplatform.dropshipping.infrastructure.messaging.NexaTopics.CACHE_INVALIDATION,
-        groupId = "nexadrop-cache-invalidation",
-        containerFactory = "kafkaListenerContainerFactory"
-    )
+    @KafkaListener(topics = com.nexaplatform.dropshipping.infrastructure.messaging.NexaTopics.CACHE_INVALIDATION, groupId = "nexadrop-cache-invalidation", containerFactory = "kafkaListenerContainerFactory")
     public void onInvalidation(Map<String, Object> event) {
         Object cacheName = event.get("cache");
         Object key = event.get("key");

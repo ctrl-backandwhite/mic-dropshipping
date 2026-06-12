@@ -22,8 +22,10 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class OdmProjectUseCaseImplTest {
 
-    @Mock OdmProjectRepository odmProjectRepository;
-    @InjectMocks OdmProjectUseCaseImpl useCase;
+    @Mock
+    OdmProjectRepository odmProjectRepository;
+    @InjectMocks
+    OdmProjectUseCaseImpl useCase;
 
     @Test
     void create_derivesSlaFromKindAndSetsIntakeStatus() {

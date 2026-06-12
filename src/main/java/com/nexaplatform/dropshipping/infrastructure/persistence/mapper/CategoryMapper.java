@@ -15,28 +15,23 @@ import java.util.stream.Collectors;
 public class CategoryMapper {
 
     public CategoryView toView(CategoryEntity entity) {
-        if (entity == null) return null;
+        if (entity == null)
+            return null;
         Map<String, String> names = entity.getTranslations() == null
                 ? Collections.emptyMap()
-                : entity.getTranslations().stream().collect(
-                        Collectors.toMap(CategoryTranslationEntity::getLanguage, CategoryTranslationEntity::getName, (a, b) -> a));
-        return new CategoryView(
-                entity.getId(),
-                entity.getSlug(),
-                entity.getNameZh(),
-                names,
-                entity.getParent() != null ? entity.getParent().getId() : null,
-                entity.getPosition(),
-                entity.getIcon(),
-                entity.isActive()
-        );
+                : entity.getTranslations().stream().collect(Collectors.toMap(CategoryTranslationEntity::getLanguage,
+                        CategoryTranslationEntity::getName, (a, b) -> a));
+        return new CategoryView(entity.getId(), entity.getSlug(), entity.getNameZh(), names,
+                entity.getParent() != null ? entity.getParent().getId() : null, entity.getPosition(), entity.getIcon(),
+                entity.isActive());
     }
 
     public CategoryTreeView toTreeView(CategoryEntity entity, List<CategoryTreeView> children) {
         Map<String, String> names = entity.getTranslations() == null
                 ? Collections.emptyMap()
-                : entity.getTranslations().stream().collect(
-                        Collectors.toMap(CategoryTranslationEntity::getLanguage, CategoryTranslationEntity::getName, (a, b) -> a));
-        return new CategoryTreeView(entity.getId(), entity.getSlug(), entity.getNameZh(), names, entity.getIcon(), children);
+                : entity.getTranslations().stream().collect(Collectors.toMap(CategoryTranslationEntity::getLanguage,
+                        CategoryTranslationEntity::getName, (a, b) -> a));
+        return new CategoryTreeView(entity.getId(), entity.getSlug(), entity.getNameZh(), names, entity.getIcon(),
+                children);
     }
 }

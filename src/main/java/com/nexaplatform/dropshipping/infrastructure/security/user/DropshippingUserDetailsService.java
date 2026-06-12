@@ -26,13 +26,8 @@ public class DropshippingUserDetailsService implements UserDetailsService {
 
         boolean locked = u.getLockedUntil() != null && u.getLockedUntil().isAfter(Instant.now());
 
-        return User.withUsername(u.getId().toString())
-                .password(u.getPasswordHash() == null ? "" : u.getPasswordHash())
-                .authorities(Set.of(new SimpleGrantedAuthority(u.getRole().authority())))
-                .accountExpired(false)
-                .accountLocked(locked)
-                .credentialsExpired(false)
-                .disabled(!u.isActive())
-                .build();
+        return User.withUsername(u.getId().toString()).password(u.getPasswordHash() == null ? "" : u.getPasswordHash())
+                .authorities(Set.of(new SimpleGrantedAuthority(u.getRole().authority()))).accountExpired(false)
+                .accountLocked(locked).credentialsExpired(false).disabled(!u.isActive()).build();
     }
 }

@@ -24,7 +24,11 @@ import java.util.Map;
 
 @Entity
 @Table(name = "payment")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class PaymentEntity extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -68,7 +72,7 @@ public class PaymentEntity extends BaseEntity {
     private BigDecimal settlementAmount;
 
     @Column(length = 40)
-    private String provider;             // stripe | paypal | coinbase | manual
+    private String provider; // stripe | paypal | coinbase | manual
 
     @Column(name = "provider_ref", length = 255)
     private String providerRef;

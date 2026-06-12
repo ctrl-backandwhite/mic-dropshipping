@@ -28,7 +28,7 @@ import java.util.concurrent.CompletableFuture;
 public class OutboxDispatcher {
 
     private static final int BATCH_SIZE = 100;
-    private static final int MAX_ATTEMPTS = 12;            // ~7 días con backoff 30 s × 2^n cap
+    private static final int MAX_ATTEMPTS = 12; // ~7 días con backoff 30 s × 2^n cap
 
     private final EventOutboxRepository repo;
     private final KafkaTemplate<String, Object> kafka;
@@ -38,13 +38,14 @@ public class OutboxDispatcher {
     @Transactional
     public void drain() {
         List<EventOutboxEntity> batch = repo.claimBatch(Instant.now(), PageRequest.of(0, BATCH_SIZE));
-        if (batch.isEmpty()) return;
+        if (batch.isEmpty())
+            return;
 
         List<UUID> sentIds = new ArrayList<>(batch.size());
         for (EventOutboxEntity e : batch) {
             try {
-                CompletableFuture<SendResult<String, Object>> future =
-                        kafka.send(e.getTopic(), e.getPartitionKey(), e.getPayload());
+                CompletableFuture<SendResult<String, Object>> future = kafka.send(e.getTopic(), e.getPartitionKey(),
+                        e.getPayload());
                 future.get(); // bloquea hasta ack; el ack y el commit van juntos
                 sentIds.add(e.getId());
             } catch (Exception ex) {
@@ -52,7 +53,8 @@ public class OutboxDispatcher {
                 e.setLastError(ex.getClass().getSimpleName() + ": " + ex.getMessage());
                 if (e.getAttempts() >= MAX_ATTEMPTS) {
                     e.setStatus("FAILED");
-                    log.error("Outbox event {} permanently FAILED after {} attempts: {}", e.getId(), e.getAttempts(), ex.getMessage());
+                    log.error("Outbox event {} permanently FAILED after {} attempts: {}", e.getId(), e.getAttempts(),
+                            ex.getMessage());
                 } else {
                     long backoffSec = (long) Math.min(3600, 30L * Math.pow(2, e.getAttempts() - 1));
                     e.setNextAttemptAt(Instant.now().plus(Duration.ofSeconds(backoffSec)));

@@ -22,13 +22,13 @@ public final class NexaTopics {
     public static final String NOTIFICATIONS_DISPATCH = "notifications.dispatch";
 
     /** Confirmaciones de pedido (consume mic-notificationservice). */
-    public static final String NOTIFICATIONS_ORDER_PLACED   = "notifications.order.placed";
-    public static final String NOTIFICATIONS_ORDER_SHIPPED  = "notifications.order.shipped";
+    public static final String NOTIFICATIONS_ORDER_PLACED = "notifications.order.placed";
+    public static final String NOTIFICATIONS_ORDER_SHIPPED = "notifications.order.shipped";
     public static final String NOTIFICATIONS_ORDER_DELIVERED = "notifications.order.delivered";
 
     /** Recargas de wallet / cargos (consume mic-notificationservice). */
     public static final String NOTIFICATIONS_WALLET_RECHARGED = "notifications.wallet.recharged";
-    public static final String NOTIFICATIONS_WALLET_CHARGED   = "notifications.wallet.charged";
+    public static final String NOTIFICATIONS_WALLET_CHARGED = "notifications.wallet.charged";
 
     /** Auth: reset password, activación, 2FA, etc. */
     public static final String NOTIFICATIONS_AUTH = "notifications.auth";
@@ -42,5 +42,6 @@ public final class NexaTopics {
     /** Cache invalidation — purga CDN/Redis tras cambios de catálogo. */
     public static final String CACHE_INVALIDATION = "cache.invalidation";
 
-    private NexaTopics() {}
+    private NexaTopics() {
+    }
 }

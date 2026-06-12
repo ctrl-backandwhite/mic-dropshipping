@@ -33,7 +33,7 @@ public interface AcademyApi {
     @Operation(summary = "List published academy courses, optionally filtered by locale and level")
     @GetMapping("/storefront/academy/courses")
     List<CourseDtoOut> courses(@RequestParam(required = false) String locale,
-                               @RequestParam(required = false) String level);
+            @RequestParam(required = false) String level);
 
     @Operation(summary = "Get a published academy course by slug")
     @GetMapping("/storefront/academy/courses/{slug}")

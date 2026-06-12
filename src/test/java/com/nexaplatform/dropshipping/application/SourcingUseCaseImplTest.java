@@ -29,10 +29,14 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class SourcingUseCaseImplTest {
 
-    @Mock SourcingRequestRepository sourcingRequestRepository;
-    @Mock SourcingQuoteRepository sourcingQuoteRepository;
-    @Mock SourcingAgentRepository sourcingAgentRepository;
-    @InjectMocks SourcingUseCaseImpl useCase;
+    @Mock
+    SourcingRequestRepository sourcingRequestRepository;
+    @Mock
+    SourcingQuoteRepository sourcingQuoteRepository;
+    @Mock
+    SourcingAgentRepository sourcingAgentRepository;
+    @InjectMocks
+    SourcingUseCaseImpl useCase;
 
     @Test
     void create_persistsRequestWithDetectedSourceAndQuotesCount() {
@@ -66,8 +70,7 @@ class SourcingUseCaseImplTest {
         UUID owner = UUID.randomUUID();
         UUID other = UUID.randomUUID();
         UUID id = UUID.randomUUID();
-        when(sourcingRequestRepository.getById(id))
-                .thenReturn(SourcingRequest.builder().id(id).userId(owner).build());
+        when(sourcingRequestRepository.getById(id)).thenReturn(SourcingRequest.builder().id(id).userId(owner).build());
 
         assertThatThrownBy(() -> useCase.detail(other, id)).isInstanceOf(NotFoundException.class);
     }
@@ -76,8 +79,7 @@ class SourcingUseCaseImplTest {
     void delete_throwsWhenRequestHasAcceptedQuote() {
         UUID userId = UUID.randomUUID();
         UUID id = UUID.randomUUID();
-        when(sourcingRequestRepository.getById(id))
-                .thenReturn(SourcingRequest.builder().id(id).userId(userId).build());
+        when(sourcingRequestRepository.getById(id)).thenReturn(SourcingRequest.builder().id(id).userId(userId).build());
         when(sourcingQuoteRepository.findByRequestIdOrderByPriceUsdCentsAsc(id))
                 .thenReturn(List.of(SourcingQuote.builder().status("ACCEPTED").build()));
 
@@ -111,8 +113,7 @@ class SourcingUseCaseImplTest {
         UUID userId = UUID.randomUUID();
         UUID id = UUID.randomUUID();
         UUID quoteId = UUID.randomUUID();
-        when(sourcingRequestRepository.getById(id))
-                .thenReturn(SourcingRequest.builder().id(id).userId(userId).build());
+        when(sourcingRequestRepository.getById(id)).thenReturn(SourcingRequest.builder().id(id).userId(userId).build());
         when(sourcingQuoteRepository.getById(quoteId))
                 .thenReturn(SourcingQuote.builder().id(quoteId).requestId(UUID.randomUUID()).build());
 

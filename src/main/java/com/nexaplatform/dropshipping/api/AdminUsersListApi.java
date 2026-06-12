@@ -29,24 +29,20 @@ public interface AdminUsersListApi {
     @Operation(summary = "List users with optional filters and pagination")
     @ApiResponse(responseCode = "200", description = "Users listed")
     @GetMapping
-    ResponseEntity<AdminUserPageDtoOut> list(
-            @RequestParam(required = false) String role,
-            @RequestParam(required = false) String q,
-            @RequestParam(required = false) String country,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "25") int size);
+    ResponseEntity<AdminUserPageDtoOut> list(@RequestParam(required = false) String role,
+            @RequestParam(required = false) String q, @RequestParam(required = false) String country,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "25") int size);
 
     @Operation(summary = "Change a user's role")
     @ApiResponse(responseCode = "200", description = "Role changed")
     @PutMapping("/{id}/role")
     ResponseEntity<AdminUserDtoOut> changeRole(@PathVariable UUID id,
-                                               @Valid @RequestBody AdminUserRoleUpdateDtoIn body);
+            @Valid @RequestBody AdminUserRoleUpdateDtoIn body);
 
     @Operation(summary = "Inline edit of a user's basic fields")
     @ApiResponse(responseCode = "200", description = "User updated")
     @PutMapping("/{id}")
-    ResponseEntity<AdminUserDtoOut> editUser(@PathVariable UUID id,
-                                             @Valid @RequestBody AdminUserEditDtoIn body);
+    ResponseEntity<AdminUserDtoOut> editUser(@PathVariable UUID id, @Valid @RequestBody AdminUserEditDtoIn body);
 
     @Operation(summary = "Lock a user for a number of minutes")
     @ApiResponse(responseCode = "200", description = "User locked")

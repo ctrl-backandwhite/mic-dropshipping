@@ -63,7 +63,7 @@ public class TokenCryptoService {
                     + "Set the property (Base64 of 32 random bytes) before deploying to production.");
             byte[] raw = new byte[KEK_LEN];
             random.nextBytes(raw);
-            keks = new SecretKey[]{ new SecretKeySpec(raw, "AES") };
+            keks = new SecretKey[]{new SecretKeySpec(raw, "AES")};
             return;
         }
         String[] parts = configuredKeys.split(",");
@@ -80,7 +80,8 @@ public class TokenCryptoService {
 
     /** Returns the encrypted token with the `gcm:` prefix, ready to persist. */
     public String encrypt(String plaintext) {
-        if (plaintext == null) return null;
+        if (plaintext == null)
+            return null;
         try {
             byte[] iv = new byte[IV_LEN];
             random.nextBytes(iv);
@@ -106,7 +107,8 @@ public class TokenCryptoService {
      *   - null / empty → returns null
      */
     public String decrypt(String stored) {
-        if (stored == null || stored.isEmpty()) return null;
+        if (stored == null || stored.isEmpty())
+            return null;
         if (stored.startsWith("enc:")) {
             // Legacy Base64-only placeholder. Decode and return; caller should re-encrypt and persist.
             return new String(Base64.getDecoder().decode(stored.substring(4)), StandardCharsets.UTF_8);
@@ -117,12 +119,17 @@ public class TokenCryptoService {
         }
         try {
             byte[] raw = Base64.getDecoder().decode(stored.substring(PREFIX.length()));
-            if (raw.length < 2 + IV_LEN + 16) throw new CryptoException("Ciphertext too short", null);
+            if (raw.length < 2 + IV_LEN + 16)
+                throw new CryptoException("Ciphertext too short", null);
             byte version = raw[0];
             int keyId = raw[1] & 0xFF;
-            if (version != VERSION) throw new CryptoException("Unsupported crypto version: " + version, null);
-            if (keyId >= keks.length) throw new CryptoException("Unknown keyId " + keyId
-                    + " — was the record encrypted with a key no longer in nexadrop.crypto.token-keks?", null);
+            if (version != VERSION)
+                throw new CryptoException("Unsupported crypto version: " + version, null);
+            if (keyId >= keks.length)
+                throw new CryptoException(
+                        "Unknown keyId " + keyId
+                                + " — was the record encrypted with a key no longer in nexadrop.crypto.token-keks?",
+                        null);
 
             byte[] iv = new byte[IV_LEN];
             System.arraycopy(raw, 2, iv, 0, IV_LEN);
@@ -146,6 +153,8 @@ public class TokenCryptoService {
     }
 
     public static class CryptoException extends RuntimeException {
-        public CryptoException(String message, Throwable cause) { super(message, cause); }
+        public CryptoException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 }

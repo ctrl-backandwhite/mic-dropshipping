@@ -43,8 +43,8 @@ public class SourcingRequestRepositoryImpl implements SourcingRequestRepository 
 
     @Override
     public List<SourcingRequest> findByUserIdOrderByCreatedAtDesc(UUID userId) {
-        return sourcingRequestEntityMapper.toDomainList(
-                sourcingRequestJpaRepositoryAdapter.findByUser_IdOrderByCreatedAtDesc(userId));
+        return sourcingRequestEntityMapper
+                .toDomainList(sourcingRequestJpaRepositoryAdapter.findByUser_IdOrderByCreatedAtDesc(userId));
     }
 
     @Override
@@ -54,9 +54,7 @@ public class SourcingRequestRepositoryImpl implements SourcingRequestRepository 
 
     @Override
     public SourcingRequest getById(UUID id) {
-        return sourcingRequestJpaRepositoryAdapter.findById(id)
-                .map(sourcingRequestEntityMapper::toDomain)
-                .orElse(null);
+        return sourcingRequestJpaRepositoryAdapter.findById(id).map(sourcingRequestEntityMapper::toDomain).orElse(null);
     }
 
     @Override

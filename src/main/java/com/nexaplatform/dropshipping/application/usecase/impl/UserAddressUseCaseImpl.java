@@ -74,13 +74,12 @@ public class UserAddressUseCaseImpl implements UserAddressUseCase {
     }
 
     private void clearExistingDefault(UUID userId) {
-        userAddressRepository.findByUserId(userId)
-                .forEach(a -> {
-                    if (a.isDefault()) {
-                        a.setDefault(false);
-                        userAddressRepository.save(a);
-                    }
-                });
+        userAddressRepository.findByUserId(userId).forEach(a -> {
+            if (a.isDefault()) {
+                a.setDefault(false);
+                userAddressRepository.save(a);
+            }
+        });
     }
 
     private UserAddress require(UUID userId, UUID id) {

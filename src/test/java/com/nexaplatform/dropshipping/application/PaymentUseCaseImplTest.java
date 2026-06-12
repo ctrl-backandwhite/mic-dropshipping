@@ -33,28 +33,34 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class PaymentUseCaseImplTest {
 
-    @Mock PaymentRepository paymentRepository;
-    @Mock PaymentJpaRepositoryAdapter paymentJpaRepositoryAdapter;
-    @Mock UserRepository userRepository;
-    @Mock OrderRepository orderRepository;
-    @Mock WalletUseCase walletUseCase;
-    @Mock AuditLogger auditLogger;
-    @Mock PartnerPlanSyncService partnerPlanSyncService;
+    @Mock
+    PaymentRepository paymentRepository;
+    @Mock
+    PaymentJpaRepositoryAdapter paymentJpaRepositoryAdapter;
+    @Mock
+    UserRepository userRepository;
+    @Mock
+    OrderRepository orderRepository;
+    @Mock
+    WalletUseCase walletUseCase;
+    @Mock
+    AuditLogger auditLogger;
+    @Mock
+    PartnerPlanSyncService partnerPlanSyncService;
 
     private final OrderPaymentDtoMapper orderPaymentDtoMapper = Mappers.getMapper(OrderPaymentDtoMapper.class);
 
     private PaymentUseCaseImpl useCase() {
         return new PaymentUseCaseImpl(List.<PaymentGateway>of(), paymentRepository, paymentJpaRepositoryAdapter,
-                userRepository, orderRepository, walletUseCase, auditLogger, partnerPlanSyncService, new ObjectMapper());
+                userRepository, orderRepository, walletUseCase, auditLogger, partnerPlanSyncService,
+                new ObjectMapper());
     }
 
     @Test
     void orderPaymentMapper_projectsProviderMetadata() {
-        Payment p = Payment.builder()
-                .method(PaymentMethod.CARD).status(PaymentStatus.REQUIRES_ACTION)
+        Payment p = Payment.builder().method(PaymentMethod.CARD).status(PaymentStatus.REQUIRES_ACTION)
                 .amountUsdCents(5000).provider("stripe").providerRef("pi_1")
-                .providerResponse(Map.of("clientSecret", "cs_test", "approveUrl", "https://x"))
-                .build();
+                .providerResponse(Map.of("clientSecret", "cs_test", "approveUrl", "https://x")).build();
         p.setId(UUID.randomUUID());
 
         OrderPaymentDtoOut view = orderPaymentDtoMapper.toDtoOut(p);
@@ -68,8 +74,7 @@ class PaymentUseCaseImplTest {
     void getOrderPayment_rejectsMismatchedOrder() {
         UUID orderId = UUID.randomUUID();
         UUID paymentId = UUID.randomUUID();
-        Payment p = Payment.builder()
-                .method(PaymentMethod.CARD).status(PaymentStatus.PENDING).amountUsdCents(100)
+        Payment p = Payment.builder().method(PaymentMethod.CARD).status(PaymentStatus.PENDING).amountUsdCents(100)
                 .orderId(UUID.randomUUID()).build();
         p.setId(paymentId);
         when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(p));
@@ -86,7 +91,7 @@ class PaymentUseCaseImplTest {
         String body = useCase().handleStripeEvent("customer.subscription.updated", payload);
 
         assertThat(body).isEqualTo("ok");
-        org.mockito.Mockito.verify(partnerPlanSyncService)
-                .onSubscriptionEvent("sub_123", "active", "customer.subscription.updated");
+        org.mockito.Mockito.verify(partnerPlanSyncService).onSubscriptionEvent("sub_123", "active",
+                "customer.subscription.updated");
     }
 }

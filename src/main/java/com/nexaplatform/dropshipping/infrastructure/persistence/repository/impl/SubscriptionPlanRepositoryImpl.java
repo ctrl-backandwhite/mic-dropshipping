@@ -39,8 +39,7 @@ public class SubscriptionPlanRepositoryImpl implements SubscriptionPlanRepositor
 
     @Override
     public SubscriptionPlan getById(UUID id) {
-        return subscriptionPlanJpaRepositoryAdapter.findById(id)
-                .map(subscriptionPlanEntityMapper::toDomain)
+        return subscriptionPlanJpaRepositoryAdapter.findById(id).map(subscriptionPlanEntityMapper::toDomain)
                 .orElse(null);
     }
 

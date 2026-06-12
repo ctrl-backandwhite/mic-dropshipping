@@ -50,8 +50,7 @@ public class RoutingDataSourceConfig {
 
     @Bean
     @Primary
-    DataSource routingDataSource(
-            @Qualifier("primaryDataSource") DataSource primary,
+    DataSource routingDataSource(@Qualifier("primaryDataSource") DataSource primary,
             @Qualifier("replicaDataSource") DataSource replica) {
         RoutingDataSource routing = new RoutingDataSource();
         Map<Object, Object> map = new HashMap<>();
@@ -65,7 +64,9 @@ public class RoutingDataSourceConfig {
         return new LazyConnectionDataSourceProxy(routing);
     }
 
-    public enum DataSourceRole { PRIMARY, REPLICA }
+    public enum DataSourceRole {
+        PRIMARY, REPLICA
+    }
 
     /**
      * Decide PRIMARY vs REPLICA según la transacción actual.

@@ -46,8 +46,7 @@ public class WebhookSubscriptionRepositoryImpl implements WebhookSubscriptionRep
 
     @Override
     public WebhookSubscription getById(UUID id) {
-        return webhookSubscriptionJpaRepositoryAdapter.findById(id)
-                .map(webhookSubscriptionEntityMapper::toDomain)
+        return webhookSubscriptionJpaRepositoryAdapter.findById(id).map(webhookSubscriptionEntityMapper::toDomain)
                 .orElse(null);
     }
 

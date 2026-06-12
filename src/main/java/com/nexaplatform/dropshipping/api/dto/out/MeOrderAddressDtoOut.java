@@ -23,17 +23,10 @@ public class MeOrderAddressDtoOut {
     String country;
 
     public static MeOrderAddressDtoOut from(AddressEntity a) {
-        if (a == null) return null;
-        return MeOrderAddressDtoOut.builder()
-                .fullName(a.getFullName())
-                .phone(a.getPhone())
-                .email(a.getEmail())
-                .line1(a.getLine1())
-                .line2(a.getLine2())
-                .city(a.getCity())
-                .state(a.getState())
-                .postalCode(a.getPostalCode())
-                .country(a.getCountry())
-                .build();
+        if (a == null)
+            return null;
+        return MeOrderAddressDtoOut.builder().fullName(a.getFullName()).phone(a.getPhone()).email(a.getEmail())
+                .line1(a.getLine1()).line2(a.getLine2()).city(a.getCity()).state(a.getState())
+                .postalCode(a.getPostalCode()).country(a.getCountry()).build();
     }
 }

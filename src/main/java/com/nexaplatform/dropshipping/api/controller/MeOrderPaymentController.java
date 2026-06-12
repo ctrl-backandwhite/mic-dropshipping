@@ -28,24 +28,17 @@ public class MeOrderPaymentController implements MeOrderPaymentApi {
     private final OrderPaymentDtoMapper orderPaymentDtoMapper;
 
     @Override
-    public ResponseEntity<OrderPaymentDtoOut> initiate(
-            Authentication auth,
-            UUID orderId,
-            OrderPaymentIntentDtoIn req,
+    public ResponseEntity<OrderPaymentDtoOut> initiate(Authentication auth, UUID orderId, OrderPaymentIntentDtoIn req,
             String idempotencyKey) {
         UUID userId = UUID.fromString(auth.getName());
-        return new ResponseEntity<>(
-                orderPaymentDtoMapper.toDtoOut(paymentUseCase.initiateMeOrderPayment(
-                        userId, orderId, req.isWallet(), req.isWallet() ? null : req.toPaymentMethod(), idempotencyKey)),
+        return new ResponseEntity<>(orderPaymentDtoMapper.toDtoOut(paymentUseCase.initiateMeOrderPayment(userId,
+                orderId, req.isWallet(), req.isWallet() ? null : req.toPaymentMethod(), idempotencyKey)),
                 HttpStatus.CREATED);
     }
 
     @Override
-    public ResponseEntity<OrderPaymentDtoOut> confirmMock(
-            Authentication auth,
-            UUID orderId,
-            UUID paymentId) {
-        return ResponseEntity.ok(orderPaymentDtoMapper.toDtoOut(
-                paymentUseCase.confirmMockOrderPayment(orderId, paymentId)));
+    public ResponseEntity<OrderPaymentDtoOut> confirmMock(Authentication auth, UUID orderId, UUID paymentId) {
+        return ResponseEntity
+                .ok(orderPaymentDtoMapper.toDtoOut(paymentUseCase.confirmMockOrderPayment(orderId, paymentId)));
     }
 }

@@ -46,45 +46,25 @@ public class ProductRawConsumer {
             UUID supplierId = null;
             JsonNode supplierNode = root.get("supplier");
             if (supplierNode != null && !supplierNode.isNull()) {
-                SupplierEntity supplier = catalogService.upsertSupplier(new IngestSupplierRequest(
-                        textOrNull(supplierNode, "source"),
-                        textOrNull(supplierNode, "external_id"),
-                        textOrNull(supplierNode, "name"),
-                        textOrNull(supplierNode, "name_zh"),
-                        textOrNull(supplierNode, "country"),
-                        textOrNull(supplierNode, "city"),
-                        bdOrNull(supplierNode, "rating"),
-                        intOrNull(supplierNode, "years_active"),
-                        boolOrFalse(supplierNode, "verified"),
-                        boolOrFalse(supplierNode, "trust_pass"),
-                        textOrNull(supplierNode, "profile_url")
-                ));
+                SupplierEntity supplier = catalogService
+                        .upsertSupplier(new IngestSupplierRequest(textOrNull(supplierNode, "source"),
+                                textOrNull(supplierNode, "external_id"), textOrNull(supplierNode, "name"),
+                                textOrNull(supplierNode, "name_zh"), textOrNull(supplierNode, "country"),
+                                textOrNull(supplierNode, "city"), bdOrNull(supplierNode, "rating"),
+                                intOrNull(supplierNode, "years_active"), boolOrFalse(supplierNode, "verified"),
+                                boolOrFalse(supplierNode, "trust_pass"), textOrNull(supplierNode, "profile_url")));
                 supplierId = supplier.getId();
             }
 
-            IngestProductRequest req = new IngestProductRequest(
-                    textOrNull(root, "source"),
-                    textOrNull(root, "external_id"),
-                    textOrNull(root, "title_zh"),
-                    textOrNull(root, "short_description_zh"),
-                    textOrNull(root, "description_zh"),
-                    textOrNull(root, "brand"),
-                    intOrNull(root, "moq"),
-                    bdOrNull(root, "base_price"),
-                    textOrNull(root, "currency"),
-                    intOrNull(root, "weight_grams"),
-                    intOrNull(root, "monthly_sales"),
-                    bdOrNull(root, "repurchase_rate"),
-                    bdOrNull(root, "rating"),
-                    intOrNull(root, "review_count"),
-                    textOrNull(root, "source_url"),
-                    supplierId,
-                    null,
-                    mapImages(root.get("images")),
-                    mapOptions(root.get("options")),
-                    mapVariants(root.get("variants")),
-                    mapPriceTiers(root.get("price_tiers"))
-            );
+            IngestProductRequest req = new IngestProductRequest(textOrNull(root, "source"),
+                    textOrNull(root, "external_id"), textOrNull(root, "title_zh"),
+                    textOrNull(root, "short_description_zh"), textOrNull(root, "description_zh"),
+                    textOrNull(root, "brand"), intOrNull(root, "moq"), bdOrNull(root, "base_price"),
+                    textOrNull(root, "currency"), intOrNull(root, "weight_grams"), intOrNull(root, "monthly_sales"),
+                    bdOrNull(root, "repurchase_rate"), bdOrNull(root, "rating"), intOrNull(root, "review_count"),
+                    textOrNull(root, "source_url"), supplierId, null, mapImages(root.get("images")),
+                    mapOptions(root.get("options")), mapVariants(root.get("variants")),
+                    mapPriceTiers(root.get("price_tiers")));
 
             catalogService.upsertProduct(req);
         } catch (Exception e) {
@@ -94,10 +74,12 @@ public class ProductRawConsumer {
 
     private List<IngestImage> mapImages(JsonNode arr) {
         List<IngestImage> out = new ArrayList<>();
-        if (arr == null || !arr.isArray()) return out;
+        if (arr == null || !arr.isArray())
+            return out;
         for (JsonNode n : arr) {
             String url = textOrNull(n, "source_url");
-            if (url == null || url.isBlank()) continue;
+            if (url == null || url.isBlank())
+                continue;
             out.add(new IngestImage(url, intOrZero(n, "position"), textOrNull(n, "role")));
         }
         return out;
@@ -105,15 +87,14 @@ public class ProductRawConsumer {
 
     private List<IngestVariantOption> mapOptions(JsonNode arr) {
         List<IngestVariantOption> out = new ArrayList<>();
-        if (arr == null || !arr.isArray()) return out;
+        if (arr == null || !arr.isArray())
+            return out;
         for (JsonNode n : arr) {
             List<IngestVariantValue> values = new ArrayList<>();
             JsonNode vals = n.get("values");
             if (vals != null && vals.isArray()) {
                 for (JsonNode v : vals) {
-                    values.add(new IngestVariantValue(
-                            textOrNull(v, "value_zh"),
-                            intOrZero(v, "position"),
+                    values.add(new IngestVariantValue(textOrNull(v, "value_zh"), intOrZero(v, "position"),
                             textOrNull(v, "image_source_url")));
                 }
             }
@@ -124,7 +105,8 @@ public class ProductRawConsumer {
 
     private List<IngestVariant> mapVariants(JsonNode arr) {
         List<IngestVariant> out = new ArrayList<>();
-        if (arr == null || !arr.isArray()) return out;
+        if (arr == null || !arr.isArray())
+            return out;
         for (JsonNode n : arr) {
             Map<String, String> opts = new HashMap<>();
             JsonNode optsNode = n.get("options");
@@ -135,28 +117,21 @@ public class ProductRawConsumer {
                     opts.put(e.getKey(), e.getValue().asText());
                 }
             }
-            out.add(new IngestVariant(
-                    textOrNull(n, "external_id"),
-                    textOrNull(n, "sku"),
-                    textOrNull(n, "title"),
-                    bdOrNull(n, "price"),
-                    intOrNull(n, "stock"),
-                    textOrNull(n, "image_source_url"),
-                    opts));
+            out.add(new IngestVariant(textOrNull(n, "external_id"), textOrNull(n, "sku"), textOrNull(n, "title"),
+                    bdOrNull(n, "price"), intOrNull(n, "stock"), textOrNull(n, "image_source_url"), opts));
         }
         return out;
     }
 
     private List<IngestPriceTier> mapPriceTiers(JsonNode arr) {
         List<IngestPriceTier> out = new ArrayList<>();
-        if (arr == null || !arr.isArray()) return out;
+        if (arr == null || !arr.isArray())
+            return out;
         for (JsonNode n : arr) {
             BigDecimal price = bdOrNull(n, "unit_price");
-            if (price == null) continue;
-            out.add(new IngestPriceTier(
-                    intOrZero(n, "min_qty"),
-                    intOrNull(n, "max_qty"),
-                    price,
+            if (price == null)
+                continue;
+            out.add(new IngestPriceTier(intOrZero(n, "min_qty"), intOrNull(n, "max_qty"), price,
                     textOrNull(n, "currency")));
         }
         return out;
@@ -165,13 +140,15 @@ public class ProductRawConsumer {
     /* ---------- small JSON helpers ---------- */
 
     private static String textOrNull(JsonNode n, String field) {
-        if (n == null) return null;
+        if (n == null)
+            return null;
         JsonNode v = n.get(field);
         return v == null || v.isNull() ? null : v.asText();
     }
 
     private static Integer intOrNull(JsonNode n, String field) {
-        if (n == null) return null;
+        if (n == null)
+            return null;
         JsonNode v = n.get(field);
         return v == null || v.isNull() ? null : v.asInt();
     }
@@ -182,13 +159,15 @@ public class ProductRawConsumer {
     }
 
     private static BigDecimal bdOrNull(JsonNode n, String field) {
-        if (n == null) return null;
+        if (n == null)
+            return null;
         JsonNode v = n.get(field);
         return v == null || v.isNull() || v.asText().isBlank() ? null : new BigDecimal(v.asText());
     }
 
     private static boolean boolOrFalse(JsonNode n, String field) {
-        if (n == null) return false;
+        if (n == null)
+            return false;
         JsonNode v = n.get(field);
         return v != null && !v.isNull() && v.asBoolean(false);
     }

@@ -30,9 +30,8 @@ public interface AuthApi {
 
     @Operation(summary = "Authenticate and open a session")
     @PostMapping("/login")
-    ResponseEntity<MeDtoOut> login(@Valid @RequestBody LoginDtoIn req,
-                                   HttpServletRequest httpRequest,
-                                   HttpServletResponse httpResponse);
+    ResponseEntity<MeDtoOut> login(@Valid @RequestBody LoginDtoIn req, HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse);
 
     @Operation(summary = "Activate an account with an activation code")
     @PostMapping("/activate")

@@ -9,5 +9,6 @@ import java.util.UUID;
 
 public interface ProductImageRepository extends JpaRepository<ProductImageEntity, UUID> {
     List<ProductImageEntity> findByProductIdOrderByPositionAsc(UUID productId);
+
     List<ProductImageEntity> findTop100ByMirrorStatusOrderByCreatedAtAsc(MirrorStatus status);
 }

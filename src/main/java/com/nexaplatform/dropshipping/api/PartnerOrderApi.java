@@ -31,7 +31,7 @@ public interface PartnerOrderApi {
     @ApiResponse(responseCode = "201", description = "Order created")
     @PostMapping
     ResponseEntity<PartnerOrderDtoOut> create(@AuthenticationPrincipal Jwt jwt,
-                                              @Valid @RequestBody CreateOrderRequest req);
+            @Valid @RequestBody CreateOrderRequest req);
 
     @Operation(summary = "List orders belonging to the authenticated partner")
     @ApiResponse(responseCode = "200", description = "Orders listed")

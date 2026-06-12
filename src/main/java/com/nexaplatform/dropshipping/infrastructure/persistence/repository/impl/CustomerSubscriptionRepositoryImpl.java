@@ -48,7 +48,8 @@ public class CustomerSubscriptionRepositoryImpl implements CustomerSubscriptionR
 
     @Override
     public List<CustomerSubscription> findByUserId(UUID userId) {
-        return customerSubscriptionEntityMapper.toDomainList(customerSubscriptionJpaRepositoryAdapter.findByUserId(userId));
+        return customerSubscriptionEntityMapper
+                .toDomainList(customerSubscriptionJpaRepositoryAdapter.findByUserId(userId));
     }
 
     @Override
@@ -58,8 +59,7 @@ public class CustomerSubscriptionRepositoryImpl implements CustomerSubscriptionR
 
     @Override
     public CustomerSubscription getById(UUID id) {
-        return customerSubscriptionJpaRepositoryAdapter.findById(id)
-                .map(customerSubscriptionEntityMapper::toDomain)
+        return customerSubscriptionJpaRepositoryAdapter.findById(id).map(customerSubscriptionEntityMapper::toDomain)
                 .orElse(null);
     }
 
@@ -102,8 +102,7 @@ public class CustomerSubscriptionRepositoryImpl implements CustomerSubscriptionR
         if (userId == null) {
             return null;
         }
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+        return userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
     }
 
     /** Resolves the related plan from its id, failing if it does not exist. */
@@ -111,7 +110,6 @@ public class CustomerSubscriptionRepositoryImpl implements CustomerSubscriptionR
         if (planId == null) {
             return null;
         }
-        return subscriptionPlanRepository.findById(planId)
-                .orElseThrow(() -> new NotFoundException("Plan not found"));
+        return subscriptionPlanRepository.findById(planId).orElseThrow(() -> new NotFoundException("Plan not found"));
     }
 }

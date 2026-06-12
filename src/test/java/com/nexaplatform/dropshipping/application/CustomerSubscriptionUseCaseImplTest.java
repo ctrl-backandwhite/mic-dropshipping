@@ -40,15 +40,22 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class CustomerSubscriptionUseCaseImplTest {
 
-    @Mock CustomerSubscriptionRepository customerSubscriptionRepository;
-    @Mock CustomerSubscriptionUpdateMapper customerSubscriptionUpdateMapper;
-    @Mock SubscriptionPlanRepository planRepository;
-    @Mock SubscriptionPlanUseCase subscriptionPlanUseCase;
-    @Mock StripeService stripeService;
+    @Mock
+    CustomerSubscriptionRepository customerSubscriptionRepository;
+    @Mock
+    CustomerSubscriptionUpdateMapper customerSubscriptionUpdateMapper;
+    @Mock
+    SubscriptionPlanRepository planRepository;
+    @Mock
+    SubscriptionPlanUseCase subscriptionPlanUseCase;
+    @Mock
+    StripeService stripeService;
 
-    @InjectMocks CustomerSubscriptionUseCaseImpl useCase;
+    @InjectMocks
+    CustomerSubscriptionUseCaseImpl useCase;
 
-    @Captor ArgumentCaptor<SubscriptionPlan> mergedCaptor;
+    @Captor
+    ArgumentCaptor<SubscriptionPlan> mergedCaptor;
 
     @Test
     void listAdminSubscriptions_filtersByStatus() {
@@ -76,8 +83,8 @@ class CustomerSubscriptionUseCaseImplTest {
         var planEntity = SubscriptionPlanEntity.builder().code("pro").name("Pro").build();
         planEntity.setId(planId);
         when(planRepository.findByCode("pro")).thenReturn(Optional.of(planEntity));
-        var current = SubscriptionPlan.builder().id(planId).code("pro").name("Pro")
-                .currency("USD").position(1).priceMonthlyCents(1000).priceYearlyCents(10000).build();
+        var current = SubscriptionPlan.builder().id(planId).code("pro").name("Pro").currency("USD").position(1)
+                .priceMonthlyCents(1000).priceYearlyCents(10000).build();
         when(subscriptionPlanUseCase.getById(planId)).thenReturn(current);
         var changes = SubscriptionPlan.builder().name("Pro+").priceMonthlyCents(4900).build();
         var updated = SubscriptionPlan.builder().id(planId).name("Pro+").build();
@@ -101,8 +108,7 @@ class CustomerSubscriptionUseCaseImplTest {
         when(planRepository.findByCode("ghost")).thenReturn(Optional.empty());
         var changes = SubscriptionPlan.builder().build();
 
-        assertThatThrownBy(() -> useCase.updatePlan("ghost", changes))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> useCase.updatePlan("ghost", changes)).isInstanceOf(NotFoundException.class);
     }
 
     @Test

@@ -5,20 +5,29 @@ import lombok.*;
 
 @Entity
 @Table(name = "affiliate")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class AffiliateEntity extends BaseEntity {
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private UserEntity user;
 
-    @Column(nullable = false, unique = true, length = 40) private String code;
+    @Column(nullable = false, unique = true, length = 40)
+    private String code;
     @Column(name = "earnings_usd_cents", nullable = false)
-    @Builder.Default private long earningsUsdCents = 0;
+    @Builder.Default
+    private long earningsUsdCents = 0;
     @Column(name = "payout_usd_cents", nullable = false)
-    @Builder.Default private long payoutUsdCents = 0;
+    @Builder.Default
+    private long payoutUsdCents = 0;
     @Column(name = "referrals_count", nullable = false)
-    @Builder.Default private int referralsCount = 0;
+    @Builder.Default
+    private int referralsCount = 0;
     @Column(nullable = false)
-    @Builder.Default private boolean active = true;
+    @Builder.Default
+    private boolean active = true;
 }

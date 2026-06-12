@@ -57,7 +57,8 @@ public class MarginService {
         }
         PriceRuleEntity r = rule.get();
         BigDecimal retail = switch (r.getMarginType()) {
-            case PERCENTAGE -> costUsd.multiply(BigDecimal.ONE.add(r.getMarginValue().divide(HUNDRED, 6, RoundingMode.HALF_UP)));
+            case PERCENTAGE ->
+                costUsd.multiply(BigDecimal.ONE.add(r.getMarginValue().divide(HUNDRED, 6, RoundingMode.HALF_UP)));
             case FIXED -> costUsd.add(r.getMarginValue());
         };
         retail = retail.setScale(4, RoundingMode.HALF_UP);
@@ -84,13 +85,13 @@ public class MarginService {
                 case CATEGORY -> categoryId;
                 case GLOBAL -> null;
             };
-            Optional<PriceRuleEntity> match = cache.stream()
-                    .filter(PriceRuleEntity::isActive)
+            Optional<PriceRuleEntity> match = cache.stream().filter(PriceRuleEntity::isActive)
                     .filter(r -> r.getScope() == scope)
-                    .filter(r -> scope == PriceRuleScope.GLOBAL || (r.getScopeId() != null && r.getScopeId().equals(target)))
-                    .filter(r -> matchesCostRange(r, costUsd))
-                    .findFirst();
-            if (match.isPresent()) return match;
+                    .filter(r -> scope == PriceRuleScope.GLOBAL
+                            || (r.getScopeId() != null && r.getScopeId().equals(target)))
+                    .filter(r -> matchesCostRange(r, costUsd)).findFirst();
+            if (match.isPresent())
+                return match;
         }
         return Optional.empty();
     }
@@ -128,19 +129,19 @@ public class MarginService {
     }
 
     private void ensureFresh() {
-        if (Duration.between(cacheStamp, Instant.now()).compareTo(CACHE_TTL) >= 0) refresh();
+        if (Duration.between(cacheStamp, Instant.now()).compareTo(CACHE_TTL) >= 0)
+            refresh();
     }
 
     private boolean matchesCostRange(PriceRuleEntity r, BigDecimal cost) {
-        if (r.getMinCostUsd() != null && cost.compareTo(r.getMinCostUsd()) < 0) return false;
-        if (r.getMaxCostUsd() != null && cost.compareTo(r.getMaxCostUsd()) > 0) return false;
+        if (r.getMinCostUsd() != null && cost.compareTo(r.getMinCostUsd()) < 0)
+            return false;
+        if (r.getMaxCostUsd() != null && cost.compareTo(r.getMaxCostUsd()) > 0)
+            return false;
         return true;
     }
 
-    public record PriceWithMargin(
-            BigDecimal costUsd,
-            BigDecimal retailUsd,
-            PriceRuleEntity appliedRule,
-            BigDecimal appliedPercentage
-    ) {}
+    public record PriceWithMargin(BigDecimal costUsd, BigDecimal retailUsd, PriceRuleEntity appliedRule,
+            BigDecimal appliedPercentage) {
+    }
 }

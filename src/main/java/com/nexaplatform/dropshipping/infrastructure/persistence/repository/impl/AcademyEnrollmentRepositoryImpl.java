@@ -41,8 +41,7 @@ public class AcademyEnrollmentRepositoryImpl implements AcademyEnrollmentReposit
 
     @Override
     public List<AcademyEnrollment> findByUserId(UUID userId) {
-        return academyEnrollmentEntityMapper.toDomainList(
-                academyEnrollmentJpaRepositoryAdapter.findByUser_Id(userId));
+        return academyEnrollmentEntityMapper.toDomainList(academyEnrollmentJpaRepositoryAdapter.findByUser_Id(userId));
     }
 
     @Override
@@ -58,8 +57,7 @@ public class AcademyEnrollmentRepositoryImpl implements AcademyEnrollmentReposit
 
     @Override
     public AcademyEnrollment getById(UUID id) {
-        return academyEnrollmentJpaRepositoryAdapter.findById(id)
-                .map(academyEnrollmentEntityMapper::toDomain)
+        return academyEnrollmentJpaRepositoryAdapter.findById(id).map(academyEnrollmentEntityMapper::toDomain)
                 .orElse(null);
     }
 
@@ -85,8 +83,7 @@ public class AcademyEnrollmentRepositoryImpl implements AcademyEnrollmentReposit
     /** Applies the mutable model fields onto the entity, resolving user/course relations. */
     private void applyModel(AcademyEnrollmentEntity entity, AcademyEnrollment model) {
         if (model.getUserId() != null) {
-            entity.setUser(userRepository.findById(model.getUserId())
-                    .orElseThrow(() -> new NotFoundException("User")));
+            entity.setUser(userRepository.findById(model.getUserId()).orElseThrow(() -> new NotFoundException("User")));
         }
         if (model.getCourseId() != null) {
             entity.setCourse(academyCourseJpaRepositoryAdapter.findById(model.getCourseId())

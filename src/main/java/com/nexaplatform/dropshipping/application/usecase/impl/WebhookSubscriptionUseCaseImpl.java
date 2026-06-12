@@ -106,8 +106,7 @@ public class WebhookSubscriptionUseCaseImpl implements WebhookSubscriptionUseCas
     @Override
     @Transactional(readOnly = true)
     public List<WebhookDelivery> deliveries(UUID id) {
-        var rows = deliveryRepository.findBySubscription_IdOrderByCreatedAtDesc(id).stream()
-                .limit(MAX_DELIVERIES)
+        var rows = deliveryRepository.findBySubscription_IdOrderByCreatedAtDesc(id).stream().limit(MAX_DELIVERIES)
                 .toList();
         return webhookSubscriptionEntityMapper.toDeliveryDomainList(rows);
     }

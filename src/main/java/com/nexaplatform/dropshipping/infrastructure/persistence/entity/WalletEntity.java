@@ -14,7 +14,11 @@ import lombok.Setter;
 
 @Entity
 @Table(name = "wallet")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class WalletEntity extends BaseEntity {
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
@@ -31,5 +35,5 @@ public class WalletEntity extends BaseEntity {
     private String currencyDefault;
 
     @Column(nullable = false, length = 20)
-    private String status;  // ACTIVE | FROZEN
+    private String status; // ACTIVE | FROZEN
 }

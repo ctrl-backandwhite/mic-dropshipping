@@ -38,11 +38,10 @@ public class ProductIndexer {
     public void ensureIndex() {
         try {
             boolean exists = client.indices().exists(b -> b.index(index)).value();
-            if (exists) return;
-            client.indices().create(CreateIndexRequest.of(b -> b
-                    .index(index)
-                    .mappings(TypeMapping.of(tm -> tm
-                            .properties("slug", Property.of(p -> p.keyword(k -> k)))
+            if (exists)
+                return;
+            client.indices().create(CreateIndexRequest.of(b -> b.index(index)
+                    .mappings(TypeMapping.of(tm -> tm.properties("slug", Property.of(p -> p.keyword(k -> k)))
                             .properties("source", Property.of(p -> p.keyword(k -> k)))
                             .properties("categoryId", Property.of(p -> p.keyword(k -> k)))
                             .properties("status", Property.of(p -> p.keyword(k -> k)))
@@ -55,8 +54,7 @@ public class ProductIndexer {
                             .properties("trendScore", Property.of(p -> p.float_(f -> f)))
                             .properties("monthlySales", Property.of(p -> p.integer(i -> i)))
                             .properties("rating", Property.of(p -> p.float_(f -> f)))
-                            .properties("supplierId", Property.of(p -> p.keyword(k -> k)))
-                    ))));
+                            .properties("supplierId", Property.of(p -> p.keyword(k -> k)))))));
             log.info("Created OpenSearch index '{}'", index);
         } catch (OpenSearchException | java.io.IOException e) {
             log.error("Failed to ensure OpenSearch index: {}", e.getMessage());
@@ -71,7 +69,8 @@ public class ProductIndexer {
     @Transactional(readOnly = true)
     public void indexProduct(UUID productId) {
         ProductEntity p = productRepository.findWithDetailsById(productId).orElse(null);
-        if (p == null) return;
+        if (p == null)
+            return;
         Map<String, Object> doc = new HashMap<>();
         doc.put("id", p.getId().toString());
         doc.put("slug", p.getSlug());
@@ -101,7 +100,8 @@ public class ProductIndexer {
     }
 
     private static String capitalize(String s) {
-        if (s == null || s.isEmpty()) return s;
+        if (s == null || s.isEmpty())
+            return s;
         return s.substring(0, 1).toUpperCase() + s.substring(1);
     }
 }

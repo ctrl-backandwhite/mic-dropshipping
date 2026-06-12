@@ -30,15 +30,12 @@ public class WarehouseRepositoryImpl implements WarehouseRepository {
 
     @Override
     public List<Warehouse> findActive() {
-        return warehouseEntityMapper.toDomainList(
-                warehouseJpaRepositoryAdapter.findByActiveTrueOrderByCountryAsc());
+        return warehouseEntityMapper.toDomainList(warehouseJpaRepositoryAdapter.findByActiveTrueOrderByCountryAsc());
     }
 
     @Override
     public Warehouse getById(UUID id) {
-        return warehouseJpaRepositoryAdapter.findById(id)
-                .map(warehouseEntityMapper::toDomain)
-                .orElse(null);
+        return warehouseJpaRepositoryAdapter.findById(id).map(warehouseEntityMapper::toDomain).orElse(null);
     }
 
     @Override

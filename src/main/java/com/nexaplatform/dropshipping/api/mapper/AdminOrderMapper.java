@@ -97,16 +97,10 @@ public interface AdminOrderMapper {
         if (order.getShippingFullName() == null && order.getShippingLine1() == null) {
             return null;
         }
-        return AdminOrderAddressDtoOut.builder()
-                .fullName(order.getShippingFullName())
-                .line1(order.getShippingLine1())
-                .line2(order.getShippingLine2())
-                .city(order.getShippingCity())
-                .region(order.getShippingState())
-                .postalCode(order.getShippingPostalCode())
-                .country(order.getShippingCountry())
-                .phone(order.getShippingPhone())
-                .build();
+        return AdminOrderAddressDtoOut.builder().fullName(order.getShippingFullName()).line1(order.getShippingLine1())
+                .line2(order.getShippingLine2()).city(order.getShippingCity()).region(order.getShippingState())
+                .postalCode(order.getShippingPostalCode()).country(order.getShippingCountry())
+                .phone(order.getShippingPhone()).build();
     }
 
     /** Title fallback: explicit snapshot, then live product titleZh, then sku. */

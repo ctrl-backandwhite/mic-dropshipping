@@ -21,8 +21,10 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class SupportTicketUseCaseImplTest {
 
-    @Mock SupportTicketRepository supportTicketRepository;
-    @InjectMocks SupportTicketUseCaseImpl useCase;
+    @Mock
+    SupportTicketRepository supportTicketRepository;
+    @InjectMocks
+    SupportTicketUseCaseImpl useCase;
 
     @Test
     void open_defaultsPriorityAndStatus() {

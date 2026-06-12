@@ -61,11 +61,8 @@ public class PartnerApiKeyUseCaseImpl implements PartnerApiKeyUseCase {
     private final JwtRevocationService revocationService;
     private final SecureRandom rng = new SecureRandom();
 
-    public PartnerApiKeyUseCaseImpl(RegisteredClientRepository repo,
-                                    PasswordEncoder passwordEncoder,
-                                    JdbcTemplate jdbc,
-                                    ObjectMapper mapper,
-                                    JwtRevocationService revocationService) {
+    public PartnerApiKeyUseCaseImpl(RegisteredClientRepository repo, PasswordEncoder passwordEncoder, JdbcTemplate jdbc,
+            ObjectMapper mapper, JwtRevocationService revocationService) {
         this.repo = repo;
         this.passwordEncoder = passwordEncoder;
         this.jdbc = jdbc;
@@ -95,32 +92,20 @@ public class PartnerApiKeyUseCaseImpl implements PartnerApiKeyUseCase {
         String clientSecret = "sk_" + randomToken(40);
         Instant now = Instant.now();
 
-        ClientSettings.Builder settings = ClientSettings.builder()
-                .setting(OWNER_KEY, userId.toString())
+        ClientSettings.Builder settings = ClientSettings.builder().setting(OWNER_KEY, userId.toString())
                 .setting(CREATED_KEY, now.toString());
 
-        RegisteredClient client = RegisteredClient.withId(UUID.randomUUID().toString())
-                .clientId(clientId)
-                .clientName(command.getName())
-                .clientSecret(passwordEncoder.encode(clientSecret))
+        RegisteredClient client = RegisteredClient.withId(UUID.randomUUID().toString()).clientId(clientId)
+                .clientName(command.getName()).clientSecret(passwordEncoder.encode(clientSecret))
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
-                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
-                .scopes(s -> s.addAll(scopes))
+                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS).scopes(s -> s.addAll(scopes))
                 .clientSettings(settings.build())
-                .tokenSettings(TokenSettings.builder()
-                        .accessTokenTimeToLive(Duration.ofHours(12)).build())
-                .build();
+                .tokenSettings(TokenSettings.builder().accessTokenTimeToLive(Duration.ofHours(12)).build()).build();
         repo.save(client);
 
         log.info("::> [PARTNER-KEYS] API key created clientId={} owner={}", clientId, userId);
-        return ApiKey.builder()
-                .clientId(clientId)
-                .clientSecret(clientSecret)
-                .name(command.getName())
-                .scopes(scopes)
-                .createdAt(now)
-                .message("Store the clientSecret now — it will not be shown again.")
-                .build();
+        return ApiKey.builder().clientId(clientId).clientSecret(clientSecret).name(command.getName()).scopes(scopes)
+                .createdAt(now).message("Store the clientSecret now — it will not be shown again.").build();
     }
 
     /** Lists the API keys owned by the user (no secrets). */
@@ -166,12 +151,11 @@ public class PartnerApiKeyUseCaseImpl implements PartnerApiKeyUseCase {
 
     @SuppressWarnings("unchecked")
     private List<ApiKey> queryByOwner(UUID userId) {
-        List<Map<String, Object>> rows = jdbc.queryForList(
-                "SELECT client_id, client_name, scopes, client_settings::text AS settings " +
-                        "FROM oauth2_registered_client " +
-                        "WHERE client_settings::jsonb->>'nexadrop.owner_user_id' = ? " +
-                        "ORDER BY client_id_issued_at DESC",
-                userId.toString());
+        List<Map<String, Object>> rows = jdbc
+                .queryForList("SELECT client_id, client_name, scopes, client_settings::text AS settings "
+                        + "FROM oauth2_registered_client "
+                        + "WHERE client_settings::jsonb->>'nexadrop.owner_user_id' = ? "
+                        + "ORDER BY client_id_issued_at DESC", userId.toString());
         List<ApiKey> out = new ArrayList<>();
         for (Map<String, Object> r : rows) {
             Map<String, Object> settings;
@@ -183,13 +167,8 @@ public class PartnerApiKeyUseCaseImpl implements PartnerApiKeyUseCase {
             String createdAt = (String) settings.getOrDefault(CREATED_KEY, null);
             String plan = (String) settings.getOrDefault(PLAN_KEY, null);
             List<String> scopes = Arrays.asList(((String) r.get("scopes")).split(","));
-            out.add(ApiKey.builder()
-                    .clientId((String) r.get("client_id"))
-                    .name((String) r.get("client_name"))
-                    .scopes(scopes)
-                    .createdAt(createdAt != null ? Instant.parse(createdAt) : null)
-                    .plan(plan)
-                    .build());
+            out.add(ApiKey.builder().clientId((String) r.get("client_id")).name((String) r.get("client_name"))
+                    .scopes(scopes).createdAt(createdAt != null ? Instant.parse(createdAt) : null).plan(plan).build());
         }
         return out;
     }

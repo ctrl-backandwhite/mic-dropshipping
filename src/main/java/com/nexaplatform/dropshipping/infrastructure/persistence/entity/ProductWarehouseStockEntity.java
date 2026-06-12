@@ -4,9 +4,13 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "product_warehouse_stock",
-       uniqueConstraints = @UniqueConstraint(columnNames = { "product_id", "warehouse_id" }))
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Table(name = "product_warehouse_stock", uniqueConstraints = @UniqueConstraint(columnNames = {"product_id",
+        "warehouse_id"}))
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ProductWarehouseStockEntity extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -18,5 +22,6 @@ public class ProductWarehouseStockEntity extends BaseEntity {
     private WarehouseEntity warehouse;
 
     @Column(nullable = false)
-    @Builder.Default private int stock = 0;
+    @Builder.Default
+    private int stock = 0;
 }

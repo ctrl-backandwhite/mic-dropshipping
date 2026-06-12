@@ -36,6 +36,7 @@ public class BillingController implements BillingApi {
     @Override
     public ResponseEntity<SubscribeDtoOut> subscribe(UserDetails principal, SubscribeDtoIn req) throws Exception {
         UUID userId = UUID.fromString(principal.getUsername());
-        return ResponseEntity.ok(mapper.toSubscribeDtoOut(useCase.subscribe(userId, req.getPlanCode(), req.getPeriod())));
+        return ResponseEntity
+                .ok(mapper.toSubscribeDtoOut(useCase.subscribe(userId, req.getPlanCode(), req.getPeriod())));
     }
 }

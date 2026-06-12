@@ -27,24 +27,18 @@ public class EventPublisher {
 
     /** Publica un evento dentro de la transacción actual (sin nueva tx). */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void publish(String topic, String aggregateType, String aggregateId,
-                        String partitionKey, Object payload) {
+    public void publish(String topic, String aggregateType, String aggregateId, String partitionKey, Object payload) {
         publish(topic, aggregateType, aggregateId, partitionKey, payload, null);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void publish(String topic, String aggregateType, String aggregateId,
-                        String partitionKey, Object payload, Map<String, String> headers) {
+    public void publish(String topic, String aggregateType, String aggregateId, String partitionKey, Object payload,
+            Map<String, String> headers) {
         @SuppressWarnings("unchecked")
         Map<String, Object> json = mapper.convertValue(payload, Map.class);
-        EventOutboxEntity row = EventOutboxEntity.builder()
-                .aggregateType(aggregateType)
-                .aggregateId(aggregateId)
-                .topic(topic)
-                .partitionKey(partitionKey != null ? partitionKey : aggregateId)
-                .payload(json)
-                .headers(headers)
-                .build();
+        EventOutboxEntity row = EventOutboxEntity.builder().aggregateType(aggregateType).aggregateId(aggregateId)
+                .topic(topic).partitionKey(partitionKey != null ? partitionKey : aggregateId).payload(json)
+                .headers(headers).build();
         repo.save(row);
         log.debug("Outbox <- topic={} agg={}/{}", topic, aggregateType, aggregateId);
     }

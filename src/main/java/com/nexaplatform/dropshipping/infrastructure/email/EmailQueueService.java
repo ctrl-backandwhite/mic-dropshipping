@@ -31,13 +31,8 @@ public class EmailQueueService {
         Context ctx = new Context();
         vars.forEach(ctx::setVariable);
         String html = templateEngine.process(template, ctx);
-        OutboundEmailEntity email = OutboundEmailEntity.builder()
-                .toAddress(to)
-                .subject(subject)
-                .bodyHtml(html)
-                .template(template)
-                .status("PENDING")
-                .build();
+        OutboundEmailEntity email = OutboundEmailEntity.builder().toAddress(to).subject(subject).bodyHtml(html)
+                .template(template).status("PENDING").build();
         return repo.save(email);
     }
 

@@ -42,32 +42,37 @@ public class StripeGateway implements PaymentGateway {
     @Value("${nexadrop.stripe.platform-env:dev}")
     private String platformEnv;
 
-    @Override public boolean supports(PaymentMethod m) { return m == PaymentMethod.CARD; }
-    @Override public String providerName() { return "stripe"; }
+    @Override
+    public boolean supports(PaymentMethod m) {
+        return m == PaymentMethod.CARD;
+    }
+
+    @Override
+    public String providerName() {
+        return "stripe";
+    }
 
     @Override
     public InitiateResult initiate(PaymentEntity p) {
         if (!isActive()) {
             String mock = "pi_mock_" + p.getId();
             log.info("Stripe mock-mode for payment {}", p.getId());
-            return new InitiateResult(mock, mock + "_secret_mock", null, null, null, null,
-                    Map.of("mock", true));
+            return new InitiateResult(mock, mock + "_secret_mock", null, null, null, null, Map.of("mock", true));
         }
         try {
             Stripe.apiKey = secretKey;
             // Metadata: identifica claramente qué plataforma + entidad NX036 originó
             // el cobro, útil cuando varias plataformas convergen en la misma cuenta Stripe.
             // Estos campos aparecen en el dashboard de Stripe y en cada webhook event.
-            PaymentIntentCreateParams.Builder b = PaymentIntentCreateParams.builder()
-                    .setAmount(p.getAmountUsdCents())
+            PaymentIntentCreateParams.Builder b = PaymentIntentCreateParams.builder().setAmount(p.getAmountUsdCents())
                     .setCurrency("usd")
-                    .setAutomaticPaymentMethods(PaymentIntentCreateParams.AutomaticPaymentMethods.builder()
-                            .setEnabled(true).build())
-                    .putMetadata("platform",   platformId)             // p.ej. "nexadrop-dropshipping"
-                    .putMetadata("env",        platformEnv)            // dev | staging | production
-                    .putMetadata("paymentId",  p.getId().toString())
-                    .putMetadata("userId",     p.getUser().getId().toString())
-                    .putMetadata("purpose",    p.getPurpose() != null ? p.getPurpose() : "WALLET_RECHARGE")
+                    .setAutomaticPaymentMethods(
+                            PaymentIntentCreateParams.AutomaticPaymentMethods.builder().setEnabled(true).build())
+                    .putMetadata("platform", platformId) // p.ej. "nexadrop-dropshipping"
+                    .putMetadata("env", platformEnv) // dev | staging | production
+                    .putMetadata("paymentId", p.getId().toString())
+                    .putMetadata("userId", p.getUser().getId().toString())
+                    .putMetadata("purpose", p.getPurpose() != null ? p.getPurpose() : "WALLET_RECHARGE")
                     .setReceiptEmail(p.getUser().getEmail());
 
             if (p.getOrderId() != null) {
@@ -76,7 +81,8 @@ public class StripeGateway implements PaymentGateway {
                 // statement_descriptor_suffix aparece en el extracto del cliente final.
                 // Máximo 22 chars; sólo letras, números, espacios, puntos.
                 String shortOrder = p.getOrderId().toString().substring(0, 8);
-                b.setStatementDescriptorSuffix(("ORD " + shortOrder).substring(0, Math.min(22, ("ORD " + shortOrder).length())));
+                b.setStatementDescriptorSuffix(
+                        ("ORD " + shortOrder).substring(0, Math.min(22, ("ORD " + shortOrder).length())));
             } else {
                 b.setDescription(platformId + " · wallet recharge");
                 b.setStatementDescriptorSuffix("WALLET");

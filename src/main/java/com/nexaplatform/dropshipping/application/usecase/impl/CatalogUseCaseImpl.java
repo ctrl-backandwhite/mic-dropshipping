@@ -90,10 +90,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Transactional
     public SupplierEntity upsertSupplier(IngestSupplierRequest req) {
         SupplierEntity entity = supplierRepository.findBySourceAndExternalId(req.source(), req.externalId())
-                .orElseGet(() -> SupplierEntity.builder()
-                        .source(req.source())
-                        .externalId(req.externalId())
-                        .build());
+                .orElseGet(() -> SupplierEntity.builder().source(req.source()).externalId(req.externalId()).build());
         entity.setName(req.name());
         entity.setNameZh(req.nameZh());
         entity.setCountry(req.country() != null ? req.country() : "CN");
@@ -121,10 +118,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Transactional
     public CategoryEntity upsertCategory(IngestCategoryRequest req) {
         CategoryEntity entity = categoryRepository.findBySlug(req.slug())
-                .orElseGet(() -> CategoryEntity.builder()
-                        .slug(req.slug())
-                        .active(true)
-                        .build());
+                .orElseGet(() -> CategoryEntity.builder().slug(req.slug()).active(true).build());
         entity.setNameZh(req.nameZh());
         entity.setSource(req.source() != null ? req.source() : "1688");
         entity.setExternalId(req.externalId());
@@ -144,16 +138,12 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     private void upsertCategoryTranslation(CategoryEntity cat, String lang, String name) {
         Optional<CategoryTranslationEntity> existing = cat.getTranslations().stream()
-                .filter(t -> t.getLanguage().equalsIgnoreCase(lang))
-                .findFirst();
+                .filter(t -> t.getLanguage().equalsIgnoreCase(lang)).findFirst();
         if (existing.isPresent()) {
             existing.get().setName(name);
         } else {
-            cat.getTranslations().add(CategoryTranslationEntity.builder()
-                    .category(cat)
-                    .language(lang)
-                    .name(name)
-                    .build());
+            cat.getTranslations()
+                    .add(CategoryTranslationEntity.builder().category(cat).language(lang).name(name).build());
         }
     }
 
@@ -163,12 +153,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Transactional
     public ProductEntity upsertProduct(IngestProductRequest req) {
         ProductEntity product = productJpaRepository.findBySourceAndExternalId(req.source(), req.externalId())
-                .orElseGet(() -> ProductEntity.builder()
-                        .source(req.source())
-                        .externalId(req.externalId())
-                        .status(ProductStatus.DRAFT)
-                        .moq(req.moq() != null ? req.moq() : 1)
-                        .build());
+                .orElseGet(() -> ProductEntity.builder().source(req.source()).externalId(req.externalId())
+                        .status(ProductStatus.DRAFT).moq(req.moq() != null ? req.moq() : 1).build());
 
         product.setTitleZh(req.titleZh());
         product.setShortDescriptionZh(req.shortDescriptionZh());
@@ -202,13 +188,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (req.images() != null) {
             for (int i = 0; i < req.images().size(); i++) {
                 var img = req.images().get(i);
-                product.getImages().add(ProductImageEntity.builder()
-                        .product(product)
-                        .position(img.position())
-                        .role(img.role() != null ? img.role() : "GALLERY")
-                        .sourceUrl(img.sourceUrl())
-                        .mirrorStatus(MirrorStatus.PENDING)
-                        .build());
+                product.getImages()
+                        .add(ProductImageEntity.builder().product(product).position(img.position())
+                                .role(img.role() != null ? img.role() : "GALLERY").sourceUrl(img.sourceUrl())
+                                .mirrorStatus(MirrorStatus.PENDING).build());
             }
         }
 
@@ -216,19 +199,12 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         product.getVariantOptions().clear();
         if (req.options() != null) {
             for (IngestVariantOption optReq : req.options()) {
-                VariantOptionEntity opt = VariantOptionEntity.builder()
-                        .product(product)
-                        .nameZh(optReq.nameZh())
-                        .position(optReq.position())
-                        .build();
+                VariantOptionEntity opt = VariantOptionEntity.builder().product(product).nameZh(optReq.nameZh())
+                        .position(optReq.position()).build();
                 if (optReq.values() != null) {
                     for (var v : optReq.values()) {
-                        opt.getValues().add(VariantValueEntity.builder()
-                                .option(opt)
-                                .valueZh(v.valueZh())
-                                .position(v.position())
-                                .imageSourceUrl(v.imageSourceUrl())
-                                .build());
+                        opt.getValues().add(VariantValueEntity.builder().option(opt).valueZh(v.valueZh())
+                                .position(v.position()).imageSourceUrl(v.imageSourceUrl()).build());
                     }
                 }
                 product.getVariantOptions().add(opt);
@@ -239,17 +215,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         product.getVariants().clear();
         if (req.variants() != null) {
             for (var v : req.variants()) {
-                product.getVariants().add(ProductVariantEntity.builder()
-                        .product(product)
-                        .externalId(v.externalId())
-                        .sku(v.sku())
-                        .title(v.title())
-                        .price(v.price())
-                        .stock(v.stock() != null ? v.stock() : 0)
-                        .imageSourceUrl(v.imageSourceUrl())
-                        .options(v.options())
-                        .active(true)
-                        .build());
+                product.getVariants()
+                        .add(ProductVariantEntity.builder().product(product).externalId(v.externalId()).sku(v.sku())
+                                .title(v.title()).price(v.price()).stock(v.stock() != null ? v.stock() : 0)
+                                .imageSourceUrl(v.imageSourceUrl()).options(v.options()).active(true).build());
             }
         }
 
@@ -257,28 +226,23 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
         // Price tiers separately
         if (req.priceTiers() != null) {
-            priceTierRepository.findByProductIdOrderByMinQtyAsc(product.getId())
-                    .forEach(priceTierRepository::delete);
+            priceTierRepository.findByProductIdOrderByMinQtyAsc(product.getId()).forEach(priceTierRepository::delete);
             for (var t : req.priceTiers()) {
-                priceTierRepository.save(ProductPriceTierEntity.builder()
-                        .product(product)
-                        .minQty(t.minQty())
-                        .maxQty(t.maxQty())
-                        .unitPrice(t.unitPrice())
-                        .currency(t.currency() != null ? t.currency() : "CNY")
-                        .build());
+                priceTierRepository.save(ProductPriceTierEntity.builder().product(product).minQty(t.minQty())
+                        .maxQty(t.maxQty()).unitPrice(t.unitPrice())
+                        .currency(t.currency() != null ? t.currency() : "CNY").build());
             }
         }
 
         // Emit events. Guard against null ids — JPA assigns them at flush; in tests with
         // pure mocks they may be absent, in which case we silently skip to avoid NPEs.
         if (product.getId() != null) {
-            kafkaTemplate.send(NexaTopics.PRODUCT_INGESTED, product.getId().toString(),
-                    new ProductIngestedEvent(product.getId(), product.getSlug(), product.getSource(), product.getExternalId()));
+            kafkaTemplate.send(NexaTopics.PRODUCT_INGESTED, product.getId().toString(), new ProductIngestedEvent(
+                    product.getId(), product.getSlug(), product.getSource(), product.getExternalId()));
             for (ProductImageEntity img : product.getImages()) {
                 if (img.getMirrorStatus() == MirrorStatus.PENDING && img.getId() != null) {
-                    kafkaTemplate.send(NexaTopics.IMAGE_FETCH, img.getId().toString(),
-                            new ImageMirrorEvent(img.getId(), product.getId(), img.getSourceUrl(), "PRODUCT", img.getPosition()));
+                    kafkaTemplate.send(NexaTopics.IMAGE_FETCH, img.getId().toString(), new ImageMirrorEvent(img.getId(),
+                            product.getId(), img.getSourceUrl(), "PRODUCT", img.getPosition()));
                 }
             }
         }
@@ -305,7 +269,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     public ProductSummaryView toSummaryView(Product product, String language) {
-        ProductEntity entity = product == null || product.getId() == null ? null
+        ProductEntity entity = product == null || product.getId() == null
+                ? null
                 : productJpaRepository.findById(product.getId()).orElse(null);
         return entity == null ? null : productMapper.toSummary(entity, language);
     }
@@ -350,8 +315,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = CACHE_PRODUCT_DETAIL,
-            key = "#slug + ':' + #language + ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get()")
+    @Cacheable(value = CACHE_PRODUCT_DETAIL, key = "#slug + ':' + #language + ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get()")
     public ProductDetailView getProductBySlug(String slug, String language) {
         ProductEntity p = productJpaRepository.findWithDetailsBySlug(slug)
                 .orElseThrow(() -> new NotFoundException("Product not found: " + slug));
@@ -361,8 +325,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = CACHE_PRODUCT_DETAIL,
-            key = "'id:' + #id + ':' + #language + ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get()")
+    @Cacheable(value = CACHE_PRODUCT_DETAIL, key = "'id:' + #id + ':' + #language + ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get()")
     public ProductDetailView getProductById(UUID id, String language) {
         ProductEntity p = productJpaRepository.findWithDetailsById(id)
                 .orElseThrow(() -> new NotFoundException("Product not found: " + id));
@@ -394,11 +357,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
-    @Caching(evict = {
-            @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
-            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)
-    })
+            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
     public void updateStatus(UUID id, ProductStatus status) {
         ProductEntity p = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Product not found: " + id));
@@ -408,30 +369,31 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
-    @Caching(evict = {
-            @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true)
-    })
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true)})
     public ProductDetailView quickEdit(UUID id, AdminProductQuickEditDtoIn req, String lang) {
         ProductEntity p = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Product not found: " + id));
-        if (req.getBrand() != null) p.setBrand(req.getBrand());
-        if (req.getBasePrice() != null) p.setBasePrice(req.getBasePrice());
-        if (req.getCurrency() != null && !req.getCurrency().isBlank()) p.setCurrency(req.getCurrency());
-        if (req.getMoq() != null) p.setMoq(req.getMoq());
+        if (req.getBrand() != null)
+            p.setBrand(req.getBrand());
+        if (req.getBasePrice() != null)
+            p.setBasePrice(req.getBasePrice());
+        if (req.getCurrency() != null && !req.getCurrency().isBlank())
+            p.setCurrency(req.getCurrency());
+        if (req.getMoq() != null)
+            p.setMoq(req.getMoq());
         if (req.getTitle() != null && !req.getTitle().isBlank()) {
             // Update the active language translation, not the canonical title_zh.
-            var trOpt = p.getTranslations().stream()
-                    .filter(t -> lang.equalsIgnoreCase(t.getLanguage())).findFirst();
+            var trOpt = p.getTranslations().stream().filter(t -> lang.equalsIgnoreCase(t.getLanguage())).findFirst();
             if (trOpt.isPresent()) {
                 trOpt.get().setTitle(req.getTitle());
-                if (req.getShortDescription() != null) trOpt.get().setShortDescription(req.getShortDescription());
+                if (req.getShortDescription() != null)
+                    trOpt.get().setShortDescription(req.getShortDescription());
             } else {
-                p.getTranslations().add(
-                        com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity.builder()
-                                .product(p).language(lang).title(req.getTitle())
-                                .shortDescription(req.getShortDescription())
-                                .provider("admin").build());
+                p.getTranslations()
+                        .add(com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity
+                                .builder().product(p).language(lang).title(req.getTitle())
+                                .shortDescription(req.getShortDescription()).provider("admin").build());
             }
         }
         productJpaRepository.save(p);
@@ -444,31 +406,20 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         ProductEntity src = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Product not found: " + id));
         String newExt = src.getExternalId() + "-COPY-" + System.currentTimeMillis() % 100000;
-        ProductEntity copy = ProductEntity.builder()
-                .source(src.getSource())
-                .externalId(newExt)
-                .titleZh(src.getTitleZh() + " (copy)")
-                .shortDescriptionZh(src.getShortDescriptionZh())
-                .descriptionZh(src.getDescriptionZh())
-                .brand(src.getBrand())
-                .moq(src.getMoq())
-                .basePrice(src.getBasePrice())
-                .currency(src.getCurrency())
-                .supplier(src.getSupplier())
-                .category(src.getCategory())
-                .status(ProductStatus.DRAFT)
-                .slug(buildSlug(src.getTitleZh(), newExt))
+        ProductEntity copy = ProductEntity.builder().source(src.getSource()).externalId(newExt)
+                .titleZh(src.getTitleZh() + " (copy)").shortDescriptionZh(src.getShortDescriptionZh())
+                .descriptionZh(src.getDescriptionZh()).brand(src.getBrand()).moq(src.getMoq())
+                .basePrice(src.getBasePrice()).currency(src.getCurrency()).supplier(src.getSupplier())
+                .category(src.getCategory()).status(ProductStatus.DRAFT).slug(buildSlug(src.getTitleZh(), newExt))
                 .build();
         ProductEntity saved = productJpaRepository.save(copy);
         for (var tr : src.getTranslations()) {
-            saved.getTranslations().add(
-                    com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity.builder()
-                            .product(saved).language(tr.getLanguage())
+            saved.getTranslations()
+                    .add(com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity
+                            .builder().product(saved).language(tr.getLanguage())
                             .title((tr.getTitle() != null ? tr.getTitle() : "") + " (copy)")
-                            .shortDescription(tr.getShortDescription())
-                            .description(tr.getDescription())
-                            .provider("admin-duplicate")
-                            .build());
+                            .shortDescription(tr.getShortDescription()).description(tr.getDescription())
+                            .provider("admin-duplicate").build());
         }
         productJpaRepository.save(saved);
         return productMapper.toDetail(saved, lang, java.util.Collections.emptyList());
@@ -491,9 +442,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
      * string), 'null' and invalid status strings — full listing in those cases.
      */
     private ProductStatus parseStatusTolerant(String status) {
-        if (status == null || status.isBlank()
-                || "ALL".equalsIgnoreCase(status)
-                || "undefined".equalsIgnoreCase(status)
+        if (status == null || status.isBlank() || "ALL".equalsIgnoreCase(status) || "undefined".equalsIgnoreCase(status)
                 || "null".equalsIgnoreCase(status)) {
             return null;
         }
@@ -507,7 +456,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private String buildSlug(String title, String externalId) {
         String base = title == null ? "product" : title;
         String slug = SLUG.slugify(base);
-        if (slug.length() > 100) slug = slug.substring(0, 100);
+        if (slug.length() > 100)
+            slug = slug.substring(0, 100);
         return slug + "-" + externalId.toLowerCase();
     }
 }

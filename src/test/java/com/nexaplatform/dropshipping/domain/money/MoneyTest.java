@@ -41,12 +41,9 @@ class MoneyTest {
 
         @Test
         void currency_code_must_be_iso_4217() {
-            assertThatThrownBy(() -> Currency.of("EU"))
-                    .isInstanceOf(IllegalArgumentException.class);
-            assertThatThrownBy(() -> Currency.of("123"))
-                    .isInstanceOf(IllegalArgumentException.class);
-            assertThatThrownBy(() -> Currency.of("EUR1"))
-                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> Currency.of("EU")).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> Currency.of("123")).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> Currency.of("EUR1")).isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
@@ -60,22 +57,19 @@ class MoneyTest {
     @DisplayName("Redondeo comercial (2 decimales, HALF_UP)")
     class CommercialRounding {
         @ParameterizedTest
-        @CsvSource({
-                "10.123, 10.12",   // < .5 → down
-                "10.125, 10.13",   // .5 → up (HALF_UP)
-                "10.999, 11.00",   // carry
-                "0.001,  0.00",    // sub-cent
-                "0.005,  0.01",    // half-cent up
-                "-0.005, -0.01",   // half-cent up (negative)
-                "9.995,  10.00",
-                "12.34,  12.34"    // ya normalizado
+        @CsvSource({"10.123, 10.12", // < .5 → down
+                "10.125, 10.13", // .5 → up (HALF_UP)
+                "10.999, 11.00", // carry
+                "0.001,  0.00", // sub-cent
+                "0.005,  0.01", // half-cent up
+                "-0.005, -0.01", // half-cent up (negative)
+                "9.995,  10.00", "12.34,  12.34" // ya normalizado
         })
         void rounds_half_up_to_two_decimals(String input, String expected) {
             Money m = Money.of(input, "EUR").commercial();
             assertThat(m.amount()).isEqualByComparingTo(expected);
             // Doble check: la escala efectiva es 2.
-            assertThat(m.amount().setScale(2, RoundingMode.HALF_UP))
-                    .isEqualByComparingTo(expected);
+            assertThat(m.amount().setScale(2, RoundingMode.HALF_UP)).isEqualByComparingTo(expected);
         }
 
         @Test
@@ -89,7 +83,8 @@ class MoneyTest {
         @Test
         void times_scalar_rounds_to_commercial() {
             // 0.10 × 7 / 3 = 0.2333… → 0.23 con HALF_UP
-            Money r = Money.of("0.10", "EUR").times(BigDecimal.valueOf(7).divide(BigDecimal.valueOf(3), 10, RoundingMode.HALF_UP));
+            Money r = Money.of("0.10", "EUR")
+                    .times(BigDecimal.valueOf(7).divide(BigDecimal.valueOf(3), 10, RoundingMode.HALF_UP));
             assertThat(r.amount()).isEqualByComparingTo("0.23");
         }
     }
@@ -109,10 +104,8 @@ class MoneyTest {
         void plus_different_currency_throws() {
             Money a = Money.of("10.00", "EUR");
             Money b = Money.of("3.25", "USD");
-            assertThatThrownBy(() -> a.plus(b))
-                    .isInstanceOf(CurrencyMismatchException.class)
-                    .hasMessageContaining("EUR")
-                    .hasMessageContaining("USD");
+            assertThatThrownBy(() -> a.plus(b)).isInstanceOf(CurrencyMismatchException.class)
+                    .hasMessageContaining("EUR").hasMessageContaining("USD");
         }
 
         @Test
@@ -122,8 +115,7 @@ class MoneyTest {
 
         @Test
         void times_decimal() {
-            assertThat(Money.of("10.00", "EUR").times(new BigDecimal("0.15")).amount())
-                    .isEqualByComparingTo("1.50");
+            assertThat(Money.of("10.00", "EUR").times(new BigDecimal("0.15")).amount()).isEqualByComparingTo("1.50");
         }
 
         @Test
@@ -133,14 +125,12 @@ class MoneyTest {
 
         @Test
         void divide_by_zero_throws() {
-            assertThatThrownBy(() -> Money.of("10.00", "EUR").divide(0))
-                    .isInstanceOf(ArithmeticException.class);
+            assertThatThrownBy(() -> Money.of("10.00", "EUR").divide(0)).isInstanceOf(ArithmeticException.class);
         }
 
         @Test
         void percent_15_pct_of_50() {
-            assertThat(Money.of("50.00", "EUR").percent(BigDecimal.valueOf(15)).amount())
-                    .isEqualByComparingTo("7.50");
+            assertThat(Money.of("50.00", "EUR").percent(BigDecimal.valueOf(15)).amount()).isEqualByComparingTo("7.50");
         }
 
         @Test

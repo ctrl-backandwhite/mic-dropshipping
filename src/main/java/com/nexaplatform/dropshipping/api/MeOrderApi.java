@@ -30,9 +30,8 @@ public interface MeOrderApi {
     @Operation(summary = "Checkout and create an order for the authenticated user")
     @ApiResponse(responseCode = "201", description = "Order created")
     @PostMapping("/checkout")
-    ResponseEntity<MeOrderDetailDtoOut> checkout(Authentication auth,
-                                                 @Valid @RequestBody MeCheckoutDtoIn req,
-                                                 @RequestHeader(value = "Idempotency-Key", required = false) String idem);
+    ResponseEntity<MeOrderDetailDtoOut> checkout(Authentication auth, @Valid @RequestBody MeCheckoutDtoIn req,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idem);
 
     @Operation(summary = "List the authenticated user's orders")
     @ApiResponse(responseCode = "200", description = "Orders listed")
@@ -43,5 +42,5 @@ public interface MeOrderApi {
     @ApiResponse(responseCode = "200", description = "Order found")
     @GetMapping("/{id}")
     ResponseEntity<MeOrderDetailDtoOut> detail(Authentication auth, @PathVariable UUID id,
-                                               @RequestParam(defaultValue = "es") String lang);
+            @RequestParam(defaultValue = "es") String lang);
 }

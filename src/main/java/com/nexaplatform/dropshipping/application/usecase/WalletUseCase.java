@@ -49,7 +49,8 @@ public interface WalletUseCase extends BaseUseCase<Wallet, Wallet, UUID> {
     /* ============ Mutations (money) ============ */
 
     /** Credit funds (recharge from a payment provider). */
-    WalletTransaction deposit(UUID userId, long amountUsdCents, UUID paymentId, String idempotencyKey, String description);
+    WalletTransaction deposit(UUID userId, long amountUsdCents, UUID paymentId, String idempotencyKey,
+            String description);
 
     /** Debit funds (from order checkout). */
     WalletTransaction charge(UUID userId, long amountUsdCents, UUID orderId, String idempotencyKey, String description);

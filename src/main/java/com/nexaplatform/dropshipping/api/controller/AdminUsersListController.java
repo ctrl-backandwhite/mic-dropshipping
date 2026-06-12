@@ -31,8 +31,7 @@ public class AdminUsersListController implements AdminUsersListApi {
 
     @Override
     public ResponseEntity<AdminUserPageDtoOut> list(String role, String q, String country, int page, int size) {
-        AdminUserPageDtoOut body = mapper.toAdminPageDtoOut(
-                useCase.listUsers(role, q, country, page, size),
+        AdminUserPageDtoOut body = mapper.toAdminPageDtoOut(useCase.listUsers(role, q, country, page, size),
                 useCase.countUsers(role, q, country), page, size);
         return new ResponseEntity<>(body, HttpStatus.OK);
     }
@@ -44,8 +43,8 @@ public class AdminUsersListController implements AdminUsersListApi {
 
     @Override
     public ResponseEntity<AdminUserDtoOut> editUser(UUID id, AdminUserEditDtoIn body) {
-        return new ResponseEntity<>(
-                mapper.toAdminDtoOut(useCase.editUser(id, mapper.toDomain(body), body.getActive())), HttpStatus.OK);
+        return new ResponseEntity<>(mapper.toAdminDtoOut(useCase.editUser(id, mapper.toDomain(body), body.getActive())),
+                HttpStatus.OK);
     }
 
     @Override

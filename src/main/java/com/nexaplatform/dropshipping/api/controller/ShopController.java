@@ -58,20 +58,19 @@ public class ShopController implements ShopApi {
 
     @Override
     public ResponseEntity<ShopInboundSecretDtoOut> rotateInboundSecret(Authentication auth, UUID id) {
-        return ResponseEntity.ok(mapper.toInboundSecretDtoOut(
-                useCase.rotateInboundSecret(UUID.fromString(auth.getName()), id)));
+        return ResponseEntity
+                .ok(mapper.toInboundSecretDtoOut(useCase.rotateInboundSecret(UUID.fromString(auth.getName()), id)));
     }
 
     @Override
     public ResponseEntity<ShopListingDtoOut> listProduct(Authentication auth, UUID id, UUID productId) {
-        return ResponseEntity.ok(mapper.toListingDtoOut(
-                useCase.listProduct(UUID.fromString(auth.getName()), id, productId)));
+        return ResponseEntity
+                .ok(mapper.toListingDtoOut(useCase.listProduct(UUID.fromString(auth.getName()), id, productId)));
     }
 
     @Override
     public ResponseEntity<List<ShopListingDtoOut>> listings(Authentication auth, UUID id) {
-        return ResponseEntity.ok(mapper.toListingDtoOutList(
-                useCase.listings(UUID.fromString(auth.getName()), id)));
+        return ResponseEntity.ok(mapper.toListingDtoOutList(useCase.listings(UUID.fromString(auth.getName()), id)));
     }
 
     @Override

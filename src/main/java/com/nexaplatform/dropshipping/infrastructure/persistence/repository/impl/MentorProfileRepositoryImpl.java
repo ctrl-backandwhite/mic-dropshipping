@@ -38,8 +38,8 @@ public class MentorProfileRepositoryImpl implements MentorProfileRepository {
 
     @Override
     public List<MentorProfile> findActive() {
-        return mentorProfileEntityMapper.toDomainList(
-                mentorProfileJpaRepositoryAdapter.findByActiveTrueOrderByCreatedAtDesc());
+        return mentorProfileEntityMapper
+                .toDomainList(mentorProfileJpaRepositoryAdapter.findByActiveTrueOrderByCreatedAtDesc());
     }
 
     @Override
@@ -49,9 +49,7 @@ public class MentorProfileRepositoryImpl implements MentorProfileRepository {
 
     @Override
     public MentorProfile getById(UUID id) {
-        return mentorProfileJpaRepositoryAdapter.findById(id)
-                .map(mentorProfileEntityMapper::toDomain)
-                .orElse(null);
+        return mentorProfileJpaRepositoryAdapter.findById(id).map(mentorProfileEntityMapper::toDomain).orElse(null);
     }
 
     @Override
@@ -76,8 +74,7 @@ public class MentorProfileRepositoryImpl implements MentorProfileRepository {
     /** Applies the mutable model fields onto the entity, resolving the user relation. */
     private void applyModel(MentorProfileEntity entity, MentorProfile model) {
         if (model.getUserId() != null) {
-            entity.setUser(userRepository.findById(model.getUserId())
-                    .orElseThrow(() -> new NotFoundException("User")));
+            entity.setUser(userRepository.findById(model.getUserId()).orElseThrow(() -> new NotFoundException("User")));
         }
         entity.setHeadline(model.getHeadline());
         entity.setBio(model.getBio());

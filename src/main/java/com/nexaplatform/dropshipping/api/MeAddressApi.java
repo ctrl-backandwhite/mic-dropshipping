@@ -36,7 +36,7 @@ public interface MeAddressApi {
     @Operation(summary = "Update an existing address of the authenticated user")
     @PutMapping("/{id}")
     ResponseEntity<AddressDtoOut> update(Authentication auth, @PathVariable UUID id,
-                                         @Valid @RequestBody AddressDtoIn req);
+            @Valid @RequestBody AddressDtoIn req);
 
     @Operation(summary = "Delete an address of the authenticated user")
     @DeleteMapping("/{id}")

@@ -74,23 +74,14 @@ public class ImageMirrorService {
     }
 
     private byte[] download(String url) {
-        return webClientBuilder.build()
-                .get()
-                .uri(url)
-                .header("Referer", "https://detail.1688.com/")
-                .header("User-Agent", "Mozilla/5.0 NexaDrop ImageMirror/1.0")
-                .retrieve()
-                .bodyToMono(byte[].class)
-                .timeout(Duration.ofSeconds(20))
-                .block();
+        return webClientBuilder.build().get().uri(url).header("Referer", "https://detail.1688.com/")
+                .header("User-Agent", "Mozilla/5.0 NexaDrop ImageMirror/1.0").retrieve().bodyToMono(byte[].class)
+                .timeout(Duration.ofSeconds(20)).block();
     }
 
     private byte[] resizeToWebp(byte[] bytes, int size) throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        Thumbnails.of(new ByteArrayInputStream(bytes))
-                .size(size, size)
-                .outputFormat("jpg")
-                .outputQuality(0.85)
+        Thumbnails.of(new ByteArrayInputStream(bytes)).size(size, size).outputFormat("jpg").outputQuality(0.85)
                 .toOutputStream(out);
         // Note: we save as .webp filename but write JPEG bytes when WebP isn't available
         // in default JVM. ImageIO can be extended with the webp-imageio plugin for true WebP.

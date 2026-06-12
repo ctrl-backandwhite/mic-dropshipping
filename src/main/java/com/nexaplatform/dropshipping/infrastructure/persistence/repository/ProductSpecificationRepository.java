@@ -8,5 +8,6 @@ import java.util.UUID;
 
 public interface ProductSpecificationRepository extends JpaRepository<ProductSpecificationEntity, UUID> {
     List<ProductSpecificationEntity> findByProduct_IdOrderByPositionAsc(UUID productId);
+
     List<ProductSpecificationEntity> findByProduct_IdAndLocaleOrderByPositionAsc(UUID productId, String locale);
 }

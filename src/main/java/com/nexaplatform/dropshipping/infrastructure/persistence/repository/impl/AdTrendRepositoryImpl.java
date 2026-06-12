@@ -50,9 +50,7 @@ public class AdTrendRepositoryImpl implements AdTrendRepository {
 
     @Override
     public AdTrend getById(UUID id) {
-        return adTrendJpaRepositoryAdapter.findById(id)
-                .map(adTrendEntityMapper::toDomain)
-                .orElse(null);
+        return adTrendJpaRepositoryAdapter.findById(id).map(adTrendEntityMapper::toDomain).orElse(null);
     }
 
     @Override

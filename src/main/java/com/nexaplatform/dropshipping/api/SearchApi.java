@@ -18,7 +18,6 @@ public interface SearchApi {
     @Operation(summary = "Search products with typed results")
     @GetMapping
     ResponseEntity<SearchResultDtoOut> search(@RequestParam(required = false) String q,
-                              @RequestParam(defaultValue = "es") String lang,
-                              @RequestParam(defaultValue = "0") int page,
-                              @RequestParam(defaultValue = "24") int size);
+            @RequestParam(defaultValue = "es") String lang, @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "24") int size);
 }

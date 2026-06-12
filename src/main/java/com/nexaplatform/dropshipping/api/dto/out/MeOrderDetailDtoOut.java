@@ -43,27 +43,15 @@ public class MeOrderDetailDtoOut {
     }
 
     public static MeOrderDetailDtoOut from(CustomerOrderEntity o, String lang) {
-        return MeOrderDetailDtoOut.builder()
-                .id(o.getId())
-                .orderNumber(o.getOrderNumber())
-                .externalOrderId(o.getExternalOrderId())
-                .status(o.getStatus().name())
-                .subtotal(cents(o.getSubtotalCents()))
-                .shipping(cents(o.getShippingCents()))
-                .tax(cents(o.getTaxCents()))
-                .total(cents(o.getTotalCents()))
-                .currency(o.getCurrency())
+        return MeOrderDetailDtoOut.builder().id(o.getId()).orderNumber(o.getOrderNumber())
+                .externalOrderId(o.getExternalOrderId()).status(o.getStatus().name())
+                .subtotal(cents(o.getSubtotalCents())).shipping(cents(o.getShippingCents())).tax(cents(o.getTaxCents()))
+                .total(cents(o.getTotalCents())).currency(o.getCurrency())
                 .shippingAddress(MeOrderAddressDtoOut.from(o.getShippingAddress()))
-                .billingAddress(MeOrderAddressDtoOut.from(o.getBillingAddress()))
-                .notes(o.getNotes())
-                .trackingCarrier(null)
-                .trackingNumber(null)
-                .placedAt(o.getPlacedAt())
-                .shippedAt(o.getShippedAt())
-                .deliveredAt(o.getDeliveredAt())
-                .cancelledAt(o.getCancelledAt())
-                .items(o.getItems().stream().map(i -> MeOrderItemDetailDtoOut.from(i, lang)).toList())
-                .build();
+                .billingAddress(MeOrderAddressDtoOut.from(o.getBillingAddress())).notes(o.getNotes())
+                .trackingCarrier(null).trackingNumber(null).placedAt(o.getPlacedAt()).shippedAt(o.getShippedAt())
+                .deliveredAt(o.getDeliveredAt()).cancelledAt(o.getCancelledAt())
+                .items(o.getItems().stream().map(i -> MeOrderItemDetailDtoOut.from(i, lang)).toList()).build();
     }
 
     private static BigDecimal cents(int v) {

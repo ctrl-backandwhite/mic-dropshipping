@@ -14,9 +14,7 @@ import java.math.BigDecimal;
 @Entity
 @Table(name = "supplier")
 // Plan 300k: proveedores cambian poco, lectura masiva en filtros.
-@org.hibernate.annotations.Cache(
-        usage = org.hibernate.annotations.CacheConcurrencyStrategy.READ_WRITE,
-        region = "supplier")
+@org.hibernate.annotations.Cache(usage = org.hibernate.annotations.CacheConcurrencyStrategy.READ_WRITE, region = "supplier")
 @Getter
 @Setter
 @NoArgsConstructor

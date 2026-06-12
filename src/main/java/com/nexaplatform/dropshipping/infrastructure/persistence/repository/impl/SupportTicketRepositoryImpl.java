@@ -51,21 +51,19 @@ public class SupportTicketRepositoryImpl implements SupportTicketRepository {
 
     @Override
     public List<SupportTicket> findByUserId(UUID userId) {
-        return supportTicketEntityMapper.toDomainList(
-                supportTicketJpaRepositoryAdapter.findByUser_IdOrderByCreatedAtDesc(userId));
+        return supportTicketEntityMapper
+                .toDomainList(supportTicketJpaRepositoryAdapter.findByUser_IdOrderByCreatedAtDesc(userId));
     }
 
     @Override
     public List<SupportTicket> findByStatus(String status) {
-        return supportTicketEntityMapper.toDomainList(
-                supportTicketJpaRepositoryAdapter.findByStatusOrderByCreatedAtDesc(status));
+        return supportTicketEntityMapper
+                .toDomainList(supportTicketJpaRepositoryAdapter.findByStatusOrderByCreatedAtDesc(status));
     }
 
     @Override
     public SupportTicket getById(UUID id) {
-        return supportTicketJpaRepositoryAdapter.findById(id)
-                .map(supportTicketEntityMapper::toDomain)
-                .orElse(null);
+        return supportTicketJpaRepositoryAdapter.findById(id).map(supportTicketEntityMapper::toDomain).orElse(null);
     }
 
     @Override
@@ -90,15 +88,13 @@ public class SupportTicketRepositoryImpl implements SupportTicketRepository {
     /** Applies the mutable model fields onto the entity, resolving user and optional order. */
     private void applyModel(SupportTicketEntity entity, SupportTicket model) {
         if (entity.getUser() == null) {
-            entity.setUser(userRepository.findById(model.getUserId())
-                    .orElseThrow(() -> new NotFoundException("User")));
+            entity.setUser(userRepository.findById(model.getUserId()).orElseThrow(() -> new NotFoundException("User")));
         }
         entity.setKind(model.getKind());
         entity.setSubject(model.getSubject());
         entity.setBody(model.getBody());
         // Mirror the legacy "best-effort" order lookup: a missing order id silently clears it.
-        entity.setOrder(model.getOrderId() == null ? null
-                : orderRepository.findById(model.getOrderId()).orElse(null));
+        entity.setOrder(model.getOrderId() == null ? null : orderRepository.findById(model.getOrderId()).orElse(null));
         if (model.getStatus() != null) {
             entity.setStatus(model.getStatus());
         }

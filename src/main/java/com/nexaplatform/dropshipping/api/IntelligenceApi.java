@@ -30,18 +30,17 @@ public interface IntelligenceApi {
     @Operation(summary = "List ad trends, optionally filtered by source")
     @GetMapping("/ad-trends")
     List<TrendRowDtoOut> adTrends(@RequestParam(required = false) String source,
-                                  @RequestParam(defaultValue = "30") int limit);
+            @RequestParam(defaultValue = "30") int limit);
 
     @Operation(summary = "List sales trends (best-selling products), optionally filtered by category")
     @GetMapping("/sales-trends")
     List<WinningProductDtoOut> salesTrends(@RequestParam(required = false) UUID categoryId,
-                                           @RequestParam(defaultValue = "20") int limit,
-                                           @RequestParam(defaultValue = "es") String lang);
+            @RequestParam(defaultValue = "20") int limit, @RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "List winning products ranked by trend score")
     @GetMapping("/winning-products")
     List<WinningProductDtoOut> winning(@RequestParam(defaultValue = "20") int limit,
-                                       @RequestParam(defaultValue = "es") String lang);
+            @RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "List the current user's active intelligence alerts")
     @GetMapping("/alerts")

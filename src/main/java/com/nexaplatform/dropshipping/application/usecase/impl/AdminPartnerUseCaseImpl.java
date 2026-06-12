@@ -34,69 +34,49 @@ public class AdminPartnerUseCaseImpl implements AdminPartnerUseCase {
     @Transactional(readOnly = true)
     public List<AdminOAuthClient> listOAuthClients() {
         return jdbc.query(
-                "SELECT id, client_id, client_name, client_authentication_methods AS auth_methods, " +
-                        "authorization_grant_types AS grant_types, redirect_uris, scopes " +
-                        "FROM oauth2_registered_client ORDER BY client_id",
-                (rs, rowNum) -> AdminOAuthClient.builder()
-                        .id(rs.getString("id"))
-                        .clientId(rs.getString("client_id"))
-                        .clientName(rs.getString("client_name"))
-                        .authMethods(rs.getString("auth_methods"))
-                        .grantTypes(rs.getString("grant_types"))
-                        .redirectUris(rs.getString("redirect_uris"))
-                        .scopes(rs.getString("scopes"))
-                        .build());
+                "SELECT id, client_id, client_name, client_authentication_methods AS auth_methods, "
+                        + "authorization_grant_types AS grant_types, redirect_uris, scopes "
+                        + "FROM oauth2_registered_client ORDER BY client_id",
+                (rs, rowNum) -> AdminOAuthClient.builder().id(rs.getString("id")).clientId(rs.getString("client_id"))
+                        .clientName(rs.getString("client_name")).authMethods(rs.getString("auth_methods"))
+                        .grantTypes(rs.getString("grant_types")).redirectUris(rs.getString("redirect_uris"))
+                        .scopes(rs.getString("scopes")).build());
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<AdminPartnerWebhook> listWebhooks() {
         return jdbc.query(
-                "SELECT id, partner_app_id, event_type, status, attempt_count, response_code, created_at " +
-                        "FROM partner_webhook_delivery ORDER BY created_at DESC LIMIT 50",
-                (rs, rowNum) -> AdminPartnerWebhook.builder()
-                        .id(rs.getObject("id"))
-                        .partnerAppId(rs.getObject("partner_app_id"))
-                        .eventType(rs.getString("event_type"))
-                        .status(rs.getString("status"))
-                        .attemptCount(getInteger(rs, "attempt_count"))
-                        .responseCode(getInteger(rs, "response_code"))
-                        .createdAt(getInstant(rs, "created_at"))
-                        .build());
+                "SELECT id, partner_app_id, event_type, status, attempt_count, response_code, created_at "
+                        + "FROM partner_webhook_delivery ORDER BY created_at DESC LIMIT 50",
+                (rs, rowNum) -> AdminPartnerWebhook.builder().id(rs.getObject("id"))
+                        .partnerAppId(rs.getObject("partner_app_id")).eventType(rs.getString("event_type"))
+                        .status(rs.getString("status")).attemptCount(getInteger(rs, "attempt_count"))
+                        .responseCode(getInteger(rs, "response_code")).createdAt(getInstant(rs, "created_at")).build());
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<AdminPartnerApp> listPartnerApps() {
         return jdbc.query(
-                "SELECT id, name, description, client_id, scopes, webhook_url, active, created_at " +
-                        "FROM partner_app ORDER BY created_at DESC",
-                (rs, rowNum) -> AdminPartnerApp.builder()
-                        .id(rs.getObject("id"))
-                        .name(rs.getString("name"))
-                        .description(rs.getString("description"))
-                        .clientId(rs.getString("client_id"))
-                        .scopes(rs.getString("scopes"))
-                        .webhookUrl(rs.getString("webhook_url"))
-                        .active(getBoolean(rs, "active"))
-                        .createdAt(getInstant(rs, "created_at"))
-                        .build());
+                "SELECT id, name, description, client_id, scopes, webhook_url, active, created_at "
+                        + "FROM partner_app ORDER BY created_at DESC",
+                (rs, rowNum) -> AdminPartnerApp.builder().id(rs.getObject("id")).name(rs.getString("name"))
+                        .description(rs.getString("description")).clientId(rs.getString("client_id"))
+                        .scopes(rs.getString("scopes")).webhookUrl(rs.getString("webhook_url"))
+                        .active(getBoolean(rs, "active")).createdAt(getInstant(rs, "created_at")).build());
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<AdminShopConnection> listShopConnections() {
         return jdbc.query(
-                "SELECT id, partner_app_id, platform, shop_handle, active, created_at " +
-                        "FROM shop_connection ORDER BY created_at DESC",
-                (rs, rowNum) -> AdminShopConnection.builder()
-                        .id(rs.getObject("id"))
-                        .partnerAppId(rs.getObject("partner_app_id"))
-                        .platform(rs.getString("platform"))
-                        .shopHandle(rs.getString("shop_handle"))
-                        .active(getBoolean(rs, "active"))
-                        .createdAt(getInstant(rs, "created_at"))
-                        .build());
+                "SELECT id, partner_app_id, platform, shop_handle, active, created_at "
+                        + "FROM shop_connection ORDER BY created_at DESC",
+                (rs, rowNum) -> AdminShopConnection.builder().id(rs.getObject("id"))
+                        .partnerAppId(rs.getObject("partner_app_id")).platform(rs.getString("platform"))
+                        .shopHandle(rs.getString("shop_handle")).active(getBoolean(rs, "active"))
+                        .createdAt(getInstant(rs, "created_at")).build());
     }
 
     private static Integer getInteger(ResultSet rs, String column) throws SQLException {

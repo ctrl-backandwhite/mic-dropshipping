@@ -31,8 +31,8 @@ public class MeAddressController implements MeAddressApi {
 
     @Override
     public ResponseEntity<List<AddressDtoOut>> list(Authentication auth) {
-        return new ResponseEntity<>(
-                mapper.toDtoOutList(useCase.findAll(UUID.fromString(auth.getName()))), HttpStatus.OK);
+        return new ResponseEntity<>(mapper.toDtoOutList(useCase.findAll(UUID.fromString(auth.getName()))),
+                HttpStatus.OK);
     }
 
     @Override

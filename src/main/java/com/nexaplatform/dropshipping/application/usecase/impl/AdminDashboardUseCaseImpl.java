@@ -50,7 +50,8 @@ public class AdminDashboardUseCaseImpl implements AdminDashboardUseCase {
     @Override
     @Transactional(readOnly = true)
     public DashboardMetrics metrics() {
-        long activeProducts = productRepository.findByStatus(ProductStatus.ACTIVE, PageRequest.of(0, 1)).getTotalElements();
+        long activeProducts = productRepository.findByStatus(ProductStatus.ACTIVE, PageRequest.of(0, 1))
+                .getTotalElements();
         long allProducts = productRepository.count();
         long totalOrders = orderRepository.count();
         long totalUsers = userRepository.count();
@@ -64,27 +65,16 @@ public class AdminDashboardUseCaseImpl implements AdminDashboardUseCase {
         BigDecimal gmvDisplay = pricingService.convertUsdToDisplay(gmvUsd);
 
         // MRR estimate: sum of plan monthly prices for ACTIVE subscriptions on MONTHLY billing
-        long mrrCents = subscriptionRepository.findAll().stream()
-                .filter(s -> "ACTIVE".equals(s.getStatus().name()))
+        long mrrCents = subscriptionRepository.findAll().stream().filter(s -> "ACTIVE".equals(s.getStatus().name()))
                 .filter(s -> !"YEARLY".equalsIgnoreCase(s.getBillingPeriod()))
                 .mapToLong(s -> s.getPlan().getPriceMonthlyCents()).sum();
         BigDecimal mrrUsd = BigDecimal.valueOf(mrrCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
 
-        return DashboardMetrics.builder()
-                .activeProducts(activeProducts)
-                .totalProducts(allProducts)
-                .draftProducts(allProducts - activeProducts)
-                .totalOrders(totalOrders)
-                .totalUsers(totalUsers)
-                .totalSuppliers(totalSuppliers)
-                .activePlans(activePlans)
-                .totalSubscriptions(totalSubs)
-                .gmvUsd(gmvUsd)
-                .gmvDisplay(gmvDisplay)
-                .mrrUsd(mrrUsd)
-                .displayCurrency(pricingService.displayCurrencyCode())
-                .displaySymbol(pricingService.displayCurrencySymbol())
-                .build();
+        return DashboardMetrics.builder().activeProducts(activeProducts).totalProducts(allProducts)
+                .draftProducts(allProducts - activeProducts).totalOrders(totalOrders).totalUsers(totalUsers)
+                .totalSuppliers(totalSuppliers).activePlans(activePlans).totalSubscriptions(totalSubs).gmvUsd(gmvUsd)
+                .gmvDisplay(gmvDisplay).mrrUsd(mrrUsd).displayCurrency(pricingService.displayCurrencyCode())
+                .displaySymbol(pricingService.displayCurrencySymbol()).build();
     }
 
     @Override
@@ -93,8 +83,7 @@ public class AdminDashboardUseCaseImpl implements AdminDashboardUseCase {
         // Bucket orders by day for the last 30 days
         Instant from = Instant.now().minus(30, ChronoUnit.DAYS);
         List<CustomerOrderEntity> orders = orderRepository.findAll().stream()
-                .filter(o -> o.getPlacedAt() != null && o.getPlacedAt().isAfter(from))
-                .toList();
+                .filter(o -> o.getPlacedAt() != null && o.getPlacedAt().isAfter(from)).toList();
         Map<String, Long> ordersByDay = new HashMap<>();
         Map<String, Long> gmvByDay = new HashMap<>();
         for (CustomerOrderEntity o : orders) {
@@ -102,35 +91,24 @@ public class AdminDashboardUseCaseImpl implements AdminDashboardUseCase {
             ordersByDay.merge(day, 1L, Long::sum);
             gmvByDay.merge(day, (long) o.getTotalCents(), Long::sum);
         }
-        return DashboardSeries.builder()
-                .ordersByDay(ordersByDay)
-                .gmvCentsByDay(gmvByDay)
-                .build();
+        return DashboardSeries.builder().ordersByDay(ordersByDay).gmvCentsByDay(gmvByDay).build();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<DashboardRecentOrder> recentOrders() {
-        return orderRepository.findAll().stream()
-                .sorted((a, b) -> {
-                    Instant ai = a.getPlacedAt() != null ? a.getPlacedAt() : a.getCreatedAt();
-                    Instant bi = b.getPlacedAt() != null ? b.getPlacedAt() : b.getCreatedAt();
-                    return bi.compareTo(ai);
-                })
-                .limit(10)
-                .map(this::toRecentOrder)
-                .toList();
+        return orderRepository.findAll().stream().sorted((a, b) -> {
+            Instant ai = a.getPlacedAt() != null ? a.getPlacedAt() : a.getCreatedAt();
+            Instant bi = b.getPlacedAt() != null ? b.getPlacedAt() : b.getCreatedAt();
+            return bi.compareTo(ai);
+        }).limit(10).map(this::toRecentOrder).toList();
     }
 
     /** Projects a persisted order entity into the read-only recent-order model. */
     private DashboardRecentOrder toRecentOrder(CustomerOrderEntity entity) {
-        return DashboardRecentOrder.builder()
-                .id(entity.getId())
-                .orderNumber(entity.getOrderNumber())
+        return DashboardRecentOrder.builder().id(entity.getId()).orderNumber(entity.getOrderNumber())
                 .status(entity.getStatus() != null ? entity.getStatus().name() : null)
-                .totalCents(entity.getTotalCents())
-                .currency(entity.getCurrency())
-                .placedAt(entity.getPlacedAt())
+                .totalCents(entity.getTotalCents()).currency(entity.getCurrency()).placedAt(entity.getPlacedAt())
                 .build();
     }
 }

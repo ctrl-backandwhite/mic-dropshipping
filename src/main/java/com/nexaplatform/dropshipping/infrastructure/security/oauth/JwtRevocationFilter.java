@@ -55,7 +55,8 @@ public class JwtRevocationFilter extends OncePerRequestFilter {
             }
         } catch (Exception e) {
             // JWT inválido o malformado — dejamos que el ResourceServer lo rechace con su mensaje propio.
-            if (log.isDebugEnabled()) log.debug("JWT parse failed in revocation filter: {}", e.getMessage());
+            if (log.isDebugEnabled())
+                log.debug("JWT parse failed in revocation filter: {}", e.getMessage());
         }
         chain.doFilter(req, res);
     }

@@ -67,9 +67,7 @@ public class ProductRepositoryImpl implements ProductRepository {
 
     @Override
     public Product getById(UUID id) {
-        return productJpaRepositoryAdapter.findById(id)
-                .map(this::toDomainWithTiers)
-                .orElse(null);
+        return productJpaRepositoryAdapter.findById(id).map(this::toDomainWithTiers).orElse(null);
     }
 
     @Override
@@ -141,11 +139,10 @@ public class ProductRepositoryImpl implements ProductRepository {
 
     @Override
     public Page<Product> searchStorefront(ProductStatus status, String needle, UUID categoryId, UUID supplierId,
-                                          BigDecimal minPrice, BigDecimal maxPrice, String shipFrom,
-                                          Boolean freeShipping, Boolean selfPickup, Boolean hasVideo,
-                                          BigDecimal minRating, Integer minInv, Pageable pageable) {
+            BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping, Boolean selfPickup,
+            Boolean hasVideo, BigDecimal minRating, Integer minInv, Pageable pageable) {
         return productJpaRepositoryAdapter.searchStorefront(status, needle, categoryId, supplierId, minPrice, maxPrice,
-                        shipFrom, freeShipping, selfPickup, hasVideo, minRating, minInv, pageable)
+                shipFrom, freeShipping, selfPickup, hasVideo, minRating, minInv, pageable)
                 .map(productEntityMapper::toDomain);
     }
 
@@ -155,8 +152,8 @@ public class ProductRepositoryImpl implements ProductRepository {
     private Product toDomainWithTiers(ProductEntity entity) {
         Product product = productEntityMapper.toDomain(entity);
         if (entity.getId() != null) {
-            product.setPriceTiers(productEntityMapper.toPriceTierDomainList(
-                    priceTierRepository.findByProductIdOrderByMinQtyAsc(entity.getId())));
+            product.setPriceTiers(productEntityMapper
+                    .toPriceTierDomainList(priceTierRepository.findByProductIdOrderByMinQtyAsc(entity.getId())));
         }
         return product;
     }
@@ -200,9 +197,11 @@ public class ProductRepositoryImpl implements ProductRepository {
         entity.setSourceUrl(model.getSourceUrl());
         entity.setIngestedAt(model.getIngestedAt());
         entity.setLastSyncedAt(model.getLastSyncedAt());
-        entity.setSupplier(model.getSupplierId() == null ? null
+        entity.setSupplier(model.getSupplierId() == null
+                ? null
                 : supplierJpaRepositoryAdapter.findById(model.getSupplierId()).orElse(null));
-        entity.setCategory(model.getCategoryId() == null ? null
+        entity.setCategory(model.getCategoryId() == null
+                ? null
                 : categoryJpaRepositoryAdapter.findById(model.getCategoryId()).orElse(null));
         rebuildImages(entity, model);
         rebuildVariantOptions(entity, model);
@@ -216,14 +215,12 @@ public class ProductRepositoryImpl implements ProductRepository {
             return;
         }
         for (ProductImage img : model.getImages()) {
-            entity.getImages().add(ProductImageEntity.builder()
-                    .product(entity)
-                    .position(img.getPosition())
-                    .role(img.getRole() != null ? img.getRole() : "GALLERY")
-                    .sourceUrl(img.getSourceUrl())
-                    .cdnUrl(img.getCdnUrl())
-                    .mirrorStatus(img.getMirrorStatus() != null ? img.getMirrorStatus() : MirrorStatus.PENDING)
-                    .build());
+            entity.getImages()
+                    .add(ProductImageEntity.builder().product(entity).position(img.getPosition())
+                            .role(img.getRole() != null ? img.getRole() : "GALLERY").sourceUrl(img.getSourceUrl())
+                            .cdnUrl(img.getCdnUrl())
+                            .mirrorStatus(img.getMirrorStatus() != null ? img.getMirrorStatus() : MirrorStatus.PENDING)
+                            .build());
         }
     }
 
@@ -233,22 +230,14 @@ public class ProductRepositoryImpl implements ProductRepository {
             return;
         }
         for (VariantOption opt : model.getVariantOptions()) {
-            VariantOptionEntity oe = VariantOptionEntity.builder()
-                    .product(entity)
-                    .nameZh(opt.getNameZh())
-                    .name(opt.getName())
-                    .position(opt.getPosition())
-                    .build();
+            VariantOptionEntity oe = VariantOptionEntity.builder().product(entity).nameZh(opt.getNameZh())
+                    .name(opt.getName()).position(opt.getPosition()).build();
             if (opt.getValues() != null) {
                 for (VariantValue v : opt.getValues()) {
-                    oe.getValues().add(VariantValueEntity.builder()
-                            .option(oe)
-                            .valueZh(v.getValueZh())
-                            .value(v.getValue())
-                            .imageSourceUrl(v.getImageSourceUrl())
-                            .imageCdnUrl(v.getImageCdnUrl())
-                            .position(v.getPosition())
-                            .build());
+                    oe.getValues()
+                            .add(VariantValueEntity.builder().option(oe).valueZh(v.getValueZh()).value(v.getValue())
+                                    .imageSourceUrl(v.getImageSourceUrl()).imageCdnUrl(v.getImageCdnUrl())
+                                    .position(v.getPosition()).build());
                 }
             }
             entity.getVariantOptions().add(oe);
@@ -261,18 +250,11 @@ public class ProductRepositoryImpl implements ProductRepository {
             return;
         }
         for (ProductVariant v : model.getVariants()) {
-            entity.getVariants().add(ProductVariantEntity.builder()
-                    .product(entity)
-                    .externalId(v.getExternalId())
-                    .sku(v.getSku())
-                    .title(v.getTitle())
-                    .price(v.getPrice())
-                    .stock(v.getStock())
-                    .imageSourceUrl(v.getImageSourceUrl())
-                    .imageCdnUrl(v.getImageCdnUrl())
-                    .options(v.getOptions())
-                    .active(v.isActive())
-                    .build());
+            entity.getVariants()
+                    .add(ProductVariantEntity.builder().product(entity).externalId(v.getExternalId()).sku(v.getSku())
+                            .title(v.getTitle()).price(v.getPrice()).stock(v.getStock())
+                            .imageSourceUrl(v.getImageSourceUrl()).imageCdnUrl(v.getImageCdnUrl())
+                            .options(v.getOptions()).active(v.isActive()).build());
         }
     }
 
@@ -282,16 +264,11 @@ public class ProductRepositoryImpl implements ProductRepository {
             return;
         }
         for (ProductTranslation tr : model.getTranslations()) {
-            entity.getTranslations().add(ProductTranslationEntity.builder()
-                    .product(entity)
-                    .language(tr.getLanguage())
-                    .title(tr.getTitle())
-                    .shortDescription(tr.getShortDescription())
-                    .description(tr.getDescription())
-                    .metaTitle(tr.getMetaTitle())
-                    .metaDescription(tr.getMetaDescription())
-                    .provider(tr.getProvider())
-                    .build());
+            entity.getTranslations()
+                    .add(ProductTranslationEntity.builder().product(entity).language(tr.getLanguage())
+                            .title(tr.getTitle()).shortDescription(tr.getShortDescription())
+                            .description(tr.getDescription()).metaTitle(tr.getMetaTitle())
+                            .metaDescription(tr.getMetaDescription()).provider(tr.getProvider()).build());
         }
     }
 
@@ -300,16 +277,11 @@ public class ProductRepositoryImpl implements ProductRepository {
         if (tiers == null) {
             return;
         }
-        priceTierRepository.findByProductIdOrderByMinQtyAsc(entity.getId())
-                .forEach(priceTierRepository::delete);
+        priceTierRepository.findByProductIdOrderByMinQtyAsc(entity.getId()).forEach(priceTierRepository::delete);
         for (ProductPriceTier t : tiers) {
-            priceTierRepository.save(ProductPriceTierEntity.builder()
-                    .product(entity)
-                    .minQty(t.getMinQty())
-                    .maxQty(t.getMaxQty())
-                    .unitPrice(t.getUnitPrice())
-                    .currency(t.getCurrency() != null ? t.getCurrency() : "CNY")
-                    .build());
+            priceTierRepository.save(ProductPriceTierEntity.builder().product(entity).minQty(t.getMinQty())
+                    .maxQty(t.getMaxQty()).unitPrice(t.getUnitPrice())
+                    .currency(t.getCurrency() != null ? t.getCurrency() : "CNY").build());
         }
     }
 }

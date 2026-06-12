@@ -48,21 +48,19 @@ public class OdmProjectRepositoryImpl implements OdmProjectRepository {
 
     @Override
     public List<OdmProject> findByUserId(UUID userId) {
-        return odmProjectEntityMapper.toDomainList(
-                odmProjectJpaRepositoryAdapter.findByUser_IdOrderByCreatedAtDesc(userId));
+        return odmProjectEntityMapper
+                .toDomainList(odmProjectJpaRepositoryAdapter.findByUser_IdOrderByCreatedAtDesc(userId));
     }
 
     @Override
     public List<OdmProject> findByStatus(String status) {
-        return odmProjectEntityMapper.toDomainList(
-                odmProjectJpaRepositoryAdapter.findByStatusOrderByCreatedAtDesc(status));
+        return odmProjectEntityMapper
+                .toDomainList(odmProjectJpaRepositoryAdapter.findByStatusOrderByCreatedAtDesc(status));
     }
 
     @Override
     public OdmProject getById(UUID id) {
-        return odmProjectJpaRepositoryAdapter.findById(id)
-                .map(odmProjectEntityMapper::toDomain)
-                .orElse(null);
+        return odmProjectJpaRepositoryAdapter.findById(id).map(odmProjectEntityMapper::toDomain).orElse(null);
     }
 
     @Override
@@ -87,8 +85,7 @@ public class OdmProjectRepositoryImpl implements OdmProjectRepository {
     /** Applies the mutable model fields onto the entity, resolving the owning user. */
     private void applyModel(OdmProjectEntity entity, OdmProject model) {
         if (entity.getUser() == null) {
-            entity.setUser(userRepository.findById(model.getUserId())
-                    .orElseThrow(() -> new NotFoundException("User")));
+            entity.setUser(userRepository.findById(model.getUserId()).orElseThrow(() -> new NotFoundException("User")));
         }
         entity.setKind(model.getKind());
         entity.setTitle(model.getTitle());

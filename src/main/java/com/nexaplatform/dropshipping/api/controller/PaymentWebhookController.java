@@ -29,13 +29,15 @@ public class PaymentWebhookController implements PaymentWebhookApi {
 
     private final PaymentUseCase paymentUseCase;
 
-    @Value("${nexadrop.stripe.webhook-secret:}") private String stripeWebhookSecret;
-    @Value("${nexadrop.paypal.webhook-secret:}") private String paypalWebhookSecret;
-    @Value("${nexadrop.coinbase.webhook-secret:}") private String coinbaseWebhookSecret;
+    @Value("${nexadrop.stripe.webhook-secret:}")
+    private String stripeWebhookSecret;
+    @Value("${nexadrop.paypal.webhook-secret:}")
+    private String paypalWebhookSecret;
+    @Value("${nexadrop.coinbase.webhook-secret:}")
+    private String coinbaseWebhookSecret;
 
     @Override
-    public ResponseEntity<String> stripe(String payload,
-                                         String sig) {
+    public ResponseEntity<String> stripe(String payload, String sig) {
         if (stripeWebhookSecret == null || stripeWebhookSecret.isBlank()) {
             log.warn("Stripe webhook hit with no secret configured");
             return ResponseEntity.ok("ignored");
@@ -51,8 +53,7 @@ public class PaymentWebhookController implements PaymentWebhookApi {
     }
 
     @Override
-    public ResponseEntity<String> paypal(String payload,
-                                         String sig) {
+    public ResponseEntity<String> paypal(String payload, String sig) {
         if (!verifyHmac(payload, sig, paypalWebhookSecret)) {
             return ResponseEntity.status(400).body("bad signature");
         }
@@ -60,8 +61,7 @@ public class PaymentWebhookController implements PaymentWebhookApi {
     }
 
     @Override
-    public ResponseEntity<String> coinbase(String payload,
-                                           String sig) {
+    public ResponseEntity<String> coinbase(String payload, String sig) {
         if (!verifyHmac(payload, sig, coinbaseWebhookSecret)) {
             return ResponseEntity.status(400).body("bad signature");
         }
@@ -73,7 +73,8 @@ public class PaymentWebhookController implements PaymentWebhookApi {
             log.warn("Webhook secret missing — accepting in dev mode");
             return true;
         }
-        if (signature == null) return false;
+        if (signature == null)
+            return false;
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));

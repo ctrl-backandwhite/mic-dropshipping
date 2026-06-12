@@ -9,6 +9,8 @@ import java.util.UUID;
 
 public interface ProductVariantRepository extends JpaRepository<ProductVariantEntity, UUID> {
     List<ProductVariantEntity> findByProductId(UUID productId);
+
     Optional<ProductVariantEntity> findByProductIdAndExternalId(UUID productId, String externalId);
+
     Optional<ProductVariantEntity> findBySku(String sku);
 }

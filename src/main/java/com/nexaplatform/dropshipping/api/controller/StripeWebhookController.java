@@ -7,5 +7,6 @@ package com.nexaplatform.dropshipping.api.controller;
  */
 @Deprecated
 public class StripeWebhookController {
-    private StripeWebhookController() { /* intentionally empty */ }
+    private StripeWebhookController() {
+        /* intentionally empty */ }
 }

@@ -24,9 +24,12 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class UserAddressUseCaseImplTest {
 
-    @Mock UserAddressRepository userAddressRepository;
-    @Mock UserAddressUpdateMapper userAddressUpdateMapper;
-    @InjectMocks UserAddressUseCaseImpl useCase;
+    @Mock
+    UserAddressRepository userAddressRepository;
+    @Mock
+    UserAddressUpdateMapper userAddressUpdateMapper;
+    @InjectMocks
+    UserAddressUseCaseImpl useCase;
 
     @Test
     void save_stampsOwnerAndPersists() {

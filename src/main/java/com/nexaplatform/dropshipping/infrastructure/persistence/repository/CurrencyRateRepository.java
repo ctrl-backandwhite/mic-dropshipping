@@ -9,5 +9,6 @@ import java.util.UUID;
 
 public interface CurrencyRateRepository extends JpaRepository<CurrencyRateEntity, UUID> {
     List<CurrencyRateEntity> findByActiveTrueOrderByCodeAsc();
+
     Optional<CurrencyRateEntity> findByCodeIgnoreCase(String code);
 }

@@ -45,37 +45,27 @@ public class RedisCacheConfig {
         // Default 5 min TTL; overrides por cache abajo.
         RedisCacheConfiguration defaults = baseConfig(Duration.ofMinutes(5));
 
-        Map<String, RedisCacheConfiguration> perCache = Map.of(
-                CACHE_PRODUCT_DETAIL,   baseConfig(Duration.ofMinutes(5)),
-                CACHE_PRODUCT_SUMMARY,  baseConfig(Duration.ofMinutes(2)),
-                CACHE_CATEGORY_TREE,    baseConfig(Duration.ofMinutes(15)),
-                CACHE_CATEGORIES_FLAT,  baseConfig(Duration.ofMinutes(15)),
-                CACHE_SUPPLIERS_FLAT,   baseConfig(Duration.ofMinutes(30)),
-                CACHE_PRICING_AMOUNT,   baseConfig(Duration.ofMinutes(5)),
-                CACHE_CURRENCY_RATES,   baseConfig(Duration.ofMinutes(10)),
-                CACHE_PRODUCT_SPECS,    baseConfig(Duration.ofMinutes(15)),
-                CACHE_PRODUCT_ATTRS,    baseConfig(Duration.ofMinutes(15))
-        );
+        Map<String, RedisCacheConfiguration> perCache = Map.of(CACHE_PRODUCT_DETAIL, baseConfig(Duration.ofMinutes(5)),
+                CACHE_PRODUCT_SUMMARY, baseConfig(Duration.ofMinutes(2)), CACHE_CATEGORY_TREE,
+                baseConfig(Duration.ofMinutes(15)), CACHE_CATEGORIES_FLAT, baseConfig(Duration.ofMinutes(15)),
+                CACHE_SUPPLIERS_FLAT, baseConfig(Duration.ofMinutes(30)), CACHE_PRICING_AMOUNT,
+                baseConfig(Duration.ofMinutes(5)), CACHE_CURRENCY_RATES, baseConfig(Duration.ofMinutes(10)),
+                CACHE_PRODUCT_SPECS, baseConfig(Duration.ofMinutes(15)), CACHE_PRODUCT_ATTRS,
+                baseConfig(Duration.ofMinutes(15)));
 
-        return RedisCacheManager.builder(cf)
-                .cacheDefaults(defaults)
-                .withInitialCacheConfigurations(perCache)
-                .transactionAware()
-                .build();
+        return RedisCacheManager.builder(cf).cacheDefaults(defaults).withInitialCacheConfigurations(perCache)
+                .transactionAware().build();
     }
 
     private RedisCacheConfiguration baseConfig(Duration ttl) {
         ObjectMapper mapper = redisObjectMapper();
         // Jackson2JsonRedisSerializer<Object> en su forma no-deprecada (con type-info en el mapper).
         Jackson2JsonRedisSerializer<Object> valueSerializer = new Jackson2JsonRedisSerializer<>(mapper, Object.class);
-        return RedisCacheConfiguration.defaultCacheConfig()
-                .entryTtl(ttl)
-                .disableCachingNullValues()
+        return RedisCacheConfiguration.defaultCacheConfig().entryTtl(ttl).disableCachingNullValues()
                 .computePrefixWith(name -> "nx036:cache:" + name + ":")
-                .serializeKeysWith(RedisSerializationContext.SerializationPair
-                        .fromSerializer(new StringRedisSerializer()))
-                .serializeValuesWith(RedisSerializationContext.SerializationPair
-                        .fromSerializer(valueSerializer));
+                .serializeKeysWith(
+                        RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
+                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(valueSerializer));
     }
 
     /** ObjectMapper preparado para preservar tipos al deserializar JSON desde Redis. */
@@ -86,10 +76,7 @@ public class RedisCacheConfig {
         mapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
         // Default-typing controlado: imprescindible para deserializar polimórficos
         // sin abrir el vector de gadget chains.
-        mapper.activateDefaultTyping(
-                BasicPolymorphicTypeValidator.builder()
-                        .allowIfBaseType(Object.class)
-                        .build(),
+        mapper.activateDefaultTyping(BasicPolymorphicTypeValidator.builder().allowIfBaseType(Object.class).build(),
                 ObjectMapper.DefaultTyping.NON_FINAL);
         return mapper;
     }

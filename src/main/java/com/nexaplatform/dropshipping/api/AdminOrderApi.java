@@ -26,10 +26,8 @@ public interface AdminOrderApi {
     @Operation(summary = "List admin orders with paging and optional status/query filters")
     @ApiResponse(responseCode = "200", description = "Orders listed")
     @GetMapping
-    ResponseEntity<PageResponse<AdminOrderRowDtoOut>> list(
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) String q,
-            @RequestParam(defaultValue = "0") int page,
+    ResponseEntity<PageResponse<AdminOrderRowDtoOut>> list(@RequestParam(required = false) String status,
+            @RequestParam(required = false) String q, @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size);
 
     @Operation(summary = "Get admin order detail by id")

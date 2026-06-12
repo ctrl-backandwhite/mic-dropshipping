@@ -28,22 +28,18 @@ import java.util.List;
 @SecurityRequirement(name = "session")
 public interface PartnerApiKeysApi {
 
-    @Operation(
-            summary = "Create a new OAuth2 client for the authenticated user",
-            description = """
-                    Generates fresh `client_id` and `client_secret` linked to the current user.
-                    The secret is shown ONCE — store it securely on your side.
+    @Operation(summary = "Create a new OAuth2 client for the authenticated user", description = """
+            Generates fresh `client_id` and `client_secret` linked to the current user.
+            The secret is shown ONCE — store it securely on your side.
 
-                    The JWT issued with these credentials will carry a `plan` claim that mirrors
-                    the user's active subscription (FREE→sandbox, STARTER/PRO/ENTERPRISE→paid).
-                    """)
-    @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Credentials created"),
-            @ApiResponse(responseCode = "400", description = "Invalid scopes or quota exceeded")
-    })
+            The JWT issued with these credentials will carry a `plan` claim that mirrors
+            the user's active subscription (FREE→sandbox, STARTER/PRO/ENTERPRISE→paid).
+            """)
+    @ApiResponses({@ApiResponse(responseCode = "201", description = "Credentials created"),
+            @ApiResponse(responseCode = "400", description = "Invalid scopes or quota exceeded")})
     @PostMapping
     ResponseEntity<PartnerApiKeyCreatedDtoOut> create(Authentication auth,
-                                                      @Valid @RequestBody PartnerApiKeyCreateDtoIn req);
+            @Valid @RequestBody PartnerApiKeyCreateDtoIn req);
 
     @Operation(summary = "List API keys belonging to the authenticated user")
     @ApiResponse(responseCode = "200", description = "API keys listed")

@@ -11,7 +11,11 @@ import java.util.Map;
 
 @Entity
 @Table(name = "user_shop_connection")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ShopConnectionEntity extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

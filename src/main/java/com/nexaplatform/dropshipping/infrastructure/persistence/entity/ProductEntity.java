@@ -25,8 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "product",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"source", "external_id"}))
+@Table(name = "product", uniqueConstraints = @UniqueConstraint(columnNames = {"source", "external_id"}))
 @Getter
 @Setter
 @NoArgsConstructor

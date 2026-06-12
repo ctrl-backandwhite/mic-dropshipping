@@ -11,10 +11,13 @@ import java.util.UUID;
 
 /** Daily price + stock snapshot — powers the 90-day chart on the product detail (DROP-25). */
 @Entity
-@Table(name = "product_history",
-       uniqueConstraints = @UniqueConstraint(columnNames = { "product_id", "snapshot_date" }))
+@Table(name = "product_history", uniqueConstraints = @UniqueConstraint(columnNames = {"product_id", "snapshot_date"}))
 @EntityListeners(AuditingEntityListener.class)
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ProductHistoryEntity {
 
     @Id

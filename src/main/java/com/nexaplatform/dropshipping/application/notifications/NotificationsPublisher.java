@@ -36,66 +36,58 @@ public class NotificationsPublisher {
     /* ============== Órdenes ============== */
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void orderPlaced(UUID userId, String userEmail, String orderNumber,
-                            String displayTotal, String currency, String locale) {
+    public void orderPlaced(UUID userId, String userEmail, String orderNumber, String displayTotal, String currency,
+            String locale) {
         Map<String, Object> body = base("ORDER_PLACED", userId, userEmail, locale);
         body.put("orderNumber", orderNumber);
         body.put("totalDisplay", displayTotal);
         body.put("currency", currency);
-        events.publish(NexaTopics.NOTIFICATIONS_ORDER_PLACED, "Order", orderNumber,
-                userId.toString(), body);
+        events.publish(NexaTopics.NOTIFICATIONS_ORDER_PLACED, "Order", orderNumber, userId.toString(), body);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void orderShipped(UUID userId, String userEmail, String orderNumber,
-                             String carrier, String trackingNumber, String locale) {
+    public void orderShipped(UUID userId, String userEmail, String orderNumber, String carrier, String trackingNumber,
+            String locale) {
         Map<String, Object> body = base("ORDER_SHIPPED", userId, userEmail, locale);
         body.put("orderNumber", orderNumber);
         body.put("carrier", carrier);
         body.put("trackingNumber", trackingNumber);
-        events.publish(NexaTopics.NOTIFICATIONS_ORDER_SHIPPED, "Order", orderNumber,
-                userId.toString(), body);
+        events.publish(NexaTopics.NOTIFICATIONS_ORDER_SHIPPED, "Order", orderNumber, userId.toString(), body);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void orderDelivered(UUID userId, String userEmail, String orderNumber, String locale) {
         Map<String, Object> body = base("ORDER_DELIVERED", userId, userEmail, locale);
         body.put("orderNumber", orderNumber);
-        events.publish(NexaTopics.NOTIFICATIONS_ORDER_DELIVERED, "Order", orderNumber,
-                userId.toString(), body);
+        events.publish(NexaTopics.NOTIFICATIONS_ORDER_DELIVERED, "Order", orderNumber, userId.toString(), body);
     }
 
     /* ============== Wallet ============== */
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void walletRecharged(UUID userId, String userEmail, long amountUsdCents,
-                                String method, String locale) {
+    public void walletRecharged(UUID userId, String userEmail, long amountUsdCents, String method, String locale) {
         Map<String, Object> body = base("WALLET_RECHARGED", userId, userEmail, locale);
         body.put("amountUsdCents", amountUsdCents);
         body.put("method", method);
-        events.publish(NexaTopics.NOTIFICATIONS_WALLET_RECHARGED, "Wallet", userId.toString(),
-                userId.toString(), body);
+        events.publish(NexaTopics.NOTIFICATIONS_WALLET_RECHARGED, "Wallet", userId.toString(), userId.toString(), body);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void walletCharged(UUID userId, String userEmail, long amountUsdCents,
-                              String orderNumber, String locale) {
+    public void walletCharged(UUID userId, String userEmail, long amountUsdCents, String orderNumber, String locale) {
         Map<String, Object> body = base("WALLET_CHARGED", userId, userEmail, locale);
         body.put("amountUsdCents", amountUsdCents);
         body.put("orderNumber", orderNumber);
-        events.publish(NexaTopics.NOTIFICATIONS_WALLET_CHARGED, "Wallet", userId.toString(),
-                userId.toString(), body);
+        events.publish(NexaTopics.NOTIFICATIONS_WALLET_CHARGED, "Wallet", userId.toString(), userId.toString(), body);
     }
 
     /* ============== Auth ============== */
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void authEvent(UUID userId, String userEmail, String kind,
-                          Map<String, Object> extra, String locale) {
+    public void authEvent(UUID userId, String userEmail, String kind, Map<String, Object> extra, String locale) {
         Map<String, Object> body = base(kind, userId, userEmail, locale);
-        if (extra != null) body.putAll(extra);
-        events.publish(NexaTopics.NOTIFICATIONS_AUTH, "User",
-                userId != null ? userId.toString() : userEmail,
+        if (extra != null)
+            body.putAll(extra);
+        events.publish(NexaTopics.NOTIFICATIONS_AUTH, "User", userId != null ? userId.toString() : userEmail,
                 userId != null ? userId.toString() : userEmail, body);
     }
 
@@ -107,12 +99,11 @@ public class NotificationsPublisher {
      * nuevos topics.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void dispatch(String kind, UUID userId, String userEmail,
-                         Map<String, Object> extra, String locale) {
+    public void dispatch(String kind, UUID userId, String userEmail, Map<String, Object> extra, String locale) {
         Map<String, Object> body = base(kind, userId, userEmail, locale);
-        if (extra != null) body.putAll(extra);
-        events.publish(NexaTopics.NOTIFICATIONS_DISPATCH, "User",
-                userId != null ? userId.toString() : userEmail,
+        if (extra != null)
+            body.putAll(extra);
+        events.publish(NexaTopics.NOTIFICATIONS_DISPATCH, "User", userId != null ? userId.toString() : userEmail,
                 userId != null ? userId.toString() : userEmail, body);
     }
 

@@ -43,8 +43,8 @@ public class ShopProductListingRepositoryImpl implements ShopProductListingRepos
 
     @Override
     public List<ShopProductListing> findByShopConnectionId(UUID shopConnectionId) {
-        return shopProductListingEntityMapper.toDomainList(
-                shopProductListingJpaRepositoryAdapter.findByShopConnection_Id(shopConnectionId));
+        return shopProductListingEntityMapper
+                .toDomainList(shopProductListingJpaRepositoryAdapter.findByShopConnection_Id(shopConnectionId));
     }
 
     @Override
@@ -54,8 +54,7 @@ public class ShopProductListingRepositoryImpl implements ShopProductListingRepos
 
     @Override
     public Optional<ShopProductListing> findByShopConnectionIdAndProductId(UUID shopConnectionId, UUID productId) {
-        return shopProductListingJpaRepositoryAdapter
-                .findByShopConnection_IdAndProduct_Id(shopConnectionId, productId)
+        return shopProductListingJpaRepositoryAdapter.findByShopConnection_IdAndProduct_Id(shopConnectionId, productId)
                 .map(shopProductListingEntityMapper::toDomain);
     }
 
@@ -66,8 +65,7 @@ public class ShopProductListingRepositoryImpl implements ShopProductListingRepos
 
     @Override
     public ShopProductListing getById(UUID id) {
-        return shopProductListingJpaRepositoryAdapter.findById(id)
-                .map(shopProductListingEntityMapper::toDomain)
+        return shopProductListingJpaRepositoryAdapter.findById(id).map(shopProductListingEntityMapper::toDomain)
                 .orElse(null);
     }
 
@@ -117,7 +115,6 @@ public class ShopProductListingRepositoryImpl implements ShopProductListingRepos
         if (productId == null) {
             return null;
         }
-        return productRepository.findById(productId)
-                .orElseThrow(() -> new NotFoundException("Product"));
+        return productRepository.findById(productId).orElseThrow(() -> new NotFoundException("Product"));
     }
 }

@@ -138,12 +138,7 @@ public interface UserDtoMapper {
 
     /** Assembles the paged admin-users response from the page slice + total count. */
     default AdminUserPageDtoOut toAdminPageDtoOut(List<User> pageItems, int total, int page, int size) {
-        return AdminUserPageDtoOut.builder()
-                .items(toAdminDtoOutList(pageItems))
-                .totalElements(total)
-                .totalPages((int) Math.ceil((double) total / Math.max(1, size)))
-                .page(page)
-                .size(size)
-                .build();
+        return AdminUserPageDtoOut.builder().items(toAdminDtoOutList(pageItems)).totalElements(total)
+                .totalPages((int) Math.ceil((double) total / Math.max(1, size))).page(page).size(size).build();
     }
 }

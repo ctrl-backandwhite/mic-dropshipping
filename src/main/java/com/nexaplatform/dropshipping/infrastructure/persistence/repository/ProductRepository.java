@@ -42,8 +42,7 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             ORDER BY p.trendScore DESC NULLS LAST
             """)
     Page<ProductEntity> findByCategoryOrderByTrend(@Param("categoryId") UUID categoryId,
-                                                   @Param("status") ProductStatus status,
-                                                   Pageable pageable);
+            @Param("status") ProductStatus status, Pageable pageable);
 
     /**
      * Listado del storefront con filtros aplicados en SQL — sustituye al stream
@@ -78,18 +77,10 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
                    OR LOWER(p.externalId) LIKE CONCAT('%', CAST(:needle AS string), '%')
                    OR LOWER(p.slug) LIKE CONCAT('%', CAST(:needle AS string), '%'))
             """)
-    Page<ProductEntity> searchStorefront(
-            @Param("status") ProductStatus status,
-            @Param("needle") String needle,
-            @Param("categoryId") UUID categoryId,
-            @Param("supplierId") UUID supplierId,
-            @Param("minPrice") java.math.BigDecimal minPrice,
-            @Param("maxPrice") java.math.BigDecimal maxPrice,
-            @Param("shipFrom") String shipFrom,
-            @Param("freeShipping") Boolean freeShipping,
-            @Param("selfPickup") Boolean selfPickup,
-            @Param("hasVideo") Boolean hasVideo,
-            @Param("minRating") java.math.BigDecimal minRating,
-            @Param("minInv") Integer minInv,
-            Pageable pageable);
+    Page<ProductEntity> searchStorefront(@Param("status") ProductStatus status, @Param("needle") String needle,
+            @Param("categoryId") UUID categoryId, @Param("supplierId") UUID supplierId,
+            @Param("minPrice") java.math.BigDecimal minPrice, @Param("maxPrice") java.math.BigDecimal maxPrice,
+            @Param("shipFrom") String shipFrom, @Param("freeShipping") Boolean freeShipping,
+            @Param("selfPickup") Boolean selfPickup, @Param("hasVideo") Boolean hasVideo,
+            @Param("minRating") java.math.BigDecimal minRating, @Param("minInv") Integer minInv, Pageable pageable);
 }

@@ -8,5 +8,6 @@ import java.util.UUID;
 
 public interface WebhookSubscriptionRepository extends JpaRepository<WebhookSubscriptionEntity, UUID> {
     List<WebhookSubscriptionEntity> findByActiveTrue();
+
     List<WebhookSubscriptionEntity> findByUser_Id(UUID userId);
 }

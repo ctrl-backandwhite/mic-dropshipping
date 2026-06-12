@@ -41,8 +41,8 @@ public class MentorBookingRepositoryImpl implements MentorBookingRepository {
 
     @Override
     public List<MentorBooking> findByLearnerId(UUID learnerId) {
-        return mentorBookingEntityMapper.toDomainList(
-                mentorBookingJpaRepositoryAdapter.findByLearner_IdOrderByStartsAtDesc(learnerId));
+        return mentorBookingEntityMapper
+                .toDomainList(mentorBookingJpaRepositoryAdapter.findByLearner_IdOrderByStartsAtDesc(learnerId));
     }
 
     @Override
@@ -52,9 +52,7 @@ public class MentorBookingRepositoryImpl implements MentorBookingRepository {
 
     @Override
     public MentorBooking getById(UUID id) {
-        return mentorBookingJpaRepositoryAdapter.findById(id)
-                .map(mentorBookingEntityMapper::toDomain)
-                .orElse(null);
+        return mentorBookingJpaRepositoryAdapter.findById(id).map(mentorBookingEntityMapper::toDomain).orElse(null);
     }
 
     @Override
@@ -83,8 +81,8 @@ public class MentorBookingRepositoryImpl implements MentorBookingRepository {
                     .orElseThrow(() -> new NotFoundException("Mentor")));
         }
         if (model.getLearnerId() != null) {
-            entity.setLearner(userRepository.findById(model.getLearnerId())
-                    .orElseThrow(() -> new NotFoundException("User")));
+            entity.setLearner(
+                    userRepository.findById(model.getLearnerId()).orElseThrow(() -> new NotFoundException("User")));
         }
         entity.setStartsAt(model.getStartsAt());
         entity.setDurationMin(model.getDurationMin());

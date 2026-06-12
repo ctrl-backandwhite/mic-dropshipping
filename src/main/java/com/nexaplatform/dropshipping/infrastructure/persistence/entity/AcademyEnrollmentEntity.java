@@ -7,9 +7,12 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
-@Table(name = "academy_enrollment",
-       uniqueConstraints = @UniqueConstraint(columnNames = { "user_id", "course_id" }))
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Table(name = "academy_enrollment", uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "course_id"}))
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class AcademyEnrollmentEntity extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -21,7 +24,9 @@ public class AcademyEnrollmentEntity extends BaseEntity {
     private AcademyCourseEntity course;
 
     @Column(name = "progress_pct", nullable = false, precision = 5, scale = 2)
-    @Builder.Default private BigDecimal progressPct = BigDecimal.ZERO;
+    @Builder.Default
+    private BigDecimal progressPct = BigDecimal.ZERO;
 
-    @Column(name = "completed_at") private Instant completedAt;
+    @Column(name = "completed_at")
+    private Instant completedAt;
 }

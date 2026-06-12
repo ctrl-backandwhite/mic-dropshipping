@@ -39,34 +39,40 @@ public class SourcingUseCaseImpl implements SourcingUseCase {
     @Override
     @Transactional(readOnly = true)
     public List<SourcingRequest> myRequests(UUID userId) {
-        return sourcingRequestRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(this::withQuotesCount).toList();
+        return sourcingRequestRepository.findByUserIdOrderByCreatedAtDesc(userId).stream().map(this::withQuotesCount)
+                .toList();
     }
 
     @Override
     @Transactional
     public SourcingRequest create(UUID userId, String url, String titleHint, String notes) {
         // Plan quota — DROP-36: Free 0/5, Plus 30, Prime 60 per 30-day window.
-        long used = sourcingRequestRepository.countByUserIdAndCreatedAtAfter(userId, Instant.now().minus(30, ChronoUnit.DAYS));
-        String plan = "FREE";  // simplified: tied to subscription, default FREE=5
-        int quota = switch (plan) { case "PLUS" -> 30; case "PRIME" -> 60; default -> 5; };
-        if (used >= quota) throw new BusinessException("Sourcing quota reached for plan " + plan + " (" + used + "/" + quota + ")");
+        long used = sourcingRequestRepository.countByUserIdAndCreatedAtAfter(userId,
+                Instant.now().minus(30, ChronoUnit.DAYS));
+        String plan = "FREE"; // simplified: tied to subscription, default FREE=5
+        int quota = switch (plan) {
+            case "PLUS" -> 30;
+            case "PRIME" -> 60;
+            default -> 5;
+        };
+        if (used >= quota)
+            throw new BusinessException("Sourcing quota reached for plan " + plan + " (" + used + "/" + quota + ")");
 
         // Detect source from URL.
         String src = null;
         String ext = null;
         String low = url.toLowerCase();
-        if (low.contains("1688.com"))            src = "1688";
-        else if (low.contains("taobao.com"))     src = "taobao";
-        else if (low.contains("aliexpress.com")) src = "aliexpress";
-        else if (low.contains("ebay.com"))       src = "ebay";
+        if (low.contains("1688.com"))
+            src = "1688";
+        else if (low.contains("taobao.com"))
+            src = "taobao";
+        else if (low.contains("aliexpress.com"))
+            src = "aliexpress";
+        else if (low.contains("ebay.com"))
+            src = "ebay";
 
-        SourcingRequest model = SourcingRequest.builder()
-                .userId(userId).sourceUrl(url)
-                .source(src).externalId(ext)
-                .status("PENDING").titleHint(titleHint)
-                .notes(notes).planQuota(plan)
-                .build();
+        SourcingRequest model = SourcingRequest.builder().userId(userId).sourceUrl(url).source(src).externalId(ext)
+                .status("PENDING").titleHint(titleHint).notes(notes).planQuota(plan).build();
         return withQuotesCount(sourcingRequestRepository.save(model));
     }
 
@@ -121,12 +127,13 @@ public class SourcingUseCaseImpl implements SourcingUseCase {
                 throw new NotFoundException("Agent");
             }
         }
-        SourcingQuote quote = SourcingQuote.builder()
-                .requestId(r.getId()).agent(agent)
-                .priceUsdCents(priceUsdCents).etaDays(etaDays)
-                .moq(moq).notes(notes).status("OPEN").build();
+        SourcingQuote quote = SourcingQuote.builder().requestId(r.getId()).agent(agent).priceUsdCents(priceUsdCents)
+                .etaDays(etaDays).moq(moq).notes(notes).status("OPEN").build();
         quote = sourcingQuoteRepository.save(quote);
-        if (!"QUOTING".equals(r.getStatus())) { r.setStatus("QUOTING"); sourcingRequestRepository.save(r); }
+        if (!"QUOTING".equals(r.getStatus())) {
+            r.setStatus("QUOTING");
+            sourcingRequestRepository.save(r);
+        }
         return quote;
     }
 
@@ -138,7 +145,8 @@ public class SourcingUseCaseImpl implements SourcingUseCase {
         if (Objects.isNull(q)) {
             throw new NotFoundException("Quote");
         }
-        if (!q.getRequestId().equals(r.getId())) throw new BusinessException("Quote does not belong to this request");
+        if (!q.getRequestId().equals(r.getId()))
+            throw new BusinessException("Quote does not belong to this request");
         q.setStatus("ACCEPTED");
         sourcingQuoteRepository.save(q);
         r.setStatus("APPROVED");
@@ -172,7 +180,8 @@ public class SourcingUseCaseImpl implements SourcingUseCase {
         if (Objects.isNull(r)) {
             throw new NotFoundException("Sourcing request");
         }
-        if (r.getUserId() == null || !userId.equals(r.getUserId())) throw new NotFoundException("Sourcing request");
+        if (r.getUserId() == null || !userId.equals(r.getUserId()))
+            throw new NotFoundException("Sourcing request");
         return r;
     }
 

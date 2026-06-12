@@ -21,7 +21,7 @@ public interface PaymentUseCase extends BaseUseCase<Payment, Payment, UUID> {
 
     /** Initiate a wallet recharge with the resolved gateway; returns the payment with provider metadata. */
     Payment initiateRecharge(UUID userId, PaymentMethod method, long amountUsdCents, String currencyDisplay,
-                             BigDecimal amountDisplay, String idempotencyKey, String cryptoChain);
+            BigDecimal amountDisplay, String idempotencyKey, String cryptoChain);
 
     /** Confirm a payment SUCCEEDED (idempotent): credit the wallet, or mark the order PAID. */
     Payment confirmSucceeded(UUID paymentId, Map<String, Object> providerPayload);
@@ -50,13 +50,16 @@ public interface PaymentUseCase extends BaseUseCase<Payment, Payment, UUID> {
     Payment chargeWalletForOrder(UUID orderId, UUID userId, String idempotencyKey);
 
     /** Initiate an order payment (WALLET charges atomically; else external provider flow). */
-    Payment initiateOrderPaymentView(UUID orderId, UUID userId, PaymentMethod method, boolean wallet, String idempotencyKey);
+    Payment initiateOrderPaymentView(UUID orderId, UUID userId, PaymentMethod method, boolean wallet,
+            String idempotencyKey);
 
     /** Initiate an order payment for a partner identified by the OAuth2 JWT. */
-    Payment initiatePartnerOrderPayment(Jwt jwt, UUID orderId, boolean wallet, PaymentMethod method, String idempotencyKey);
+    Payment initiatePartnerOrderPayment(Jwt jwt, UUID orderId, boolean wallet, PaymentMethod method,
+            String idempotencyKey);
 
     /** Initiate an order payment for the account owner (B2C). */
-    Payment initiateMeOrderPayment(UUID userId, UUID orderId, boolean wallet, PaymentMethod method, String idempotencyKey);
+    Payment initiateMeOrderPayment(UUID userId, UUID orderId, boolean wallet, PaymentMethod method,
+            String idempotencyKey);
 
     /** All payment attempts for an order, newest first. */
     List<Payment> listOrderPayments(UUID orderId);

@@ -20,8 +20,10 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AcademyCourseUseCaseImplTest {
 
-    @Mock AcademyCourseRepository academyCourseRepository;
-    @InjectMocks AcademyCourseUseCaseImpl useCase;
+    @Mock
+    AcademyCourseRepository academyCourseRepository;
+    @InjectMocks
+    AcademyCourseUseCaseImpl useCase;
 
     @Test
     void listPublished_filtersByLocaleAndLevel() {

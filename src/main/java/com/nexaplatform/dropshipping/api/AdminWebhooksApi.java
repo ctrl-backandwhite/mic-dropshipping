@@ -41,7 +41,7 @@ public interface AdminWebhooksApi {
     @ApiResponse(responseCode = "200", description = "Subscription updated")
     @PutMapping("/{id}")
     ResponseEntity<WebhookSubscriptionDtoOut> update(@PathVariable UUID id,
-                                                     @RequestBody WebhookSubscriptionUpdateDtoIn req);
+            @RequestBody WebhookSubscriptionUpdateDtoIn req);
 
     @Operation(summary = "Rotate the signing secret of a webhook subscription")
     @ApiResponse(responseCode = "200", description = "Secret rotated")

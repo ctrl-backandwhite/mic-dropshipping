@@ -26,9 +26,12 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AcademyEnrollmentUseCaseImplTest {
 
-    @Mock AcademyEnrollmentRepository academyEnrollmentRepository;
-    @Mock AcademyCourseRepository academyCourseRepository;
-    @InjectMocks AcademyEnrollmentUseCaseImpl useCase;
+    @Mock
+    AcademyEnrollmentRepository academyEnrollmentRepository;
+    @Mock
+    AcademyCourseRepository academyCourseRepository;
+    @InjectMocks
+    AcademyEnrollmentUseCaseImpl useCase;
 
     @Test
     void enroll_returnsExistingEnrollmentWhenAlreadyEnrolled() {

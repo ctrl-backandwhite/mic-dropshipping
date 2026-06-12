@@ -31,21 +31,17 @@ public class AffiliateUseCaseImpl implements AffiliateUseCase {
     @Override
     @Transactional
     public Affiliate getOrCreate(UUID userId) {
-        return affiliateRepository.findByUserId(userId)
-                .orElseGet(() -> {
-                    UserEntity user = userRepository.findById(userId).orElseThrow();
-                    return affiliateRepository.save(Affiliate.builder()
-                            .userId(userId)
-                            .code(generateCode(user))
-                            .active(true)
-                            .build());
-                });
+        return affiliateRepository.findByUserId(userId).orElseGet(() -> {
+            UserEntity user = userRepository.findById(userId).orElseThrow();
+            return affiliateRepository
+                    .save(Affiliate.builder().userId(userId).code(generateCode(user)).active(true).build());
+        });
     }
 
     /** Builds a short, unique affiliate code from the user's display name or email. */
     private static String generateCode(UserEntity u) {
-        String base = (u.getDisplayName() == null ? u.getEmail() : u.getDisplayName())
-                .toLowerCase().replaceAll("[^a-z0-9]", "");
+        String base = (u.getDisplayName() == null ? u.getEmail() : u.getDisplayName()).toLowerCase()
+                .replaceAll("[^a-z0-9]", "");
         if (base.length() > 8) {
             base = base.substring(0, 8);
         }

@@ -46,14 +46,13 @@ public class CurrencyRateService {
 
     public List<CurrencyRateEntity> listActive() {
         ensureFresh();
-        return cache.values().stream()
-                .filter(CurrencyRateEntity::isActive)
-                .sorted((a, b) -> a.getCode().compareTo(b.getCode()))
-                .toList();
+        return cache.values().stream().filter(CurrencyRateEntity::isActive)
+                .sorted((a, b) -> a.getCode().compareTo(b.getCode())).toList();
     }
 
     public Optional<CurrencyRateEntity> find(String code) {
-        if (code == null) return Optional.empty();
+        if (code == null)
+            return Optional.empty();
         ensureFresh();
         return Optional.ofNullable(cache.get(code.toUpperCase(Locale.ROOT)));
     }
@@ -70,21 +69,22 @@ public class CurrencyRateService {
     }
 
     public BigDecimal usdTo(BigDecimal amountUsd, String targetCode) {
-        if (amountUsd == null) return null;
+        if (amountUsd == null)
+            return null;
         if ("USD".equalsIgnoreCase(targetCode)) {
             return amountUsd.setScale(2, RoundingMode.HALF_UP);
         }
-        return find(targetCode)
-                .map(r -> amountUsd.multiply(r.getRateVsUsd()).setScale(2, RoundingMode.HALF_UP))
+        return find(targetCode).map(r -> amountUsd.multiply(r.getRateVsUsd()).setScale(2, RoundingMode.HALF_UP))
                 .orElse(amountUsd.setScale(2, RoundingMode.HALF_UP));
     }
 
     /** Convert an amount in any source currency to USD (used at order creation to fix USD canonical). */
     public BigDecimal toUsd(BigDecimal amount, String sourceCode) {
-        if (amount == null) return null;
-        if ("USD".equalsIgnoreCase(sourceCode)) return amount.setScale(4, RoundingMode.HALF_UP);
-        return find(sourceCode)
-                .map(r -> amount.divide(r.getRateVsUsd(), 4, RoundingMode.HALF_UP))
+        if (amount == null)
+            return null;
+        if ("USD".equalsIgnoreCase(sourceCode))
+            return amount.setScale(4, RoundingMode.HALF_UP);
+        return find(sourceCode).map(r -> amount.divide(r.getRateVsUsd(), 4, RoundingMode.HALF_UP))
                 .orElseThrow(() -> new NotFoundException("Unknown source currency: " + sourceCode));
     }
 
@@ -127,7 +127,8 @@ public class CurrencyRateService {
         int updated = 0;
         for (var entry : ratesFromProvider.entrySet()) {
             var existing = repository.findByCodeIgnoreCase(entry.getKey()).orElse(null);
-            if (existing == null) continue;
+            if (existing == null)
+                continue;
             existing.setRateVsUsd(entry.getValue());
             existing.setLastSyncedAt(now);
             repository.save(existing);

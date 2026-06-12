@@ -48,11 +48,9 @@ public class JwkKeyService {
             gen.initialize(2048);
             KeyPair pair = gen.generateKeyPair();
             String kid = UUID.randomUUID().toString();
-            JwkKeyEntity entity = JwkKeyEntity.builder()
-                    .kid(kid)
+            JwkKeyEntity entity = JwkKeyEntity.builder().kid(kid)
                     .publicKey(Base64.getEncoder().encodeToString(pair.getPublic().getEncoded()))
-                    .privateKey(Base64.getEncoder().encodeToString(pair.getPrivate().getEncoded()))
-                    .active(true)
+                    .privateKey(Base64.getEncoder().encodeToString(pair.getPrivate().getEncoded())).active(true)
                     .build();
             return jwkKeyRepository.save(entity);
         } catch (Exception e) {
@@ -65,8 +63,7 @@ public class JwkKeyService {
     }
 
     public JWKSet loadJwkSet() {
-        List<RSAKey> keys = jwkKeyRepository.findAllByOrderByCreatedAtDesc().stream()
-                .map(this::toRsaKey)
+        List<RSAKey> keys = jwkKeyRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toRsaKey)
                 .collect(Collectors.toList());
         return new JWKSet(keys.stream().map(k -> (com.nimbusds.jose.jwk.JWK) k).toList());
     }

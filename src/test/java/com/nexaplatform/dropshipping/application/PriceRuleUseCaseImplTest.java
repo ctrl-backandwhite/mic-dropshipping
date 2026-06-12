@@ -23,10 +23,14 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class PriceRuleUseCaseImplTest {
 
-    @Mock PriceRuleRepository priceRuleRepository;
-    @Mock PriceRuleUpdateMapper priceRuleUpdateMapper;
-    @Mock MarginService marginService;
-    @InjectMocks PriceRuleUseCaseImpl useCase;
+    @Mock
+    PriceRuleRepository priceRuleRepository;
+    @Mock
+    PriceRuleUpdateMapper priceRuleUpdateMapper;
+    @Mock
+    MarginService marginService;
+    @InjectMocks
+    PriceRuleUseCaseImpl useCase;
 
     @Test
     void save_persistsAndFlushesMarginCache() {

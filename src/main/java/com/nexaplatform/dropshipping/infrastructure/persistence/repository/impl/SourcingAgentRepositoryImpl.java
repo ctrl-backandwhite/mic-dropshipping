@@ -24,15 +24,13 @@ public class SourcingAgentRepositoryImpl implements SourcingAgentRepository {
 
     @Override
     public List<SourcingAgent> findByActiveTrueOrderBySatisfactionDesc() {
-        return sourcingAgentEntityMapper.toDomainList(
-                sourcingAgentJpaRepositoryAdapter.findByActiveTrueOrderBySatisfactionDesc());
+        return sourcingAgentEntityMapper
+                .toDomainList(sourcingAgentJpaRepositoryAdapter.findByActiveTrueOrderBySatisfactionDesc());
     }
 
     @Override
     public SourcingAgent getById(UUID id) {
-        return sourcingAgentJpaRepositoryAdapter.findById(id)
-                .map(sourcingAgentEntityMapper::toDomain)
-                .orElse(null);
+        return sourcingAgentJpaRepositoryAdapter.findById(id).map(sourcingAgentEntityMapper::toDomain).orElse(null);
     }
 
     @Override

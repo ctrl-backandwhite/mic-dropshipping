@@ -74,17 +74,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
             throw new BusinessException("Order must have at least one item");
         }
 
-        Order order = Order.builder()
-                .orderNumber(generateOrderNumber())
-                .partnerAppId(partnerAppId)
-                .userId(userId)
-                .externalOrderId(req.externalOrderId())
-                .status(OrderStatus.PENDING)
-                .currency("USD")
-                .notes(req.notes())
-                .placedAt(Instant.now())
-                .items(new ArrayList<>())
-                .build();
+        Order order = Order.builder().orderNumber(generateOrderNumber()).partnerAppId(partnerAppId).userId(userId)
+                .externalOrderId(req.externalOrderId()).status(OrderStatus.PENDING).currency("USD").notes(req.notes())
+                .placedAt(Instant.now()).items(new ArrayList<>()).build();
 
         applyAddress(order, req.shippingAddress(), false);
         if (req.billingAddress() != null) {
@@ -95,28 +87,25 @@ public class OrderUseCaseImpl implements OrderUseCase {
         for (var itemReq : req.items()) {
             ProductEntity product = productRepository.findById(itemReq.productId())
                     .orElseThrow(() -> new NotFoundException("Product not found: " + itemReq.productId()));
-            ProductVariantEntity variant = itemReq.variantId() == null ? null :
-                    variantRepository.findById(itemReq.variantId())
+            ProductVariantEntity variant = itemReq.variantId() == null
+                    ? null
+                    : variantRepository.findById(itemReq.variantId())
                             .orElseThrow(() -> new NotFoundException("Variant not found: " + itemReq.variantId()));
 
-            BigDecimal unitPrice = variant != null && variant.getPrice() != null ? variant.getPrice() : product.getBasePrice();
+            BigDecimal unitPrice = variant != null && variant.getPrice() != null
+                    ? variant.getPrice()
+                    : product.getBasePrice();
             if (unitPrice == null) {
                 throw new BusinessException("Product " + product.getSlug() + " has no price");
             }
             int unitCents = unitPrice.multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).intValue();
             int lineTotal = unitCents * itemReq.quantity();
 
-            order.getItems().add(OrderItem.builder()
-                    .productId(product.getId())
-                    .variantId(variant != null ? variant.getId() : null)
-                    .titleSnapshot(product.getTitleZh())
+            order.getItems().add(OrderItem.builder().productId(product.getId())
+                    .variantId(variant != null ? variant.getId() : null).titleSnapshot(product.getTitleZh())
                     .imageUrlSnapshot(product.getImages().isEmpty() ? null : product.getImages().get(0).getSourceUrl())
-                    .skuSnapshot(variant != null ? variant.getSku() : null)
-                    .unitPriceCents(unitCents)
-                    .costCents(unitCents)
-                    .quantity(itemReq.quantity())
-                    .lineTotalCents(lineTotal)
-                    .build());
+                    .skuSnapshot(variant != null ? variant.getSku() : null).unitPriceCents(unitCents)
+                    .costCents(unitCents).quantity(itemReq.quantity()).lineTotalCents(lineTotal).build());
 
             subtotal += lineTotal;
         }
@@ -132,8 +121,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Override
     @Transactional(readOnly = true)
     public Order getOrder(UUID id) {
-        return orderRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Order not found: " + id));
+        return orderRepository.findById(id).orElseThrow(() -> new NotFoundException("Order not found: " + id));
     }
 
     @Override
@@ -183,9 +171,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
                     Instant ai = a.getPlacedAt() != null ? a.getPlacedAt() : a.getCreatedAt();
                     Instant bi = b.getPlacedAt() != null ? b.getPlacedAt() : b.getCreatedAt();
                     return bi.compareTo(ai);
-                })
-                .map(this::enrich)
-                .toList();
+                }).map(this::enrich).toList();
     }
 
     @Override
@@ -250,8 +236,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
         }
         long amountCents = o.getTotalCents();
         if (o.getUserId() != null && amountCents > 0) {
-            walletUseCase.deposit(o.getUserId(), amountCents, o.getId(),
-                    "refund-" + o.getId(), "Refund order " + o.getOrderNumber());
+            walletUseCase.deposit(o.getUserId(), amountCents, o.getId(), "refund-" + o.getId(),
+                    "Refund order " + o.getOrderNumber());
         }
         o.setStatus(OrderStatus.REFUNDED);
         o = orderRepository.save(o);
@@ -267,12 +253,12 @@ public class OrderUseCaseImpl implements OrderUseCase {
         }
         ProductEntity p = productRepository.findAll().stream()
                 .filter(x -> x.getStatus() != null && x.getStatus().name().equals("ACTIVE"))
-                .filter(x -> x.getBasePrice() != null)
-                .findFirst().orElseThrow(() -> new NotFoundException("No active product to seed demo order"));
-        var addr = new AddressInput("Demo Customer", "+34000000", "demo@nx036.local",
-                "C/ Demo 1", null, "Madrid", "M", "28001", "ES");
-        var req = new CreateOrderRequest("DEMO-" + Instant.now().getEpochSecond(),
-                addr, null, List.of(new OrderItemInput(p.getId(), null, 2)), "demo order from admin panel");
+                .filter(x -> x.getBasePrice() != null).findFirst()
+                .orElseThrow(() -> new NotFoundException("No active product to seed demo order"));
+        var addr = new AddressInput("Demo Customer", "+34000000", "demo@nx036.local", "C/ Demo 1", null, "Madrid", "M",
+                "28001", "ES");
+        var req = new CreateOrderRequest("DEMO-" + Instant.now().getEpochSecond(), addr, null,
+                List.of(new OrderItemInput(p.getId(), null, 2)), "demo order from admin panel");
         return createOrder(null, null, req);
     }
 
@@ -281,14 +267,11 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Override
     @Transactional(readOnly = true)
     public List<Order> listMyOrders(UUID userId) {
-        return orderRepository.findAll().stream()
-                .filter(o -> userId.equals(o.getUserId()))
-                .sorted((a, b) -> {
-                    Instant ai = a.getPlacedAt() != null ? a.getPlacedAt() : a.getCreatedAt();
-                    Instant bi = b.getPlacedAt() != null ? b.getPlacedAt() : b.getCreatedAt();
-                    return bi.compareTo(ai);
-                })
-                .toList();
+        return orderRepository.findAll().stream().filter(o -> userId.equals(o.getUserId())).sorted((a, b) -> {
+            Instant ai = a.getPlacedAt() != null ? a.getPlacedAt() : a.getCreatedAt();
+            Instant bi = b.getPlacedAt() != null ? b.getPlacedAt() : b.getCreatedAt();
+            return bi.compareTo(ai);
+        }).toList();
     }
 
     @Override
@@ -298,18 +281,19 @@ public class OrderUseCaseImpl implements OrderUseCase {
         if (req.getShippingAddressId() != null) {
             UserAddressEntity saved = userAddressRepository.findById(req.getShippingAddressId())
                     .orElseThrow(() -> new NotFoundException("Address not found"));
-            if (!saved.getUser().getId().equals(userId)) throw new NotFoundException("Address not found");
-            addr = new AddressInput(saved.getFullName(), saved.getPhone(), null,
-                    saved.getLine1(), saved.getLine2(), saved.getCity(),
-                    saved.getState(), saved.getPostalCode(), saved.getCountry());
+            if (!saved.getUser().getId().equals(userId))
+                throw new NotFoundException("Address not found");
+            addr = new AddressInput(saved.getFullName(), saved.getPhone(), null, saved.getLine1(), saved.getLine2(),
+                    saved.getCity(), saved.getState(), saved.getPostalCode(), saved.getCountry());
         }
-        if (addr == null) throw new BusinessException("Shipping address is required");
+        if (addr == null)
+            throw new BusinessException("Shipping address is required");
 
         List<OrderItemInput> items = req.getItems().stream()
                 .map(i -> new OrderItemInput(i.getProductId(), i.getVariantId(), i.getQuantity())).toList();
 
-        var orderReq = new CreateOrderRequest(
-                "ME-" + Instant.now().getEpochSecond(), addr, null, items, req.getNotes());
+        var orderReq = new CreateOrderRequest("ME-" + Instant.now().getEpochSecond(), addr, null, items,
+                req.getNotes());
         Order created = createOrder(null, userId, orderReq);
 
         // DROP-549: only charge the wallet when the requested method is WALLET.
@@ -333,8 +317,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP).toPlainString();
         final String orderNumber = created.getOrderNumber();
         final String currency = created.getCurrency();
-        userRepository.findById(userId).ifPresent(u -> notificationsPublisher.orderPlaced(
-                userId, u.getEmail(), orderNumber, totalPlain, currency, u.getLanguage()));
+        userRepository.findById(userId).ifPresent(u -> notificationsPublisher.orderPlaced(userId, u.getEmail(),
+                orderNumber, totalPlain, currency, u.getLanguage()));
 
         return o;
     }
@@ -343,7 +327,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Transactional(readOnly = true)
     public Order getMyOrderDetail(UUID userId, UUID id, String lang) {
         Order o = orderRepository.findById(id).orElseThrow(() -> new NotFoundException("Order"));
-        if (!userId.equals(o.getUserId())) throw new NotFoundException("Order");
+        if (!userId.equals(o.getUserId()))
+            throw new NotFoundException("Order");
         resolveItemTitles(o, lang);
         return o;
     }
@@ -379,13 +364,15 @@ public class OrderUseCaseImpl implements OrderUseCase {
      * stores it back into {@code titleSnapshot} so the api mapper stays free of logic.
      */
     private void resolveItemTitles(Order o, String lang) {
-        if (o.getItems() == null) return;
+        if (o.getItems() == null)
+            return;
         for (OrderItem i : o.getItems()) {
             Map<String, String> titles = i.getProductTitles();
             String title = null;
             if (titles != null) {
                 title = titles.get(lang == null ? null : lang.toLowerCase());
-                if (title == null) title = titles.get("en");
+                if (title == null)
+                    title = titles.get("en");
             }
             if (title == null) {
                 title = i.getTitleSnapshot() != null ? i.getTitleSnapshot() : i.getProductTitleZh();
@@ -411,12 +398,14 @@ public class OrderUseCaseImpl implements OrderUseCase {
         r.put("shippedAt", o.getShippedAt());
         r.put("deliveredAt", o.getDeliveredAt());
         r.put("cancelledAt", o.getCancelledAt());
-        if (o.getCustomerEmail() != null) r.put("customerEmail", o.getCustomerEmail());
+        if (o.getCustomerEmail() != null)
+            r.put("customerEmail", o.getCustomerEmail());
         if (o.getShopName() != null) {
             r.put("shopName", o.getShopName());
             r.put("shopHandle", o.getShopHandle());
         }
-        if (o.getSupplierName() != null) r.put("supplierName", o.getSupplierName());
+        if (o.getSupplierName() != null)
+            r.put("supplierName", o.getSupplierName());
         return r;
     }
 

@@ -33,8 +33,8 @@ import java.util.List;
 public class GlobalExceptionHandler {
 
     private static ApiResponseDtoOut<?> body(String code, String message, List<String> details) {
-        return ApiResponseDtoOut.builder().code(code).message(message).details(details)
-                .timestamp(ZonedDateTime.now()).build();
+        return ApiResponseDtoOut.builder().code(code).message(message).details(details).timestamp(ZonedDateTime.now())
+                .build();
     }
 
     // ---------------- Domain hierarchy ----------------
@@ -61,7 +61,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleBusiness(BusinessException ex) {
         log.warn("Business exception: {} - Code: {}", ex.getMessage(), ex.getCode());
-        return new ResponseEntity<>(body(ex.getCode(), ex.getMessage(), ex.getDetail()), HttpStatus.UNPROCESSABLE_ENTITY);
+        return new ResponseEntity<>(body(ex.getCode(), ex.getMessage(), ex.getDetail()),
+                HttpStatus.UNPROCESSABLE_ENTITY);
     }
 
     @ExceptionHandler(RateLimitExceededException.class)
@@ -74,33 +75,35 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BaseException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleBase(BaseException ex) {
         log.error("Base exception: {} - Code: {}", ex.getMessage(), ex.getCode(), ex);
-        return new ResponseEntity<>(body(ex.getCode(), ex.getMessage(), ex.getDetail()), HttpStatus.INTERNAL_SERVER_ERROR);
+        return new ResponseEntity<>(body(ex.getCode(), ex.getMessage(), ex.getDetail()),
+                HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     // ---------------- Framework / validation ----------------
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
-        List<String> details = ex.getBindingResult().getAllErrors().stream()
-                .map(ObjectError::getDefaultMessage).toList();
+        List<String> details = ex.getBindingResult().getAllErrors().stream().map(ObjectError::getDefaultMessage)
+                .toList();
         return new ResponseEntity<>(body("VE001", "Validation error", details), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleConstraintViolation(ConstraintViolationException ex) {
-        List<String> details = ex.getConstraintViolations().stream()
-                .map(ConstraintViolation::getMessage).toList();
+        List<String> details = ex.getConstraintViolations().stream().map(ConstraintViolation::getMessage).toList();
         return new ResponseEntity<>(body("VE001", "Validation error", details), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleMissingParam(MissingServletRequestParameterException ex) {
-        return new ResponseEntity<>(body("VE002", "Missing required parameter", List.of(ex.getMessage())), HttpStatus.BAD_REQUEST);
+        return new ResponseEntity<>(body("VE002", "Missing required parameter", List.of(ex.getMessage())),
+                HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
-        return new ResponseEntity<>(body("VE003", "Invalid parameter type", List.of(ex.getMessage())), HttpStatus.BAD_REQUEST);
+        return new ResponseEntity<>(body("VE003", "Invalid parameter type", List.of(ex.getMessage())),
+                HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -110,8 +113,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleDataIntegrity(DataIntegrityViolationException ex) {
-        return new ResponseEntity<>(body("DB001", "Data integrity violation",
-                List.of(ex.getMostSpecificCause().getMessage())), HttpStatus.CONFLICT);
+        return new ResponseEntity<>(
+                body("DB001", "Data integrity violation", List.of(ex.getMostSpecificCause().getMessage())),
+                HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler({AccessDeniedException.class, AuthorizationDeniedException.class})
@@ -126,7 +130,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleNoRoute(NoResourceFoundException ex) {
-        return new ResponseEntity<>(body("ENF002", "Route not found: " + ex.getResourcePath(), List.of()), HttpStatus.NOT_FOUND);
+        return new ResponseEntity<>(body("ENF002", "Route not found: " + ex.getResourcePath(), List.of()),
+                HttpStatus.NOT_FOUND);
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
@@ -137,6 +142,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleGlobal(Exception ex) {
         log.error("Unhandled exception: {}", ex.getMessage(), ex);
-        return new ResponseEntity<>(body("IS001", "Internal server error", List.of()), HttpStatus.INTERNAL_SERVER_ERROR);
+        return new ResponseEntity<>(body("IS001", "Internal server error", List.of()),
+                HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }

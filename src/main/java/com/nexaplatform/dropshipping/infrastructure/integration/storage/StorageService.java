@@ -22,11 +22,7 @@ public class StorageService {
     private String publicBaseUrl;
 
     public String putBytes(String key, byte[] bytes, String contentType) {
-        s3.putObject(PutObjectRequest.builder()
-                        .bucket(bucket)
-                        .key(key)
-                        .contentType(contentType)
-                        .build(),
+        s3.putObject(PutObjectRequest.builder().bucket(bucket).key(key).contentType(contentType).build(),
                 RequestBody.fromBytes(bytes));
         return publicUrl(key);
     }

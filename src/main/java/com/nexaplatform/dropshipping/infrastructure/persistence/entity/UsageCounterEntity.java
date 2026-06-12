@@ -21,8 +21,8 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "usage_counter",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"subscription_id", "metric", "period_start"}))
+@Table(name = "usage_counter", uniqueConstraints = @UniqueConstraint(columnNames = {"subscription_id", "metric",
+        "period_start"}))
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter

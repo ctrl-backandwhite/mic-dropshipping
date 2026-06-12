@@ -8,6 +8,6 @@ import java.util.List;
 import java.util.UUID;
 
 public interface ProductHistoryRepository extends JpaRepository<ProductHistoryEntity, UUID> {
-    List<ProductHistoryEntity> findByProduct_IdAndSnapshotDateGreaterThanEqualOrderBySnapshotDateAsc(
-            UUID productId, LocalDate from);
+    List<ProductHistoryEntity> findByProduct_IdAndSnapshotDateGreaterThanEqualOrderBySnapshotDateAsc(UUID productId,
+            LocalDate from);
 }

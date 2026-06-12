@@ -72,12 +72,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
         String key = rule.name + ":" + plan + ":" + principal;
         Bucket bucket = bucketFactory != null
                 ? bucketFactory.resolve(key, rule.capacity, rule.period)
-                : buckets.computeIfAbsent(key, k -> Bucket.builder()
-                        .addLimit(Bandwidth.builder()
-                                .capacity(rule.capacity)
-                                .refillIntervally(rule.capacity, rule.period)
-                                .build())
-                        .build());
+                : buckets.computeIfAbsent(key, k -> Bucket.builder().addLimit(Bandwidth.builder()
+                        .capacity(rule.capacity).refillIntervally(rule.capacity, rule.period).build()).build());
 
         ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
         long resetSeconds = Math.max(0, TimeUnit.NANOSECONDS.toSeconds(probe.getNanosToWaitForRefill()));
@@ -93,9 +89,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
             res.setStatus(429);
             res.setHeader("Retry-After", String.valueOf(retryAfter));
             res.setContentType("application/json");
-            res.getWriter().write(
-                    "{\"code\":\"RATE_LIMITED\",\"message\":\"Too many requests\",\"policy\":\""
-                            + rule.name + "\",\"retryAfterSeconds\":" + retryAfter + "}");
+            res.getWriter().write("{\"code\":\"RATE_LIMITED\",\"message\":\"Too many requests\",\"policy\":\""
+                    + rule.name + "\",\"retryAfterSeconds\":" + retryAfter + "}");
         }
     }
 
@@ -110,23 +105,33 @@ public class RateLimitFilter extends OncePerRequestFilter {
      */
     private RateRule ruleFor(String path, String plan) {
         // Auth abuse-prevention buckets (per-IP)
-        if (path.equals("/api/auth/register"))                  return new RateRule("auth.register",   Scope.IP, 5,  Duration.ofHours(1));
-        if (path.equals("/api/auth/password-reset/request"))    return new RateRule("auth.reset.req",  Scope.IP, 3,  Duration.ofHours(1));
-        if (path.equals("/api/auth/password-reset/confirm"))    return new RateRule("auth.reset.conf", Scope.IP, 5,  Duration.ofHours(1));
-        if (path.equals("/login"))                              return new RateRule("auth.login",      Scope.IP, 20, Duration.ofMinutes(1));
-        if (path.equals("/oauth2/token"))                       return new RateRule("oauth.token",     Scope.IP, 30, Duration.ofMinutes(1));
+        if (path.equals("/api/auth/register"))
+            return new RateRule("auth.register", Scope.IP, 5, Duration.ofHours(1));
+        if (path.equals("/api/auth/password-reset/request"))
+            return new RateRule("auth.reset.req", Scope.IP, 3, Duration.ofHours(1));
+        if (path.equals("/api/auth/password-reset/confirm"))
+            return new RateRule("auth.reset.conf", Scope.IP, 5, Duration.ofHours(1));
+        if (path.equals("/login"))
+            return new RateRule("auth.login", Scope.IP, 20, Duration.ofMinutes(1));
+        if (path.equals("/oauth2/token"))
+            return new RateRule("oauth.token", Scope.IP, 30, Duration.ofMinutes(1));
 
         // Partner API per-client buckets — keyed by JWT subject (client_id), CAPACIDAD por plan.
         long partnerCapacity = "paid".equalsIgnoreCase(plan) ? 5L : 1L;
-        if (path.startsWith("/api/v1/partner/catalog"))         return new RateRule("partner.catalog.read", Scope.PARTNER, partnerCapacity, Duration.ofMinutes(1));
-        if (path.startsWith("/api/v1/partner/orders"))          return new RateRule("partner.orders.write", Scope.PARTNER, partnerCapacity, Duration.ofMinutes(1));
-        if (path.startsWith("/api/v1/partner/shop"))            return new RateRule("partner.shop.sync",    Scope.PARTNER, partnerCapacity, Duration.ofMinutes(1));
+        if (path.startsWith("/api/v1/partner/catalog"))
+            return new RateRule("partner.catalog.read", Scope.PARTNER, partnerCapacity, Duration.ofMinutes(1));
+        if (path.startsWith("/api/v1/partner/orders"))
+            return new RateRule("partner.orders.write", Scope.PARTNER, partnerCapacity, Duration.ofMinutes(1));
+        if (path.startsWith("/api/v1/partner/shop"))
+            return new RateRule("partner.shop.sync", Scope.PARTNER, partnerCapacity, Duration.ofMinutes(1));
 
         // Inbound webhooks signed with HMAC — per shop connection (path segment).
-        if (path.startsWith("/api/v1/integrations/shops/"))     return new RateRule("inbound.shop",     Scope.PATH_SEG_3, 240, Duration.ofMinutes(1));
+        if (path.startsWith("/api/v1/integrations/shops/"))
+            return new RateRule("inbound.shop", Scope.PATH_SEG_3, 240, Duration.ofMinutes(1));
 
         // Public storefront — per IP, generous but bounded.
-        if (path.startsWith("/api/v1/storefront/"))             return new RateRule("storefront",       Scope.IP, 60, Duration.ofMinutes(1));
+        if (path.startsWith("/api/v1/storefront/"))
+            return new RateRule("storefront", Scope.IP, 60, Duration.ofMinutes(1));
 
         return null;
     }
@@ -134,9 +139,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     /** Extracts the bucket key part (without the rule name) based on the rule scope. */
     private String principal(HttpServletRequest req, RateRule rule, JwtInfo info) {
         return switch (rule.scope) {
-            case PARTNER -> (info != null && info.sub() != null)
-                    ? "client:" + info.sub()
-                    : "ip:" + clientIp(req);
+            case PARTNER -> (info != null && info.sub() != null) ? "client:" + info.sub() : "ip:" + clientIp(req);
             case PATH_SEG_3 -> {
                 String[] segs = req.getRequestURI().split("/");
                 yield segs.length > 5 ? "shop:" + segs[5] : "ip:" + clientIp(req);
@@ -146,11 +149,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     /** Plan + subject extraídos del JWT del partner (sin verificación; ya la hizo el resource server). */
-    private record JwtInfo(String sub, String plan) {}
+    private record JwtInfo(String sub, String plan) {
+    }
 
     private java.util.Optional<JwtInfo> bearerInfo(HttpServletRequest req) {
         String auth = req.getHeader("Authorization");
-        if (auth == null || !auth.startsWith("Bearer ")) return java.util.Optional.empty();
+        if (auth == null || !auth.startsWith("Bearer "))
+            return java.util.Optional.empty();
         try {
             var claims = JWTParser.parse(auth.substring(7)).getJWTClaimsSet();
             String sub = claims.getSubject();
@@ -163,7 +168,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private String clientIp(HttpServletRequest req) {
         String xff = req.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) return xff.split(",")[0].trim();
+        if (xff != null && !xff.isBlank())
+            return xff.split(",")[0].trim();
         return req.getRemoteAddr();
     }
 
@@ -172,17 +178,16 @@ public class RateLimitFilter extends OncePerRequestFilter {
      * Las cuotas partner.* dependen del plan del JWT (`plan` claim).
      */
     public List<Map<String, Object>> policies() {
-        return List.of(
-                planTiered("partner.catalog.read", "/api/v1/partner/catalog/**", "per client_id (JWT sub)"),
-                planTiered("partner.orders.write", "/api/v1/partner/orders/**",  "per client_id (JWT sub)"),
-                planTiered("partner.shop.sync",    "/api/v1/partner/shop/**",    "per client_id (JWT sub)"),
-                policy("inbound.shop",         "/api/v1/integrations/shops/{id}/**", "per shopConnection id", 240, "1m"),
-                policy("storefront",           "/api/v1/storefront/**",      "per IP",   60, "1m"),
-                policy("oauth.token",          "/oauth2/token",              "per IP",   30, "1m"),
-                policy("auth.login",           "/login",                     "per IP",   20, "1m"),
-                policy("auth.register",        "/api/auth/register",         "per IP",   5,  "1h"),
-                policy("auth.reset.req",       "/api/auth/password-reset/request", "per IP", 3, "1h"),
-                policy("auth.reset.conf",      "/api/auth/password-reset/confirm", "per IP", 5, "1h"));
+        return List.of(planTiered("partner.catalog.read", "/api/v1/partner/catalog/**", "per client_id (JWT sub)"),
+                planTiered("partner.orders.write", "/api/v1/partner/orders/**", "per client_id (JWT sub)"),
+                planTiered("partner.shop.sync", "/api/v1/partner/shop/**", "per client_id (JWT sub)"),
+                policy("inbound.shop", "/api/v1/integrations/shops/{id}/**", "per shopConnection id", 240, "1m"),
+                policy("storefront", "/api/v1/storefront/**", "per IP", 60, "1m"),
+                policy("oauth.token", "/oauth2/token", "per IP", 30, "1m"),
+                policy("auth.login", "/login", "per IP", 20, "1m"),
+                policy("auth.register", "/api/auth/register", "per IP", 5, "1h"),
+                policy("auth.reset.req", "/api/auth/password-reset/request", "per IP", 3, "1h"),
+                policy("auth.reset.conf", "/api/auth/password-reset/confirm", "per IP", 5, "1h"));
     }
 
     private static Map<String, Object> policy(String name, String path, String scope, int capacity, String period) {
@@ -191,22 +196,24 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     /** Política partner con cuota diferenciada por plan (sandbox vs paid). */
     private static Map<String, Object> planTiered(String name, String path, String scope) {
-        return Map.of(
-                "name", name,
-                "path", path,
-                "scope", scope,
-                "period", "1m",
-                "tiers", Map.of(
-                        "sandbox", 1,
-                        "paid",    5));
+        return Map.of("name", name, "path", path, "scope", scope, "period", "1m", "tiers",
+                Map.of("sandbox", 1, "paid", 5));
     }
 
-    private enum Scope { IP, PARTNER, PATH_SEG_3 }
-    private record RateRule(String name, Scope scope, long capacity, Duration period) {}
+    private enum Scope {
+        IP, PARTNER, PATH_SEG_3
+    }
+
+    private record RateRule(String name, Scope scope, long capacity, Duration period) {
+    }
 
     /** Test hook to wipe state between tests. */
-    public void reset() { buckets.clear(); }
+    public void reset() {
+        buckets.clear();
+    }
 
     /** For dependency-free unit reflection. */
-    static List<Map<String, Object>> staticPoliciesForDocs() { return Collections.emptyList(); }
+    static List<Map<String, Object>> staticPoliciesForDocs() {
+        return Collections.emptyList();
+    }
 }

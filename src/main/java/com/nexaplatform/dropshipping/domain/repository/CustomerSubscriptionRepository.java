@@ -12,7 +12,9 @@ import java.util.UUID;
  * {@code infrastructure.persistence.repository} (different package), which other
  * out-of-cluster consumers keep using.
  */
-public interface CustomerSubscriptionRepository extends BaseRepository<CustomerSubscription, CustomerSubscription, UUID> {
+public interface CustomerSubscriptionRepository
+        extends
+            BaseRepository<CustomerSubscription, CustomerSubscription, UUID> {
 
     /** All subscriptions owned by the given user (storefront listing). */
     List<CustomerSubscription> findByUserId(UUID userId);

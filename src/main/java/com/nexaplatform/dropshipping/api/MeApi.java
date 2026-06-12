@@ -30,16 +30,13 @@ public interface MeApi {
 
     @Operation(summary = "Change the authenticated user's password")
     @PostMapping("/password")
-    ResponseEntity<Void> changePassword(Authentication authentication,
-                                        @Valid @RequestBody ChangePasswordDtoIn req);
+    ResponseEntity<Void> changePassword(Authentication authentication, @Valid @RequestBody ChangePasswordDtoIn req);
 
     @Operation(summary = "Update the authenticated user's profile")
     @PutMapping
-    ResponseEntity<MeDtoOut> updateProfile(Authentication authentication,
-                                           @Valid @RequestBody UpdateProfileDtoIn req);
+    ResponseEntity<MeDtoOut> updateProfile(Authentication authentication, @Valid @RequestBody UpdateProfileDtoIn req);
 
     @Operation(summary = "Upload the authenticated user's avatar image")
     @PostMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    ResponseEntity<MeDtoOut> uploadAvatar(Authentication authentication,
-                                          @RequestParam("file") MultipartFile file);
+    ResponseEntity<MeDtoOut> uploadAvatar(Authentication authentication, @RequestParam("file") MultipartFile file);
 }

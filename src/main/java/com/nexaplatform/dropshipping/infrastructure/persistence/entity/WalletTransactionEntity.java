@@ -26,7 +26,11 @@ import java.util.UUID;
 @Entity
 @Table(name = "wallet_transaction")
 @EntityListeners(AuditingEntityListener.class)
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class WalletTransactionEntity {
 
     @Id
@@ -39,10 +43,10 @@ public class WalletTransactionEntity {
     private WalletEntity wallet;
 
     @Column(nullable = false, length = 20)
-    private String kind;  // DEPOSIT, WITHDRAW, PAYMENT, REFUND, HOLD, RELEASE, ADJUSTMENT
+    private String kind; // DEPOSIT, WITHDRAW, PAYMENT, REFUND, HOLD, RELEASE, ADJUSTMENT
 
     @Column(name = "amount_usd_cents", nullable = false)
-    private long amountUsdCents;  // signed
+    private long amountUsdCents; // signed
 
     @Column(name = "balance_after_cents", nullable = false)
     private long balanceAfterCents;
@@ -57,7 +61,7 @@ public class WalletTransactionEntity {
     private String idempotencyKey;
 
     @Column(nullable = false, length = 20)
-    private String status;  // COMPLETED | PENDING | FAILED
+    private String status; // COMPLETED | PENDING | FAILED
 
     @Column(length = 500)
     private String description;

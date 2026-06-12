@@ -26,15 +26,11 @@ public class AdminBootstrapListener {
         if (userRepository.existsByEmail(DEFAULT_ADMIN_EMAIL)) {
             return;
         }
-        UserEntity admin = UserEntity.builder()
-                .email(DEFAULT_ADMIN_EMAIL)
-                .passwordHash(passwordEncoder.encode(DEFAULT_ADMIN_PASSWORD))
-                .role(UserRole.ADMIN)
-                .active(true)
-                .displayName("NX036 Admin")
-                .language("es")
-                .build();
+        UserEntity admin = UserEntity.builder().email(DEFAULT_ADMIN_EMAIL)
+                .passwordHash(passwordEncoder.encode(DEFAULT_ADMIN_PASSWORD)).role(UserRole.ADMIN).active(true)
+                .displayName("NX036 Admin").language("es").build();
         userRepository.save(admin);
-        log.warn("Bootstrap admin created: {} / {} — CHANGE PASSWORD IMMEDIATELY", DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD);
+        log.warn("Bootstrap admin created: {} / {} — CHANGE PASSWORD IMMEDIATELY", DEFAULT_ADMIN_EMAIL,
+                DEFAULT_ADMIN_PASSWORD);
     }
 }

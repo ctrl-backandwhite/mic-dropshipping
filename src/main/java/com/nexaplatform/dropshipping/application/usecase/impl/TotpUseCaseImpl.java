@@ -25,10 +25,7 @@ public class TotpUseCaseImpl implements TotpUseCase {
     @Override
     public TotpSetup setup(UUID userId) {
         TotpService.SetupResult result = totpService.setup(userId);
-        return TotpSetup.builder()
-                .base32Secret(result.base32Secret())
-                .otpauthUrl(result.otpauthUrl())
-                .build();
+        return TotpSetup.builder().base32Secret(result.base32Secret()).otpauthUrl(result.otpauthUrl()).build();
     }
 
     @Override

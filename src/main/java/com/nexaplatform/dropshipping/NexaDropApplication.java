@@ -10,14 +10,11 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
-@EntityScan(basePackages = {
-        "com.nexaplatform.dropshipping.infrastructure.persistence.entity",
-        "com.nexaplatform.dropshipping.infrastructure.messaging.outbox"
-})
+@EntityScan(basePackages = {"com.nexaplatform.dropshipping.infrastructure.persistence.entity",
+        "com.nexaplatform.dropshipping.infrastructure.messaging.outbox"})
 @EnableJpaRepositories(repositoryImplementationPostfix = "JpaCustomImpl", basePackages = {
         "com.nexaplatform.dropshipping.infrastructure.persistence.repository",
-        "com.nexaplatform.dropshipping.infrastructure.messaging.outbox"
-})
+        "com.nexaplatform.dropshipping.infrastructure.messaging.outbox"})
 @EnableJpaAuditing(auditorAwareRef = "auditorAware")
 @EnableScheduling
 @EnableAsync

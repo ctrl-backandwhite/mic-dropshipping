@@ -86,13 +86,9 @@ public class UserUseCaseImpl implements UserUseCase {
 
         User saved = userRepository.save(user);
 
-        emailQueueService.enqueue(
-                email,
-                "Confirma tu cuenta NexaDrop",
-                "emails/welcome",
-                Map.of(
-                        "displayName", saved.getDisplayName() != null ? saved.getDisplayName() : "",
-                        "dashboardUrl", "http://localhost:3003/activate?code=" + activationCode));
+        emailQueueService.enqueue(email, "Confirma tu cuenta NexaDrop", "emails/welcome",
+                Map.of("displayName", saved.getDisplayName() != null ? saved.getDisplayName() : "", "dashboardUrl",
+                        "http://localhost:3003/activate?code=" + activationCode));
 
         auditLogger.log("auth.register", email, Map.of("userId", saved.getId(), "role", saved.getRole().name()));
         return saved;
@@ -157,14 +153,11 @@ public class UserUseCaseImpl implements UserUseCase {
             String hash = sha256(raw);
             UserEntity managed = userJpaRepository.findById(user.getId())
                     .orElseThrow(() -> new NotFoundException("User not found"));
-            resetTokenRepository.save(PasswordResetTokenEntity.builder()
-                    .user(managed)
-                    .tokenHash(hash)
-                    .expiresAt(Instant.now().plus(RESET_TTL_MINUTES, ChronoUnit.MINUTES))
-                    .build());
+            resetTokenRepository.save(PasswordResetTokenEntity.builder().user(managed).tokenHash(hash)
+                    .expiresAt(Instant.now().plus(RESET_TTL_MINUTES, ChronoUnit.MINUTES)).build());
             emailQueueService.enqueue(normalized, "Restablece tu contraseña NexaDrop", "emails/welcome",
-                    Map.of("displayName", user.getDisplayName() != null ? user.getDisplayName() : "",
-                            "dashboardUrl", "http://localhost:3003/password-reset?token=" + raw));
+                    Map.of("displayName", user.getDisplayName() != null ? user.getDisplayName() : "", "dashboardUrl",
+                            "http://localhost:3003/password-reset?token=" + raw));
         });
         auditLogger.log("auth.password_reset.request", normalized, Map.of());
     }
@@ -284,7 +277,8 @@ public class UserUseCaseImpl implements UserUseCase {
         User u = findById(id);
         // Partial update: null source fields are ignored by the update mapper.
         userUpdateMapper.updateFromModel(patch, u);
-        if (active != null) u.setActive(active);
+        if (active != null)
+            u.setActive(active);
         return userRepository.update(u);
     }
 
@@ -323,18 +317,17 @@ public class UserUseCaseImpl implements UserUseCase {
         return userRepository.findAll().stream()
                 .filter(u -> role == null || role.isBlank() || u.getRole().name().equalsIgnoreCase(role))
                 .filter(u -> country == null || country.isBlank()
-                          || (u.getCountry() != null && u.getCountry().equalsIgnoreCase(country)))
-                .filter(u -> needle.isEmpty()
-                          || (u.getEmail() != null && u.getEmail().toLowerCase().contains(needle))
-                          || (u.getDisplayName() != null && u.getDisplayName().toLowerCase().contains(needle))
-                          || (u.getCompanyName() != null && u.getCompanyName().toLowerCase().contains(needle)))
-                .sorted(Comparator.comparing(User::getCreatedAt,
-                        Comparator.nullsLast(Comparator.reverseOrder())))
+                        || (u.getCountry() != null && u.getCountry().equalsIgnoreCase(country)))
+                .filter(u -> needle.isEmpty() || (u.getEmail() != null && u.getEmail().toLowerCase().contains(needle))
+                        || (u.getDisplayName() != null && u.getDisplayName().toLowerCase().contains(needle))
+                        || (u.getCompanyName() != null && u.getCompanyName().toLowerCase().contains(needle)))
+                .sorted(Comparator.comparing(User::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
     }
 
     private static String normalizeEmail(String email) {
-        if (email == null) return null;
+        if (email == null)
+            return null;
         return email.trim().toLowerCase();
     }
 

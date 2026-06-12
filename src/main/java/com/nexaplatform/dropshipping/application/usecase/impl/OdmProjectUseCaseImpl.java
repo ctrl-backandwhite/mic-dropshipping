@@ -33,7 +33,7 @@ public class OdmProjectUseCaseImpl implements OdmProjectUseCase {
             case "ODM_PAID" -> 7;
             case "OEM" -> 30;
             case "CUSTOM_PACKAGING" -> 14;
-            default -> 21;  // ODM_FREE
+            default -> 21; // ODM_FREE
         };
         model.setUserId(userId);
         model.setSlaDays(sla);

@@ -55,19 +55,15 @@ public class CatalogStorefrontReadService {
 
     @Transactional(readOnly = true)
     public List<CategoryView> categoriesFlat(String lang) {
-        return categoryRepository.findAll().stream()
-                .filter(c -> c.getParent() == null)
-                .sorted(Comparator.comparingInt(CategoryEntity::getPosition))
-                .map(c -> categoryView(c, lang, false))
+        return categoryRepository.findAll().stream().filter(c -> c.getParent() == null)
+                .sorted(Comparator.comparingInt(CategoryEntity::getPosition)).map(c -> categoryView(c, lang, false))
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public List<CategoryView> categoriesTree(String lang) {
-        return categoryRepository.findAll().stream()
-                .filter(c -> c.getParent() == null)
-                .sorted(Comparator.comparingInt(CategoryEntity::getPosition))
-                .map(c -> categoryView(c, lang, true))
+        return categoryRepository.findAll().stream().filter(c -> c.getParent() == null)
+                .sorted(Comparator.comparingInt(CategoryEntity::getPosition)).map(c -> categoryView(c, lang, true))
                 .toList();
     }
 
@@ -95,7 +91,8 @@ public class CatalogStorefrontReadService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<ProductSummaryView> productsByCategory(String idOrSlug, int page, int size, String lang, String sort) {
+    public PageResponse<ProductSummaryView> productsByCategory(String idOrSlug, int page, int size, String lang,
+            String sort) {
         UUID categoryId = resolveCategory(idOrSlug).getId();
         return productList(page, size, lang, null, categoryId, null, null, null, sort);
     }
@@ -104,8 +101,7 @@ public class CatalogStorefrontReadService {
 
     @Transactional(readOnly = true)
     public List<SupplierView> suppliers() {
-        return supplierRepository.findAll().stream()
-                .sorted((a, b) -> a.getName().compareToIgnoreCase(b.getName()))
+        return supplierRepository.findAll().stream().sorted((a, b) -> a.getName().compareToIgnoreCase(b.getName()))
                 .map(this::supplierView).toList();
     }
 
@@ -123,8 +119,7 @@ public class CatalogStorefrontReadService {
 
     @Transactional(readOnly = true)
     public List<VariantView> variantsForProduct(UUID id) {
-        return variantRepository.findByProductId(id).stream()
-                .filter(ProductVariantEntity::isActive)
+        return variantRepository.findByProductId(id).stream().filter(ProductVariantEntity::isActive)
                 .map(this::variantView).toList();
     }
 
@@ -136,19 +131,16 @@ public class CatalogStorefrontReadService {
     @Transactional(readOnly = true)
     public VariantView variantBySku(UUID productId, String sku) {
         return variantRepository.findByProductId(productId).stream()
-                .filter(v -> sku.equalsIgnoreCase(v.getSku()) || sku.equalsIgnoreCase(v.getExternalId()))
-                .findFirst()
-                .map(this::variantView)
-                .orElseThrow(() -> new NotFoundException("Variant"));
+                .filter(v -> sku.equalsIgnoreCase(v.getSku()) || sku.equalsIgnoreCase(v.getExternalId())).findFirst()
+                .map(this::variantView).orElseThrow(() -> new NotFoundException("Variant"));
     }
 
     /* ============================ Products listing ============================ */
 
-    public PageResponse<ProductSummaryView> productListFull(int page, int size, String lang,
-            String q, UUID categoryId, UUID supplierId,
-            BigDecimal minPrice, BigDecimal maxPrice,
-            String shipFrom, Boolean freeShipping, Boolean selfPickup, Boolean hasVideo,
-            Integer minRating, Integer inventoryMin, String certification, String sort) {
+    public PageResponse<ProductSummaryView> productListFull(int page, int size, String lang, String q, UUID categoryId,
+            UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping,
+            Boolean selfPickup, Boolean hasVideo, Integer minRating, Integer inventoryMin, String certification,
+            String sort) {
 
         int safeSize = Math.min(size, 100);
         Sort sortSpec = sortFor(sort);
@@ -158,33 +150,29 @@ public class CatalogStorefrontReadService {
         String shipCc = shipFrom == null ? null : shipFrom.toUpperCase();
         BigDecimal minRatingBd = minRating == null ? null : BigDecimal.valueOf(minRating);
 
-        Page<ProductEntity> raw = productRepository.searchStorefront(
-                ProductStatus.ACTIVE, needle, categoryId, supplierId,
-                minPrice, maxPrice, shipCc, freeShipping, selfPickup, hasVideo,
-                minRatingBd, inventoryMin, pageable);
+        Page<ProductEntity> raw = productRepository.searchStorefront(ProductStatus.ACTIVE, needle, categoryId,
+                supplierId, minPrice, maxPrice, shipCc, freeShipping, selfPickup, hasVideo, minRatingBd, inventoryMin,
+                pageable);
 
         List<ProductEntity> filtered;
         if (certification != null && !certification.isBlank()) {
             String certUp = certification.toUpperCase();
-            filtered = raw.getContent().stream()
-                    .filter(p -> p.getCertifications() != null && p.getCertifications().stream()
-                            .anyMatch(c -> c != null && c.toUpperCase().contains(certUp)))
+            filtered = raw.getContent().stream().filter(p -> p.getCertifications() != null
+                    && p.getCertifications().stream().anyMatch(c -> c != null && c.toUpperCase().contains(certUp)))
                     .toList();
         } else {
             filtered = raw.getContent();
         }
 
-        List<ProductSummaryView> slice = filtered.stream()
-                .map(p -> productMapper.toSummary(p, lang))
-                .toList();
+        List<ProductSummaryView> slice = filtered.stream().map(p -> productMapper.toSummary(p, lang)).toList();
         Page<ProductSummaryView> pageObj = new PageImpl<>(slice, pageable, raw.getTotalElements());
         return PageResponse.from(pageObj);
     }
 
-    public PageResponse<ProductSummaryView> productList(int page, int size, String lang,
-            String q, UUID categoryId, UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String sort) {
-        return productListFull(page, size, lang, q, categoryId, supplierId, minPrice, maxPrice,
-                null, null, null, null, null, null, null, sort);
+    public PageResponse<ProductSummaryView> productList(int page, int size, String lang, String q, UUID categoryId,
+            UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String sort) {
+        return productListFull(page, size, lang, q, categoryId, supplierId, minPrice, maxPrice, null, null, null, null,
+                null, null, null, sort);
     }
 
     /* ============================ helpers ============================ */
@@ -204,26 +192,22 @@ public class CatalogStorefrontReadService {
                         .map(child -> categoryView(child, lang, true)).toList()
                 : List.of();
         long count = productRepository.findAll().stream()
-                .filter(p -> p.getCategory() != null && c.getId().equals(p.getCategory().getId()))
-                .count();
+                .filter(p -> p.getCategory() != null && c.getId().equals(p.getCategory().getId())).count();
         return new CategoryView(c.getId(), c.getSlug(), translatedName(c, lang), c.getNameZh(),
-                c.getParent() != null ? c.getParent().getId() : null,
-                c.getPosition(), c.getIcon(), (int) count, children);
+                c.getParent() != null ? c.getParent().getId() : null, c.getPosition(), c.getIcon(), (int) count,
+                children);
     }
 
     public SupplierView supplierView(SupplierEntity s) {
         long count = productRepository.findAll().stream()
-                .filter(p -> p.getSupplier() != null && s.getId().equals(p.getSupplier().getId()))
-                .count();
-        return new SupplierView(s.getId(), s.getExternalId(), s.getName(), s.getNameZh(),
-                s.getCountry(), s.getCity(), s.getRating(), s.getYearsActive(),
-                s.isVerified(), s.isTrustPass(), count);
+                .filter(p -> p.getSupplier() != null && s.getId().equals(p.getSupplier().getId())).count();
+        return new SupplierView(s.getId(), s.getExternalId(), s.getName(), s.getNameZh(), s.getCountry(), s.getCity(),
+                s.getRating(), s.getYearsActive(), s.isVerified(), s.isTrustPass(), count);
     }
 
     public VariantView variantView(ProductVariantEntity v) {
         String img = v.getImageCdnUrl() != null ? v.getImageCdnUrl() : v.getImageSourceUrl();
-        return new VariantView(v.getId(), v.getSku(), v.getExternalId(), v.getTitle(),
-                v.getPrice(), v.getStock(), img,
+        return new VariantView(v.getId(), v.getSku(), v.getExternalId(), v.getTitle(), v.getPrice(), v.getStock(), img,
                 v.getOptions() != null ? v.getOptions() : Map.of(), v.isActive());
     }
 
@@ -233,20 +217,18 @@ public class CatalogStorefrontReadService {
 
     public Sort sortFor(String sort) {
         return switch (sort == null ? "best_match" : sort) {
-            case "price_asc"  -> Sort.by(Sort.Direction.ASC, "basePrice");
+            case "price_asc" -> Sort.by(Sort.Direction.ASC, "basePrice");
             case "price_desc" -> Sort.by(Sort.Direction.DESC, "basePrice");
-            case "newest"     -> Sort.by(Sort.Direction.DESC, "createdAt");
+            case "newest" -> Sort.by(Sort.Direction.DESC, "createdAt");
             case "sales", "lists" -> Sort.by(Sort.Direction.DESC, "monthlySales");
-            case "rating"     -> Sort.by(Sort.Direction.DESC, "rating");
-            case "inventory"  -> Sort.by(Sort.Direction.DESC, "inventoryCount");
-            default           -> Sort.by(Sort.Direction.DESC, "trendScore");
+            case "rating" -> Sort.by(Sort.Direction.DESC, "rating");
+            case "inventory" -> Sort.by(Sort.Direction.DESC, "inventoryCount");
+            default -> Sort.by(Sort.Direction.DESC, "trendScore");
         };
     }
 
     public static String translatedName(CategoryEntity c, String lang) {
-        return c.getTranslations().stream()
-                .filter(t -> lang.equalsIgnoreCase(t.getLanguage()))
-                .map(CategoryTranslationEntity::getName).findFirst()
-                .orElse(c.getNameZh());
+        return c.getTranslations().stream().filter(t -> lang.equalsIgnoreCase(t.getLanguage()))
+                .map(CategoryTranslationEntity::getName).findFirst().orElse(c.getNameZh());
     }
 }

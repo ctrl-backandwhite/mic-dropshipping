@@ -26,15 +26,15 @@ public class CacheConfig {
 
     // Nombres centralizados para que los @Cacheable apunten al mismo bucket
     // que su contrato de evicción.
-    public static final String CACHE_PRODUCT_DETAIL   = "pdp";       // PDP completo por slug+lang+ccy
-    public static final String CACHE_PRODUCT_SUMMARY  = "summary";   // ProductSummaryView por id+lang
-    public static final String CACHE_CATEGORY_TREE    = "category-tree";
-    public static final String CACHE_CATEGORIES_FLAT  = "categories-flat";
-    public static final String CACHE_SUPPLIERS_FLAT   = "suppliers";
-    public static final String CACHE_PRICING_AMOUNT   = "pricing";   // PricedAmount por productId+ccy
-    public static final String CACHE_CURRENCY_RATES   = "currency-rates";
-    public static final String CACHE_PRODUCT_SPECS    = "product-specs";
-    public static final String CACHE_PRODUCT_ATTRS    = "product-attrs";
+    public static final String CACHE_PRODUCT_DETAIL = "pdp"; // PDP completo por slug+lang+ccy
+    public static final String CACHE_PRODUCT_SUMMARY = "summary"; // ProductSummaryView por id+lang
+    public static final String CACHE_CATEGORY_TREE = "category-tree";
+    public static final String CACHE_CATEGORIES_FLAT = "categories-flat";
+    public static final String CACHE_SUPPLIERS_FLAT = "suppliers";
+    public static final String CACHE_PRICING_AMOUNT = "pricing"; // PricedAmount por productId+ccy
+    public static final String CACHE_CURRENCY_RATES = "currency-rates";
+    public static final String CACHE_PRODUCT_SPECS = "product-specs";
+    public static final String CACHE_PRODUCT_ATTRS = "product-attrs";
 
     /**
      * Local-only fallback que se usa SI no hay Redis configurado (perfil dev /
@@ -46,16 +46,10 @@ public class CacheConfig {
     @Primary
     @Profile({"local", "dev", "default", "test"})
     public CacheManager caffeineCacheManager() {
-        CaffeineCacheManager mgr = new CaffeineCacheManager(
-                CACHE_PRODUCT_DETAIL, CACHE_PRODUCT_SUMMARY,
-                CACHE_CATEGORY_TREE, CACHE_CATEGORIES_FLAT,
-                CACHE_SUPPLIERS_FLAT, CACHE_PRICING_AMOUNT,
-                CACHE_CURRENCY_RATES, CACHE_PRODUCT_SPECS, CACHE_PRODUCT_ATTRS
-        );
-        mgr.setCaffeine(Caffeine.newBuilder()
-                .maximumSize(50_000)
-                .expireAfterWrite(5, TimeUnit.MINUTES)
-                .recordStats()); // expone métricas a Micrometer
+        CaffeineCacheManager mgr = new CaffeineCacheManager(CACHE_PRODUCT_DETAIL, CACHE_PRODUCT_SUMMARY,
+                CACHE_CATEGORY_TREE, CACHE_CATEGORIES_FLAT, CACHE_SUPPLIERS_FLAT, CACHE_PRICING_AMOUNT,
+                CACHE_CURRENCY_RATES, CACHE_PRODUCT_SPECS, CACHE_PRODUCT_ATTRS);
+        mgr.setCaffeine(Caffeine.newBuilder().maximumSize(50_000).expireAfterWrite(5, TimeUnit.MINUTES).recordStats()); // expone métricas a Micrometer
         mgr.setAllowNullValues(false);
         return mgr;
     }

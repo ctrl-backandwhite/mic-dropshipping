@@ -36,7 +36,8 @@ public class PartnerPlanSyncService {
 
     /** Mapeo plan.code → tier (debe estar alineado con partnerPlanClaimCustomizer). */
     private static String mapPlanCodeToTier(String planCode) {
-        if (planCode == null) return "sandbox";
+        if (planCode == null)
+            return "sandbox";
         return switch (planCode.toUpperCase()) {
             case "FREE" -> "sandbox";
             case "STARTER", "PRO", "ENTERPRISE" -> "paid";
@@ -73,10 +74,9 @@ public class PartnerPlanSyncService {
      */
     @SuppressWarnings("unchecked")
     private int updateClientSettings(UUID userId, String tier, String planCode) {
-        List<Map<String, Object>> rows = jdbc.queryForList(
-                "SELECT id, client_id, client_settings FROM oauth2_registered_client " +
-                        "WHERE client_settings::jsonb->>'nexadrop.owner_user_id' = ?",
-                userId.toString());
+        List<Map<String, Object>> rows = jdbc
+                .queryForList("SELECT id, client_id, client_settings FROM oauth2_registered_client "
+                        + "WHERE client_settings::jsonb->>'nexadrop.owner_user_id' = ?", userId.toString());
         int count = 0;
         List<String> clientIds = new java.util.ArrayList<>();
         for (Map<String, Object> r : rows) {
@@ -84,7 +84,8 @@ public class PartnerPlanSyncService {
                 String settingsJson = (String) r.get("client_settings");
                 Map<String, Object> settings = mapper.readValue(settingsJson, Map.class);
                 settings.put("nexadrop.plan", tier);
-                if (planCode != null) settings.put("nexadrop.plan_code", planCode);
+                if (planCode != null)
+                    settings.put("nexadrop.plan_code", planCode);
                 settings.put("nexadrop.plan_synced_at", java.time.Instant.now().toString());
                 jdbc.update("UPDATE oauth2_registered_client SET client_settings = ?::jsonb WHERE id = ?",
                         mapper.writeValueAsString(settings), r.get("id"));

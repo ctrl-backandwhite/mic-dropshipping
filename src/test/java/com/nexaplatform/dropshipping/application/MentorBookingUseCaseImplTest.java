@@ -23,9 +23,12 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class MentorBookingUseCaseImplTest {
 
-    @Mock MentorBookingRepository mentorBookingRepository;
-    @Mock MentorProfileRepository mentorProfileRepository;
-    @InjectMocks MentorBookingUseCaseImpl useCase;
+    @Mock
+    MentorBookingRepository mentorBookingRepository;
+    @Mock
+    MentorProfileRepository mentorProfileRepository;
+    @InjectMocks
+    MentorBookingUseCaseImpl useCase;
 
     @Test
     void book_stampsLearnerAndRequestedStatusAndPersists() {

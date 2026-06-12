@@ -38,23 +38,31 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class CatalogUseCaseImplTest {
 
-    @Mock com.nexaplatform.dropshipping.domain.repository.ProductRepository productRepository;
-    @Mock SupplierRepository supplierRepository;
-    @Mock CategoryRepository categoryRepository;
-    @Mock ProductPriceTierRepository priceTierRepository;
-    @Mock ProductImageRepository imageRepository;
-    @Mock ProductRepository productJpaRepository;
-    @Mock ProductMapper productMapper;
-    @Mock CatalogStorefrontMapper catalogStorefrontMapper;
-    @Mock KafkaTemplate<String, Object> kafkaTemplate;
+    @Mock
+    com.nexaplatform.dropshipping.domain.repository.ProductRepository productRepository;
+    @Mock
+    SupplierRepository supplierRepository;
+    @Mock
+    CategoryRepository categoryRepository;
+    @Mock
+    ProductPriceTierRepository priceTierRepository;
+    @Mock
+    ProductImageRepository imageRepository;
+    @Mock
+    ProductRepository productJpaRepository;
+    @Mock
+    ProductMapper productMapper;
+    @Mock
+    CatalogStorefrontMapper catalogStorefrontMapper;
+    @Mock
+    KafkaTemplate<String, Object> kafkaTemplate;
 
     CatalogUseCaseImpl useCase;
 
     @BeforeEach
     void setup() {
-        useCase = new CatalogUseCaseImpl(productRepository, supplierRepository, categoryRepository,
-                priceTierRepository, imageRepository, productJpaRepository, productMapper,
-                catalogStorefrontMapper, kafkaTemplate);
+        useCase = new CatalogUseCaseImpl(productRepository, supplierRepository, categoryRepository, priceTierRepository,
+                imageRepository, productJpaRepository, productMapper, catalogStorefrontMapper, kafkaTemplate);
     }
 
     @Test
@@ -66,8 +74,7 @@ class CatalogUseCaseImplTest {
             return s;
         });
 
-        SupplierEntity s = useCase.upsertSupplier(new IngestSupplierRequest(
-                "1688", "S1", "Acme", "艾克米", "CN", "Yiwu",
+        SupplierEntity s = useCase.upsertSupplier(new IngestSupplierRequest("1688", "S1", "Acme", "艾克米", "CN", "Yiwu",
                 new BigDecimal("4.7"), 5, true, true, null));
 
         assertThat(s.getId()).isNotNull();
@@ -77,21 +84,16 @@ class CatalogUseCaseImplTest {
 
     @Test
     void upsertProduct_idempotent_with_same_external_id() {
-        ProductEntity existing = ProductEntity.builder()
-                .source("1688").externalId("OFFER-1").status(ProductStatus.DRAFT)
-                .titleZh("Old title").slug("old-slug-offer-1").moq(1).build();
+        ProductEntity existing = ProductEntity.builder().source("1688").externalId("OFFER-1")
+                .status(ProductStatus.DRAFT).titleZh("Old title").slug("old-slug-offer-1").moq(1).build();
         existing.setId(UUID.randomUUID());
         when(productJpaRepository.findBySourceAndExternalId("1688", "OFFER-1")).thenReturn(Optional.of(existing));
         when(productJpaRepository.save(any(ProductEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        IngestProductRequest req = new IngestProductRequest(
-                "1688", "OFFER-1", "Nuevo título",
-                null, null, null, 2, new BigDecimal("19.90"), "CNY",
-                500, 1234, null, new BigDecimal("4.8"), 30,
-                "https://detail.1688.com/offer/OFFER-1.html",
-                null, null,
-                List.of(new IngestImage("https://cbu01.alicdn.com/img.jpg", 0, "GALLERY")),
-                null, null, null);
+        IngestProductRequest req = new IngestProductRequest("1688", "OFFER-1", "Nuevo título", null, null, null, 2,
+                new BigDecimal("19.90"), "CNY", 500, 1234, null, new BigDecimal("4.8"), 30,
+                "https://detail.1688.com/offer/OFFER-1.html", null, null,
+                List.of(new IngestImage("https://cbu01.alicdn.com/img.jpg", 0, "GALLERY")), null, null, null);
 
         ProductEntity saved = useCase.upsertProduct(req);
         assertThat(saved.getTitleZh()).isEqualTo("Nuevo título");
@@ -122,12 +124,8 @@ class CatalogUseCaseImplTest {
 
     @Test
     void computeTrendScore_within_unit_range() {
-        ProductEntity p = ProductEntity.builder()
-                .monthlySales(500)
-                .rating(new BigDecimal("4.5"))
-                .repurchaseRate(new BigDecimal("30"))
-                .reviewCount(100)
-                .build();
+        ProductEntity p = ProductEntity.builder().monthlySales(500).rating(new BigDecimal("4.5"))
+                .repurchaseRate(new BigDecimal("30")).reviewCount(100).build();
         BigDecimal score = useCase.computeTrendScore(p);
         assertThat(score).isGreaterThan(BigDecimal.ZERO).isLessThanOrEqualTo(BigDecimal.ONE);
     }

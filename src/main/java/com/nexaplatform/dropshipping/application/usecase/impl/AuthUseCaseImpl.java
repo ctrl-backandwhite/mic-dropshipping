@@ -58,15 +58,12 @@ public class AuthUseCaseImpl implements AuthUseCase {
     private final StorageService storageService;
     private final UserDtoMapper mapper;
 
-    private final SecurityContextRepository securityContextRepository =
-            new HttpSessionSecurityContextRepository();
+    private final SecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
 
     @Override
     public RegisterDtoOut register(RegisterDtoIn req) {
         User user = userUseCase.register(mapper.toDomain(req), req.getPassword());
-        return RegisterDtoOut.builder()
-                .userId(user.getId())
-                .message("Account created. Check your email to activate.")
+        return RegisterDtoOut.builder().userId(user.getId()).message("Account created. Check your email to activate.")
                 .build();
     }
 
@@ -88,8 +85,7 @@ public class AuthUseCaseImpl implements AuthUseCase {
         } catch (DisabledException e) {
             throw new BusinessException("Account not yet activated. Check your email.");
         } catch (LockedException e) {
-            throw new BusinessException(
-                    "Account temporarily locked due to repeated failed attempts. Try again later.");
+            throw new BusinessException("Account temporarily locked due to repeated failed attempts. Try again later.");
         }
     }
 
@@ -142,10 +138,14 @@ public class AuthUseCaseImpl implements AuthUseCase {
     public MeDtoOut updateProfile(Authentication authentication, UpdateProfileDtoIn req) {
         UUID id = UUID.fromString(authentication.getName());
         User user = userUseCase.findById(id);
-        if (req.getDisplayName() != null) user.setDisplayName(req.getDisplayName().trim());
-        if (req.getCompanyName() != null) user.setCompanyName(req.getCompanyName().trim());
-        if (req.getCountry() != null) user.setCountry(req.getCountry().trim().toUpperCase());
-        if (req.getLanguage() != null) user.setLanguage(req.getLanguage());
+        if (req.getDisplayName() != null)
+            user.setDisplayName(req.getDisplayName().trim());
+        if (req.getCompanyName() != null)
+            user.setCompanyName(req.getCompanyName().trim());
+        if (req.getCountry() != null)
+            user.setCountry(req.getCountry().trim().toUpperCase());
+        if (req.getLanguage() != null)
+            user.setLanguage(req.getLanguage());
         User saved = userUseCase.updateUser(user);
         return mapper.toMeDtoOut(saved, authorities(authentication));
     }
@@ -153,17 +153,27 @@ public class AuthUseCaseImpl implements AuthUseCase {
     @Override
     @Transactional
     public MeDtoOut uploadAvatar(Authentication authentication, MultipartFile file) {
-        if (authentication == null) throw new BusinessException("Not authenticated");
-        if (file == null || file.isEmpty()) throw new BusinessException("Empty file");
-        if (file.getSize() > 2L * 1024 * 1024) throw new BusinessException("Avatar exceeds 2 MB");
+        if (authentication == null)
+            throw new BusinessException("Not authenticated");
+        if (file == null || file.isEmpty())
+            throw new BusinessException("Empty file");
+        if (file.getSize() > 2L * 1024 * 1024)
+            throw new BusinessException("Avatar exceeds 2 MB");
         String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase();
         String ext;
         switch (contentType) {
-            case "image/jpeg":
-            case "image/jpg":  ext = "jpg";  break;
-            case "image/png":  ext = "png";  break;
-            case "image/webp": ext = "webp"; break;
-            default: throw new BusinessException("Only JPG/PNG/WEBP are allowed");
+            case "image/jpeg" :
+            case "image/jpg" :
+                ext = "jpg";
+                break;
+            case "image/png" :
+                ext = "png";
+                break;
+            case "image/webp" :
+                ext = "webp";
+                break;
+            default :
+                throw new BusinessException("Only JPG/PNG/WEBP are allowed");
         }
 
         UUID id = UUID.fromString(authentication.getName());
@@ -183,8 +193,6 @@ public class AuthUseCaseImpl implements AuthUseCase {
     }
 
     private static Set<String> authorities(Authentication authentication) {
-        return authentication.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .collect(Collectors.toSet());
+        return authentication.getAuthorities().stream().map(GrantedAuthority::getAuthority).collect(Collectors.toSet());
     }
 }

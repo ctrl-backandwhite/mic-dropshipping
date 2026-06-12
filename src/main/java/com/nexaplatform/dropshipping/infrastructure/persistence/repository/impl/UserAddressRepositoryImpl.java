@@ -37,8 +37,8 @@ public class UserAddressRepositoryImpl implements UserAddressRepository {
 
     @Override
     public List<UserAddress> findByUserId(UUID userId) {
-        return userAddressEntityMapper.toDomainList(
-                userAddressJpaRepositoryAdapter.findByUser_IdOrderByIsDefaultDescCreatedAtDesc(userId));
+        return userAddressEntityMapper
+                .toDomainList(userAddressJpaRepositoryAdapter.findByUser_IdOrderByIsDefaultDescCreatedAtDesc(userId));
     }
 
     @Override
@@ -48,9 +48,7 @@ public class UserAddressRepositoryImpl implements UserAddressRepository {
 
     @Override
     public UserAddress getById(UUID id) {
-        return userAddressJpaRepositoryAdapter.findById(id)
-                .map(userAddressEntityMapper::toDomain)
-                .orElse(null);
+        return userAddressJpaRepositoryAdapter.findById(id).map(userAddressEntityMapper::toDomain).orElse(null);
     }
 
     @Override

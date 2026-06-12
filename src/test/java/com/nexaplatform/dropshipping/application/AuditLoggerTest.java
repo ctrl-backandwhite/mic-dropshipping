@@ -39,7 +39,7 @@ class AuditLoggerTest {
         AuditLogger al = new AuditLogger();
         Map<String, Object> attrs = new HashMap<>();
         attrs.put("userId", "abc");
-        attrs.put("password", "S3cret!");   // must be dropped
+        attrs.put("password", "S3cret!"); // must be dropped
         attrs.put("Authorization", "Bearer xyz"); // must be dropped (case-insensitive)
         attrs.put("note", "ok\nwith\nnewlines");
         al.log("auth.login_ok", "alice@example.com", attrs);

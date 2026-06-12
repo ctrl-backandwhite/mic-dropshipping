@@ -39,8 +39,8 @@ public class ShopConnectionRepositoryImpl implements ShopConnectionRepository {
 
     @Override
     public List<ShopConnection> findByUserId(UUID userId) {
-        return shopConnectionEntityMapper.toDomainList(
-                shopConnectionJpaRepositoryAdapter.findByUser_IdOrderByCreatedAtDesc(userId));
+        return shopConnectionEntityMapper
+                .toDomainList(shopConnectionJpaRepositoryAdapter.findByUser_IdOrderByCreatedAtDesc(userId));
     }
 
     @Override
@@ -50,9 +50,7 @@ public class ShopConnectionRepositoryImpl implements ShopConnectionRepository {
 
     @Override
     public ShopConnection getById(UUID id) {
-        return shopConnectionJpaRepositoryAdapter.findById(id)
-                .map(shopConnectionEntityMapper::toDomain)
-                .orElse(null);
+        return shopConnectionJpaRepositoryAdapter.findById(id).map(shopConnectionEntityMapper::toDomain).orElse(null);
     }
 
     @Override

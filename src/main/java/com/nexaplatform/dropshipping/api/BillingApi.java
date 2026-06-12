@@ -33,5 +33,5 @@ public interface BillingApi {
     @ApiResponse(responseCode = "200", description = "Checkout started")
     @PostMapping("/subscribe")
     ResponseEntity<SubscribeDtoOut> subscribe(@AuthenticationPrincipal UserDetails principal,
-                                              @Valid @RequestBody SubscribeDtoIn req) throws Exception;
+            @Valid @RequestBody SubscribeDtoIn req) throws Exception;
 }

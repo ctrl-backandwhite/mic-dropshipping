@@ -31,19 +31,16 @@ public class DistributedBucketFactory {
      */
     @Bean("distributedBucketFactory")
     BucketFactory distributedBucketFactory(RedisClient redisClient) {
-        StatefulRedisConnection<String, byte[]> connection =
-                redisClient.connect(RedisCodec.of(StringCodec.UTF8, ByteArrayCodec.INSTANCE));
+        StatefulRedisConnection<String, byte[]> connection = redisClient
+                .connect(RedisCodec.of(StringCodec.UTF8, ByteArrayCodec.INSTANCE));
         ProxyManager<String> proxy = LettuceBasedProxyManager.builderFor(connection)
-                .withExpirationStrategy(ExpirationAfterWriteStrategy
-                        .basedOnTimeForRefillingBucketUpToMax(Duration.ofMinutes(10)))
+                .withExpirationStrategy(
+                        ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(Duration.ofMinutes(10)))
                 .build();
 
         return (key, capacity, period) -> {
             BucketConfiguration cfg = BucketConfiguration.builder()
-                    .addLimit(Bandwidth.builder()
-                            .capacity(capacity)
-                            .refillIntervally(capacity, period)
-                            .build())
+                    .addLimit(Bandwidth.builder().capacity(capacity).refillIntervally(capacity, period).build())
                     .build();
             return proxy.builder().build("nx036:rl:" + key, () -> cfg);
         };

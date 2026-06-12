@@ -29,14 +29,12 @@ public class AcademyCourseUseCaseImpl implements AcademyCourseUseCase {
     public List<AcademyCourse> listPublished(String locale, String level) {
         return academyCourseRepository.findPublished().stream()
                 .filter(c -> locale == null || locale.equalsIgnoreCase(c.getLocale()))
-                .filter(c -> level == null || level.equalsIgnoreCase(c.getLevel()))
-                .toList();
+                .filter(c -> level == null || level.equalsIgnoreCase(c.getLevel())).toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public AcademyCourse getBySlug(String slug) {
-        return academyCourseRepository.findBySlug(slug)
-                .orElseThrow(() -> new NotFoundException("Course"));
+        return academyCourseRepository.findBySlug(slug).orElseThrow(() -> new NotFoundException("Course"));
     }
 }

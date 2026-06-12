@@ -21,8 +21,10 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class NotificationUseCaseImplTest {
 
-    @Mock NotificationRepository notificationRepository;
-    @InjectMocks NotificationUseCaseImpl useCase;
+    @Mock
+    NotificationRepository notificationRepository;
+    @InjectMocks
+    NotificationUseCaseImpl useCase;
 
     @Test
     void unreadCount_wrapsRepositoryCounter() {

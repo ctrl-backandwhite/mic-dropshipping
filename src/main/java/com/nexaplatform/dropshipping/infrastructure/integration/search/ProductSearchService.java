@@ -30,22 +30,19 @@ public class ProductSearchService {
     public Map<String, Object> search(String keyword, String language, int page, int size) {
         String field = "title" + capitalize(language == null ? "es" : language);
         try {
-            SearchResponse<Map> response = client.search(SearchRequest.of(s -> s
-                    .index(index)
-                    .from(page * size)
+            SearchResponse<Map> response = client.search(SearchRequest.of(s -> s.index(index).from(page * size)
                     .size(size)
                     .query(keyword == null || keyword.isBlank()
                             ? Query.of(q -> q.matchAll(m -> m))
                             : Query.of(q -> q.multiMatch(m -> m.query(keyword).fields(field, "titleZh", "titleEn"))))
                     .sort(srt -> srt.field(f -> f.field("trendScore").order(SortOrder.Desc)))), Map.class);
 
-            List<Map<String, Object>> hits = response.hits().hits().stream()
-                    .map(h -> {
-                        Map<String, Object> doc = new HashMap<>(h.source());
-                        doc.put("_id", h.id());
-                        doc.put("_score", h.score());
-                        return doc;
-                    }).toList();
+            List<Map<String, Object>> hits = response.hits().hits().stream().map(h -> {
+                Map<String, Object> doc = new HashMap<>(h.source());
+                doc.put("_id", h.id());
+                doc.put("_score", h.score());
+                return doc;
+            }).toList();
 
             Map<String, Object> out = new HashMap<>();
             out.put("items", hits);
@@ -72,43 +69,31 @@ public class ProductSearchService {
         final int fromOffset = page * size;
         String field = "title" + capitalize(language == null ? "es" : language);
         try {
-            SearchResponse<Map> response = client.search(SearchRequest.of(s -> s
-                    .index(index)
-                    .from(fromOffset)
+            SearchResponse<Map> response = client.search(SearchRequest.of(s -> s.index(index).from(fromOffset)
                     .size(pageSize)
                     .query(keyword == null || keyword.isBlank()
                             ? Query.of(q -> q.matchAll(m -> m))
                             : Query.of(q -> q.multiMatch(m -> m.query(keyword).fields(field, "titleZh", "titleEn"))))
                     .sort(srt -> srt.field(f -> f.field("trendScore").order(SortOrder.Desc)))), Map.class);
 
-            List<SearchHitDtoOut> hits = response.hits().hits().stream()
-                    .map(h -> {
-                        Map<String, Object> doc = new HashMap<>(h.source());
-                        doc.put("_id", h.id());
-                        doc.put("_score", h.score());
-                        return SearchHitDtoOut.builder().source(doc).build();
-                    }).toList();
+            List<SearchHitDtoOut> hits = response.hits().hits().stream().map(h -> {
+                Map<String, Object> doc = new HashMap<>(h.source());
+                doc.put("_id", h.id());
+                doc.put("_score", h.score());
+                return SearchHitDtoOut.builder().source(doc).build();
+            }).toList();
 
             long total = response.hits().total() != null ? response.hits().total().value() : (long) hits.size();
-            return SearchResultDtoOut.builder()
-                    .items(hits)
-                    .total(total)
-                    .page(page)
-                    .size(size)
-                    .build();
+            return SearchResultDtoOut.builder().items(hits).total(total).page(page).size(size).build();
         } catch (IOException e) {
             log.error("Search failed: {}", e.getMessage());
-            return SearchResultDtoOut.builder()
-                    .items(List.of())
-                    .total(0L)
-                    .page(page)
-                    .size(size)
-                    .build();
+            return SearchResultDtoOut.builder().items(List.of()).total(0L).page(page).size(size).build();
         }
     }
 
     private static String capitalize(String s) {
-        if (s == null || s.isEmpty()) return s;
+        if (s == null || s.isEmpty())
+            return s;
         return s.substring(0, 1).toUpperCase() + s.substring(1);
     }
 }

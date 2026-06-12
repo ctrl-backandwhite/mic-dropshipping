@@ -20,8 +20,10 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class MentorProfileUseCaseImplTest {
 
-    @Mock MentorProfileRepository mentorProfileRepository;
-    @InjectMocks MentorProfileUseCaseImpl useCase;
+    @Mock
+    MentorProfileRepository mentorProfileRepository;
+    @InjectMocks
+    MentorProfileUseCaseImpl useCase;
 
     @Test
     void listActive_filtersSeededFakeAccounts() {
@@ -29,8 +31,7 @@ class MentorProfileUseCaseImplTest {
         MentorProfile seedName = MentorProfile.builder().displayName("NX036 Admin").email("x@real.com").build();
         MentorProfile seedEmail = MentorProfile.builder().displayName("Ops").email("operator@nx036.local").build();
         MentorProfile seedPartner = MentorProfile.builder().displayName("Demo").email("d@partners.nx036.local").build();
-        when(mentorProfileRepository.findActive())
-                .thenReturn(List.of(real, seedName, seedEmail, seedPartner));
+        when(mentorProfileRepository.findActive()).thenReturn(List.of(real, seedName, seedEmail, seedPartner));
 
         List<MentorProfile> result = useCase.listActive();
 

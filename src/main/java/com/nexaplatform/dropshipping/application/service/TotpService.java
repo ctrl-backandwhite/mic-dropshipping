@@ -63,8 +63,11 @@ public class TotpService {
     private final SecureRandom rng = new SecureRandom();
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(10);
 
-    public record SetupResult(String base32Secret, String otpauthUrl) {}
-    public record EnableResult(List<String> backupCodes) {}
+    public record SetupResult(String base32Secret, String otpauthUrl) {
+    }
+
+    public record EnableResult(List<String> backupCodes) {
+    }
 
     /**
      * Disable 2FA after re-checking the user's account password. Moves the
@@ -72,8 +75,7 @@ public class TotpService {
      */
     @Transactional
     public void disableWithPassword(UUID userId, String rawPassword) {
-        UserEntity user = userRepo.findById(userId)
-                .orElseThrow(() -> new BusinessException("User not found"));
+        UserEntity user = userRepo.findById(userId).orElseThrow(() -> new BusinessException("User not found"));
         if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
             throw new BusinessException("Invalid password");
         }
@@ -103,9 +105,7 @@ public class TotpService {
 
         String issuer = "NX036";
         String label = issuer + ":" + user.getEmail();
-        String url = "otpauth://totp/" + urlEnc(label)
-                + "?secret=" + b32
-                + "&issuer=" + urlEnc(issuer)
+        String url = "otpauth://totp/" + urlEnc(label) + "?secret=" + b32 + "&issuer=" + urlEnc(issuer)
                 + "&algorithm=SHA1&digits=" + DIGITS + "&period=" + PERIOD_SECONDS;
         return new SetupResult(b32, url);
     }
@@ -114,7 +114,8 @@ public class TotpService {
     @Transactional
     public EnableResult verifyAndEnable(UUID userId, String otp) {
         TotpSecretEntity rec = repo.findById(userId).orElseThrow(() -> new NotFoundException("2FA not initialized"));
-        if (rec.isEnabled()) throw new BusinessException("2FA already enabled");
+        if (rec.isEnabled())
+            throw new BusinessException("2FA already enabled");
         String secret = crypto.decrypt(rec.getSecretEnc());
         if (!verifyAtTime(secret, otp, System.currentTimeMillis() / 1000)) {
             throw new BusinessException("Invalid OTP");
@@ -127,8 +128,11 @@ public class TotpService {
             codes.add(c);
             hashes.add(encoder.encode(c));
         }
-        try { rec.setRecoveryCodesHash(mapper.writeValueAsString(hashes)); }
-        catch (JsonProcessingException e) { throw new RuntimeException(e); }
+        try {
+            rec.setRecoveryCodesHash(mapper.writeValueAsString(hashes));
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
         rec.setEnabled(true);
         rec.setLastUsedAt(Instant.now());
         rec.setUpdatedAt(Instant.now());
@@ -139,7 +143,8 @@ public class TotpService {
     /** Verifica un OTP contra el secret ya activo (uso en login). */
     public boolean verifyOtp(UUID userId, String otp) {
         TotpSecretEntity rec = repo.findById(userId).orElse(null);
-        if (rec == null || !rec.isEnabled()) return false;
+        if (rec == null || !rec.isEnabled())
+            return false;
         String secret = crypto.decrypt(rec.getSecretEnc());
         boolean ok = verifyAtTime(secret, otp, System.currentTimeMillis() / 1000);
         if (ok) {
@@ -153,7 +158,8 @@ public class TotpService {
     @Transactional
     public boolean consumeBackupCode(UUID userId, String code) {
         TotpSecretEntity rec = repo.findById(userId).orElse(null);
-        if (rec == null || !rec.isEnabled() || rec.getRecoveryCodesHash() == null) return false;
+        if (rec == null || !rec.isEnabled() || rec.getRecoveryCodesHash() == null)
+            return false;
         try {
             @SuppressWarnings("unchecked")
             List<String> hashes = mapper.readValue(rec.getRecoveryCodesHash(), List.class);
@@ -181,7 +187,8 @@ public class TotpService {
     @Transactional
     public List<String> regenerateBackupCodes(UUID userId) {
         TotpSecretEntity rec = repo.findById(userId).orElseThrow(() -> new NotFoundException("2FA not enabled"));
-        if (!rec.isEnabled()) throw new BusinessException("Enable 2FA first");
+        if (!rec.isEnabled())
+            throw new BusinessException("Enable 2FA first");
         List<String> codes = new ArrayList<>();
         List<String> hashes = new ArrayList<>();
         for (int i = 0; i < BACKUP_COUNT; i++) {
@@ -189,8 +196,11 @@ public class TotpService {
             codes.add(c);
             hashes.add(encoder.encode(c));
         }
-        try { rec.setRecoveryCodesHash(mapper.writeValueAsString(hashes)); }
-        catch (JsonProcessingException e) { throw new RuntimeException(e); }
+        try {
+            rec.setRecoveryCodesHash(mapper.writeValueAsString(hashes));
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
         rec.setUpdatedAt(Instant.now());
         repo.save(rec);
         return codes;
@@ -203,12 +213,14 @@ public class TotpService {
     /* ============================ Internals ============================ */
 
     private boolean verifyAtTime(String base32Secret, String otp, long epochSeconds) {
-        if (otp == null || otp.length() != DIGITS) return false;
+        if (otp == null || otp.length() != DIGITS)
+            return false;
         byte[] key = base32Decode(base32Secret);
         long counter = epochSeconds / PERIOD_SECONDS;
         // Window: cuenta actual + WINDOW pasadas/futuras (drift)
         for (int w = -WINDOW; w <= WINDOW; w++) {
-            if (otp.equals(generate(key, counter + w))) return true;
+            if (otp.equals(generate(key, counter + w)))
+                return true;
         }
         return false;
     }
@@ -216,15 +228,16 @@ public class TotpService {
     private String generate(byte[] key, long counter) {
         try {
             byte[] data = new byte[8];
-            for (int i = 7; i >= 0; i--) { data[i] = (byte) (counter & 0xFF); counter >>= 8; }
+            for (int i = 7; i >= 0; i--) {
+                data[i] = (byte) (counter & 0xFF);
+                counter >>= 8;
+            }
             Mac mac = Mac.getInstance(ALG);
             mac.init(new SecretKeySpec(key, ALG));
             byte[] hash = mac.doFinal(data);
             int offset = hash[hash.length - 1] & 0x0F;
-            int code = ((hash[offset] & 0x7F) << 24)
-                     | ((hash[offset + 1] & 0xFF) << 16)
-                     | ((hash[offset + 2] & 0xFF) << 8)
-                     |  (hash[offset + 3] & 0xFF);
+            int code = ((hash[offset] & 0x7F) << 24) | ((hash[offset + 1] & 0xFF) << 16)
+                    | ((hash[offset + 2] & 0xFF) << 8) | (hash[offset + 3] & 0xFF);
             code = code % (int) Math.pow(10, DIGITS);
             return String.format("%0" + DIGITS + "d", code);
         } catch (Exception e) {
@@ -243,7 +256,8 @@ public class TotpService {
                 bits -= 5;
             }
         }
-        if (bits > 0) sb.append(BASE32.charAt((value << (5 - bits)) & 0x1F));
+        if (bits > 0)
+            sb.append(BASE32.charAt((value << (5 - bits)) & 0x1F));
         return sb.toString();
     }
 
@@ -253,10 +267,14 @@ public class TotpService {
         int bits = 0, value = 0;
         for (char c : s.toCharArray()) {
             int idx = BASE32.indexOf(c);
-            if (idx < 0) continue;
+            if (idx < 0)
+                continue;
             value = (value << 5) | idx;
             bits += 5;
-            if (bits >= 8) { out.write((value >> (bits - 8)) & 0xFF); bits -= 8; }
+            if (bits >= 8) {
+                out.write((value >> (bits - 8)) & 0xFF);
+                bits -= 8;
+            }
         }
         return out.toByteArray();
     }
@@ -275,5 +293,7 @@ public class TotpService {
 
     /** Inválido sólo para evitar warning del import unused en algunos builds. */
     @SuppressWarnings("unused")
-    private String b64(byte[] raw) { return Base64.getUrlEncoder().withoutPadding().encodeToString(raw); }
+    private String b64(byte[] raw) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
+    }
 }

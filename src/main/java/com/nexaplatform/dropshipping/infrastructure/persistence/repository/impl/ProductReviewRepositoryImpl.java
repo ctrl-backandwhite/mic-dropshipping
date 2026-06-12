@@ -37,7 +37,8 @@ public class ProductReviewRepositoryImpl implements ProductReviewRepository {
     @Override
     public Page<ProductReview> findApprovedByProductAndMinRating(UUID productId, short minRating, Pageable pageable) {
         return productReviewJpaRepositoryAdapter
-                .findByProduct_IdAndApprovedTrueAndRatingGreaterThanEqualOrderByCreatedAtDesc(productId, minRating, pageable)
+                .findByProduct_IdAndApprovedTrueAndRatingGreaterThanEqualOrderByCreatedAtDesc(productId, minRating,
+                        pageable)
                 .map(productReviewEntityMapper::toDomain);
     }
 
@@ -52,9 +53,7 @@ public class ProductReviewRepositoryImpl implements ProductReviewRepository {
 
     @Override
     public ProductReview getById(UUID id) {
-        return productReviewJpaRepositoryAdapter.findById(id)
-                .map(productReviewEntityMapper::toDomain)
-                .orElse(null);
+        return productReviewJpaRepositoryAdapter.findById(id).map(productReviewEntityMapper::toDomain).orElse(null);
     }
 
     @Override

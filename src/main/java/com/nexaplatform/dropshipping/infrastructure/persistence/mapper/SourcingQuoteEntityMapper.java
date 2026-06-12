@@ -17,8 +17,7 @@ import java.util.List;
  * {@code request} and {@code agent} relations are resolved by the repository
  * adapter (which owns the managed entity), so they are ignored on {@code toEntity}.
  */
-@Mapper(componentModel = "spring", builder = @Builder(disableBuilder = true),
-        uses = SourcingAgentEntityMapper.class)
+@Mapper(componentModel = "spring", builder = @Builder(disableBuilder = true), uses = SourcingAgentEntityMapper.class)
 public interface SourcingQuoteEntityMapper {
 
     @Mapping(target = "id", source = "id")

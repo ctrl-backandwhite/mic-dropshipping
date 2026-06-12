@@ -36,10 +36,8 @@ public class PodDesignUseCaseImpl implements PodDesignUseCase {
     @Override
     @Transactional(readOnly = true)
     public List<PodBlankProduct> blanks(String lang) {
-        return productRepository.findAll().stream()
-                .filter(p -> Boolean.TRUE.equals(p.getPodEnabled()))
-                .map(p -> tinyProduct(p, lang))
-                .toList();
+        return productRepository.findAll().stream().filter(p -> Boolean.TRUE.equals(p.getPodEnabled()))
+                .map(p -> tinyProduct(p, lang)).toList();
     }
 
     @Override
@@ -52,8 +50,8 @@ public class PodDesignUseCaseImpl implements PodDesignUseCase {
         if (model.getCanvasJson() == null) {
             model.setCanvasJson(new HashMap<>());
         }
-        model.setMockupUrl("https://cdn.nx036.local/pod/mock-"
-                + UUID.randomUUID().toString().substring(0, 8) + ".webp");
+        model.setMockupUrl(
+                "https://cdn.nx036.local/pod/mock-" + UUID.randomUUID().toString().substring(0, 8) + ".webp");
         model.setStatus("RENDERED");
         PodDesign saved = podDesignRepository.save(model);
         log.info("::> [POD] Design created id={}", saved.getId());
@@ -72,9 +70,7 @@ public class PodDesignUseCaseImpl implements PodDesignUseCase {
         String safePrompt = prompt == null ? "" : prompt;
         return PodAiResult.builder()
                 .mockupUrl("https://cdn.nx036.local/pod/ai-" + Math.abs(safePrompt.hashCode()) + ".webp")
-                .prompt(safePrompt)
-                .provider("mock")
-                .build();
+                .prompt(safePrompt).provider("mock").build();
     }
 
     /**
@@ -87,24 +83,21 @@ public class PodDesignUseCaseImpl implements PodDesignUseCase {
         String title = null;
         if (p.getTranslations() != null) {
             title = p.getTranslations().stream()
-                    .filter(t -> lang.equalsIgnoreCase(t.getLanguage()) && t.getTitle() != null)
-                    .map(t -> t.getTitle()).findFirst().orElse(null);
-            if (title == null) title = p.getTranslations().stream()
-                    .filter(t -> "en".equalsIgnoreCase(t.getLanguage()) && t.getTitle() != null)
-                    .map(t -> t.getTitle()).findFirst().orElse(null);
+                    .filter(t -> lang.equalsIgnoreCase(t.getLanguage()) && t.getTitle() != null).map(t -> t.getTitle())
+                    .findFirst().orElse(null);
+            if (title == null)
+                title = p.getTranslations().stream()
+                        .filter(t -> "en".equalsIgnoreCase(t.getLanguage()) && t.getTitle() != null)
+                        .map(t -> t.getTitle()).findFirst().orElse(null);
         }
-        if (title == null) title = p.getTitleZh();
+        if (title == null)
+            title = p.getTitleZh();
         String image = null;
         if (p.getImages() != null && !p.getImages().isEmpty()) {
             var img = p.getImages().get(0);
             image = img.getCdnUrl() != null && !img.getCdnUrl().isBlank() ? img.getCdnUrl() : img.getSourceUrl();
         }
-        return PodBlankProduct.builder()
-                .id(p.getId())
-                .slug(p.getSlug())
-                .title(title)
-                .mainImage(image)
-                .price(p.getBasePrice())
-                .build();
+        return PodBlankProduct.builder().id(p.getId()).slug(p.getSlug()).title(title).mainImage(image)
+                .price(p.getBasePrice()).build();
     }
 }

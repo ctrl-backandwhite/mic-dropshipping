@@ -21,9 +21,7 @@ import java.util.List;
 @Table(name = "category")
 // Plan 300k: las categorías cambian raro y se leen muchísimo. L2 READ_WRITE
 // para mantener consistencia eventual entre nodos (vía JCache/Caffeine).
-@org.hibernate.annotations.Cache(
-        usage = org.hibernate.annotations.CacheConcurrencyStrategy.READ_WRITE,
-        region = "category")
+@org.hibernate.annotations.Cache(usage = org.hibernate.annotations.CacheConcurrencyStrategy.READ_WRITE, region = "category")
 @Getter
 @Setter
 @NoArgsConstructor

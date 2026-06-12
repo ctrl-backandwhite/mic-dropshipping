@@ -36,44 +36,39 @@ public class MeOrderItemDetailDtoOut {
      * product_translation[lang] → product_translation['en'] → snapshot → titleZh.
      */
     public static MeOrderItemDetailDtoOut from(OrderItemEntity i, String lang) {
-        BigDecimal unit = BigDecimal.valueOf(i.getUnitPriceCents()).divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
-        BigDecimal total = BigDecimal.valueOf(i.getLineTotalCents()).divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
+        BigDecimal unit = BigDecimal.valueOf(i.getUnitPriceCents()).divide(BigDecimal.valueOf(100), 4,
+                RoundingMode.HALF_UP);
+        BigDecimal total = BigDecimal.valueOf(i.getLineTotalCents()).divide(BigDecimal.valueOf(100), 4,
+                RoundingMode.HALF_UP);
         String title = null;
         if (i.getProduct() != null) {
             var trs = i.getProduct().getTranslations();
             if (trs != null) {
-                title = trs.stream()
-                        .filter(t -> lang.equalsIgnoreCase(t.getLanguage()) && t.getTitle() != null)
+                title = trs.stream().filter(t -> lang.equalsIgnoreCase(t.getLanguage()) && t.getTitle() != null)
                         .map(t -> t.getTitle()).findFirst().orElse(null);
                 if (title == null) {
-                    title = trs.stream()
-                            .filter(t -> "en".equalsIgnoreCase(t.getLanguage()) && t.getTitle() != null)
+                    title = trs.stream().filter(t -> "en".equalsIgnoreCase(t.getLanguage()) && t.getTitle() != null)
                             .map(t -> t.getTitle()).findFirst().orElse(null);
                 }
             }
         }
         if (title == null) {
-            title = i.getTitleSnapshot() != null ? i.getTitleSnapshot()
+            title = i.getTitleSnapshot() != null
+                    ? i.getTitleSnapshot()
                     : (i.getProduct() != null ? i.getProduct().getTitleZh() : null);
         }
         String variantName = (i.getVariant() != null) ? i.getVariant().getTitle() : null;
         // Prefer a live catalog image over the snapshot (often placeholder or empty).
         String image = i.getImageUrlSnapshot();
-        if ((image == null || image.isBlank()) && i.getProduct() != null
-                && i.getProduct().getImages() != null && !i.getProduct().getImages().isEmpty()) {
+        if ((image == null || image.isBlank()) && i.getProduct() != null && i.getProduct().getImages() != null
+                && !i.getProduct().getImages().isEmpty()) {
             var img = i.getProduct().getImages().get(0);
             image = img.getCdnUrl() != null && !img.getCdnUrl().isBlank() ? img.getCdnUrl() : img.getSourceUrl();
         }
-        return MeOrderItemDetailDtoOut.builder()
-                .id(i.getId())
+        return MeOrderItemDetailDtoOut.builder().id(i.getId())
                 .productId(i.getProduct() != null ? i.getProduct().getId() : null)
-                .variantId(i.getVariant() != null ? i.getVariant().getId() : null)
-                .productTitle(title)
-                .variantName(variantName)
-                .imageUrl(image)
-                .quantity(i.getQuantity())
-                .unitPrice(unit)
-                .lineTotal(total)
+                .variantId(i.getVariant() != null ? i.getVariant().getId() : null).productTitle(title)
+                .variantName(variantName).imageUrl(image).quantity(i.getQuantity()).unitPrice(unit).lineTotal(total)
                 .build();
     }
 }

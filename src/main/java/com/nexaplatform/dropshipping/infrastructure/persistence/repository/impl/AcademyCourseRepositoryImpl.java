@@ -36,8 +36,8 @@ public class AcademyCourseRepositoryImpl implements AcademyCourseRepository {
 
     @Override
     public List<AcademyCourse> findPublished() {
-        return academyCourseEntityMapper.toDomainList(
-                academyCourseJpaRepositoryAdapter.findByPublishedTrueOrderByCreatedAtDesc());
+        return academyCourseEntityMapper
+                .toDomainList(academyCourseJpaRepositoryAdapter.findByPublishedTrueOrderByCreatedAtDesc());
     }
 
     @Override
@@ -52,9 +52,7 @@ public class AcademyCourseRepositoryImpl implements AcademyCourseRepository {
 
     @Override
     public AcademyCourse getById(UUID id) {
-        return academyCourseJpaRepositoryAdapter.findById(id)
-                .map(academyCourseEntityMapper::toDomain)
-                .orElse(null);
+        return academyCourseJpaRepositoryAdapter.findById(id).map(academyCourseEntityMapper::toDomain).orElse(null);
     }
 
     @Override

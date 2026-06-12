@@ -24,7 +24,7 @@ public class ProductWarehouseStockRepositoryImpl implements ProductWarehouseStoc
 
     @Override
     public List<WarehouseStock> findByProductId(UUID productId) {
-        return productWarehouseStockEntityMapper.toDomainList(
-                productWarehouseStockJpaRepositoryAdapter.findByProduct_Id(productId));
+        return productWarehouseStockEntityMapper
+                .toDomainList(productWarehouseStockJpaRepositoryAdapter.findByProduct_Id(productId));
     }
 }

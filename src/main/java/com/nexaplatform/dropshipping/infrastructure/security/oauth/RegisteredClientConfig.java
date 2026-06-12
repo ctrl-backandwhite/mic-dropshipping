@@ -61,84 +61,61 @@ public class RegisteredClientConfig {
     }
 
     @Bean
-    public static OAuth2AuthorizationConsentService authorizationConsentService(JdbcTemplate jdbc, RegisteredClientRepository repo) {
+    public static OAuth2AuthorizationConsentService authorizationConsentService(JdbcTemplate jdbc,
+            RegisteredClientRepository repo) {
         return new JdbcOAuth2AuthorizationConsentService(jdbc, repo);
     }
 
     @EventListener(ApplicationReadyEvent.class)
     public void seedClients(ApplicationReadyEvent event) {
         if (repo.findByClientId(adminClientId) == null) {
-            repo.save(RegisteredClient.withId(UUID.randomUUID().toString())
-                    .clientId(adminClientId)
-                    .clientName("NX036 Admin SPA")
-                    .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
+            repo.save(RegisteredClient.withId(UUID.randomUUID().toString()).clientId(adminClientId)
+                    .clientName("NX036 Admin SPA").clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
                     .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                    .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
-                    .redirectUri(adminRedirect)
-                    .postLogoutRedirectUri(adminPostLogout)
-                    .scope(OidcScopes.OPENID)
-                    .scope(OidcScopes.PROFILE)
-                    .scope(OidcScopes.EMAIL)
-                    .scope("admin")
-                    .clientSettings(ClientSettings.builder().requireProofKey(true).requireAuthorizationConsent(false).build())
-                    .tokenSettings(TokenSettings.builder()
-                            .accessTokenTimeToLive(Duration.ofMinutes(15))
-                            .refreshTokenTimeToLive(Duration.ofDays(7))
-                            .reuseRefreshTokens(false).build())
+                    .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN).redirectUri(adminRedirect)
+                    .postLogoutRedirectUri(adminPostLogout).scope(OidcScopes.OPENID).scope(OidcScopes.PROFILE)
+                    .scope(OidcScopes.EMAIL).scope("admin")
+                    .clientSettings(
+                            ClientSettings.builder().requireProofKey(true).requireAuthorizationConsent(false).build())
+                    .tokenSettings(TokenSettings.builder().accessTokenTimeToLive(Duration.ofMinutes(15))
+                            .refreshTokenTimeToLive(Duration.ofDays(7)).reuseRefreshTokens(false).build())
                     .build());
         }
 
         if (repo.findByClientId(storefrontClientId) == null) {
-            repo.save(RegisteredClient.withId(UUID.randomUUID().toString())
-                    .clientId(storefrontClientId)
-                    .clientName("NX036 Storefront SPA")
-                    .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
+            repo.save(RegisteredClient.withId(UUID.randomUUID().toString()).clientId(storefrontClientId)
+                    .clientName("NX036 Storefront SPA").clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
                     .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                    .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
-                    .redirectUri(storefrontRedirect)
-                    .postLogoutRedirectUri(storefrontPostLogout)
-                    .scope(OidcScopes.OPENID)
-                    .scope(OidcScopes.PROFILE)
-                    .scope(OidcScopes.EMAIL)
-                    .scope("storefront")
-                    .clientSettings(ClientSettings.builder().requireProofKey(true).requireAuthorizationConsent(false).build())
-                    .tokenSettings(TokenSettings.builder()
-                            .accessTokenTimeToLive(Duration.ofMinutes(15))
-                            .refreshTokenTimeToLive(Duration.ofDays(30))
-                            .reuseRefreshTokens(false).build())
+                    .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN).redirectUri(storefrontRedirect)
+                    .postLogoutRedirectUri(storefrontPostLogout).scope(OidcScopes.OPENID).scope(OidcScopes.PROFILE)
+                    .scope(OidcScopes.EMAIL).scope("storefront")
+                    .clientSettings(
+                            ClientSettings.builder().requireProofKey(true).requireAuthorizationConsent(false).build())
+                    .tokenSettings(TokenSettings.builder().accessTokenTimeToLive(Duration.ofMinutes(15))
+                            .refreshTokenTimeToLive(Duration.ofDays(30)).reuseRefreshTokens(false).build())
                     .build());
         }
 
         // Free / sandbox tier — 1 req/min. UPSERT: re-aplicamos settings y TTL si ya existe.
-        upsertPartnerClient("demo-partner",
-                "Demo Partner — Sandbox / Free (server-to-server)",
-                partnerSecret, "sandbox");
+        upsertPartnerClient("demo-partner", "Demo Partner — Sandbox / Free (server-to-server)", partnerSecret,
+                "sandbox");
 
         // Paid tier — 5 req/min.
-        upsertPartnerClient("demo-partner-paid",
-                "Demo Partner — Paid (server-to-server)",
-                partnerSecret + "-paid", "paid");
+        upsertPartnerClient("demo-partner-paid", "Demo Partner — Paid (server-to-server)", partnerSecret + "-paid",
+                "paid");
     }
 
     /** Crea o actualiza el RegisteredClient. Idempotente — corrige TTL/plan en reinicio. */
     private void upsertPartnerClient(String clientId, String clientName, String rawSecret, String plan) {
         var existing = repo.findByClientId(clientId);
         String internalId = existing != null ? existing.getId() : UUID.randomUUID().toString();
-        repo.save(RegisteredClient.withId(internalId)
-                .clientId(clientId)
-                .clientName(clientName)
+        repo.save(RegisteredClient.withId(internalId).clientId(clientId).clientName(clientName)
                 .clientSecret(passwordEncoder.encode(rawSecret))
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
-                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
-                .scope("catalog.read")
-                .scope("orders.write")
-                .scope("shop.sync")
-                .clientSettings(ClientSettings.builder()
-                        .setting("nexadrop.plan", plan)
-                        .build())
-                .tokenSettings(TokenSettings.builder()
-                        .accessTokenTimeToLive(Duration.ofHours(12)).build())
-                .build());
+                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS).scope("catalog.read")
+                .scope("orders.write").scope("shop.sync")
+                .clientSettings(ClientSettings.builder().setting("nexadrop.plan", plan).build())
+                .tokenSettings(TokenSettings.builder().accessTokenTimeToLive(Duration.ofHours(12)).build()).build());
     }
 
     /**
@@ -157,12 +134,11 @@ public class RegisteredClientConfig {
      * El RateLimitFilter consume `plan` para aplicar 1/min (sandbox) o 5/min (paid).
      */
     @Bean
-    public org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer<
-            org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext>
-            partnerPlanClaimCustomizer(
-                    com.nexaplatform.dropshipping.infrastructure.persistence.repository.CustomerSubscriptionRepository subsRepo) {
+    public org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer<org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext> partnerPlanClaimCustomizer(
+            com.nexaplatform.dropshipping.infrastructure.persistence.repository.CustomerSubscriptionRepository subsRepo) {
         return context -> {
-            if (!"access_token".equals(context.getTokenType().getValue())) return;
+            if (!"access_token".equals(context.getTokenType().getValue()))
+                return;
             var settings = context.getRegisteredClient().getClientSettings();
 
             String tier = "sandbox";
@@ -186,18 +162,22 @@ public class RegisteredClientConfig {
                             planCode = sub.getPlan().getCode();
                             tier = mapPlanCodeToTier(planCode);
                         }
-                    } catch (IllegalArgumentException ignored) { /* UUID malformado, sandbox */ }
+                    } catch (IllegalArgumentException ignored) {
+                        /* UUID malformado, sandbox */ }
                 }
             }
 
             context.getClaims().claim("plan", tier);
-            if (planCode != null) context.getClaims().claim("plan_code", planCode);
-            if (ownerUserId != null) context.getClaims().claim("owner_user_id", ownerUserId.toString());
+            if (planCode != null)
+                context.getClaims().claim("plan_code", planCode);
+            if (ownerUserId != null)
+                context.getClaims().claim("owner_user_id", ownerUserId.toString());
         };
     }
 
     private static String mapPlanCodeToTier(String planCode) {
-        if (planCode == null) return "sandbox";
+        if (planCode == null)
+            return "sandbox";
         return switch (planCode.toUpperCase()) {
             case "FREE" -> "sandbox";
             case "STARTER", "PRO", "ENTERPRISE" -> "paid";

@@ -24,11 +24,10 @@ public class GoogleTranslationProvider implements TranslationProvider {
 
     @Override
     public String translate(String text, String sourceLang, String targetLang) {
-        if (text == null || text.isBlank()) return text;
-        Translation t = translate.translate(text,
-                Translate.TranslateOption.sourceLanguage(sourceLang),
-                Translate.TranslateOption.targetLanguage(targetLang),
-                Translate.TranslateOption.format("text"));
+        if (text == null || text.isBlank())
+            return text;
+        Translation t = translate.translate(text, Translate.TranslateOption.sourceLanguage(sourceLang),
+                Translate.TranslateOption.targetLanguage(targetLang), Translate.TranslateOption.format("text"));
         return t.getTranslatedText();
     }
 }

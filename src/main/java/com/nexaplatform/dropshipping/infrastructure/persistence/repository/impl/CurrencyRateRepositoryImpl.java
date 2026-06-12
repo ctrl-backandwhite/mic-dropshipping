@@ -36,14 +36,12 @@ public class CurrencyRateRepositoryImpl implements CurrencyRateRepository {
 
     @Override
     public List<CurrencyRate> findActive() {
-        return currencyRateEntityMapper.toDomainList(
-                currencyRateJpaRepositoryAdapter.findByActiveTrueOrderByCodeAsc());
+        return currencyRateEntityMapper.toDomainList(currencyRateJpaRepositoryAdapter.findByActiveTrueOrderByCodeAsc());
     }
 
     @Override
     public Optional<CurrencyRate> findByCode(String code) {
-        return currencyRateJpaRepositoryAdapter.findByCodeIgnoreCase(code)
-                .map(currencyRateEntityMapper::toDomain);
+        return currencyRateJpaRepositoryAdapter.findByCodeIgnoreCase(code).map(currencyRateEntityMapper::toDomain);
     }
 
     @Override
@@ -53,9 +51,7 @@ public class CurrencyRateRepositoryImpl implements CurrencyRateRepository {
 
     @Override
     public CurrencyRate getById(UUID id) {
-        return currencyRateJpaRepositoryAdapter.findById(id)
-                .map(currencyRateEntityMapper::toDomain)
-                .orElse(null);
+        return currencyRateJpaRepositoryAdapter.findById(id).map(currencyRateEntityMapper::toDomain).orElse(null);
     }
 
     @Override

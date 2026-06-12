@@ -5,7 +5,11 @@ import lombok.*;
 
 @Entity
 @Table(name = "sourcing_quote")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class SourcingQuoteEntity extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -16,10 +20,15 @@ public class SourcingQuoteEntity extends BaseEntity {
     @JoinColumn(name = "agent_id")
     private AgentProfileEntity agent;
 
-    @Column(name = "price_usd_cents", nullable = false) private int priceUsdCents;
-    @Column(name = "eta_days", nullable = false) private int etaDays;
-    @Column private Integer moq;
-    @Column(length = 2000) private String notes;
+    @Column(name = "price_usd_cents", nullable = false)
+    private int priceUsdCents;
+    @Column(name = "eta_days", nullable = false)
+    private int etaDays;
+    @Column
+    private Integer moq;
+    @Column(length = 2000)
+    private String notes;
     @Column(nullable = false, length = 20)
-    @Builder.Default private String status = "OPEN";
+    @Builder.Default
+    private String status = "OPEN";
 }

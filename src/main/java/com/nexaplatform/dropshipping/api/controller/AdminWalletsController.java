@@ -41,22 +41,23 @@ public class AdminWalletsController implements AdminWalletsApi {
 
     @Override
     public ResponseEntity<AdminWalletTxResultDtoOut> adjust(UUID userId, AdminWalletAdjustDtoIn req) {
-        return ResponseEntity.ok(adminWalletMapper.toResult(
-                walletUseCase.adminAdjustEntry(userId, req.getAmountCents(), req.getDescription(), req.getIdempotencyKey())));
+        return ResponseEntity.ok(adminWalletMapper.toResult(walletUseCase.adminAdjustEntry(userId, req.getAmountCents(),
+                req.getDescription(), req.getIdempotencyKey())));
     }
 
     @Override
     public ResponseEntity<PageResponse<AdminWalletTxRowDtoOut>> transactions(UUID walletId, int page, int size) {
         int capped = Math.min(size, 100);
-        List<AdminWalletTxRowDtoOut> items = adminWalletMapper.toTxRows(
-                walletUseCase.adminTransactions(walletId, page, capped));
+        List<AdminWalletTxRowDtoOut> items = adminWalletMapper
+                .toTxRows(walletUseCase.adminTransactions(walletId, page, capped));
         long total = walletUseCase.countWalletTransactions(walletId);
         var pageable = PageRequest.of(page, capped);
         return ResponseEntity.ok(PageResponse.from(new PageImpl<>(items, pageable, total)));
     }
 
     @Override
-    public ResponseEntity<PageResponse<AdminWalletRowDtoOut>> list(String q, String status, String currency, int page, int size) {
+    public ResponseEntity<PageResponse<AdminWalletRowDtoOut>> list(String q, String status, String currency, int page,
+            int size) {
         List<Wallet> all = walletUseCase.adminListWallets(q, status, currency);
         int total = all.size();
         int from = Math.min(page * size, total);

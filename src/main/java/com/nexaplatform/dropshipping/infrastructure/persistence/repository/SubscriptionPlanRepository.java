@@ -9,5 +9,6 @@ import java.util.UUID;
 
 public interface SubscriptionPlanRepository extends JpaRepository<SubscriptionPlanEntity, UUID> {
     List<SubscriptionPlanEntity> findByActiveTrueOrderByPositionAsc();
+
     Optional<SubscriptionPlanEntity> findByCode(String code);
 }

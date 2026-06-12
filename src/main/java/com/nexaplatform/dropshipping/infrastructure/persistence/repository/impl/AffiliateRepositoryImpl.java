@@ -52,9 +52,7 @@ public class AffiliateRepositoryImpl implements AffiliateRepository {
 
     @Override
     public Affiliate getById(UUID id) {
-        return affiliateJpaRepositoryAdapter.findById(id)
-                .map(affiliateEntityMapper::toDomain)
-                .orElse(null);
+        return affiliateJpaRepositoryAdapter.findById(id).map(affiliateEntityMapper::toDomain).orElse(null);
     }
 
     @Override
@@ -79,8 +77,7 @@ public class AffiliateRepositoryImpl implements AffiliateRepository {
     /** Applies the mutable model fields onto the entity, resolving the user relation. */
     private void applyModel(AffiliateEntity entity, Affiliate model) {
         if (model.getUserId() != null) {
-            entity.setUser(userRepository.findById(model.getUserId())
-                    .orElseThrow(() -> new NotFoundException("User")));
+            entity.setUser(userRepository.findById(model.getUserId()).orElseThrow(() -> new NotFoundException("User")));
         }
         entity.setCode(model.getCode());
         entity.setEarningsUsdCents(model.getEarningsUsdCents());

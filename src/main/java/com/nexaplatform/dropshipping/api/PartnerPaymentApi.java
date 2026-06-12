@@ -33,36 +33,24 @@ import java.util.UUID;
 @SecurityRequirement(name = "bearer-jwt")
 public interface PartnerPaymentApi {
 
-    @Operation(
-            summary = "Initiate payment for an order",
-            description = """
-                    Creates a Payment record for the given order and method.
-                      - **WALLET** → debits the partner's NX036 wallet atomically; order moves to PAID immediately.
-                      - **CARD**   → returns `clientSecret` (Stripe Elements). The partner's frontend confirms.
-                      - **PAYPAL** → returns `approveUrl` (redirect the merchant to PayPal).
-                      - **USDT**   → returns `cryptoAddress`, `cryptoChain`, `qrUrl`, `cryptoExpiresAt` (30 min TTL).
+    @Operation(summary = "Initiate payment for an order", description = """
+            Creates a Payment record for the given order and method.
+              - **WALLET** → debits the partner's NX036 wallet atomically; order moves to PAID immediately.
+              - **CARD**   → returns `clientSecret` (Stripe Elements). The partner's frontend confirms.
+              - **PAYPAL** → returns `approveUrl` (redirect the merchant to PayPal).
+              - **USDT**   → returns `cryptoAddress`, `cryptoChain`, `qrUrl`, `cryptoExpiresAt` (30 min TTL).
 
-                    `Idempotency-Key` is honored — the same key returns the same Payment without re-charging.
-                    """,
-            requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                    required = true,
-                    content = @Content(
-                            schema = @Schema(implementation = OrderPaymentIntentDtoIn.class),
-                            examples = {
-                                    @ExampleObject(name = "WALLET", value = "{\"method\":\"WALLET\"}"),
-                                    @ExampleObject(name = "CARD",   value = "{\"method\":\"CARD\"}"),
-                                    @ExampleObject(name = "PAYPAL", value = "{\"method\":\"PAYPAL\"}"),
-                                    @ExampleObject(name = "USDT",   value = "{\"method\":\"USDT\"}"),
-                            })))
-    @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Payment created (or returned from idempotency)"),
+            `Idempotency-Key` is honored — the same key returns the same Payment without re-charging.
+            """, requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, content = @Content(schema = @Schema(implementation = OrderPaymentIntentDtoIn.class), examples = {
+            @ExampleObject(name = "WALLET", value = "{\"method\":\"WALLET\"}"),
+            @ExampleObject(name = "CARD", value = "{\"method\":\"CARD\"}"),
+            @ExampleObject(name = "PAYPAL", value = "{\"method\":\"PAYPAL\"}"),
+            @ExampleObject(name = "USDT", value = "{\"method\":\"USDT\"}"),})))
+    @ApiResponses({@ApiResponse(responseCode = "201", description = "Payment created (or returned from idempotency)"),
             @ApiResponse(responseCode = "400", description = "Order in non-payable state, or wallet without sufficient balance"),
-            @ApiResponse(responseCode = "404", description = "Order not found")
-    })
+            @ApiResponse(responseCode = "404", description = "Order not found")})
     @PostMapping("/{orderId}/payment-intent")
-    ResponseEntity<OrderPaymentDtoOut> initiate(
-            @AuthenticationPrincipal Jwt jwt,
-            @PathVariable UUID orderId,
+    ResponseEntity<OrderPaymentDtoOut> initiate(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID orderId,
             @Valid @RequestBody OrderPaymentIntentDtoIn req,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey);
 

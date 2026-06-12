@@ -21,13 +21,14 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AdTrendUseCaseImplTest {
 
-    @Mock AdTrendRepository adTrendRepository;
-    @InjectMocks AdTrendUseCaseImpl useCase;
+    @Mock
+    AdTrendRepository adTrendRepository;
+    @InjectMocks
+    AdTrendUseCaseImpl useCase;
 
     @Test
     void findTrends_withoutSource_usesFullQueryAndCapsAtLimit() {
-        List<AdTrend> rows = IntStream.range(0, 5)
-                .mapToObj(i -> AdTrend.builder().id(UUID.randomUUID()).build())
+        List<AdTrend> rows = IntStream.range(0, 5).mapToObj(i -> AdTrend.builder().id(UUID.randomUUID()).build())
                 .toList();
         when(adTrendRepository.findAllByScoreDesc()).thenReturn(rows);
 
@@ -51,8 +52,7 @@ class AdTrendUseCaseImplTest {
 
     @Test
     void findTrends_hardCapsAtOneHundred() {
-        List<AdTrend> rows = IntStream.range(0, 150)
-                .mapToObj(i -> AdTrend.builder().id(UUID.randomUUID()).build())
+        List<AdTrend> rows = IntStream.range(0, 150).mapToObj(i -> AdTrend.builder().id(UUID.randomUUID()).build())
                 .toList();
         when(adTrendRepository.findAllByScoreDesc()).thenReturn(rows);
 

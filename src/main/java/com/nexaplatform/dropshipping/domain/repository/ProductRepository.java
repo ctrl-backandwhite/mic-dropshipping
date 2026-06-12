@@ -40,18 +40,7 @@ public interface ProductRepository extends BaseRepository<Product, Product, UUID
 
     List<Product> findAllById(List<UUID> ids);
 
-    Page<Product> searchStorefront(
-            ProductStatus status,
-            String needle,
-            UUID categoryId,
-            UUID supplierId,
-            BigDecimal minPrice,
-            BigDecimal maxPrice,
-            String shipFrom,
-            Boolean freeShipping,
-            Boolean selfPickup,
-            Boolean hasVideo,
-            BigDecimal minRating,
-            Integer minInv,
-            Pageable pageable);
+    Page<Product> searchStorefront(ProductStatus status, String needle, UUID categoryId, UUID supplierId,
+            BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping, Boolean selfPickup,
+            Boolean hasVideo, BigDecimal minRating, Integer minInv, Pageable pageable);
 }

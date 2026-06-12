@@ -30,11 +30,16 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class PartnerApiKeyUseCaseImplTest {
 
-    @Mock RegisteredClientRepository repo;
-    @Mock PasswordEncoder passwordEncoder;
-    @Mock JdbcTemplate jdbc;
-    @Mock ObjectMapper mapper;
-    @Mock JwtRevocationService revocationService;
+    @Mock
+    RegisteredClientRepository repo;
+    @Mock
+    PasswordEncoder passwordEncoder;
+    @Mock
+    JdbcTemplate jdbc;
+    @Mock
+    ObjectMapper mapper;
+    @Mock
+    JwtRevocationService revocationService;
 
     private PartnerApiKeyUseCaseImpl useCase() {
         return new PartnerApiKeyUseCaseImpl(repo, passwordEncoder, jdbc, mapper, revocationService);
@@ -63,8 +68,7 @@ class PartnerApiKeyUseCaseImplTest {
         ApiKey command = ApiKey.builder().name("Another").build();
         PartnerApiKeyUseCaseImpl uc = useCase();
 
-        assertThatThrownBy(() -> uc.create(userId, command))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> uc.create(userId, command)).isInstanceOf(BusinessException.class);
         verify(repo, never()).save(any());
     }
 
@@ -75,21 +79,21 @@ class PartnerApiKeyUseCaseImplTest {
         ApiKey command = ApiKey.builder().name("Bad").scopes(List.of("admin.everything")).build();
         PartnerApiKeyUseCaseImpl uc = useCase();
 
-        assertThatThrownBy(() -> uc.create(userId, command))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> uc.create(userId, command)).isInstanceOf(BusinessException.class);
         verify(repo, never()).save(any());
     }
 
     @Test
     void revoke_deletesAndRevokesTokensWhenOwned() {
         UUID userId = UUID.randomUUID();
-        RegisteredClient client = RegisteredClient.withId(UUID.randomUUID().toString())
-                .clientId("pk_abc")
+        RegisteredClient client = RegisteredClient.withId(UUID.randomUUID().toString()).clientId("pk_abc")
                 .clientName("k")
-                .clientAuthenticationMethod(org.springframework.security.oauth2.core.ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
-                .authorizationGrantType(org.springframework.security.oauth2.core.AuthorizationGrantType.CLIENT_CREDENTIALS)
-                .clientSettings(org.springframework.security.oauth2.server.authorization.settings.ClientSettings.builder()
-                        .setting("nexadrop.owner_user_id", userId.toString()).build())
+                .clientAuthenticationMethod(
+                        org.springframework.security.oauth2.core.ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+                .authorizationGrantType(
+                        org.springframework.security.oauth2.core.AuthorizationGrantType.CLIENT_CREDENTIALS)
+                .clientSettings(org.springframework.security.oauth2.server.authorization.settings.ClientSettings
+                        .builder().setting("nexadrop.owner_user_id", userId.toString()).build())
                 .build();
         when(repo.findByClientId("pk_abc")).thenReturn(client);
 
@@ -105,7 +109,6 @@ class PartnerApiKeyUseCaseImplTest {
         when(repo.findByClientId("ghost")).thenReturn(null);
         PartnerApiKeyUseCaseImpl uc = useCase();
 
-        assertThatThrownBy(() -> uc.revoke(userId, "ghost"))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> uc.revoke(userId, "ghost")).isInstanceOf(NotFoundException.class);
     }
 }

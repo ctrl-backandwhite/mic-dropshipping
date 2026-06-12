@@ -30,27 +30,25 @@ public interface AdminWalletsApi {
     @Operation(summary = "Top up a user's wallet")
     @ApiResponse(responseCode = "200", description = "Wallet topped up")
     @PostMapping("/{userId}/topup")
-    ResponseEntity<AdminWalletTxResultDtoOut> topup(@PathVariable UUID userId, @Valid @RequestBody AdminWalletTopupDtoIn req);
+    ResponseEntity<AdminWalletTxResultDtoOut> topup(@PathVariable UUID userId,
+            @Valid @RequestBody AdminWalletTopupDtoIn req);
 
     @Operation(summary = "Adjust a user's wallet balance")
     @ApiResponse(responseCode = "200", description = "Wallet adjusted")
     @PostMapping("/{userId}/adjust")
-    ResponseEntity<AdminWalletTxResultDtoOut> adjust(@PathVariable UUID userId, @Valid @RequestBody AdminWalletAdjustDtoIn req);
+    ResponseEntity<AdminWalletTxResultDtoOut> adjust(@PathVariable UUID userId,
+            @Valid @RequestBody AdminWalletAdjustDtoIn req);
 
     @Operation(summary = "List wallet transactions with pagination")
     @ApiResponse(responseCode = "200", description = "Transactions listed")
     @GetMapping("/{walletId}/transactions")
     ResponseEntity<PageResponse<AdminWalletTxRowDtoOut>> transactions(@PathVariable UUID walletId,
-                                                                      @RequestParam(defaultValue = "0") int page,
-                                                                      @RequestParam(defaultValue = "30") int size);
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "30") int size);
 
     @Operation(summary = "List wallets with optional filters and pagination")
     @ApiResponse(responseCode = "200", description = "Wallets listed")
     @GetMapping
-    ResponseEntity<PageResponse<AdminWalletRowDtoOut>> list(
-            @RequestParam(required = false) String q,
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) String currency,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "25") int size);
+    ResponseEntity<PageResponse<AdminWalletRowDtoOut>> list(@RequestParam(required = false) String q,
+            @RequestParam(required = false) String status, @RequestParam(required = false) String currency,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "25") int size);
 }

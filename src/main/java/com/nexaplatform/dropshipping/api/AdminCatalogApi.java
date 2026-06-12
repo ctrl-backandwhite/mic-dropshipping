@@ -42,30 +42,25 @@ public interface AdminCatalogApi {
 
     @Operation(summary = "List products with paging and optional status filter")
     @GetMapping("/products")
-    PageResponse<ProductSummaryView> list(
-            @RequestParam(required = false) String status,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "30") int size,
+    PageResponse<ProductSummaryView> list(@RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "30") int size,
             @RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "Get product detail by id")
     @GetMapping("/products/{id}")
-    ProductDetailView detail(@PathVariable UUID id,
-                             @RequestParam(defaultValue = "es") String lang);
+    ProductDetailView detail(@PathVariable UUID id, @RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "Update a product status")
     @PutMapping("/products/{id}/status")
-    ResponseEntity<Void> updateStatus(@PathVariable UUID id,
-                                      @Valid @RequestBody UpdateProductStatusRequest req);
+    ResponseEntity<Void> updateStatus(@PathVariable UUID id, @Valid @RequestBody UpdateProductStatusRequest req);
 
     @Operation(summary = "Quick-edit a product")
     @PutMapping("/products/{id}")
     ProductDetailView quickEdit(@PathVariable UUID id,
-                                @Valid @RequestBody com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn req,
-                                @RequestParam(defaultValue = "es") String lang);
+            @Valid @RequestBody com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn req,
+            @RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "Duplicate a product")
     @PostMapping("/products/{id}/duplicate")
-    ProductDetailView duplicate(@PathVariable UUID id,
-                                @RequestParam(defaultValue = "es") String lang);
+    ProductDetailView duplicate(@PathVariable UUID id, @RequestParam(defaultValue = "es") String lang);
 }

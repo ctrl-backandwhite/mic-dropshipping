@@ -48,12 +48,18 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class UserUseCaseImplTest {
 
-    @Mock UserRepository userRepository;
-    @Mock PasswordResetTokenRepository resetTokenRepository;
-    @Mock com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository userJpaRepository;
-    @Mock EmailQueueService emailQueueService;
-    @Mock AuditLogger auditLogger;
-    @Mock UserUpdateMapper userUpdateMapper;
+    @Mock
+    UserRepository userRepository;
+    @Mock
+    PasswordResetTokenRepository resetTokenRepository;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository userJpaRepository;
+    @Mock
+    EmailQueueService emailQueueService;
+    @Mock
+    AuditLogger auditLogger;
+    @Mock
+    UserUpdateMapper userUpdateMapper;
 
     PasswordEncoder encoder = new BCryptPasswordEncoder(4); // low cost for tests
     PasswordPolicy policy = new PasswordPolicy();
@@ -62,8 +68,8 @@ class UserUseCaseImplTest {
 
     @BeforeEach
     void setup() {
-        useCase = new UserUseCaseImpl(userRepository, resetTokenRepository, userJpaRepository,
-                encoder, policy, emailQueueService, auditLogger, userUpdateMapper);
+        useCase = new UserUseCaseImpl(userRepository, resetTokenRepository, userJpaRepository, encoder, policy,
+                emailQueueService, auditLogger, userUpdateMapper);
     }
 
     @Test
@@ -76,10 +82,8 @@ class UserUseCaseImplTest {
             return u;
         });
 
-        User u = useCase.register(
-                User.builder().email("User@Example.com").displayName("Alice")
-                        .companyName("Co").country("ES").language("es").build(),
-                "Str0ngP@ssword!");
+        User u = useCase.register(User.builder().email("User@Example.com").displayName("Alice").companyName("Co")
+                .country("ES").language("es").build(), "Str0ngP@ssword!");
 
         assertThat(u.getEmail()).isEqualTo("user@example.com"); // normalized
         assertThat(u.getRole()).isEqualTo(UserRole.USER);
@@ -96,8 +100,8 @@ class UserUseCaseImplTest {
     @DisplayName("register: rechaza email duplicado")
     void register_duplicate_email() {
         when(userRepository.existsByEmail("a@b.com")).thenReturn(true);
-        assertThatThrownBy(() -> useCase.register(
-                User.builder().email("a@b.com").language("es").build(), "Str0ngP@ssword!"))
+        assertThatThrownBy(
+                () -> useCase.register(User.builder().email("a@b.com").language("es").build(), "Str0ngP@ssword!"))
                 .isInstanceOf(ConflictException.class);
         verify(userRepository, never()).save(any());
     }
@@ -105,8 +109,7 @@ class UserUseCaseImplTest {
     @Test
     @DisplayName("register: rechaza contraseña débil sin guardar")
     void register_weak_password() {
-        assertThatThrownBy(() -> useCase.register(
-                User.builder().email("a@b.com").language("es").build(), "weak"))
+        assertThatThrownBy(() -> useCase.register(User.builder().email("a@b.com").language("es").build(), "weak"))
                 .isInstanceOf(BusinessException.class);
         verify(userRepository, never()).save(any());
     }
@@ -114,12 +117,8 @@ class UserUseCaseImplTest {
     @Test
     @DisplayName("activate: marca activo y limpia el código")
     void activate_marks_user_active() {
-        User u = User.builder()
-                .id(UUID.randomUUID())
-                .email("a@b.com").role(UserRole.USER).active(false)
-                .activationCode("CODE")
-                .activationCodeExpiresAt(Instant.now().plus(1, ChronoUnit.HOURS))
-                .build();
+        User u = User.builder().id(UUID.randomUUID()).email("a@b.com").role(UserRole.USER).active(false)
+                .activationCode("CODE").activationCodeExpiresAt(Instant.now().plus(1, ChronoUnit.HOURS)).build();
         when(userRepository.findByActivationCode("CODE")).thenReturn(Optional.of(u));
         when(userRepository.update(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -132,21 +131,16 @@ class UserUseCaseImplTest {
     @Test
     @DisplayName("activate: rechaza código expirado")
     void activate_rejects_expired() {
-        User u = User.builder()
-                .email("a@b.com").role(UserRole.USER).active(false)
-                .activationCode("CODE")
-                .activationCodeExpiresAt(Instant.now().minusSeconds(60))
-                .build();
+        User u = User.builder().email("a@b.com").role(UserRole.USER).active(false).activationCode("CODE")
+                .activationCodeExpiresAt(Instant.now().minusSeconds(60)).build();
         when(userRepository.findByActivationCode("CODE")).thenReturn(Optional.of(u));
-        assertThatThrownBy(() -> useCase.activate("CODE"))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> useCase.activate("CODE")).isInstanceOf(BusinessException.class);
     }
 
     @Test
     @DisplayName("recordFailedLogin: lockea después de 5 fallos")
     void lockout_after_five_failures() {
-        User u = User.builder()
-                .email("a@b.com").role(UserRole.USER).active(true).failedLoginCount(4).build();
+        User u = User.builder().email("a@b.com").role(UserRole.USER).active(true).failedLoginCount(4).build();
         when(userRepository.findByEmail("a@b.com")).thenReturn(Optional.of(u));
         when(userRepository.update(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -163,11 +157,8 @@ class UserUseCaseImplTest {
     @Test
     @DisplayName("recordSuccessfulLogin: reinicia contador y lockedUntil")
     void successful_login_resets() {
-        User u = User.builder()
-                .email("a@b.com").role(UserRole.USER).active(true)
-                .failedLoginCount(3)
-                .lockedUntil(Instant.now().plusSeconds(60))
-                .build();
+        User u = User.builder().email("a@b.com").role(UserRole.USER).active(true).failedLoginCount(3)
+                .lockedUntil(Instant.now().plusSeconds(60)).build();
         when(userRepository.findByEmail("a@b.com")).thenReturn(Optional.of(u));
         when(userRepository.update(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -185,12 +176,12 @@ class UserUseCaseImplTest {
     @DisplayName("requestPasswordReset: misma respuesta exista o no el email (no enumeración)")
     void password_reset_no_enumeration() {
         UUID knownId = UUID.randomUUID();
-        when(userRepository.findByEmail("known@x.com")).thenReturn(Optional.of(
-                User.builder().id(knownId).email("known@x.com").role(UserRole.USER).active(true).build()));
+        when(userRepository.findByEmail("known@x.com")).thenReturn(
+                Optional.of(User.builder().id(knownId).email("known@x.com").role(UserRole.USER).active(true).build()));
         when(userRepository.findByEmail("unknown@x.com")).thenReturn(Optional.empty());
-        when(userJpaRepository.findById(knownId)).thenReturn(Optional.of(
-                com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity.builder()
-                        .email("known@x.com").role(UserRole.USER).active(true).build()));
+        when(userJpaRepository.findById(knownId))
+                .thenReturn(Optional.of(com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity
+                        .builder().email("known@x.com").role(UserRole.USER).active(true).build()));
 
         useCase.requestPasswordReset("known@x.com");
         useCase.requestPasswordReset("unknown@x.com");
@@ -216,8 +207,8 @@ class UserUseCaseImplTest {
             u.setId(UUID.randomUUID());
             return u;
         });
-        User u = useCase.createAdminUser(
-                User.builder().email("op@x.com").displayName("Op").build(), "Str0ngP@ssword!", "OPERATOR");
+        User u = useCase.createAdminUser(User.builder().email("op@x.com").displayName("Op").build(), "Str0ngP@ssword!",
+                "OPERATOR");
         assertThat(u.getRole()).isEqualTo(UserRole.OPERATOR);
         assertThat(u.isActive()).isTrue();
     }

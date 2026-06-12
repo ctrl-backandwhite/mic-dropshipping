@@ -21,12 +21,11 @@ class PasswordPolicyTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {
-            "short1A!",        // < 12 chars
-            "alllowercase1!",  // no upper
-            "ALLUPPERCASE1!",  // no lower
-            "NoDigitsHere!!",  // no digit
-            "NoSymbol1234AB"   // no symbol
+    @ValueSource(strings = {"short1A!", // < 12 chars
+            "alllowercase1!", // no upper
+            "ALLUPPERCASE1!", // no lower
+            "NoDigitsHere!!", // no digit
+            "NoSymbol1234AB" // no symbol
     })
     @DisplayName("rechaza contraseñas que no cumplen política")
     void rejects_weak_passwords(String pw) {
@@ -38,8 +37,7 @@ class PasswordPolicyTest {
     void rejects_common_password_after_normalization() {
         // 'password1234' is in the blacklist after .toLowerCase(); but it lacks symbol/upper,
         // so we craft a 12-char password that lowercases into the blacklist exactly.
-        assertThatThrownBy(() -> policy.validate("password1234"))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> policy.validate("password1234")).isInstanceOf(BusinessException.class);
     }
 
     @Test
@@ -53,8 +51,7 @@ class PasswordPolicyTest {
     @DisplayName("rechaza contraseña por encima del máximo")
     void rejects_too_long() {
         String tooLong = "A1!a".repeat(40);
-        assertThatThrownBy(() -> policy.validate(tooLong))
-                .isInstanceOf(BusinessException.class)
+        assertThatThrownBy(() -> policy.validate(tooLong)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("at most 128");
     }
 }

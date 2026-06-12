@@ -11,11 +11,12 @@ import java.util.UUID;
 
 public interface CustomerSubscriptionRepository extends JpaRepository<CustomerSubscriptionEntity, UUID> {
     List<CustomerSubscriptionEntity> findByUserId(UUID userId);
+
     Optional<CustomerSubscriptionEntity> findByStripeSubscriptionId(String stripeId);
 
     /** Suscripciones ACTIVE o TRIALING para el usuario, ordenadas por fin de periodo (más reciente primero). */
-    @Query("SELECT s FROM CustomerSubscriptionEntity s " +
-           "WHERE s.user.id = :userId AND s.status IN ('ACTIVE','TRIALING') " +
-           "ORDER BY s.currentPeriodEnd DESC NULLS LAST")
+    @Query("SELECT s FROM CustomerSubscriptionEntity s "
+            + "WHERE s.user.id = :userId AND s.status IN ('ACTIVE','TRIALING') "
+            + "ORDER BY s.currentPeriodEnd DESC NULLS LAST")
     List<CustomerSubscriptionEntity> findActiveByUserId(@Param("userId") UUID userId);
 }

@@ -46,8 +46,8 @@ public class IntelligenceAlertRepositoryImpl implements IntelligenceAlertReposit
 
     @Override
     public List<IntelligenceAlert> findActiveByUser(UUID userId) {
-        return intelligenceAlertEntityMapper.toDomainList(
-                intelligenceAlertJpaRepositoryAdapter.findByUser_IdAndActiveTrue(userId));
+        return intelligenceAlertEntityMapper
+                .toDomainList(intelligenceAlertJpaRepositoryAdapter.findByUser_IdAndActiveTrue(userId));
     }
 
     @Override
@@ -57,8 +57,7 @@ public class IntelligenceAlertRepositoryImpl implements IntelligenceAlertReposit
 
     @Override
     public IntelligenceAlert getById(UUID id) {
-        return intelligenceAlertJpaRepositoryAdapter.findById(id)
-                .map(intelligenceAlertEntityMapper::toDomain)
+        return intelligenceAlertJpaRepositoryAdapter.findById(id).map(intelligenceAlertEntityMapper::toDomain)
                 .orElse(null);
     }
 

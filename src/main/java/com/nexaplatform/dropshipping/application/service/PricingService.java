@@ -31,24 +31,17 @@ public class PricingService {
 
     public PricedAmount priceFor(ProductEntity product, ProductVariantEntity variant) {
         BigDecimal supplierAmount = variant != null && variant.getPrice() != null
-                ? variant.getPrice() : product.getBasePrice();
+                ? variant.getPrice()
+                : product.getBasePrice();
         String sourceCurrency = product.getCurrency() != null ? product.getCurrency() : "CNY";
-        BigDecimal costUsd = supplierAmount != null
-                ? currencyService.toUsd(supplierAmount, sourceCurrency)
-                : null;
+        BigDecimal costUsd = supplierAmount != null ? currencyService.toUsd(supplierAmount, sourceCurrency) : null;
         var withMargin = marginService.apply(costUsd, product, variant);
         BigDecimal retailUsd = withMargin.retailUsd();
         String displayCode = CurrencyHolder.get();
         BigDecimal displayAmount = currencyService.usdToDisplay(retailUsd);
-        return new PricedAmount(
-                costUsd,
-                retailUsd,
-                displayAmount,
-                displayCode,
-                currencyService.symbolOf(displayCode),
+        return new PricedAmount(costUsd, retailUsd, displayAmount, displayCode, currencyService.symbolOf(displayCode),
                 withMargin.appliedRule() != null ? withMargin.appliedRule().getId() : null,
-                withMargin.appliedPercentage()
-        );
+                withMargin.appliedPercentage());
     }
 
     public PricedAmount priceFor(ProductEntity product) {
@@ -67,13 +60,8 @@ public class PricingService {
         return currencyService.symbolOf(CurrencyHolder.get());
     }
 
-    public record PricedAmount(
-            BigDecimal costUsd,
-            BigDecimal retailUsd,
-            BigDecimal displayAmount,
-            String displayCurrency,
-            String displaySymbol,
-            java.util.UUID appliedRuleId,
-            BigDecimal appliedMarginPercent
-    ) {}
+    public record PricedAmount(BigDecimal costUsd, BigDecimal retailUsd, BigDecimal displayAmount,
+            String displayCurrency, String displaySymbol, java.util.UUID appliedRuleId,
+            BigDecimal appliedMarginPercent) {
+    }
 }

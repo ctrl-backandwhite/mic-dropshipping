@@ -23,10 +23,14 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class WalletUseCaseImplTest {
 
-    @Mock WalletRepository walletRepository;
-    @Mock WalletTransactionRepository txRepository;
-    @Mock AuditLogger auditLogger;
-    @Mock CurrencyRateService currencyService;
+    @Mock
+    WalletRepository walletRepository;
+    @Mock
+    WalletTransactionRepository txRepository;
+    @Mock
+    AuditLogger auditLogger;
+    @Mock
+    CurrencyRateService currencyService;
 
     private WalletUseCaseImpl useCase() {
         return new WalletUseCaseImpl(walletRepository, txRepository, auditLogger, currencyService);

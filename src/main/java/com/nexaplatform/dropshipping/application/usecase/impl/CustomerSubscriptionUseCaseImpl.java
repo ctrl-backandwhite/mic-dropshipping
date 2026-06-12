@@ -89,10 +89,8 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     @Override
     @Transactional(readOnly = true)
     public List<CustomerSubscription> listAdminSubscriptions(String status) {
-        return customerSubscriptionRepository.findAll().stream()
-                .filter(s -> status == null || status.isBlank()
-                        || (s.getStatus() != null && s.getStatus().name().equalsIgnoreCase(status)))
-                .toList();
+        return customerSubscriptionRepository.findAll().stream().filter(s -> status == null || status.isBlank()
+                || (s.getStatus() != null && s.getStatus().name().equalsIgnoreCase(status))).toList();
     }
 
     @Override
@@ -103,14 +101,10 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         Instant end = "YEARLY".equalsIgnoreCase(billingPeriod)
                 ? now.plus(365, ChronoUnit.DAYS)
                 : now.plus(30, ChronoUnit.DAYS);
-        CustomerSubscription model = CustomerSubscription.builder()
-                .userId(userId)
-                .planId(plan.getId())
+        CustomerSubscription model = CustomerSubscription.builder().userId(userId).planId(plan.getId())
                 .status(SubscriptionStatus.ACTIVE)
-                .billingPeriod(billingPeriod == null ? "MONTHLY" : billingPeriod.toUpperCase())
-                .currentPeriodStart(now)
-                .currentPeriodEnd(end)
-                .build();
+                .billingPeriod(billingPeriod == null ? "MONTHLY" : billingPeriod.toUpperCase()).currentPeriodStart(now)
+                .currentPeriodEnd(end).build();
         return customerSubscriptionRepository.save(model);
     }
 
@@ -127,31 +121,22 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
 
         if (!stripeService.isEnabled()) {
             CustomerSubscription sub = createSubscription(userId, planCode, period);
-            return SubscribeResult.builder()
-                    .checkoutUrl("/billing/success?dev=1")
-                    .sessionId(sub.getId().toString())
+            return SubscribeResult.builder().checkoutUrl("/billing/success?dev=1").sessionId(sub.getId().toString())
                     .build();
         }
 
         String priceId = "YEARLY".equalsIgnoreCase(period)
                 ? plan.getStripeYearlyPriceId()
                 : plan.getStripeMonthlyPriceId();
-        var session = stripeService.createCheckoutSession(
-                "user@example.com",
-                priceId,
-                "http://localhost:3003/billing/success",
-                "http://localhost:3003/billing/cancel");
-        return SubscribeResult.builder()
-                .checkoutUrl(session.getUrl())
-                .sessionId(session.getId())
-                .build();
+        var session = stripeService.createCheckoutSession("user@example.com", priceId,
+                "http://localhost:3003/billing/success", "http://localhost:3003/billing/cancel");
+        return SubscribeResult.builder().checkoutUrl(session.getUrl()).sessionId(session.getId()).build();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<SubscriptionPlan> listAdminPlans() {
-        return subscriptionPlanUseCase.findAll().stream()
-                .sorted(Comparator.comparingInt(SubscriptionPlan::getPosition))
+        return subscriptionPlanUseCase.findAll().stream().sorted(Comparator.comparingInt(SubscriptionPlan::getPosition))
                 .toList();
     }
 
@@ -164,11 +149,14 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         // non-editable columns (code/currency/position), preserving the legacy
         // updatePlan contract.
         SubscriptionPlan current = subscriptionPlanUseCase.getById(plan.getId());
-        SubscriptionPlan merged = current
-                .withName(changes.getName() != null ? changes.getName() : current.getName())
+        SubscriptionPlan merged = current.withName(changes.getName() != null ? changes.getName() : current.getName())
                 .withDescription(changes.getDescription() != null ? changes.getDescription() : current.getDescription())
-                .withPriceMonthlyCents(changes.getPriceMonthlyCents() != 0 ? changes.getPriceMonthlyCents() : current.getPriceMonthlyCents())
-                .withPriceYearlyCents(changes.getPriceYearlyCents() != 0 ? changes.getPriceYearlyCents() : current.getPriceYearlyCents())
+                .withPriceMonthlyCents(changes.getPriceMonthlyCents() != 0
+                        ? changes.getPriceMonthlyCents()
+                        : current.getPriceMonthlyCents())
+                .withPriceYearlyCents(changes.getPriceYearlyCents() != 0
+                        ? changes.getPriceYearlyCents()
+                        : current.getPriceYearlyCents())
                 .withActive(changes.isActive());
         SubscriptionPlan updated = subscriptionPlanUseCase.update(merged, plan.getId());
         log.info("::> [BILLING] Plan updated code={}", code);
@@ -183,7 +171,6 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
 
     /** Resolves the managed plan entity by its unique code, failing if it does not exist. */
     private SubscriptionPlanEntity getPlanEntityByCode(String code) {
-        return planRepository.findByCode(code)
-                .orElseThrow(() -> new NotFoundException("Plan not found: " + code));
+        return planRepository.findByCode(code).orElseThrow(() -> new NotFoundException("Plan not found: " + code));
     }
 }

@@ -54,15 +54,13 @@ public class CurrencyLayerAdapter {
     }
 
     public Map<String, BigDecimal> fetchLive() {
-        if (accessKey == null || accessKey.isBlank()) return Collections.emptyMap();
+        if (accessKey == null || accessKey.isBlank())
+            return Collections.emptyMap();
         String url = apiUrl + "?access_key=" + accessKey;
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> body = webClientBuilder.build().get().uri(url)
-                .retrieve()
-                .bodyToMono(Map.class)
-                .timeout(Duration.ofSeconds(15))
-                .block();
+        Map<String, Object> body = webClientBuilder.build().get().uri(url).retrieve().bodyToMono(Map.class)
+                .timeout(Duration.ofSeconds(15)).block();
 
         if (body == null || !Boolean.TRUE.equals(body.get("success"))) {
             log.warn("CurrencyLayer returned non-success body");
@@ -70,7 +68,8 @@ public class CurrencyLayerAdapter {
         }
         @SuppressWarnings("unchecked")
         Map<String, Number> quotes = (Map<String, Number>) body.get("quotes");
-        if (quotes == null) return Collections.emptyMap();
+        if (quotes == null)
+            return Collections.emptyMap();
 
         Map<String, BigDecimal> out = new HashMap<>();
         for (var entry : quotes.entrySet()) {

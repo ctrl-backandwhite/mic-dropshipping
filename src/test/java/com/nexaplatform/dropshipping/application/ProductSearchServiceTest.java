@@ -19,9 +19,11 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ProductSearchServiceTest {
 
-    @Mock OpenSearchClient client;
+    @Mock
+    OpenSearchClient client;
 
-    @InjectMocks ProductSearchService service;
+    @InjectMocks
+    ProductSearchService service;
 
     @Test
     void searchTyped_returnsEmptyEnvelopeOnClientFailure() throws IOException {

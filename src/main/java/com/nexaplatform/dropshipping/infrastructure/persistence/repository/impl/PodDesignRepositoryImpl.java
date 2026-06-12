@@ -33,25 +33,22 @@ public class PodDesignRepositoryImpl implements PodDesignRepository {
     @Override
     public PodDesign save(PodDesign model) {
         PodDesignEntity entity = podDesignEntityMapper.toEntity(model);
-        entity.setUser(userRepository.findById(model.getUserId())
-                .orElseThrow(() -> new NotFoundException("User")));
-        entity.setProduct(productRepository.findById(model.getProductId())
-                .orElseThrow(() -> new NotFoundException("Product")));
+        entity.setUser(userRepository.findById(model.getUserId()).orElseThrow(() -> new NotFoundException("User")));
+        entity.setProduct(
+                productRepository.findById(model.getProductId()).orElseThrow(() -> new NotFoundException("Product")));
         PodDesignEntity saved = podDesignJpaRepositoryAdapter.save(entity);
         return podDesignEntityMapper.toDomain(saved);
     }
 
     @Override
     public List<PodDesign> findByUserId(UUID userId) {
-        return podDesignEntityMapper.toDomainList(
-                podDesignJpaRepositoryAdapter.findByUser_IdOrderByCreatedAtDesc(userId));
+        return podDesignEntityMapper
+                .toDomainList(podDesignJpaRepositoryAdapter.findByUser_IdOrderByCreatedAtDesc(userId));
     }
 
     @Override
     public PodDesign getById(UUID id) {
-        return podDesignJpaRepositoryAdapter.findById(id)
-                .map(podDesignEntityMapper::toDomain)
-                .orElse(null);
+        return podDesignJpaRepositoryAdapter.findById(id).map(podDesignEntityMapper::toDomain).orElse(null);
     }
 
     @Override

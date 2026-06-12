@@ -25,12 +25,18 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class WebhookSubscriptionUseCaseImplTest {
 
-    @Mock WebhookSubscriptionRepository webhookSubscriptionRepository;
-    @Mock WebhookSubscriptionUpdateMapper webhookSubscriptionUpdateMapper;
-    @Mock WebhookSubscriptionEntityMapper webhookSubscriptionEntityMapper;
-    @Mock WebhookDeliveryRepository deliveryRepository;
-    @Mock WebhookDispatcherService dispatcher;
-    @InjectMocks WebhookSubscriptionUseCaseImpl useCase;
+    @Mock
+    WebhookSubscriptionRepository webhookSubscriptionRepository;
+    @Mock
+    WebhookSubscriptionUpdateMapper webhookSubscriptionUpdateMapper;
+    @Mock
+    WebhookSubscriptionEntityMapper webhookSubscriptionEntityMapper;
+    @Mock
+    WebhookDeliveryRepository deliveryRepository;
+    @Mock
+    WebhookDispatcherService dispatcher;
+    @InjectMocks
+    WebhookSubscriptionUseCaseImpl useCase;
 
     @Test
     void save_generatesSecretActivatesAndPersists() {

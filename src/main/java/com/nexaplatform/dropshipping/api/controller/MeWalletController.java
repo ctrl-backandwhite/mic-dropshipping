@@ -38,23 +38,24 @@ public class MeWalletController implements MeWalletApi {
 
     @Override
     public ResponseEntity<MeWalletDtoOut> wallet(Authentication auth) {
-        return ResponseEntity.ok(meWalletDtoMapper.toWalletDtoOut(
-                walletUseCase.getMyWallet(UUID.fromString(auth.getName()))));
+        return ResponseEntity
+                .ok(meWalletDtoMapper.toWalletDtoOut(walletUseCase.getMyWallet(UUID.fromString(auth.getName()))));
     }
 
     @Override
     public ResponseEntity<PageResponse<MeWalletTxDtoOut>> transactions(Authentication auth, int page, int size) {
         UUID userId = UUID.fromString(auth.getName());
         int capped = Math.min(size, 100);
-        List<MeWalletTxDtoOut> items = meWalletDtoMapper.toTxDtoOutList(
-                walletUseCase.getMyTransactions(userId, page, capped));
+        List<MeWalletTxDtoOut> items = meWalletDtoMapper
+                .toTxDtoOutList(walletUseCase.getMyTransactions(userId, page, capped));
         long total = walletUseCase.countMyTransactions(userId);
         var pageable = PageRequest.of(page, capped);
         return ResponseEntity.ok(PageResponse.from(new PageImpl<>(items, pageable, total)));
     }
 
     @Override
-    public ResponseEntity<MeWalletRechargeDtoOut> recharge(Authentication auth, MeWalletRechargeDtoIn req, String idem) {
+    public ResponseEntity<MeWalletRechargeDtoOut> recharge(Authentication auth, MeWalletRechargeDtoIn req,
+            String idem) {
         UUID userId = UUID.fromString(auth.getName());
         Payment p = paymentUseCase.initiateRecharge(userId, PaymentMethod.valueOf(req.getMethod()),
                 req.getAmountUsdCents(), req.getCurrencyDisplay(), req.getAmountDisplay(), idem, req.getCryptoChain());
@@ -64,20 +65,15 @@ public class MeWalletController implements MeWalletApi {
     @Override
     public ResponseEntity<MeWalletPaymentStatusDtoOut> capturePayPal(UUID paymentId) {
         Payment p = paymentUseCase.capturePayPal(paymentId);
-        return ResponseEntity.ok(MeWalletPaymentStatusDtoOut.builder()
-                .paymentId(p.getId())
-                .status(p.getStatus().name())
-                .build());
+        return ResponseEntity
+                .ok(MeWalletPaymentStatusDtoOut.builder().paymentId(p.getId()).status(p.getStatus().name()).build());
     }
 
     @Override
     public ResponseEntity<MeWalletPaymentStatusDtoOut> confirmMock(Authentication auth, UUID paymentId) {
         UUID userId = UUID.fromString(auth.getName());
         Payment p = paymentUseCase.confirmMockRecharge(userId, paymentId);
-        return ResponseEntity.ok(MeWalletPaymentStatusDtoOut.builder()
-                .paymentId(p.getId())
-                .status(p.getStatus().name())
-                .balanceUsdCents(walletUseCase.getOrCreate(userId).getBalanceUsdCents())
-                .build());
+        return ResponseEntity.ok(MeWalletPaymentStatusDtoOut.builder().paymentId(p.getId()).status(p.getStatus().name())
+                .balanceUsdCents(walletUseCase.getOrCreate(userId).getBalanceUsdCents()).build());
     }
 }

@@ -24,9 +24,12 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AffiliateUseCaseImplTest {
 
-    @Mock AffiliateRepository affiliateRepository;
-    @Mock UserRepository userRepository;
-    @InjectMocks AffiliateUseCaseImpl useCase;
+    @Mock
+    AffiliateRepository affiliateRepository;
+    @Mock
+    UserRepository userRepository;
+    @InjectMocks
+    AffiliateUseCaseImpl useCase;
 
     @Test
     void getOrCreate_returnsExistingWhenPresent() {

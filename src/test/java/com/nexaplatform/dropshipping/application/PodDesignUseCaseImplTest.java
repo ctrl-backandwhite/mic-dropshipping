@@ -23,9 +23,12 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class PodDesignUseCaseImplTest {
 
-    @Mock PodDesignRepository podDesignRepository;
-    @Mock ProductRepository productRepository;
-    @InjectMocks PodDesignUseCaseImpl useCase;
+    @Mock
+    PodDesignRepository podDesignRepository;
+    @Mock
+    ProductRepository productRepository;
+    @InjectMocks
+    PodDesignUseCaseImpl useCase;
 
     @Test
     void create_assignsOwnerAndRendersMockup() {

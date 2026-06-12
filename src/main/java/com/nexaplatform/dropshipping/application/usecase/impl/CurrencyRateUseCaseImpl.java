@@ -59,15 +59,10 @@ public class CurrencyRateUseCaseImpl implements CurrencyRateUseCase {
     public CurrencySyncResult sync() {
         Map<String, BigDecimal> rates = currencyLayerAdapter.fetchLive();
         if (rates.isEmpty()) {
-            return CurrencySyncResult.builder()
-                    .updated(0)
-                    .message("No provider key set or provider returned empty payload.")
-                    .build();
+            return CurrencySyncResult.builder().updated(0)
+                    .message("No provider key set or provider returned empty payload.").build();
         }
         currencyRateService.applyBulkSync(rates);
-        return CurrencySyncResult.builder()
-                .updated(rates.size())
-                .message("Rates updated from provider.")
-                .build();
+        return CurrencySyncResult.builder().updated(rates.size()).message("Rates updated from provider.").build();
     }
 }

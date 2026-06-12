@@ -37,15 +37,13 @@ public interface MeWalletApi {
     @ApiResponse(responseCode = "200", description = "Transactions listed")
     @GetMapping("/transactions")
     ResponseEntity<PageResponse<MeWalletTxDtoOut>> transactions(Authentication auth,
-                                                                @RequestParam(defaultValue = "0") int page,
-                                                                @RequestParam(defaultValue = "20") int size);
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size);
 
     @Operation(summary = "Recharge the authenticated user's wallet")
     @ApiResponse(responseCode = "200", description = "Recharge initiated")
     @PostMapping("/recharge")
-    ResponseEntity<MeWalletRechargeDtoOut> recharge(Authentication auth,
-                                                    @Valid @RequestBody MeWalletRechargeDtoIn req,
-                                                    @RequestHeader(value = "Idempotency-Key", required = false) String idem);
+    ResponseEntity<MeWalletRechargeDtoOut> recharge(Authentication auth, @Valid @RequestBody MeWalletRechargeDtoIn req,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idem);
 
     @Operation(summary = "Capture a PayPal wallet recharge result")
     @ApiResponse(responseCode = "200", description = "PayPal capture processed")
@@ -55,5 +53,6 @@ public interface MeWalletApi {
     @Operation(summary = "Dev-only: mock-confirm a pending wallet recharge")
     @ApiResponse(responseCode = "200", description = "Recharge mock-confirmed")
     @PostMapping("/confirm-mock")
-    ResponseEntity<MeWalletPaymentStatusDtoOut> confirmMock(Authentication auth, @RequestParam("paymentId") UUID paymentId);
+    ResponseEntity<MeWalletPaymentStatusDtoOut> confirmMock(Authentication auth,
+            @RequestParam("paymentId") UUID paymentId);
 }

@@ -64,9 +64,7 @@ public class OrderRepositoryImpl implements OrderRepository {
 
     @Override
     public Order getById(UUID id) {
-        return orderJpaRepositoryAdapter.findById(id)
-                .map(orderEntityMapper::toDomain)
-                .orElse(null);
+        return orderJpaRepositoryAdapter.findById(id).map(orderEntityMapper::toDomain).orElse(null);
     }
 
     @Override
@@ -81,8 +79,8 @@ public class OrderRepositoryImpl implements OrderRepository {
 
     @Override
     public List<Order> findByPartnerAppId(UUID partnerAppId) {
-        return orderJpaRepositoryAdapter.findByPartnerAppId(partnerAppId).stream()
-                .map(orderEntityMapper::toDomain).toList();
+        return orderJpaRepositoryAdapter.findByPartnerAppId(partnerAppId).stream().map(orderEntityMapper::toDomain)
+                .toList();
     }
 
     @Override
@@ -147,17 +145,10 @@ public class OrderRepositoryImpl implements OrderRepository {
             return addressRepository.findById(model.getShippingAddressId())
                     .orElseThrow(() -> new NotFoundException("Address not found"));
         }
-        return addressRepository.save(AddressEntity.builder()
-                .fullName(model.getShippingFullName())
-                .phone(model.getShippingPhone())
-                .email(model.getShippingEmail())
-                .line1(model.getShippingLine1())
-                .line2(model.getShippingLine2())
-                .city(model.getShippingCity())
-                .state(model.getShippingState())
-                .postalCode(model.getShippingPostalCode())
-                .country(model.getShippingCountry())
-                .build());
+        return addressRepository.save(AddressEntity.builder().fullName(model.getShippingFullName())
+                .phone(model.getShippingPhone()).email(model.getShippingEmail()).line1(model.getShippingLine1())
+                .line2(model.getShippingLine2()).city(model.getShippingCity()).state(model.getShippingState())
+                .postalCode(model.getShippingPostalCode()).country(model.getShippingCountry()).build());
     }
 
     /** Persists a fresh billing address from the flat snapshot fields (optional). */
@@ -169,37 +160,24 @@ public class OrderRepositoryImpl implements OrderRepository {
         if (model.getBillingLine1() == null && model.getBillingFullName() == null) {
             return null;
         }
-        return addressRepository.save(AddressEntity.builder()
-                .fullName(model.getBillingFullName())
-                .phone(model.getBillingPhone())
-                .email(model.getBillingEmail())
-                .line1(model.getBillingLine1())
-                .line2(model.getBillingLine2())
-                .city(model.getBillingCity())
-                .state(model.getBillingState())
-                .postalCode(model.getBillingPostalCode())
-                .country(model.getBillingCountry())
-                .build());
+        return addressRepository.save(AddressEntity.builder().fullName(model.getBillingFullName())
+                .phone(model.getBillingPhone()).email(model.getBillingEmail()).line1(model.getBillingLine1())
+                .line2(model.getBillingLine2()).city(model.getBillingCity()).state(model.getBillingState())
+                .postalCode(model.getBillingPostalCode()).country(model.getBillingCountry()).build());
     }
 
     /** Builds a managed order line, resolving the product / variant relations from ids. */
     private OrderItemEntity buildItem(CustomerOrderEntity order, OrderItem itemModel) {
         ProductEntity product = productRepository.findById(itemModel.getProductId())
                 .orElseThrow(() -> new NotFoundException("Product not found: " + itemModel.getProductId()));
-        ProductVariantEntity variant = itemModel.getVariantId() == null ? null
+        ProductVariantEntity variant = itemModel.getVariantId() == null
+                ? null
                 : variantRepository.findById(itemModel.getVariantId())
                         .orElseThrow(() -> new NotFoundException("Variant not found: " + itemModel.getVariantId()));
-        return OrderItemEntity.builder()
-                .order(order)
-                .product(product)
-                .variant(variant)
-                .titleSnapshot(itemModel.getTitleSnapshot())
-                .imageUrlSnapshot(itemModel.getImageUrlSnapshot())
-                .skuSnapshot(itemModel.getSkuSnapshot())
-                .unitPriceCents(itemModel.getUnitPriceCents())
-                .costCents(itemModel.getCostCents())
-                .quantity(itemModel.getQuantity())
-                .lineTotalCents(itemModel.getLineTotalCents())
-                .build();
+        return OrderItemEntity.builder().order(order).product(product).variant(variant)
+                .titleSnapshot(itemModel.getTitleSnapshot()).imageUrlSnapshot(itemModel.getImageUrlSnapshot())
+                .skuSnapshot(itemModel.getSkuSnapshot()).unitPriceCents(itemModel.getUnitPriceCents())
+                .costCents(itemModel.getCostCents()).quantity(itemModel.getQuantity())
+                .lineTotalCents(itemModel.getLineTotalCents()).build();
     }
 }

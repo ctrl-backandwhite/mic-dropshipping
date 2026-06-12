@@ -8,5 +8,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface UsageCounterRepository extends JpaRepository<UsageCounterEntity, UUID> {
-    Optional<UsageCounterEntity> findBySubscription_IdAndMetricAndPeriodStart(UUID subscriptionId, String metric, Instant periodStart);
+    Optional<UsageCounterEntity> findBySubscription_IdAndMetricAndPeriodStart(UUID subscriptionId, String metric,
+            Instant periodStart);
 }

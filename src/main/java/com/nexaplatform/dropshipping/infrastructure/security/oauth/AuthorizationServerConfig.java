@@ -30,14 +30,12 @@ public class AuthorizationServerConfig {
     public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
         OAuth2AuthorizationServerConfigurer authServerConfigurer = new OAuth2AuthorizationServerConfigurer();
 
-        http
-                .securityMatcher(authServerConfigurer.getEndpointsMatcher())
+        http.securityMatcher(authServerConfigurer.getEndpointsMatcher())
                 .with(authServerConfigurer, c -> c.oidc(Customizer.withDefaults()))
                 .authorizeHttpRequests(reg -> reg.anyRequest().authenticated())
                 .csrf(csrf -> csrf.ignoringRequestMatchers(authServerConfigurer.getEndpointsMatcher()))
-                .exceptionHandling(ex -> ex
-                        .defaultAuthenticationEntryPointFor(
-                                new LoginUrlAuthenticationEntryPoint("/login"),
+                .exceptionHandling(
+                        ex -> ex.defaultAuthenticationEntryPointFor(new LoginUrlAuthenticationEntryPoint("/login"),
                                 new MediaTypeRequestMatcher(MediaType.TEXT_HTML)));
 
         return http.build();
@@ -65,7 +63,8 @@ public class AuthorizationServerConfig {
 
     @Bean
     public org.springframework.security.authentication.AuthenticationManager authenticationManager(
-            org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration cfg) throws Exception {
+            org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration cfg)
+            throws Exception {
         return cfg.getAuthenticationManager();
     }
 }

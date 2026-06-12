@@ -40,9 +40,7 @@ public class PriceRuleRepositoryImpl implements PriceRuleRepository {
 
     @Override
     public PriceRule getById(UUID id) {
-        return priceRuleJpaRepositoryAdapter.findById(id)
-                .map(priceRuleEntityMapper::toDomain)
-                .orElse(null);
+        return priceRuleJpaRepositoryAdapter.findById(id).map(priceRuleEntityMapper::toDomain).orElse(null);
     }
 
     @Override

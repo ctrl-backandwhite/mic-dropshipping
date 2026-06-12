@@ -45,15 +45,13 @@ public class SourcingQuoteRepositoryImpl implements SourcingQuoteRepository {
 
     @Override
     public List<SourcingQuote> findByRequestIdOrderByPriceUsdCentsAsc(UUID requestId) {
-        return sourcingQuoteEntityMapper.toDomainList(
-                sourcingQuoteJpaRepositoryAdapter.findByRequest_IdOrderByPriceUsdCentsAsc(requestId));
+        return sourcingQuoteEntityMapper
+                .toDomainList(sourcingQuoteJpaRepositoryAdapter.findByRequest_IdOrderByPriceUsdCentsAsc(requestId));
     }
 
     @Override
     public SourcingQuote getById(UUID id) {
-        return sourcingQuoteJpaRepositoryAdapter.findById(id)
-                .map(sourcingQuoteEntityMapper::toDomain)
-                .orElse(null);
+        return sourcingQuoteJpaRepositoryAdapter.findById(id).map(sourcingQuoteEntityMapper::toDomain).orElse(null);
     }
 
     @Override

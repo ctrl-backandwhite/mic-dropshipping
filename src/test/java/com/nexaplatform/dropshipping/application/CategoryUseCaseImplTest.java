@@ -24,10 +24,14 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class CategoryUseCaseImplTest {
 
-    @Mock CategoryRepository categoryRepository;
-    @Mock CategoryUpdateMapper categoryUpdateMapper;
-    @Mock EntityManager em;
-    @InjectMocks CategoryUseCaseImpl useCase;
+    @Mock
+    CategoryRepository categoryRepository;
+    @Mock
+    CategoryUpdateMapper categoryUpdateMapper;
+    @Mock
+    EntityManager em;
+    @InjectMocks
+    CategoryUseCaseImpl useCase;
 
     @Test
     void toggle_flipsActiveAndPersists() {
@@ -61,7 +65,6 @@ class CategoryUseCaseImplTest {
         when(categoryRepository.getById(id)).thenReturn(existing);
         when(categoryRepository.findBySlug("new")).thenReturn(Optional.of(other));
 
-        assertThatThrownBy(() -> useCase.update(incoming, id))
-                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> useCase.update(incoming, id)).isInstanceOf(BusinessException.class);
     }
 }

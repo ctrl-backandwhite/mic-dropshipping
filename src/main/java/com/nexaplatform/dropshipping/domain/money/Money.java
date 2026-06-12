@@ -77,20 +77,27 @@ public final class Money implements Comparable<Money> {
 
     /* ==================== Accessors ==================== */
 
-    public BigDecimal amount() { return amount; }
-    public Currency currency() { return currency; }
-    public String currencyCode() { return currency.code(); }
+    public BigDecimal amount() {
+        return amount;
+    }
+
+    public Currency currency() {
+        return currency;
+    }
+
+    public String currencyCode() {
+        return currency.code();
+    }
 
     /** Cantidad en céntimos como long. Rounding HALF_UP por seguridad. */
     public long cents() {
-        return amount.movePointRight(COMMERCIAL_SCALE)
-                .setScale(0, COMMERCIAL_ROUNDING)
-                .longValueExact();
+        return amount.movePointRight(COMMERCIAL_SCALE).setScale(0, COMMERCIAL_ROUNDING).longValueExact();
     }
 
     /** Devuelve una copia con el amount redondeado al estándar comercial (2 decimales HALF_UP). */
     public Money commercial() {
-        if (amount.scale() == COMMERCIAL_SCALE && amount.signum() != 0) return this;
+        if (amount.scale() == COMMERCIAL_SCALE && amount.signum() != 0)
+            return this;
         return new Money(amount.setScale(COMMERCIAL_SCALE, COMMERCIAL_ROUNDING), currency);
     }
 
@@ -127,7 +134,8 @@ public final class Money implements Comparable<Money> {
     /** División por escalar; redondeo HALF_UP a 2 decimales. */
     public Money divide(BigDecimal divisor) {
         Objects.requireNonNull(divisor, "divisor");
-        if (divisor.signum() == 0) throw new ArithmeticException("Division by zero");
+        if (divisor.signum() == 0)
+            throw new ArithmeticException("Division by zero");
         return new Money(amount.divide(divisor, COMMERCIAL_SCALE, COMMERCIAL_ROUNDING), currency);
     }
 
@@ -151,14 +159,37 @@ public final class Money implements Comparable<Money> {
 
     /* ==================== Predicados ==================== */
 
-    public boolean isZero()     { return amount.signum() == 0; }
-    public boolean isPositive() { return amount.signum() > 0; }
-    public boolean isNegative() { return amount.signum() < 0; }
+    public boolean isZero() {
+        return amount.signum() == 0;
+    }
 
-    public boolean greaterThan(Money other)  { requireSameCurrency(other); return amount.compareTo(other.amount) > 0; }
-    public boolean greaterOrEqual(Money other){ requireSameCurrency(other); return amount.compareTo(other.amount) >= 0; }
-    public boolean lessThan(Money other)     { requireSameCurrency(other); return amount.compareTo(other.amount) < 0; }
-    public boolean lessOrEqual(Money other)  { requireSameCurrency(other); return amount.compareTo(other.amount) <= 0; }
+    public boolean isPositive() {
+        return amount.signum() > 0;
+    }
+
+    public boolean isNegative() {
+        return amount.signum() < 0;
+    }
+
+    public boolean greaterThan(Money other) {
+        requireSameCurrency(other);
+        return amount.compareTo(other.amount) > 0;
+    }
+
+    public boolean greaterOrEqual(Money other) {
+        requireSameCurrency(other);
+        return amount.compareTo(other.amount) >= 0;
+    }
+
+    public boolean lessThan(Money other) {
+        requireSameCurrency(other);
+        return amount.compareTo(other.amount) < 0;
+    }
+
+    public boolean lessOrEqual(Money other) {
+        requireSameCurrency(other);
+        return amount.compareTo(other.amount) <= 0;
+    }
 
     /* ==================== Conversión de divisa ==================== */
 
@@ -173,7 +204,8 @@ public final class Money implements Comparable<Money> {
     public Money convertTo(Currency target, BigDecimal rate) {
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(rate, "rate");
-        if (currency.equals(target)) return this;
+        if (currency.equals(target))
+            return this;
         return new Money(amount.multiply(rate), target).commercial();
     }
 
@@ -194,10 +226,11 @@ public final class Money implements Comparable<Money> {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof Money m)) return false;
-        return currency.equals(m.currency)
-                && commercial().amount.compareTo(m.commercial().amount) == 0;
+        if (this == o)
+            return true;
+        if (!(o instanceof Money m))
+            return false;
+        return currency.equals(m.currency) && commercial().amount.compareTo(m.commercial().amount) == 0;
     }
 
     @Override

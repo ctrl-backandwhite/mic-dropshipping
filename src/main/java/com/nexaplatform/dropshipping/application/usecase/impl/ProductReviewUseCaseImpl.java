@@ -34,7 +34,8 @@ public class ProductReviewUseCaseImpl implements ProductReviewUseCase {
     @Override
     @Transactional(readOnly = true)
     public ProductReviewPage list(UUID productId, int page, int size, Short minRating) {
-        if (!productRepo.existsById(productId)) throw new NotFoundException("Product");
+        if (!productRepo.existsById(productId))
+            throw new NotFoundException("Product");
         PageRequest pr = PageRequest.of(page, Math.min(size, 50));
         Page<ProductReview> result = minRating != null && minRating > 0
                 ? productReviewRepository.findApprovedByProductAndMinRating(productId, minRating, pr)
@@ -44,19 +45,15 @@ public class ProductReviewUseCaseImpl implements ProductReviewUseCase {
 
         // Rating distribution histogram 5..1.
         Map<Integer, Long> dist = productReviewRepository.ratingDistribution(productId);
-        for (int s = 1; s <= 5; s++) dist.putIfAbsent(s, 0L);
+        for (int s = 1; s <= 5; s++)
+            dist.putIfAbsent(s, 0L);
         long total = dist.values().stream().mapToLong(Long::longValue).sum();
-        double avg = total == 0 ? 0.0
+        double avg = total == 0
+                ? 0.0
                 : dist.entrySet().stream().mapToDouble(e -> e.getKey() * e.getValue()).sum() / total;
 
-        return ProductReviewPage.builder()
-                .items(items)
-                .page(page)
-                .size(pr.getPageSize())
-                .totalElements(result.getTotalElements())
-                .totalPages(result.getTotalPages())
-                .distribution(dist)
-                .averageRating(Math.round(avg * 10) / 10.0)
-                .build();
+        return ProductReviewPage.builder().items(items).page(page).size(pr.getPageSize())
+                .totalElements(result.getTotalElements()).totalPages(result.getTotalPages()).distribution(dist)
+                .averageRating(Math.round(avg * 10) / 10.0).build();
     }
 }

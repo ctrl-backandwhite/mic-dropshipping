@@ -18,7 +18,11 @@ import java.util.UUID;
 @Entity
 @Table(name = "webhook_delivery")
 @EntityListeners(AuditingEntityListener.class)
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class WebhookDeliveryEntity {
 
     @Id

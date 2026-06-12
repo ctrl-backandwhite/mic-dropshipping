@@ -15,7 +15,11 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "webhook_subscription")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class WebhookSubscriptionEntity extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)

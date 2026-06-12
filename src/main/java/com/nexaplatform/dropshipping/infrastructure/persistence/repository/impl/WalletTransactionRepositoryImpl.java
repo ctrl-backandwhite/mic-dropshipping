@@ -46,17 +46,14 @@ public class WalletTransactionRepositoryImpl implements WalletTransactionReposit
 
     @Override
     public WalletTransaction getById(UUID id) {
-        return walletTransactionJpaRepositoryAdapter.findById(id)
-                .map(walletTransactionEntityMapper::toDomain)
+        return walletTransactionJpaRepositoryAdapter.findById(id).map(walletTransactionEntityMapper::toDomain)
                 .orElse(null);
     }
 
     @Override
     public List<WalletTransaction> findByWalletIdOrderByCreatedAtDesc(UUID walletId, int page, int size) {
-        return walletTransactionEntityMapper.toDomainList(
-                walletTransactionJpaRepositoryAdapter
-                        .findByWallet_IdOrderByCreatedAtDesc(walletId, PageRequest.of(page, Math.min(size, 100)))
-                        .getContent());
+        return walletTransactionEntityMapper.toDomainList(walletTransactionJpaRepositoryAdapter
+                .findByWallet_IdOrderByCreatedAtDesc(walletId, PageRequest.of(page, Math.min(size, 100))).getContent());
     }
 
     @Override

@@ -39,5 +39,5 @@ public interface AdminBillingApi {
     @ApiResponse(responseCode = "200", description = "Plan updated")
     @PutMapping("/plans/{code}")
     ResponseEntity<OperationResponseDtoOut> updatePlan(@PathVariable String code,
-                                                       @Valid @RequestBody AdminPlanUpdateDtoIn body);
+            @Valid @RequestBody AdminPlanUpdateDtoIn body);
 }

@@ -8,5 +8,6 @@ import java.util.UUID;
 
 public interface JwkKeyRepository extends JpaRepository<JwkKeyEntity, UUID> {
     List<JwkKeyEntity> findAllByActiveTrueOrderByCreatedAtDesc();
+
     List<JwkKeyEntity> findAllByOrderByCreatedAtDesc();
 }

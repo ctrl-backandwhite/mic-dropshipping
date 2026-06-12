@@ -24,7 +24,7 @@ import java.util.List;
 public interface CurrencyApi {
 
     @Operation(summary = "List active currency rates")
-    @GetMapping({ "/api/storefront/currency/rates", "/api/admin/currency/rates" })
+    @GetMapping({"/api/storefront/currency/rates", "/api/admin/currency/rates"})
     ResponseEntity<List<CurrencyDtoOut>> listActive();
 
     @Operation(summary = "Get a single currency by code")

@@ -8,5 +8,6 @@ import java.util.UUID;
 
 public interface ShippingZoneRepository extends JpaRepository<ShippingZoneEntity, UUID> {
     List<ShippingZoneEntity> findBySupplier_IdAndActiveTrueOrderByCountryCodeAsc(UUID supplierId);
+
     boolean existsBySupplier_IdAndCountryCodeAndActiveTrue(UUID supplierId, String countryCode);
 }

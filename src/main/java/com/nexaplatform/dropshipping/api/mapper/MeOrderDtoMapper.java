@@ -69,17 +69,10 @@ public interface MeOrderDtoMapper {
         if (model.getShippingFullName() == null && model.getShippingLine1() == null) {
             return null;
         }
-        return MeOrderAddressDtoOut.builder()
-                .fullName(model.getShippingFullName())
-                .phone(model.getShippingPhone())
-                .email(model.getShippingEmail())
-                .line1(model.getShippingLine1())
-                .line2(model.getShippingLine2())
-                .city(model.getShippingCity())
-                .state(model.getShippingState())
-                .postalCode(model.getShippingPostalCode())
-                .country(model.getShippingCountry())
-                .build();
+        return MeOrderAddressDtoOut.builder().fullName(model.getShippingFullName()).phone(model.getShippingPhone())
+                .email(model.getShippingEmail()).line1(model.getShippingLine1()).line2(model.getShippingLine2())
+                .city(model.getShippingCity()).state(model.getShippingState()).postalCode(model.getShippingPostalCode())
+                .country(model.getShippingCountry()).build();
     }
 
     /** Builds the billing address block from the order's flat snapshot fields (nullable). */
@@ -87,17 +80,10 @@ public interface MeOrderDtoMapper {
         if (model.getBillingFullName() == null && model.getBillingLine1() == null) {
             return null;
         }
-        return MeOrderAddressDtoOut.builder()
-                .fullName(model.getBillingFullName())
-                .phone(model.getBillingPhone())
-                .email(model.getBillingEmail())
-                .line1(model.getBillingLine1())
-                .line2(model.getBillingLine2())
-                .city(model.getBillingCity())
-                .state(model.getBillingState())
-                .postalCode(model.getBillingPostalCode())
-                .country(model.getBillingCountry())
-                .build();
+        return MeOrderAddressDtoOut.builder().fullName(model.getBillingFullName()).phone(model.getBillingPhone())
+                .email(model.getBillingEmail()).line1(model.getBillingLine1()).line2(model.getBillingLine2())
+                .city(model.getBillingCity()).state(model.getBillingState()).postalCode(model.getBillingPostalCode())
+                .country(model.getBillingCountry()).build();
     }
 
     /** Converts integer cents to a 4-dp BigDecimal amount. */

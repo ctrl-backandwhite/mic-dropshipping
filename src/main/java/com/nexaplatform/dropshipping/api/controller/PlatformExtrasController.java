@@ -176,6 +176,7 @@ public class PlatformExtrasController implements PlatformExtrasApi {
 
     @Override
     public CarbonFootprintDtoOut carbonFootprint(ShippingCalculatorDtoIn req) {
-        return shippingMapper.toCarbonDtoOut(shippingUseCase.carbonFootprint(req.effectiveWeight(), req.effectiveQty()));
+        return shippingMapper
+                .toCarbonDtoOut(shippingUseCase.carbonFootprint(req.effectiveWeight(), req.effectiveQty()));
     }
 }

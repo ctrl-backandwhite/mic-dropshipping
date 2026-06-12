@@ -19,10 +19,6 @@ public class InMemoryBucketFactory implements BucketFactory {
     @Override
     public Bucket resolve(String key, long capacity, Duration period) {
         return buckets.computeIfAbsent(key, k -> Bucket.builder()
-                .addLimit(Bandwidth.builder()
-                        .capacity(capacity)
-                        .refillIntervally(capacity, period)
-                        .build())
-                .build());
+                .addLimit(Bandwidth.builder().capacity(capacity).refillIntervally(capacity, period).build()).build());
     }
 }

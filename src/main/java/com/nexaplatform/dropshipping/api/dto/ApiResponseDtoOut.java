@@ -36,13 +36,12 @@ public class ApiResponseDtoOut<T> {
     private ZonedDateTime timestamp;
 
     public static <T> ApiResponseDtoOut<T> success(T data, String message) {
-        return ApiResponseDtoOut.<T>builder().code("SUCCESS").message(message).data(data)
-                .timestamp(ZonedDateTime.now()).build();
+        return ApiResponseDtoOut.<T>builder().code("SUCCESS").message(message).data(data).timestamp(ZonedDateTime.now())
+                .build();
     }
 
     public static <T> ApiResponseDtoOut<T> success(String message) {
-        return ApiResponseDtoOut.<T>builder().code("SUCCESS").message(message)
-                .timestamp(ZonedDateTime.now()).build();
+        return ApiResponseDtoOut.<T>builder().code("SUCCESS").message(message).timestamp(ZonedDateTime.now()).build();
     }
 
     public static <T> ApiResponseDtoOut<T> error(String code, String message, List<String> details) {

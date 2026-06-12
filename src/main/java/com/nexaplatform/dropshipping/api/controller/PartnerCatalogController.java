@@ -41,13 +41,12 @@ public class PartnerCatalogController implements PartnerCatalogApi {
     /* ============================ Products ============================ */
 
     @Override
-    public PageResponse<ProductSummaryView> list(
-            int page, int size, String lang, String q,
-            UUID categoryId, UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice,
-            String shipFrom, Boolean freeShipping, Boolean selfPickup, Boolean hasVideo,
-            Integer minRating, Integer inventoryMin, String certification, String sort) {
-        return storefrontRead.productListFull(page, size, lang, q, categoryId, supplierId, minPrice, maxPrice,
-                shipFrom, freeShipping, selfPickup, hasVideo, minRating, inventoryMin, certification, sort);
+    public PageResponse<ProductSummaryView> list(int page, int size, String lang, String q, UUID categoryId,
+            UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping,
+            Boolean selfPickup, Boolean hasVideo, Integer minRating, Integer inventoryMin, String certification,
+            String sort) {
+        return storefrontRead.productListFull(page, size, lang, q, categoryId, supplierId, minPrice, maxPrice, shipFrom,
+                freeShipping, selfPickup, hasVideo, minRating, inventoryMin, certification, sort);
     }
 
     @Override
@@ -99,7 +98,8 @@ public class PartnerCatalogController implements PartnerCatalogApi {
     }
 
     @Override
-    public PageResponse<ProductSummaryView> productsByCategory(String idOrSlug, int page, int size, String lang, String sort) {
+    public PageResponse<ProductSummaryView> productsByCategory(String idOrSlug, int page, int size, String lang,
+            String sort) {
         return storefrontRead.productsByCategory(idOrSlug, page, size, lang, sort);
     }
 

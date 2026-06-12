@@ -31,19 +31,12 @@ public class StripeService {
         }
     }
 
-    public Session createCheckoutSession(String customerEmail,
-                                         String stripePriceId,
-                                         String successUrl,
-                                         String cancelUrl) throws StripeException {
-        SessionCreateParams params = SessionCreateParams.builder()
-                .setMode(SessionCreateParams.Mode.SUBSCRIPTION)
-                .setSuccessUrl(successUrl + "?session_id={CHECKOUT_SESSION_ID}")
-                .setCancelUrl(cancelUrl)
+    public Session createCheckoutSession(String customerEmail, String stripePriceId, String successUrl,
+            String cancelUrl) throws StripeException {
+        SessionCreateParams params = SessionCreateParams.builder().setMode(SessionCreateParams.Mode.SUBSCRIPTION)
+                .setSuccessUrl(successUrl + "?session_id={CHECKOUT_SESSION_ID}").setCancelUrl(cancelUrl)
                 .setCustomerEmail(customerEmail)
-                .addLineItem(SessionCreateParams.LineItem.builder()
-                        .setPrice(stripePriceId)
-                        .setQuantity(1L)
-                        .build())
+                .addLineItem(SessionCreateParams.LineItem.builder().setPrice(stripePriceId).setQuantity(1L).build())
                 .build();
         return Session.create(params);
     }

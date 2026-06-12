@@ -16,15 +16,12 @@ public class StorageConfig {
 
     @Bean
     public S3Client s3Client(@Value("${nexadrop.storage.endpoint}") String endpoint,
-                             @Value("${nexadrop.storage.region}") String region,
-                             @Value("${nexadrop.storage.access-key}") String accessKey,
-                             @Value("${nexadrop.storage.secret-key}") String secretKey,
-                             @Value("${nexadrop.storage.path-style-access}") boolean pathStyle) {
-        return S3Client.builder()
-                .endpointOverride(URI.create(endpoint))
-                .region(Region.of(region))
+            @Value("${nexadrop.storage.region}") String region,
+            @Value("${nexadrop.storage.access-key}") String accessKey,
+            @Value("${nexadrop.storage.secret-key}") String secretKey,
+            @Value("${nexadrop.storage.path-style-access}") boolean pathStyle) {
+        return S3Client.builder().endpointOverride(URI.create(endpoint)).region(Region.of(region))
                 .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
-                .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(pathStyle).build())
-                .build();
+                .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(pathStyle).build()).build();
     }
 }

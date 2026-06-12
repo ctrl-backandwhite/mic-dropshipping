@@ -22,9 +22,12 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class SubscriptionPlanUseCaseImplTest {
 
-    @Mock SubscriptionPlanRepository subscriptionPlanRepository;
-    @Mock SubscriptionPlanUpdateMapper subscriptionPlanUpdateMapper;
-    @InjectMocks SubscriptionPlanUseCaseImpl useCase;
+    @Mock
+    SubscriptionPlanRepository subscriptionPlanRepository;
+    @Mock
+    SubscriptionPlanUpdateMapper subscriptionPlanUpdateMapper;
+    @InjectMocks
+    SubscriptionPlanUseCaseImpl useCase;
 
     @Test
     void save_delegatesToRepository() {

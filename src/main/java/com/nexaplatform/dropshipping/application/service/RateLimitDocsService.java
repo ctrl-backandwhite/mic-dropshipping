@@ -23,21 +23,14 @@ public class RateLimitDocsService {
 
     /** Return one typed entry per declared rate-limit policy. */
     public List<RateLimitPolicyDtoOut> listPolicies() {
-        return filter.policies().stream()
-                .map(RateLimitDocsService::toDto)
-                .toList();
+        return filter.policies().stream().map(RateLimitDocsService::toDto).toList();
     }
 
     @SuppressWarnings("unchecked")
     private static RateLimitPolicyDtoOut toDto(Map<String, Object> p) {
         Object capacity = p.get("capacity");
-        return RateLimitPolicyDtoOut.builder()
-                .name((String) p.get("name"))
-                .path((String) p.get("path"))
-                .scope((String) p.get("scope"))
-                .capacity(capacity instanceof Number n ? n.intValue() : null)
-                .period((String) p.get("period"))
-                .tiers((Map<String, Object>) p.get("tiers"))
-                .build();
+        return RateLimitPolicyDtoOut.builder().name((String) p.get("name")).path((String) p.get("path"))
+                .scope((String) p.get("scope")).capacity(capacity instanceof Number n ? n.intValue() : null)
+                .period((String) p.get("period")).tiers((Map<String, Object>) p.get("tiers")).build();
     }
 }

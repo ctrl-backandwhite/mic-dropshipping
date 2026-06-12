@@ -28,17 +28,19 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ProductReviewUseCaseImplTest {
 
-    @Mock ProductReviewRepository productReviewRepository;
-    @Mock ProductRepository productRepo;
-    @InjectMocks ProductReviewUseCaseImpl useCase;
+    @Mock
+    ProductReviewRepository productReviewRepository;
+    @Mock
+    ProductRepository productRepo;
+    @InjectMocks
+    ProductReviewUseCaseImpl useCase;
 
     @Test
     void list_throwsWhenProductMissing() {
         UUID productId = UUID.randomUUID();
         when(productRepo.existsById(productId)).thenReturn(false);
 
-        assertThatThrownBy(() -> useCase.list(productId, 0, 10, null))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> useCase.list(productId, 0, 10, null)).isInstanceOf(NotFoundException.class);
     }
 
     @Test

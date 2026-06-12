@@ -12,7 +12,11 @@ import java.util.UUID;
 @Entity
 @Table(name = "product_keyword")
 @EntityListeners(AuditingEntityListener.class)
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ProductTagEntity {
 
     @Id

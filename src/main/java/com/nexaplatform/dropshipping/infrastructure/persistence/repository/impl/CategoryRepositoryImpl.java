@@ -43,8 +43,7 @@ public class CategoryRepositoryImpl implements CategoryRepository {
     @Override
     public List<Category> findAll() {
         return categoryJpaRepositoryAdapter.findAll().stream()
-                .sorted(Comparator.comparingInt(CategoryEntity::getPosition))
-                .map(categoryEntityMapper::toDomain)
+                .sorted(Comparator.comparingInt(CategoryEntity::getPosition)).map(categoryEntityMapper::toDomain)
                 .toList();
     }
 
@@ -55,9 +54,7 @@ public class CategoryRepositoryImpl implements CategoryRepository {
 
     @Override
     public Category getById(UUID id) {
-        return categoryJpaRepositoryAdapter.findById(id)
-                .map(categoryEntityMapper::toDomain)
-                .orElse(null);
+        return categoryJpaRepositoryAdapter.findById(id).map(categoryEntityMapper::toDomain).orElse(null);
     }
 
     @Override
@@ -116,11 +113,8 @@ public class CategoryRepositoryImpl implements CategoryRepository {
             if (e.getValue() == null || e.getValue().isBlank()) {
                 continue;
             }
-            out.add(CategoryTranslationEntity.builder()
-                    .category(c)
-                    .language(e.getKey().toLowerCase())
-                    .name(e.getValue())
-                    .build());
+            out.add(CategoryTranslationEntity.builder().category(c).language(e.getKey().toLowerCase())
+                    .name(e.getValue()).build());
         }
         return out;
     }

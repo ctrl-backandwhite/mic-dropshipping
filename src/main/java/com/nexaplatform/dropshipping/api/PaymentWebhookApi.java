@@ -18,15 +18,15 @@ public interface PaymentWebhookApi {
     @Operation(summary = "Receive a Stripe webhook event (signature verified)")
     @PostMapping(value = "/stripe", consumes = "application/json")
     ResponseEntity<String> stripe(@RequestBody String payload,
-                                  @RequestHeader(value = "Stripe-Signature", required = false) String sig);
+            @RequestHeader(value = "Stripe-Signature", required = false) String sig);
 
     @Operation(summary = "Receive a PayPal webhook event (HMAC verified)")
     @PostMapping("/paypal")
     ResponseEntity<String> paypal(@RequestBody String payload,
-                                  @RequestHeader(value = "PayPal-Transmission-Sig", required = false) String sig);
+            @RequestHeader(value = "PayPal-Transmission-Sig", required = false) String sig);
 
     @Operation(summary = "Receive a Coinbase Commerce webhook event (HMAC verified)")
     @PostMapping("/coinbase")
     ResponseEntity<String> coinbase(@RequestBody String payload,
-                                    @RequestHeader(value = "X-CC-Webhook-Signature", required = false) String sig);
+            @RequestHeader(value = "X-CC-Webhook-Signature", required = false) String sig);
 }

@@ -16,7 +16,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class OrderPaymentIntentDtoIn {
 
-    public enum Method { WALLET, CARD, PAYPAL, USDT }
+    public enum Method {
+        WALLET, CARD, PAYPAL, USDT
+    }
 
     @NotNull
     private Method method;

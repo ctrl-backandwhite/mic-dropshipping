@@ -57,11 +57,12 @@ public interface SourcingApi {
     @Operation(summary = "Submit a quote for a sourcing request")
     @PostMapping("/requests/{id}/quotes")
     ResponseEntity<SourcingQuoteDtoOut> submitQuote(@PathVariable UUID id, @Valid @RequestBody SourcingQuoteDtoIn q,
-                          @RequestParam(required = false) UUID asAgent);
+            @RequestParam(required = false) UUID asAgent);
 
     @Operation(summary = "Select the winning quote for a sourcing request")
     @PostMapping("/requests/{id}/select-quote/{quoteId}")
-    ResponseEntity<SourcingRequestDtoOut> selectQuote(Authentication auth, @PathVariable UUID id, @PathVariable UUID quoteId);
+    ResponseEntity<SourcingRequestDtoOut> selectQuote(Authentication auth, @PathVariable UUID id,
+            @PathVariable UUID quoteId);
 
     @Operation(summary = "List the active sourcing agents")
     @GetMapping("/agents")

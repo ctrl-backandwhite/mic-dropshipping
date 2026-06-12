@@ -9,10 +9,13 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "shipping_zone",
-       uniqueConstraints = @UniqueConstraint(columnNames = { "supplier_id", "country_code" }))
+@Table(name = "shipping_zone", uniqueConstraints = @UniqueConstraint(columnNames = {"supplier_id", "country_code"}))
 @EntityListeners(AuditingEntityListener.class)
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ShippingZoneEntity {
 
     @Id

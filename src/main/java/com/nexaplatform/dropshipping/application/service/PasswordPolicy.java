@@ -26,11 +26,9 @@ public class PasswordPolicy {
     private static final Pattern DIGIT = Pattern.compile(".*\\d.*");
     private static final Pattern SYMBOL = Pattern.compile(".*[^A-Za-z0-9].*");
 
-    private static final Set<String> COMMON = Set.of(
-            "password", "password1", "password123", "password1234", "passw0rd",
-            "qwerty", "qwerty123", "12345678", "123456789", "1234567890",
-            "letmein", "welcome", "admin", "administrator", "changeme",
-            "iloveyou", "abc12345", "monkey", "dragon", "trustno1");
+    private static final Set<String> COMMON = Set.of("password", "password1", "password123", "password1234", "passw0rd",
+            "qwerty", "qwerty123", "12345678", "123456789", "1234567890", "letmein", "welcome", "admin",
+            "administrator", "changeme", "iloveyou", "abc12345", "monkey", "dragon", "trustno1");
 
     public void validate(String password) {
         if (password == null || password.length() < 12) {

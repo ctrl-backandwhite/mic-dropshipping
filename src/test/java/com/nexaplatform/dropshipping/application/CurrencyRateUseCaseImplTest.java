@@ -23,10 +23,14 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class CurrencyRateUseCaseImplTest {
 
-    @Mock CurrencyRateService currencyRateService;
-    @Mock CurrencyLayerAdapter currencyLayerAdapter;
-    @Mock CurrencyRateEntityMapper currencyRateEntityMapper;
-    @InjectMocks CurrencyRateUseCaseImpl useCase;
+    @Mock
+    CurrencyRateService currencyRateService;
+    @Mock
+    CurrencyLayerAdapter currencyLayerAdapter;
+    @Mock
+    CurrencyRateEntityMapper currencyRateEntityMapper;
+    @InjectMocks
+    CurrencyRateUseCaseImpl useCase;
 
     @Test
     void one_mapsRequiredEntityToModel() {

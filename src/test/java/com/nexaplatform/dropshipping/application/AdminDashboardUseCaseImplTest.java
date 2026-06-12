@@ -27,23 +27,31 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AdminDashboardUseCaseImplTest {
 
-    @Mock ProductRepository productRepository;
-    @Mock OrderRepository orderRepository;
-    @Mock SupplierRepository supplierRepository;
-    @Mock UserRepository userRepository;
-    @Mock SubscriptionPlanRepository planRepository;
-    @Mock CustomerSubscriptionRepository subscriptionRepository;
-    @Mock PricingService pricingService;
+    @Mock
+    ProductRepository productRepository;
+    @Mock
+    OrderRepository orderRepository;
+    @Mock
+    SupplierRepository supplierRepository;
+    @Mock
+    UserRepository userRepository;
+    @Mock
+    SubscriptionPlanRepository planRepository;
+    @Mock
+    CustomerSubscriptionRepository subscriptionRepository;
+    @Mock
+    PricingService pricingService;
 
-    @InjectMocks AdminDashboardUseCaseImpl useCase;
+    @InjectMocks
+    AdminDashboardUseCaseImpl useCase;
 
     @Test
     void series_bucketsRecentOrdersByDay() {
         Instant recent = Instant.now().minus(1, ChronoUnit.DAYS);
         String day = recent.toString().substring(0, 10);
         var order = CustomerOrderEntity.builder().placedAt(recent).totalCents(500).build();
-        var stale = CustomerOrderEntity.builder()
-                .placedAt(Instant.now().minus(90, ChronoUnit.DAYS)).totalCents(999).build();
+        var stale = CustomerOrderEntity.builder().placedAt(Instant.now().minus(90, ChronoUnit.DAYS)).totalCents(999)
+                .build();
         when(orderRepository.findAll()).thenReturn(List.of(order, stale));
 
         DashboardSeries result = useCase.series();
@@ -54,10 +62,10 @@ class AdminDashboardUseCaseImplTest {
 
     @Test
     void recentOrders_sortsByPlacedAtDescAndProjectsToModel() {
-        var older = CustomerOrderEntity.builder()
-                .orderNumber("OLD").placedAt(Instant.now().minus(5, ChronoUnit.DAYS)).totalCents(100).build();
-        var newer = CustomerOrderEntity.builder()
-                .orderNumber("NEW").placedAt(Instant.now().minus(1, ChronoUnit.DAYS)).totalCents(200).build();
+        var older = CustomerOrderEntity.builder().orderNumber("OLD").placedAt(Instant.now().minus(5, ChronoUnit.DAYS))
+                .totalCents(100).build();
+        var newer = CustomerOrderEntity.builder().orderNumber("NEW").placedAt(Instant.now().minus(1, ChronoUnit.DAYS))
+                .totalCents(200).build();
         when(orderRepository.findAll()).thenReturn(List.of(older, newer));
 
         List<DashboardRecentOrder> result = useCase.recentOrders();

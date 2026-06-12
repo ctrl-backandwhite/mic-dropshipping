@@ -51,8 +51,7 @@ public interface BillingDtoMapper {
         if (features == null) {
             return Map.of();
         }
-        return features.stream()
-                .filter(f -> f.getIntValue() != null)
-                .collect(Collectors.toMap(PlanFeatureEntity::getFeatureKey, PlanFeatureEntity::getIntValue, (a, b) -> a));
+        return features.stream().filter(f -> f.getIntValue() != null).collect(
+                Collectors.toMap(PlanFeatureEntity::getFeatureKey, PlanFeatureEntity::getIntValue, (a, b) -> a));
     }
 }

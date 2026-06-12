@@ -37,9 +37,7 @@ public class NotificationUseCaseImpl implements NotificationUseCase {
     @Override
     @Transactional(readOnly = true)
     public UnreadCount unreadCount(UUID userId) {
-        return UnreadCount.builder()
-                .count(notificationRepository.countUnreadByUserId(userId))
-                .build();
+        return UnreadCount.builder().count(notificationRepository.countUnreadByUserId(userId)).build();
     }
 
     @Override

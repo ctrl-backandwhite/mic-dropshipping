@@ -9,5 +9,7 @@ import java.util.UUID;
 
 public interface WebhookDeliveryRepository extends JpaRepository<WebhookDeliveryEntity, UUID> {
     List<WebhookDeliveryEntity> findBySubscription_IdOrderByCreatedAtDesc(UUID subscriptionId);
-    List<WebhookDeliveryEntity> findByStatusAndNextRetryAtLessThanEqualOrderByNextRetryAtAsc(String status, Instant now);
+
+    List<WebhookDeliveryEntity> findByStatusAndNextRetryAtLessThanEqualOrderByNextRetryAtAsc(String status,
+            Instant now);
 }

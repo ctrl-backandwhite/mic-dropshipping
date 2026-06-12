@@ -28,24 +28,16 @@ public class CrawlerClient {
     @Retry(name = "crawler")
     @CircuitBreaker(name = "crawler")
     public Mono<Map<String, Object>> requestProductScrape(String source, String offerId) {
-        return webClient().post()
-                .uri("/scrape/product")
-                .bodyValue(Map.of("source", source, "kind", "product", "target", offerId))
-                .retrieve()
-                .bodyToMono(Map.class)
-                .map(m -> (Map<String, Object>) m)
-                .timeout(Duration.ofSeconds(timeoutSeconds));
+        return webClient().post().uri("/scrape/product")
+                .bodyValue(Map.of("source", source, "kind", "product", "target", offerId)).retrieve()
+                .bodyToMono(Map.class).map(m -> (Map<String, Object>) m).timeout(Duration.ofSeconds(timeoutSeconds));
     }
 
     @Retry(name = "crawler")
     @CircuitBreaker(name = "crawler")
     public Mono<Map<String, Object>> requestBestsellerScrape(String listUrl) {
-        return webClient().post()
-                .uri("/scrape/bestsellers")
-                .bodyValue(Map.of("source", "1688", "kind", "bestseller", "target", listUrl))
-                .retrieve()
-                .bodyToMono(Map.class)
-                .map(m -> (Map<String, Object>) m)
-                .timeout(Duration.ofSeconds(timeoutSeconds));
+        return webClient().post().uri("/scrape/bestsellers")
+                .bodyValue(Map.of("source", "1688", "kind", "bestseller", "target", listUrl)).retrieve()
+                .bodyToMono(Map.class).map(m -> (Map<String, Object>) m).timeout(Duration.ofSeconds(timeoutSeconds));
     }
 }

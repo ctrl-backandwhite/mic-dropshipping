@@ -37,43 +37,45 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class OrderUseCaseImplTest {
 
-    @Mock com.nexaplatform.dropshipping.domain.repository.OrderRepository orderRepository;
-    @Mock ProductRepository productRepository;
-    @Mock ProductVariantRepository variantRepository;
-    @Mock UserRepository userRepository;
-    @Mock ShopConnectionRepository shopConnectionRepository;
-    @Mock UserAddressRepository userAddressRepository;
-    @Mock WebhookDispatcherService webhooks;
-    @Mock WalletUseCase walletUseCase;
-    @Mock NotificationsPublisher notificationsPublisher;
+    @Mock
+    com.nexaplatform.dropshipping.domain.repository.OrderRepository orderRepository;
+    @Mock
+    ProductRepository productRepository;
+    @Mock
+    ProductVariantRepository variantRepository;
+    @Mock
+    UserRepository userRepository;
+    @Mock
+    ShopConnectionRepository shopConnectionRepository;
+    @Mock
+    UserAddressRepository userAddressRepository;
+    @Mock
+    WebhookDispatcherService webhooks;
+    @Mock
+    WalletUseCase walletUseCase;
+    @Mock
+    NotificationsPublisher notificationsPublisher;
 
     OrderUseCaseImpl orderUseCase;
 
     @BeforeEach
     void setup() {
-        orderUseCase = new OrderUseCaseImpl(orderRepository, productRepository, variantRepository,
-                userRepository, shopConnectionRepository, userAddressRepository, webhooks, walletUseCase,
-                notificationsPublisher);
+        orderUseCase = new OrderUseCaseImpl(orderRepository, productRepository, variantRepository, userRepository,
+                shopConnectionRepository, userAddressRepository, webhooks, walletUseCase, notificationsPublisher);
     }
 
     @Test
     void create_order_with_two_items_computes_totals() {
         UUID productId = UUID.randomUUID();
-        ProductEntity product = ProductEntity.builder()
-                .basePrice(new BigDecimal("12.50"))
-                .moq(1)
-                .titleZh("Widget")
+        ProductEntity product = ProductEntity.builder().basePrice(new BigDecimal("12.50")).moq(1).titleZh("Widget")
                 .build();
         product.setId(productId);
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        var req = new CreateOrderRequest(
-                "EXT-001",
-                new AddressInput("John Doe", "555", "j@x.com", "Line 1", null, "Madrid", "M", "28001", "ES"),
-                null,
-                List.of(new OrderItemInput(productId, null, 3)),
-                null);
+        var req = new CreateOrderRequest("EXT-001",
+                new AddressInput("John Doe", "555", "j@x.com", "Line 1", null, "Madrid", "M", "28001", "ES"), null,
+                List.of(new OrderItemInput(productId, null, 3)), null);
 
         Order order = orderUseCase.createOrder(UUID.randomUUID(), null, req);
 
@@ -91,13 +93,11 @@ class OrderUseCaseImplTest {
         product.setId(productId);
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
 
-        var req = new CreateOrderRequest(
-                "EXT", new AddressInput("X", null, null, "L1", null, "C", null, "00000", "ES"),
+        var req = new CreateOrderRequest("EXT", new AddressInput("X", null, null, "L1", null, "C", null, "00000", "ES"),
                 null, List.of(new OrderItemInput(productId, null, 1)), null);
 
         assertThatThrownBy(() -> orderUseCase.createOrder(UUID.randomUUID(), null, req))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("no price");
+                .isInstanceOf(BusinessException.class).hasMessageContaining("no price");
     }
 
     @Test
@@ -105,8 +105,7 @@ class OrderUseCaseImplTest {
         UUID productId = UUID.randomUUID();
         when(productRepository.findById(productId)).thenReturn(Optional.empty());
 
-        var req = new CreateOrderRequest(
-                "EXT", new AddressInput("X", null, null, "L1", null, "C", null, "00000", "ES"),
+        var req = new CreateOrderRequest("EXT", new AddressInput("X", null, null, "L1", null, "C", null, "00000", "ES"),
                 null, List.of(new OrderItemInput(productId, null, 1)), null);
 
         assertThatThrownBy(() -> orderUseCase.createOrder(UUID.randomUUID(), null, req))
@@ -117,19 +116,17 @@ class OrderUseCaseImplTest {
     void variant_price_overrides_product_price() {
         UUID productId = UUID.randomUUID();
         UUID variantId = UUID.randomUUID();
-        ProductEntity product = ProductEntity.builder()
-                .basePrice(new BigDecimal("10")).moq(1).titleZh("p").build();
+        ProductEntity product = ProductEntity.builder().basePrice(new BigDecimal("10")).moq(1).titleZh("p").build();
         product.setId(productId);
-        ProductVariantEntity variant = ProductVariantEntity.builder()
-                .price(new BigDecimal("15")).sku("V1").stock(10).active(true).build();
+        ProductVariantEntity variant = ProductVariantEntity.builder().price(new BigDecimal("15")).sku("V1").stock(10)
+                .active(true).build();
         variant.setId(variantId);
 
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
         when(variantRepository.findById(variantId)).thenReturn(Optional.of(variant));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        var req = new CreateOrderRequest(
-                "EXT", new AddressInput("X", null, null, "L1", null, "C", null, "00000", "ES"),
+        var req = new CreateOrderRequest("EXT", new AddressInput("X", null, null, "L1", null, "C", null, "00000", "ES"),
                 null, List.of(new OrderItemInput(productId, variantId, 2)), null);
 
         Order order = orderUseCase.createOrder(UUID.randomUUID(), null, req);
@@ -148,17 +145,16 @@ class OrderUseCaseImplTest {
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.FORWARDED);
         org.mockito.Mockito.verify(orderRepository).save(order);
-        org.mockito.Mockito.verify(webhooks).publish(
-                org.mockito.ArgumentMatchers.eq("order.forwarded"),
-                org.mockito.ArgumentMatchers.eq(id.toString()),
-                org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verify(webhooks).publish(org.mockito.ArgumentMatchers.eq("order.forwarded"),
+                org.mockito.ArgumentMatchers.eq(id.toString()), org.mockito.ArgumentMatchers.any());
     }
 
     @Test
     void refundOrder_creditsWalletAndMarksRefunded() {
         UUID id = UUID.randomUUID();
         UUID buyer = UUID.randomUUID();
-        Order order = Order.builder().status(OrderStatus.PAID).userId(buyer).orderNumber("NX-1").totalCents(2500).build();
+        Order order = Order.builder().status(OrderStatus.PAID).userId(buyer).orderNumber("NX-1").totalCents(2500)
+                .build();
         order.setId(id);
         when(orderRepository.findById(id)).thenReturn(Optional.of(order));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -166,9 +162,8 @@ class OrderUseCaseImplTest {
         orderUseCase.refundOrder(id);
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
-        org.mockito.Mockito.verify(walletUseCase).deposit(
-                org.mockito.ArgumentMatchers.eq(buyer), org.mockito.ArgumentMatchers.eq(2500L),
-                org.mockito.ArgumentMatchers.eq(id), org.mockito.ArgumentMatchers.eq("refund-" + id),
-                org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer),
+                org.mockito.ArgumentMatchers.eq(2500L), org.mockito.ArgumentMatchers.eq(id),
+                org.mockito.ArgumentMatchers.eq("refund-" + id), org.mockito.ArgumentMatchers.anyString());
     }
 }

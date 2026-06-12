@@ -10,7 +10,8 @@ public final class CurrencyHolder {
     private static final String DEFAULT = "USD";
     private static final ThreadLocal<String> CURRENT = ThreadLocal.withInitial(() -> DEFAULT);
 
-    private CurrencyHolder() {}
+    private CurrencyHolder() {
+    }
 
     public static String get() {
         String code = CURRENT.get();

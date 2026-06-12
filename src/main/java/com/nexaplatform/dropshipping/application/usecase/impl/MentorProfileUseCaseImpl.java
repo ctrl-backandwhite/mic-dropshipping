@@ -34,23 +34,21 @@ public class MentorProfileUseCaseImpl implements MentorProfileUseCase {
         // they leaked in when the table was populated. We hide them from the
         // public listing until the team decides whether to delete them from the
         // dataset or create real mentors.
-        return mentorProfileRepository.findActive().stream()
-                .filter(m -> {
-                    String name = m.getDisplayName() != null ? m.getDisplayName() : "";
-                    String email = m.getEmail() != null ? m.getEmail().toLowerCase() : "";
-                    if (name.startsWith("NX036 ")) {
-                        return false;
-                    }
-                    if (email.startsWith("admin@") || email.startsWith("operator@")
-                            || email.startsWith("customer@") || email.startsWith("partner@")) {
-                        return false;
-                    }
-                    if (email.endsWith("@partners.nx036.local")) {
-                        return false;
-                    }
-                    return true;
-                })
-                .toList();
+        return mentorProfileRepository.findActive().stream().filter(m -> {
+            String name = m.getDisplayName() != null ? m.getDisplayName() : "";
+            String email = m.getEmail() != null ? m.getEmail().toLowerCase() : "";
+            if (name.startsWith("NX036 ")) {
+                return false;
+            }
+            if (email.startsWith("admin@") || email.startsWith("operator@") || email.startsWith("customer@")
+                    || email.startsWith("partner@")) {
+                return false;
+            }
+            if (email.endsWith("@partners.nx036.local")) {
+                return false;
+            }
+            return true;
+        }).toList();
     }
 
     @Override

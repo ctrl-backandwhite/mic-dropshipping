@@ -16,7 +16,11 @@ import java.util.UUID;
 @Entity
 @Table(name = "shipping_rate")
 @EntityListeners(AuditingEntityListener.class)
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ShippingRateEntity {
 
     @Id

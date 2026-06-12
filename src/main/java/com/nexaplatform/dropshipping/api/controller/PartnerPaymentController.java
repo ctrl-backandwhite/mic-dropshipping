@@ -31,14 +31,10 @@ public class PartnerPaymentController implements PartnerPaymentApi {
     private final OrderPaymentDtoMapper orderPaymentDtoMapper;
 
     @Override
-    public ResponseEntity<OrderPaymentDtoOut> initiate(
-            Jwt jwt,
-            UUID orderId,
-            OrderPaymentIntentDtoIn req,
+    public ResponseEntity<OrderPaymentDtoOut> initiate(Jwt jwt, UUID orderId, OrderPaymentIntentDtoIn req,
             String idempotencyKey) {
-        return new ResponseEntity<>(
-                orderPaymentDtoMapper.toDtoOut(paymentUseCase.initiatePartnerOrderPayment(
-                        jwt, orderId, req.isWallet(), req.isWallet() ? null : req.toPaymentMethod(), idempotencyKey)),
+        return new ResponseEntity<>(orderPaymentDtoMapper.toDtoOut(paymentUseCase.initiatePartnerOrderPayment(jwt,
+                orderId, req.isWallet(), req.isWallet() ? null : req.toPaymentMethod(), idempotencyKey)),
                 HttpStatus.CREATED);
     }
 

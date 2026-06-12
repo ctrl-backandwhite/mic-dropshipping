@@ -21,9 +21,11 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class SupplierUseCaseImplTest {
 
-    @Mock SupplierRepository supplierRepository;
+    @Mock
+    SupplierRepository supplierRepository;
 
-    @InjectMocks SupplierUseCaseImpl useCase;
+    @InjectMocks
+    SupplierUseCaseImpl useCase;
 
     @Test
     void toggleVerified_flipsFlagAndPersists() {
@@ -56,7 +58,6 @@ class SupplierUseCaseImplTest {
         UUID id = UUID.randomUUID();
         when(supplierRepository.getById(id)).thenReturn(null);
 
-        assertThatThrownBy(() -> useCase.toggleVerified(id))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> useCase.toggleVerified(id)).isInstanceOf(NotFoundException.class);
     }
 }

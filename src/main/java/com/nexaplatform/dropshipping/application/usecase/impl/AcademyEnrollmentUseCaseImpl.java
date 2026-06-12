@@ -41,8 +41,8 @@ public class AcademyEnrollmentUseCaseImpl implements AcademyEnrollmentUseCase {
             throw new NotFoundException("Course");
         }
         return academyEnrollmentRepository.findByUserIdAndCourseId(userId, courseId)
-                .orElseGet(() -> academyEnrollmentRepository.save(
-                        AcademyEnrollment.builder().userId(userId).courseId(courseId).build()));
+                .orElseGet(() -> academyEnrollmentRepository
+                        .save(AcademyEnrollment.builder().userId(userId).courseId(courseId).build()));
     }
 
     @Override

@@ -30,9 +30,9 @@ public class WinningProductUseCaseImpl implements WinningProductUseCase {
     public List<WinningProduct> salesTrends(UUID categoryId, int limit, String lang) {
         return productRepository.findAll().stream()
                 .filter(p -> "ACTIVE".equals(p.getStatus() == null ? null : p.getStatus().name()))
-                .filter(p -> categoryId == null || (p.getCategory() != null && categoryId.equals(p.getCategory().getId())))
-                .sorted((a, b) -> Integer.compare(b.getMonthlySales(), a.getMonthlySales()))
-                .limit(Math.min(limit, 100))
+                .filter(p -> categoryId == null
+                        || (p.getCategory() != null && categoryId.equals(p.getCategory().getId())))
+                .sorted((a, b) -> Integer.compare(b.getMonthlySales(), a.getMonthlySales())).limit(Math.min(limit, 100))
                 .map(p -> toWin(p, lang)).toList();
     }
 
@@ -40,14 +40,11 @@ public class WinningProductUseCaseImpl implements WinningProductUseCase {
     @Transactional(readOnly = true)
     public List<WinningProduct> winning(int limit, String lang) {
         return productRepository.findAll().stream()
-                .filter(p -> "ACTIVE".equals(p.getStatus() == null ? null : p.getStatus().name()))
-                .sorted((a, b) -> {
+                .filter(p -> "ACTIVE".equals(p.getStatus() == null ? null : p.getStatus().name())).sorted((a, b) -> {
                     BigDecimal sa = a.getTrendScore() == null ? BigDecimal.ZERO : a.getTrendScore();
                     BigDecimal sb = b.getTrendScore() == null ? BigDecimal.ZERO : b.getTrendScore();
                     return sb.compareTo(sa);
-                })
-                .limit(Math.min(limit, 100))
-                .map(p -> toWin(p, lang)).toList();
+                }).limit(Math.min(limit, 100)).map(p -> toWin(p, lang)).toList();
     }
 
     // DROP-541: usa la traducción en el idioma del usuario en lugar del título chino.
@@ -63,8 +60,8 @@ public class WinningProductUseCaseImpl implements WinningProductUseCase {
         String title = null;
         if (p.getTranslations() != null) {
             title = p.getTranslations().stream()
-                    .filter(t -> lang.equalsIgnoreCase(t.getLanguage()) && t.getTitle() != null)
-                    .map(t -> t.getTitle()).findFirst().orElse(null);
+                    .filter(t -> lang.equalsIgnoreCase(t.getLanguage()) && t.getTitle() != null).map(t -> t.getTitle())
+                    .findFirst().orElse(null);
             if (title == null) {
                 title = p.getTranslations().stream()
                         .filter(t -> "en".equalsIgnoreCase(t.getLanguage()) && t.getTitle() != null)
@@ -74,13 +71,7 @@ public class WinningProductUseCaseImpl implements WinningProductUseCase {
         if (title == null) {
             title = p.getTitleZh();
         }
-        return WinningProduct.builder()
-                .slug(p.getSlug())
-                .title(title)
-                .monthlySales(p.getMonthlySales())
-                .trendScore(p.getTrendScore())
-                .mainImage(img)
-                .price(p.getBasePrice())
-                .build();
+        return WinningProduct.builder().slug(p.getSlug()).title(title).monthlySales(p.getMonthlySales())
+                .trendScore(p.getTrendScore()).mainImage(img).price(p.getBasePrice()).build();
     }
 }

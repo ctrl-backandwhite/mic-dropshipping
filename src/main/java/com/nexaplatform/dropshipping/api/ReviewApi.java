@@ -20,9 +20,6 @@ public interface ReviewApi {
 
     @Operation(summary = "List reviews for a product")
     @GetMapping
-    ResponseEntity<ReviewListDtoOut> list(
-            @PathVariable UUID productId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) Short minRating);
+    ResponseEntity<ReviewListDtoOut> list(@PathVariable UUID productId, @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size, @RequestParam(required = false) Short minRating);
 }

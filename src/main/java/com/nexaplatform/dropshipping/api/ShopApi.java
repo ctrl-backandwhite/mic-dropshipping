@@ -49,7 +49,8 @@ public interface ShopApi {
 
     @Operation(summary = "List a catalog product into a connected shop")
     @PostMapping("/{id}/listings/{productId}")
-    ResponseEntity<ShopListingDtoOut> listProduct(Authentication auth, @PathVariable UUID id, @PathVariable UUID productId);
+    ResponseEntity<ShopListingDtoOut> listProduct(Authentication auth, @PathVariable UUID id,
+            @PathVariable UUID productId);
 
     @Operation(summary = "List the product listings of a connected shop")
     @GetMapping("/{id}/listings")

@@ -53,9 +53,7 @@ public class PaymentRepositoryImpl implements PaymentRepository {
 
     @Override
     public Payment getById(UUID id) {
-        return paymentJpaRepositoryAdapter.findById(id)
-                .map(paymentEntityMapper::toDomain)
-                .orElse(null);
+        return paymentJpaRepositoryAdapter.findById(id).map(paymentEntityMapper::toDomain).orElse(null);
     }
 
     @Override
@@ -134,8 +132,7 @@ public class PaymentRepositoryImpl implements PaymentRepository {
         if (userId == null) {
             return null;
         }
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+        return userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
     }
 
     /** Resolves the related wallet from its id, failing if it does not exist. */

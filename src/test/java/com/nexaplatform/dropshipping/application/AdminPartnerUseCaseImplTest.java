@@ -33,8 +33,7 @@ class AdminPartnerUseCaseImplTest {
     @SuppressWarnings("unchecked")
     void listOAuthClients_delegatesToJdbcAndReturnsProjectionModels() {
         var model = AdminOAuthClient.builder().clientId("admin-spa").build();
-        when(jdbc.query(contains("oauth2_registered_client"), any(RowMapper.class)))
-                .thenReturn(List.of(model));
+        when(jdbc.query(contains("oauth2_registered_client"), any(RowMapper.class))).thenReturn(List.of(model));
 
         List<AdminOAuthClient> result = useCase.listOAuthClients();
 
@@ -45,8 +44,7 @@ class AdminPartnerUseCaseImplTest {
     @SuppressWarnings("unchecked")
     void listWebhooks_delegatesToJdbcAndReturnsProjectionModels() {
         var model = AdminPartnerWebhook.builder().eventType("ORDER_CREATED").build();
-        when(jdbc.query(contains("partner_webhook_delivery"), any(RowMapper.class)))
-                .thenReturn(List.of(model));
+        when(jdbc.query(contains("partner_webhook_delivery"), any(RowMapper.class))).thenReturn(List.of(model));
 
         List<AdminPartnerWebhook> result = useCase.listWebhooks();
 
@@ -57,8 +55,7 @@ class AdminPartnerUseCaseImplTest {
     @SuppressWarnings("unchecked")
     void listPartnerApps_delegatesToJdbcAndReturnsProjectionModels() {
         var model = AdminPartnerApp.builder().name("Demo Partner").build();
-        when(jdbc.query(contains("partner_app"), any(RowMapper.class)))
-                .thenReturn(List.of(model));
+        when(jdbc.query(contains("partner_app"), any(RowMapper.class))).thenReturn(List.of(model));
 
         List<AdminPartnerApp> result = useCase.listPartnerApps();
 
@@ -69,8 +66,7 @@ class AdminPartnerUseCaseImplTest {
     @SuppressWarnings("unchecked")
     void listShopConnections_delegatesToJdbcAndReturnsProjectionModels() {
         var model = AdminShopConnection.builder().platform("shopify").build();
-        when(jdbc.query(contains("shop_connection"), any(RowMapper.class)))
-                .thenReturn(List.of(model));
+        when(jdbc.query(contains("shop_connection"), any(RowMapper.class))).thenReturn(List.of(model));
 
         List<AdminShopConnection> result = useCase.listShopConnections();
 

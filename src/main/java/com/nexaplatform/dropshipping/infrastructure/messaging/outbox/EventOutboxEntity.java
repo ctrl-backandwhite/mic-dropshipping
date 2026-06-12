@@ -21,7 +21,11 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "event_outbox")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class EventOutboxEntity {
 
     @Id
@@ -71,7 +75,9 @@ public class EventOutboxEntity {
 
     @PrePersist
     void prePersist() {
-        if (createdAt == null) createdAt = Instant.now();
-        if (nextAttemptAt == null) nextAttemptAt = Instant.now();
+        if (createdAt == null)
+            createdAt = Instant.now();
+        if (nextAttemptAt == null)
+            nextAttemptAt = Instant.now();
     }
 }

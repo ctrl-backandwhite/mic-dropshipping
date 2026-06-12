@@ -56,11 +56,9 @@ public class HttpCacheFilter extends OncePerRequestFilter {
     }
 
     private boolean isPublicReadable(String path) {
-        return path.startsWith("/api/storefront/catalog/")
-            || path.startsWith("/api/storefront/categories")
-            || path.startsWith("/api/storefront/suppliers")
-            || path.startsWith("/api/storefront/warehouses")
-            || path.startsWith("/api/v1/storefront/");
+        return path.startsWith("/api/storefront/catalog/") || path.startsWith("/api/storefront/categories")
+                || path.startsWith("/api/storefront/suppliers") || path.startsWith("/api/storefront/warehouses")
+                || path.startsWith("/api/v1/storefront/");
     }
 
     private String cacheControlFor(String path) {

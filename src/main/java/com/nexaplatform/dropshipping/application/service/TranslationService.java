@@ -50,7 +50,8 @@ public class TranslationService {
     @Transactional
     public void translateProduct(UUID productId) {
         Optional<ProductEntity> opt = productRepository.findById(productId);
-        if (opt.isEmpty()) return;
+        if (opt.isEmpty())
+            return;
         ProductEntity p = opt.get();
         for (String lang : targetLanguages()) {
             try {
@@ -67,14 +68,10 @@ public class TranslationService {
 
     private void upsertTranslation(ProductEntity p, String lang, String title, String shortDesc, String desc) {
         Optional<ProductTranslationEntity> existing = p.getTranslations().stream()
-                .filter(t -> lang.equalsIgnoreCase(t.getLanguage()))
-                .findFirst();
+                .filter(t -> lang.equalsIgnoreCase(t.getLanguage())).findFirst();
         ProductTranslationEntity tr = existing.orElseGet(() -> {
-            ProductTranslationEntity n = ProductTranslationEntity.builder()
-                    .product(p)
-                    .language(lang)
-                    .provider(provider.name())
-                    .build();
+            ProductTranslationEntity n = ProductTranslationEntity.builder().product(p).language(lang)
+                    .provider(provider.name()).build();
             p.getTranslations().add(n);
             return n;
         });
@@ -85,12 +82,15 @@ public class TranslationService {
     }
 
     private String translateCached(String text, String src, String tgt) {
-        if (text == null || text.isBlank()) return text;
+        if (text == null || text.isBlank())
+            return text;
         String key = "tr:" + tgt + ":" + sha1(text);
         String hit = redis.opsForValue().get(key);
-        if (hit != null) return hit;
+        if (hit != null)
+            return hit;
         String translated = provider.translate(text, src, tgt);
-        if (translated != null) redis.opsForValue().set(key, translated, Duration.ofDays(90));
+        if (translated != null)
+            redis.opsForValue().set(key, translated, Duration.ofDays(90));
         return translated;
     }
 

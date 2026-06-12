@@ -14,7 +14,11 @@ import lombok.Setter;
 
 @Entity
 @Table(name = "user_address")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class UserAddressEntity extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -27,13 +31,20 @@ public class UserAddressEntity extends BaseEntity {
     @Column(name = "full_name", nullable = false, length = 200)
     private String fullName;
 
-    @Column(length = 40) private String phone;
-    @Column(nullable = false, length = 300) private String line1;
-    @Column(length = 300) private String line2;
-    @Column(nullable = false, length = 200) private String city;
-    @Column(length = 200) private String state;
-    @Column(name = "postal_code", length = 40) private String postalCode;
-    @Column(nullable = false, length = 60) private String country;
+    @Column(length = 40)
+    private String phone;
+    @Column(nullable = false, length = 300)
+    private String line1;
+    @Column(length = 300)
+    private String line2;
+    @Column(nullable = false, length = 200)
+    private String city;
+    @Column(length = 200)
+    private String state;
+    @Column(name = "postal_code", length = 40)
+    private String postalCode;
+    @Column(nullable = false, length = 60)
+    private String country;
 
     @Column(name = "is_default", nullable = false)
     private boolean isDefault;

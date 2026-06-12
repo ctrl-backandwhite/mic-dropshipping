@@ -49,13 +49,8 @@ public class WalletUseCaseImpl implements WalletUseCase {
     }
 
     private Wallet createFor(UUID userId) {
-        Wallet w = Wallet.builder()
-                .userId(userId)
-                .balanceUsdCents(0L)
-                .holdUsdCents(0L)
-                .currencyDefault("USD")
-                .status("ACTIVE")
-                .build();
+        Wallet w = Wallet.builder().userId(userId).balanceUsdCents(0L).holdUsdCents(0L).currencyDefault("USD")
+                .status("ACTIVE").build();
         return walletRepository.save(w);
     }
 
@@ -65,7 +60,8 @@ public class WalletUseCaseImpl implements WalletUseCase {
         Wallet w = getOrCreate(userId);
         long available = Math.max(0L, w.getBalanceUsdCents() - w.getHoldUsdCents());
         String currency = CurrencyHolder.get();
-        BigDecimal usd = BigDecimal.valueOf(w.getBalanceUsdCents()).divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
+        BigDecimal usd = BigDecimal.valueOf(w.getBalanceUsdCents()).divide(BigDecimal.valueOf(100), 4,
+                RoundingMode.HALF_UP);
         BigDecimal display = currencyService.usdTo(usd, currency);
         w.setAvailableUsdCents(available);
         w.setBalanceDisplay(display);
@@ -99,7 +95,8 @@ public class WalletUseCaseImpl implements WalletUseCase {
 
     @Override
     @Transactional
-    public WalletTransaction adminAdjustEntry(UUID userId, long amountCents, String description, String idempotencyKey) {
+    public WalletTransaction adminAdjustEntry(UUID userId, long amountCents, String description,
+            String idempotencyKey) {
         if (description == null || description.isBlank()) {
             throw new IllegalArgumentException("description is required for manual adjustments");
         }
@@ -130,23 +127,26 @@ public class WalletUseCaseImpl implements WalletUseCase {
                 .filter(w -> needle.isEmpty()
                         || (w.getUserEmail() != null && w.getUserEmail().toLowerCase().contains(needle))
                         || (w.getUserName() != null && w.getUserName().toLowerCase().contains(needle)))
-                .sorted((a, b) -> Long.compare(b.getBalanceUsdCents(), a.getBalanceUsdCents()))
-                .toList();
+                .sorted((a, b) -> Long.compare(b.getBalanceUsdCents(), a.getBalanceUsdCents())).toList();
     }
 
     /* ============ Mutations ============ */
 
     @Override
     @Transactional
-    public WalletTransaction deposit(UUID userId, long amountUsdCents, UUID paymentId, String idempotencyKey, String description) {
-        if (amountUsdCents <= 0) throw new BusinessException("Deposit amount must be positive");
+    public WalletTransaction deposit(UUID userId, long amountUsdCents, UUID paymentId, String idempotencyKey,
+            String description) {
+        if (amountUsdCents <= 0)
+            throw new BusinessException("Deposit amount must be positive");
         return record(userId, "DEPOSIT", amountUsdCents, paymentId, null, idempotencyKey, description, null);
     }
 
     @Override
     @Transactional
-    public WalletTransaction charge(UUID userId, long amountUsdCents, UUID orderId, String idempotencyKey, String description) {
-        if (amountUsdCents <= 0) throw new BusinessException("Charge amount must be positive");
+    public WalletTransaction charge(UUID userId, long amountUsdCents, UUID orderId, String idempotencyKey,
+            String description) {
+        if (amountUsdCents <= 0)
+            throw new BusinessException("Charge amount must be positive");
         Wallet w = require(userId);
         if (available(w) < amountUsdCents) {
             throw new BusinessException("Insufficient wallet balance");
@@ -156,7 +156,8 @@ public class WalletUseCaseImpl implements WalletUseCase {
 
     @Override
     @Transactional
-    public WalletTransaction refund(UUID userId, long amountUsdCents, UUID orderId, String idempotencyKey, String reason) {
+    public WalletTransaction refund(UUID userId, long amountUsdCents, UUID orderId, String idempotencyKey,
+            String reason) {
         return record(userId, "REFUND", amountUsdCents, null, orderId, idempotencyKey, reason, null);
     }
 
@@ -164,7 +165,8 @@ public class WalletUseCaseImpl implements WalletUseCase {
     @Transactional
     public WalletTransaction hold(UUID userId, long amountUsdCents, UUID orderId, String idempotencyKey) {
         Wallet w = require(userId);
-        if (available(w) < amountUsdCents) throw new BusinessException("Insufficient balance to hold");
+        if (available(w) < amountUsdCents)
+            throw new BusinessException("Insufficient balance to hold");
         w.setHoldUsdCents(w.getHoldUsdCents() + amountUsdCents);
         w = walletRepository.save(w);
         return record(userId, "HOLD", -amountUsdCents, null, orderId, idempotencyKey, "Hold for order", w);
@@ -189,10 +191,8 @@ public class WalletUseCaseImpl implements WalletUseCase {
         return walletRepository.findByUserId(userId).orElseThrow(() -> new NotFoundException("Wallet not found"));
     }
 
-    private WalletTransaction record(UUID userId, String kind, long signedAmount,
-                                     UUID paymentId, UUID orderId,
-                                     String idempotencyKey, String description,
-                                     Wallet preloadedWallet) {
+    private WalletTransaction record(UUID userId, String kind, long signedAmount, UUID paymentId, UUID orderId,
+            String idempotencyKey, String description, Wallet preloadedWallet) {
         if (idempotencyKey != null) {
             var existing = txRepository.findByIdempotencyKey(idempotencyKey);
             if (existing.isPresent()) {
@@ -206,21 +206,14 @@ public class WalletUseCaseImpl implements WalletUseCase {
         long newBalance = w.getBalanceUsdCents();
         if (affectsBalance) {
             newBalance += signedAmount;
-            if (newBalance < 0) throw new BusinessException("Wallet balance would go negative");
+            if (newBalance < 0)
+                throw new BusinessException("Wallet balance would go negative");
             w.setBalanceUsdCents(newBalance);
             walletRepository.save(w);
         }
-        WalletTransaction tx = WalletTransaction.builder()
-                .walletId(w.getId())
-                .kind(kind)
-                .amountUsdCents(signedAmount)
-                .balanceAfterCents(newBalance)
-                .paymentId(paymentId)
-                .orderId(orderId)
-                .idempotencyKey(idempotencyKey)
-                .status("COMPLETED")
-                .description(description)
-                .build();
+        WalletTransaction tx = WalletTransaction.builder().walletId(w.getId()).kind(kind).amountUsdCents(signedAmount)
+                .balanceAfterCents(newBalance).paymentId(paymentId).orderId(orderId).idempotencyKey(idempotencyKey)
+                .status("COMPLETED").description(description).build();
         WalletTransaction saved = txRepository.save(tx);
         auditLogger.log("wallet." + kind.toLowerCase(), String.valueOf(userId),
                 Map.of("amount", signedAmount, "balance_after", newBalance, "tx_id", saved.getId()));

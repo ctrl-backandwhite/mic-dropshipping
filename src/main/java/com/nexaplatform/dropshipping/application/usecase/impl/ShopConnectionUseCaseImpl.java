@@ -51,12 +51,9 @@ public class ShopConnectionUseCaseImpl implements ShopConnectionUseCase {
     public ShopConnection connect(UUID userId, ShopConnection model) {
         // AES-256-GCM with envelope key (rotation supported via TokenCryptoService).
         String encoded = tokenCrypto.encrypt(model.getAccessTokenEnc());
-        ShopConnection toPersist = model
-                .withUserId(userId)
+        ShopConnection toPersist = model.withUserId(userId)
                 .withPlatform(model.getPlatform() != null ? model.getPlatform().toLowerCase() : null)
-                .withAccessTokenEnc(encoded)
-                .withStatus("CONNECTED")
-                .withMetadata(new HashMap<>());
+                .withAccessTokenEnc(encoded).withStatus("CONNECTED").withMetadata(new HashMap<>());
         ShopConnection saved = shopRepository.save(toPersist);
         saved.setListings(0);
         return saved;
@@ -91,13 +88,12 @@ public class ShopConnectionUseCaseImpl implements ShopConnectionUseCase {
         byte[] raw = new byte[32];
         new SecureRandom().nextBytes(raw);
         String secret = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
-        if (s.getMetadata() == null) s.setMetadata(new HashMap<>());
+        if (s.getMetadata() == null)
+            s.setMetadata(new HashMap<>());
         s.getMetadata().put("inboundSecret", secret);
         shopRepository.update(s);
-        return ShopInboundSecret.builder()
-                .inboundSecret(secret)
-                .inboundUrl("/api/v1/integrations/shops/" + s.getId() + "/orders")
-                .build();
+        return ShopInboundSecret.builder().inboundSecret(secret)
+                .inboundUrl("/api/v1/integrations/shops/" + s.getId() + "/orders").build();
     }
 
     @Override
@@ -105,8 +101,7 @@ public class ShopConnectionUseCaseImpl implements ShopConnectionUseCase {
     public ShopProductListing listProduct(UUID userId, UUID id, UUID productId) {
         require(userId, id);
         ShopProductListing listing = listingRepository.findByShopConnectionIdAndProductId(id, productId)
-                .orElseGet(() -> ShopProductListing.builder()
-                        .shopConnectionId(id).productId(productId).build());
+                .orElseGet(() -> ShopProductListing.builder().shopConnectionId(id).productId(productId).build());
         listing.setStatus("LISTED");
         listing.setRemoteProductId("remote-" + UUID.randomUUID().toString().substring(0, 8));
         listing.setLastPushedAt(Instant.now());
@@ -122,8 +117,7 @@ public class ShopConnectionUseCaseImpl implements ShopConnectionUseCase {
 
     @Override
     public List<ShopPlatform> platforms() {
-        return List.of(
-                ShopPlatform.builder().code("shopify").label("Shopify").build(),
+        return List.of(ShopPlatform.builder().code("shopify").label("Shopify").build(),
                 ShopPlatform.builder().code("woocommerce").label("WooCommerce").build(),
                 ShopPlatform.builder().code("tiktokshop").label("TikTok Shop").build(),
                 ShopPlatform.builder().code("ebay").label("eBay").build(),

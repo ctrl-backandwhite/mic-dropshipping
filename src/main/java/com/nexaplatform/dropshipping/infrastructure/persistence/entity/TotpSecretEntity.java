@@ -9,7 +9,11 @@ import java.util.UUID;
 /** DROP-436: secreto TOTP por usuario + recovery codes hasheados. */
 @Entity
 @Table(name = "totp_secret")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class TotpSecretEntity {
 
     @Id

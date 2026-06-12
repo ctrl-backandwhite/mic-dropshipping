@@ -21,8 +21,10 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class IntelligenceAlertUseCaseImplTest {
 
-    @Mock IntelligenceAlertRepository intelligenceAlertRepository;
-    @InjectMocks IntelligenceAlertUseCaseImpl useCase;
+    @Mock
+    IntelligenceAlertRepository intelligenceAlertRepository;
+    @InjectMocks
+    IntelligenceAlertUseCaseImpl useCase;
 
     @Test
     void findActiveForUser_delegatesToRepository() {

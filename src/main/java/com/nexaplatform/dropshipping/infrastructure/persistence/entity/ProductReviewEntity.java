@@ -8,7 +8,11 @@ import java.util.UUID;
 /** DROP-445: reseña de un producto. */
 @Entity
 @Table(name = "product_review")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ProductReviewEntity extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

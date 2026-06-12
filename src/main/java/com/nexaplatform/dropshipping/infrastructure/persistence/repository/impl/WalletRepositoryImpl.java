@@ -55,9 +55,7 @@ public class WalletRepositoryImpl implements WalletRepository {
 
     @Override
     public Wallet getById(UUID id) {
-        return walletJpaRepositoryAdapter.findById(id)
-                .map(walletEntityMapper::toDomain)
-                .orElse(null);
+        return walletJpaRepositoryAdapter.findById(id).map(walletEntityMapper::toDomain).orElse(null);
     }
 
     @Override
@@ -93,7 +91,6 @@ public class WalletRepositoryImpl implements WalletRepository {
         if (userId == null) {
             return null;
         }
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+        return userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
     }
 }

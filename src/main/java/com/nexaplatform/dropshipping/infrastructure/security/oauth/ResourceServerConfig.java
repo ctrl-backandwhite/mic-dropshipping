@@ -21,24 +21,21 @@ public class ResourceServerConfig {
      */
     @Bean
     @Order(1)
-    public SecurityFilterChain partnerApiFilterChain(HttpSecurity http, JwtRevocationFilter revocationFilter) throws Exception {
+    public SecurityFilterChain partnerApiFilterChain(HttpSecurity http, JwtRevocationFilter revocationFilter)
+            throws Exception {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
         authoritiesConverter.setAuthoritiesClaimName("scope");
         authoritiesConverter.setAuthorityPrefix("SCOPE_");
         converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
 
-        http
-                .securityMatcher("/api/v1/partner/**")
-                .csrf(csrf -> csrf.disable())
-                .cors(Customizer.withDefaults())
+        http.securityMatcher("/api/v1/partner/**").csrf(csrf -> csrf.disable()).cors(Customizer.withDefaults())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(revocationFilter, UsernamePasswordAuthenticationFilter.class)
-                .authorizeHttpRequests(reg -> reg
-                        .requestMatchers("/api/v1/partner/catalog/**").hasAuthority("SCOPE_catalog.read")
-                        .requestMatchers("/api/v1/partner/orders/**").hasAuthority("SCOPE_orders.write")
-                        .requestMatchers("/api/v1/partner/shop/**").hasAuthority("SCOPE_shop.sync")
-                        .anyRequest().authenticated())
+                .authorizeHttpRequests(reg -> reg.requestMatchers("/api/v1/partner/catalog/**")
+                        .hasAuthority("SCOPE_catalog.read").requestMatchers("/api/v1/partner/orders/**")
+                        .hasAuthority("SCOPE_orders.write").requestMatchers("/api/v1/partner/shop/**")
+                        .hasAuthority("SCOPE_shop.sync").anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(converter)));
 
         return http.build();

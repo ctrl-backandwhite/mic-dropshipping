@@ -15,7 +15,11 @@ import java.util.UUID;
 @Entity
 @Table(name = "product_specification")
 @EntityListeners(AuditingEntityListener.class)
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ProductSpecificationEntity {
 
     @Id

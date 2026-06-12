@@ -42,10 +42,7 @@ public class InboundShopWebhookController implements InboundShopWebhookApi {
     private final ObjectMapper json;
 
     @Override
-    public ResponseEntity<OrderView> receiveOrder(
-            UUID shopId,
-            String signature,
-            String idempotencyKey,
+    public ResponseEntity<OrderView> receiveOrder(UUID shopId, String signature, String idempotencyKey,
             byte[] rawBody) {
 
         ShopConnectionEntity shop = shopRepo.findById(shopId)
@@ -74,8 +71,8 @@ public class InboundShopWebhookController implements InboundShopWebhookApi {
         // userId del owner de la shop_connection → la orden queda asociada a su cuenta.
         UUID userId = shop.getUser().getId();
         OrderView view = partnerOrderDtoMapper.toOrderView(orderUseCase.createOrder(null, userId, req));
-        log.info("Inbound order created from shop {} platform={} externalId={} orderId={}",
-                shopId, shop.getPlatform(), req.externalOrderId(), view.id());
+        log.info("Inbound order created from shop {} platform={} externalId={} orderId={}", shopId, shop.getPlatform(),
+                req.externalOrderId(), view.id());
         return ResponseEntity.status(201).body(view);
     }
 
@@ -94,7 +91,8 @@ public class InboundShopWebhookController implements InboundShopWebhookApi {
             externalId = "shop-" + shop.getId() + "-" + System.currentTimeMillis();
 
         // Items: aceptamos `items` o `line_items`.
-        JsonNode itemsNode = root.has("items") ? root.get("items")
+        JsonNode itemsNode = root.has("items")
+                ? root.get("items")
                 : root.has("line_items") ? root.get("line_items") : null;
         if (itemsNode == null || !itemsNode.isArray() || itemsNode.isEmpty()) {
             throw new IllegalArgumentException("Missing items / line_items");
@@ -110,27 +108,22 @@ public class InboundShopWebhookController implements InboundShopWebhookApi {
             // publicados" deja de quedar a 0 mientras hay ventas reales.
             if (productId != null
                     && !listingRepo.findByShopConnection_IdAndProduct_Id(shop.getId(), productId).isPresent()) {
-                productRepo.findById(productId).ifPresent(p -> listingRepo.save(ShopProductListingEntity.builder()
-                        .shopConnection(shop).product(p)
-                        .remoteProductId(it.hasNonNull("sku") ? it.get("sku").asText() : null)
-                        .status("PUBLISHED")
-                        .build()));
+                productRepo.findById(productId)
+                        .ifPresent(p -> listingRepo.save(ShopProductListingEntity.builder().shopConnection(shop)
+                                .product(p).remoteProductId(it.hasNonNull("sku") ? it.get("sku").asText() : null)
+                                .status("PUBLISHED").build()));
             }
         }
 
         // Address: `shippingAddress` o `shipping_address`.
-        JsonNode addr = root.has("shippingAddress") ? root.get("shippingAddress")
+        JsonNode addr = root.has("shippingAddress")
+                ? root.get("shippingAddress")
                 : root.has("shipping_address") ? root.get("shipping_address") : null;
-        AddressInput shipping = addr == null ? null
-                : new AddressInput(
-                        text(addr, "fullName", "name"),
-                        text(addr, "phone"),
-                        text(addr, "email"),
-                        text(addr, "line1", "address1"),
-                        text(addr, "line2", "address2"),
-                        text(addr, "city"),
-                        text(addr, "state", "region", "province"),
-                        text(addr, "postalCode", "zip"),
+        AddressInput shipping = addr == null
+                ? null
+                : new AddressInput(text(addr, "fullName", "name"), text(addr, "phone"), text(addr, "email"),
+                        text(addr, "line1", "address1"), text(addr, "line2", "address2"), text(addr, "city"),
+                        text(addr, "state", "region", "province"), text(addr, "postalCode", "zip"),
                         text(addr, "country", "country_code"));
 
         return new CreateOrderRequest(externalId, shipping, null, items, text(root, "notes"));
@@ -150,8 +143,8 @@ public class InboundShopWebhookController implements InboundShopWebhookApi {
         if (remoteId == null)
             throw new UnknownLineItemException("(no sku)");
         // 1) listing publicado desde NexaDrop
-        ShopProductListingEntity listing = listingRepo
-                .findByShopConnection_IdAndRemoteProductId(shop.getId(), remoteId).orElse(null);
+        ShopProductListingEntity listing = listingRepo.findByShopConnection_IdAndRemoteProductId(shop.getId(), remoteId)
+                .orElse(null);
         if (listing != null)
             return listing.getProduct().getId();
         // 2) match por externalId en catálogo

@@ -15,14 +15,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ExtendWith(MockitoExtension.class)
 class ShippingUseCaseImplTest {
 
-    @InjectMocks ShippingUseCaseImpl useCase;
+    @InjectMocks
+    ShippingUseCaseImpl useCase;
 
     @Test
     void calculate_returnsFourCarrierRows() {
         List<ShippingRate> rows = useCase.calculate(1000, 2);
 
-        assertThat(rows).extracting(ShippingRate::getMethod)
-                .containsExactly("STANDARD", "EXPRESS", "AIR", "SEA");
+        assertThat(rows).extracting(ShippingRate::getMethod).containsExactly("STANDARD", "EXPRESS", "AIR", "SEA");
     }
 
     @Test

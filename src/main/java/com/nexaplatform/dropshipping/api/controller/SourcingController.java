@@ -33,26 +33,26 @@ public class SourcingController implements SourcingApi {
 
     @Override
     public ResponseEntity<List<SourcingRequestDtoOut>> myRequests(Authentication auth) {
-        return ResponseEntity.ok(sourcingDtoMapper.toRequestList(
-                sourcingUseCase.myRequests(UUID.fromString(auth.getName()))));
+        return ResponseEntity
+                .ok(sourcingDtoMapper.toRequestList(sourcingUseCase.myRequests(UUID.fromString(auth.getName()))));
     }
 
     @Override
     public ResponseEntity<SourcingRequestDtoOut> create(Authentication auth, SourcingCreateDtoIn body) {
-        return ResponseEntity.ok(sourcingDtoMapper.toRequest(sourcingUseCase.create(
-                UUID.fromString(auth.getName()), body.getUrl(), body.getTitleHint(), body.getNotes())));
+        return ResponseEntity.ok(sourcingDtoMapper.toRequest(sourcingUseCase.create(UUID.fromString(auth.getName()),
+                body.getUrl(), body.getTitleHint(), body.getNotes())));
     }
 
     @Override
     public ResponseEntity<SourcingRequestDtoOut> detail(Authentication auth, UUID id) {
-        return ResponseEntity.ok(sourcingDtoMapper.toRequest(
-                sourcingUseCase.detail(UUID.fromString(auth.getName()), id)));
+        return ResponseEntity
+                .ok(sourcingDtoMapper.toRequest(sourcingUseCase.detail(UUID.fromString(auth.getName()), id)));
     }
 
     @Override
     public ResponseEntity<SourcingRequestDtoOut> cancel(Authentication auth, UUID id) {
-        return ResponseEntity.ok(sourcingDtoMapper.toRequest(
-                sourcingUseCase.cancel(UUID.fromString(auth.getName()), id)));
+        return ResponseEntity
+                .ok(sourcingDtoMapper.toRequest(sourcingUseCase.cancel(UUID.fromString(auth.getName()), id)));
     }
 
     @Override
@@ -63,20 +63,20 @@ public class SourcingController implements SourcingApi {
 
     @Override
     public ResponseEntity<List<SourcingQuoteDtoOut>> quotes(Authentication auth, UUID id) {
-        return ResponseEntity.ok(sourcingDtoMapper.toQuoteList(
-                sourcingUseCase.quotes(UUID.fromString(auth.getName()), id)));
+        return ResponseEntity
+                .ok(sourcingDtoMapper.toQuoteList(sourcingUseCase.quotes(UUID.fromString(auth.getName()), id)));
     }
 
     @Override
     public ResponseEntity<SourcingQuoteDtoOut> submitQuote(UUID id, SourcingQuoteDtoIn q, UUID asAgent) {
-        return ResponseEntity.ok(sourcingDtoMapper.toQuote(sourcingUseCase.submitQuote(id,
-                q.getPriceUsdCents(), q.getEtaDays(), q.getMoq(), q.getNotes(), asAgent)));
+        return ResponseEntity.ok(sourcingDtoMapper.toQuote(sourcingUseCase.submitQuote(id, q.getPriceUsdCents(),
+                q.getEtaDays(), q.getMoq(), q.getNotes(), asAgent)));
     }
 
     @Override
     public ResponseEntity<SourcingRequestDtoOut> selectQuote(Authentication auth, UUID id, UUID quoteId) {
-        return ResponseEntity.ok(sourcingDtoMapper.toRequest(
-                sourcingUseCase.selectQuote(UUID.fromString(auth.getName()), id, quoteId)));
+        return ResponseEntity.ok(
+                sourcingDtoMapper.toRequest(sourcingUseCase.selectQuote(UUID.fromString(auth.getName()), id, quoteId)));
     }
 
     @Override

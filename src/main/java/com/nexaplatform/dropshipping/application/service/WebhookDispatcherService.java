@@ -41,32 +41,32 @@ import java.util.UUID;
 public class WebhookDispatcherService {
 
     private static final int MAX_ATTEMPTS = 5;
-    private static final long[] BACKOFF_SECONDS = { 60, 300, 1800, 7200, 28800 };
+    private static final long[] BACKOFF_SECONDS = {60, 300, 1800, 7200, 28800};
 
     private final WebhookSubscriptionRepository subscriptionRepository;
     private final WebhookDeliveryRepository deliveryRepository;
     /** Local mapper with JavaTimeModule so payloads carrying Instant/LocalDate serialize cleanly. */
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
-    private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(5))
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
+    private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5))
+            .followRedirects(HttpClient.Redirect.NEVER).build();
 
     /** Publish an event to every active subscription that listens to {@code eventType}. */
     @Transactional
     public void publish(String eventType, String eventId, Map<String, Object> data) {
         List<WebhookSubscriptionEntity> subs = subscriptionRepository.findByActiveTrue();
-        if (subs.isEmpty()) return;
+        if (subs.isEmpty())
+            return;
 
         Map<String, Object> envelope = new HashMap<>();
-        envelope.put("id",        eventId);
-        envelope.put("type",      eventType);
+        envelope.put("id", eventId);
+        envelope.put("type", eventType);
         envelope.put("createdAt", Instant.now().toString());
-        envelope.put("data",      data);
+        envelope.put("data", data);
 
         for (WebhookSubscriptionEntity s : subs) {
-            if (!matches(s, eventType)) continue;
+            if (!matches(s, eventType))
+                continue;
             queue(s, eventType, eventId, envelope);
         }
     }
@@ -87,15 +87,14 @@ public class WebhookDispatcherService {
      */
     @Transactional
     public void publishTest(UUID subscriptionId) {
-        publish("test.ping", "test-" + UUID.randomUUID(), Map.of(
-                "message", "NX036 webhook test event",
-                "subscriptionId", subscriptionId.toString(),
-                "at", Instant.now().toString()));
+        publish("test.ping", "test-" + UUID.randomUUID(), Map.of("message", "NX036 webhook test event",
+                "subscriptionId", subscriptionId.toString(), "at", Instant.now().toString()));
     }
 
     private static boolean matches(WebhookSubscriptionEntity s, String eventType) {
         var events = s.getEvents();
-        if (events == null || events.isEmpty()) return true;          // empty filter = receive all
+        if (events == null || events.isEmpty())
+            return true; // empty filter = receive all
         return events.contains(eventType) || events.contains("*");
     }
 
@@ -103,14 +102,9 @@ public class WebhookDispatcherService {
         try {
             String body = objectMapper.writeValueAsString(envelope);
             String signature = sign(body, s.getSecret());
-            WebhookDeliveryEntity d = deliveryRepository.save(WebhookDeliveryEntity.builder()
-                    .subscription(s)
-                    .eventType(eventType).eventId(eventId)
-                    .payload(envelope).signature(signature)
-                    .targetUrl(s.getTargetUrl())
-                    .status("PENDING").attempt(0)
-                    .nextRetryAt(Instant.now())
-                    .build());
+            WebhookDeliveryEntity d = deliveryRepository.save(WebhookDeliveryEntity.builder().subscription(s)
+                    .eventType(eventType).eventId(eventId).payload(envelope).signature(signature)
+                    .targetUrl(s.getTargetUrl()).status("PENDING").attempt(0).nextRetryAt(Instant.now()).build());
             // Fire-and-forget; the scheduler also picks up PENDING/RETRY rows so we never lose a delivery.
             attempt(d.getId());
         } catch (Exception e) {
@@ -122,22 +116,18 @@ public class WebhookDispatcherService {
     @Transactional
     public void attempt(UUID deliveryId) {
         WebhookDeliveryEntity d = deliveryRepository.findById(deliveryId).orElse(null);
-        if (d == null || "SUCCESS".equals(d.getStatus())) return;
+        if (d == null || "SUCCESS".equals(d.getStatus()))
+            return;
         d.setLastAttemptAt(Instant.now());
         d.setAttempt(d.getAttempt() + 1);
 
         try {
             String body = objectMapper.writeValueAsString(d.getPayload());
-            HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create(d.getTargetUrl()))
-                    .timeout(Duration.ofSeconds(10))
-                    .header("Content-Type", "application/json")
-                    .header("X-NX036-Signature", d.getSignature())
-                    .header("X-NX036-Event", d.getEventType())
-                    .header("X-NX036-Event-Id", d.getEventId())
+            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(d.getTargetUrl())).timeout(Duration.ofSeconds(10))
+                    .header("Content-Type", "application/json").header("X-NX036-Signature", d.getSignature())
+                    .header("X-NX036-Event", d.getEventType()).header("X-NX036-Event-Id", d.getEventId())
                     .header("X-NX036-Attempt", String.valueOf(d.getAttempt()))
-                    .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-                    .build();
+                    .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)).build();
 
             HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             d.setResponseStatus(res.statusCode());
@@ -171,9 +161,10 @@ public class WebhookDispatcherService {
     @Transactional
     public void retryDueDeliveries() {
         Instant now = Instant.now();
-        List<WebhookDeliveryEntity> due =
-                deliveryRepository.findByStatusAndNextRetryAtLessThanEqualOrderByNextRetryAtAsc("RETRY", now);
-        if (due.isEmpty()) return;
+        List<WebhookDeliveryEntity> due = deliveryRepository
+                .findByStatusAndNextRetryAtLessThanEqualOrderByNextRetryAtAsc("RETRY", now);
+        if (due.isEmpty())
+            return;
         for (WebhookDeliveryEntity d : due) {
             // Mark PENDING first so we don't double-attempt if the scheduler overlaps.
             d.setStatus("PENDING");
@@ -184,7 +175,8 @@ public class WebhookDispatcherService {
     }
 
     private static String truncate(String s, int max) {
-        if (s == null) return null;
+        if (s == null)
+            return null;
         return s.length() <= max ? s : s.substring(0, max);
     }
 

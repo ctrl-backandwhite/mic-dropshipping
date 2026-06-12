@@ -35,7 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class JwtRevocationService {
 
     private static final String PREFIX = "nx:jwt:revoked-before:";
-    private static final Duration TTL  = Duration.ofHours(13); // un poco más que el JWT TTL
+    private static final Duration TTL = Duration.ofHours(13); // un poco más que el JWT TTL
 
     private final StringRedisTemplate redis;
     private final ConcurrentHashMap<String, Long> fallback = new ConcurrentHashMap<>();
@@ -49,7 +49,8 @@ public class JwtRevocationService {
 
     /** Marca todos los tokens del client como revocados con efecto inmediato. */
     public void revokeAllForClient(String clientId) {
-        if (clientId == null || clientId.isBlank()) return;
+        if (clientId == null || clientId.isBlank())
+            return;
         long now = Instant.now().getEpochSecond();
         if (redis != null) {
             redis.opsForValue().set(PREFIX + clientId, Long.toString(now), TTL);
@@ -61,7 +62,8 @@ public class JwtRevocationService {
 
     /** Atajo cuando varios clients pertenecen al mismo user. */
     public void revokeAllForClients(java.util.Collection<String> clientIds) {
-        for (String c : clientIds) revokeAllForClient(c);
+        for (String c : clientIds)
+            revokeAllForClient(c);
     }
 
     /**
@@ -70,7 +72,8 @@ public class JwtRevocationService {
      * @return true si el token sigue válido; false si fue revocado masivamente
      */
     public boolean isStillValid(String clientId, long issuedAtEpochSeconds) {
-        if (clientId == null) return true;
+        if (clientId == null)
+            return true;
         Long revokedAt;
         if (redis != null) {
             String v = redis.opsForValue().get(PREFIX + clientId);
@@ -90,7 +93,8 @@ public class JwtRevocationService {
                 for (Object k : keys) {
                     String key = String.valueOf(k);
                     String v = redis.opsForValue().get(key);
-                    if (v != null) out.put(key.substring(PREFIX.length()), Long.parseLong(v));
+                    if (v != null)
+                        out.put(key.substring(PREFIX.length()), Long.parseLong(v));
                 }
             }
             return out;

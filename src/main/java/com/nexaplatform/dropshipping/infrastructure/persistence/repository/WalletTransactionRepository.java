@@ -10,5 +10,6 @@ import java.util.UUID;
 
 public interface WalletTransactionRepository extends JpaRepository<WalletTransactionEntity, UUID> {
     Page<WalletTransactionEntity> findByWallet_IdOrderByCreatedAtDesc(UUID walletId, Pageable pageable);
+
     Optional<WalletTransactionEntity> findByIdempotencyKey(String idempotencyKey);
 }

@@ -20,10 +20,8 @@ public interface ProductReviewRepository extends JpaRepository<ProductReviewEnti
             UUID productId, short minRating, Pageable pageable);
 
     /** Histograma de distribución de ratings (stars → count). */
-    @Query("SELECT r.rating AS stars, COUNT(r) AS cnt " +
-           "FROM ProductReviewEntity r " +
-           "WHERE r.product.id = :productId AND r.approved = true " +
-           "GROUP BY r.rating ORDER BY r.rating DESC")
+    @Query("SELECT r.rating AS stars, COUNT(r) AS cnt " + "FROM ProductReviewEntity r "
+            + "WHERE r.product.id = :productId AND r.approved = true " + "GROUP BY r.rating ORDER BY r.rating DESC")
     List<Object[]> distribution(@Param("productId") UUID productId);
 
     long countByProduct_IdAndApprovedTrue(UUID productId);

@@ -28,14 +28,26 @@ import java.util.Map;
 @Component
 public class UsdtGateway implements PaymentGateway {
 
-    @Value("${nexadrop.usdt.enabled:true}") private boolean enabled;
-    @Value("${nexadrop.usdt.manual-address:TBd5jH7XPM2QwG1pVxLqkRtjY8bD3sxA1Z}") private String manualAddress;
-    @Value("${nexadrop.usdt.chain:TRC20}") private String defaultChain;
-    @Value("${nexadrop.usdt.expiry-minutes:30}") private int expiryMinutes;
-    @Value("${nexadrop.coinbase.api-key:}") private String coinbaseKey;
+    @Value("${nexadrop.usdt.enabled:true}")
+    private boolean enabled;
+    @Value("${nexadrop.usdt.manual-address:TBd5jH7XPM2QwG1pVxLqkRtjY8bD3sxA1Z}")
+    private String manualAddress;
+    @Value("${nexadrop.usdt.chain:TRC20}")
+    private String defaultChain;
+    @Value("${nexadrop.usdt.expiry-minutes:30}")
+    private int expiryMinutes;
+    @Value("${nexadrop.coinbase.api-key:}")
+    private String coinbaseKey;
 
-    @Override public boolean supports(PaymentMethod m) { return m == PaymentMethod.USDT; }
-    @Override public String providerName() { return coinbaseKey.isBlank() ? "manual" : "coinbase"; }
+    @Override
+    public boolean supports(PaymentMethod m) {
+        return m == PaymentMethod.USDT;
+    }
+
+    @Override
+    public String providerName() {
+        return coinbaseKey.isBlank() ? "manual" : "coinbase";
+    }
 
     @Override
     public InitiateResult initiate(PaymentEntity p) {
@@ -45,15 +57,8 @@ public class UsdtGateway implements PaymentGateway {
         Instant expiresAt = Instant.now().plus(Duration.ofMinutes(expiryMinutes));
         String qr = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + address;
         log.info("USDT manual deposit initiated for payment {} ({} chain)", p.getId(), chain);
-        return new InitiateResult(
-                "usdt_" + p.getId(),
-                null,
-                null,
-                address,
-                chain,
-                qr,
-                Map.of("manual", true, "address", address, "chain", chain, "expiresAt", expiresAt.toString())
-        );
+        return new InitiateResult("usdt_" + p.getId(), null, null, address, chain, qr,
+                Map.of("manual", true, "address", address, "chain", chain, "expiresAt", expiresAt.toString()));
     }
 
     @Override

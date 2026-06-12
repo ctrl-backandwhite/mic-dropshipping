@@ -33,8 +33,7 @@ public interface AdminCategoryApi {
 
     @Operation(summary = "Update a category by id (slug, names, parent, position, icon)")
     @PutMapping("/{id}")
-    ResponseEntity<AdminCategoryDtoOut> update(@PathVariable UUID id,
-                              @Valid @RequestBody AdminCategoryUpsertDtoIn req);
+    ResponseEntity<AdminCategoryDtoOut> update(@PathVariable UUID id, @Valid @RequestBody AdminCategoryUpsertDtoIn req);
 
     @Operation(summary = "Delete a category by id (fails if products are associated)")
     @DeleteMapping("/{id}")

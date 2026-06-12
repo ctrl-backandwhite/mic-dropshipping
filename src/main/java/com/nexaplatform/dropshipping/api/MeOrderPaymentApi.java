@@ -26,16 +26,12 @@ public interface MeOrderPaymentApi {
 
     @Operation(summary = "Initiate payment for the authenticated user's order")
     @PostMapping("/{orderId}/payment-intent")
-    ResponseEntity<OrderPaymentDtoOut> initiate(
-            Authentication auth,
-            @PathVariable UUID orderId,
+    ResponseEntity<OrderPaymentDtoOut> initiate(Authentication auth, @PathVariable UUID orderId,
             @Valid @RequestBody OrderPaymentIntentDtoIn req,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey);
 
     @Operation(summary = "Dev-only: mock-confirm a pending order payment (no real provider call)")
     @PostMapping("/{orderId}/payments/{paymentId}/confirm-mock")
-    ResponseEntity<OrderPaymentDtoOut> confirmMock(
-            Authentication auth,
-            @PathVariable UUID orderId,
+    ResponseEntity<OrderPaymentDtoOut> confirmMock(Authentication auth, @PathVariable UUID orderId,
             @PathVariable UUID paymentId);
 }

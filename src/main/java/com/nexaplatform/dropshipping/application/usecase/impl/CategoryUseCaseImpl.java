@@ -119,7 +119,7 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
     private Map<UUID, Long> productCountByCategory() {
         @SuppressWarnings("unchecked")
         List<Object[]> counts = em.createQuery(
-                        "SELECT p.category.id, COUNT(p) FROM ProductEntity p WHERE p.category IS NOT NULL GROUP BY p.category.id")
+                "SELECT p.category.id, COUNT(p) FROM ProductEntity p WHERE p.category IS NOT NULL GROUP BY p.category.id")
                 .getResultList();
         Map<UUID, Long> productCount = new HashMap<>();
         for (Object[] row : counts) {

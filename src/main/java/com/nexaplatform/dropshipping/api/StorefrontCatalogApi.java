@@ -57,27 +57,22 @@ public interface StorefrontCatalogApi {
 
     @Operation(summary = "Get a category by id or slug")
     @GetMapping("/categories/{idOrSlug}")
-    CategoryView categoryDetail(@PathVariable String idOrSlug,
-                                @RequestParam(defaultValue = "es") String lang);
+    CategoryView categoryDetail(@PathVariable String idOrSlug, @RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "List the children of a category")
     @GetMapping("/categories/{idOrSlug}/children")
-    List<CategoryView> categoryChildren(@PathVariable String idOrSlug,
-                                        @RequestParam(defaultValue = "es") String lang);
+    List<CategoryView> categoryChildren(@PathVariable String idOrSlug, @RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "Get the breadcrumb path of a category")
     @GetMapping("/categories/{idOrSlug}/breadcrumb")
     List<CategoryBreadcrumb> categoryBreadcrumb(@PathVariable String idOrSlug,
-                                                @RequestParam(defaultValue = "es") String lang);
+            @RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "List products in a category")
     @GetMapping("/categories/{idOrSlug}/products")
-    PageResponse<ProductSummaryView> productsByCategory(
-            @PathVariable String idOrSlug,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "24") int size,
-            @RequestParam(defaultValue = "es") String lang,
-            @RequestParam(defaultValue = "trending") String sort);
+    PageResponse<ProductSummaryView> productsByCategory(@PathVariable String idOrSlug,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "24") int size,
+            @RequestParam(defaultValue = "es") String lang, @RequestParam(defaultValue = "trending") String sort);
 
     /* =========================== SUPPLIERS =========================== */
 
@@ -91,84 +86,62 @@ public interface StorefrontCatalogApi {
 
     @Operation(summary = "List products of a supplier")
     @GetMapping("/suppliers/{id}/products")
-    PageResponse<ProductSummaryView> productsBySupplier(
-            @PathVariable UUID id,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "24") int size,
-            @RequestParam(defaultValue = "es") String lang,
-            @RequestParam(defaultValue = "trending") String sort);
+    PageResponse<ProductSummaryView> productsBySupplier(@PathVariable UUID id,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "24") int size,
+            @RequestParam(defaultValue = "es") String lang, @RequestParam(defaultValue = "trending") String sort);
 
     /* =========================== PRODUCTS =========================== */
 
     @Operation(summary = "List/search products with filters")
     @GetMapping("/products")
-    PageResponse<ProductSummaryView> list(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "24") int size,
-            @RequestParam(defaultValue = "es") String lang,
-            @RequestParam(required = false) String q,
-            @RequestParam(required = false) UUID categoryId,
-            @RequestParam(required = false) UUID supplierId,
-            @RequestParam(required = false) BigDecimal minPrice,
-            @RequestParam(required = false) BigDecimal maxPrice,
-            @RequestParam(required = false) String shipFrom,
-            @RequestParam(required = false) Boolean freeShipping,
-            @RequestParam(required = false) Boolean selfPickup,
-            @RequestParam(required = false) Boolean hasVideo,
-            @RequestParam(required = false) Integer minRating,
-            @RequestParam(required = false) Integer inventoryMin,
-            @RequestParam(required = false) String certification,
+    PageResponse<ProductSummaryView> list(@RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "24") int size, @RequestParam(defaultValue = "es") String lang,
+            @RequestParam(required = false) String q, @RequestParam(required = false) UUID categoryId,
+            @RequestParam(required = false) UUID supplierId, @RequestParam(required = false) BigDecimal minPrice,
+            @RequestParam(required = false) BigDecimal maxPrice, @RequestParam(required = false) String shipFrom,
+            @RequestParam(required = false) Boolean freeShipping, @RequestParam(required = false) Boolean selfPickup,
+            @RequestParam(required = false) Boolean hasVideo, @RequestParam(required = false) Integer minRating,
+            @RequestParam(required = false) Integer inventoryMin, @RequestParam(required = false) String certification,
             @RequestParam(required = false, defaultValue = "best_match") String sort);
 
     @Operation(summary = "Get a product detail by slug")
     @GetMapping("/products/{slug}")
-    ProductDetailView detailBySlug(@PathVariable String slug,
-                                   @RequestParam(defaultValue = "es") String lang);
+    ProductDetailView detailBySlug(@PathVariable String slug, @RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "Get a product detail by id")
     @GetMapping("/products/by-id/{id}")
-    ProductDetailView detailById(@PathVariable UUID id,
-                                 @RequestParam(defaultValue = "es") String lang);
+    ProductDetailView detailById(@PathVariable UUID id, @RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "Get a product detail by external source and id")
     @GetMapping("/products/by-external/{source}/{externalId}")
-    ProductDetailView detailByExternal(@PathVariable String source,
-                                       @PathVariable String externalId,
-                                       @RequestParam(defaultValue = "es") String lang);
+    ProductDetailView detailByExternal(@PathVariable String source, @PathVariable String externalId,
+            @RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "List bestseller products")
     @GetMapping("/bestsellers")
-    PageResponse<ProductSummaryView> bestsellers(
-            @RequestParam(required = false) UUID categoryId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
+    PageResponse<ProductSummaryView> bestsellers(@RequestParam(required = false) UUID categoryId,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "List trending products")
     @GetMapping("/products/trending")
-    PageResponse<ProductSummaryView> trending(
-            @RequestParam(required = false) UUID categoryId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
+    PageResponse<ProductSummaryView> trending(@RequestParam(required = false) UUID categoryId,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "List newest products")
     @GetMapping("/products/newest")
-    PageResponse<ProductSummaryView> newest(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "es") String lang);
+    PageResponse<ProductSummaryView> newest(@RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size, @RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "List products related to a product")
     @GetMapping("/products/{id}/related")
-    List<ProductSummaryView> relatedProducts(@PathVariable UUID id,
-                                             @RequestParam(defaultValue = "es") String lang,
-                                             @RequestParam(defaultValue = "8") int limit);
+    List<ProductSummaryView> relatedProducts(@PathVariable UUID id, @RequestParam(defaultValue = "es") String lang,
+            @RequestParam(defaultValue = "8") int limit);
 
     @Operation(summary = "List the specifications of a product")
     @GetMapping("/products/{id}/specifications")
-    List<SpecificationView> specifications(@PathVariable UUID id,
-                                           @RequestParam(defaultValue = "es") String lang);
+    List<SpecificationView> specifications(@PathVariable UUID id, @RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "List the attributes of a product")
     @GetMapping("/products/{id}/attributes")
@@ -188,9 +161,8 @@ public interface StorefrontCatalogApi {
 
     @Operation(summary = "Suggest products for an autocomplete query")
     @GetMapping("/products/suggest")
-    List<SuggestionView> suggest(@RequestParam String q,
-                                 @RequestParam(defaultValue = "es") String lang,
-                                 @RequestParam(defaultValue = "8") int limit);
+    List<SuggestionView> suggest(@RequestParam String q, @RequestParam(defaultValue = "es") String lang,
+            @RequestParam(defaultValue = "8") int limit);
 
     /* =========================== VARIANTS =========================== */
 
@@ -208,8 +180,7 @@ public interface StorefrontCatalogApi {
 
     @Operation(summary = "Match product variants by selected options")
     @PostMapping("/products/{productId}/variants/match")
-    List<VariantView> variantMatch(@PathVariable UUID productId,
-                                   @RequestBody Map<String, String> options);
+    List<VariantView> variantMatch(@PathVariable UUID productId, @RequestBody Map<String, String> options);
 
     /* =========================== ATTRIBUTES (taxonomy) =========================== */
 
@@ -229,9 +200,8 @@ public interface StorefrontCatalogApi {
 
     @Operation(summary = "List products by tag")
     @GetMapping("/tags/{tag}/products")
-    List<ProductSummaryView> productsByTag(@PathVariable String tag,
-                                           @RequestParam(defaultValue = "es") String lang,
-                                           @RequestParam(defaultValue = "24") int limit);
+    List<ProductSummaryView> productsByTag(@PathVariable String tag, @RequestParam(defaultValue = "es") String lang,
+            @RequestParam(defaultValue = "24") int limit);
 
     /* =========================== SHIPPING =========================== */
 
@@ -241,8 +211,7 @@ public interface StorefrontCatalogApi {
 
     @Operation(summary = "List the shipping rates of a supplier for a country")
     @GetMapping("/shipping/rates")
-    List<ShippingRateView> shippingRates(@RequestParam UUID supplierId,
-                                         @RequestParam String country);
+    List<ShippingRateView> shippingRates(@RequestParam UUID supplierId, @RequestParam String country);
 
     @Operation(summary = "Quote shipping options for a product to a country")
     @PostMapping("/shipping/quote")
@@ -253,34 +222,31 @@ public interface StorefrontCatalogApi {
     @Operation(summary = "Get the homepage sections and hot categories")
     @GetMapping("/home/sections")
     HomeSectionsResponse homeSections(@RequestParam(defaultValue = "es") String lang,
-                                      @RequestParam(defaultValue = "8") int perSection);
+            @RequestParam(defaultValue = "8") int perSection);
 
     /* =========================== IMPORT BY URL (DROP-15) =========================== */
 
     @Operation(summary = "Resolve a 1688/taobao/aliexpress/ebay URL against the catalog")
     @PostMapping("/products/import-url")
-    ImportUrlResponse importByUrl(@RequestBody ImportUrlRequest req,
-                                  @RequestParam(defaultValue = "es") String lang);
+    ImportUrlResponse importByUrl(@RequestBody ImportUrlRequest req, @RequestParam(defaultValue = "es") String lang);
 
     /* =========================== IMAGE SEARCH MOCK (DROP-16) =========================== */
 
     @Operation(summary = "Search products by image")
     @PostMapping("/products/search-by-image")
     List<ImageSearchResult> searchByImage(@RequestBody ImageSearchRequest req,
-                                          @RequestParam(defaultValue = "es") String lang);
+            @RequestParam(defaultValue = "es") String lang);
 
     /* =========================== PRICE/STOCK HISTORY (DROP-25) =========================== */
 
     @Operation(summary = "Get the price/stock history of a product")
     @GetMapping("/products/{id}/price-history")
-    List<HistoryPoint> priceHistory(@PathVariable UUID id,
-                                    @RequestParam(defaultValue = "90") int days);
+    List<HistoryPoint> priceHistory(@PathVariable UUID id, @RequestParam(defaultValue = "90") int days);
 
     /* =========================== MARGIN ESTIMATE (DROP-24) =========================== */
 
     @Operation(summary = "Estimate the dropshipping margin for a product")
     @GetMapping("/products/{id}/margin-estimate")
-    MarginEstimate marginEstimate(@PathVariable UUID id,
-                                  @RequestParam(defaultValue = "ES") String country,
-                                  @RequestParam(defaultValue = "1") int quantity);
+    MarginEstimate marginEstimate(@PathVariable UUID id, @RequestParam(defaultValue = "ES") String country,
+            @RequestParam(defaultValue = "1") int quantity);
 }

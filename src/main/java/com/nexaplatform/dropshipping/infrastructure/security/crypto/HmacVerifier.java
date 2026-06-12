@@ -34,12 +34,11 @@ public class HmacVerifier {
 
     /** Constant-time check. False if the header is null or malformed. */
     public boolean verify(String secret, byte[] body, String headerSignature) {
-        if (secret == null || headerSignature == null) return false;
+        if (secret == null || headerSignature == null)
+            return false;
         String expected = sign(secret, body);
         // strip optional "sha256=" prefix for compatibility with Shopify/Stripe-style headers
         String got = headerSignature.startsWith("sha256=") ? headerSignature.substring(7) : headerSignature;
-        return MessageDigest.isEqual(
-                expected.getBytes(StandardCharsets.UTF_8),
-                got.getBytes(StandardCharsets.UTF_8));
+        return MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), got.getBytes(StandardCharsets.UTF_8));
     }
 }

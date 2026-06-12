@@ -28,15 +28,12 @@ public interface PaymentGateway {
     /** Confirm via webhook payload. Returns true if SUCCEEDED. */
     ConfirmResult confirm(PaymentEntity payment, Map<String, Object> providerPayload);
 
-    record InitiateResult(
-            String providerRef,
-            String clientSecret,        // Stripe only
-            String approveUrl,          // PayPal only
-            String cryptoAddress,       // USDT only
-            String cryptoChain,
-            String qrUrl,
-            Map<String, Object> raw
-    ) {}
+    record InitiateResult(String providerRef, String clientSecret, // Stripe only
+            String approveUrl, // PayPal only
+            String cryptoAddress, // USDT only
+            String cryptoChain, String qrUrl, Map<String, Object> raw) {
+    }
 
-    record ConfirmResult(boolean succeeded, String errorMessage, Map<String, Object> raw) {}
+    record ConfirmResult(boolean succeeded, String errorMessage, Map<String, Object> raw) {
+    }
 }

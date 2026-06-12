@@ -22,7 +22,8 @@ public final class LocaleHolder {
     private static final String DEFAULT = "en";
     private static final ThreadLocal<String> CURRENT = ThreadLocal.withInitial(() -> DEFAULT);
 
-    private LocaleHolder() {}
+    private LocaleHolder() {
+    }
 
     public static String get() {
         String l = CURRENT.get();
@@ -30,12 +31,17 @@ public final class LocaleHolder {
     }
 
     public static void set(String l) {
-        if (l == null) { CURRENT.set(DEFAULT); return; }
+        if (l == null) {
+            CURRENT.set(DEFAULT);
+            return;
+        }
         String norm = l.trim().toLowerCase().split("[-_]")[0];
         CURRENT.set(SUPPORTED.contains(norm) ? norm : DEFAULT);
     }
 
-    public static void clear() { CURRENT.remove(); }
+    public static void clear() {
+        CURRENT.remove();
+    }
 
     @Component
     @Order(Ordered.HIGHEST_PRECEDENCE + 25)

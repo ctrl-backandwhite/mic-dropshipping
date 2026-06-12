@@ -40,9 +40,7 @@ public class SupplierRepositoryImpl implements SupplierRepository {
 
     @Override
     public Supplier getById(UUID id) {
-        return supplierJpaRepositoryAdapter.findById(id)
-                .map(supplierEntityMapper::toDomain)
-                .orElse(null);
+        return supplierJpaRepositoryAdapter.findById(id).map(supplierEntityMapper::toDomain).orElse(null);
     }
 
     @Override

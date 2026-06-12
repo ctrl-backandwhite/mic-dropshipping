@@ -45,17 +45,13 @@ public class UserRepositoryImpl implements UserRepository {
     @Override
     public List<User> findAll() {
         return userJpaRepository.findAll().stream()
-                .sorted(Comparator.comparing(UserEntity::getCreatedAt,
-                        Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(userEntityMapper::toDomain)
-                .toList();
+                .sorted(Comparator.comparing(UserEntity::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(userEntityMapper::toDomain).toList();
     }
 
     @Override
     public User getById(UUID id) {
-        return userJpaRepository.findById(id)
-                .map(userEntityMapper::toDomain)
-                .orElse(null);
+        return userJpaRepository.findById(id).map(userEntityMapper::toDomain).orElse(null);
     }
 
     @Override
@@ -86,8 +82,7 @@ public class UserRepositoryImpl implements UserRepository {
     /** Loads the managed entity for an existing id, or starts a fresh one for inserts. */
     private UserEntity resolveEntity(User model) {
         if (model.getId() != null) {
-            return userJpaRepository.findById(model.getId())
-                    .orElseThrow(() -> new NotFoundException("User not found"));
+            return userJpaRepository.findById(model.getId()).orElseThrow(() -> new NotFoundException("User not found"));
         }
         return new UserEntity();
     }

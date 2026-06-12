@@ -19,12 +19,11 @@ public class OpenSearchConfig {
 
     @Bean
     public OpenSearchClient openSearchClient(@Value("${nexadrop.opensearch.uris}") String uris,
-                                             ObjectMapper objectMapper) {
+            ObjectMapper objectMapper) {
         URI uri = URI.create(uris.split(",")[0].trim());
         OpenSearchTransport transport = ApacheHttpClient5TransportBuilder
                 .builder(new HttpHost(uri.getScheme(), uri.getHost(), uri.getPort() == -1 ? 9200 : uri.getPort()))
-                .setMapper(new JacksonJsonpMapper(objectMapper))
-                .build();
+                .setMapper(new JacksonJsonpMapper(objectMapper)).build();
         log.info("OpenSearch client configured against {}", uri);
         return new OpenSearchClient(transport);
     }

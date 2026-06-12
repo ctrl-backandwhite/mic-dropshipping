@@ -38,22 +38,16 @@ public class SupplierUseCaseImpl implements SupplierUseCase {
     @Transactional(readOnly = true)
     public List<Supplier> findAll() {
         Map<UUID, Long> productCount = productCountBySupplier();
-        return supplierRepository.findAll().stream()
-                .map(s -> {
-                    BigDecimal rating = s.getRating() != null ? s.getRating() : BigDecimal.valueOf(4.0);
-                    double r = rating.doubleValue();
-                    long onTimePct = Math.round(Math.min(99.5, 60 + r * 8)); // r=4.0 -> 92, r=5.0 -> 99
-                    double defectRate = Math.round((5.0 - r) * 80) / 100.0; // r=5.0 -> 0.0, r=4.0 -> 0.8
-                    int responseHours = r >= 4.7 ? 4 : (r >= 4.3 ? 12 : 24);
-                    int leadTimeDays = r >= 4.7 ? 3 : (r >= 4.3 ? 7 : 14);
-                    return s
-                            .withProductCount(productCount.getOrDefault(s.getId(), 0L))
-                            .withOnTimePct(onTimePct)
-                            .withDefectRate(defectRate)
-                            .withResponseHours(responseHours)
-                            .withLeadTimeDays(leadTimeDays);
-                })
-                .toList();
+        return supplierRepository.findAll().stream().map(s -> {
+            BigDecimal rating = s.getRating() != null ? s.getRating() : BigDecimal.valueOf(4.0);
+            double r = rating.doubleValue();
+            long onTimePct = Math.round(Math.min(99.5, 60 + r * 8)); // r=4.0 -> 92, r=5.0 -> 99
+            double defectRate = Math.round((5.0 - r) * 80) / 100.0; // r=5.0 -> 0.0, r=4.0 -> 0.8
+            int responseHours = r >= 4.7 ? 4 : (r >= 4.3 ? 12 : 24);
+            int leadTimeDays = r >= 4.7 ? 3 : (r >= 4.3 ? 7 : 14);
+            return s.withProductCount(productCount.getOrDefault(s.getId(), 0L)).withOnTimePct(onTimePct)
+                    .withDefectRate(defectRate).withResponseHours(responseHours).withLeadTimeDays(leadTimeDays);
+        }).toList();
     }
 
     /**

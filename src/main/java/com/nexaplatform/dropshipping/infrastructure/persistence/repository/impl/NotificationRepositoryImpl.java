@@ -44,8 +44,8 @@ public class NotificationRepositoryImpl implements NotificationRepository {
 
     @Override
     public List<PlatformNotification> findByUserId(UUID userId) {
-        return notificationEntityMapper.toDomainList(
-                notificationJpaRepositoryAdapter.findByUser_IdOrderByCreatedAtDesc(userId));
+        return notificationEntityMapper
+                .toDomainList(notificationJpaRepositoryAdapter.findByUser_IdOrderByCreatedAtDesc(userId));
     }
 
     @Override
@@ -55,9 +55,7 @@ public class NotificationRepositoryImpl implements NotificationRepository {
 
     @Override
     public PlatformNotification getById(UUID id) {
-        return notificationJpaRepositoryAdapter.findById(id)
-                .map(notificationEntityMapper::toDomain)
-                .orElse(null);
+        return notificationJpaRepositoryAdapter.findById(id).map(notificationEntityMapper::toDomain).orElse(null);
     }
 
     @Override
@@ -82,8 +80,7 @@ public class NotificationRepositoryImpl implements NotificationRepository {
     /** Applies the mutable model fields onto the entity, resolving the owning user. */
     private void applyModel(NotificationEntity entity, PlatformNotification model) {
         if (entity.getUser() == null) {
-            entity.setUser(userRepository.findById(model.getUserId())
-                    .orElseThrow(() -> new NotFoundException("User")));
+            entity.setUser(userRepository.findById(model.getUserId()).orElseThrow(() -> new NotFoundException("User")));
         }
         entity.setEventType(model.getEventType());
         entity.setTitle(model.getTitle());

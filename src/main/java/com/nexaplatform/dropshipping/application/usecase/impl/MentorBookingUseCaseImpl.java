@@ -34,9 +34,7 @@ public class MentorBookingUseCaseImpl implements MentorBookingUseCase {
         if (!mentorProfileRepository.existsById(model.getMentorId())) {
             throw new NotFoundException("Mentor");
         }
-        MentorBooking toSave = model
-                .withLearnerId(learnerId)
-                .withStatus("REQUESTED");
+        MentorBooking toSave = model.withLearnerId(learnerId).withStatus("REQUESTED");
         return mentorBookingRepository.save(toSave);
     }
 

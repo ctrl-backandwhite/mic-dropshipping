@@ -28,18 +28,26 @@ public final class Currency {
         return new Currency(normalized);
     }
 
-    public String code() { return code; }
+    public String code() {
+        return code;
+    }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof Currency c)) return false;
+        if (this == o)
+            return true;
+        if (!(o instanceof Currency c))
+            return false;
         return code.equals(c.code);
     }
 
     @Override
-    public int hashCode() { return code.hashCode(); }
+    public int hashCode() {
+        return code.hashCode();
+    }
 
     @Override
-    public String toString() { return code; }
+    public String toString() {
+        return code;
+    }
 }

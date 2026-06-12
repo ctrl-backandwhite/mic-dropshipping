@@ -28,16 +28,20 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ShopConnectionUseCaseImplTest {
 
-    @Mock ShopConnectionRepository shopRepository;
-    @Mock ShopProductListingRepository listingRepository;
-    @Mock TokenCryptoService tokenCrypto;
-    @InjectMocks ShopConnectionUseCaseImpl useCase;
+    @Mock
+    ShopConnectionRepository shopRepository;
+    @Mock
+    ShopProductListingRepository listingRepository;
+    @Mock
+    TokenCryptoService tokenCrypto;
+    @InjectMocks
+    ShopConnectionUseCaseImpl useCase;
 
     @Test
     void connect_encryptsTokenLowercasesPlatformAndDefaultsStatus() {
         UUID userId = UUID.randomUUID();
-        ShopConnection incoming = ShopConnection.builder()
-                .platform("Shopify").shopHandle("my-store").accessTokenEnc("raw-token").build();
+        ShopConnection incoming = ShopConnection.builder().platform("Shopify").shopHandle("my-store")
+                .accessTokenEnc("raw-token").build();
         when(tokenCrypto.encrypt("raw-token")).thenReturn("gcm:encrypted");
         when(shopRepository.save(any(ShopConnection.class)))
                 .thenAnswer(inv -> ((ShopConnection) inv.getArgument(0)).withId(UUID.randomUUID()));

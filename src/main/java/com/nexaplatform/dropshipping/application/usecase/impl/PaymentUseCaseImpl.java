@@ -62,12 +62,12 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
     @Override
     @Transactional
-    public Payment initiateRecharge(UUID userId, PaymentMethod method,
-                                    long amountUsdCents, String currencyDisplay,
-                                    BigDecimal amountDisplay, String idempotencyKey,
-                                    String cryptoChain) {
-        if (amountUsdCents < 100) throw new BusinessException("Minimum recharge is $1.00 USD");
-        if (amountUsdCents > 1_000_000_00L) throw new BusinessException("Maximum recharge is $1,000,000 USD");
+    public Payment initiateRecharge(UUID userId, PaymentMethod method, long amountUsdCents, String currencyDisplay,
+            BigDecimal amountDisplay, String idempotencyKey, String cryptoChain) {
+        if (amountUsdCents < 100)
+            throw new BusinessException("Minimum recharge is $1.00 USD");
+        if (amountUsdCents > 1_000_000_00L)
+            throw new BusinessException("Maximum recharge is $1,000,000 USD");
 
         // idempotency
         if (idempotencyKey != null) {
@@ -78,17 +78,14 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             }
         }
 
-        if (userRepository.findById(userId).isEmpty()) throw new NotFoundException("User");
+        if (userRepository.findById(userId).isEmpty())
+            throw new NotFoundException("User");
         Wallet wallet = walletUseCase.getOrCreate(userId);
 
-        Payment p = Payment.builder()
-                .userId(userId).walletId(wallet.getId())
-                .method(method).status(PaymentStatus.PENDING)
-                .amountDisplay(amountDisplay).currencyDisplay(currencyDisplay)
-                .amountUsdCents(amountUsdCents)
-                .settlementCurrency(method == PaymentMethod.USDT ? "USDT" : "USD")
-                .idempotencyKey(idempotencyKey)
-                .build();
+        Payment p = Payment.builder().userId(userId).walletId(wallet.getId()).method(method)
+                .status(PaymentStatus.PENDING).amountDisplay(amountDisplay).currencyDisplay(currencyDisplay)
+                .amountUsdCents(amountUsdCents).settlementCurrency(method == PaymentMethod.USDT ? "USDT" : "USD")
+                .idempotencyKey(idempotencyKey).build();
         p = paymentRepository.save(p);
 
         PaymentGateway gw = resolveGateway(method);
@@ -106,13 +103,15 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         p.setStatus(PaymentStatus.REQUIRES_ACTION);
         p = paymentRepository.save(p);
 
-        auditLogger.log("payment.initiate", p.getUserEmail(), Map.of(
-                "paymentId", p.getId(), "method", method, "amount_usd_cents", amountUsdCents));
+        auditLogger.log("payment.initiate", p.getUserEmail(),
+                Map.of("paymentId", p.getId(), "method", method, "amount_usd_cents", amountUsdCents));
 
         // attach client metadata to provider_response so the controller can return it
         Map<String, Object> meta = new HashMap<>(p.getProviderResponse());
-        if (result.clientSecret() != null) meta.put("clientSecret", result.clientSecret());
-        if (result.approveUrl() != null) meta.put("approveUrl", result.approveUrl());
+        if (result.clientSecret() != null)
+            meta.put("clientSecret", result.clientSecret());
+        if (result.approveUrl() != null)
+            meta.put("approveUrl", result.approveUrl());
         if (result.cryptoAddress() != null) {
             meta.put("cryptoAddress", result.cryptoAddress());
             meta.put("cryptoChain", result.cryptoChain());
@@ -127,10 +126,12 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Transactional
     public Payment confirmSucceeded(UUID paymentId, Map<String, Object> providerPayload) {
         Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException("Payment"));
-        if (p.getStatus() == PaymentStatus.SUCCEEDED) return p;
+        if (p.getStatus() == PaymentStatus.SUCCEEDED)
+            return p;
 
         p.setStatus(PaymentStatus.SUCCEEDED);
-        Map<String, Object> merged = new HashMap<>(p.getProviderResponse() != null ? p.getProviderResponse() : Map.of());
+        Map<String, Object> merged = new HashMap<>(
+                p.getProviderResponse() != null ? p.getProviderResponse() : Map.of());
         merged.put("confirmed_at", Instant.now().toString());
         merged.putAll(providerPayload);
         p.setProviderResponse(merged);
@@ -146,14 +147,12 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                     orderRepository.save(o);
                 }
             });
-            auditLogger.log("order_payment.succeeded", p.getUserEmail(), Map.of(
-                    "paymentId", p.getId(), "orderId", p.getOrderId(),
-                    "method", p.getMethod(), "amount_usd_cents", p.getAmountUsdCents()));
+            auditLogger.log("order_payment.succeeded", p.getUserEmail(), Map.of("paymentId", p.getId(), "orderId",
+                    p.getOrderId(), "method", p.getMethod(), "amount_usd_cents", p.getAmountUsdCents()));
         } else {
             // Recarga de wallet: acreditar saldo.
             String idempKey = "deposit-" + p.getId();
-            walletUseCase.deposit(p.getUserId(), p.getAmountUsdCents(),
-                    p.getId(), idempKey,
+            walletUseCase.deposit(p.getUserId(), p.getAmountUsdCents(), p.getId(), idempKey,
                     "Wallet recharge via " + p.getMethod());
             auditLogger.log("payment.succeeded", p.getUserEmail(),
                     Map.of("paymentId", p.getId(), "method", p.getMethod(), "amount_usd_cents", p.getAmountUsdCents()));
@@ -167,7 +166,8 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         Payment p = paymentRepository.findById(paymentId).orElseThrow();
         p.setStatus(PaymentStatus.FAILED);
         p.setErrorMessage(errorMessage);
-        Map<String, Object> merged = new HashMap<>(p.getProviderResponse() != null ? p.getProviderResponse() : Map.of());
+        Map<String, Object> merged = new HashMap<>(
+                p.getProviderResponse() != null ? p.getProviderResponse() : Map.of());
         merged.putAll(providerPayload != null ? providerPayload : Map.of());
         p.setProviderResponse(merged);
         return paymentRepository.save(p);
@@ -177,7 +177,8 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Transactional
     public Payment capturePayPal(UUID paymentId) {
         Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException("Payment"));
-        if (p.getMethod() != PaymentMethod.PAYPAL) throw new BusinessException("Not a PayPal payment");
+        if (p.getMethod() != PaymentMethod.PAYPAL)
+            throw new BusinessException("Not a PayPal payment");
         PaymentGateway gw = resolveGateway(PaymentMethod.PAYPAL);
         if (!(gw instanceof com.nexaplatform.dropshipping.infrastructure.integration.payment.PayPalGateway pp)) {
             throw new BusinessException("PayPal gateway not configured");
@@ -215,8 +216,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
     /** Fetches the managed entity for the gateway call (gateways read the persisted id + user). */
     private PaymentEntity managedEntity(UUID paymentId) {
-        return paymentJpaRepositoryAdapter.findById(paymentId)
-                .orElseThrow(() -> new NotFoundException("Payment"));
+        return paymentJpaRepositoryAdapter.findById(paymentId).orElseThrow(() -> new NotFoundException("Payment"));
     }
 
     /* ============================================================
@@ -226,11 +226,13 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Override
     @Transactional
     public Payment initiateOrderPayment(UUID orderId, UUID userId, PaymentMethod method, String idempotencyKey) {
-        if (method == null) throw new BusinessException("paymentMethod required");
+        if (method == null)
+            throw new BusinessException("paymentMethod required");
 
         if (idempotencyKey != null) {
             var existing = paymentRepository.findByIdempotencyKey(idempotencyKey);
-            if (existing.isPresent()) return existing.get();
+            if (existing.isPresent())
+                return existing.get();
         }
 
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException("Order"));
@@ -239,24 +241,22 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         }
 
         long amountUsdCents = order.getTotalCents();
-        if (amountUsdCents < 100) throw new BusinessException("Order total below $1.00 USD — refusing to charge");
+        if (amountUsdCents < 100)
+            throw new BusinessException("Order total below $1.00 USD — refusing to charge");
 
         UUID payerUserId = order.getUserId() != null ? order.getUserId() : userId;
-        if (payerUserId == null) throw new BusinessException("Cannot resolve payer user for this order");
-        if (userRepository.findById(payerUserId).isEmpty()) throw new NotFoundException("User");
+        if (payerUserId == null)
+            throw new BusinessException("Cannot resolve payer user for this order");
+        if (userRepository.findById(payerUserId).isEmpty())
+            throw new NotFoundException("User");
         Wallet wallet = walletUseCase.getOrCreate(payerUserId);
 
-        Payment p = Payment.builder()
-                .userId(payerUserId).walletId(wallet.getId())
-                .method(method).status(PaymentStatus.PENDING)
-                .amountUsdCents(amountUsdCents)
+        Payment p = Payment.builder().userId(payerUserId).walletId(wallet.getId()).method(method)
+                .status(PaymentStatus.PENDING).amountUsdCents(amountUsdCents)
                 .amountDisplay(BigDecimal.valueOf(amountUsdCents).movePointLeft(2))
                 .currencyDisplay(order.getCurrency() != null ? order.getCurrency() : "USD")
-                .settlementCurrency(method == PaymentMethod.USDT ? "USDT" : "USD")
-                .idempotencyKey(idempotencyKey)
-                .orderId(orderId)
-                .purpose("ORDER_PAYMENT")
-                .build();
+                .settlementCurrency(method == PaymentMethod.USDT ? "USDT" : "USD").idempotencyKey(idempotencyKey)
+                .orderId(orderId).purpose("ORDER_PAYMENT").build();
         p = paymentRepository.save(p);
 
         PaymentGateway gw = resolveGateway(method);
@@ -265,8 +265,10 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         p.setProvider(gw.providerName());
         p.setProviderRef(result.providerRef());
         Map<String, Object> meta = result.raw() != null ? new HashMap<>(result.raw()) : new HashMap<>();
-        if (result.clientSecret() != null)   meta.put("clientSecret", result.clientSecret());
-        if (result.approveUrl() != null)     meta.put("approveUrl", result.approveUrl());
+        if (result.clientSecret() != null)
+            meta.put("clientSecret", result.clientSecret());
+        if (result.approveUrl() != null)
+            meta.put("approveUrl", result.approveUrl());
         if (result.cryptoAddress() != null) {
             meta.put("cryptoAddress", result.cryptoAddress());
             meta.put("cryptoChain", result.cryptoChain());
@@ -281,8 +283,8 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         p.setStatus(PaymentStatus.REQUIRES_ACTION);
         p = paymentRepository.save(p);
 
-        auditLogger.log("order_payment.initiate", p.getUserEmail(), Map.of(
-                "orderId", orderId, "paymentId", p.getId(), "method", method, "amountCents", amountUsdCents));
+        auditLogger.log("order_payment.initiate", p.getUserEmail(),
+                Map.of("orderId", orderId, "paymentId", p.getId(), "method", method, "amountCents", amountUsdCents));
         return p;
     }
 
@@ -291,45 +293,39 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     public Payment chargeWalletForOrder(UUID orderId, UUID userId, String idempotencyKey) {
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException("Order"));
         UUID payerUserId = order.getUserId() != null ? order.getUserId() : userId;
-        if (payerUserId == null) throw new BusinessException("Cannot resolve payer user for this order");
+        if (payerUserId == null)
+            throw new BusinessException("Cannot resolve payer user for this order");
 
         long amountUsdCents = order.getTotalCents();
-        if (userRepository.findById(payerUserId).isEmpty()) throw new NotFoundException("User");
+        if (userRepository.findById(payerUserId).isEmpty())
+            throw new NotFoundException("User");
         Wallet wallet = walletUseCase.getOrCreate(payerUserId);
 
         // El WalletUseCase.charge ya valida saldo y maneja idempotencia.
         walletUseCase.charge(payerUserId, amountUsdCents, orderId, idempotencyKey, "Order " + order.getOrderNumber());
 
         // Registramos el payment en SUCCEEDED para auditoría uniforme.
-        Payment p = Payment.builder()
-                .userId(payerUserId).walletId(wallet.getId())
-                .method(PaymentMethod.CARD) // sentinel: wallet no es un PaymentMethod del enum
-                .status(PaymentStatus.SUCCEEDED)
-                .amountUsdCents(amountUsdCents)
-                .amountDisplay(BigDecimal.valueOf(amountUsdCents).movePointLeft(2))
-                .currencyDisplay("USD")
-                .settlementCurrency("USD")
-                .provider("wallet")
-                .idempotencyKey(idempotencyKey)
-                .orderId(orderId)
+        Payment p = Payment.builder().userId(payerUserId).walletId(wallet.getId()).method(PaymentMethod.CARD) // sentinel: wallet no es un PaymentMethod del enum
+                .status(PaymentStatus.SUCCEEDED).amountUsdCents(amountUsdCents)
+                .amountDisplay(BigDecimal.valueOf(amountUsdCents).movePointLeft(2)).currencyDisplay("USD")
+                .settlementCurrency("USD").provider("wallet").idempotencyKey(idempotencyKey).orderId(orderId)
                 .purpose("ORDER_PAYMENT")
-                .providerResponse(Map.of("walletId", wallet.getId().toString(), "settled", "atomic"))
-                .build();
+                .providerResponse(Map.of("walletId", wallet.getId().toString(), "settled", "atomic")).build();
         p = paymentRepository.save(p);
 
         // La orden pasa a PAID — el FulfillmentService la recogerá.
         order.setStatus(OrderStatus.PAID);
         orderRepository.save(order);
 
-        auditLogger.log("order_payment.wallet", p.getUserEmail(), Map.of(
-                "orderId", orderId, "paymentId", p.getId(), "amountCents", amountUsdCents));
+        auditLogger.log("order_payment.wallet", p.getUserEmail(),
+                Map.of("orderId", orderId, "paymentId", p.getId(), "amountCents", amountUsdCents));
         return p;
     }
 
     @Override
     @Transactional
-    public Payment initiateOrderPaymentView(UUID orderId, UUID userId, PaymentMethod method,
-                                            boolean wallet, String idempotencyKey) {
+    public Payment initiateOrderPaymentView(UUID orderId, UUID userId, PaymentMethod method, boolean wallet,
+            String idempotencyKey) {
         return wallet
                 ? chargeWalletForOrder(orderId, userId, idempotencyKey)
                 : initiateOrderPayment(orderId, userId, method, idempotencyKey);
@@ -337,8 +333,8 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
     @Override
     @Transactional
-    public Payment initiatePartnerOrderPayment(Jwt jwt, UUID orderId, boolean wallet,
-                                               PaymentMethod method, String idempotencyKey) {
+    public Payment initiatePartnerOrderPayment(Jwt jwt, UUID orderId, boolean wallet, PaymentMethod method,
+            String idempotencyKey) {
         UUID userId = resolvePartnerUserId(jwt);
         return initiateOrderPaymentView(orderId, userId, method, wallet, idempotencyKey);
     }
@@ -354,8 +350,8 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
     @Override
     @Transactional
-    public Payment initiateMeOrderPayment(UUID userId, UUID orderId, boolean wallet,
-                                          PaymentMethod method, String idempotencyKey) {
+    public Payment initiateMeOrderPayment(UUID userId, UUID orderId, boolean wallet, PaymentMethod method,
+            String idempotencyKey) {
         return initiateOrderPaymentView(orderId, userId, method, wallet, idempotencyKey);
     }
 
@@ -397,11 +393,11 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             String paymentIdStr = meta != null ? String.valueOf(meta.get("paymentId")) : null;
             if (paymentIdStr == null || "null".equals(paymentIdStr)) {
                 Payment p = paymentRepository.findByProviderAndProviderRef("stripe", intentId).orElse(null);
-                if (p != null) paymentIdStr = p.getId().toString();
+                if (p != null)
+                    paymentIdStr = p.getId().toString();
             }
 
-            if ("customer.subscription.created".equals(eventType)
-                    || "customer.subscription.updated".equals(eventType)
+            if ("customer.subscription.created".equals(eventType) || "customer.subscription.updated".equals(eventType)
                     || "customer.subscription.deleted".equals(eventType)) {
                 String stripeSubId = String.valueOf(data.get("id"));
                 String stripeStatus = String.valueOf(data.get("status"));
@@ -409,7 +405,8 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 return "ok";
             }
 
-            if (paymentIdStr == null) return "no-match";
+            if (paymentIdStr == null)
+                return "no-match";
             UUID paymentId = UUID.fromString(paymentIdStr);
             if ("payment_intent.succeeded".equals(eventType)) {
                 confirmSucceeded(paymentId, data);
@@ -432,7 +429,8 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             Map<String, Object> resource = (Map<String, Object>) root.get("resource");
             String orderId = String.valueOf(resource.get("id"));
             Payment p = paymentRepository.findByProviderAndProviderRef("paypal", orderId).orElse(null);
-            if (p == null) return "no-match";
+            if (p == null)
+                return "no-match";
             if (eventType != null && eventType.contains("CAPTURE.COMPLETED")) {
                 confirmSucceeded(p.getId(), resource);
             } else if (eventType != null && eventType.contains("DENIED")) {
@@ -455,7 +453,8 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             Map<String, Object> data = event != null ? (Map<String, Object>) event.get("data") : Map.of();
             String chargeCode = String.valueOf(data.get("code"));
             Payment p = paymentRepository.findByProviderAndProviderRef("coinbase", chargeCode).orElse(null);
-            if (p == null) return "no-match";
+            if (p == null)
+                return "no-match";
             if ("charge:confirmed".equals(type)) {
                 confirmSucceeded(p.getId(), data);
             } else if ("charge:failed".equals(type) || "charge:delayed".equals(type)) {
