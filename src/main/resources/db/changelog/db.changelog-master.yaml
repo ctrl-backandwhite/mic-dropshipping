@@ -71,3 +71,19 @@ databaseChangeLog:
       file: db/changelog/schema-v30-event-outbox.sql
   - include:
       file: db/changelog/schema-v31-auditing.sql
+  - include:
+      file: db/changelog/schema-v32-google-linked.sql
+  - include:
+      file: db/changelog/schema-v33-billing-period-status-normalize.sql
+  - include:
+      file: db/changelog/schema-v34-warehouse-seed-city-coherence.sql
+  - include:
+      file: db/changelog/schema-v35-fix-cable-usbc-image.sql
+  - include:
+      file: db/changelog/schema-v36-adtrend-headlines-latin.sql
+  - include:
+      file: db/changelog/schema-v37-mentor-latin-names.sql
+  - include:
+      file: db/changelog/schema-v38-variant-images.sql
+  - include:
+      file: db/changelog/schema-v39-affiliate-program.sql

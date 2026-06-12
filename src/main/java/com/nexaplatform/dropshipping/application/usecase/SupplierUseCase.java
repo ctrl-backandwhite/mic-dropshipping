@@ -17,4 +17,13 @@ public interface SupplierUseCase {
     Supplier toggleVerified(UUID id);
 
     Supplier toggleTrustPass(UUID id);
+
+    /** Creates a supplier manually. */
+    Supplier create(Supplier model);
+
+    /** Updates a supplier's editable fields. */
+    Supplier update(UUID id, Supplier model);
+
+    /** Deletes a supplier (refused if it still has products). */
+    void delete(UUID id);
 }

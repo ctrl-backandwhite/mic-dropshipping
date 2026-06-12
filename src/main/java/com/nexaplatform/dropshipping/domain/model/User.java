@@ -50,6 +50,9 @@ public class User {
     private String avatarUrl;
     private String language;
 
+    /** Whether this account has a confirmed link to a Google identity (social login). */
+    private boolean googleLinked;
+
     /** Nested second-factor data of the aggregate (null when 2FA was never set up). */
     private TotpSecret totp;
 

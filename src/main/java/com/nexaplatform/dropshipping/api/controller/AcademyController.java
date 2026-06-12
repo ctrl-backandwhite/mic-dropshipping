@@ -98,9 +98,4 @@ public class AcademyController implements AcademyApi {
         return bookingMapper.toDtoOutList(bookingUseCase.findByLearner(userId));
     }
 
-    @Override
-    public AffiliateDtoOut affiliate(Authentication auth) {
-        UUID userId = UUID.fromString(auth.getName());
-        return affiliateMapper.toDtoOut(affiliateUseCase.getOrCreate(userId));
-    }
 }

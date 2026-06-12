@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.api;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AdminWalletAdjustDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminWalletTopupDtoIn;
+import com.nexaplatform.dropshipping.api.dto.out.AdminWalletDetailDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminWalletRowDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminWalletTxResultDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminWalletTxRowDtoOut;
@@ -38,6 +39,11 @@ public interface AdminWalletsApi {
     @PostMapping("/{userId}/adjust")
     ResponseEntity<AdminWalletTxResultDtoOut> adjust(@PathVariable UUID userId,
             @Valid @RequestBody AdminWalletAdjustDtoIn req);
+
+    @Operation(summary = "Get a user's wallet detail (balances + status)")
+    @ApiResponse(responseCode = "200", description = "Wallet detail returned")
+    @GetMapping("/{userId}")
+    ResponseEntity<AdminWalletDetailDtoOut> detail(@PathVariable UUID userId);
 
     @Operation(summary = "List wallet transactions with pagination")
     @ApiResponse(responseCode = "200", description = "Transactions listed")

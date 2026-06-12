@@ -88,4 +88,60 @@ public class SupplierUseCaseImpl implements SupplierUseCase {
             productCount.put((UUID) row[0], (Long) row[1]);
         return productCount;
     }
+
+    @Override
+    @Transactional
+    public Supplier create(Supplier model) {
+        if (model.getName() == null || model.getName().isBlank()) {
+            throw new com.nexaplatform.dropshipping.api.exception.BusinessException("El nombre del proveedor es obligatorio");
+        }
+        model.setId(null);
+        model.setSource(model.getSource() != null ? model.getSource() : "manual");
+        if (model.getExternalId() == null || model.getExternalId().isBlank()) {
+            model.setExternalId("manual-" + UUID.randomUUID().toString().substring(0, 8));
+        }
+        if (model.getCountry() == null || model.getCountry().isBlank()) {
+            model.setCountry("CN");
+        }
+        Supplier saved = supplierRepository.save(model);
+        log.info("::> [SUPPLIER] Created id={}", saved.getId());
+        return saved;
+    }
+
+    @Override
+    @Transactional
+    public Supplier update(UUID id, Supplier model) {
+        Supplier existing = supplierRepository.getById(id);
+        if (Objects.isNull(existing)) {
+            throw new NotFoundException("Proveedor no encontrado");
+        }
+        if (model.getName() != null && !model.getName().isBlank()) existing.setName(model.getName());
+        if (model.getNameZh() != null) existing.setNameZh(model.getNameZh());
+        if (model.getCountry() != null && !model.getCountry().isBlank()) existing.setCountry(model.getCountry());
+        if (model.getCity() != null) existing.setCity(model.getCity());
+        if (model.getRating() != null) existing.setRating(model.getRating());
+        if (model.getYearsActive() != null) existing.setYearsActive(model.getYearsActive());
+        if (model.getProfileUrl() != null) existing.setProfileUrl(model.getProfileUrl());
+        existing.setVerified(model.isVerified());
+        existing.setTrustPass(model.isTrustPass());
+        return supplierRepository.update(existing);
+    }
+
+    @Override
+    @Transactional
+    public void delete(UUID id) {
+        Supplier existing = supplierRepository.getById(id);
+        if (Objects.isNull(existing)) {
+            throw new NotFoundException("Proveedor no encontrado");
+        }
+        Long products = em.createQuery("SELECT count(p) FROM ProductEntity p WHERE p.supplier.id = :id", Long.class)
+                .setParameter("id", id).getSingleResult();
+        if (products != null && products > 0) {
+            throw new com.nexaplatform.dropshipping.api.exception.BusinessException(
+                    "No se puede eliminar: el proveedor tiene " + products + " productos asociados");
+        }
+        supplierRepository.delete(id);
+        log.info("::> [SUPPLIER] Deleted id={}", id);
+    }
+
 }

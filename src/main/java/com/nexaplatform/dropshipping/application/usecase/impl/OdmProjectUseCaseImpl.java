@@ -71,4 +71,38 @@ public class OdmProjectUseCaseImpl implements OdmProjectUseCase {
         log.info("::> [ODM] Project status updated id={}", id);
         return saved;
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public OdmProject getById(UUID userId, UUID id) {
+        OdmProject p = odmProjectRepository.getById(id);
+        if (Objects.isNull(p) || !userId.equals(p.getUserId())) {
+            throw new NotFoundException("ODM project");
+        }
+        return p;
+    }
+
+    @Override
+    @Transactional
+    public OdmProject update(UUID userId, UUID id, OdmProject changes) {
+        OdmProject p = getById(userId, id);
+        if (changes.getTitle() != null && !changes.getTitle().isBlank()) {
+            p.setTitle(changes.getTitle());
+        }
+        if (changes.getBrief() != null) {
+            p.setBrief(changes.getBrief());
+        }
+        if (changes.getBudgetUsdCents() != null) {
+            p.setBudgetUsdCents(changes.getBudgetUsdCents());
+        }
+        return odmProjectRepository.update(p);
+    }
+
+    @Override
+    @Transactional
+    public void delete(UUID userId, UUID id) {
+        getById(userId, id);
+        odmProjectRepository.delete(id);
+        log.info("::> [ODM] Project deleted id={}", id);
+    }
 }

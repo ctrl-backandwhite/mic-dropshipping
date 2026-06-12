@@ -23,4 +23,13 @@ public interface OdmProjectUseCase {
 
     /** Updates the status of a project (admin). */
     OdmProject setStatus(UUID id, String status);
+
+    /** Gets one of the user's projects (404 if not owned). */
+    OdmProject getById(UUID userId, UUID id);
+
+    /** Updates the editable fields (title/brief/budget) of the user's project. */
+    OdmProject update(UUID userId, UUID id, OdmProject changes);
+
+    /** Deletes one of the user's projects (404 if not owned). */
+    void delete(UUID userId, UUID id);
 }

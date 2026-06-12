@@ -55,13 +55,25 @@ class OrderUseCaseImplTest {
     WalletUseCase walletUseCase;
     @Mock
     NotificationsPublisher notificationsPublisher;
+    @Mock
+    com.nexaplatform.dropshipping.application.service.PricingService pricingService;
+    @Mock
+    com.nexaplatform.dropshipping.application.service.AffiliateProgramService affiliateProgramService;
 
     OrderUseCaseImpl orderUseCase;
 
     @BeforeEach
     void setup() {
         orderUseCase = new OrderUseCaseImpl(orderRepository, productRepository, variantRepository, userRepository,
-                shopConnectionRepository, userAddressRepository, webhooks, walletUseCase, notificationsPublisher);
+                shopConnectionRepository, userAddressRepository, webhooks, walletUseCase, notificationsPublisher,
+                pricingService, affiliateProgramService);
+    }
+
+    /** DROP-637: the checkout now bills the priced amount (retailUsd) from PricingService. */
+    private static com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount priced(String retail) {
+        java.math.BigDecimal r = retail == null ? null : new java.math.BigDecimal(retail);
+        return new com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount(r, r, r, "USD", "$",
+                null, java.math.BigDecimal.ZERO);
     }
 
     @Test
@@ -71,6 +83,7 @@ class OrderUseCaseImplTest {
                 .build();
         product.setId(productId);
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
+        when(pricingService.priceFor(any(), any())).thenReturn(priced("12.50"));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         var req = new CreateOrderRequest("EXT-001",
@@ -92,6 +105,7 @@ class OrderUseCaseImplTest {
         ProductEntity product = ProductEntity.builder().titleZh("noprice").moq(1).build();
         product.setId(productId);
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
+        when(pricingService.priceFor(any(), any())).thenReturn(priced(null));
 
         var req = new CreateOrderRequest("EXT", new AddressInput("X", null, null, "L1", null, "C", null, "00000", "ES"),
                 null, List.of(new OrderItemInput(productId, null, 1)), null);
@@ -124,13 +138,14 @@ class OrderUseCaseImplTest {
 
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
         when(variantRepository.findById(variantId)).thenReturn(Optional.of(variant));
+        when(pricingService.priceFor(any(), any())).thenReturn(priced("15"));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         var req = new CreateOrderRequest("EXT", new AddressInput("X", null, null, "L1", null, "C", null, "00000", "ES"),
                 null, List.of(new OrderItemInput(productId, variantId, 2)), null);
 
         Order order = orderUseCase.createOrder(UUID.randomUUID(), null, req);
-        assertThat(order.getSubtotalCents()).isEqualTo(3000); // 15 * 2 * 100
+        assertThat(order.getSubtotalCents()).isEqualTo(3000); // priced retailUsd 15 * 2 * 100
     }
 
     @Test

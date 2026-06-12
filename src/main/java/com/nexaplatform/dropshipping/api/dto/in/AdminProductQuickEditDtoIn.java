@@ -34,4 +34,7 @@ public class AdminProductQuickEditDtoIn {
 
     @Schema(description = "Localized short description")
     private String shortDescription;
+
+    @Schema(description = "Localized long description")
+    private String description;
 }

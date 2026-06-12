@@ -5,6 +5,8 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariantOption;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
+import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
@@ -83,6 +85,16 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private final ProductMapper productMapper;
     private final CatalogStorefrontMapper catalogStorefrontMapper;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository variantRepository;
+    private final com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer productIndexer;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    private final com.nexaplatform.dropshipping.infrastructure.integration.storage.StorageService storageService;
+
+    // @Lazy field injection breaks the CatalogUseCaseImpl <-> CatalogFillWriter constructor cycle
+    // (the writer ingests through this same use case).
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.nexaplatform.dropshipping.infrastructure.seed.CatalogFillWriter catalogFillWriter;
 
     /* ============ Suppliers ============ */
 
@@ -195,6 +207,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             }
         }
 
+        // DROP variant-images: a variant/value with no image of its own falls back to the
+        // product's main image, so every variant always shows a coherent picture.
+        final String mainImageUrl = mainImageUrlOf(req.images());
+
         // Replace variant options & values
         product.getVariantOptions().clear();
         if (req.options() != null) {
@@ -204,7 +220,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 if (optReq.values() != null) {
                     for (var v : optReq.values()) {
                         opt.getValues().add(VariantValueEntity.builder().option(opt).valueZh(v.valueZh())
-                                .position(v.position()).imageSourceUrl(v.imageSourceUrl()).build());
+                                .position(v.position())
+                                .imageSourceUrl(v.imageSourceUrl() != null ? v.imageSourceUrl() : mainImageUrl).build());
                     }
                 }
                 product.getVariantOptions().add(opt);
@@ -218,7 +235,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 product.getVariants()
                         .add(ProductVariantEntity.builder().product(product).externalId(v.externalId()).sku(v.sku())
                                 .title(v.title()).price(v.price()).stock(v.stock() != null ? v.stock() : 0)
-                                .imageSourceUrl(v.imageSourceUrl()).options(v.options()).active(true).build());
+                                .imageSourceUrl(v.imageSourceUrl() != null ? v.imageSourceUrl() : mainImageUrl)
+                                .options(v.options()).active(true).build());
             }
         }
 
@@ -253,9 +271,17 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ProductSummaryView> listProductsForAdmin(String status, int page, int size, String language) {
+    public Page<ProductSummaryView> listProductsForAdmin(String status, UUID categoryId, int page, int size,
+            String language) {
         Pageable pageable = PageRequest.of(page, Math.min(size, 200));
-        return listProducts(parseStatusTolerant(status), pageable, language);
+        ProductStatus st = parseStatusTolerant(status);
+        if (categoryId == null) {
+            return listProducts(st, pageable, language);
+        }
+        Page<ProductEntity> entities = (st == null)
+                ? productJpaRepository.findByCategoryId(categoryId, pageable)
+                : productJpaRepository.findByCategoryIdAndStatus(categoryId, st, pageable);
+        return entities.map(p -> productMapper.toSummary(p, language));
     }
 
     @Override
@@ -382,21 +408,26 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             p.setCurrency(req.getCurrency());
         if (req.getMoq() != null)
             p.setMoq(req.getMoq());
-        if (req.getTitle() != null && !req.getTitle().isBlank()) {
-            // Update the active language translation, not the canonical title_zh.
+        boolean touchesTranslation = (req.getTitle() != null && !req.getTitle().isBlank())
+                || req.getShortDescription() != null || req.getDescription() != null;
+        if (touchesTranslation) {
+            // Update the active-language translation (title/short/long description), not the canonical title_zh.
             var trOpt = p.getTranslations().stream().filter(t -> lang.equalsIgnoreCase(t.getLanguage())).findFirst();
-            if (trOpt.isPresent()) {
-                trOpt.get().setTitle(req.getTitle());
-                if (req.getShortDescription() != null)
-                    trOpt.get().setShortDescription(req.getShortDescription());
-            } else {
-                p.getTranslations()
-                        .add(com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity
-                                .builder().product(p).language(lang).title(req.getTitle())
-                                .shortDescription(req.getShortDescription()).provider("admin").build());
-            }
+            var tr = trOpt.orElseGet(() -> {
+                var n = com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity
+                        .builder().product(p).language(lang).provider("admin").build();
+                p.getTranslations().add(n);
+                return n;
+            });
+            if (req.getTitle() != null && !req.getTitle().isBlank())
+                tr.setTitle(req.getTitle());
+            if (req.getShortDescription() != null)
+                tr.setShortDescription(req.getShortDescription());
+            if (req.getDescription() != null)
+                tr.setDescription(req.getDescription());
         }
         productJpaRepository.save(p);
+        productIndexer.indexProduct(id);
         return productMapper.toDetail(p, lang, priceTierRepository.findByProductIdOrderByMinQtyAsc(p.getId()));
     }
 
@@ -460,4 +491,316 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             slug = slug.substring(0, 100);
         return slug + "-" + externalId.toLowerCase();
     }
+
+    /* ============ Reindex (admin) ============ */
+
+    @Override
+    public int reindexAllProducts() {
+        return productIndexer.reindexAll();
+    }
+
+    /* ============ Variants (admin CRUD) ============ */
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<VariantView> listVariantsForAdmin(UUID productId) {
+        return variantRepository.findByProductId(productId).stream().map(productMapper::toVariantView).toList();
+    }
+
+    @Override
+    @Transactional
+    // DROP-639: also evict the pricing-amount cache so the product's headline (Resumen) price
+    // recomputes from the new variant — otherwise it shows the stale pre-edit value.
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
+    public VariantView createVariant(UUID productId, AdminVariantUpsertDtoIn req) {
+        ProductEntity product = productJpaRepository.findById(productId)
+                .orElseThrow(() -> new NotFoundException("Product not found"));
+        ProductVariantEntity v = new ProductVariantEntity();
+        v.setProduct(product);
+        applyVariant(v, req);
+        v.setExternalId(req.getSku());
+        ProductVariantEntity saved = variantRepository.save(v);
+        productIndexer.indexProduct(productId);
+        return productMapper.toVariantView(saved);
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
+    public VariantView updateVariant(UUID variantId, AdminVariantUpsertDtoIn req) {
+        ProductVariantEntity v = variantRepository.findById(variantId)
+                .orElseThrow(() -> new NotFoundException("Variant not found"));
+        applyVariant(v, req);
+        ProductVariantEntity saved = variantRepository.save(v);
+        productIndexer.indexProduct(v.getProduct().getId());
+        return productMapper.toVariantView(saved);
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
+    public void deleteVariant(UUID variantId) {
+        ProductVariantEntity v = variantRepository.findById(variantId)
+                .orElseThrow(() -> new NotFoundException("Variant not found"));
+        UUID productId = v.getProduct().getId();
+        variantRepository.delete(v);
+        productIndexer.indexProduct(productId);
+    }
+
+    /* ============ Images (upload + product gallery) ============ */
+
+    @Override
+    public String uploadImage(byte[] bytes, String contentType, String originalName) {
+        if (bytes == null || bytes.length == 0) {
+            throw new com.nexaplatform.dropshipping.api.exception.BusinessException("El archivo de imagen está vacío");
+        }
+        String ext = extensionFor(contentType, originalName);
+        String key = "uploads/" + UUID.randomUUID() + ext;
+        return storageService.putBytes(key, bytes, contentType != null && !contentType.isBlank() ? contentType : "application/octet-stream");
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true)})
+    public com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView addProductImage(UUID productId, String url,
+            String role) {
+        if (url == null || url.isBlank()) {
+            throw new com.nexaplatform.dropshipping.api.exception.BusinessException("La URL de imagen es obligatoria");
+        }
+        ProductEntity product = productJpaRepository.findById(productId)
+                .orElseThrow(() -> new NotFoundException("Product not found"));
+        int nextPos = product.getImages().stream().mapToInt(ProductImageEntity::getPosition).max().orElse(-1) + 1;
+        boolean asMain = product.getImages().isEmpty() || "MAIN".equalsIgnoreCase(role);
+        if (asMain) {
+            product.getImages().forEach(i -> {
+                if ("MAIN".equalsIgnoreCase(i.getRole())) {
+                    i.setRole("GALLERY");
+                }
+            });
+        }
+        // The URL is already reachable (uploaded to our storage or an external CDN), so expose it
+        // directly as the cdnUrl and mark it MIRRORED — no async mirroring needed to display it.
+        // Persist via the image repository so the generated id is returned (the product→images
+        // collection is not cascade-persist). Role demotions above flush with the transaction.
+        ProductImageEntity img = ProductImageEntity.builder().product(product).position(nextPos)
+                .role(asMain ? "MAIN" : "GALLERY").sourceUrl(url).cdnUrl(url)
+                .mirrorStatus(MirrorStatus.MIRRORED).build();
+        ProductImageEntity saved = imageRepository.save(img);
+        productIndexer.indexProduct(productId);
+        return productMapper.toImageView(saved);
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true)})
+    public void deleteProductImage(UUID imageId) {
+        ProductImageEntity img = imageRepository.findById(imageId)
+                .orElseThrow(() -> new NotFoundException("Image not found"));
+        UUID productId = img.getProduct() != null ? img.getProduct().getId() : null;
+        imageRepository.delete(img);
+        if (productId != null) {
+            productIndexer.indexProduct(productId);
+        }
+    }
+
+    private String extensionFor(String contentType, String originalName) {
+        if (originalName != null && originalName.contains(".")) {
+            String ext = originalName.substring(originalName.lastIndexOf('.')).toLowerCase();
+            if (ext.matches("\\.[a-z0-9]{2,5}")) {
+                return ext;
+            }
+        }
+        if (contentType == null) {
+            return "";
+        }
+        return switch (contentType.toLowerCase()) {
+            case "image/jpeg", "image/jpg" -> ".jpg";
+            case "image/png" -> ".png";
+            case "image/webp" -> ".webp";
+            case "image/gif" -> ".gif";
+            case "image/avif" -> ".avif";
+            default -> "";
+        };
+    }
+
+    private void applyVariant(ProductVariantEntity v, AdminVariantUpsertDtoIn req) {
+        v.setSku(req.getSku());
+        v.setTitle(req.getTitle() != null && !req.getTitle().isBlank() ? req.getTitle() : req.getSku());
+        v.setPrice(req.getPrice());
+        v.setStock(req.getStock() != null ? req.getStock() : 0);
+        v.setBarcode(req.getBarcode());
+        // A variant without an explicit image inherits the product's main image so its
+        // thumbnail is never empty. An explicit URL (typed or uploaded) always wins.
+        String img = req.getImageUrl();
+        if (img == null || img.isBlank()) {
+            img = productMainImage(v.getProduct());
+        }
+        v.setImageSourceUrl(img);
+        v.setOptions(req.getOptions() != null ? req.getOptions() : java.util.Map.of());
+        v.setActive(req.getActive() == null || req.getActive());
+    }
+
+    /** Main image URL of an ingest payload (role MAIN first, then lowest position). */
+    private String mainImageUrlOf(java.util.List<com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage> images) {
+        if (images == null || images.isEmpty()) {
+            return null;
+        }
+        return images.stream().filter(i -> i.sourceUrl() != null && !i.sourceUrl().isBlank())
+                .min(java.util.Comparator
+                        .comparingInt((com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage i) -> "MAIN"
+                                .equalsIgnoreCase(i.role()) ? 0 : 1)
+                        .thenComparingInt(com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage::position))
+                .map(com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage::sourceUrl).orElse(null);
+    }
+
+    /** Main image (CDN preferred, else source) of a persisted product, or null. */
+    private String productMainImage(ProductEntity p) {
+        if (p == null || p.getImages() == null) {
+            return null;
+        }
+        return p.getImages().stream()
+                .filter(i -> (i.getCdnUrl() != null && !i.getCdnUrl().isBlank())
+                        || (i.getSourceUrl() != null && !i.getSourceUrl().isBlank()))
+                .min(java.util.Comparator
+                        .comparingInt((ProductImageEntity i) -> "MAIN".equalsIgnoreCase(i.getRole()) ? 0 : 1)
+                        .thenComparingInt(ProductImageEntity::getPosition))
+                .map(i -> i.getCdnUrl() != null && !i.getCdnUrl().isBlank() ? i.getCdnUrl() : i.getSourceUrl())
+                .orElse(null);
+    }
+
+
+    /* ============ Bulk import (admin) ============ */
+
+    @Override
+    public com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut bulkCreateProducts(
+            java.util.List<com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn> rows) {
+        int created = 0, failed = 0;
+        java.util.List<String> errors = new java.util.ArrayList<>();
+        java.util.List<SupplierEntity> suppliers = supplierRepository.findAll();
+        for (int i = 0; i < rows.size(); i++) {
+            var r = rows.get(i);
+            try {
+                buildAndWriteProduct(r, suppliers);
+                created++;
+            } catch (Exception e) {
+                failed++;
+                errors.add("fila " + (i + 1) + ": " + e.getMessage());
+            }
+        }
+        if (created > 0)
+            productIndexer.reindexAll();
+        return new com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut(created, failed, errors);
+    }
+
+    @Override
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true)})
+    public UUID createProductManual(com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn req) {
+        UUID id = buildAndWriteProduct(req, supplierRepository.findAll());
+        productIndexer.indexProduct(id);
+        return id;
+    }
+
+    private static final List<String> PRODUCT_CHILD_TABLES = List.of("product_price_tier", "product_tag_link",
+            "product_specification", "product_attribute", "product_keyword", "product_history", "product_review",
+            "product_warehouse_stock", "product_sync_state", "bestseller_ranking", "category_ranking", "trend_signal",
+            "shop_product_listing", "pod_design");
+
+    @Override
+    @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true)})
+    public void deleteProduct(UUID id) {
+        ProductEntity p = productJpaRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Product not found"));
+        Long orders = jdbcTemplate.queryForObject("SELECT count(*) FROM order_item WHERE product_id = ?", Long.class,
+                id);
+        if (orders != null && orders > 0) {
+            throw new BusinessException("No se puede eliminar: el producto tiene pedidos. Archívalo en su lugar.");
+        }
+        // Flat children without JPA cascade are removed first; the mapped collections
+        // (images/variants/translations/variantOptions) cascade on the entity delete.
+        for (String table : PRODUCT_CHILD_TABLES) {
+            jdbcTemplate.update("DELETE FROM " + table + " WHERE product_id = ?", id);
+        }
+        productJpaRepository.delete(p);
+        productIndexer.deleteFromIndex(id);
+        log.info("::> [CATALOG] Product deleted id={}", id);
+    }
+
+    /** Builds the heavy ingest request from a friendly row, persists it (via the writer) and returns its id. */
+    private UUID buildAndWriteProduct(com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn r,
+            java.util.List<SupplierEntity> suppliers) {
+        CategoryEntity cat = categoryRepository.findBySlug(r.getCategorySlug())
+                .orElseThrow(() -> new BusinessException("Categoría no encontrada: " + r.getCategorySlug()));
+        UUID supplierId = resolveBulkSupplier(suppliers, r.getSupplierExternalId());
+        String esTitle = r.getTitleEs();
+        String enTitle = (r.getTitleEn() != null && !r.getTitleEn().isBlank()) ? r.getTitleEn() : esTitle;
+        String zhTitle = (r.getTitleZh() != null && !r.getTitleZh().isBlank()) ? r.getTitleZh() : esTitle;
+        String esDesc = (r.getDescriptionEs() != null && !r.getDescriptionEs().isBlank()) ? r.getDescriptionEs()
+                : esTitle;
+        java.math.BigDecimal price = r.getPrice() != null ? r.getPrice() : new java.math.BigDecimal("9.90");
+        String externalId = (r.getExternalId() != null && !r.getExternalId().isBlank()) ? r.getExternalId()
+                : "BULK-" + SLUG.slugify(esTitle) + "-" + System.nanoTime();
+        java.util.List<com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage> images = new java.util.ArrayList<>();
+        if (r.getImageUrls() != null) {
+            for (int k = 0; k < r.getImageUrls().size(); k++)
+                images.add(new com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage(
+                        r.getImageUrls().get(k), k, k == 0 ? "MAIN" : "GALLERY"));
+        }
+        var variant = new com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariant(
+                externalId + "-DEF", externalId + "-DEF", esTitle, price, 100, null, java.util.Map.of());
+        var tier = new com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestPriceTier(1, null, price, "CNY");
+        var req = new IngestProductRequest("1688", externalId, zhTitle, esDesc, esDesc, null,
+                r.getMoq() != null ? r.getMoq() : 1, price, "CNY", null,
+                r.getMonthlySales() != null ? r.getMonthlySales() : 0, new java.math.BigDecimal("15"),
+                r.getRating() != null ? r.getRating() : new java.math.BigDecimal("4.5"), 0,
+                "https://detail.1688.com/offer/" + externalId + ".html", supplierId, cat.getId(), images,
+                java.util.List.<IngestVariantOption>of(), java.util.List.of(variant), java.util.List.of(tier));
+        return catalogFillWriter.write(req, esTitle, enTitle, zhTitle, esDesc, esDesc);
+    }
+
+    @Override
+    public com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut bulkCreateCategories(
+            java.util.List<com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn> rows) {
+        int created = 0, failed = 0;
+        java.util.List<String> errors = new java.util.ArrayList<>();
+        for (int i = 0; i < rows.size(); i++) {
+            var r = rows.get(i);
+            try {
+                int position = r.getPosition() != null ? r.getPosition() : (int) (categoryRepository.count() + 1);
+                String pt = (r.getNamePt() != null && !r.getNamePt().isBlank()) ? r.getNamePt() : r.getNameEs();
+                String en = (r.getNameEn() != null && !r.getNameEn().isBlank()) ? r.getNameEn() : r.getNameEs();
+                String zh = (r.getNameZh() != null && !r.getNameZh().isBlank()) ? r.getNameZh() : r.getNameEs();
+                upsertCategory(new IngestCategoryRequest(r.getSlug(), null, "1688", null, zh, position,
+                        r.getIcon() != null ? r.getIcon() : "tag",
+                        java.util.Map.of("es", r.getNameEs(), "en", en, "pt", pt)));
+                created++;
+            } catch (Exception e) {
+                failed++;
+                errors.add("fila " + (i + 1) + ": " + e.getMessage());
+            }
+        }
+        return new com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut(created, failed, errors);
+    }
+
+    private UUID resolveBulkSupplier(java.util.List<SupplierEntity> suppliers, String supplierExternalId) {
+        if (supplierExternalId != null && !supplierExternalId.isBlank()) {
+            return supplierRepository.findBySourceAndExternalId("1688", supplierExternalId)
+                    .map(SupplierEntity::getId)
+                    .orElseThrow(() -> new BusinessException("Proveedor no encontrado: " + supplierExternalId));
+        }
+        if (suppliers.isEmpty())
+            throw new BusinessException("No hay proveedores; crea uno antes de importar productos");
+        return suppliers.get(0).getId();
+    }
+
 }

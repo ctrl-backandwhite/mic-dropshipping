@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.security.oauth;
 
+import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -12,8 +13,14 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 public class DefaultSecurityConfig {
 
     @Bean
+    public GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler(UserUseCase userUseCase) {
+        return new GoogleOAuth2SuccessHandler(userUseCase);
+    }
+
+    @Bean
     @Order(3)
-    public SecurityFilterChain defaultFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain defaultFilterChain(HttpSecurity http,
+            GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler) throws Exception {
         http.cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                         // CSRF off for: OAuth2 token, OAuth callbacks, actuator, public storefront API,
@@ -32,7 +39,9 @@ public class DefaultSecurityConfig {
                         .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/v3/api-docs.yaml", "/v3/api-docs.yaml/**",
                                 "/swagger-ui.html", "/swagger-ui/**", "/swagger-resources/**", "/webjars/**")
                         .hasAnyAuthority("ROLE_ADMIN", "ROLE_OPERATOR").anyRequest().authenticated())
-                .formLogin(form -> form.loginPage("/login").permitAll());
+                .formLogin(form -> form.loginPage("/login").permitAll())
+                .oauth2Login(oauth -> oauth.loginPage("/login").successHandler(googleOAuth2SuccessHandler)
+                        .failureUrl("/login?error=google").permitAll());
         return http.build();
     }
 }

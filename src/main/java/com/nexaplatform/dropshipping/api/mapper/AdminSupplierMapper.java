@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
+import com.nexaplatform.dropshipping.api.dto.in.AdminSupplierUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.AdminSupplierDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminSupplierToggleDtoOut;
 import com.nexaplatform.dropshipping.domain.model.Supplier;
@@ -48,4 +49,19 @@ public interface AdminSupplierMapper {
     @Mapping(target = "verified", ignore = true)
     @Mapping(target = "trustPass", source = "trustPass")
     AdminSupplierToggleDtoOut toTrustPassToggle(Supplier model);
+
+    @org.mapstruct.Mapping(target = "id", ignore = true)
+    @org.mapstruct.Mapping(target = "externalId", ignore = true)
+    @org.mapstruct.Mapping(target = "source", ignore = true)
+    @org.mapstruct.Mapping(target = "name", source = "name")
+    @org.mapstruct.Mapping(target = "nameZh", source = "nameZh")
+    @org.mapstruct.Mapping(target = "country", source = "country")
+    @org.mapstruct.Mapping(target = "city", source = "city")
+    @org.mapstruct.Mapping(target = "rating", source = "rating")
+    @org.mapstruct.Mapping(target = "yearsActive", source = "yearsActive")
+    @org.mapstruct.Mapping(target = "verified", source = "verified")
+    @org.mapstruct.Mapping(target = "trustPass", source = "trustPass")
+    @org.mapstruct.Mapping(target = "profileUrl", source = "profileUrl")
+    com.nexaplatform.dropshipping.domain.model.Supplier toDomain(AdminSupplierUpsertDtoIn req);
+
 }

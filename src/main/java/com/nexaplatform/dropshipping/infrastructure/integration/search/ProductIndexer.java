@@ -66,6 +66,31 @@ public class ProductIndexer {
         indexProduct(event.productId());
     }
 
+    /** Removes a single product document from the search index (best-effort). */
+    public void deleteFromIndex(UUID productId) {
+        try {
+            client.delete(d -> d.index(index).id(productId.toString()));
+        } catch (Exception e) {
+            log.warn("Index delete failed for product {}: {}", productId, e.getMessage());
+        }
+    }
+
+    /**
+     * Re-indexes every product into OpenSearch. {@code @Transactional} keeps one session open
+     * for the whole sweep so the self-invoked {@link #indexProduct} can read the lazy
+     * {@code translations}/{@code images} collections. Returns the number indexed.
+     */
+    @Transactional(readOnly = true)
+    public int reindexAll() {
+        int[] n = { 0 };
+        productRepository.findAll().forEach(p -> {
+            indexProduct(p.getId());
+            n[0]++;
+        });
+        log.info("::> [REINDEX] reindexed {} products into '{}'", n[0], index);
+        return n[0];
+    }
+
     @Transactional(readOnly = true)
     public void indexProduct(UUID productId) {
         ProductEntity p = productRepository.findWithDetailsById(productId).orElse(null);

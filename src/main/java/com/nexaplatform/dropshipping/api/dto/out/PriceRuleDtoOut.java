@@ -29,6 +29,9 @@ public class PriceRuleDtoOut {
     @Schema(description = "Identifier of the scoped entity (null for GLOBAL)")
     private UUID scopeId;
 
+    @Schema(description = "Human-readable name of the scoped entity (category/supplier/product/variant); null for GLOBAL")
+    private String scopeName;
+
     @Schema(description = "Margin type", example = "PERCENTAGE")
     private String marginType;
 

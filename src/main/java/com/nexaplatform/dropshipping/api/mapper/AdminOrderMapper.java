@@ -51,6 +51,7 @@ public interface AdminOrderMapper {
     @Mapping(target = "partnerAppId", source = "partnerAppId")
     @Mapping(target = "subtotalCents", source = "subtotalCents")
     @Mapping(target = "shippingCents", source = "shippingCents")
+    @Mapping(target = "taxCents", source = "taxCents")
     @Mapping(target = "totalCents", source = "totalCents")
     @Mapping(target = "currency", source = "currency")
     @Mapping(target = "itemCount", expression = "java(order.getItems() != null ? order.getItems().size() : 0)")

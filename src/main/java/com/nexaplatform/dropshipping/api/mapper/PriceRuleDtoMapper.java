@@ -19,6 +19,7 @@ public interface PriceRuleDtoMapper {
     @Mapping(target = "id", source = "id")
     @Mapping(target = "scope", expression = "java(model.getScope() != null ? model.getScope().name() : null)")
     @Mapping(target = "scopeId", source = "scopeId")
+    @Mapping(target = "scopeName", ignore = true)
     @Mapping(target = "marginType", expression = "java(model.getMarginType() != null ? model.getMarginType().name() : null)")
     @Mapping(target = "marginValue", source = "marginValue")
     @Mapping(target = "minCostUsd", source = "minCostUsd")

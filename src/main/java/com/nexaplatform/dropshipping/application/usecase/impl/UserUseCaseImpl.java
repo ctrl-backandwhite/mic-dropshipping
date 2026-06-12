@@ -6,6 +6,7 @@ import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
 import com.nexaplatform.dropshipping.application.mapper.UserUpdateMapper;
 import com.nexaplatform.dropshipping.application.service.PasswordPolicy;
+import com.nexaplatform.dropshipping.application.usecase.GoogleLoginOutcome;
 import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
 import com.nexaplatform.dropshipping.domain.enums.UserRole;
 import com.nexaplatform.dropshipping.domain.model.User;
@@ -31,6 +32,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -345,4 +347,100 @@ public class UserUseCaseImpl implements UserUseCase {
             throw new IllegalStateException(e);
         }
     }
+
+    @Override
+    @Transactional
+    public GoogleLoginOutcome resolveGoogleLogin(String email, String firstName, String lastName) {
+        String normalized = normalizeEmail(email);
+        Optional<User> existing = userRepository.findByEmail(normalized);
+        if (existing.isPresent()) {
+            User user = existing.get();
+            if (user.isGoogleLinked()) {
+                return new GoogleLoginOutcome(user, false, normalized);
+            }
+            // A local (password) account already owns this email: do NOT sign in via Google.
+            // The caller must confirm ownership with the account password before linking.
+            log.info("::> [GOOGLE-OAUTH2] Existing local account, link confirmation required userId={}",
+                    user.getId());
+            return new GoogleLoginOutcome(null, true, normalized);
+        }
+        String display = ((firstName != null ? firstName : "") + " " + (lastName != null ? lastName : "")).trim();
+        User user = User.builder()
+                .email(normalized)
+                .passwordHash(passwordEncoder.encode(java.util.UUID.randomUUID().toString()))
+                .role(UserRole.USER)
+                .active(true)
+                .googleLinked(true)
+                .displayName(display.isBlank() ? normalized.split("@")[0] : display)
+                .language("es")
+                .build();
+        User saved = userRepository.save(user);
+        auditLogger.log("auth.google.register", normalized, java.util.Map.of("userId", saved.getId()));
+        log.info("::> [GOOGLE-OAUTH2] New user registered userId={}", saved.getId());
+        return new GoogleLoginOutcome(saved, false, normalized);
+    }
+
+    @Override
+    @Transactional
+    public void linkGoogleAccount(UUID id) {
+        User user = findById(id);
+        if (!user.isGoogleLinked()) {
+            user.setGoogleLinked(true);
+            userRepository.save(user);
+            auditLogger.log("auth.google.link", user.getEmail(), java.util.Map.of("userId", id));
+            log.info("::> [GOOGLE-OAUTH2] Google identity linked to account userId={}", id);
+        }
+    }
+
+
+    @Override
+    @Transactional
+    public void adminResetPassword(UUID id) {
+        User user = findById(id);
+        requestPasswordReset(user.getEmail());
+        auditLogger.log("auth.admin.password_reset", user.getEmail(), java.util.Map.of("userId", id));
+    }
+
+    @Override
+    @Transactional
+    public void deleteUser(UUID id) {
+        User user = findById(id);
+        if (user.getRole() == UserRole.ADMIN) {
+            throw new BusinessException("No se puede eliminar una cuenta de administrador");
+        }
+        userRepository.delete(id);
+        auditLogger.log("auth.admin.delete", user.getEmail(), java.util.Map.of("userId", id));
+    }
+
+    @Override
+    @Transactional
+    public User inviteUser(String email, String role) {
+        String normalized = normalizeEmail(email);
+        if (userRepository.existsByEmail(normalized)) {
+            throw new ConflictException("Ya existe un usuario con ese correo");
+        }
+        UserRole r;
+        try {
+            r = role != null && !role.isBlank() ? UserRole.valueOf(role.trim().toUpperCase()) : UserRole.USER;
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException("Rol invalido: " + role);
+        }
+        String activationCode = randomToken(32);
+        User user = User.builder()
+                .email(normalized)
+                .passwordHash(passwordEncoder.encode(java.util.UUID.randomUUID().toString()))
+                .role(r)
+                .active(false)
+                .activationCode(activationCode)
+                .activationCodeExpiresAt(Instant.now().plus(ACTIVATION_TTL_HOURS, ChronoUnit.HOURS))
+                .language("es")
+                .build();
+        User saved = userRepository.save(user);
+        emailQueueService.enqueue(normalized, "Te han invitado a NexaDrop", "emails/welcome",
+                java.util.Map.of("displayName", "", "dashboardUrl",
+                        "http://localhost:3003/activate?code=" + activationCode));
+        auditLogger.log("auth.admin.invite", normalized, java.util.Map.of("userId", saved.getId(), "role", r.name()));
+        return saved;
+    }
+
 }

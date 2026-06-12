@@ -22,6 +22,7 @@ public class AdminOrderDetailDtoOut {
     UUID partnerAppId;
     int subtotalCents;
     int shippingCents;
+    int taxCents;
     int totalCents;
     String currency;
     int itemCount;

@@ -56,13 +56,22 @@ class CatalogUseCaseImplTest {
     CatalogStorefrontMapper catalogStorefrontMapper;
     @Mock
     KafkaTemplate<String, Object> kafkaTemplate;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository variantRepository;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer productIndexer;
+    @Mock
+    org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.integration.storage.StorageService storageService;
 
     CatalogUseCaseImpl useCase;
 
     @BeforeEach
     void setup() {
         useCase = new CatalogUseCaseImpl(productRepository, supplierRepository, categoryRepository, priceTierRepository,
-                imageRepository, productJpaRepository, productMapper, catalogStorefrontMapper, kafkaTemplate);
+                imageRepository, productJpaRepository, productMapper, catalogStorefrontMapper, kafkaTemplate,
+                variantRepository, productIndexer, jdbcTemplate, storageService);
     }
 
     @Test

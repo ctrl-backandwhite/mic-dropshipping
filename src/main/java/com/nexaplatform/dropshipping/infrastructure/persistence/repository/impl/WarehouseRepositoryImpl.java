@@ -34,6 +34,11 @@ public class WarehouseRepositoryImpl implements WarehouseRepository {
     }
 
     @Override
+    public List<Warehouse> findAll() {
+        return warehouseEntityMapper.toDomainList(warehouseJpaRepositoryAdapter.findAll());
+    }
+
+    @Override
     public Warehouse getById(UUID id) {
         return warehouseJpaRepositoryAdapter.findById(id).map(warehouseEntityMapper::toDomain).orElse(null);
     }

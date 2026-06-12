@@ -7,14 +7,21 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.UpdateProductStatusRequest;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
+import com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.ReindexResultDtoOut;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -45,8 +52,8 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
-    public PageResponse<ProductSummaryView> list(String status, int page, int size, String lang) {
-        return PageResponse.from(catalogUseCase.listProductsForAdmin(status, page, size, lang));
+    public PageResponse<ProductSummaryView> list(String status, UUID categoryId, int page, int size, String lang) {
+        return PageResponse.from(catalogUseCase.listProductsForAdmin(status, categoryId, page, size, lang));
     }
 
     @Override
@@ -68,5 +75,79 @@ public class AdminCatalogController implements AdminCatalogApi {
     @Override
     public ProductDetailView duplicate(UUID id, String lang) {
         return catalogUseCase.duplicateProduct(id, lang);
+    }
+
+    @Override
+    public ResponseEntity<ReindexResultDtoOut> reindex() {
+        return ResponseEntity.ok(new ReindexResultDtoOut(catalogUseCase.reindexAllProducts()));
+    }
+
+    @Override
+    public ResponseEntity<List<VariantView>> listVariants(UUID productId) {
+        return ResponseEntity.ok(catalogUseCase.listVariantsForAdmin(productId));
+    }
+
+    @Override
+    public ResponseEntity<VariantView> createVariant(UUID productId, AdminVariantUpsertDtoIn req) {
+        return ResponseEntity.ok(catalogUseCase.createVariant(productId, req));
+    }
+
+    @Override
+    public ResponseEntity<VariantView> updateVariant(UUID id, AdminVariantUpsertDtoIn req) {
+        return ResponseEntity.ok(catalogUseCase.updateVariant(id, req));
+    }
+
+    @Override
+    public ResponseEntity<Void> deleteVariant(UUID id) {
+        catalogUseCase.deleteVariant(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    public ResponseEntity<com.nexaplatform.dropshipping.api.dto.out.ImageUploadDtoOut> uploadImage(
+            org.springframework.web.multipart.MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new com.nexaplatform.dropshipping.api.exception.BusinessException("No se ha enviado ningún archivo");
+        }
+        try {
+            String url = catalogUseCase.uploadImage(file.getBytes(), file.getContentType(), file.getOriginalFilename());
+            return ResponseEntity.ok(new com.nexaplatform.dropshipping.api.dto.out.ImageUploadDtoOut(url));
+        } catch (java.io.IOException e) {
+            throw new com.nexaplatform.dropshipping.api.exception.BusinessException("No se pudo leer el archivo subido");
+        }
+    }
+
+    @Override
+    public ResponseEntity<com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView> addProductImage(
+            UUID productId, com.nexaplatform.dropshipping.api.dto.in.AddProductImageDtoIn req) {
+        return new ResponseEntity<>(catalogUseCase.addProductImage(productId, req.getUrl(), req.getRole()),
+                org.springframework.http.HttpStatus.CREATED);
+    }
+
+    @Override
+    public ResponseEntity<Void> deleteProductImage(UUID imageId) {
+        catalogUseCase.deleteProductImage(imageId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    public ResponseEntity<UUID> createProduct(BulkProductDtoIn req) {
+        return ResponseEntity.ok(catalogUseCase.createProductManual(req));
+    }
+
+    @Override
+    public ResponseEntity<Void> deleteProduct(UUID id) {
+        catalogUseCase.deleteProduct(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    public ResponseEntity<BulkResultDtoOut> bulkProducts(List<BulkProductDtoIn> rows) {
+        return ResponseEntity.ok(catalogUseCase.bulkCreateProducts(rows));
+    }
+
+    @Override
+    public ResponseEntity<BulkResultDtoOut> bulkCategories(List<BulkCategoryDtoIn> rows) {
+        return ResponseEntity.ok(catalogUseCase.bulkCreateCategories(rows));
     }
 }

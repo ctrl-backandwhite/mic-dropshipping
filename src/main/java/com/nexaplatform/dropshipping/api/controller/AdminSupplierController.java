@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.AdminSupplierApi;
+import com.nexaplatform.dropshipping.api.dto.in.AdminSupplierUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.AdminSupplierDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminSupplierToggleDtoOut;
 import com.nexaplatform.dropshipping.api.mapper.AdminSupplierMapper;
@@ -43,5 +44,22 @@ public class AdminSupplierController implements AdminSupplierApi {
     @Override
     public ResponseEntity<AdminSupplierToggleDtoOut> toggleTrustPass(UUID id) {
         return ResponseEntity.ok(mapper.toTrustPassToggle(useCase.toggleTrustPass(id)));
+    }
+
+    @Override
+    public ResponseEntity<AdminSupplierDtoOut> create(AdminSupplierUpsertDtoIn req) {
+        return new ResponseEntity<>(mapper.toDtoOut(useCase.create(mapper.toDomain(req))),
+                org.springframework.http.HttpStatus.CREATED);
+    }
+
+    @Override
+    public ResponseEntity<AdminSupplierDtoOut> update(UUID id, AdminSupplierUpsertDtoIn req) {
+        return ResponseEntity.ok(mapper.toDtoOut(useCase.update(id, mapper.toDomain(req))));
+    }
+
+    @Override
+    public ResponseEntity<Void> delete(UUID id) {
+        useCase.delete(id);
+        return ResponseEntity.noContent().build();
     }
 }

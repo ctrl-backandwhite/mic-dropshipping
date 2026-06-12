@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.api;
 
 import com.nexaplatform.dropshipping.api.dto.in.AdminUserEditDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.AdminUserInviteDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminUserRoleUpdateDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.AdminUserDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminUserPageDtoOut;
@@ -9,6 +10,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -58,4 +60,19 @@ public interface AdminUsersListApi {
     @ApiResponse(responseCode = "200", description = "User activated")
     @PostMapping("/{id}/activate")
     ResponseEntity<AdminUserDtoOut> forceActivate(@PathVariable UUID id);
+
+    @Operation(summary = "Trigger a password reset email for a user")
+    @ApiResponse(responseCode = "204", description = "Reset email queued")
+    @PostMapping("/{id}/reset-password")
+    ResponseEntity<Void> resetPassword(@PathVariable UUID id);
+
+    @Operation(summary = "Delete a user account")
+    @ApiResponse(responseCode = "204", description = "User deleted")
+    @DeleteMapping("/{id}")
+    ResponseEntity<Void> delete(@PathVariable UUID id);
+
+    @Operation(summary = "Invite a new user (creates an inactive account + activation email)")
+    @ApiResponse(responseCode = "201", description = "User invited")
+    @PostMapping("/invite")
+    ResponseEntity<AdminUserDtoOut> invite(@Valid @RequestBody AdminUserInviteDtoIn body);
 }

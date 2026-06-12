@@ -158,8 +158,11 @@ public class DemoOperationsSeedRunner {
                 {"Ethan", "Moore", "IE"}, {"Mia", "Jackson", "NZ"}, {"Lucas", "White", "US"},
                 {"Charlotte", "Harris", "GB"}, {"João", "Silva", "BR"}, {"Beatriz", "Santos", "PT"},
                 {"Pedro", "Costa", "PT"}, {"Ana", "Almeida", "BR"}, {"Rafael", "Oliveira", "BR"},
-                {"Mariana", "Pereira", "PT"}, {"明", "李", "CN"}, {"芳", "王", "CN"}, {"伟", "张", "CN"}, {"芳", "刘", "HK"},
-                {"敏", "陈", "SG"}, {"娜", "杨", "CN"}, {"Hiroshi", "Tanaka", "JP"}, {"Sakura", "Yamamoto", "JP"},
+                // DROP-642: use latin (pinyin) display names for CN/HK/SG demo users so mentor
+                // profiles built on these accounts never surface CJK names to the storefront.
+                {"Mariana", "Pereira", "PT"}, {"Ming", "Li", "CN"}, {"Fang", "Wang", "CN"}, {"Wei", "Zhang", "CN"},
+                {"Fang", "Liu", "HK"}, {"Min", "Chen", "SG"}, {"Na", "Yang", "CN"}, {"Hiroshi", "Tanaka", "JP"},
+                {"Sakura", "Yamamoto", "JP"},
                 {"Min-jun", "Kim", "KR"}, {"Seo-yeon", "Park", "KR"}, {"Arjun", "Patel", "IN"},
                 {"Priya", "Sharma", "IN"}, {"Rohan", "Singh", "IN"}, {"Aisha", "Khan", "AE"}, {"Hugo", "Bernard", "FR"},
                 {"Camille", "Dubois", "FR"}, {"Lukas", "Müller", "DE"}, {"Lena", "Schmidt", "DE"},
@@ -444,10 +447,20 @@ public class DemoOperationsSeedRunner {
             UserEntity p = partners.get(i);
             if (!subscriptionRepository.findByUserId(p.getId()).isEmpty())
                 continue;
+            SubscriptionPlanEntity assignedPlan = i % 3 == 0 ? free : paid;
+            boolean isFreePlan = assignedPlan.getPriceMonthlyCents() == 0 && assignedPlan.getPriceYearlyCents() == 0;
+            // DROP-634: un plan gratuito (FREE) no puede estar en periodo de prueba —
+            // un plan sin coste ya es "activo" desde el primer momento. Forzamos
+            // ACTIVE cuando el plan asignado es gratuito.
             SubscriptionStatus st = statuses[i % statuses.length];
+            if (isFreePlan && st == SubscriptionStatus.TRIALING) {
+                st = SubscriptionStatus.ACTIVE;
+            }
             Instant now = Instant.now();
-            CustomerSubscriptionEntity s = CustomerSubscriptionEntity.builder().user(p).plan(i % 3 == 0 ? free : paid)
-                    .status(st).billingPeriod(i % 2 == 0 ? "MONTH" : "YEAR")
+            CustomerSubscriptionEntity s = CustomerSubscriptionEntity.builder().user(p).plan(assignedPlan)
+                    // DROP-634: usamos el formato canónico MONTHLY/YEARLY (igual que el
+                    // use case real) para que el frontend lo traduzca siempre vía i18n.
+                    .status(st).billingPeriod(i % 2 == 0 ? "MONTHLY" : "YEARLY")
                     .currentPeriodStart(now.minus(15 + rnd.nextInt(30), ChronoUnit.DAYS))
                     .currentPeriodEnd(now.plus(15 + rnd.nextInt(30), ChronoUnit.DAYS))
                     .canceledAt(st == SubscriptionStatus.CANCELED ? now.minus(5, ChronoUnit.DAYS) : null)
@@ -859,14 +872,29 @@ public class DemoOperationsSeedRunner {
                         45, "pt", "BEGINNER"},
                 {"intro-zh", "代发货入门", "业务基础与首个 30 天行动计划。", "Jesus Finol", 45, "zh", "BEGINNER"},};
         for (Object[] c : courses) {
+            String slug = (String) c[0];
             courseRepo.save(com.nexaplatform.dropshipping.infrastructure.persistence.entity.AcademyCourseEntity
-                    .builder().slug((String) c[0]).title((String) c[1]).description((String) c[2])
-                    .instructor((String) c[3]).durationMinutes((int) c[4]).locale((String) c[5]).level((String) c[6])
-                    .coverUrl("https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800")
-                    .videoUrl("https://cdn.nx036.local/academy/" + c[0] + ".mp4").published(true).build());
+                    .builder().slug(slug).title((String) c[1]).description((String) c[2]).instructor((String) c[3])
+                    .durationMinutes((int) c[4]).locale((String) c[5]).level((String) c[6])
+                    .coverUrl(ACADEMY_COVERS[Math.floorMod(slug.hashCode(), ACADEMY_COVERS.length)])
+                    .videoUrl(ACADEMY_VIDEOS[Math.floorMod(slug.hashCode(), ACADEMY_VIDEOS.length)]).published(true)
+                    .build());
         }
         log.info("Seeded {} academy courses", courses.length);
     }
+
+    // DROP-605: real, reachable covers + sample videos (the old cdn.nx036.local URLs were fictional).
+    private static final String[] ACADEMY_COVERS = {
+            "https://images.unsplash.com/photo-1497032205916-ac775f0649ae?w=800",
+            "https://images.unsplash.com/photo-1456735190827-d1262f71b8a3?w=800",
+            "https://images.unsplash.com/photo-1498049794561-7780e7231661?w=800",
+            "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=800",
+            "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=800",
+            "https://images.unsplash.com/photo-1503341960582-b45751874cf0?w=800" };
+    private static final String[] ACADEMY_VIDEOS = {
+            "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4",
+            "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+            "https://www.w3schools.com/html/mov_bbb.mp4" };
 
     private void seedMentors(List<UserEntity> demoPartners) {
         // Build mentor profiles on the first 6 demo partners.
@@ -930,7 +958,9 @@ public class DemoOperationsSeedRunner {
         for (int i = 0; i < 40 && i < prods.size() * 2; i++) {
             ProductEntity p = prods.get(i % prods.size());
             String src = sources[rnd.nextInt(sources.length)];
-            String hook = hooks[rnd.nextInt(hooks.length)].replace("{}", p.getTitleZh());
+            // DROP-642: use the translated (ES → EN) product title in the headline; never the
+            // Chinese title_zh, which would surface CJK text to the user in the Ad Trends tab.
+            String hook = hooks[rnd.nextInt(hooks.length)].replace("{}", displayTitleFor(p));
             adTrendRepo.save(com.nexaplatform.dropshipping.infrastructure.persistence.entity.AdTrendEntity.builder()
                     .source(src).headline(hook).productSlug(p.getSlug())
                     .impressions(10000L + (long) rnd.nextInt(900000)).engagement(500L + (long) rnd.nextInt(40000))
@@ -942,6 +972,26 @@ public class DemoOperationsSeedRunner {
             created++;
         }
         log.info("Seeded {} ad trends", created);
+    }
+
+    /**
+     * DROP-642: resolves a latin, user-facing product title for headlines/snapshots.
+     * Prefers the Spanish translation, then English, and only falls back to the raw
+     * Chinese {@code title_zh} when no latin translation exists.
+     */
+    private String displayTitleFor(ProductEntity p) {
+        if (p.getTranslations() != null) {
+            for (String lang : new String[]{"es", "en"}) {
+                String t = p.getTranslations().stream()
+                        .filter(tr -> lang.equals(tr.getLanguage()))
+                        .map(com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity::getTitle)
+                        .filter(s -> s != null && !s.isBlank())
+                        .findFirst().orElse(null);
+                if (t != null)
+                    return t;
+            }
+        }
+        return p.getTitleZh();
     }
 
     private void seedNotifications(List<UserEntity> demoCustomers) {

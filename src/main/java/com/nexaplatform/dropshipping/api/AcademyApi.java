@@ -67,7 +67,6 @@ public interface AcademyApi {
     @GetMapping("/me/mentors/bookings")
     List<BookingDtoOut> myBookings(Authentication auth);
 
-    @Operation(summary = "Get or create the current user's affiliate account")
-    @GetMapping("/me/affiliate")
-    AffiliateDtoOut affiliate(Authentication auth);
+    // DROP-643..649: the affiliate endpoints moved to MeAffiliateController / AdminAffiliateController
+    // (full referral program). The old /me/affiliate stub was removed to avoid an ambiguous mapping.
 }

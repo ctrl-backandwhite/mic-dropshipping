@@ -36,6 +36,34 @@ public class MarginService {
     private static final BigDecimal HUNDRED = new BigDecimal("100");
     private static final Duration CACHE_TTL = Duration.ofMinutes(5);
 
+    /** Half-bounded ranges are less specific than fully bounded ones; "any cost" is the least specific. */
+    private static final BigDecimal HALF_BOUNDED_WIDTH = new BigDecimal("1000000");
+    private static final BigDecimal UNBOUNDED_WIDTH = new BigDecimal("1000000000");
+
+    /**
+     * DROP-630 deterministic tie-break among same-scope rules matching the same cost:
+     * narrowest cost range first, then lowest admin position, then most recently created,
+     * then id — a total order so the winner never depends on stream/DB iteration order.
+     */
+    private static final java.util.Comparator<PriceRuleEntity> MOST_SPECIFIC = java.util.Comparator
+            .comparing(MarginService::rangeWidth)
+            .thenComparingInt(PriceRuleEntity::getPosition)
+            .thenComparing(r -> r.getCreatedAt() != null ? r.getCreatedAt() : Instant.EPOCH,
+                    java.util.Comparator.reverseOrder())
+            .thenComparing(r -> r.getId() != null ? r.getId().toString() : "");
+
+    private static BigDecimal rangeWidth(PriceRuleEntity r) {
+        boolean hasMin = r.getMinCostUsd() != null;
+        boolean hasMax = r.getMaxCostUsd() != null;
+        if (hasMin && hasMax) {
+            return r.getMaxCostUsd().subtract(r.getMinCostUsd()).abs();
+        }
+        if (hasMin || hasMax) {
+            return HALF_BOUNDED_WIDTH;
+        }
+        return UNBOUNDED_WIDTH;
+    }
+
     private final PriceRuleRepository repository;
     private final List<PriceRuleEntity> cache = new CopyOnWriteArrayList<>();
     private volatile Instant cacheStamp = Instant.EPOCH;
@@ -85,11 +113,15 @@ public class MarginService {
                 case CATEGORY -> categoryId;
                 case GLOBAL -> null;
             };
+            // DROP-630: when several active rules of the SAME scope match the same cost,
+            // the declared VARIANT>PRODUCT>… order only disambiguates across levels, not within
+            // one. Pick deterministically: narrowest cost range (most specific) → lowest
+            // position → most recently created → id, so resolution is never order-dependent.
             Optional<PriceRuleEntity> match = cache.stream().filter(PriceRuleEntity::isActive)
                     .filter(r -> r.getScope() == scope)
                     .filter(r -> scope == PriceRuleScope.GLOBAL
                             || (r.getScopeId() != null && r.getScopeId().equals(target)))
-                    .filter(r -> matchesCostRange(r, costUsd)).findFirst();
+                    .filter(r -> matchesCostRange(r, costUsd)).min(MOST_SPECIFIC);
             if (match.isPresent())
                 return match;
         }

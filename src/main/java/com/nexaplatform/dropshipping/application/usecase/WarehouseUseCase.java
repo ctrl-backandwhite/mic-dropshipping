@@ -18,4 +18,19 @@ public interface WarehouseUseCase {
 
     /** Lists the per-warehouse stock rows of a product. */
     List<WarehouseStock> stockPerWarehouse(UUID productId);
+
+    /** Admin: lists every warehouse (active and inactive). */
+    List<Warehouse> listAll();
+
+    /** Admin: gets one warehouse by id (404 if missing). */
+    Warehouse getById(UUID id);
+
+    /** Admin: creates a warehouse (unique code). */
+    Warehouse create(Warehouse model);
+
+    /** Admin: updates a warehouse (unique code). */
+    Warehouse update(UUID id, Warehouse model);
+
+    /** Admin: deletes a warehouse. */
+    void delete(UUID id);
 }

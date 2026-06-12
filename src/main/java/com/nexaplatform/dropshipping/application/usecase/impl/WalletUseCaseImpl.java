@@ -100,8 +100,21 @@ public class WalletUseCaseImpl implements WalletUseCase {
         if (description == null || description.isBlank()) {
             throw new IllegalArgumentException("description is required for manual adjustments");
         }
+        if (amountCents == 0) {
+            throw new BusinessException("Adjustment amount cannot be zero");
+        }
+        // A manual adjustment can credit (+) or debit (-); record() applies the signed amount and
+        // rejects it if it would overdraw the wallet. (DROP-603: negative adjustments used to fail.)
         String key = idempotencyKey != null ? idempotencyKey : UUID.randomUUID().toString();
-        return deposit(userId, amountCents, null, key, "[Adjustment] " + description);
+        return record(userId, "ADJUSTMENT", amountCents, null, null, key, "[Adjustment] " + description, null);
+    }
+
+    @Override
+    @Transactional
+    public Wallet adminGetWalletDetail(UUID userId) {
+        Wallet w = getOrCreate(userId);
+        w.setAvailableUsdCents(available(w));
+        return w;
     }
 
     @Override

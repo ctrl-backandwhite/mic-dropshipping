@@ -5,7 +5,7 @@ import com.nexaplatform.dropshipping.domain.model.User;
 import com.nexaplatform.dropshipping.domain.repository.UserRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.UserEntityMapper;
-import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Repository;
 
 import java.util.Comparator;
@@ -23,11 +23,24 @@ import java.util.UUID;
  * ordering (newest first).
  */
 @Repository
-@RequiredArgsConstructor
 public class UserRepositoryImpl implements UserRepository {
 
     private final UserEntityMapper userEntityMapper;
     private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository userJpaRepository;
+
+    /**
+     * The legacy Spring Data {@code UserRepository} is injected {@code @Lazy} on
+     * purpose: Spring Data detects this adapter ({@code UserRepositoryImpl}) as the
+     * custom-implementation fragment of the same-named JPA repository, so eager
+     * constructor injection forms a {@code userRepository ↔ userRepositoryImpl}
+     * cycle whose resolution is bean-ordering dependent. A lazy proxy breaks it
+     * deterministically without changing runtime behaviour.
+     */
+    public UserRepositoryImpl(UserEntityMapper userEntityMapper,
+            @Lazy com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository userJpaRepository) {
+        this.userEntityMapper = userEntityMapper;
+        this.userJpaRepository = userJpaRepository;
+    }
 
     @Override
     public User save(User model) {
@@ -104,5 +117,6 @@ public class UserRepositoryImpl implements UserRepository {
         entity.setPhone(model.getPhone());
         entity.setAvatarUrl(model.getAvatarUrl());
         entity.setLanguage(model.getLanguage());
+        entity.setGoogleLinked(model.isGoogleLinked());
     }
 }

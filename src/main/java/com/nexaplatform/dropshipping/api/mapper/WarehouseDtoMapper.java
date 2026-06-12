@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
+import com.nexaplatform.dropshipping.api.dto.in.WarehouseUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.WarehouseDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.WarehouseStockDtoOut;
 import com.nexaplatform.dropshipping.domain.model.Warehouse;
@@ -27,6 +28,18 @@ public interface WarehouseDtoMapper {
     WarehouseDtoOut toDtoOut(Warehouse model);
 
     List<WarehouseDtoOut> toDtoOutList(List<Warehouse> models);
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "code", source = "code")
+    @Mapping(target = "name", source = "name")
+    @Mapping(target = "country", source = "country")
+    @Mapping(target = "city", source = "city")
+    @Mapping(target = "active", source = "active")
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
+    Warehouse toDomain(WarehouseUpsertDtoIn req);
 
     @Mapping(target = "warehouseId", source = "warehouseId")
     @Mapping(target = "warehouseCode", source = "warehouseCode")

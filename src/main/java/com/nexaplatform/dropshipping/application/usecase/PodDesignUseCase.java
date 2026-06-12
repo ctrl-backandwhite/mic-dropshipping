@@ -25,4 +25,10 @@ public interface PodDesignUseCase {
 
     /** Generates a POD design mockup via a (mocked) AI provider. */
     PodAiResult aiGenerate(String prompt);
+
+    /** Deletes one of the user's designs (404 if not owned). */
+    void deleteDesign(UUID userId, UUID id);
+
+    /** Renames one of the user's designs (404 if not owned). */
+    PodDesign renameDesign(UUID userId, UUID id, String name);
 }

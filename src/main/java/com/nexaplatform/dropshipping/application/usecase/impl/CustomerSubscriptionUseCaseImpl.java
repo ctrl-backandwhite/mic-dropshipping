@@ -89,8 +89,48 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     @Override
     @Transactional(readOnly = true)
     public List<CustomerSubscription> listAdminSubscriptions(String status) {
-        return customerSubscriptionRepository.findAll().stream().filter(s -> status == null || status.isBlank()
-                || (s.getStatus() != null && s.getStatus().name().equalsIgnoreCase(status))).toList();
+        return customerSubscriptionRepository.findAll().stream()
+                // DROP-634: normaliza estado y periodo en la propia consulta para que
+                // el LISTADO de admin sea consistente aunque existan datos legacy que
+                // escapen a la migración (FREE+TRIALING, periodo MONTH/YEAR).
+                .map(this::normalizeForAdmin)
+                .filter(s -> status == null || status.isBlank()
+                        || (s.getStatus() != null && s.getStatus().name().equalsIgnoreCase(status)))
+                .toList();
+    }
+
+    /**
+     * DROP-634: defensa en profundidad sobre la vista de admin.
+     * <ul>
+     *   <li>Un plan gratuito (FREE) nunca debe figurar en {@code TRIALING}: un plan
+     *       sin coste está activo desde el inicio, así que lo presentamos {@code ACTIVE}.</li>
+     *   <li>El periodo se canonicaliza a {@code MONTHLY}/{@code YEARLY} (formato del
+     *       use case real) para que el frontend siempre lo traduzca vía i18n y nunca
+     *       muestre el valor crudo del enum.</li>
+     * </ul>
+     * No persiste: sólo ajusta el modelo de lectura que viaja al DTO.
+     */
+    private CustomerSubscription normalizeForAdmin(CustomerSubscription s) {
+        CustomerSubscription out = s;
+        boolean isFree = "FREE".equalsIgnoreCase(out.getPlanCode())
+                || (out.getPriceMonthly() == 0 && out.getPriceYearly() == 0);
+        if (isFree && out.getStatus() == SubscriptionStatus.TRIALING) {
+            out = out.withStatus(SubscriptionStatus.ACTIVE).withTrialEndsAt(null);
+        }
+        out = out.withBillingPeriod(canonicalPeriod(out.getBillingPeriod()));
+        return out;
+    }
+
+    /** Maps the historical period conventions to the canonical MONTHLY/YEARLY values. */
+    private String canonicalPeriod(String period) {
+        if (period == null) {
+            return null;
+        }
+        return switch (period.trim().toUpperCase()) {
+            case "MONTH", "MONTHLY" -> "MONTHLY";
+            case "YEAR", "YEARLY" -> "YEARLY";
+            default -> period.toUpperCase();
+        };
     }
 
     @Override

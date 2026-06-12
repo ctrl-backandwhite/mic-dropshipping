@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.AdminUsersListApi;
 import com.nexaplatform.dropshipping.api.dto.in.AdminUserEditDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.AdminUserInviteDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminUserRoleUpdateDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.AdminUserDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminUserPageDtoOut;
@@ -60,5 +61,23 @@ public class AdminUsersListController implements AdminUsersListApi {
     @Override
     public ResponseEntity<AdminUserDtoOut> forceActivate(UUID id) {
         return new ResponseEntity<>(mapper.toAdminDtoOut(useCase.forceActivate(id)), HttpStatus.OK);
+    }
+
+    @Override
+    public ResponseEntity<Void> resetPassword(UUID id) {
+        useCase.adminResetPassword(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    public ResponseEntity<Void> delete(UUID id) {
+        useCase.deleteUser(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    public ResponseEntity<AdminUserDtoOut> invite(AdminUserInviteDtoIn body) {
+        return new ResponseEntity<>(mapper.toAdminDtoOut(useCase.inviteUser(body.getEmail(), body.getRole())),
+                HttpStatus.CREATED);
     }
 }

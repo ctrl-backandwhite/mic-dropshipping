@@ -23,6 +23,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -58,6 +60,14 @@ public interface PlatformExtrasApi {
     @PostMapping("/me/pod/ai-generate")
     PodAiGenerateDtoOut aiGenerate(@RequestBody PodAiGenerateDtoIn req);
 
+    @Operation(summary = "Rename one of the current user's POD designs")
+    @PutMapping("/me/pod/designs/{id}")
+    PodDesignDtoOut renameDesign(Authentication auth, @PathVariable UUID id, @RequestParam String name);
+
+    @Operation(summary = "Delete one of the current user's POD designs")
+    @DeleteMapping("/me/pod/designs/{id}")
+    ResponseEntity<Void> deleteDesign(Authentication auth, @PathVariable UUID id);
+
     @Operation(summary = "Create an ODM/OEM project for the current user")
     @PostMapping("/me/odm/projects")
     OdmProjectDtoOut createOdm(Authentication auth, @Valid @RequestBody OdmProjectCreateDtoIn req);
@@ -73,6 +83,19 @@ public interface PlatformExtrasApi {
     @Operation(summary = "Update the status of an ODM/OEM project (admin)")
     @PutMapping("/admin/odm/projects/{id}/status")
     OdmProjectDtoOut setOdmStatus(@PathVariable UUID id, @RequestBody OdmStatusUpdateDtoIn req);
+
+    @Operation(summary = "Get one of the current user's ODM/OEM projects")
+    @GetMapping("/me/odm/projects/{id}")
+    OdmProjectDtoOut getOdm(Authentication auth, @PathVariable UUID id);
+
+    @Operation(summary = "Update editable fields of the current user's ODM/OEM project")
+    @PutMapping("/me/odm/projects/{id}")
+    OdmProjectDtoOut updateOdm(Authentication auth, @PathVariable UUID id,
+            @Valid @RequestBody OdmProjectCreateDtoIn req);
+
+    @Operation(summary = "Delete one of the current user's ODM/OEM projects")
+    @DeleteMapping("/me/odm/projects/{id}")
+    ResponseEntity<Void> deleteOdm(Authentication auth, @PathVariable UUID id);
 
     @Operation(summary = "Open a support ticket for the current user")
     @PostMapping("/me/tickets")

@@ -30,12 +30,19 @@ public class PricingService {
     private final MarginService marginService;
 
     public PricedAmount priceFor(ProductEntity product, ProductVariantEntity variant) {
-        BigDecimal supplierAmount = variant != null && variant.getPrice() != null
-                ? variant.getPrice()
+        // DROP-629: the product's headline price must be traceable to a real, purchasable
+        // variant — not the disconnected base_price. When no specific variant is requested
+        // (catalog list / detail headline) and the product has active variants, derive the
+        // price from the representative (cheapest active) variant. A single-variant product
+        // therefore prices exactly as its variant (delta 0%), and multi-variant products show
+        // the "from" price that the customer can actually pay.
+        ProductVariantEntity effective = variant != null ? variant : representativeVariant(product);
+        BigDecimal supplierAmount = effective != null && effective.getPrice() != null
+                ? effective.getPrice()
                 : product.getBasePrice();
         String sourceCurrency = product.getCurrency() != null ? product.getCurrency() : "CNY";
         BigDecimal costUsd = supplierAmount != null ? currencyService.toUsd(supplierAmount, sourceCurrency) : null;
-        var withMargin = marginService.apply(costUsd, product, variant);
+        var withMargin = marginService.apply(costUsd, product, effective);
         BigDecimal retailUsd = withMargin.retailUsd();
         String displayCode = CurrencyHolder.get();
         BigDecimal displayAmount = currencyService.usdToDisplay(retailUsd);
@@ -46,6 +53,30 @@ public class PricingService {
 
     public PricedAmount priceFor(ProductEntity product) {
         return priceFor(product, null);
+    }
+
+    /**
+     * DROP-629: representative variant used to price the product headline — the cheapest
+     * active variant with a real price. Returns {@code null} (→ fall back to base_price) when
+     * there are no priced active variants, or when variants are lazily detached outside a
+     * transaction (defensive: pricing is also called from list/search contexts).
+     */
+    private ProductVariantEntity representativeVariant(ProductEntity product) {
+        if (product == null) {
+            return null;
+        }
+        try {
+            var variants = product.getVariants();
+            if (variants == null || variants.isEmpty()) {
+                return null;
+            }
+            return variants.stream()
+                    .filter(v -> v != null && v.isActive() && v.getPrice() != null && v.getPrice().signum() > 0)
+                    .min(java.util.Comparator.comparing(ProductVariantEntity::getPrice))
+                    .orElse(null);
+        } catch (RuntimeException lazyOutsideTx) {
+            return null;
+        }
     }
 
     public BigDecimal convertUsdToDisplay(BigDecimal amountUsd) {

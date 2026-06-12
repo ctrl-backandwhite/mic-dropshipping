@@ -37,6 +37,13 @@ public interface WalletUseCase extends BaseUseCase<Wallet, Wallet, UUID> {
     /** Admin manual adjustment ({@code amountCents} may be negative; description required). */
     WalletTransaction adminAdjustEntry(UUID userId, long amountCents, String description, String idempotencyKey);
 
+    /**
+     * Admin wallet detail for a given user. Returns the wallet with the computed
+     * available balance ({@code balance - hold}) and the user enrichment filled,
+     * creating an empty ACTIVE wallet on first access (mirrors {@link #getOrCreate}).
+     */
+    Wallet adminGetWalletDetail(UUID userId);
+
     /** Admin paginated wallet transactions for a wallet, newest first. */
     List<WalletTransaction> adminTransactions(UUID walletId, int page, int size);
 

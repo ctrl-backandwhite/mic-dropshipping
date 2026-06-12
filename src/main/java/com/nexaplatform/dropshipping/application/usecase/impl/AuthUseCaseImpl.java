@@ -15,8 +15,10 @@ import com.nexaplatform.dropshipping.application.usecase.AuthUseCase;
 import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
 import com.nexaplatform.dropshipping.domain.model.User;
 import com.nexaplatform.dropshipping.infrastructure.integration.storage.StorageService;
+import com.nexaplatform.dropshipping.infrastructure.security.oauth.GoogleOAuth2SuccessHandler;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -81,11 +83,30 @@ public class AuthUseCaseImpl implements AuthUseCase {
 
             UUID id = UUID.fromString(auth.getName());
             User user = userUseCase.findById(id);
+            completePendingGoogleLink(httpRequest, user);
             return mapper.toMeDtoOut(user, authorities(auth));
         } catch (DisabledException e) {
             throw new BusinessException("Account not yet activated. Check your email.");
         } catch (LockedException e) {
             throw new BusinessException("Account temporarily locked due to repeated failed attempts. Try again later.");
+        }
+    }
+
+    /**
+     * If a Google login for this account was parked awaiting password confirmation
+     * (see {@link GoogleOAuth2SuccessHandler}), the just-completed password login is
+     * that proof of ownership: confirm the link and clear the pending marker. The
+     * email match guards against linking the wrong account if the session was reused.
+     */
+    private void completePendingGoogleLink(HttpServletRequest httpRequest, User user) {
+        HttpSession session = httpRequest.getSession(false);
+        if (session == null) {
+            return;
+        }
+        Object pendingEmail = session.getAttribute(GoogleOAuth2SuccessHandler.PENDING_GOOGLE_LINK_EMAIL);
+        if (pendingEmail != null && pendingEmail.toString().equalsIgnoreCase(user.getEmail())) {
+            userUseCase.linkGoogleAccount(user.getId());
+            session.removeAttribute(GoogleOAuth2SuccessHandler.PENDING_GOOGLE_LINK_EMAIL);
         }
     }
 

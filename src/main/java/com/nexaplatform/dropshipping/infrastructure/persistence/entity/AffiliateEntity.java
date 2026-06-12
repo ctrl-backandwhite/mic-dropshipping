@@ -30,4 +30,13 @@ public class AffiliateEntity extends BaseEntity {
     @Column(nullable = false)
     @Builder.Default
     private boolean active = true;
+
+    /** Lifecycle: PENDING, ACTIVE, SUSPENDED. */
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private String status = "ACTIVE";
+
+    /** Per-affiliate commission override (percent); null → use the program default. */
+    @Column(name = "commission_percent_override", precision = 6, scale = 3)
+    private java.math.BigDecimal commissionPercentOverride;
 }

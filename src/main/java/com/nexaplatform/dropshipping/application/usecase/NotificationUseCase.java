@@ -24,4 +24,10 @@ public interface NotificationUseCase {
 
     /** Marks all of the user's notifications as read. */
     void markAllRead(UUID userId);
+
+    /**
+     * Admin: sends a notification. {@code target} = "all" (or blank) broadcasts to every
+     * user; otherwise it is treated as a recipient email. Returns the number created.
+     */
+    int sendAdminNotification(String target, String title, String body);
 }

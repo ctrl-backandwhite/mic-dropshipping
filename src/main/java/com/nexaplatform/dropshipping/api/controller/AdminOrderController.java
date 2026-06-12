@@ -46,8 +46,8 @@ public class AdminOrderController implements AdminOrderApi {
     }
 
     @Override
-    public ResponseEntity<AdminOrderDetailDtoOut> detail(UUID id) {
-        return ResponseEntity.ok(adminOrderMapper.toDetail(orderUseCase.getAdminOrderDetail(id)));
+    public ResponseEntity<AdminOrderDetailDtoOut> detail(UUID id, String lang) {
+        return ResponseEntity.ok(adminOrderMapper.toDetail(orderUseCase.getAdminOrderDetail(id, lang)));
     }
 
     @Override

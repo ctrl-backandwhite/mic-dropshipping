@@ -256,4 +256,69 @@ class UserUseCaseImplTest {
         assertThat(u.isActive()).isTrue();
         verify(userRepository).update(u);
     }
+
+    @Test
+    @DisplayName("resolveGoogleLogin: email nuevo crea cuenta activa, vinculada y rol USER")
+    void googleLogin_newEmail_createsLinkedUser() {
+        when(userRepository.findByEmail("new@gmail.com")).thenReturn(Optional.empty());
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+            User u = inv.getArgument(0);
+            u.setId(UUID.randomUUID());
+            return u;
+        });
+
+        var outcome = useCase.resolveGoogleLogin("New@Gmail.com", "Ada", "Lovelace");
+
+        assertThat(outcome.isLinkRequired()).isFalse();
+        assertThat(outcome.getUser()).isNotNull();
+        assertThat(outcome.getUser().getEmail()).isEqualTo("new@gmail.com");
+        assertThat(outcome.getUser().getRole()).isEqualTo(UserRole.USER);
+        assertThat(outcome.getUser().isActive()).isTrue();
+        assertThat(outcome.getUser().isGoogleLinked()).isTrue();
+        assertThat(outcome.getUser().getDisplayName()).isEqualTo("Ada Lovelace");
+    }
+
+    @Test
+    @DisplayName("resolveGoogleLogin: cuenta ya vinculada inicia sesión sin pedir confirmación")
+    void googleLogin_alreadyLinked_signsIn() {
+        var linked = User.builder().id(UUID.randomUUID()).email("me@gmail.com").role(UserRole.USER).active(true)
+                .googleLinked(true).build();
+        when(userRepository.findByEmail("me@gmail.com")).thenReturn(Optional.of(linked));
+
+        var outcome = useCase.resolveGoogleLogin("me@gmail.com", "Me", null);
+
+        assertThat(outcome.isLinkRequired()).isFalse();
+        assertThat(outcome.getUser()).isSameAs(linked);
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("resolveGoogleLogin: cuenta local sin vincular exige confirmación, no inicia sesión ni crea")
+    void googleLogin_existingLocalAccount_requiresLink() {
+        var local = User.builder().id(UUID.randomUUID()).email("local@gmail.com").role(UserRole.USER).active(true)
+                .googleLinked(false).build();
+        when(userRepository.findByEmail("local@gmail.com")).thenReturn(Optional.of(local));
+
+        var outcome = useCase.resolveGoogleLogin("local@gmail.com", "L", "Ocal");
+
+        assertThat(outcome.isLinkRequired()).isTrue();
+        assertThat(outcome.getUser()).isNull();
+        assertThat(outcome.getEmail()).isEqualTo("local@gmail.com");
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("linkGoogleAccount: marca googleLinked y persiste")
+    void linkGoogleAccount_setsFlagAndSaves() {
+        UUID id = UUID.randomUUID();
+        var u = User.builder().id(id).email("u@gmail.com").role(UserRole.USER).active(true).googleLinked(false).build();
+        when(userRepository.getById(id)).thenReturn(u);
+        when(userRepository.save(u)).thenReturn(u);
+
+        useCase.linkGoogleAccount(id);
+
+        assertThat(u.isGoogleLinked()).isTrue();
+        verify(userRepository).save(u);
+        verify(auditLogger).log(eq("auth.google.link"), eq("u@gmail.com"), anyMap());
+    }
 }

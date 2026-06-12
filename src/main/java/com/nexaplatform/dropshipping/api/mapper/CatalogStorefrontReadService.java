@@ -137,6 +137,9 @@ public class CatalogStorefrontReadService {
 
     /* ============================ Products listing ============================ */
 
+    // Read-only tx keeps the Hibernate session open while mapping each product to a summary,
+    // so the lazy `translations`/`images` collections load (otherwise LazyInitializationException).
+    @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productListFull(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping,
             Boolean selfPickup, Boolean hasVideo, Integer minRating, Integer inventoryMin, String certification,

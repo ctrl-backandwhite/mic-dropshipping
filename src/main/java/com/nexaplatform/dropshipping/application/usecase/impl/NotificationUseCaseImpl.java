@@ -1,9 +1,12 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.application.usecase.NotificationUseCase;
 import com.nexaplatform.dropshipping.domain.model.PlatformNotification;
 import com.nexaplatform.dropshipping.domain.model.UnreadCount;
+import com.nexaplatform.dropshipping.domain.model.User;
 import com.nexaplatform.dropshipping.domain.repository.NotificationRepository;
+import com.nexaplatform.dropshipping.domain.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,6 +30,7 @@ import java.util.UUID;
 public class NotificationUseCaseImpl implements NotificationUseCase {
 
     private final NotificationRepository notificationRepository;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -59,5 +63,27 @@ public class NotificationUseCaseImpl implements NotificationUseCase {
                 notificationRepository.update(model);
             }
         }
+    }
+
+    @Override
+    @Transactional
+    public int sendAdminNotification(String target, String title, String body) {
+        if (target == null || target.isBlank() || "all".equalsIgnoreCase(target.trim())) {
+            int n = 0;
+            for (User u : userRepository.findAll()) {
+                create(u.getId(), title, body, "ADMIN_BROADCAST");
+                n++;
+            }
+            return n;
+        }
+        User user = userRepository.findByEmail(target.trim().toLowerCase())
+                .orElseThrow(() -> new BusinessException("Usuario no encontrado: " + target));
+        create(user.getId(), title, body, "ADMIN_MESSAGE");
+        return 1;
+    }
+
+    private void create(UUID userId, String title, String body, String eventType) {
+        notificationRepository.save(PlatformNotification.builder().userId(userId).title(title).body(body)
+                .eventType(eventType).channel("IN_APP").build());
     }
 }

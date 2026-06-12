@@ -33,7 +33,8 @@ public interface AdminOrderApi {
     @Operation(summary = "Get admin order detail by id")
     @ApiResponse(responseCode = "200", description = "Order found")
     @GetMapping("/{id}")
-    ResponseEntity<AdminOrderDetailDtoOut> detail(@PathVariable UUID id);
+    ResponseEntity<AdminOrderDetailDtoOut> detail(@PathVariable UUID id,
+            @RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "Forward an order to the supplier")
     @ApiResponse(responseCode = "200", description = "Order forwarded")

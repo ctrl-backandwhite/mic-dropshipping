@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application.usecase;
 
 import com.nexaplatform.dropshipping.domain.model.AdminOAuthClient;
+import com.nexaplatform.dropshipping.domain.model.AdminOAuthClientCreated;
 import com.nexaplatform.dropshipping.domain.model.AdminPartnerApp;
 import com.nexaplatform.dropshipping.domain.model.AdminShopConnection;
 import com.nexaplatform.dropshipping.domain.model.AdminPartnerWebhook;
@@ -25,4 +26,13 @@ public interface AdminPartnerUseCase {
 
     /** Lists shop connections. */
     List<AdminShopConnection> listShopConnections();
+
+    /** Creates an OAuth2 client (client_credentials); returns the plaintext secret once. */
+    AdminOAuthClientCreated createOAuthClient(String name, List<String> scopes);
+
+    /** Rotates an OAuth2 client's secret; returns the new plaintext secret once. */
+    AdminOAuthClientCreated rotateSecret(String clientId);
+
+    /** Deletes an OAuth2 client by id or client_id. */
+    void deleteOAuthClient(String id);
 }

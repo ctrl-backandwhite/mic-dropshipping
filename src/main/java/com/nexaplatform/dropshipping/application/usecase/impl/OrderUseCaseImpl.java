@@ -63,6 +63,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final WebhookDispatcherService webhooks;
     private final WalletUseCase walletUseCase;
     private final NotificationsPublisher notificationsPublisher;
+    private final com.nexaplatform.dropshipping.application.service.PricingService pricingService;
+    private final com.nexaplatform.dropshipping.application.service.AffiliateProgramService affiliateProgramService;
 
     @Value("${nexadrop.demo.orders-enabled:false}")
     private boolean demoOrdersEnabled;
@@ -92,20 +94,25 @@ public class OrderUseCaseImpl implements OrderUseCase {
                     : variantRepository.findById(itemReq.variantId())
                             .orElseThrow(() -> new NotFoundException("Variant not found: " + itemReq.variantId()));
 
-            BigDecimal unitPrice = variant != null && variant.getPrice() != null
-                    ? variant.getPrice()
-                    : product.getBasePrice();
+            // DROP-637: charge the PRICED amount (raw supplier price → USD → margin), not the raw
+            // CNY value. The order currency is USD, so we bill retailUsd — the same figure the
+            // storefront showed — instead of the stored 14.90 CNY mis-billed as $14.90.
+            var priced = pricingService.priceFor(product, variant);
+            BigDecimal unitPrice = priced.retailUsd();
             if (unitPrice == null) {
                 throw new BusinessException("Product " + product.getSlug() + " has no price");
             }
             int unitCents = unitPrice.multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).intValue();
+            int costCents = priced.costUsd() != null
+                    ? priced.costUsd().multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).intValue()
+                    : unitCents;
             int lineTotal = unitCents * itemReq.quantity();
 
             order.getItems().add(OrderItem.builder().productId(product.getId())
                     .variantId(variant != null ? variant.getId() : null).titleSnapshot(product.getTitleZh())
                     .imageUrlSnapshot(product.getImages().isEmpty() ? null : product.getImages().get(0).getSourceUrl())
                     .skuSnapshot(variant != null ? variant.getSku() : null).unitPriceCents(unitCents)
-                    .costCents(unitCents).quantity(itemReq.quantity()).lineTotalCents(lineTotal).build());
+                    .costCents(costCents).quantity(itemReq.quantity()).lineTotalCents(lineTotal).build());
 
             subtotal += lineTotal;
         }
@@ -176,9 +183,49 @@ public class OrderUseCaseImpl implements OrderUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public Order getAdminOrderDetail(UUID id) {
+    public Order getAdminOrderDetail(UUID id, String lang) {
         Order o = orderRepository.findById(id).orElseThrow(() -> new NotFoundException("Order not found"));
+        // DROP-632: localise the line titles for the admin's language (the admin detail used
+        // to fall through to the raw Chinese snapshot) and consolidate the duplicated
+        // base/variant lines into a single resolved-SKU line.
+        resolveItemTitles(o, lang);
+        consolidateItems(o);
         return enrich(o);
+    }
+
+    /**
+     * DROP-632: collapses duplicated order lines for the same product+unit price into one
+     * line (summing quantity), preferring the line that resolved a real SKU. This removes the
+     * "same unit, one with empty SKU and one resolved" artifact that inflated item counts.
+     * Operates on the in-memory (read-only) order; never persisted.
+     */
+    private void consolidateItems(Order o) {
+        if (o.getItems() == null || o.getItems().size() < 2) {
+            return;
+        }
+        java.util.LinkedHashMap<String, OrderItem> merged = new java.util.LinkedHashMap<>();
+        for (OrderItem it : o.getItems()) {
+            String key = (it.getProductId() != null ? it.getProductId() : it.getId()) + "|" + it.getUnitPriceCents();
+            OrderItem prev = merged.get(key);
+            if (prev == null) {
+                merged.put(key, it);
+                continue;
+            }
+            // same product & unit price → merge quantities and keep the most informative line
+            prev.setQuantity(prev.getQuantity() + it.getQuantity());
+            prev.setLineTotalCents(prev.getUnitPriceCents() * prev.getQuantity());
+            boolean prevHasSku = prev.getSkuSnapshot() != null && !prev.getSkuSnapshot().isBlank();
+            boolean curHasSku = it.getSkuSnapshot() != null && !it.getSkuSnapshot().isBlank();
+            if (!prevHasSku && curHasSku) {
+                prev.setSkuSnapshot(it.getSkuSnapshot());
+                if (it.getTitleSnapshot() != null) {
+                    prev.setTitleSnapshot(it.getTitleSnapshot());
+                }
+            }
+        }
+        if (merged.size() != o.getItems().size()) {
+            o.setItems(new java.util.ArrayList<>(merged.values()));
+        }
     }
 
     @Override
@@ -198,6 +245,10 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Transactional
     public Order shipOrder(UUID id) {
         Order o = orderRepository.findById(id).orElseThrow();
+        // DROP-631: "Marcar en camino" is only valid once the order was forwarded to the supplier.
+        if (o.getStatus() != OrderStatus.FORWARDED) {
+            throw new BusinessException("Solo se puede marcar en camino un pedido enviado al proveedor");
+        }
         o.setStatus(OrderStatus.SHIPPED);
         o.setShippedAt(Instant.now());
         o = orderRepository.save(o);
@@ -208,6 +259,10 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Transactional
     public Order deliverOrder(UUID id) {
         Order o = orderRepository.findById(id).orElseThrow();
+        // DROP-631: delivery only valid from "en camino" (SHIPPED).
+        if (o.getStatus() != OrderStatus.SHIPPED) {
+            throw new BusinessException("Solo se puede entregar un pedido que está en camino");
+        }
         o.setStatus(OrderStatus.DELIVERED);
         o.setDeliveredAt(Instant.now());
         o = orderRepository.save(o);
@@ -221,6 +276,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         o.setStatus(OrderStatus.CANCELLED);
         o.setCancelledAt(Instant.now());
         o = orderRepository.save(o);
+        affiliateProgramService.rejectForOrder(o.getId()); // DROP-646: void any affiliate commission
         return publishAndEnrich(o, "order.cancelled");
     }
 
@@ -241,6 +297,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         }
         o.setStatus(OrderStatus.REFUNDED);
         o = orderRepository.save(o);
+        affiliateProgramService.rejectForOrder(o.getId()); // DROP-646: void any affiliate commission
         return publishAndEnrich(o, "order.refunded");
     }
 
@@ -310,6 +367,10 @@ public class OrderUseCaseImpl implements OrderUseCase {
             o.setStatus(OrderStatus.PENDING);
         }
         o = orderRepository.save(o);
+
+        // DROP-645/646: capture an affiliate conversion + commission for this confirmed order
+        // (no-op if the customer has no live referral attribution).
+        affiliateProgramService.onOrderPlaced(o.getId(), userId, o.getSubtotalCents(), o.getCurrency());
 
         // Plan 300k: publish to the notifications outbox in the same tx as the order
         // so we never end up with an "order without notification".

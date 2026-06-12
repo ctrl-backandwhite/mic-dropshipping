@@ -78,4 +78,25 @@ public interface UserUseCase extends BaseUseCase<User, User, UUID> {
 
     /** Force-activate a user, clearing any pending activation code. */
     User forceActivate(UUID id);
+
+    /** Admin-triggered password reset: emails a reset link to the user. */
+    void adminResetPassword(UUID id);
+
+    /** Permanently delete a user account (admins cannot be deleted). */
+    void deleteUser(UUID id);
+
+    /** Invite a new user: creates an inactive account with the given role and emails an activation link. */
+    User inviteUser(String email, String role);
+
+    /**
+     * Resolves a (Google-verified) login. Creates a new linked account when no
+     * user owns the email, signs in when the existing account is already linked,
+     * or signals that a deliberate password confirmation is required when a local
+     * (unlinked) account already exists for that email.
+     */
+    GoogleLoginOutcome resolveGoogleLogin(String email, String firstName, String lastName);
+
+    /** Confirms the Google link on an existing account (after a successful password login). */
+    void linkGoogleAccount(UUID id);
+
 }

@@ -44,8 +44,8 @@ public interface OrderUseCase extends BaseUseCase<Order, Order, UUID> {
     /** Admin filtered listing (status + free-text), newest first, enriched. */
     List<Order> listAdminOrders(String status, String q);
 
-    /** Admin order detail (enriched, with items + shipping address). */
-    Order getAdminOrderDetail(UUID id);
+    /** Admin order detail (enriched, with items + shipping address), localised to {@code lang}. */
+    Order getAdminOrderDetail(UUID id, String lang);
 
     /** Move a payable order to FORWARDED and publish {@code order.forwarded}. */
     Order forwardOrder(UUID id);

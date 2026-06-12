@@ -91,6 +91,17 @@ public class PlatformExtrasController implements PlatformExtrasApi {
         return podMapper.toAiDtoOut(podUseCase.aiGenerate(req.getPrompt()));
     }
 
+    @Override
+    public PodDesignDtoOut renameDesign(Authentication auth, UUID id, String name) {
+        return podMapper.toDtoOut(podUseCase.renameDesign(UUID.fromString(auth.getName()), id, name));
+    }
+
+    @Override
+    public org.springframework.http.ResponseEntity<Void> deleteDesign(Authentication auth, UUID id) {
+        podUseCase.deleteDesign(UUID.fromString(auth.getName()), id);
+        return org.springframework.http.ResponseEntity.noContent().build();
+    }
+
     /* ============================== DROP-7 ODM/OEM ============================== */
 
     @Override
@@ -111,6 +122,22 @@ public class PlatformExtrasController implements PlatformExtrasApi {
     @Override
     public OdmProjectDtoOut setOdmStatus(UUID id, OdmStatusUpdateDtoIn req) {
         return odmMapper.toDtoOut(odmUseCase.setStatus(id, req.getStatus()));
+    }
+
+    @Override
+    public OdmProjectDtoOut getOdm(Authentication auth, UUID id) {
+        return odmMapper.toDtoOut(odmUseCase.getById(UUID.fromString(auth.getName()), id));
+    }
+
+    @Override
+    public OdmProjectDtoOut updateOdm(Authentication auth, UUID id, OdmProjectCreateDtoIn req) {
+        return odmMapper.toDtoOut(odmUseCase.update(UUID.fromString(auth.getName()), id, odmMapper.toDomain(req)));
+    }
+
+    @Override
+    public org.springframework.http.ResponseEntity<Void> deleteOdm(Authentication auth, UUID id) {
+        odmUseCase.delete(UUID.fromString(auth.getName()), id);
+        return org.springframework.http.ResponseEntity.noContent().build();
     }
 
     /* ============================== DROP-11 Tickets ============================== */

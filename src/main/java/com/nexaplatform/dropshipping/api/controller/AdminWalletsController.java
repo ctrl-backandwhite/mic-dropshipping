@@ -4,6 +4,7 @@ import com.nexaplatform.dropshipping.api.AdminWalletsApi;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AdminWalletAdjustDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminWalletTopupDtoIn;
+import com.nexaplatform.dropshipping.api.dto.out.AdminWalletDetailDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminWalletRowDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminWalletTxResultDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminWalletTxRowDtoOut;
@@ -43,6 +44,11 @@ public class AdminWalletsController implements AdminWalletsApi {
     public ResponseEntity<AdminWalletTxResultDtoOut> adjust(UUID userId, AdminWalletAdjustDtoIn req) {
         return ResponseEntity.ok(adminWalletMapper.toResult(walletUseCase.adminAdjustEntry(userId, req.getAmountCents(),
                 req.getDescription(), req.getIdempotencyKey())));
+    }
+
+    @Override
+    public ResponseEntity<AdminWalletDetailDtoOut> detail(UUID userId) {
+        return ResponseEntity.ok(adminWalletMapper.toDetail(walletUseCase.adminGetWalletDetail(userId)));
     }
 
     @Override

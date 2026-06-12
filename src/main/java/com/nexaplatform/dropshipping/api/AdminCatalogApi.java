@@ -6,11 +6,18 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.UpdateProductStatusRequest;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
+import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
+import com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.ReindexResultDtoOut;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,6 +25,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -40,11 +48,11 @@ public interface AdminCatalogApi {
     @PostMapping("/products")
     ResponseEntity<UUID> upsertProduct(@Valid @RequestBody IngestProductRequest req);
 
-    @Operation(summary = "List products with paging and optional status filter")
+    @Operation(summary = "List products with paging and optional status/category filter")
     @GetMapping("/products")
     PageResponse<ProductSummaryView> list(@RequestParam(required = false) String status,
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "30") int size,
-            @RequestParam(defaultValue = "es") String lang);
+            @RequestParam(required = false) UUID categoryId, @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "30") int size, @RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "Get product detail by id")
     @GetMapping("/products/{id}")
@@ -63,4 +71,64 @@ public interface AdminCatalogApi {
     @Operation(summary = "Duplicate a product")
     @PostMapping("/products/{id}/duplicate")
     ProductDetailView duplicate(@PathVariable UUID id, @RequestParam(defaultValue = "es") String lang);
+
+    /* ============================ Reindex ============================ */
+
+    @Operation(summary = "Reindex the whole catalog into OpenSearch")
+    @PostMapping("/reindex")
+    ResponseEntity<ReindexResultDtoOut> reindex();
+
+    /* ============================ Variants ============================ */
+
+    @Operation(summary = "List a product's variants with their raw stored price (admin)")
+    @GetMapping("/products/{productId}/variants")
+    ResponseEntity<List<VariantView>> listVariants(@PathVariable UUID productId);
+
+    @Operation(summary = "Create a variant on a product")
+    @PostMapping("/products/{productId}/variants")
+    ResponseEntity<VariantView> createVariant(@PathVariable UUID productId,
+            @Valid @RequestBody AdminVariantUpsertDtoIn req);
+
+    @Operation(summary = "Update a variant")
+    @PutMapping("/variants/{id}")
+    ResponseEntity<VariantView> updateVariant(@PathVariable UUID id, @Valid @RequestBody AdminVariantUpsertDtoIn req);
+
+    @Operation(summary = "Delete a variant")
+    @DeleteMapping("/variants/{id}")
+    ResponseEntity<Void> deleteVariant(@PathVariable UUID id);
+
+    /* ============================ Images (URL or upload) ============================ */
+
+    @Operation(summary = "Upload an image file (returns its public URL) for a product or variant")
+    @PostMapping(value = "/images/upload", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    ResponseEntity<com.nexaplatform.dropshipping.api.dto.out.ImageUploadDtoOut> uploadImage(
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file);
+
+    @Operation(summary = "Add an image (by URL) to a product's gallery")
+    @PostMapping("/products/{productId}/images")
+    ResponseEntity<com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView> addProductImage(
+            @PathVariable UUID productId,
+            @Valid @RequestBody com.nexaplatform.dropshipping.api.dto.in.AddProductImageDtoIn req);
+
+    @Operation(summary = "Delete a product image")
+    @DeleteMapping("/products/images/{imageId}")
+    ResponseEntity<Void> deleteProductImage(@PathVariable UUID imageId);
+
+    /* ============================ Bulk import ============================ */
+
+    @Operation(summary = "Create a single product manually")
+    @PostMapping("/products/create")
+    ResponseEntity<UUID> createProduct(@Valid @RequestBody BulkProductDtoIn req);
+
+    @Operation(summary = "Delete a product (refused if it has orders)")
+    @DeleteMapping("/products/{id}")
+    ResponseEntity<Void> deleteProduct(@PathVariable UUID id);
+
+    @Operation(summary = "Bulk-create products from a JSON array")
+    @PostMapping("/products/bulk")
+    ResponseEntity<BulkResultDtoOut> bulkProducts(@Valid @RequestBody List<BulkProductDtoIn> rows);
+
+    @Operation(summary = "Bulk-create categories from a JSON array")
+    @PostMapping("/categories/bulk")
+    ResponseEntity<BulkResultDtoOut> bulkCategories(@Valid @RequestBody List<BulkCategoryDtoIn> rows);
 }

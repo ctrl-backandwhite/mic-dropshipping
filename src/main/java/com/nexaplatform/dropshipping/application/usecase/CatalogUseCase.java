@@ -5,7 +5,9 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
@@ -44,7 +46,46 @@ public interface CatalogUseCase {
 
     Page<ProductSummaryView> listProducts(ProductStatus status, Pageable pageable, String language);
 
-    Page<ProductSummaryView> listProductsForAdmin(String status, int page, int size, String language);
+    Page<ProductSummaryView> listProductsForAdmin(String status, UUID categoryId, int page, int size, String language);
+
+    /** Reindexes every product into OpenSearch; returns the number indexed. */
+    int reindexAllProducts();
+
+    /** Lists a product's variants with their RAW stored price (admin manage view, no margin/currency). */
+    java.util.List<VariantView> listVariantsForAdmin(UUID productId);
+
+    /** Creates a variant on a product and reindexes it. */
+    VariantView createVariant(UUID productId, AdminVariantUpsertDtoIn req);
+
+    /** Updates an existing variant and reindexes its product. */
+    VariantView updateVariant(UUID variantId, AdminVariantUpsertDtoIn req);
+
+    /** Deletes a variant and reindexes its product. */
+    void deleteVariant(UUID variantId);
+
+    /** Uploads raw image bytes to object storage and returns the public URL (for products/variants). */
+    String uploadImage(byte[] bytes, String contentType, String originalName);
+
+    /** Adds an image (by URL — typed or previously uploaded) to a product's gallery. */
+    com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView addProductImage(UUID productId, String url,
+            String role);
+
+    /** Removes a product image and reindexes its product. */
+    void deleteProductImage(UUID imageId);
+
+    /** Bulk-creates products from friendly JSON rows; returns created/failed counts and errors. */
+    com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut bulkCreateProducts(
+            java.util.List<com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn> rows);
+
+    /** Creates a single product manually from a friendly row; returns the new product id. */
+    UUID createProductManual(com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn req);
+
+    /** Permanently deletes a product and its catalog children (refused if it has orders). */
+    void deleteProduct(UUID id);
+
+    /** Bulk-creates categories from friendly JSON rows. */
+    com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut bulkCreateCategories(
+            java.util.List<com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn> rows);
 
     ProductSummaryView toSummaryView(Product product, String language);
 

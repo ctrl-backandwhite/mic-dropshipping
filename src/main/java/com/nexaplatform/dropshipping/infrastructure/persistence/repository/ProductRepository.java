@@ -16,6 +16,9 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
 
     Optional<ProductEntity> findBySlug(String slug);
 
+    /** Number of products already attached to a category — used by the demo catalog filler. */
+    long countByCategoryId(UUID categoryId);
+
     Optional<ProductEntity> findBySourceAndExternalId(String source, String externalId);
 
     /** Resolución de SKU/external id sin saber la fuente — útil para inbound webhooks de tiendas. */
@@ -28,6 +31,12 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
     Optional<ProductEntity> findWithDetailsById(UUID id);
 
     Page<ProductEntity> findByStatus(ProductStatus status, Pageable pageable);
+
+    /** Admin product list filtered by category (any status). */
+    Page<ProductEntity> findByCategoryId(UUID categoryId, Pageable pageable);
+
+    /** Admin product list filtered by category and status. */
+    Page<ProductEntity> findByCategoryIdAndStatus(UUID categoryId, ProductStatus status, Pageable pageable);
 
     @Query("""
             SELECT p FROM ProductEntity p

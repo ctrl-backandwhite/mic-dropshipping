@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
+import com.nexaplatform.dropshipping.api.dto.out.AdminWalletDetailDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminWalletRowDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminWalletTxResultDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminWalletTxRowDtoOut;
@@ -46,4 +47,15 @@ public interface AdminWalletMapper {
     AdminWalletRowDtoOut toRow(Wallet wallet);
 
     List<AdminWalletRowDtoOut> toRows(List<Wallet> wallets);
+
+    @Mapping(target = "id", source = "id")
+    @Mapping(target = "userId", source = "userId")
+    @Mapping(target = "email", source = "userEmail")
+    @Mapping(target = "name", source = "userName")
+    @Mapping(target = "balanceUsd", expression = "java(java.math.BigDecimal.valueOf(wallet.getBalanceUsdCents()).divide(java.math.BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP))")
+    @Mapping(target = "holdUsd", expression = "java(java.math.BigDecimal.valueOf(wallet.getHoldUsdCents()).divide(java.math.BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP))")
+    @Mapping(target = "availableUsd", expression = "java(java.math.BigDecimal.valueOf(wallet.getAvailableUsdCents()).divide(java.math.BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP))")
+    @Mapping(target = "currency", expression = "java(wallet.getCurrencyDefault() != null ? wallet.getCurrencyDefault() : \"USD\")")
+    @Mapping(target = "status", source = "status")
+    AdminWalletDetailDtoOut toDetail(Wallet wallet);
 }

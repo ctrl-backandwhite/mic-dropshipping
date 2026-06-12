@@ -68,4 +68,7 @@ public class UserEntity extends BaseEntity {
 
     @Column(length = 8)
     private String language;
+
+    @Column(name = "google_linked", nullable = false)
+    private boolean googleLinked;
 }
