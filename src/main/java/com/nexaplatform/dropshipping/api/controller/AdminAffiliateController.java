@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.api.controller;
 import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.*;
 import com.nexaplatform.dropshipping.api.mapper.AffiliateViewMapper;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
+import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -38,7 +39,7 @@ public class AdminAffiliateController {
     public ResponseEntity<AdminAffiliateDetail> detail(@PathVariable UUID id) {
         String currency = service.config().getCurrency();
         AffiliateEntity a = service.allAffiliates().stream().filter(x -> x.getId().equals(id)).findFirst()
-                .orElseThrow(() -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("Affiliate not found"));
+                .orElseThrow(() -> new NotFoundException("Affiliate not found"));
         List<AffiliateReferralCodeEntity> codes = service.listCodes(id);
         List<AffiliateConversionEntity> convs = service.conversionsForAffiliate(id);
         List<AffiliateCommissionEntity> comms = service.commissionsForAffiliate(id);
@@ -68,7 +69,7 @@ public class AdminAffiliateController {
     /* ---- DROP-651: payout requests (operator approval required) ---- */
 
     @GetMapping("/payouts/pending")
-    public ResponseEntity<List<com.nexaplatform.dropshipping.infrastructure.persistence.entity.AffiliatePayoutEntity>> pendingPayouts() {
+    public ResponseEntity<List<AffiliatePayoutEntity>> pendingPayouts() {
         return ResponseEntity.ok(service.pendingPayouts());
     }
 

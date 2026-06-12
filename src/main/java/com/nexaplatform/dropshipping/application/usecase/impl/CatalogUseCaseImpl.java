@@ -2,9 +2,13 @@ package com.nexaplatform.dropshipping.application.usecase.impl;
 
 import com.github.slugify.Slugify;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestPriceTier;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariant;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariantOption;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
 import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
@@ -14,6 +18,8 @@ import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.infrastructure.integration.storage.StorageService;
+import org.springframework.jdbc.core.JdbcTemplate;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontMapper;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
@@ -87,8 +93,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository variantRepository;
     private final com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer productIndexer;
-    private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
-    private final com.nexaplatform.dropshipping.infrastructure.integration.storage.StorageService storageService;
+    private final JdbcTemplate jdbcTemplate;
+    private final StorageService storageService;
 
     // @Lazy field injection breaks the CatalogUseCaseImpl <-> CatalogFillWriter constructor cycle
     // (the writer ingests through this same use case).
@@ -558,7 +564,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Override
     public String uploadImage(byte[] bytes, String contentType, String originalName) {
         if (bytes == null || bytes.length == 0) {
-            throw new com.nexaplatform.dropshipping.api.exception.BusinessException("El archivo de imagen está vacío");
+            throw new BusinessException("El archivo de imagen está vacío");
         }
         String ext = extensionFor(contentType, originalName);
         String key = "uploads/" + UUID.randomUUID() + ext;
@@ -569,10 +575,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Transactional
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true)})
-    public com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView addProductImage(UUID productId, String url,
+    public ProductImageView addProductImage(UUID productId, String url,
             String role) {
         if (url == null || url.isBlank()) {
-            throw new com.nexaplatform.dropshipping.api.exception.BusinessException("La URL de imagen es obligatoria");
+            throw new BusinessException("La URL de imagen es obligatoria");
         }
         ProductEntity product = productJpaRepository.findById(productId)
                 .orElseThrow(() -> new NotFoundException("Product not found"));
@@ -649,16 +655,16 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     }
 
     /** Main image URL of an ingest payload (role MAIN first, then lowest position). */
-    private String mainImageUrlOf(java.util.List<com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage> images) {
+    private String mainImageUrlOf(java.util.List<IngestImage> images) {
         if (images == null || images.isEmpty()) {
             return null;
         }
         return images.stream().filter(i -> i.sourceUrl() != null && !i.sourceUrl().isBlank())
                 .min(java.util.Comparator
-                        .comparingInt((com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage i) -> "MAIN"
+                        .comparingInt((IngestImage i) -> "MAIN"
                                 .equalsIgnoreCase(i.role()) ? 0 : 1)
-                        .thenComparingInt(com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage::position))
-                .map(com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage::sourceUrl).orElse(null);
+                        .thenComparingInt(IngestImage::position))
+                .map(IngestImage::sourceUrl).orElse(null);
     }
 
     /** Main image (CDN preferred, else source) of a persisted product, or null. */
@@ -750,15 +756,15 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         java.math.BigDecimal price = r.getPrice() != null ? r.getPrice() : new java.math.BigDecimal("9.90");
         String externalId = (r.getExternalId() != null && !r.getExternalId().isBlank()) ? r.getExternalId()
                 : "BULK-" + SLUG.slugify(esTitle) + "-" + System.nanoTime();
-        java.util.List<com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage> images = new java.util.ArrayList<>();
+        java.util.List<IngestImage> images = new java.util.ArrayList<>();
         if (r.getImageUrls() != null) {
             for (int k = 0; k < r.getImageUrls().size(); k++)
-                images.add(new com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage(
+                images.add(new IngestImage(
                         r.getImageUrls().get(k), k, k == 0 ? "MAIN" : "GALLERY"));
         }
-        var variant = new com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariant(
+        var variant = new IngestVariant(
                 externalId + "-DEF", externalId + "-DEF", esTitle, price, 100, null, java.util.Map.of());
-        var tier = new com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestPriceTier(1, null, price, "CNY");
+        var tier = new IngestPriceTier(1, null, price, "CNY");
         var req = new IngestProductRequest("1688", externalId, zhTitle, esDesc, esDesc, null,
                 r.getMoq() != null ? r.getMoq() : 1, price, "CNY", null,
                 r.getMonthlySales() != null ? r.getMonthlySales() : 0, new java.math.BigDecimal("15"),

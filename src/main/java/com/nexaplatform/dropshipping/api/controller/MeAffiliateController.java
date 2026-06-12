@@ -10,6 +10,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -39,10 +40,10 @@ public class MeAffiliateController {
 
     /** DROP-651: the affiliate requests a payout of their approved commissions. */
     @PostMapping("/payout-request")
-    public ResponseEntity<java.util.Map<String, Object>> requestPayout(Authentication auth) {
+    public ResponseEntity<Map<String, Object>> requestPayout(Authentication auth) {
         UUID userId = UUID.fromString(auth.getName());
         var p = service.requestPayout(userId);
-        return ResponseEntity.ok(java.util.Map.of("id", p.getId(), "amountCents", p.getAmountCents(), "status",
+        return ResponseEntity.ok(Map.of("id", p.getId(), "amountCents", p.getAmountCents(), "status",
                 p.getStatus()));
     }
 

@@ -3,6 +3,8 @@ package com.nexaplatform.dropshipping.application;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.domain.model.WalletTransaction;
+import com.nexaplatform.dropshipping.api.exception.BusinessException;
+import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,7 +38,8 @@ class AffiliateProgramServiceTest {
     @Mock AffiliateProgramConfigRepository configRepo;
     @Mock AffiliatePayoutRepository payoutRepo;
     @Mock UserRepository userRepository;
-    @Mock com.nexaplatform.dropshipping.infrastructure.persistence.repository.NotificationJpaRepositoryAdapter notificationRepo;
+    @Mock NotificationJpaRepositoryAdapter notificationRepo;
+    @Mock NotificationsPublisher notificationsPublisher;
     @Mock WalletUseCase walletUseCase;
 
     AffiliateProgramService service;
@@ -49,7 +52,7 @@ class AffiliateProgramServiceTest {
     @BeforeEach
     void setup() {
         service = new AffiliateProgramService(affiliateRepo, codeRepo, attrRepo, conversionRepo, commissionRepo,
-                configRepo, payoutRepo, userRepository, notificationRepo, walletUseCase);
+                configRepo, payoutRepo, userRepository, notificationRepo, notificationsPublisher, walletUseCase);
         AffiliateProgramConfigEntity config = AffiliateProgramConfigEntity.builder()
                 .defaultPercent(new BigDecimal("10.000")).attributionWindowDays(30).returnPeriodDays(14)
                 .minPayoutCents(5000).currency("EUR").attributionModel("LAST_CLICK").build();
@@ -154,9 +157,9 @@ class AffiliateProgramServiceTest {
         tx.setId(UUID.randomUUID());
         when(walletUseCase.adminTopup(eq(affiliateUserId), eq(5500L), any(), any())).thenReturn(tx);
         // DROP-651: payoutApproved now creates+executes a payout record.
-        com.nexaplatform.dropshipping.infrastructure.persistence.entity.AffiliatePayoutEntity[] saved = new com.nexaplatform.dropshipping.infrastructure.persistence.entity.AffiliatePayoutEntity[1];
+        AffiliatePayoutEntity[] saved = new AffiliatePayoutEntity[1];
         when(payoutRepo.save(any())).thenAnswer(i -> {
-            var p = (com.nexaplatform.dropshipping.infrastructure.persistence.entity.AffiliatePayoutEntity) i.getArgument(0);
+            var p = (AffiliatePayoutEntity) i.getArgument(0);
             if (p.getId() == null) p.setId(UUID.randomUUID());
             saved[0] = p; return p;
         });
@@ -201,7 +204,7 @@ class AffiliateProgramServiceTest {
         when(commissionRepo.findByAffiliateIdAndStatus(affiliateId, "APPROVED")).thenReturn(List.of(c));
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.requestPayout(affiliateUserId))
-                .isInstanceOf(com.nexaplatform.dropshipping.api.exception.BusinessException.class);
+                .isInstanceOf(BusinessException.class);
         verify(payoutRepo, never()).save(any());
     }
 

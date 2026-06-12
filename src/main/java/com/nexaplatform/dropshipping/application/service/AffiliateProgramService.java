@@ -1,5 +1,8 @@
 package com.nexaplatform.dropshipping.application.service;
 
+import com.nexaplatform.dropshipping.api.exception.BusinessException;
+import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.*;
@@ -12,7 +15,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -33,28 +38,38 @@ public class AffiliateProgramService {
     private final AffiliateConversionRepository conversionRepo;
     private final AffiliateCommissionRepository commissionRepo;
     private final AffiliateProgramConfigRepository configRepo;
-    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.AffiliatePayoutRepository payoutRepo;
+    private final AffiliatePayoutRepository payoutRepo;
     private final UserRepository userRepository;
-    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.NotificationJpaRepositoryAdapter notificationRepo;
+    private final NotificationJpaRepositoryAdapter notificationRepo;
+    private final NotificationsPublisher notificationsPublisher;
     private final WalletUseCase walletUseCase;
 
     /* ============================ Notifications (DROP-653) ============================ */
 
-    /** Writes an in-app notification (reuses the existing notification center). */
-    private void notify(java.util.UUID userId, String eventType, String title, String body) {
+    /** Writes an in-app notification AND publishes a (marketing) email event via Kafka. */
+    private void notify(UUID userId, String eventType, String title, String body) {
         if (userId == null) {
             return;
         }
         try {
-            com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity u = userRepository
+            UserEntity u = userRepository
                     .findById(userId).orElse(null);
             if (u == null) {
                 return;
             }
             notificationRepo.save(
-                    com.nexaplatform.dropshipping.infrastructure.persistence.entity.NotificationEntity.builder().user(u)
+                    NotificationEntity.builder().user(u)
                             .eventType(eventType).title(title).body(body).channel("IN_APP")
-                            .payload(new java.util.HashMap<>()).build());
+                            .payload(new HashMap<>()).build());
+            // Email via Kafka (notifications.dispatch → EmailDispatchConsumer). Marketing → opt-out aware.
+            Map<String, Object> extra = new HashMap<>();
+            extra.put("title", title);
+            extra.put("body", body);
+            extra.put("marketing", true);
+            extra.put("ctaUrl", "/affiliate");
+            extra.put("ctaLabel", "Ver mi panel de afiliado");
+            notificationsPublisher.dispatch(eventType, userId, u.getEmail(), extra,
+                    u.getLanguage() != null ? u.getLanguage() : "es");
         } catch (RuntimeException e) {
             log.warn("affiliate notify failed for {}: {}", userId, e.getMessage());
         }
@@ -101,11 +116,11 @@ public class AffiliateProgramService {
     @Transactional
     public AffiliateEntity getOrCreateForUser(UUID userId) {
         UserEntity user = userRepository.findById(userId).orElseThrow(
-                () -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("User not found"));
+                () -> new NotFoundException("User not found"));
         // Data rule: admin/operator accounts cannot be affiliates.
         String role = user.getRole() != null ? user.getRole().name() : "";
         if ("ADMIN".equals(role) || "OPERATOR".equals(role)) {
-            throw new com.nexaplatform.dropshipping.api.exception.BusinessException(
+            throw new BusinessException(
                     "Las cuentas de administración no pueden ser afiliados");
         }
         AffiliateEntity affiliate = affiliateRepo.findByUser_Id(userId).orElseGet(() -> {
@@ -146,7 +161,7 @@ public class AffiliateProgramService {
     @Transactional
     public AffiliateReferralCodeEntity addCode(UUID affiliateId, String label) {
         AffiliateEntity affiliate = affiliateRepo.findById(affiliateId).orElseThrow(
-                () -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("Affiliate not found"));
+                () -> new NotFoundException("Affiliate not found"));
         return codeRepo.save(AffiliateReferralCodeEntity.builder().affiliate(affiliate)
                 .code(generateUniqueCode(affiliate.getUser())).label(label != null ? label : "Link").active(true)
                 .build());
@@ -155,7 +170,7 @@ public class AffiliateProgramService {
     @Transactional
     public AffiliateReferralCodeEntity setCodeActive(UUID codeId, boolean active) {
         AffiliateReferralCodeEntity c = codeRepo.findById(codeId).orElseThrow(
-                () -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("Code not found"));
+                () -> new NotFoundException("Code not found"));
         c.setActive(active);
         return codeRepo.save(c);
     }
@@ -355,9 +370,9 @@ public class AffiliateProgramService {
     @Transactional
     public void resolveReview(UUID commissionId, boolean approve) {
         AffiliateCommissionEntity comm = commissionRepo.findById(commissionId).orElseThrow(
-                () -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("Commission not found"));
+                () -> new NotFoundException("Commission not found"));
         if (!"REVIEW".equals(comm.getStatus())) {
-            throw new com.nexaplatform.dropshipping.api.exception.BusinessException("La comisión no está en revisión");
+            throw new BusinessException("La comisión no está en revisión");
         }
         if (approve) {
             comm.setStatus("APPROVED");
@@ -379,16 +394,16 @@ public class AffiliateProgramService {
     @Transactional
     public AffiliatePayoutEntity requestPayout(UUID userId) {
         AffiliateEntity affiliate = affiliateRepo.findByUser_Id(userId).orElseThrow(
-                () -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("Affiliate not found"));
+                () -> new NotFoundException("Affiliate not found"));
         if (payoutRepo.existsByAffiliateIdAndStatus(affiliate.getId(), "REQUESTED")) {
-            throw new com.nexaplatform.dropshipping.api.exception.BusinessException(
+            throw new BusinessException(
                     "Ya tienes una solicitud de pago pendiente");
         }
         List<AffiliateCommissionEntity> approved = commissionRepo.findByAffiliateIdAndStatus(affiliate.getId(), "APPROVED");
         long total = approved.stream().mapToLong(AffiliateCommissionEntity::getAmountCents).sum();
         var cfg = config();
         if (total < cfg.getMinPayoutCents()) {
-            throw new com.nexaplatform.dropshipping.api.exception.BusinessException(
+            throw new BusinessException(
                     "Saldo aprobado por debajo del pago mínimo");
         }
         AffiliatePayoutEntity payout = payoutRepo.save(AffiliatePayoutEntity.builder().affiliateId(affiliate.getId())
@@ -407,15 +422,15 @@ public class AffiliateProgramService {
     @Transactional
     public AffiliatePayoutEntity approvePayout(UUID payoutId) {
         AffiliatePayoutEntity payout = payoutRepo.findById(payoutId).orElseThrow(
-                () -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("Payout not found"));
+                () -> new NotFoundException("Payout not found"));
         if ("PAID".equals(payout.getStatus())) {
             return payout; // idempotent — never pay twice
         }
         if ("REJECTED".equals(payout.getStatus())) {
-            throw new com.nexaplatform.dropshipping.api.exception.BusinessException("El pago fue rechazado");
+            throw new BusinessException("El pago fue rechazado");
         }
         AffiliateEntity affiliate = affiliateRepo.findById(payout.getAffiliateId()).orElseThrow(
-                () -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("Affiliate not found"));
+                () -> new NotFoundException("Affiliate not found"));
         List<AffiliateCommissionEntity> approved = commissionRepo.findByAffiliateIdAndStatus(affiliate.getId(), "APPROVED");
         long total = approved.stream().mapToLong(AffiliateCommissionEntity::getAmountCents).sum();
         if (total <= 0) {
@@ -453,9 +468,9 @@ public class AffiliateProgramService {
     @Transactional
     public AffiliatePayoutEntity rejectPayout(UUID payoutId, String reason) {
         AffiliatePayoutEntity payout = payoutRepo.findById(payoutId).orElseThrow(
-                () -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("Payout not found"));
+                () -> new NotFoundException("Payout not found"));
         if ("PAID".equals(payout.getStatus())) {
-            throw new com.nexaplatform.dropshipping.api.exception.BusinessException("El pago ya se ejecutó");
+            throw new BusinessException("El pago ya se ejecutó");
         }
         payout.setStatus("REJECTED");
         payout.setProcessedAt(Instant.now());
@@ -467,7 +482,7 @@ public class AffiliateProgramService {
     @Transactional
     public long payoutApproved(UUID affiliateId, boolean force) {
         AffiliateEntity affiliate = affiliateRepo.findById(affiliateId).orElseThrow(
-                () -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("Affiliate not found"));
+                () -> new NotFoundException("Affiliate not found"));
         long approvedTotal = commissionRepo.findByAffiliateIdAndStatus(affiliateId, "APPROVED").stream()
                 .mapToLong(AffiliateCommissionEntity::getAmountCents).sum();
         if (approvedTotal <= 0) {
@@ -515,10 +530,10 @@ public class AffiliateProgramService {
     public AffiliateEntity setAffiliateStatus(UUID affiliateId, String status) {
         String s = status == null ? "" : status.trim().toUpperCase();
         if (!s.equals("PENDING") && !s.equals("ACTIVE") && !s.equals("SUSPENDED")) {
-            throw new com.nexaplatform.dropshipping.api.exception.BusinessException("Estado de afiliado no válido");
+            throw new BusinessException("Estado de afiliado no válido");
         }
         AffiliateEntity a = affiliateRepo.findById(affiliateId).orElseThrow(
-                () -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("Affiliate not found"));
+                () -> new NotFoundException("Affiliate not found"));
         a.setStatus(s);
         a.setActive("ACTIVE".equals(s));
         return affiliateRepo.save(a);

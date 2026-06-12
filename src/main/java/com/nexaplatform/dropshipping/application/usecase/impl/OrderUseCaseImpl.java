@@ -7,6 +7,8 @@ import com.nexaplatform.dropshipping.api.dto.in.MeCheckoutDtoIn;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
+import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
+import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
 import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
@@ -63,8 +65,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final WebhookDispatcherService webhooks;
     private final WalletUseCase walletUseCase;
     private final NotificationsPublisher notificationsPublisher;
-    private final com.nexaplatform.dropshipping.application.service.PricingService pricingService;
-    private final com.nexaplatform.dropshipping.application.service.AffiliateProgramService affiliateProgramService;
+    private final PricingService pricingService;
+    private final AffiliateProgramService affiliateProgramService;
 
     @Value("${nexadrop.demo.orders-enabled:false}")
     private boolean demoOrdersEnabled;

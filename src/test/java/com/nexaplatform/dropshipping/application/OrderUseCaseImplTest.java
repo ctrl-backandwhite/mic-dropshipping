@@ -6,6 +6,8 @@ import com.nexaplatform.dropshipping.api.dto.PartnerDtos.OrderItemInput;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
+import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
+import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.application.usecase.impl.OrderUseCaseImpl;
@@ -56,9 +58,9 @@ class OrderUseCaseImplTest {
     @Mock
     NotificationsPublisher notificationsPublisher;
     @Mock
-    com.nexaplatform.dropshipping.application.service.PricingService pricingService;
+    PricingService pricingService;
     @Mock
-    com.nexaplatform.dropshipping.application.service.AffiliateProgramService affiliateProgramService;
+    AffiliateProgramService affiliateProgramService;
 
     OrderUseCaseImpl orderUseCase;
 
@@ -70,10 +72,9 @@ class OrderUseCaseImplTest {
     }
 
     /** DROP-637: the checkout now bills the priced amount (retailUsd) from PricingService. */
-    private static com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount priced(String retail) {
-        java.math.BigDecimal r = retail == null ? null : new java.math.BigDecimal(retail);
-        return new com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount(r, r, r, "USD", "$",
-                null, java.math.BigDecimal.ZERO);
+    private static PricingService.PricedAmount priced(String retail) {
+        BigDecimal r = retail == null ? null : new BigDecimal(retail);
+        return new PricingService.PricedAmount(r, r, r, "USD", "$", null, BigDecimal.ZERO);
     }
 
     @Test

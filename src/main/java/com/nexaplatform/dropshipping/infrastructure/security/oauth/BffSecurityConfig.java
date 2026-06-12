@@ -30,7 +30,8 @@ public class BffSecurityConfig {
                                 "/api/storefront/catalog/products/import-url",
                                 "/api/storefront/catalog/products/search-by-image",
                                 "/api/storefront/shipping/calculator", "/api/storefront/shipping/carbon-footprint",
-                                "/api/storefront/affiliate/track"))
+                                "/api/storefront/affiliate/track", "/api/storefront/newsletter/subscribe",
+                                "/api/storefront/newsletter/unsubscribe"))
                 .authorizeHttpRequests(reg -> reg.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/activate",
                                 "/api/auth/password-reset/**", "/api/webhooks/**")
@@ -43,6 +44,8 @@ public class BffSecurityConfig {
                         .permitAll().requestMatchers(HttpMethod.POST, "/api/storefront/shipping/calculator").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/storefront/shipping/carbon-footprint").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/storefront/affiliate/track").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/storefront/newsletter/subscribe").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/storefront/newsletter/unsubscribe").permitAll()
                         .requestMatchers("/api/admin/users/**").hasRole("ADMIN").requestMatchers("/api/admin/**")
                         .hasAnyRole("ADMIN", "OPERATOR")
                         // /api/me is the auth-bootstrap probe — it must succeed even when

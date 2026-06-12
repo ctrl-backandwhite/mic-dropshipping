@@ -93,3 +93,5 @@ databaseChangeLog:
       file: db/changelog/schema-v41-affiliate-seed-fix.sql
   - include:
       file: db/changelog/schema-v42-pricing-image-fix.sql
+  - include:
+      file: db/changelog/schema-v43-email-newsletter.sql

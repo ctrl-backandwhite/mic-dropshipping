@@ -36,6 +36,11 @@ public class UserEntity extends BaseEntity {
     @Column(nullable = false)
     private boolean active;
 
+    /** Email preference: when true, the user is excluded from marketing/affiliate/newsletter emails. */
+    @Column(name = "marketing_opt_out", nullable = false)
+    @Builder.Default
+    private boolean marketingOptOut = false;
+
     @Column(name = "activation_code", length = 64)
     private String activationCode;
 

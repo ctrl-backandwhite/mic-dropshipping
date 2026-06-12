@@ -185,6 +185,11 @@ nexadrop:
     redis-enabled: ${RATELIMIT_REDIS_ENABLED:false} # Bucket4j sobre Redis
   outbox:
     poll-ms: ${OUTBOX_POLL_MS:500}              # dispatcher polling interval
+  storefront:
+    base-url: ${STOREFRONT_BASE_URL:http://localhost:3003}  # for email CTA / unsubscribe links
+  email:
+    from: ${EMAIL_FROM:noreply@nexadrop.local}  # Gmail: set to your Gmail address
+    from-name: ${EMAIL_FROM_NAME:NX036 Dropshipping}
   # ============================ (legado abajo) ============================
   oauth:
     issuer: ${OAUTH_ISSUER:http://localhost:18082}

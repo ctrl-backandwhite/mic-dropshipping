@@ -21,6 +21,9 @@ public final class NexaTopics {
     /** Notificaciones transaccionales — email/push genéricos. */
     public static final String NOTIFICATIONS_DISPATCH = "notifications.dispatch";
 
+    /** Envío de newsletter (fan-out a suscriptores en el consumer de email del monolito). */
+    public static final String NEWSLETTER_SEND = "newsletter.send";
+
     /** Confirmaciones de pedido (consume mic-notificationservice). */
     public static final String NOTIFICATIONS_ORDER_PLACED = "notifications.order.placed";
     public static final String NOTIFICATIONS_ORDER_SHIPPED = "notifications.order.shipped";

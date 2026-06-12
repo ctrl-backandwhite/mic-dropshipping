@@ -26,6 +26,11 @@ public class EmailQueueService {
     private final JavaMailSender mailSender;
     private final TemplateEngine templateEngine;
 
+    @org.springframework.beans.factory.annotation.Value("${nexadrop.email.from:noreply@nexadrop.local}")
+    private String fromAddress;
+    @org.springframework.beans.factory.annotation.Value("${nexadrop.email.from-name:NX036 Dropshipping}")
+    private String fromName;
+
     @Transactional
     public OutboundEmailEntity enqueue(String to, String subject, String template, Map<String, Object> vars) {
         Context ctx = new Context();
@@ -46,7 +51,9 @@ public class EmailQueueService {
                 helper.setTo(email.getToAddress());
                 helper.setSubject(email.getSubject());
                 helper.setText(email.getBodyHtml(), true);
-                helper.setFrom("noreply@nexadrop.local");
+                // Named From + Reply-To greatly reduces Gmail spam classification.
+                helper.setFrom(new jakarta.mail.internet.InternetAddress(fromAddress, fromName, "UTF-8"));
+                helper.setReplyTo(fromAddress);
                 mailSender.send(msg);
                 email.setStatus("SENT");
                 email.setSentAt(Instant.now());
