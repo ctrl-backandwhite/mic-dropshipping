@@ -101,8 +101,8 @@ public class DemoOperationsSeedRunner {
             seedOrders(demoCustomers, 60);
         if (subscriptionRepository.count() < 5)
             seedSubscriptions(demoPartners);
-        if (priceRuleRepository.count() < 5)
-            seedPriceRules();
+        // Reglas de margen: NO se siembran automáticamente — las define el operador
+        // (decisión 2026-06-13). El método seedPriceRules() se conserva sin invocar.
         if (specRepository.count() < 50)
             seedSpecifications();
         if (attrRepository.count() < 50)
