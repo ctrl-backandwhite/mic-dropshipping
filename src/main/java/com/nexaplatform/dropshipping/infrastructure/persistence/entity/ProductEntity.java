@@ -120,6 +120,29 @@ public class ProductEntity extends BaseEntity {
     @Column(name = "video_url", length = 800)
     private String videoUrl;
 
+    // ── v44: campos internacionales/1688 que faltaban ──
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "video_urls", columnDefinition = "jsonb")
+    private java.util.List<String> videoUrls;
+
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "sales_regions", columnDefinition = "jsonb")
+    private java.util.List<String> salesRegions;
+
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "rating_breakdown", columnDefinition = "jsonb")
+    private java.util.Map<String, Integer> ratingBreakdown;
+
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "cross_border_support", columnDefinition = "jsonb")
+    private java.util.Map<String, Object> crossBorderSupport;
+
+    @Column(name = "dropship_shipped_30d")
+    private Integer dropshipShipped30d;
+
+    @Column(name = "dropship_pickup_rate_48h", precision = 5, scale = 2)
+    private java.math.BigDecimal dropshipPickupRate48h;
+
     @Column(name = "inventory_count")
     private Integer inventoryCount;
 

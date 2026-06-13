@@ -36,6 +36,10 @@ public class ProductVariantEntity extends BaseEntity {
     @Column(length = 120)
     private String sku;
 
+    /** v44: SKU del proveedor (1688) para reaprovisionar. */
+    @Column(name = "supplier_sku_id", length = 120)
+    private String supplierSkuId;
+
     @Column(length = 400)
     private String title;
 

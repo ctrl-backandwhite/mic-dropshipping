@@ -866,6 +866,43 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             p.setVideoUrl(r.getVideoUrl());
             p.setHasVideo(true);
         }
+        // v44: campos internacionales adicionales.
+        if (r.getVideoUrls() != null && !r.getVideoUrls().isEmpty()) {
+            p.setVideoUrls(r.getVideoUrls());
+            p.setHasVideo(true);
+        }
+        if (r.getSalesRegions() != null && !r.getSalesRegions().isEmpty()) {
+            p.setSalesRegions(r.getSalesRegions());
+        }
+        if (r.getRatingBreakdown() != null && !r.getRatingBreakdown().isEmpty()) {
+            p.setRatingBreakdown(r.getRatingBreakdown());
+        }
+        if (r.getCrossBorderSupport() != null && !r.getCrossBorderSupport().isEmpty()) {
+            p.setCrossBorderSupport(r.getCrossBorderSupport());
+        }
+        if (r.getDropshipShipped30d() != null) {
+            p.setDropshipShipped30d(r.getDropshipShipped30d());
+        }
+        if (r.getDropshipPickupRate48h() != null) {
+            p.setDropshipPickupRate48h(r.getDropshipPickupRate48h());
+        }
+        // supplierSkuId por variante: se matchea por SKU sobre las variantes ya creadas por upsertProduct.
+        if (r.getVariants() != null && !r.getVariants().isEmpty()) {
+            java.util.Map<String, String> bySku = new java.util.HashMap<>();
+            for (var v : r.getVariants()) {
+                if (v.getSku() != null && v.getSupplierSkuId() != null && !v.getSupplierSkuId().isBlank()) {
+                    bySku.put(v.getSku(), v.getSupplierSkuId());
+                }
+            }
+            if (!bySku.isEmpty()) {
+                for (ProductVariantEntity pv : p.getVariants()) {
+                    String s = bySku.get(pv.getSku());
+                    if (s != null) {
+                        pv.setSupplierSkuId(s);
+                    }
+                }
+            }
+        }
         // Atributos taxonómicos (facetas): se reemplazan en cada import.
         if (r.getAttributes() != null && !r.getAttributes().isEmpty()) {
             productAttributeRepository.deleteAll(productAttributeRepository.findByProduct_Id(p.getId()));

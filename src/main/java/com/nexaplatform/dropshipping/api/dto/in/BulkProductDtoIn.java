@@ -82,6 +82,20 @@ public class BulkProductDtoIn {
     /** URL del vídeo principal. */
     private String videoUrl;
 
+    // ── v44: campos internacionales/1688 adicionales ──
+    /** Vídeos adicionales del producto. */
+    private List<String> videoUrls;
+    /** Regiones de venta sugeridas/autorizadas (ej. ["EU","LATAM"]). */
+    private List<String> salesRegions;
+    /** Desglose de reseñas por estrellas: {"5":120,"4":30,...}. */
+    private java.util.Map<String, Integer> ratingBreakdown;
+    /** Soporte transfronterizo: {labeling, foreignManual, foreignPackaging, boxMark}. */
+    private java.util.Map<String, Object> crossBorderSupport;
+    /** Unidades despachadas en 30 días (fiabilidad del proveedor). */
+    private Integer dropshipShipped30d;
+    /** Tasa de recolección en 48 h (0-100). */
+    private BigDecimal dropshipPickupRate48h;
+
     /** Precios escalonados por cantidad (tiered pricing). */
     private List<BulkTier> tieredPricing;
 
@@ -127,6 +141,8 @@ public class BulkProductDtoIn {
         private BigDecimal price;
         private Integer stock;
         private String imageUrl;
+        /** SKU del proveedor (1688) para esta combinación. */
+        private String supplierSkuId;
     }
 
     /** Un atributo taxonómico (faceta). */
