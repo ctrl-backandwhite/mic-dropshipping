@@ -27,23 +27,37 @@ public class CatalogFillWriter {
     private final CatalogUseCase catalogService;
     private final ProductRepository productRepository;
 
+    /** Legacy 6-arg shape used by the demo filler: PT falls back to ES, no extra enrichment. */
     @Transactional
     public UUID write(IngestProductRequest req, String esTitle, String enTitle, String zhTitle, String esDesc,
             String enDesc) {
+        return write(req, esTitle, enTitle, esTitle, zhTitle, esDesc, enDesc, esDesc, esDesc, p -> {
+        });
+    }
+
+    /**
+     * Full variant: per-language titles AND descriptions, plus an {@code enrich} hook that runs on the
+     * managed entity inside this transaction (used by the bulk importer to set logistics/customs fields
+     * without hitting a LazyInitializationException).
+     */
+    @Transactional
+    public UUID write(IngestProductRequest req, String esTitle, String enTitle, String ptTitle, String zhTitle,
+            String descEs, String descEn, String descPt, String descZh,
+            java.util.function.Consumer<ProductEntity> enrich) {
         ProductEntity saved = catalogService.upsertProduct(req);
         ProductEntity managed = productRepository.findById(saved.getId()).orElse(null);
         if (managed == null)
             return saved.getId();
 
         managed.getTranslations().clear();
-        managed.getTranslations().add(ProductTranslationEntity.builder().product(managed).language("es").title(esTitle)
-                .shortDescription(esDesc).description(esDesc).provider("seed").build());
-        managed.getTranslations().add(ProductTranslationEntity.builder().product(managed).language("en").title(enTitle)
-                .shortDescription(enDesc).description(enDesc).provider("seed").build());
-        managed.getTranslations().add(ProductTranslationEntity.builder().product(managed).language("zh").title(zhTitle)
-                .shortDescription(esDesc).description(esDesc).provider("seed").build());
-        managed.getTranslations().add(ProductTranslationEntity.builder().product(managed).language("pt").title(esTitle)
-                .shortDescription(esDesc).description(esDesc).provider("seed").build());
+        addTranslation(managed, "es", esTitle, descEs);
+        addTranslation(managed, "en", blankTo(enTitle, esTitle), blankTo(descEn, descEs));
+        addTranslation(managed, "zh", zhTitle, blankTo(descZh, descEs));
+        addTranslation(managed, "pt", blankTo(ptTitle, esTitle), blankTo(descPt, descEs));
+
+        if (enrich != null) {
+            enrich.accept(managed);
+        }
 
         // Publish straight away (mirrors DemoCatalogSeedRunner.publishAll trend formula).
         managed.setStatus(ProductStatus.ACTIVE);
@@ -56,5 +70,15 @@ public class CatalogFillWriter {
 
         productRepository.save(managed);
         return saved.getId();
+    }
+
+    private static void addTranslation(ProductEntity p, String lang, String title, String desc) {
+        String shortDesc = desc != null && desc.length() > 2000 ? desc.substring(0, 2000) : desc;
+        p.getTranslations().add(ProductTranslationEntity.builder().product(p).language(lang).title(title)
+                .shortDescription(shortDesc).description(desc).provider("seed").build());
+    }
+
+    private static String blankTo(String v, String fallback) {
+        return v != null && !v.isBlank() ? v : fallback;
     }
 }

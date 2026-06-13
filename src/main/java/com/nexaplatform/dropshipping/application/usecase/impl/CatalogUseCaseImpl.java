@@ -771,14 +771,64 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         }
         var variant = new IngestVariant(
                 externalId + "-DEF", externalId + "-DEF", esTitle, price, 100, null, java.util.Map.of());
-        var tier = new IngestPriceTier(1, null, price, "CNY");
+        // Tiered pricing: usar los tramos del JSON si vienen; si no, un tramo único.
+        java.util.List<IngestPriceTier> tiers = new java.util.ArrayList<>();
+        if (r.getTieredPricing() != null && !r.getTieredPricing().isEmpty()) {
+            for (var t : r.getTieredPricing()) {
+                tiers.add(new IngestPriceTier(t.getMinQty() != null ? t.getMinQty() : 1, t.getMaxQty(),
+                        t.getUnitPrice() != null ? t.getUnitPrice() : price,
+                        t.getCurrency() != null ? t.getCurrency() : "CNY"));
+            }
+        } else {
+            tiers.add(new IngestPriceTier(1, null, price, "CNY"));
+        }
         var req = new IngestProductRequest("1688", externalId, zhTitle, esDesc, esDesc, r.getManufacturer(),
-                r.getMoq() != null ? r.getMoq() : 1, price, "CNY", null,
+                r.getMoq() != null ? r.getMoq() : 1, price, "CNY", r.getWeightGrams(),
                 r.getMonthlySales() != null ? r.getMonthlySales() : 0, new java.math.BigDecimal("15"),
                 r.getRating() != null ? r.getRating() : new java.math.BigDecimal("4.5"), 0,
                 "https://detail.1688.com/offer/" + externalId + ".html", supplierId, cat.getId(), images,
-                java.util.List.<IngestVariantOption>of(), java.util.List.of(variant), java.util.List.of(tier));
-        return catalogFillWriter.write(req, esTitle, enTitle, zhTitle, esDesc, esDesc);
+                java.util.List.<IngestVariantOption>of(), java.util.List.of(variant), tiers);
+        String ptTitle = (r.getTitlePt() != null && !r.getTitlePt().isBlank()) ? r.getTitlePt() : esTitle;
+        // El writer corre @Transactional: aplica títulos+descripciones por idioma y la logística
+        // (vía el hook) sobre la entidad gestionada, evitando LazyInitialization.
+        return catalogFillWriter.write(req, esTitle, enTitle, ptTitle, zhTitle, esDesc, r.getDescriptionEn(),
+                r.getDescriptionPt(), r.getDescriptionZh(), p -> applyLogistics(p, r));
+    }
+
+    /** Fija los campos de logística/aduana sobre la entidad gestionada (dentro de la transacción del writer). */
+    private void applyLogistics(ProductEntity p, com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn r) {
+        if (r.getPackageWeightGrams() != null) {
+            p.setPackageWeightGrams(r.getPackageWeightGrams());
+        }
+        if (r.getLengthMm() != null) {
+            p.setLengthMm(r.getLengthMm());
+        }
+        if (r.getWidthMm() != null) {
+            p.setWidthMm(r.getWidthMm());
+        }
+        if (r.getHeightMm() != null) {
+            p.setHeightMm(r.getHeightMm());
+        }
+        if (r.getCountryOfOrigin() != null && !r.getCountryOfOrigin().isBlank()) {
+            p.setCountryOfOrigin(r.getCountryOfOrigin());
+        }
+        if (r.getHsCode() != null && !r.getHsCode().isBlank()) {
+            p.setHsCode(r.getHsCode());
+        }
+        if (r.getCertifications() != null && !r.getCertifications().isEmpty()) {
+            p.setCertifications(r.getCertifications());
+        }
+        if (r.getShipFrom() != null && !r.getShipFrom().isBlank()) {
+            p.setShipFrom(r.getShipFrom());
+        }
+        if (r.getLeadTimeDays() != null) {
+            p.setLeadTimeDays(r.getLeadTimeDays());
+        }
+        if (r.getVideoUrl() != null && !r.getVideoUrl().isBlank()) {
+            p.setVideoUrl(r.getVideoUrl());
+            p.setHasVideo(true);
+        }
+        // Las traducciones (título + descripción por idioma) las fija el writer dentro de su transacción.
     }
 
     @Override

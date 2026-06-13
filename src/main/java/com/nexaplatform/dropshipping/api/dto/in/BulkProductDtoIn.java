@@ -27,9 +27,17 @@ public class BulkProductDtoIn {
 
     private String titleEn;
 
+    private String titlePt;
+
     private String titleZh;
 
     private String descriptionEs;
+
+    private String descriptionEn;
+
+    private String descriptionPt;
+
+    private String descriptionZh;
 
     private BigDecimal price;
 
@@ -52,4 +60,39 @@ public class BulkProductDtoIn {
 
     /** Optional stable id; generated from the title when omitted. */
     private String externalId;
+
+    // ── Logística / aduana internacional (mapean a columnas existentes de product) ──
+    /** Peso neto del producto en gramos. */
+    private Integer weightGrams;
+    /** Peso bruto (con embalaje) en gramos. */
+    private Integer packageWeightGrams;
+    private Integer lengthMm;
+    private Integer widthMm;
+    private Integer heightMm;
+    /** País de origen (COO), código ISO-2 (ej. CN). */
+    private String countryOfOrigin;
+    /** Código arancelario HS. */
+    private String hsCode;
+    /** Certificaciones (CE, RoHS, FDA…). */
+    private List<String> certifications;
+    /** País/almacén de despacho, código ISO-2. */
+    private String shipFrom;
+    /** Plazo de despacho del proveedor, en días. */
+    private Integer leadTimeDays;
+    /** URL del vídeo principal. */
+    private String videoUrl;
+
+    /** Precios escalonados por cantidad (tiered pricing). */
+    private List<BulkTier> tieredPricing;
+
+    /** Un tramo de precio por cantidad. */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class BulkTier {
+        private Integer minQty;
+        private Integer maxQty;
+        private BigDecimal unitPrice;
+        private String currency;
+    }
 }
