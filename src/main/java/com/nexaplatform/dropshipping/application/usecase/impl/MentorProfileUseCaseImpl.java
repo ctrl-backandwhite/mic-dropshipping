@@ -47,6 +47,10 @@ public class MentorProfileUseCaseImpl implements MentorProfileUseCase {
             if (email.endsWith("@partners.nx036.local")) {
                 return false;
             }
+            // DROP-667: QA/test accounts must not surface as public mentors.
+            if (name.toUpperCase().startsWith("QA ") || email.contains("qa-") || email.endsWith("@example.com")) {
+                return false;
+            }
             return true;
         }).toList();
     }

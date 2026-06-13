@@ -45,6 +45,8 @@ public class WebhookDispatcherService {
 
     private final WebhookSubscriptionRepository subscriptionRepository;
     private final WebhookDeliveryRepository deliveryRepository;
+    /** DROP-663: the same lifecycle events are also delivered to active partner apps. */
+    private final PartnerWebhookDispatcherService partnerWebhooks;
     /** Local mapper with JavaTimeModule so payloads carrying Instant/LocalDate serialize cleanly. */
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
@@ -54,6 +56,8 @@ public class WebhookDispatcherService {
     /** Publish an event to every active subscription that listens to {@code eventType}. */
     @Transactional
     public void publish(String eventType, String eventId, Map<String, Object> data) {
+        // DROP-663: fan the event out to active partner apps too (recorded in partner_webhook_delivery).
+        partnerWebhooks.publish(eventType, eventId, data);
         List<WebhookSubscriptionEntity> subs = subscriptionRepository.findByActiveTrue();
         if (subs.isEmpty())
             return;

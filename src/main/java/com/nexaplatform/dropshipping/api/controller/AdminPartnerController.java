@@ -9,14 +9,17 @@ import com.nexaplatform.dropshipping.api.dto.out.AdminPartnerAppDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminPartnerWebhookDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminShopConnectionDtoOut;
 import com.nexaplatform.dropshipping.api.mapper.AdminPartnerMapper;
+import com.nexaplatform.dropshipping.application.service.PartnerWebhookDispatcherService;
 import com.nexaplatform.dropshipping.application.usecase.AdminPartnerUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Admin Partners controller. Pure implementation of {@link AdminPartnerApi}:
@@ -31,6 +34,7 @@ public class AdminPartnerController implements AdminPartnerApi {
 
     private final AdminPartnerMapper mapper;
     private final AdminPartnerUseCase useCase;
+    private final PartnerWebhookDispatcherService partnerWebhooks;
 
     @Override
     public ResponseEntity<List<AdminOAuthClientDtoOut>> oauthClients() {
@@ -67,6 +71,13 @@ public class AdminPartnerController implements AdminPartnerApi {
     public ResponseEntity<Void> deleteOAuthClient(String id) {
         useCase.deleteOAuthClient(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /** DROP-663: fire a test webhook to every active partner app so the deliveries panel populates. */
+    @PostMapping("/webhooks/test")
+    public ResponseEntity<Map<String, Object>> testWebhooks() {
+        int queued = partnerWebhooks.dispatchTestToAll();
+        return ResponseEntity.ok(Map.of("queued", queued));
     }
 
     private static AdminOAuthClientCreatedDtoOut toCreatedDtoOut(AdminOAuthClientCreated c) {

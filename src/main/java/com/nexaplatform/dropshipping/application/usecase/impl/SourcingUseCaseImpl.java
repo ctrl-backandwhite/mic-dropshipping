@@ -58,10 +58,15 @@ public class SourcingUseCaseImpl implements SourcingUseCase {
         if (used >= quota)
             throw new BusinessException("Sourcing quota reached for plan " + plan + " (" + used + "/" + quota + ")");
 
+        // DROP-662: validate the field is a real http(s) URL of a supported marketplace and
+        // block the request otherwise (the form used to accept any free text).
+        String low = url == null ? "" : url.trim().toLowerCase();
+        if (!low.startsWith("http://") && !low.startsWith("https://")) {
+            throw new BusinessException("Introduce una URL http(s) válida.");
+        }
         // Detect source from URL.
         String src = null;
         String ext = null;
-        String low = url.toLowerCase();
         if (low.contains("1688.com"))
             src = "1688";
         else if (low.contains("taobao.com"))
@@ -70,8 +75,15 @@ public class SourcingUseCaseImpl implements SourcingUseCase {
             src = "aliexpress";
         else if (low.contains("ebay.com"))
             src = "ebay";
+        else if (low.contains("amazon."))
+            src = "amazon";
+        if (src == null) {
+            throw new BusinessException(
+                    "Marketplace no soportado. Usa 1688, Taobao, AliExpress, eBay o Amazon.");
+        }
 
-        SourcingRequest model = SourcingRequest.builder().userId(userId).sourceUrl(url).source(src).externalId(ext)
+        SourcingRequest model = SourcingRequest.builder().userId(userId).sourceUrl(url.trim()).source(src)
+                .externalId(ext)
                 .status("PENDING").titleHint(titleHint).notes(notes).planQuota(plan).build();
         return withQuotesCount(sourcingRequestRepository.save(model));
     }
