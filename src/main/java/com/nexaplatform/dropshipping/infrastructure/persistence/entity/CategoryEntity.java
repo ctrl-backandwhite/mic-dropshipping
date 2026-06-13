@@ -55,6 +55,6 @@ public class CategoryEntity extends BaseEntity {
     private String icon;
 
     @Builder.Default
-    @OneToMany(mappedBy = "category", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "category", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<CategoryTranslationEntity> translations = new ArrayList<>();
 }

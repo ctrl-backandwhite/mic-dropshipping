@@ -26,4 +26,8 @@ public class BulkCategoryDtoIn {
     private String icon;
 
     private Integer position;
+
+    /** Optional slug of the parent category (for sub-categories). The parent must already exist
+     *  or appear earlier in the same import batch; omit it for top-level categories. */
+    private String parentSlug;
 }

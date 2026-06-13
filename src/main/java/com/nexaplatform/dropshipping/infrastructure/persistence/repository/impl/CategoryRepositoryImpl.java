@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -91,7 +92,7 @@ public class CategoryRepositoryImpl implements CategoryRepository {
         entity.setActive(model.getActive() != null && model.getActive());
         entity.setIcon(model.getIcon());
         entity.setParent(resolveParent(model.getParentId()));
-        entity.setTranslations(buildTranslations(entity, model.getNames()));
+        upsertTranslations(entity, model.getNames());
     }
 
     /** Resolves the parent category from its id, failing if it does not exist. */
@@ -103,19 +104,39 @@ public class CategoryRepositoryImpl implements CategoryRepository {
                 .orElseThrow(() -> new NotFoundException("Parent category"));
     }
 
-    /** Rebuilds the translation rows from the {language -> name} map. */
-    private List<CategoryTranslationEntity> buildTranslations(CategoryEntity c, Map<String, String> names) {
-        List<CategoryTranslationEntity> out = new ArrayList<>();
-        if (names == null) {
-            return out;
+    /**
+     * Upserts translation rows <em>in place</em> on the managed collection: existing languages
+     * have their name updated, genuinely new languages are added and languages no longer present
+     * are dropped (orphanRemoval deletes them). Reusing the existing rows is what prevents the
+     * duplicate-key violation on {@code (category_id, language)} that replacing the whole
+     * collection caused on every edit.
+     */
+    private void upsertTranslations(CategoryEntity c, Map<String, String> names) {
+        if (c.getTranslations() == null) {
+            c.setTranslations(new ArrayList<>());
         }
-        for (Map.Entry<String, String> e : names.entrySet()) {
-            if (e.getValue() == null || e.getValue().isBlank()) {
-                continue;
+        Map<String, String> wanted = new HashMap<>();
+        if (names != null) {
+            for (Map.Entry<String, String> e : names.entrySet()) {
+                if (e.getValue() != null && !e.getValue().isBlank()) {
+                    wanted.put(e.getKey().toLowerCase(), e.getValue());
+                }
             }
-            out.add(CategoryTranslationEntity.builder().category(c).language(e.getKey().toLowerCase())
-                    .name(e.getValue()).build());
         }
-        return out;
+        List<CategoryTranslationEntity> current = c.getTranslations();
+        // Drop languages no longer wanted (orphanRemoval deletes the row).
+        current.removeIf(tr -> !wanted.containsKey(tr.getLanguage()));
+        // Update the rows we keep, consuming them from `wanted` so only new languages remain.
+        for (CategoryTranslationEntity tr : current) {
+            String name = wanted.remove(tr.getLanguage());
+            if (name != null) {
+                tr.setName(name);
+            }
+        }
+        // Add the genuinely new languages.
+        for (Map.Entry<String, String> e : wanted.entrySet()) {
+            current.add(CategoryTranslationEntity.builder().category(c).language(e.getKey()).name(e.getValue())
+                    .build());
+        }
     }
 }

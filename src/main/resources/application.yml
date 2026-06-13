@@ -257,6 +257,9 @@ nexadrop:
 
   demo-seed:
     enabled: ${DEMO_SEED_ENABLED:true}
+  # Per-category catalog top-up (CategoryProductFiller). Disable in deployments that load real data.
+  catalog-fill:
+    enabled: ${CATALOG_FILL_ENABLED:true}
 
   currency:
     access-key: ${NEXADROP_CURRENCY_ACCESS_KEY:}

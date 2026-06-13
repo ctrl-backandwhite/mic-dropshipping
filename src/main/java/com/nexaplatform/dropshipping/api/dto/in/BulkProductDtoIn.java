@@ -42,6 +42,9 @@ public class BulkProductDtoIn {
     /** Optional supplier external id (1688); first available supplier used when null. */
     private String supplierExternalId;
 
+    /** Optional product manufacturer (stored in the product's brand field). */
+    private String manufacturer;
+
     private List<String> imageUrls;
 
     /** ACTIVE (default) or DRAFT. */

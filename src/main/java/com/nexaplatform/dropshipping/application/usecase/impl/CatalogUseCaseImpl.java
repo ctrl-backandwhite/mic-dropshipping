@@ -765,7 +765,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         var variant = new IngestVariant(
                 externalId + "-DEF", externalId + "-DEF", esTitle, price, 100, null, java.util.Map.of());
         var tier = new IngestPriceTier(1, null, price, "CNY");
-        var req = new IngestProductRequest("1688", externalId, zhTitle, esDesc, esDesc, null,
+        var req = new IngestProductRequest("1688", externalId, zhTitle, esDesc, esDesc, r.getManufacturer(),
                 r.getMoq() != null ? r.getMoq() : 1, price, "CNY", null,
                 r.getMonthlySales() != null ? r.getMonthlySales() : 0, new java.math.BigDecimal("15"),
                 r.getRating() != null ? r.getRating() : new java.math.BigDecimal("4.5"), 0,
@@ -786,7 +786,15 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 String pt = (r.getNamePt() != null && !r.getNamePt().isBlank()) ? r.getNamePt() : r.getNameEs();
                 String en = (r.getNameEn() != null && !r.getNameEn().isBlank()) ? r.getNameEn() : r.getNameEs();
                 String zh = (r.getNameZh() != null && !r.getNameZh().isBlank()) ? r.getNameZh() : r.getNameEs();
-                upsertCategory(new IngestCategoryRequest(r.getSlug(), null, "1688", null, zh, position,
+                // Resolve the optional parent by slug (a parent listed earlier in the batch is
+                // already persisted, so it is visible here). An unknown slug fails just that row.
+                UUID parentId = null;
+                if (r.getParentSlug() != null && !r.getParentSlug().isBlank()) {
+                    parentId = categoryRepository.findBySlug(r.getParentSlug()).map(CategoryEntity::getId)
+                            .orElseThrow(() -> new BusinessException(
+                                    "Categoría padre no encontrada: " + r.getParentSlug()));
+                }
+                upsertCategory(new IngestCategoryRequest(r.getSlug(), parentId, "1688", null, zh, position,
                         r.getIcon() != null ? r.getIcon() : "tag",
                         java.util.Map.of("es", r.getNameEs(), "en", en, "pt", pt)));
                 created++;
