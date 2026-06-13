@@ -565,6 +565,23 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
+    public VariantView updateVariantPrice(UUID variantId, java.math.BigDecimal price) {
+        if (price == null || price.signum() < 0) {
+            throw new BusinessException("El precio de la variante debe ser ≥ 0");
+        }
+        ProductVariantEntity v = variantRepository.findById(variantId)
+                .orElseThrow(() -> new NotFoundException("Variant not found"));
+        v.setPrice(price);
+        ProductVariantEntity saved = variantRepository.save(v);
+        productIndexer.indexProduct(v.getProduct().getId());
+        return productMapper.toVariantView(saved);
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
     public void deleteVariant(UUID variantId) {
         ProductVariantEntity v = variantRepository.findById(variantId)
                 .orElseThrow(() -> new NotFoundException("Variant not found"));

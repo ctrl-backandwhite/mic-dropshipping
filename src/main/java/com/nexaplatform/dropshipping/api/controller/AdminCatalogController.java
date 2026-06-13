@@ -18,10 +18,15 @@ import com.nexaplatform.dropshipping.api.dto.out.ReindexResultDtoOut;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -95,6 +100,13 @@ public class AdminCatalogController implements AdminCatalogApi {
     @Override
     public ResponseEntity<VariantView> updateVariant(UUID id, AdminVariantUpsertDtoIn req) {
         return ResponseEntity.ok(catalogUseCase.updateVariant(id, req));
+    }
+
+    /** Edición inline del precio por variante (moneda canónica), sin tocar el resto de campos. */
+    @PutMapping("/variants/{id}/price")
+    public ResponseEntity<VariantView> updateVariantPrice(@PathVariable UUID id,
+            @RequestBody Map<String, BigDecimal> body) {
+        return ResponseEntity.ok(catalogUseCase.updateVariantPrice(id, body.get("price")));
     }
 
     @Override

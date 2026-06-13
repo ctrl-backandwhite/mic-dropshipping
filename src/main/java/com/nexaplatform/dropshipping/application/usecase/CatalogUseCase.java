@@ -60,6 +60,9 @@ public interface CatalogUseCase {
     /** Updates an existing variant and reindexes its product. */
     VariantView updateVariant(UUID variantId, AdminVariantUpsertDtoIn req);
 
+    /** Partial update: sets only the variant's price (en moneda canónica) sin tocar el resto. */
+    VariantView updateVariantPrice(UUID variantId, java.math.BigDecimal price);
+
     /** Deletes a variant and reindexes its product. */
     void deleteVariant(UUID variantId);
 
