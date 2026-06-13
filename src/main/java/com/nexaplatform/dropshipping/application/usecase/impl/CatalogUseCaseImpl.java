@@ -93,6 +93,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository variantRepository;
     private final com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer productIndexer;
+    private final com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer categoryIndexer;
     private final JdbcTemplate jdbcTemplate;
     private final StorageService storageService;
 
@@ -156,6 +157,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             // collection after the first save; without this they were silently dropped).
             entity = categoryRepository.save(entity);
         }
+        categoryIndexer.indexCategory(entity.getId());
         return entity;
     }
 

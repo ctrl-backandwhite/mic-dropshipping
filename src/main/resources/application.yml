@@ -227,6 +227,7 @@ nexadrop:
   opensearch:
     uris: ${OPENSEARCH_URIS:http://localhost:9400}
     products-index: products
+    categories-index: categories
 
   crawler:
     base-url: ${CRAWLER_URL:http://localhost:8001}

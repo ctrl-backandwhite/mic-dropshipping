@@ -30,6 +30,8 @@ class CategoryUseCaseImplTest {
     CategoryUpdateMapper categoryUpdateMapper;
     @Mock
     EntityManager em;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer categoryIndexer;
     @InjectMocks
     CategoryUseCaseImpl useCase;
 

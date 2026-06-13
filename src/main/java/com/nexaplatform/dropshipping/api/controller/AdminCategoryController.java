@@ -6,12 +6,15 @@ import com.nexaplatform.dropshipping.api.dto.out.AdminCategoryDtoOut;
 import com.nexaplatform.dropshipping.api.mapper.AdminCategoryMapper;
 import com.nexaplatform.dropshipping.application.usecase.CategoryUseCase;
 import com.nexaplatform.dropshipping.domain.model.Category;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -26,10 +29,17 @@ public class AdminCategoryController implements AdminCategoryApi {
 
     private final AdminCategoryMapper mapper;
     private final CategoryUseCase useCase;
+    private final CategoryIndexer categoryIndexer;
 
     @Override
     public ResponseEntity<List<AdminCategoryDtoOut>> list() {
         return ResponseEntity.ok(mapper.toDtoOutList(useCase.findAll()));
+    }
+
+    /** Reindexa todas las categorías en OpenSearch (botón "Reindexar" del admin). */
+    @PostMapping("/reindex")
+    public ResponseEntity<Map<String, Object>> reindex() {
+        return ResponseEntity.ok(Map.of("indexed", categoryIndexer.reindexAll()));
     }
 
     @Override

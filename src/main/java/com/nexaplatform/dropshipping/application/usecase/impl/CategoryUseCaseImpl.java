@@ -34,6 +34,7 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
 
     private final CategoryRepository categoryRepository;
     private final CategoryUpdateMapper categoryUpdateMapper;
+    private final com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer categoryIndexer;
 
     @PersistenceContext
     private EntityManager em;
@@ -55,6 +56,7 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
         Category model = getById(id);
         model.setActive(!Boolean.TRUE.equals(model.getActive()));
         Category saved = categoryRepository.update(model);
+        categoryIndexer.indexCategory(id);
         saved.setProductCount(0L);
         return saved;
     }
@@ -84,6 +86,7 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
             existing.setParentId(null);
         }
         Category saved = categoryRepository.update(existing);
+        categoryIndexer.indexCategory(id);
         log.info("::> [CATALOG] Category updated id={}", id);
         saved.setProductCount(productCount(id));
         return saved;
@@ -103,6 +106,7 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
             throw new BusinessException("Cannot delete: " + children + " sub-categories still depend on this category");
         }
         categoryRepository.delete(id);
+        categoryIndexer.deleteFromIndex(id);
         log.info("::> [CATALOG] Category deleted id={}", id);
     }
 
