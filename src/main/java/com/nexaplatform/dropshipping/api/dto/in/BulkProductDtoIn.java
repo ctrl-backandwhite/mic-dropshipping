@@ -91,6 +91,12 @@ public class BulkProductDtoIn {
     /** Combinaciones concretas (SKU) con stock y precio por variante. */
     private List<BulkVariant> variants;
 
+    /** Atributos taxonómicos para facetas: [{key:"material", value:"algodón"}]. */
+    private List<BulkAttr> attributes;
+
+    /** Ficha técnica por idioma: [{locale:"es", key:"Material", value:"Algodón", position:0}]. */
+    private List<BulkSpec> specifications;
+
     /** Un tramo de precio por cantidad. */
     @Data
     @NoArgsConstructor
@@ -121,5 +127,25 @@ public class BulkProductDtoIn {
         private BigDecimal price;
         private Integer stock;
         private String imageUrl;
+    }
+
+    /** Un atributo taxonómico (faceta). */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class BulkAttr {
+        private String key;
+        private String value;
+    }
+
+    /** Una fila de ficha técnica por idioma. */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class BulkSpec {
+        private String locale;
+        private String key;
+        private String value;
+        private Integer position;
     }
 }

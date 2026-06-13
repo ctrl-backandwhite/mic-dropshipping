@@ -33,7 +33,9 @@ import com.nexaplatform.dropshipping.infrastructure.messaging.ProductIngestedEve
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductAttributeEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductSpecificationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductPriceTierEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierEntity;
@@ -41,7 +43,9 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantOp
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductAttributeRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductImageRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductSpecificationRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierRepository;
 import lombok.RequiredArgsConstructor;
@@ -95,6 +99,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository variantRepository;
     private final com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer productIndexer;
     private final com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer categoryIndexer;
+    private final ProductAttributeRepository productAttributeRepository;
+    private final ProductSpecificationRepository productSpecificationRepository;
     private final JdbcTemplate jdbcTemplate;
     private final StorageService storageService;
 
@@ -859,6 +865,31 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (r.getVideoUrl() != null && !r.getVideoUrl().isBlank()) {
             p.setVideoUrl(r.getVideoUrl());
             p.setHasVideo(true);
+        }
+        // Atributos taxonómicos (facetas): se reemplazan en cada import.
+        if (r.getAttributes() != null && !r.getAttributes().isEmpty()) {
+            productAttributeRepository.deleteAll(productAttributeRepository.findByProduct_Id(p.getId()));
+            for (var a : r.getAttributes()) {
+                if (a.getKey() != null && !a.getKey().isBlank() && a.getValue() != null && !a.getValue().isBlank()) {
+                    productAttributeRepository.save(ProductAttributeEntity.builder().product(p).attrKey(a.getKey())
+                            .attrValue(a.getValue()).createdAt(Instant.now()).build());
+                }
+            }
+        }
+        // Ficha técnica por idioma: se reemplaza en cada import.
+        if (r.getSpecifications() != null && !r.getSpecifications().isEmpty()) {
+            productSpecificationRepository
+                    .deleteAll(productSpecificationRepository.findByProduct_IdOrderByPositionAsc(p.getId()));
+            int sp = 0;
+            for (var s : r.getSpecifications()) {
+                if (s.getKey() != null && !s.getKey().isBlank() && s.getValue() != null && !s.getValue().isBlank()) {
+                    productSpecificationRepository.save(ProductSpecificationEntity.builder().product(p)
+                            .locale(s.getLocale() != null && !s.getLocale().isBlank() ? s.getLocale() : "es")
+                            .specKey(s.getKey()).specValue(s.getValue())
+                            .position(s.getPosition() != null ? s.getPosition() : sp).createdAt(Instant.now()).build());
+                }
+                sp++;
+            }
         }
         // Las traducciones (título + descripción por idioma) las fija el writer dentro de su transacción.
     }
