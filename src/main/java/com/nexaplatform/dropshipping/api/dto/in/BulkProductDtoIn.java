@@ -85,6 +85,12 @@ public class BulkProductDtoIn {
     /** Precios escalonados por cantidad (tiered pricing). */
     private List<BulkTier> tieredPricing;
 
+    /** Ejes de variación (Color, Talla…) con sus valores posibles. */
+    private List<BulkAxis> variantAxes;
+
+    /** Combinaciones concretas (SKU) con stock y precio por variante. */
+    private List<BulkVariant> variants;
+
     /** Un tramo de precio por cantidad. */
     @Data
     @NoArgsConstructor
@@ -94,5 +100,26 @@ public class BulkProductDtoIn {
         private Integer maxQty;
         private BigDecimal unitPrice;
         private String currency;
+    }
+
+    /** Un eje de variación: {"name":"Color","values":["Blanco","Negro"]}. */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class BulkAxis {
+        private String name;
+        private List<String> values;
+    }
+
+    /** Una variante/SKU: {"sku":"...","optionValues":{"Color":"Blanco","Talla":"42"},"price":..,"stock":..}. */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class BulkVariant {
+        private String sku;
+        private java.util.Map<String, String> optionValues;
+        private BigDecimal price;
+        private Integer stock;
+        private String imageUrl;
     }
 }

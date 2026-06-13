@@ -8,6 +8,7 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariant;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariantOption;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariantValue;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
 import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
@@ -769,8 +770,39 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 images.add(new IngestImage(
                         r.getImageUrls().get(k), k, k == 0 ? "MAIN" : "GALLERY"));
         }
-        var variant = new IngestVariant(
-                externalId + "-DEF", externalId + "-DEF", esTitle, price, 100, null, java.util.Map.of());
+        // Ejes de variación (Color/Talla) desde el JSON.
+        java.util.List<IngestVariantOption> options = new java.util.ArrayList<>();
+        if (r.getVariantAxes() != null) {
+            for (var ax : r.getVariantAxes()) {
+                if (ax.getName() == null || ax.getName().isBlank()) {
+                    continue;
+                }
+                java.util.List<IngestVariantValue> vals = new java.util.ArrayList<>();
+                if (ax.getValues() != null) {
+                    int vp = 0;
+                    for (String val : ax.getValues()) {
+                        vals.add(new IngestVariantValue(val, vp++, null));
+                    }
+                }
+                options.add(new IngestVariantOption(ax.getName(), options.size(), vals));
+            }
+        }
+        // Variantes/SKU desde el JSON; si no vienen, una variante por defecto.
+        java.util.List<IngestVariant> variants = new java.util.ArrayList<>();
+        if (r.getVariants() != null && !r.getVariants().isEmpty()) {
+            int vi = 0;
+            for (var v : r.getVariants()) {
+                String sku = (v.getSku() != null && !v.getSku().isBlank()) ? v.getSku()
+                        : externalId + "-" + (vi + 1);
+                variants.add(new IngestVariant(sku, sku, esTitle,
+                        v.getPrice() != null ? v.getPrice() : price, v.getStock() != null ? v.getStock() : 0,
+                        v.getImageUrl(), v.getOptionValues() != null ? v.getOptionValues() : java.util.Map.of()));
+                vi++;
+            }
+        } else {
+            variants.add(new IngestVariant(externalId + "-DEF", externalId + "-DEF", esTitle, price, 100, null,
+                    java.util.Map.of()));
+        }
         // Tiered pricing: usar los tramos del JSON si vienen; si no, un tramo único.
         java.util.List<IngestPriceTier> tiers = new java.util.ArrayList<>();
         if (r.getTieredPricing() != null && !r.getTieredPricing().isEmpty()) {
@@ -787,7 +819,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 r.getMonthlySales() != null ? r.getMonthlySales() : 0, new java.math.BigDecimal("15"),
                 r.getRating() != null ? r.getRating() : new java.math.BigDecimal("4.5"), 0,
                 "https://detail.1688.com/offer/" + externalId + ".html", supplierId, cat.getId(), images,
-                java.util.List.<IngestVariantOption>of(), java.util.List.of(variant), tiers);
+                options, variants, tiers);
         String ptTitle = (r.getTitlePt() != null && !r.getTitlePt().isBlank()) ? r.getTitlePt() : esTitle;
         // El writer corre @Transactional: aplica títulos+descripciones por idioma y la logística
         // (vía el hook) sobre la entidad gestionada, evitando LazyInitialization.
