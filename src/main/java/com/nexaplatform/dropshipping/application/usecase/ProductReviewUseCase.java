@@ -15,4 +15,7 @@ public interface ProductReviewUseCase extends BaseUseCase<ProductReview, Product
      * the storefront DtoOut.
      */
     ProductReviewPage list(UUID productId, int page, int size, Short minRating);
+
+    /** Crea una reseña (aprobada) y recalcula la valoración media y el contador del producto. */
+    ProductReview create(UUID productId, ProductReview review);
 }

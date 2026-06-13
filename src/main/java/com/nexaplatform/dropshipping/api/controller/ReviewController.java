@@ -1,11 +1,16 @@
 package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.ReviewApi;
+import com.nexaplatform.dropshipping.api.dto.in.CreateReviewDtoIn;
+import com.nexaplatform.dropshipping.api.dto.out.ReviewItemDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.ReviewListDtoOut;
 import com.nexaplatform.dropshipping.api.mapper.ReviewDtoMapper;
 import com.nexaplatform.dropshipping.application.usecase.ProductReviewUseCase;
+import com.nexaplatform.dropshipping.domain.model.ProductReview;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -28,5 +33,14 @@ public class ReviewController implements ReviewApi {
     @Override
     public ResponseEntity<ReviewListDtoOut> list(UUID productId, int page, int size, Short minRating) {
         return ResponseEntity.ok(mapper.toListDtoOut(useCase.list(productId, page, size, minRating)));
+    }
+
+    @Override
+    public ResponseEntity<ReviewItemDtoOut> create(UUID productId, CreateReviewDtoIn req, Authentication auth) {
+        String authorName = req.getAuthorName() != null && !req.getAuthorName().isBlank() ? req.getAuthorName()
+                : (auth != null ? auth.getName() : null);
+        ProductReview model = ProductReview.builder().rating(req.getRating()).title(req.getTitle()).body(req.getBody())
+                .language(req.getLanguage()).authorName(authorName).authorCountry(req.getAuthorCountry()).build();
+        return new ResponseEntity<>(mapper.toItem(useCase.create(productId, model)), HttpStatus.CREATED);
     }
 }

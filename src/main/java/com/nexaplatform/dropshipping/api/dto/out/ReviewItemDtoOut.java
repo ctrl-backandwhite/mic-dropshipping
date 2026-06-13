@@ -46,6 +46,8 @@ public class ReviewItemDtoOut {
     @Schema(description = "Number of helpful votes")
     private int helpfulCount;
 
+    private String language;
+
     @Schema(description = "Whether the purchase was verified")
     private boolean verifiedPurchase;
 

@@ -52,4 +52,7 @@ public class ProductReviewEntity extends BaseEntity {
     @Column(nullable = false)
     @Builder.Default
     private boolean approved = true;
+
+    @Column(length = 8)
+    private String language;
 }

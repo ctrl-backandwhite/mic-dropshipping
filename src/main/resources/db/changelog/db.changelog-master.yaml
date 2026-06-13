@@ -99,3 +99,5 @@ databaseChangeLog:
       file: db/changelog/schema-v44-product-intl-fields.sql
   - include:
       file: db/changelog/schema-v45-clear-price-rules.sql
+  - include:
+      file: db/changelog/schema-v46-review-language.sql

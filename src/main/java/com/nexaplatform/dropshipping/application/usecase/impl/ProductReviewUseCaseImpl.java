@@ -29,6 +29,8 @@ public class ProductReviewUseCaseImpl implements ProductReviewUseCase {
 
     private final ProductReviewRepository productReviewRepository;
     private final ProductRepository productRepo;
+    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductReviewJpaRepositoryAdapter reviewJpa;
+    private final com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductReviewEntityMapper reviewEntityMapper;
 
     /** Lists approved reviews for a product with a rating histogram and average. */
     @Override
@@ -55,5 +57,32 @@ public class ProductReviewUseCaseImpl implements ProductReviewUseCase {
         return ProductReviewPage.builder().items(items).page(page).size(pr.getPageSize())
                 .totalElements(result.getTotalElements()).totalPages(result.getTotalPages()).distribution(dist)
                 .averageRating(Math.round(avg * 10) / 10.0).build();
+    }
+
+    @Override
+    @Transactional
+    public ProductReview create(UUID productId, ProductReview review) {
+        var product = productRepo.findById(productId).orElseThrow(() -> new NotFoundException("Product"));
+        short rating = (short) Math.max(1, Math.min(5, review.getRating()));
+        var entity = com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductReviewEntity.builder()
+                .product(product)
+                .authorName(review.getAuthorName() != null && !review.getAuthorName().isBlank()
+                        ? review.getAuthorName() : "Anónimo")
+                .authorCountry(review.getAuthorCountry()).rating(rating).title(review.getTitle()).body(review.getBody())
+                .language(review.getLanguage() != null && !review.getLanguage().isBlank()
+                        ? review.getLanguage().toLowerCase() : "es")
+                .helpfulCount(0).verifiedPurchase(false).approved(true).build();
+        var saved = reviewJpa.save(entity);
+
+        // Recalcular media y contador del producto (solo reseñas aprobadas).
+        Map<Integer, Long> dist = productReviewRepository.ratingDistribution(productId);
+        long total = dist.values().stream().mapToLong(Long::longValue).sum();
+        double avg = total == 0 ? 0.0
+                : dist.entrySet().stream().mapToDouble(e -> e.getKey() * e.getValue()).sum() / total;
+        product.setReviewCount((int) total);
+        product.setRating(java.math.BigDecimal.valueOf(Math.round(avg * 100) / 100.0));
+        productRepo.save(product);
+
+        return reviewEntityMapper.toDomain(saved);
     }
 }

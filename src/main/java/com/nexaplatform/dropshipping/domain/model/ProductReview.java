@@ -35,6 +35,7 @@ public class ProductReview {
     private int helpfulCount;
     private boolean verifiedPurchase;
     private boolean approved;
+    private String language;
     private Instant createdAt;
     private Instant updatedAt;
     private String createdBy;
