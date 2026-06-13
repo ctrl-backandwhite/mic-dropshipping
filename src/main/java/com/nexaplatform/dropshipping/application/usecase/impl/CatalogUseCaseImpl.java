@@ -148,8 +148,13 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         entity = categoryRepository.save(entity);
         if (req.nameTranslations() != null) {
             for (Map.Entry<String, String> e : req.nameTranslations().entrySet()) {
-                upsertCategoryTranslation(entity, e.getKey(), e.getValue());
+                if (e.getValue() != null && !e.getValue().isBlank()) {
+                    upsertCategoryTranslation(entity, e.getKey(), e.getValue());
+                }
             }
+            // Re-save so the cascade actually persists the translation rows (they are added to the
+            // collection after the first save; without this they were silently dropped).
+            entity = categoryRepository.save(entity);
         }
         return entity;
     }
@@ -782,6 +787,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         for (int i = 0; i < rows.size(); i++) {
             var r = rows.get(i);
             try {
+                if (r.getNameEs() == null || r.getNameEs().isBlank()) {
+                    throw new BusinessException("nameEs es obligatorio");
+                }
                 int position = r.getPosition() != null ? r.getPosition() : (int) (categoryRepository.count() + 1);
                 String pt = (r.getNamePt() != null && !r.getNamePt().isBlank()) ? r.getNamePt() : r.getNameEs();
                 String en = (r.getNameEn() != null && !r.getNameEn().isBlank()) ? r.getNameEn() : r.getNameEs();
