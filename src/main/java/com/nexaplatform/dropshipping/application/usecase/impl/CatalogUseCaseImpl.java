@@ -1004,8 +1004,17 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         String ptTitle = (r.getTitlePt() != null && !r.getTitlePt().isBlank()) ? r.getTitlePt() : esTitle;
         // El writer corre @Transactional: aplica títulos+descripciones por idioma y la logística
         // (vía el hook) sobre la entidad gestionada, evitando LazyInitialization.
-        return catalogFillWriter.write(req, esTitle, enTitle, ptTitle, zhTitle, esDesc, r.getDescriptionEn(),
+        UUID id = catalogFillWriter.write(req, esTitle, enTitle, ptTitle, zhTitle, esDesc, r.getDescriptionEn(),
                 r.getDescriptionPt(), r.getDescriptionZh(), p -> applyLogistics(p, r));
+        // El writer publica como ACTIVE por defecto; si el operador pidió DRAFT, se respeta.
+        if (r.getStatus() != null && "DRAFT".equalsIgnoreCase(r.getStatus().trim())) {
+            productJpaRepository.findById(id).ifPresent(pp -> {
+                pp.setStatus(ProductStatus.DRAFT);
+                productJpaRepository.save(pp);
+                productIndexer.indexProduct(id);
+            });
+        }
+        return id;
     }
 
     /** Fija los campos de logística/aduana sobre la entidad gestionada (dentro de la transacción del writer). */
