@@ -37,6 +37,10 @@ public class ProductAttributeEntity {
     @Column(name = "attr_value", nullable = false, length = 120)
     private String attrValue;
 
+    /** DROP-672: idioma del valor (es/en/pt/zh). NULL = neutral (facetas/filtrado). */
+    @Column(length = 8)
+    private String locale;
+
     @CreatedDate
     @Column(name = "created_at", updatable = false, nullable = false)
     private Instant createdAt;

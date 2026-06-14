@@ -103,3 +103,9 @@ databaseChangeLog:
       file: db/changelog/schema-v46-review-language.sql
   - include:
       file: db/changelog/schema-v47-variant-shipping-dims.sql
+  - include:
+      file: db/changelog/schema-v48-attribute-locale.sql
+  - include:
+      file: db/changelog/schema-v49-category-1688-mapping.sql
+  - include:
+      file: db/changelog/schema-v50-category-attribute-schema.sql

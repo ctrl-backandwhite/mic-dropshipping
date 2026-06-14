@@ -145,7 +145,8 @@ public interface StorefrontCatalogApi {
 
     @Operation(summary = "List the attributes of a product")
     @GetMapping("/products/{id}/attributes")
-    List<AttributeView> attributes(@PathVariable UUID id);
+    List<AttributeView> attributes(@PathVariable UUID id,
+            @RequestParam(name = "lang", defaultValue = "es") String lang);
 
     @Operation(summary = "List the tags of a product")
     @GetMapping("/products/{id}/tags")

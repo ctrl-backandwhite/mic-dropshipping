@@ -176,4 +176,50 @@ public class AdminCatalogController implements AdminCatalogApi {
     public ResponseEntity<BulkResultDtoOut> bulkCategories(List<BulkCategoryDtoIn> rows) {
         return ResponseEntity.ok(catalogUseCase.bulkCreateCategories(rows));
     }
+
+    /* ===================== DROP-677: mapeo categorías 1688 → interna ===================== */
+
+    @org.springframework.web.bind.annotation.GetMapping("/category-1688-mappings")
+    public ResponseEntity<List<com.nexaplatform.dropshipping.api.dto.out.Category1688MappingDtoOut>> listCategory1688Mappings() {
+        return ResponseEntity.ok(catalogUseCase.listCategory1688Mappings());
+    }
+
+    @org.springframework.web.bind.annotation.PostMapping("/category-1688-mappings")
+    public ResponseEntity<UUID> upsertCategory1688Mapping(@RequestBody Map<String, String> body) {
+        UUID categoryId = UUID.fromString(body.get("categoryId"));
+        UUID id = catalogUseCase.upsertCategory1688Mapping(body.get("external1688Id"), body.get("external1688Name"),
+                categoryId);
+        return ResponseEntity.ok(id);
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/category-1688-mappings/{id}")
+    public ResponseEntity<Void> deleteCategory1688Mapping(@PathVariable UUID id) {
+        catalogUseCase.deleteCategory1688Mapping(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /* ===================== DROP-670: esquema de atributos por categoría ===================== */
+
+    @org.springframework.web.bind.annotation.GetMapping("/categories/{categoryId}/attribute-schema")
+    public ResponseEntity<List<com.nexaplatform.dropshipping.api.dto.out.CategoryAttributeSchemaDtoOut>> listCategoryAttributeSchema(
+            @PathVariable UUID categoryId) {
+        return ResponseEntity.ok(catalogUseCase.listCategoryAttributeSchema(categoryId));
+    }
+
+    @org.springframework.web.bind.annotation.PostMapping("/categories/{categoryId}/attribute-schema")
+    public ResponseEntity<UUID> upsertCategoryAttributeSchema(@PathVariable UUID categoryId,
+            @RequestBody Map<String, Object> body) {
+        String attrKey = (String) body.get("attrKey");
+        String label = (String) body.get("label");
+        boolean required = Boolean.TRUE.equals(body.get("required"));
+        int position = body.get("position") instanceof Number n ? n.intValue() : 0;
+        return ResponseEntity.ok(catalogUseCase.upsertCategoryAttributeSchema(categoryId, attrKey, label, required,
+                position));
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/category-attribute-schema/{id}")
+    public ResponseEntity<Void> deleteCategoryAttributeSchema(@PathVariable UUID id) {
+        catalogUseCase.deleteCategoryAttributeSchema(id);
+        return ResponseEntity.noContent().build();
+    }
 }

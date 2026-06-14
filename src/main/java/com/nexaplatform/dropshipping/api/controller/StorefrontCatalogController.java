@@ -228,9 +228,25 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     @Override
     @Transactional(readOnly = true)
-    public List<AttributeView> attributes(UUID id) {
-        return attributeRepository.findByProduct_Id(id).stream()
-                .map(a -> new AttributeView(a.getAttrKey(), a.getAttrValue())).toList();
+    public List<AttributeView> attributes(UUID id, String lang) {
+        // DROP-672: se parte de los atributos neutrales (locale NULL) y se sobreescribe por clave con
+        // la variante traducida al idioma pedido cuando existe. Así el comprador ve el valor en su idioma
+        // sin perder los atributos que solo existen como neutrales.
+        var all = attributeRepository.findByProduct_Id(id);
+        java.util.LinkedHashMap<String, String> byKey = new java.util.LinkedHashMap<>();
+        for (var a : all) {
+            if (a.getLocale() == null) {
+                byKey.putIfAbsent(a.getAttrKey(), a.getAttrValue());
+            }
+        }
+        if (lang != null) {
+            for (var a : all) {
+                if (lang.equalsIgnoreCase(a.getLocale())) {
+                    byKey.put(a.getAttrKey(), a.getAttrValue());
+                }
+            }
+        }
+        return byKey.entrySet().stream().map(e -> new AttributeView(e.getKey(), e.getValue())).toList();
     }
 
     @Override

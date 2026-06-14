@@ -111,6 +111,14 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @org.springframework.context.annotation.Lazy
     private com.nexaplatform.dropshipping.infrastructure.seed.CatalogFillWriter catalogFillWriter;
 
+    // DROP-677: mapeo de categorías 1688 → interna (inyección por campo para no alterar el constructor).
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.nexaplatform.dropshipping.infrastructure.persistence.repository.Category1688MappingRepository category1688MappingRepository;
+
+    // DROP-670: esquema de atributos por categoría (inyección por campo para no alterar el constructor).
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryAttributeSchemaRepository categoryAttributeSchemaRepository;
+
     /* ============ Suppliers ============ */
 
     @Override
@@ -871,8 +879,28 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     /** Builds the heavy ingest request from a friendly row, persists it (via the writer) and returns its id. */
     private UUID buildAndWriteProduct(com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn r,
             java.util.List<SupplierEntity> suppliers) {
-        CategoryEntity cat = categoryRepository.findBySlug(r.getCategorySlug())
-                .orElseThrow(() -> new BusinessException("Categoría no encontrada: " + r.getCategorySlug()));
+        CategoryEntity cat = resolveBulkCategory(r);
+        // DROP-670: si la categoría define atributos obligatorios, el producto debe traerlos (integridad).
+        var requiredSchema = categoryAttributeSchemaRepository.findByCategory_IdOrderByPositionAsc(cat.getId()).stream()
+                .filter(com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryAttributeSchemaEntity::isRequired)
+                .map(com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryAttributeSchemaEntity::getAttrKey)
+                .toList();
+        if (!requiredSchema.isEmpty()) {
+            java.util.Set<String> provided = new java.util.HashSet<>();
+            if (r.getAttributes() != null) {
+                for (var a : r.getAttributes()) {
+                    if (a.getKey() != null && a.getValue() != null && !a.getValue().isBlank()) {
+                        provided.add(a.getKey().trim().toLowerCase());
+                    }
+                }
+            }
+            for (String key : requiredSchema) {
+                if (!provided.contains(key.toLowerCase())) {
+                    throw new BusinessException("Falta el atributo obligatorio '" + key + "' para la categoría "
+                            + cat.getSlug());
+                }
+            }
+        }
         // El proveedor se toma de supplierName; si no, del fabricante (manufacturer). Solo si no hay
         // ninguno se usa el primero por defecto.
         String supName = (r.getSupplierName() != null && !r.getSupplierName().isBlank()) ? r.getSupplierName()
@@ -1080,8 +1108,11 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             productAttributeRepository.deleteAll(productAttributeRepository.findByProduct_Id(p.getId()));
             for (var a : r.getAttributes()) {
                 if (a.getKey() != null && !a.getKey().isBlank() && a.getValue() != null && !a.getValue().isBlank()) {
+                    // DROP-672: locale opcional (es/en/pt/zh); en blanco = neutral (faceta).
+                    String loc = a.getLocale() != null && !a.getLocale().isBlank() ? a.getLocale().trim().toLowerCase()
+                            : null;
                     productAttributeRepository.save(ProductAttributeEntity.builder().product(p).attrKey(a.getKey())
-                            .attrValue(a.getValue()).createdAt(Instant.now()).build());
+                            .attrValue(a.getValue()).locale(loc).createdAt(Instant.now()).build());
                 }
             }
         }
@@ -1139,6 +1170,116 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             }
         }
         return new com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut(created, failed, errors);
+    }
+
+    /**
+     * DROP-677: resuelve la categoría interna del producto al importar. Prioridad: (1) categorySlug
+     * interno explícito; (2) mapeo por id de 1688; (3) mapeo por nombre de 1688. Si nada resuelve, se
+     * rechaza la fila (no se inventa una categoría).
+     */
+    private CategoryEntity resolveBulkCategory(com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn r) {
+        if (r.getCategorySlug() != null && !r.getCategorySlug().isBlank()) {
+            String slug = r.getCategorySlug().trim();
+            return categoryRepository.findBySlug(slug)
+                    .orElseThrow(() -> new BusinessException("Categoría no encontrada: " + slug));
+        }
+        if (r.getCategory1688Id() != null && !r.getCategory1688Id().isBlank()) {
+            var m = category1688MappingRepository.findByExternal1688Id(r.getCategory1688Id().trim());
+            if (m.isPresent()) {
+                return m.get().getCategory();
+            }
+        }
+        if (r.getCategory1688Name() != null && !r.getCategory1688Name().isBlank()) {
+            var m = category1688MappingRepository.findFirstByExternal1688NameIgnoreCase(r.getCategory1688Name().trim());
+            if (m.isPresent()) {
+                return m.get().getCategory();
+            }
+        }
+        throw new BusinessException(
+                "No se pudo resolver la categoría: indica categorySlug o un category1688Id/Name con mapeo definido");
+    }
+
+    @Override
+    @Transactional
+    public UUID upsertCategory1688Mapping(String external1688Id, String external1688Name, UUID categoryId) {
+        if (external1688Id == null || external1688Id.isBlank()) {
+            throw new BusinessException("external1688Id es obligatorio");
+        }
+        CategoryEntity cat = categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new NotFoundException("Category not found: " + categoryId));
+        var existing = category1688MappingRepository.findByExternal1688Id(external1688Id.trim());
+        var m = existing.orElseGet(
+                com.nexaplatform.dropshipping.infrastructure.persistence.entity.Category1688MappingEntity::new);
+        m.setExternal1688Id(external1688Id.trim());
+        m.setExternal1688Name(external1688Name != null && !external1688Name.isBlank() ? external1688Name.trim() : null);
+        m.setCategory(cat);
+        return category1688MappingRepository.save(m).getId();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<com.nexaplatform.dropshipping.api.dto.out.Category1688MappingDtoOut> listCategory1688Mappings() {
+        return category1688MappingRepository.findAll().stream()
+                .map(m -> new com.nexaplatform.dropshipping.api.dto.out.Category1688MappingDtoOut(m.getId(),
+                        m.getExternal1688Id(), m.getExternal1688Name(),
+                        m.getCategory() != null ? m.getCategory().getId() : null,
+                        m.getCategory() != null ? m.getCategory().getSlug() : null,
+                        categoryDisplayName(m.getCategory())))
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public void deleteCategory1688Mapping(UUID id) {
+        category1688MappingRepository.deleteById(id);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<com.nexaplatform.dropshipping.api.dto.out.CategoryAttributeSchemaDtoOut> listCategoryAttributeSchema(
+            UUID categoryId) {
+        return categoryAttributeSchemaRepository.findByCategory_IdOrderByPositionAsc(categoryId).stream()
+                .map(s -> new com.nexaplatform.dropshipping.api.dto.out.CategoryAttributeSchemaDtoOut(s.getId(),
+                        s.getCategory() != null ? s.getCategory().getId() : null, s.getAttrKey(), s.getLabel(),
+                        s.isRequired(), s.getPosition()))
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public UUID upsertCategoryAttributeSchema(UUID categoryId, String attrKey, String label, boolean required,
+            int position) {
+        if (attrKey == null || attrKey.isBlank()) {
+            throw new BusinessException("attrKey es obligatorio");
+        }
+        CategoryEntity cat = categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new NotFoundException("Category not found: " + categoryId));
+        var existing = categoryAttributeSchemaRepository.findByCategory_IdAndAttrKey(categoryId, attrKey.trim());
+        var s = existing.orElseGet(
+                com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryAttributeSchemaEntity::new);
+        s.setCategory(cat);
+        s.setAttrKey(attrKey.trim());
+        s.setLabel(label != null && !label.isBlank() ? label.trim() : null);
+        s.setRequired(required);
+        s.setPosition(position);
+        return categoryAttributeSchemaRepository.save(s).getId();
+    }
+
+    @Override
+    @Transactional
+    public void deleteCategoryAttributeSchema(UUID id) {
+        categoryAttributeSchemaRepository.deleteById(id);
+    }
+
+    /** Nombre legible de una categoría: traducción ES, si no nameZh, si no el slug. */
+    private String categoryDisplayName(CategoryEntity c) {
+        if (c == null) {
+            return null;
+        }
+        return c.getTranslations().stream().filter(tr -> "es".equalsIgnoreCase(tr.getLanguage())).findFirst()
+                .map(com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryTranslationEntity::getName)
+                .filter(n -> n != null && !n.isBlank())
+                .orElse(c.getNameZh() != null ? c.getNameZh() : c.getSlug());
     }
 
     private UUID resolveBulkSupplier(java.util.List<SupplierEntity> suppliers, String supplierExternalId,

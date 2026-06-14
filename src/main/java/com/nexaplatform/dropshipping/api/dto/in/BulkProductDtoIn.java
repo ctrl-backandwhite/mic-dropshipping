@@ -18,9 +18,17 @@ import java.util.List;
 @AllArgsConstructor
 public class BulkProductDtoIn {
 
-    /** Category slug the product belongs to (must already exist). */
-    @NotBlank
+    /**
+     * Slug de la categoría interna. DROP-677: ya NO es obligatorio; si se omite, la categoría se
+     * resuelve automáticamente desde category1688Id/category1688Name vía la tabla de mapeo.
+     */
     private String categorySlug;
+
+    /** DROP-677: id de la categoría de origen en 1688 (para resolución automática vía mapeo). */
+    private String category1688Id;
+
+    /** DROP-677: nombre de la categoría de origen en 1688 (resolución por nombre si no hay id mapeado). */
+    private String category1688Name;
 
     @NotBlank
     private String titleEs;
@@ -158,13 +166,15 @@ public class BulkProductDtoIn {
         private Integer heightMm;
     }
 
-    /** Un atributo taxonómico (faceta). */
+    /** Un atributo taxonómico (faceta). DROP-672: {@code locale} opcional para el valor traducido. */
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
     public static class BulkAttr {
         private String key;
         private String value;
+        /** es/en/pt/zh para un valor traducido; vacío/omitido = neutral (faceta). */
+        private String locale;
     }
 
     /** Una fila de ficha técnica por idioma. */

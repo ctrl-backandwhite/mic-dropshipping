@@ -54,6 +54,23 @@ public interface CatalogUseCase {
     /** DROP-679: rellena el SEO (meta_title/meta_description) faltante de productos ya activos. */
     int backfillMissingSeo();
 
+    /* ============ DROP-677: mapeo categorías 1688 → interna ============ */
+
+    UUID upsertCategory1688Mapping(String external1688Id, String external1688Name, UUID categoryId);
+
+    java.util.List<com.nexaplatform.dropshipping.api.dto.out.Category1688MappingDtoOut> listCategory1688Mappings();
+
+    void deleteCategory1688Mapping(UUID id);
+
+    /* ============ DROP-670: esquema de atributos por categoría ============ */
+
+    java.util.List<com.nexaplatform.dropshipping.api.dto.out.CategoryAttributeSchemaDtoOut> listCategoryAttributeSchema(
+            UUID categoryId);
+
+    UUID upsertCategoryAttributeSchema(UUID categoryId, String attrKey, String label, boolean required, int position);
+
+    void deleteCategoryAttributeSchema(UUID id);
+
     /** Lists a product's variants with their RAW stored price (admin manage view, no margin/currency). */
     java.util.List<VariantView> listVariantsForAdmin(UUID productId);
 
