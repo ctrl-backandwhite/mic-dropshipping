@@ -955,6 +955,24 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         log.info("::> [CATALOG] Product deleted id={}", id);
     }
 
+    /** Rellena el campo fijo de un idioma (título/descr.) desde el mapa `translations` si está vacío. */
+    private void mergeTranslationField(String lang,
+            java.util.Map<String, com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn.BulkTranslation> m,
+            java.util.function.Supplier<String> getTitle, java.util.function.Consumer<String> setTitle,
+            java.util.function.Supplier<String> getDesc, java.util.function.Consumer<String> setDesc) {
+        var tr = m.get(lang);
+        if (tr == null) {
+            return;
+        }
+        if ((getTitle.get() == null || getTitle.get().isBlank()) && tr.getTitle() != null && !tr.getTitle().isBlank()) {
+            setTitle.accept(tr.getTitle().trim());
+        }
+        if ((getDesc.get() == null || getDesc.get().isBlank()) && tr.getDescription() != null
+                && !tr.getDescription().isBlank()) {
+            setDesc.accept(tr.getDescription().trim());
+        }
+    }
+
     /** Builds the heavy ingest request from a friendly row, persists it (via the writer) and returns its id. */
     private UUID buildAndWriteProduct(com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn r,
             java.util.List<SupplierEntity> suppliers) {
@@ -985,6 +1003,27 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         String supName = (r.getSupplierName() != null && !r.getSupplierName().isBlank()) ? r.getSupplierName()
                 : r.getManufacturer();
         UUID supplierId = resolveBulkSupplier(suppliers, r.getSupplierExternalId(), supName);
+        // Idiomas ilimitados: si el contenido viene en el mapa `translations`, se rellenan los campos
+        // canónicos es/en/pt/zh donde falten (para slug/validación/writer); el resto de idiomas del
+        // mapa se upsertan luego en applyLogistics. Si no hay 'es' explícito, se usa el primer idioma
+        // disponible como canónico para que el alta no falle por requerir titleEs.
+        if (r.getTranslations() != null && !r.getTranslations().isEmpty()) {
+            var m = r.getTranslations();
+            mergeTranslationField("es", m, r::getTitleEs, r::setTitleEs, r::getDescriptionEs, r::setDescriptionEs);
+            mergeTranslationField("en", m, r::getTitleEn, r::setTitleEn, r::getDescriptionEn, r::setDescriptionEn);
+            mergeTranslationField("pt", m, r::getTitlePt, r::setTitlePt, r::getDescriptionPt, r::setDescriptionPt);
+            mergeTranslationField("zh", m, r::getTitleZh, r::setTitleZh, r::getDescriptionZh, r::setDescriptionZh);
+            if (r.getTitleEs() == null || r.getTitleEs().isBlank()) {
+                var any = m.values().stream().filter(t -> t != null && t.getTitle() != null && !t.getTitle().isBlank())
+                        .findFirst().orElse(null);
+                if (any != null) {
+                    r.setTitleEs(any.getTitle().trim());
+                    if (r.getDescriptionEs() == null || r.getDescriptionEs().isBlank()) {
+                        r.setDescriptionEs(any.getDescription());
+                    }
+                }
+            }
+        }
         String esTitle = r.getTitleEs();
         String enTitle = (r.getTitleEn() != null && !r.getTitleEn().isBlank()) ? r.getTitleEn() : esTitle;
         String zhTitle = (r.getTitleZh() != null && !r.getTitleZh().isBlank()) ? r.getTitleZh() : esTitle;
@@ -1321,6 +1360,32 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                             .position(s.getPosition() != null ? s.getPosition() : sp).createdAt(Instant.now()).build());
                 }
                 sp++;
+            }
+        }
+        // Contenido por idioma ILIMITADO: el writer fija es/en/pt/zh desde los campos fijos; aquí se
+        // upsertan las traducciones del mapa `translations` para CUALQUIER idioma (incl. fr/de/ja/…),
+        // sin duplicar (si ya existe el idioma, se actualiza). El mapa tiene prioridad (más explícito).
+        if (r.getTranslations() != null && !r.getTranslations().isEmpty()) {
+            for (var e : r.getTranslations().entrySet()) {
+                String lang = e.getKey() != null ? e.getKey().trim().toLowerCase() : null;
+                var tr = e.getValue();
+                if (lang == null || lang.isEmpty() || tr == null
+                        || (tr.getTitle() == null || tr.getTitle().isBlank())) {
+                    continue;
+                }
+                var existing = p.getTranslations().stream()
+                        .filter(t -> lang.equalsIgnoreCase(t.getLanguage())).findFirst().orElse(null);
+                if (existing == null) {
+                    existing = com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity
+                            .builder().product(p).language(lang).provider("bulk").build();
+                    p.getTranslations().add(existing);
+                }
+                existing.setTitle(tr.getTitle().trim());
+                String sd = tr.getShortDescription() != null && !tr.getShortDescription().isBlank()
+                        ? tr.getShortDescription().trim()
+                        : (tr.getDescription() != null ? tr.getDescription().trim() : tr.getTitle().trim());
+                existing.setShortDescription(sd != null && sd.length() > 2000 ? sd.substring(0, 2000) : sd);
+                existing.setDescription(tr.getDescription() != null ? tr.getDescription().trim() : sd);
             }
         }
         // Las traducciones (título + descripción por idioma) las fija el writer dentro de su transacción.

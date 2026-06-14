@@ -113,3 +113,5 @@ databaseChangeLog:
       file: db/changelog/schema-v51-variant-value-translation.sql
   - include:
       file: db/changelog/schema-v52-ship-from-widen.sql
+  - include:
+      file: db/changelog/schema-v53-store-language.sql

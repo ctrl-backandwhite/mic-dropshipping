@@ -54,7 +54,7 @@ public class ProductMapper {
     }
 
     public ProductDetailView toDetail(ProductEntity p, String language, List<ProductPriceTierEntity> tiers) {
-        ProductTranslationEntity tr = findTranslation(p.getTranslations(), language).orElse(null);
+        ProductTranslationEntity tr = resolveTranslation(p.getTranslations(), language);
         PricedAmount priced = pricingService.priceFor(p);
         return new ProductDetailView(p.getId(), p.getSlug(), p.getSource(), p.getExternalId(),
                 p.getSupplier() != null ? supplierMapper.toView(p.getSupplier()) : null,
@@ -146,6 +146,21 @@ public class ProductMapper {
         if (ts == null || lang == null)
             return Optional.empty();
         return ts.stream().filter(t -> lang.equalsIgnoreCase(t.getLanguage())).findFirst();
+    }
+
+    /**
+     * Traducción efectiva para mostrar: idioma pedido → inglés → primera disponible. Nunca cae al
+     * chino canónico salvo que no exista ninguna traducción (entonces devuelve null y el caller usa zh).
+     * Así un idioma sin traducción propia (fr/de/…) ve inglés, no el título original en chino.
+     */
+    private ProductTranslationEntity resolveTranslation(List<ProductTranslationEntity> ts, String lang) {
+        if (ts == null || ts.isEmpty()) {
+            return null;
+        }
+        return findTranslation(ts, lang)
+                .or(() -> findTranslation(ts, "en"))
+                .orElseGet(() -> ts.stream().filter(t -> t.getTitle() != null && !t.getTitle().isBlank())
+                        .findFirst().orElse(null));
     }
 
     private String pickImageUrl(ProductImageEntity img) {

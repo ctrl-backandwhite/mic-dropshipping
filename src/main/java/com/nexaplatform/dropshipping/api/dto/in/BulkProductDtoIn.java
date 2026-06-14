@@ -122,8 +122,24 @@ public class BulkProductDtoIn {
     /** Ficha técnica por idioma: [{locale:"es", key:"Material", value:"Algodón", position:0}]. */
     private List<BulkSpec> specifications;
 
+    /**
+     * Contenido por idioma en CUALQUIER idioma (ilimitado): {"fr": {"title":"…","description":"…"}, "ja": {…}}.
+     * Complementa/override a titleEs/En/Pt/Zh; permite cargar manualmente todos los idiomas que se deseen.
+     */
+    private java.util.Map<String, BulkTranslation> translations;
+
     /** Reseñas reales del producto (cada una con su idioma). */
     private List<BulkReview> reviews;
+
+    /** Título + descripción de un idioma. */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class BulkTranslation {
+        private String title;
+        private String shortDescription;
+        private String description;
+    }
 
     /** Una reseña real del producto, con su idioma. */
     @Data
