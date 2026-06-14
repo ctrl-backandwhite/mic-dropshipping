@@ -67,6 +67,8 @@ class CatalogUseCaseImplTest {
     @Mock
     com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductSpecificationRepository productSpecificationRepository;
     @Mock
+    com.nexaplatform.dropshipping.infrastructure.persistence.repository.VariantValueRepository variantValueRepository;
+    @Mock
     org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     @Mock
     com.nexaplatform.dropshipping.infrastructure.integration.storage.StorageService storageService;
@@ -78,7 +80,7 @@ class CatalogUseCaseImplTest {
         useCase = new CatalogUseCaseImpl(productRepository, supplierRepository, categoryRepository, priceTierRepository,
                 imageRepository, productJpaRepository, productMapper, catalogStorefrontMapper, kafkaTemplate,
                 variantRepository, productIndexer, categoryIndexer, productAttributeRepository,
-                productSpecificationRepository, jdbcTemplate, storageService);
+                productSpecificationRepository, variantValueRepository, jdbcTemplate, storageService);
     }
 
     @Test

@@ -63,6 +63,9 @@ public interface CatalogUseCase {
     /** Partial update: sets only the variant's price (en moneda canónica) sin tocar el resto. */
     VariantView updateVariantPrice(UUID variantId, java.math.BigDecimal price);
 
+    /** Renombra la etiqueta visible de un valor de variación (p.ej. un color) y reindexa el producto. */
+    void renameVariantValue(UUID valueId, String label);
+
     /** Deletes a variant and reindexes its product. */
     void deleteVariant(UUID variantId);
 

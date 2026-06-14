@@ -50,6 +50,9 @@ public class BulkProductDtoIn {
     /** Optional supplier external id (1688); first available supplier used when null. */
     private String supplierExternalId;
 
+    /** Nombre del proveedor/fábrica; si no existe se crea y se vincula (en vez de reutilizar el primero). */
+    private String supplierName;
+
     /** Optional product manufacturer (stored in the product's brand field). */
     private String manufacturer;
 

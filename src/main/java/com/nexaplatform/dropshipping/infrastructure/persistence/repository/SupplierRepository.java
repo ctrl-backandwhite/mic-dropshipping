@@ -8,4 +8,6 @@ import java.util.UUID;
 
 public interface SupplierRepository extends JpaRepository<SupplierEntity, UUID> {
     Optional<SupplierEntity> findBySourceAndExternalId(String source, String externalId);
+
+    Optional<SupplierEntity> findFirstByNameIgnoreCase(String name);
 }

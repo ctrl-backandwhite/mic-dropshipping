@@ -101,6 +101,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private final com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer categoryIndexer;
     private final ProductAttributeRepository productAttributeRepository;
     private final ProductSpecificationRepository productSpecificationRepository;
+    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.VariantValueRepository variantValueRepository;
     private final JdbcTemplate jdbcTemplate;
     private final StorageService storageService;
 
@@ -580,6 +581,19 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Override
     @Transactional
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true)})
+    public void renameVariantValue(UUID valueId, String label) {
+        var v = variantValueRepository.findById(valueId).orElseThrow(() -> new NotFoundException("Variant value"));
+        v.setValue(label != null && !label.isBlank() ? label.trim() : null);
+        variantValueRepository.save(v);
+        if (v.getOption() != null && v.getOption().getProduct() != null) {
+            productIndexer.indexProduct(v.getOption().getProduct().getId());
+        }
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
     public void deleteVariant(UUID variantId) {
@@ -778,7 +792,11 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             java.util.List<SupplierEntity> suppliers) {
         CategoryEntity cat = categoryRepository.findBySlug(r.getCategorySlug())
                 .orElseThrow(() -> new BusinessException("Categoría no encontrada: " + r.getCategorySlug()));
-        UUID supplierId = resolveBulkSupplier(suppliers, r.getSupplierExternalId());
+        // El proveedor se toma de supplierName; si no, del fabricante (manufacturer). Solo si no hay
+        // ninguno se usa el primero por defecto.
+        String supName = (r.getSupplierName() != null && !r.getSupplierName().isBlank()) ? r.getSupplierName()
+                : r.getManufacturer();
+        UUID supplierId = resolveBulkSupplier(suppliers, r.getSupplierExternalId(), supName);
         String esTitle = r.getTitleEs();
         String enTitle = (r.getTitleEn() != null && !r.getTitleEn().isBlank()) ? r.getTitleEn() : esTitle;
         String zhTitle = (r.getTitleZh() != null && !r.getTitleZh().isBlank()) ? r.getTitleZh() : esTitle;
@@ -983,11 +1001,25 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         return new com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut(created, failed, errors);
     }
 
-    private UUID resolveBulkSupplier(java.util.List<SupplierEntity> suppliers, String supplierExternalId) {
+    private UUID resolveBulkSupplier(java.util.List<SupplierEntity> suppliers, String supplierExternalId,
+            String supplierName) {
         if (supplierExternalId != null && !supplierExternalId.isBlank()) {
             return supplierRepository.findBySourceAndExternalId("1688", supplierExternalId)
                     .map(SupplierEntity::getId)
                     .orElseThrow(() -> new BusinessException("Proveedor no encontrado: " + supplierExternalId));
+        }
+        // Si se da el nombre del proveedor/fábrica, buscar o CREAR uno con ese nombre — no reutilizar
+        // el primer proveedor por defecto (causaba que una camiseta apuntara a la fábrica de zapatos).
+        if (supplierName != null && !supplierName.isBlank()) {
+            String name = supplierName.trim();
+            return supplierRepository.findFirstByNameIgnoreCase(name).map(SupplierEntity::getId).orElseGet(() -> {
+                String ext = "NAME-" + SLUG.slugify(name);
+                if (ext.length() > 100) {
+                    ext = ext.substring(0, 100);
+                }
+                return supplierRepository.save(SupplierEntity.builder().source("1688").externalId(ext).name(name)
+                        .verified(false).trustPass(false).build()).getId();
+            });
         }
         if (suppliers.isEmpty())
             throw new BusinessException("No hay proveedores; crea uno antes de importar productos");

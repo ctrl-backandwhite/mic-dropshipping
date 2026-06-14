@@ -109,6 +109,13 @@ public class AdminCatalogController implements AdminCatalogApi {
         return ResponseEntity.ok(catalogUseCase.updateVariantPrice(id, body.get("price")));
     }
 
+    /** Renombra la etiqueta visible de un valor de variación (p.ej. un color/estampado). */
+    @PutMapping("/variant-values/{id}/label")
+    public ResponseEntity<Void> renameVariantValue(@PathVariable UUID id, @RequestBody Map<String, String> body) {
+        catalogUseCase.renameVariantValue(id, body.get("value"));
+        return ResponseEntity.noContent().build();
+    }
+
     @Override
     public ResponseEntity<Void> deleteVariant(UUID id) {
         catalogUseCase.deleteVariant(id);
