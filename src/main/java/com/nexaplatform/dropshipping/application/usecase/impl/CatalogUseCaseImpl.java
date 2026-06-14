@@ -119,6 +119,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @org.springframework.beans.factory.annotation.Autowired
     private com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryAttributeSchemaRepository categoryAttributeSchemaRepository;
 
+    // Reseñas reales en la carga masiva (inyección por campo para no alterar el constructor).
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductReviewJpaRepositoryAdapter productReviewJpaRepositoryAdapter;
+
     /* ============ Suppliers ============ */
 
     @Override
@@ -1114,7 +1118,42 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 productIndexer.indexProduct(id);
             });
         }
+        createBulkReviews(id, r.getReviews());
         return id;
+    }
+
+    /** Crea las reseñas reales del producto desde la carga masiva (cada una con su idioma). */
+    private void createBulkReviews(UUID productId,
+            java.util.List<com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn.BulkReview> reviews) {
+        if (reviews == null || reviews.isEmpty()) {
+            return;
+        }
+        ProductEntity ref = productJpaRepository.findById(productId).orElse(null);
+        if (ref == null) {
+            return;
+        }
+        for (var rv : reviews) {
+            if ((rv.getBody() == null || rv.getBody().isBlank()) && (rv.getTitle() == null || rv.getTitle().isBlank())) {
+                continue;
+            }
+            short rating = rv.getRating() != null ? (short) Math.max(1, Math.min(5, rv.getRating())) : 5;
+            var e = com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductReviewEntity.builder()
+                    .product(ref)
+                    .authorName(rv.getAuthorName() != null && !rv.getAuthorName().isBlank() ? rv.getAuthorName().trim()
+                            : "Anónimo")
+                    .authorCountry(rv.getAuthorCountry())
+                    .rating(rating)
+                    .title(rv.getTitle())
+                    .body(rv.getBody())
+                    .tags(rv.getTags() != null ? String.join(",", rv.getTags()) : null)
+                    .verifiedPurchase(Boolean.TRUE.equals(rv.getVerifiedPurchase()))
+                    .approved(true)
+                    .language(rv.getLanguage() != null && !rv.getLanguage().isBlank()
+                            ? rv.getLanguage().trim().toLowerCase()
+                            : "es")
+                    .build();
+            productReviewJpaRepositoryAdapter.save(e);
+        }
     }
 
     /** Fija los campos de logística/aduana sobre la entidad gestionada (dentro de la transacción del writer). */

@@ -122,6 +122,25 @@ public class BulkProductDtoIn {
     /** Ficha técnica por idioma: [{locale:"es", key:"Material", value:"Algodón", position:0}]. */
     private List<BulkSpec> specifications;
 
+    /** Reseñas reales del producto (cada una con su idioma). */
+    private List<BulkReview> reviews;
+
+    /** Una reseña real del producto, con su idioma. */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class BulkReview {
+        private String authorName;
+        private String authorCountry;
+        private Integer rating;
+        private String title;
+        private String body;
+        /** Idioma de la reseña (es/en/pt/zh…). */
+        private String language;
+        private Boolean verifiedPurchase;
+        private List<String> tags;
+    }
+
     /** Un tramo de precio por cantidad. */
     @Data
     @NoArgsConstructor
