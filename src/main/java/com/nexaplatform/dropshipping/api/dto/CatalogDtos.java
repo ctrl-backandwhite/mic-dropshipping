@@ -104,7 +104,9 @@ public final class CatalogDtos {
             List<PriceTierView> priceTiers,
             // pricing
             BigDecimal costUsd, BigDecimal retailUsd, BigDecimal displayPrice, String displayCurrency,
-            String displaySymbol, BigDecimal appliedMarginPercent) {
+            String displaySymbol, BigDecimal appliedMarginPercent,
+            // DROP-679: SEO por idioma (generado al publicar a partir del contenido real)
+            String metaTitle, String metaDescription) {
     }
 
     public record BestsellerView(UUID productId, String slug, String title, String mainImage, int rank, String listCode,

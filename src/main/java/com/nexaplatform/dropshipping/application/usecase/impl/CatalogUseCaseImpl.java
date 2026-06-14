@@ -411,7 +411,42 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         ProductEntity p = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Product not found: " + id));
         p.setStatus(status);
+        // DROP-679: al publicar se generan los metadatos SEO por idioma a partir del contenido real
+        // (título/descripción ya traducidos), sin sobrescribir los que el operador haya definido.
+        if (status == ProductStatus.ACTIVE) {
+            generateSeoMetadata(p);
+        }
         productJpaRepository.save(p);
+        productIndexer.indexProduct(id);
+    }
+
+    /** DROP-679: rellena meta_title/meta_description (solo si están vacíos) desde el contenido real. */
+    private void generateSeoMetadata(ProductEntity p) {
+        for (var tr : p.getTranslations()) {
+            String title = tr.getTitle() != null && !tr.getTitle().isBlank() ? tr.getTitle().trim() : null;
+            if (title == null) {
+                continue;
+            }
+            if (tr.getMetaTitle() == null || tr.getMetaTitle().isBlank()) {
+                String mt = title;
+                if (p.getBrand() != null && !p.getBrand().isBlank()
+                        && !title.toLowerCase().contains(p.getBrand().toLowerCase())
+                        && (mt.length() + p.getBrand().length() + 3) <= 65) {
+                    mt = mt + " | " + p.getBrand().trim();
+                }
+                tr.setMetaTitle(mt.length() > 200 ? mt.substring(0, 200) : mt);
+            }
+            if (tr.getMetaDescription() == null || tr.getMetaDescription().isBlank()) {
+                String base = tr.getShortDescription() != null && !tr.getShortDescription().isBlank()
+                        ? tr.getShortDescription()
+                        : (tr.getDescription() != null ? tr.getDescription() : title);
+                String md = base.replaceAll("\\s+", " ").trim();
+                if (md.length() > 155) {
+                    md = md.substring(0, 152).trim() + "…";
+                }
+                tr.setMetaDescription(md);
+            }
+        }
     }
 
     @Override
@@ -524,6 +559,30 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Override
     public int reindexAllProducts() {
         return productIndexer.reindexAll();
+    }
+
+    @Override
+    @Transactional
+    public int backfillMissingSeo() {
+        int filled = 0;
+        for (ProductEntity p : productJpaRepository.findAll()) {
+            if (p.getStatus() != ProductStatus.ACTIVE) {
+                continue;
+            }
+            boolean missing = p.getTranslations().stream().anyMatch(tr ->
+                    tr.getTitle() != null && !tr.getTitle().isBlank()
+                            && (tr.getMetaTitle() == null || tr.getMetaTitle().isBlank()
+                                    || tr.getMetaDescription() == null || tr.getMetaDescription().isBlank()));
+            if (missing) {
+                generateSeoMetadata(p);
+                productJpaRepository.save(p);
+                filled++;
+            }
+        }
+        if (filled > 0) {
+            log.info("::> [SEO] Backfilled SEO metadata for {} active products", filled);
+        }
+        return filled;
     }
 
     /* ============ Variants (admin CRUD) ============ */
@@ -1022,6 +1081,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             }
         }
         // Las traducciones (título + descripción por idioma) las fija el writer dentro de su transacción.
+        // DROP-679: como el writer publica el producto (status ACTIVE), generamos aquí el SEO por idioma
+        // a partir de esas traducciones reales (las colecciones ya están adjuntas a la entidad gestionada).
+        generateSeoMetadata(p);
     }
 
     @Override

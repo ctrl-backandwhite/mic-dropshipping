@@ -51,6 +51,9 @@ public interface CatalogUseCase {
     /** Reindexes every product into OpenSearch; returns the number indexed. */
     int reindexAllProducts();
 
+    /** DROP-679: rellena el SEO (meta_title/meta_description) faltante de productos ya activos. */
+    int backfillMissingSeo();
+
     /** Lists a product's variants with their RAW stored price (admin manage view, no margin/currency). */
     java.util.List<VariantView> listVariantsForAdmin(UUID productId);
 

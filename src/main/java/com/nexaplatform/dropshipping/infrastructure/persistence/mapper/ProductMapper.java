@@ -69,7 +69,8 @@ public class ProductMapper {
                 p.getVariants().stream().map(v -> toVariantView(p, v)).toList(),
                 tiers == null ? Collections.emptyList() : tiers.stream().map(this::toPriceTierView).toList(),
                 priced.costUsd(), priced.retailUsd(), priced.displayAmount(), priced.displayCurrency(),
-                priced.displaySymbol(), priced.appliedMarginPercent());
+                priced.displaySymbol(), priced.appliedMarginPercent(),
+                tr != null ? tr.getMetaTitle() : null, tr != null ? tr.getMetaDescription() : null);
     }
 
     public ProductImageView toImageView(ProductImageEntity img) {
