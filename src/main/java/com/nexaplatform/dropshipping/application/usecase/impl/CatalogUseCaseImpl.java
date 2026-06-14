@@ -802,7 +802,19 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         String zhTitle = (r.getTitleZh() != null && !r.getTitleZh().isBlank()) ? r.getTitleZh() : esTitle;
         String esDesc = (r.getDescriptionEs() != null && !r.getDescriptionEs().isBlank()) ? r.getDescriptionEs()
                 : esTitle;
-        java.math.BigDecimal price = r.getPrice() != null ? r.getPrice() : new java.math.BigDecimal("9.90");
+        // DROP-680: el precio es dato real obligatorio; no se inventa. Si no viene explícito se toma
+        // del tramo de precio más bajo (price break real); si tampoco hay tramos, se rechaza la fila.
+        java.math.BigDecimal price = r.getPrice();
+        if (price == null && r.getTieredPricing() != null) {
+            for (var t : r.getTieredPricing()) {
+                if (t.getUnitPrice() != null && (price == null || t.getUnitPrice().compareTo(price) < 0)) {
+                    price = t.getUnitPrice();
+                }
+            }
+        }
+        if (price == null) {
+            throw new BusinessException("Falta el precio real del producto (price o tieredPricing): " + esTitle);
+        }
         String externalId = (r.getExternalId() != null && !r.getExternalId().isBlank()) ? r.getExternalId()
                 : "BULK-" + SLUG.slugify(esTitle) + "-" + System.nanoTime();
         java.util.List<IngestImage> images = new java.util.ArrayList<>();
@@ -841,10 +853,12 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 vi++;
             }
         } else {
-            variants.add(new IngestVariant(externalId + "-DEF", externalId + "-DEF", esTitle, price, 100, null,
+            // DROP-680: sin variantes declaradas no se inventa inventario (stock real desconocido = 0).
+            variants.add(new IngestVariant(externalId + "-DEF", externalId + "-DEF", esTitle, price, 0, null,
                     java.util.Map.of()));
         }
-        // Tiered pricing: usar los tramos del JSON si vienen; si no, un tramo único.
+        // Tiered pricing (DROP-669): se persisten SOLO los tramos reales que declara el proveedor.
+        // Si no hay tramos no se inventa ninguno: la ficha muestra únicamente el precio unitario.
         java.util.List<IngestPriceTier> tiers = new java.util.ArrayList<>();
         if (r.getTieredPricing() != null && !r.getTieredPricing().isEmpty()) {
             for (var t : r.getTieredPricing()) {
@@ -852,13 +866,13 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                         t.getUnitPrice() != null ? t.getUnitPrice() : price,
                         t.getCurrency() != null ? t.getCurrency() : "CNY"));
             }
-        } else {
-            tiers.add(new IngestPriceTier(1, null, price, "CNY"));
         }
+        // DROP-680: rating, recompra y reseñas NO se inventan. Si el proveedor no los declara quedan
+        // nulos/0; el desglose real (ratingBreakdown) se persiste y deriva reviewCount/rating en applyLogistics.
         var req = new IngestProductRequest("1688", externalId, zhTitle, esDesc, esDesc, r.getManufacturer(),
                 r.getMoq() != null ? r.getMoq() : 1, price, "CNY", r.getWeightGrams(),
-                r.getMonthlySales() != null ? r.getMonthlySales() : 0, new java.math.BigDecimal("15"),
-                r.getRating() != null ? r.getRating() : new java.math.BigDecimal("4.5"), 0,
+                r.getMonthlySales() != null ? r.getMonthlySales() : 0, null,
+                r.getRating(), 0,
                 "https://detail.1688.com/offer/" + externalId + ".html", supplierId, cat.getId(), images,
                 options, variants, tiers);
         String ptTitle = (r.getTitlePt() != null && !r.getTitlePt().isBlank()) ? r.getTitlePt() : esTitle;
@@ -910,7 +924,27 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             p.setSalesRegions(r.getSalesRegions());
         }
         if (r.getRatingBreakdown() != null && !r.getRatingBreakdown().isEmpty()) {
+            // DROP-676/680: desglose por estrellas REAL. De él derivamos reviewCount (suma) y, si el
+            // proveedor no declaró una media explícita, el rating ponderado. Nada inventado.
             p.setRatingBreakdown(r.getRatingBreakdown());
+            int total = 0;
+            long weighted = 0;
+            for (var e : r.getRatingBreakdown().entrySet()) {
+                int stars;
+                try {
+                    stars = Integer.parseInt(e.getKey().trim());
+                } catch (NumberFormatException ex) {
+                    continue;
+                }
+                int cnt = e.getValue() != null ? e.getValue() : 0;
+                total += cnt;
+                weighted += (long) stars * cnt;
+            }
+            p.setReviewCount(total);
+            if (r.getRating() == null && total > 0) {
+                p.setRating(java.math.BigDecimal.valueOf((double) weighted / total)
+                        .setScale(2, java.math.RoundingMode.HALF_UP));
+            }
         }
         if (r.getCrossBorderSupport() != null && !r.getCrossBorderSupport().isEmpty()) {
             p.setCrossBorderSupport(r.getCrossBorderSupport());
