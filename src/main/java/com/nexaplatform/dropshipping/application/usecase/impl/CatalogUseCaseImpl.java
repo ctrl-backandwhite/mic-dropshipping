@@ -559,7 +559,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         String slug = SLUG.slugify(base);
         if (slug.length() > 100)
             slug = slug.substring(0, 100);
-        return slug + "-" + externalId.toLowerCase();
+        String full = slug + "-" + externalId.toLowerCase();
+        // slug es varchar(220): se capa por seguridad ante títulos + externalId largos.
+        return full.length() > 220 ? full.substring(0, 220) : full;
     }
 
     /* ============ Reindex (admin) ============ */
@@ -924,8 +926,21 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (price == null) {
             throw new BusinessException("Falta el precio real del producto (price o tieredPricing): " + esTitle);
         }
-        String externalId = (r.getExternalId() != null && !r.getExternalId().isBlank()) ? r.getExternalId()
-                : "BULK-" + SLUG.slugify(esTitle) + "-" + System.nanoTime();
+        // external_id es varchar(120): con títulos largos el slug autogenerado lo desbordaba. Se capa
+        // el slug para que "BULK-<slug>-<nanoTime>" (y cualquier externalId provisto) quepa en 120.
+        String externalId;
+        if (r.getExternalId() != null && !r.getExternalId().isBlank()) {
+            externalId = r.getExternalId().trim();
+        } else {
+            String base = SLUG.slugify(esTitle);
+            if (base.length() > 90) {
+                base = base.substring(0, 90);
+            }
+            externalId = "BULK-" + base + "-" + System.nanoTime();
+        }
+        if (externalId.length() > 120) {
+            externalId = externalId.substring(0, 120);
+        }
         java.util.List<IngestImage> images = new java.util.ArrayList<>();
         if (r.getImageUrls() != null) {
             for (int k = 0; k < r.getImageUrls().size(); k++)
