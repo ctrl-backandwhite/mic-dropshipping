@@ -144,6 +144,8 @@ public class BulkProductDtoIn {
         private String name;
         private List<String> values;
         private java.util.Map<String, String> valueImages;
+        /** Traducciones por valor: {"白色1": {"es":"Blanco","en":"White"}}. */
+        private java.util.Map<String, java.util.Map<String, String>> valueTranslations;
     }
 
     /** Una variante/SKU: {"sku":"...","optionValues":{"Color":"Blanco","Talla":"42"},"price":..,"stock":..}. */

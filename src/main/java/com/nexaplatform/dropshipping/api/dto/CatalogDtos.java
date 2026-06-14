@@ -70,7 +70,10 @@ public final class CatalogDtos {
     public record ProductImageView(UUID id, int position, String role, String sourceUrl, String cdnUrl) {
     }
 
-    public record VariantValueView(UUID id, String valueZh, String value, String imageUrl, int position) {
+    // value = override neutral (compat); valueLocalized = etiqueta del idioma activo (traducción ?? value);
+    // translations = todas las traducciones por idioma (para el editor del admin).
+    public record VariantValueView(UUID id, String valueZh, String value, String valueLocalized, String imageUrl,
+            int position, java.util.Map<String, String> translations) {
     }
 
     public record VariantOptionView(UUID id, String nameZh, String name, int position, List<VariantValueView> values) {

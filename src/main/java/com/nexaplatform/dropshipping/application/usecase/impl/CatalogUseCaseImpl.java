@@ -400,7 +400,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private void forceLoadCollections(ProductEntity p) {
         p.getImages().size();
         p.getVariants().size();
-        p.getVariantOptions().forEach(o -> o.getValues().size());
+        p.getVariantOptions().forEach(o -> o.getValues().forEach(v -> v.getTranslations().size()));
         p.getTranslations().size();
     }
 
@@ -573,6 +573,57 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
+    public int backfillVariantAxes() {
+        int filled = 0;
+        for (ProductEntity p : productJpaRepository.findAll()) {
+            if (!p.getVariantOptions().isEmpty() || p.getVariants() == null || p.getVariants().isEmpty()) {
+                continue;
+            }
+            java.util.LinkedHashMap<String, java.util.LinkedHashSet<String>> derived = new java.util.LinkedHashMap<>();
+            for (var v : p.getVariants()) {
+                if (v.getOptions() == null) {
+                    continue;
+                }
+                for (var e : v.getOptions().entrySet()) {
+                    if (e.getKey() == null || e.getKey().isBlank() || e.getValue() == null || e.getValue().isBlank()) {
+                        continue;
+                    }
+                    derived.computeIfAbsent(e.getKey().trim(), k -> new java.util.LinkedHashSet<>())
+                            .add(e.getValue().trim());
+                }
+            }
+            if (derived.isEmpty()) {
+                continue;
+            }
+            int op = 0;
+            for (var en : derived.entrySet()) {
+                var opt = new com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantOptionEntity();
+                opt.setProduct(p);
+                opt.setNameZh(en.getKey());
+                opt.setName(en.getKey());
+                opt.setPosition(op++);
+                int vp = 0;
+                for (String val : en.getValue()) {
+                    var vv = new com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueEntity();
+                    vv.setOption(opt);
+                    vv.setValueZh(val);
+                    vv.setPosition(vp++);
+                    opt.getValues().add(vv);
+                }
+                p.getVariantOptions().add(opt);
+            }
+            productJpaRepository.save(p);
+            productIndexer.indexProduct(p.getId());
+            filled++;
+        }
+        if (filled > 0) {
+            log.info("::> [VARIANTS] Backfilled variation axes from variants for {} products", filled);
+        }
+        return filled;
+    }
+
+    @Override
+    @Transactional
     public int backfillMissingSeo() {
         int filled = 0;
         for (ProductEntity p : productJpaRepository.findAll()) {
@@ -676,6 +727,28 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         String url = imageUrl != null ? imageUrl.trim() : null;
         v.setImageSourceUrl(url != null && !url.isEmpty() ? url : null);
         v.setImageCdnUrl(url != null && !url.isEmpty() ? url : null);
+        variantValueRepository.save(v);
+        if (v.getOption() != null && v.getOption().getProduct() != null) {
+            productIndexer.indexProduct(v.getOption().getProduct().getId());
+        }
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true)})
+    public void setVariantValueTranslation(UUID valueId, String language, String value) {
+        if (language == null || language.isBlank()) {
+            throw new BusinessException("language es obligatorio");
+        }
+        var v = variantValueRepository.findById(valueId).orElseThrow(() -> new NotFoundException("Variant value"));
+        String lang = language.trim().toLowerCase();
+        String val = value != null ? value.trim() : null;
+        v.getTranslations().removeIf(tt -> lang.equalsIgnoreCase(tt.getLanguage()));
+        if (val != null && !val.isEmpty()) {
+            v.getTranslations().add(com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueTranslationEntity
+                    .builder().variantValue(v).language(lang).value(val).build());
+        }
         variantValueRepository.save(v);
         if (v.getOption() != null && v.getOption().getProduct() != null) {
             productIndexer.indexProduct(v.getOption().getProduct().getId());
@@ -966,6 +1039,33 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 options.add(new IngestVariantOption(ax.getName(), options.size(), vals));
             }
         }
+        // Si no se declararon ejes pero las variantes traen optionValues, se derivan los ejes y valores
+        // automáticamente (cada clave -> un eje; sus valores distintos -> los valores), preservando el
+        // orden. Así un import/alta que solo trae variantes (Color/Talla en optionValues) muestra el
+        // selector en la ficha sin tener que repetir los ejes a mano.
+        if (options.isEmpty() && r.getVariants() != null) {
+            java.util.LinkedHashMap<String, java.util.LinkedHashSet<String>> derived = new java.util.LinkedHashMap<>();
+            for (var v : r.getVariants()) {
+                if (v.getOptionValues() == null) {
+                    continue;
+                }
+                for (var e : v.getOptionValues().entrySet()) {
+                    if (e.getKey() == null || e.getKey().isBlank() || e.getValue() == null || e.getValue().isBlank()) {
+                        continue;
+                    }
+                    derived.computeIfAbsent(e.getKey().trim(), k -> new java.util.LinkedHashSet<>())
+                            .add(e.getValue().trim());
+                }
+            }
+            for (var en : derived.entrySet()) {
+                java.util.List<IngestVariantValue> vals = new java.util.ArrayList<>();
+                int vp = 0;
+                for (String val : en.getValue()) {
+                    vals.add(new IngestVariantValue(val, vp++, null));
+                }
+                options.add(new IngestVariantOption(en.getKey(), options.size(), vals));
+            }
+        }
         // Variantes/SKU desde el JSON; si no vienen, una variante por defecto.
         java.util.List<IngestVariant> variants = new java.util.ArrayList<>();
         if (r.getVariants() != null && !r.getVariants().isEmpty()) {
@@ -1123,6 +1223,35 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                     }
                     if (v.getHeightMm() != null) {
                         pv.setHeightMm(v.getHeightMm());
+                    }
+                }
+            }
+        }
+        // Traducciones por idioma de los valores de variación (Color/Talla) desde el JSON: se matchean
+        // por value_zh sobre los valores ya creados. Reemplaza las traducciones de ese valor.
+        if (r.getVariantAxes() != null) {
+            java.util.Map<String, java.util.Map<String, String>> byValue = new java.util.HashMap<>();
+            for (var ax : r.getVariantAxes()) {
+                if (ax.getValueTranslations() != null) {
+                    byValue.putAll(ax.getValueTranslations());
+                }
+            }
+            if (!byValue.isEmpty()) {
+                for (var opt : p.getVariantOptions()) {
+                    for (var vv : opt.getValues()) {
+                        var trMap = byValue.get(vv.getValueZh());
+                        if (trMap == null || trMap.isEmpty()) {
+                            continue;
+                        }
+                        vv.getTranslations().clear();
+                        for (var e : trMap.entrySet()) {
+                            if (e.getKey() != null && !e.getKey().isBlank() && e.getValue() != null
+                                    && !e.getValue().isBlank()) {
+                                vv.getTranslations().add(com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueTranslationEntity
+                                        .builder().variantValue(vv).language(e.getKey().trim().toLowerCase())
+                                        .value(e.getValue().trim()).build());
+                            }
+                        }
                     }
                 }
             }

@@ -33,5 +33,12 @@ public class SeoBackfillRunner implements ApplicationRunner {
         } catch (RuntimeException e) {
             log.warn("::> [SEO] SEO backfill skipped: {}", e.getMessage());
         }
+        try {
+            // Deriva los ejes/valores de variación faltantes desde las variantes, para que los
+            // productos importados solo con variantes muestren el selector de color/talla.
+            catalogUseCase.backfillVariantAxes();
+        } catch (RuntimeException e) {
+            log.warn("::> [VARIANTS] Variant-axes backfill skipped: {}", e.getMessage());
+        }
     }
 }

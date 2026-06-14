@@ -54,6 +54,9 @@ public interface CatalogUseCase {
     /** DROP-679: rellena el SEO (meta_title/meta_description) faltante de productos ya activos. */
     int backfillMissingSeo();
 
+    /** Deriva los ejes/valores de variación faltantes desde las variantes (productos sin selector). */
+    int backfillVariantAxes();
+
     /* ============ DROP-677: mapeo categorías 1688 → interna ============ */
 
     UUID upsertCategory1688Mapping(String external1688Id, String external1688Name, UUID categoryId);
@@ -88,6 +91,9 @@ public interface CatalogUseCase {
 
     /** DROP-674: fija la imagen real de un valor de variación (p.ej. la foto de un color). Vacío la elimina. */
     void setVariantValueImage(UUID valueId, String imageUrl);
+
+    /** Fija/actualiza la traducción de un valor de variación para un idioma (valor vacío la elimina). */
+    void setVariantValueTranslation(UUID valueId, String language, String value);
 
     /** Deletes a variant and reindexes its product. */
     void deleteVariant(UUID variantId);

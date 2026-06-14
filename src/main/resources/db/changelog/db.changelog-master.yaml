@@ -109,3 +109,5 @@ databaseChangeLog:
       file: db/changelog/schema-v49-category-1688-mapping.sql
   - include:
       file: db/changelog/schema-v50-category-attribute-schema.sql
+  - include:
+      file: db/changelog/schema-v51-variant-value-translation.sql

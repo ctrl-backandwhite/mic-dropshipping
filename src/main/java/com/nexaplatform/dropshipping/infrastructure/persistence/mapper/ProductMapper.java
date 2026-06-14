@@ -65,7 +65,7 @@ public class ProductMapper {
                 p.getReviewCount(), p.getMonthlySales(), p.getRepurchaseRate(), p.getTrendScore(),
                 p.getStatus() != null ? p.getStatus().name() : null, p.getSourceUrl(), p.getIngestedAt(),
                 p.getLastSyncedAt(), p.getImages().stream().map(this::toImageView).toList(),
-                p.getVariantOptions().stream().map(this::toOptionView).toList(),
+                p.getVariantOptions().stream().map(o -> toOptionView(o, language)).toList(),
                 p.getVariants().stream().map(v -> toVariantView(p, v)).toList(),
                 tiers == null ? Collections.emptyList() : tiers.stream().map(this::toPriceTierView).toList(),
                 priced.costUsd(), priced.retailUsd(), priced.displayAmount(), priced.displayCurrency(),
@@ -90,13 +90,31 @@ public class ProductMapper {
                 v.getOptions(), v.isActive());
     }
 
+    /** Back-compat: opción sin idioma (no resuelve traducción) — usado por tests/llamadas heredadas. */
     public VariantOptionView toOptionView(VariantOptionEntity o) {
-        List<VariantValueView> vals = o.getValues().stream().map(this::toValueView).toList();
+        return toOptionView(o, null);
+    }
+
+    public VariantOptionView toOptionView(VariantOptionEntity o, String language) {
+        List<VariantValueView> vals = o.getValues().stream().map(v -> toValueView(v, language)).toList();
         return new VariantOptionView(o.getId(), o.getNameZh(), o.getName(), o.getPosition(), vals);
     }
 
-    public VariantValueView toValueView(VariantValueEntity v) {
-        return new VariantValueView(v.getId(), v.getValueZh(), v.getValue(), pickValueImage(v), v.getPosition());
+    public VariantValueView toValueView(VariantValueEntity v, String language) {
+        // Traducciones por idioma + override neutral (value). valueLocalized = traducción del idioma
+        // pedido, si no el override neutral; el frontend cae a translateVariantCN(valueZh) si ambos faltan.
+        java.util.Map<String, String> tr = new java.util.LinkedHashMap<>();
+        for (var t : v.getTranslations()) {
+            if (t.getLanguage() != null && t.getValue() != null) {
+                tr.put(t.getLanguage().toLowerCase(), t.getValue());
+            }
+        }
+        String localized = language != null ? tr.get(language.toLowerCase()) : null;
+        if (localized == null) {
+            localized = v.getValue();
+        }
+        return new VariantValueView(v.getId(), v.getValueZh(), v.getValue(), localized, pickValueImage(v),
+                v.getPosition(), tr);
     }
 
     public PriceTierView toPriceTierView(ProductPriceTierEntity t) {

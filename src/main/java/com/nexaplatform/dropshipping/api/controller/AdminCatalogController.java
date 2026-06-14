@@ -123,6 +123,14 @@ public class AdminCatalogController implements AdminCatalogApi {
         return ResponseEntity.noContent().build();
     }
 
+    /** Traducción por idioma de un valor de variación (color/talla) — valor vacío la elimina. */
+    @PutMapping("/variant-values/{id}/translation")
+    public ResponseEntity<Void> setVariantValueTranslation(@PathVariable UUID id,
+            @RequestBody Map<String, String> body) {
+        catalogUseCase.setVariantValueTranslation(id, body.get("language"), body.get("value"));
+        return ResponseEntity.noContent().build();
+    }
+
     @Override
     public ResponseEntity<Void> deleteVariant(UUID id) {
         catalogUseCase.deleteVariant(id);
