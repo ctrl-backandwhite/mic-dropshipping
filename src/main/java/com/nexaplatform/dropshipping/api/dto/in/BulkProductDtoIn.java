@@ -150,6 +150,12 @@ public class BulkProductDtoIn {
         private String imageUrl;
         /** SKU del proveedor (1688) para esta combinación. */
         private String supplierSkuId;
+        // DROP-675: peso/dimensiones reales POR VARIANTE (para envío). Si faltan, se usa el del producto.
+        private Integer weightGrams;
+        private Integer packageWeightGrams;
+        private Integer lengthMm;
+        private Integer widthMm;
+        private Integer heightMm;
     }
 
     /** Un atributo taxonómico (faceta). */

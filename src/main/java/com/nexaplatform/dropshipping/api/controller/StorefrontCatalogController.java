@@ -500,11 +500,14 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     @Override
     @Transactional(readOnly = true)
-    public MarginEstimate marginEstimate(UUID id, String country, int quantity) {
+    public MarginEstimate marginEstimate(UUID id, String country, int quantity, UUID variantId) {
         ProductEntity p = productRepository.findById(id)
                 .orElseThrow(() -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("Product"));
         int qty = Math.max(1, quantity);
         java.math.RoundingMode HU = java.math.RoundingMode.HALF_UP;
+        // DROP-675: si se indica una variante, el envío usa su peso/dimensiones reales (no el del producto).
+        ProductVariantEntity variant = variantId == null ? null : p.getVariants().stream()
+                .filter(v -> variantId.equals(v.getId())).findFirst().orElse(null);
         // DROP-669: el coste parte del TRAMO de precio real aplicable a la cantidad (price break),
         // no de un precio plano. Si no hay tramos, se usa el precio unitario base. Todo se normaliza a USD.
         var tier = applicableTier(p.getId(), qty);
@@ -531,10 +534,10 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         if (p.getSupplier() != null) {
             var rates = rateRepository.findBySupplier_IdAndCountryCodeAndActiveTrue(p.getSupplier().getId(),
                     country.toUpperCase());
+            // DROP-675: peso de envío real, priorizando el de la variante seleccionada.
+            int grams = shippingGrams(p, variant);
             shippingUsd = rates.stream().map(r -> {
-                double kg = (p.getPackageWeightGrams() != null
-                        ? p.getPackageWeightGrams()
-                        : p.getWeightGrams() != null ? p.getWeightGrams() : 500) / 1000.0;
+                double kg = grams / 1000.0;
                 long cents = r.getBaseCents() + Math.round(r.getPerKgCents() * kg);
                 return BigDecimal.valueOf(cents).movePointLeft(2);
             }).min(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
@@ -556,6 +559,25 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
                 currencyService.usdToDisplay(commissionUsd).setScale(2, HU),
                 currencyService.usdToDisplay(netUsd).setScale(2, HU),
                 marginPct.setScale(1, HU), displayCode, appliedMarginPct, appliedTierMinQty);
+    }
+
+    /**
+     * DROP-675: gramos para el cálculo de envío. Prioriza el peso del paquete/unidad de la variante
+     * seleccionada y, si falta, el del producto; 500 g como último recurso cuando no hay dato real.
+     */
+    private int shippingGrams(ProductEntity p, ProductVariantEntity variant) {
+        if (variant != null) {
+            if (variant.getPackageWeightGrams() != null) {
+                return variant.getPackageWeightGrams();
+            }
+            if (variant.getWeightGrams() != null) {
+                return variant.getWeightGrams();
+            }
+        }
+        if (p.getPackageWeightGrams() != null) {
+            return p.getPackageWeightGrams();
+        }
+        return p.getWeightGrams() != null ? p.getWeightGrams() : 500;
     }
 
     /** DROP-669: tramo de precio real cuyo rango [minQty,maxQty] contiene la cantidad (o {@code null}). */

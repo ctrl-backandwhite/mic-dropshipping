@@ -52,6 +52,19 @@ public class ProductVariantEntity extends BaseEntity {
     @Column(name = "weight_grams")
     private Integer weightGrams;
 
+    // DROP-675: peso del paquete y dimensiones reales por variante (para el cálculo de envío).
+    @Column(name = "package_weight_grams")
+    private Integer packageWeightGrams;
+
+    @Column(name = "length_mm")
+    private Integer lengthMm;
+
+    @Column(name = "width_mm")
+    private Integer widthMm;
+
+    @Column(name = "height_mm")
+    private Integer heightMm;
+
     @Column(length = 80)
     private String barcode;
 

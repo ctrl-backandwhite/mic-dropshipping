@@ -248,5 +248,6 @@ public interface StorefrontCatalogApi {
     @Operation(summary = "Estimate the dropshipping margin for a product")
     @GetMapping("/products/{id}/margin-estimate")
     MarginEstimate marginEstimate(@PathVariable UUID id, @RequestParam(defaultValue = "ES") String country,
-            @RequestParam(defaultValue = "1") int quantity);
+            @RequestParam(defaultValue = "1") int quantity,
+            @RequestParam(required = false) UUID variantId);
 }

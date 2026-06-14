@@ -1038,19 +1038,39 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (r.getDropshipPickupRate48h() != null) {
             p.setDropshipPickupRate48h(r.getDropshipPickupRate48h());
         }
-        // supplierSkuId por variante: se matchea por SKU sobre las variantes ya creadas por upsertProduct.
+        // supplierSkuId + peso/dimensiones por variante (DROP-675): se matchean por SKU sobre las
+        // variantes ya creadas por upsertProduct.
         if (r.getVariants() != null && !r.getVariants().isEmpty()) {
-            java.util.Map<String, String> bySku = new java.util.HashMap<>();
+            java.util.Map<String, com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn.BulkVariant> bySku =
+                    new java.util.HashMap<>();
             for (var v : r.getVariants()) {
-                if (v.getSku() != null && v.getSupplierSkuId() != null && !v.getSupplierSkuId().isBlank()) {
-                    bySku.put(v.getSku(), v.getSupplierSkuId());
+                if (v.getSku() != null && !v.getSku().isBlank()) {
+                    bySku.put(v.getSku(), v);
                 }
             }
             if (!bySku.isEmpty()) {
                 for (ProductVariantEntity pv : p.getVariants()) {
-                    String s = bySku.get(pv.getSku());
-                    if (s != null) {
-                        pv.setSupplierSkuId(s);
+                    var v = bySku.get(pv.getSku());
+                    if (v == null) {
+                        continue;
+                    }
+                    if (v.getSupplierSkuId() != null && !v.getSupplierSkuId().isBlank()) {
+                        pv.setSupplierSkuId(v.getSupplierSkuId());
+                    }
+                    if (v.getWeightGrams() != null) {
+                        pv.setWeightGrams(v.getWeightGrams());
+                    }
+                    if (v.getPackageWeightGrams() != null) {
+                        pv.setPackageWeightGrams(v.getPackageWeightGrams());
+                    }
+                    if (v.getLengthMm() != null) {
+                        pv.setLengthMm(v.getLengthMm());
+                    }
+                    if (v.getWidthMm() != null) {
+                        pv.setWidthMm(v.getWidthMm());
+                    }
+                    if (v.getHeightMm() != null) {
+                        pv.setHeightMm(v.getHeightMm());
                     }
                 }
             }

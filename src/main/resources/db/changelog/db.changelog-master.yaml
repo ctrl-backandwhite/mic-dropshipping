@@ -101,3 +101,5 @@ databaseChangeLog:
       file: db/changelog/schema-v45-clear-price-rules.sql
   - include:
       file: db/changelog/schema-v46-review-language.sql
+  - include:
+      file: db/changelog/schema-v47-variant-shipping-dims.sql
