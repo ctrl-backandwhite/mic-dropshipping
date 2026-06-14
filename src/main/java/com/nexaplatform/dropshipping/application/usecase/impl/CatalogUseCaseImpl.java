@@ -429,6 +429,12 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             p.setCurrency(req.getCurrency());
         if (req.getMoq() != null)
             p.setMoq(req.getMoq());
+        // DROP-673: edición del vídeo real del producto desde el admin (cadena vacía lo elimina).
+        if (req.getVideoUrl() != null) {
+            String vu = req.getVideoUrl().trim();
+            p.setVideoUrl(vu.isEmpty() ? null : vu);
+            p.setHasVideo(!vu.isEmpty() || (p.getVideoUrls() != null && !p.getVideoUrls().isEmpty()));
+        }
         boolean touchesTranslation = (req.getTitle() != null && !req.getTitle().isBlank())
                 || req.getShortDescription() != null || req.getDescription() != null;
         if (touchesTranslation) {
@@ -585,6 +591,22 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     public void renameVariantValue(UUID valueId, String label) {
         var v = variantValueRepository.findById(valueId).orElseThrow(() -> new NotFoundException("Variant value"));
         v.setValue(label != null && !label.isBlank() ? label.trim() : null);
+        variantValueRepository.save(v);
+        if (v.getOption() != null && v.getOption().getProduct() != null) {
+            productIndexer.indexProduct(v.getOption().getProduct().getId());
+        }
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true)})
+    public void setVariantValueImage(UUID valueId, String imageUrl) {
+        var v = variantValueRepository.findById(valueId).orElseThrow(() -> new NotFoundException("Variant value"));
+        // DROP-674: imagen real por color. Una cadena vacía la elimina (volverá a usar la principal).
+        String url = imageUrl != null ? imageUrl.trim() : null;
+        v.setImageSourceUrl(url != null && !url.isEmpty() ? url : null);
+        v.setImageCdnUrl(url != null && !url.isEmpty() ? url : null);
         variantValueRepository.save(v);
         if (v.getOption() != null && v.getOption().getProduct() != null) {
             productIndexer.indexProduct(v.getOption().getProduct().getId());
@@ -834,7 +856,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 if (ax.getValues() != null) {
                     int vp = 0;
                     for (String val : ax.getValues()) {
-                        vals.add(new IngestVariantValue(val, vp++, null));
+                        // DROP-674: imagen real por valor (p.ej. la foto del color), si el proveedor la trae.
+                        String img = ax.getValueImages() != null ? ax.getValueImages().get(val) : null;
+                        vals.add(new IngestVariantValue(val, vp++, img != null && !img.isBlank() ? img : null));
                     }
                 }
                 options.add(new IngestVariantOption(ax.getName(), options.size(), vals));

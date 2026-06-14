@@ -66,6 +66,9 @@ public interface CatalogUseCase {
     /** Renombra la etiqueta visible de un valor de variación (p.ej. un color) y reindexa el producto. */
     void renameVariantValue(UUID valueId, String label);
 
+    /** DROP-674: fija la imagen real de un valor de variación (p.ej. la foto de un color). Vacío la elimina. */
+    void setVariantValueImage(UUID valueId, String imageUrl);
+
     /** Deletes a variant and reindexes its product. */
     void deleteVariant(UUID variantId);
 

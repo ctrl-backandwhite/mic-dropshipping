@@ -37,4 +37,7 @@ public class AdminProductQuickEditDtoIn {
 
     @Schema(description = "Localized long description")
     private String description;
+
+    @Schema(description = "DROP-673: URL del vídeo principal del producto (real). Cadena vacía lo elimina.")
+    private String videoUrl;
 }

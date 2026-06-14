@@ -116,6 +116,13 @@ public class AdminCatalogController implements AdminCatalogApi {
         return ResponseEntity.noContent().build();
     }
 
+    /** DROP-674: fija la imagen real de un valor de variación (p.ej. la foto de un color). */
+    @PutMapping("/variant-values/{id}/image")
+    public ResponseEntity<Void> setVariantValueImage(@PathVariable UUID id, @RequestBody Map<String, String> body) {
+        catalogUseCase.setVariantValueImage(id, body.get("imageUrl"));
+        return ResponseEntity.noContent().build();
+    }
+
     @Override
     public ResponseEntity<Void> deleteVariant(UUID id) {
         catalogUseCase.deleteVariant(id);

@@ -125,13 +125,17 @@ public class BulkProductDtoIn {
         private String currency;
     }
 
-    /** Un eje de variación: {"name":"Color","values":["Blanco","Negro"]}. */
+    /**
+     * Un eje de variación: {"name":"Color","values":["Blanco","Negro"]}. DROP-674: opcionalmente,
+     * una imagen real por valor: {"valueImages":{"Blanco":"https://...","Negro":"https://..."}}.
+     */
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
     public static class BulkAxis {
         private String name;
         private List<String> values;
+        private java.util.Map<String, String> valueImages;
     }
 
     /** Una variante/SKU: {"sku":"...","optionValues":{"Color":"Blanco","Talla":"42"},"price":..,"stock":..}. */
