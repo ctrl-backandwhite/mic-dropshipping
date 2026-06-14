@@ -51,6 +51,14 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     private final ShippingRateRepository rateRepository;
     private final ProductHistoryRepository historyRepository;
     private final ProductMapper productMapper;
+    // DROP-669/678: estimación de rentabilidad con datos reales (tramo aplicable + margen configurado).
+    private final com.nexaplatform.dropshipping.application.service.PricingService pricingService;
+    private final com.nexaplatform.dropshipping.application.service.MarginService marginService;
+    private final com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService currencyService;
+    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository priceTierRepository;
+    /** Comisión de plataforma (%). DROP-680: por defecto 0 — no se inventa una comisión. */
+    @org.springframework.beans.factory.annotation.Value("${nexadrop.platform.commission-pct:0}")
+    private BigDecimal platformCommissionPct;
 
     /* =========================== VIEW RECORDS =========================== */
 
@@ -486,7 +494,8 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     /* =========================== MARGIN ESTIMATE (DROP-24) =========================== */
 
     public record MarginEstimate(BigDecimal cost, BigDecimal suggestedRetail, BigDecimal shipping,
-            BigDecimal commission, BigDecimal netProfit, BigDecimal marginPct) {
+            BigDecimal commission, BigDecimal netProfit, BigDecimal marginPct,
+            String currency, BigDecimal appliedMarginPct, Integer appliedTierMinQty) {
     }
 
     @Override
@@ -494,13 +503,35 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     public MarginEstimate marginEstimate(UUID id, String country, int quantity) {
         ProductEntity p = productRepository.findById(id)
                 .orElseThrow(() -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("Product"));
-        BigDecimal cost = p.getBasePrice() == null ? BigDecimal.ZERO : p.getBasePrice();
-        BigDecimal retail = cost.multiply(new BigDecimal("2.5")).setScale(2, java.math.RoundingMode.HALF_UP);
-        BigDecimal shipping = BigDecimal.ZERO;
+        int qty = Math.max(1, quantity);
+        java.math.RoundingMode HU = java.math.RoundingMode.HALF_UP;
+        // DROP-669: el coste parte del TRAMO de precio real aplicable a la cantidad (price break),
+        // no de un precio plano. Si no hay tramos, se usa el precio unitario base. Todo se normaliza a USD.
+        var tier = applicableTier(p.getId(), qty);
+        BigDecimal unitSource;
+        String sourceCurrency;
+        Integer appliedTierMinQty;
+        if (tier != null && tier.getUnitPrice() != null) {
+            unitSource = tier.getUnitPrice();
+            sourceCurrency = tier.getCurrency() != null ? tier.getCurrency()
+                    : (p.getCurrency() != null ? p.getCurrency() : "CNY");
+            appliedTierMinQty = tier.getMinQty();
+        } else {
+            unitSource = p.getBasePrice();
+            sourceCurrency = p.getCurrency() != null ? p.getCurrency() : "CNY";
+            appliedTierMinQty = null;
+        }
+        BigDecimal costUsd = unitSource != null ? currencyService.toUsd(unitSource, sourceCurrency) : BigDecimal.ZERO;
+        // DROP-678: el retail sugerido aplica la REGLA DE MARGEN configurada (MarginService), no un x2.5.
+        var withMargin = marginService.apply(costUsd, p, null);
+        BigDecimal retailUsd = withMargin.retailUsd() != null ? withMargin.retailUsd() : costUsd;
+        BigDecimal appliedMarginPct = withMargin.appliedPercentage();
+        // Envío real por destino (base_cents/per_kg_cents en USD) con el peso real del paquete.
+        BigDecimal shippingUsd = BigDecimal.ZERO;
         if (p.getSupplier() != null) {
             var rates = rateRepository.findBySupplier_IdAndCountryCodeAndActiveTrue(p.getSupplier().getId(),
                     country.toUpperCase());
-            shipping = rates.stream().map(r -> {
+            shippingUsd = rates.stream().map(r -> {
                 double kg = (p.getPackageWeightGrams() != null
                         ? p.getPackageWeightGrams()
                         : p.getWeightGrams() != null ? p.getWeightGrams() : 500) / 1000.0;
@@ -508,14 +539,37 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
                 return BigDecimal.valueOf(cents).movePointLeft(2);
             }).min(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
         }
-        BigDecimal commission = retail.multiply(new BigDecimal("0.12")).setScale(2, java.math.RoundingMode.HALF_UP);
-        BigDecimal net = retail.subtract(cost).subtract(shipping).subtract(commission)
-                .multiply(BigDecimal.valueOf(quantity)).setScale(2, java.math.RoundingMode.HALF_UP);
-        BigDecimal marginPct = retail.signum() == 0
+        // Comisión de plataforma configurable (DROP-680: por defecto 0; no se inventa).
+        BigDecimal commPct = platformCommissionPct != null ? platformCommissionPct : BigDecimal.ZERO;
+        BigDecimal commissionUsd = retailUsd.multiply(commPct).movePointLeft(2).setScale(2, HU);
+        BigDecimal netUsd = retailUsd.subtract(costUsd).subtract(shippingUsd).subtract(commissionUsd)
+                .multiply(BigDecimal.valueOf(qty)).setScale(2, HU);
+        BigDecimal marginPct = retailUsd.signum() == 0
                 ? BigDecimal.ZERO
-                : net.divide(retail.multiply(BigDecimal.valueOf(quantity)), 4, java.math.RoundingMode.HALF_UP)
-                        .multiply(BigDecimal.valueOf(100));
-        return new MarginEstimate(cost, retail, shipping, commission, net, marginPct);
+                : netUsd.divide(retailUsd.multiply(BigDecimal.valueOf(qty)), 4, HU).multiply(BigDecimal.valueOf(100));
+        // Presentar en la moneda activa (coherente con el resto de la tienda, vía X-Currency).
+        String displayCode = pricingService.displayCurrencyCode();
+        return new MarginEstimate(
+                currencyService.usdToDisplay(costUsd).setScale(2, HU),
+                currencyService.usdToDisplay(retailUsd).setScale(2, HU),
+                currencyService.usdToDisplay(shippingUsd).setScale(2, HU),
+                currencyService.usdToDisplay(commissionUsd).setScale(2, HU),
+                currencyService.usdToDisplay(netUsd).setScale(2, HU),
+                marginPct.setScale(1, HU), displayCode, appliedMarginPct, appliedTierMinQty);
+    }
+
+    /** DROP-669: tramo de precio real cuyo rango [minQty,maxQty] contiene la cantidad (o {@code null}). */
+    private com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductPriceTierEntity applicableTier(
+            UUID productId, int qty) {
+        var tiers = priceTierRepository.findByProductIdOrderByMinQtyAsc(productId);
+        com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductPriceTierEntity best = null;
+        for (var t : tiers) {
+            Integer max = t.getMaxQty();
+            if (qty >= t.getMinQty() && (max == null || qty <= max)) {
+                best = t;
+            }
+        }
+        return best;
     }
 
     /* =========================== INTERNAL (storefront-only) =========================== */
