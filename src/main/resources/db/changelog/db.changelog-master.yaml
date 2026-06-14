@@ -111,3 +111,5 @@ databaseChangeLog:
       file: db/changelog/schema-v50-category-attribute-schema.sql
   - include:
       file: db/changelog/schema-v51-variant-value-translation.sql
+  - include:
+      file: db/changelog/schema-v52-ship-from-widen.sql

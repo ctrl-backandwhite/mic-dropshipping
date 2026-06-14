@@ -1477,9 +1477,18 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private UUID resolveBulkSupplier(java.util.List<SupplierEntity> suppliers, String supplierExternalId,
             String supplierName) {
         if (supplierExternalId != null && !supplierExternalId.isBlank()) {
-            return supplierRepository.findBySourceAndExternalId("1688", supplierExternalId)
-                    .map(SupplierEntity::getId)
-                    .orElseThrow(() -> new BusinessException("Proveedor no encontrado: " + supplierExternalId));
+            String ext = supplierExternalId.trim();
+            var existing = supplierRepository.findBySourceAndExternalId("1688", ext);
+            if (existing.isPresent()) {
+                return existing.get().getId();
+            }
+            // El proveedor de 1688 aún no existe: se crea con ese externalId y el nombre disponible
+            // (supplierName/manufacturer) en vez de rechazar la fila. Así el import es autosuficiente.
+            String name = (supplierName != null && !supplierName.isBlank()) ? supplierName.trim()
+                    : ("Proveedor " + ext);
+            String extId = ext.length() > 100 ? ext.substring(0, 100) : ext;
+            return supplierRepository.save(SupplierEntity.builder().source("1688").externalId(extId).name(name)
+                    .verified(false).trustPass(false).build()).getId();
         }
         // Si se da el nombre del proveedor/fábrica, buscar o CREAR uno con ese nombre — no reutilizar
         // el primer proveedor por defecto (causaba que una camiseta apuntara a la fábrica de zapatos).

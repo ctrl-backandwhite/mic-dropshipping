@@ -105,7 +105,7 @@ public class ProductEntity extends BaseEntity {
     @Column(columnDefinition = "jsonb")
     private java.util.List<String> certifications;
 
-    @Column(name = "ship_from", length = 2)
+    @Column(name = "ship_from", length = 120)
     private String shipFrom;
 
     @Column(name = "free_shipping")
