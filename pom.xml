@@ -18,6 +18,7 @@
     <description>Dropshipping platform backend (1688 + multi-supplier)</description>
 
     <properties>
+        <sonar.organization>ctrl-backandwhite</sonar.organization>
         <java.version>25</java.version>
         <maven.compiler.source>25</maven.compiler.source>
         <maven.compiler.target>25</maven.compiler.target>
@@ -339,6 +340,38 @@
                     <lineEnding>LF</lineEnding>
                     <encoding>UTF-8</encoding>
                 </configuration>
+            </plugin>
+            <!-- Cobertura para SonarCloud (mismo setup que mic-authservice). 0.8.14 = única compatible con Java 25. -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.14</version>
+                <configuration>
+                    <excludes>
+                        <exclude>**/*MapperImpl.class</exclude>
+                        <exclude>**/*MapperImpl$*.class</exclude>
+                        <exclude>**/*Application.class</exclude>
+                        <exclude>**/configuration/**/*</exclude>
+                        <exclude>**/config/**/*</exclude>
+                        <exclude>**/dto/**/*</exclude>
+                        <exclude>**/entity/**/*</exclude>
+                        <exclude>**/document/**/*</exclude>
+                    </excludes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
