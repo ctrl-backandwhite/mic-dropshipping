@@ -45,13 +45,19 @@ public class RedisCacheConfig {
         // Default 5 min TTL; overrides por cache abajo.
         RedisCacheConfiguration defaults = baseConfig(Duration.ofMinutes(5));
 
-        Map<String, RedisCacheConfiguration> perCache = Map.of(CACHE_PRODUCT_DETAIL, baseConfig(Duration.ofMinutes(5)),
-                CACHE_PRODUCT_SUMMARY, baseConfig(Duration.ofMinutes(2)), CACHE_CATEGORY_TREE,
-                baseConfig(Duration.ofMinutes(15)), CACHE_CATEGORIES_FLAT, baseConfig(Duration.ofMinutes(15)),
-                CACHE_SUPPLIERS_FLAT, baseConfig(Duration.ofMinutes(30)), CACHE_PRICING_AMOUNT,
-                baseConfig(Duration.ofMinutes(5)), CACHE_CURRENCY_RATES, baseConfig(Duration.ofMinutes(10)),
-                CACHE_PRODUCT_SPECS, baseConfig(Duration.ofMinutes(15)), CACHE_PRODUCT_ATTRS,
-                baseConfig(Duration.ofMinutes(15)));
+        // product-list con TTL corto (60 s): tolera menos staleness que el árbol de categorías por el
+        // precio/stock. Se invalida además al mutar productos. Map.ofEntries (más de 10 entradas).
+        Map<String, RedisCacheConfiguration> perCache = Map.ofEntries(
+                Map.entry(CACHE_PRODUCT_DETAIL, baseConfig(Duration.ofMinutes(5))),
+                Map.entry(CACHE_PRODUCT_SUMMARY, baseConfig(Duration.ofMinutes(2))),
+                Map.entry(CACHE_PRODUCT_LIST, baseConfig(Duration.ofSeconds(60))),
+                Map.entry(CACHE_CATEGORY_TREE, baseConfig(Duration.ofMinutes(15))),
+                Map.entry(CACHE_CATEGORIES_FLAT, baseConfig(Duration.ofMinutes(15))),
+                Map.entry(CACHE_SUPPLIERS_FLAT, baseConfig(Duration.ofMinutes(30))),
+                Map.entry(CACHE_PRICING_AMOUNT, baseConfig(Duration.ofMinutes(5))),
+                Map.entry(CACHE_CURRENCY_RATES, baseConfig(Duration.ofMinutes(10))),
+                Map.entry(CACHE_PRODUCT_SPECS, baseConfig(Duration.ofMinutes(15))),
+                Map.entry(CACHE_PRODUCT_ATTRS, baseConfig(Duration.ofMinutes(15))));
 
         return RedisCacheManager.builder(cf).cacheDefaults(defaults).withInitialCacheConfigurations(perCache)
                 .transactionAware().build();

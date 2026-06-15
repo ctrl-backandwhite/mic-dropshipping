@@ -77,6 +77,7 @@ import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CAC
 import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORY_TREE;
 import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRICING_AMOUNT;
 import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_DETAIL;
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_LIST;
 import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_SUMMARY;
 
 /**
@@ -433,6 +434,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Transactional
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true),
             @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
     public void updateStatus(UUID id, ProductStatus status) {
         ProductEntity p = productJpaRepository.findById(id)
@@ -505,7 +507,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Override
     @Transactional
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true)})
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public ProductDetailView quickEdit(UUID id, AdminProductQuickEditDtoIn req, String lang) {
         ProductEntity p = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Product not found: " + id));
@@ -722,6 +725,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     // recomputes from the new variant — otherwise it shows the stale pre-edit value.
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true),
             @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
     public VariantView createVariant(UUID productId, AdminVariantUpsertDtoIn req) {
         ProductEntity product = productJpaRepository.findById(productId)
@@ -739,6 +743,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Transactional
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true),
             @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
     public VariantView updateVariant(UUID variantId, AdminVariantUpsertDtoIn req) {
         ProductVariantEntity v = variantRepository.findById(variantId)
@@ -753,6 +758,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Transactional
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true),
             @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
     public VariantView updateVariantPrice(UUID variantId, java.math.BigDecimal price) {
         if (price == null || price.signum() < 0) {
@@ -769,7 +775,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Override
     @Transactional
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true)})
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void renameVariantValue(UUID valueId, String label) {
         var v = variantValueRepository.findById(valueId).orElseThrow(() -> new NotFoundException("Variant value"));
         v.setValue(label != null && !label.isBlank() ? label.trim() : null);
@@ -782,7 +789,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Override
     @Transactional
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true)})
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void setVariantValueImage(UUID valueId, String imageUrl) {
         var v = variantValueRepository.findById(valueId).orElseThrow(() -> new NotFoundException("Variant value"));
         // DROP-674: imagen real por color. Una cadena vacía la elimina (volverá a usar la principal).
@@ -798,7 +806,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Override
     @Transactional
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true)})
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void setVariantValueTranslation(UUID valueId, String language, String value) {
         if (language == null || language.isBlank()) {
             throw new BusinessException("language es obligatorio");
@@ -821,6 +830,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Transactional
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true),
             @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
     public void deleteVariant(UUID variantId) {
         ProductVariantEntity v = variantRepository.findById(variantId)
@@ -845,7 +855,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Override
     @Transactional
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true)})
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public ProductImageView addProductImage(UUID productId, String url,
             String role) {
         if (url == null || url.isBlank()) {
@@ -877,7 +888,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Override
     @Transactional
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true)})
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void deleteProductImage(UUID imageId) {
         ProductImageEntity img = imageRepository.findById(imageId)
                 .orElseThrow(() -> new NotFoundException("Image not found"));
@@ -1014,7 +1026,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true)})
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public UUID createProductManual(com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn req) {
         UUID id = buildAndWriteProduct(req, supplierRepository.findAll());
         productIndexer.indexProduct(id);
@@ -1029,7 +1042,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Override
     @Transactional
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
-            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true)})
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void deleteProduct(UUID id) {
         ProductEntity p = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Product not found"));

@@ -30,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORIES_FLAT;
 import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORY_TREE;
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_LIST;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -138,6 +139,8 @@ public class CatalogStorefrontReadService {
         return out;
     }
 
+    @Cacheable(value = CACHE_PRODUCT_LIST,
+            key = "'cat:' + #idOrSlug + ':' + #page + ':' + #size + ':' + #lang + ':' + #sort")
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productsByCategory(String idOrSlug, int page, int size, String lang,
             String sort) {
@@ -158,6 +161,7 @@ public class CatalogStorefrontReadService {
         return supplierView(supplierRepository.findById(id).orElseThrow(() -> new NotFoundException("Supplier")));
     }
 
+    @Cacheable(value = CACHE_PRODUCT_LIST, key = "'sup:' + #id + ':' + #page + ':' + #size + ':' + #lang + ':' + #sort")
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productsBySupplier(UUID id, int page, int size, String lang, String sort) {
         return productList(page, size, lang, null, null, id, null, null, sort);
@@ -187,6 +191,9 @@ public class CatalogStorefrontReadService {
 
     // Read-only tx keeps the Hibernate session open while mapping each product to a summary,
     // so the lazy `translations`/`images` collections load (otherwise LazyInitializationException).
+    // Cacheado por la combinación de filtros (TTL 60 s / Redis; invalidado al mutar productos). La clave
+    // por defecto (SimpleKey con todos los parámetros) distingue cada consulta sin colisión.
+    @Cacheable(CACHE_PRODUCT_LIST)
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productListFull(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping,
@@ -220,6 +227,7 @@ public class CatalogStorefrontReadService {
         return PageResponse.from(pageObj);
     }
 
+    @Cacheable(CACHE_PRODUCT_LIST)
     public PageResponse<ProductSummaryView> productList(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String sort) {
         return productListFull(page, size, lang, q, categoryId, supplierId, minPrice, maxPrice, null, null, null, null,
