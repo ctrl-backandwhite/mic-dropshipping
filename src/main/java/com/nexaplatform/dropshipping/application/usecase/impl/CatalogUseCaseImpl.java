@@ -509,7 +509,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             p.setHasVideo(!vu.isEmpty() || (p.getVideoUrls() != null && !p.getVideoUrls().isEmpty()));
         }
         boolean touchesTranslation = (req.getTitle() != null && !req.getTitle().isBlank())
-                || req.getShortDescription() != null || req.getDescription() != null;
+                || req.getShortDescription() != null || req.getDescription() != null
+                || req.getMetaTitle() != null || req.getMetaDescription() != null;
         if (touchesTranslation) {
             // Update the active-language translation (title/short/long description), not the canonical title_zh.
             var trOpt = p.getTranslations().stream().filter(t -> lang.equalsIgnoreCase(t.getLanguage())).findFirst();
@@ -525,6 +526,11 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 tr.setShortDescription(req.getShortDescription());
             if (req.getDescription() != null)
                 tr.setDescription(req.getDescription());
+            // DROP-688: edición manual del SEO (meta título/descripción) del idioma activo.
+            if (req.getMetaTitle() != null)
+                tr.setMetaTitle(req.getMetaTitle().isBlank() ? null : req.getMetaTitle().trim());
+            if (req.getMetaDescription() != null)
+                tr.setMetaDescription(req.getMetaDescription().isBlank() ? null : req.getMetaDescription().trim());
         }
         productJpaRepository.save(p);
         productIndexer.indexProduct(id);

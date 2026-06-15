@@ -40,4 +40,10 @@ public class AdminProductQuickEditDtoIn {
 
     @Schema(description = "DROP-673: URL del vídeo principal del producto (real). Cadena vacía lo elimina.")
     private String videoUrl;
+
+    @Schema(description = "DROP-688: meta título SEO del idioma activo (edición manual).")
+    private String metaTitle;
+
+    @Schema(description = "DROP-688: meta descripción SEO del idioma activo (edición manual).")
+    private String metaDescription;
 }
