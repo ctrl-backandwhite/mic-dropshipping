@@ -59,6 +59,13 @@ public class CategoryRepositoryImpl implements CategoryRepository {
     }
 
     @Override
+    public org.springframework.data.domain.Page<Category> search(String q,
+            org.springframework.data.domain.Pageable pageable) {
+        String filter = (q == null || q.isBlank()) ? null : q.trim();
+        return categoryJpaRepositoryAdapter.search(filter, pageable).map(categoryEntityMapper::toDomain);
+    }
+
+    @Override
     public Optional<Category> findBySlug(String slug) {
         return categoryJpaRepositoryAdapter.findBySlug(slug).map(categoryEntityMapper::toDomain);
     }

@@ -1,7 +1,11 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository;
 
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -10,4 +14,19 @@ import java.util.UUID;
 public interface CategoryJpaRepositoryAdapter extends JpaRepository<CategoryEntity, UUID> {
 
     Optional<CategoryEntity> findBySlug(String slug);
+
+    /**
+     * Indexed, paginated category listing with an optional free-text filter (slug, Chinese name or any
+     * translated name). The DB applies LIMIT/OFFSET and the ordering uses the {@code (parent_id, position)}
+     * / {@code position} indexes (migration v57), so the query never loads the whole table into memory.
+     */
+    @Query("""
+            SELECT c FROM CategoryEntity c
+            WHERE :q IS NULL
+               OR LOWER(c.slug) LIKE LOWER(CONCAT('%', :q, '%'))
+               OR LOWER(c.nameZh) LIKE LOWER(CONCAT('%', :q, '%'))
+               OR EXISTS (SELECT 1 FROM CategoryTranslationEntity t
+                          WHERE t.category = c AND LOWER(t.name) LIKE LOWER(CONCAT('%', :q, '%')))
+            """)
+    Page<CategoryEntity> search(@Param("q") String q, Pageable pageable);
 }

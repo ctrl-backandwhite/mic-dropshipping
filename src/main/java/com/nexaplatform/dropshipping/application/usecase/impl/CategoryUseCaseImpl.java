@@ -10,6 +10,8 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +50,16 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
             c.setProductCount(productCount.getOrDefault(c.getId(), 0L));
         }
         return categories;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Category> findAllPaged(String q, Pageable pageable) {
+        Page<Category> page = categoryRepository.search(q, pageable);
+        // One GROUP BY for the whole page instead of a COUNT per category (no N+1).
+        Map<UUID, Long> productCount = productCountByCategory();
+        page.getContent().forEach(c -> c.setProductCount(productCount.getOrDefault(c.getId(), 0L)));
+        return page;
     }
 
     @Override

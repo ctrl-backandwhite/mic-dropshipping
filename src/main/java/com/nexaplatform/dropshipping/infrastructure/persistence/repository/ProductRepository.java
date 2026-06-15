@@ -19,6 +19,9 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
     /** Number of products already attached to a category — used by the demo catalog filler. */
     long countByCategoryId(UUID categoryId);
 
+    /** Number of products from a given supplier — used by the storefront supplier view count. */
+    long countBySupplierId(UUID supplierId);
+
     Optional<ProductEntity> findBySourceAndExternalId(String source, String externalId);
 
     /** Resolución de SKU/external id sin saber la fuente — útil para inbound webhooks de tiendas. */

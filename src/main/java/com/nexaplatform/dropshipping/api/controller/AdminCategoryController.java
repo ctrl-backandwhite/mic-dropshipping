@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.AdminCategoryApi;
+import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AdminCategoryUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.AdminCategoryDtoOut;
 import com.nexaplatform.dropshipping.api.mapper.AdminCategoryMapper;
@@ -8,6 +9,8 @@ import com.nexaplatform.dropshipping.application.usecase.CategoryUseCase;
 import com.nexaplatform.dropshipping.domain.model.Category;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,6 +37,15 @@ public class AdminCategoryController implements AdminCategoryApi {
     @Override
     public ResponseEntity<List<AdminCategoryDtoOut>> list() {
         return ResponseEntity.ok(mapper.toDtoOutList(useCase.findAll()));
+    }
+
+    @Override
+    public ResponseEntity<PageResponse<AdminCategoryDtoOut>> listPaged(String q, int page, int size) {
+        // Ordered by position then slug — covered by the (position) / (parent_id, position) indexes (v57).
+        var pageable = PageRequest.of(Math.max(0, page), Math.max(1, size),
+                Sort.by(Sort.Order.asc("position"), Sort.Order.asc("slug")));
+        var result = useCase.findAllPaged(q, pageable);
+        return ResponseEntity.ok(PageResponse.map(result, mapper::toDtoOut));
     }
 
     /** Reindexa todas las categorías en OpenSearch (botón "Reindexar" del admin). */

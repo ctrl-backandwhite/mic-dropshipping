@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api;
 
+import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AdminCategoryUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.AdminCategoryDtoOut;
 import io.swagger.v3.oas.annotations.Operation;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
 import java.util.UUID;
@@ -26,6 +28,11 @@ public interface AdminCategoryApi {
     @Operation(summary = "List all admin categories")
     @GetMapping
     ResponseEntity<List<AdminCategoryDtoOut>> list();
+
+    @Operation(summary = "Indexed, paginated category listing with optional free-text filter (q)")
+    @GetMapping("/paged")
+    ResponseEntity<PageResponse<AdminCategoryDtoOut>> listPaged(@RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "50") int size);
 
     @Operation(summary = "Toggle a category active state by id")
     @PutMapping("/{id}/toggle")

@@ -194,16 +194,16 @@ public class CatalogStorefrontReadService {
                 ? categoryRepository.findByParent_IdOrderByPositionAsc(c.getId()).stream()
                         .map(child -> categoryView(child, lang, true)).toList()
                 : List.of();
-        long count = productRepository.findAll().stream()
-                .filter(p -> p.getCategory() != null && c.getId().equals(p.getCategory().getId())).count();
+        // Indexed COUNT (idx product.category_id) instead of loading the whole product table per category.
+        long count = productRepository.countByCategoryId(c.getId());
         return new CategoryView(c.getId(), c.getSlug(), translatedName(c, lang), c.getNameZh(),
                 c.getParent() != null ? c.getParent().getId() : null, c.getPosition(), c.getIcon(), (int) count,
                 children);
     }
 
     public SupplierView supplierView(SupplierEntity s) {
-        long count = productRepository.findAll().stream()
-                .filter(p -> p.getSupplier() != null && s.getId().equals(p.getSupplier().getId())).count();
+        // Indexed COUNT (idx product.supplier_id) instead of scanning the whole product table.
+        long count = productRepository.countBySupplierId(s.getId());
         return new SupplierView(s.getId(), s.getExternalId(), s.getName(), s.getNameZh(), s.getCountry(), s.getCity(),
                 s.getRating(), s.getYearsActive(), s.isVerified(), s.isTrustPass(), count);
     }
