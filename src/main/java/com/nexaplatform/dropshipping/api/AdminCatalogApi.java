@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -127,6 +128,15 @@ public interface AdminCatalogApi {
     @Operation(summary = "Bulk-create products from a JSON array")
     @PostMapping("/products/bulk")
     ResponseEntity<BulkResultDtoOut> bulkProducts(@Valid @RequestBody List<BulkProductDtoIn> rows);
+
+    @Operation(summary = "Export products in a 1-based range as the same bulk JSON shape (re-importable)")
+    @GetMapping("/products/export")
+    ResponseEntity<List<BulkProductDtoIn>> exportProducts(@RequestParam(defaultValue = "1") int from,
+            @RequestParam(defaultValue = "1000") int to);
+
+    @Operation(summary = "Total product count (to compute export segments)")
+    @GetMapping("/products/export/count")
+    ResponseEntity<Map<String, Long>> exportCount();
 
     @Operation(summary = "Bulk-create categories from a JSON array")
     @PostMapping("/categories/bulk")

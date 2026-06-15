@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -14,6 +15,14 @@ import java.util.UUID;
 public interface CategoryJpaRepositoryAdapter extends JpaRepository<CategoryEntity, UUID> {
 
     Optional<CategoryEntity> findBySlug(String slug);
+
+    /**
+     * Loads every category with its translations in a single query. Fixes the N+1 that made the admin
+     * category tree slow: the domain mapper builds the {@code names} map from the lazy {@code translations}
+     * collection, so a plain {@code findAll()} issued one extra query per category.
+     */
+    @Query("SELECT DISTINCT c FROM CategoryEntity c LEFT JOIN FETCH c.translations")
+    List<CategoryEntity> findAllWithTranslations();
 
     /**
      * Indexed, paginated category listing with an optional free-text filter (slug, Chinese name or any

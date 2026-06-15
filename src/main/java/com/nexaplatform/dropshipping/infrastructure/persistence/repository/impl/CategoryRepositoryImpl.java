@@ -43,7 +43,8 @@ public class CategoryRepositoryImpl implements CategoryRepository {
 
     @Override
     public List<Category> findAll() {
-        return categoryJpaRepositoryAdapter.findAll().stream()
+        // Single JOIN FETCH query (translations included) — avoids the N+1 that slowed the admin tree.
+        return categoryJpaRepositoryAdapter.findAllWithTranslations().stream()
                 .sorted(Comparator.comparingInt(CategoryEntity::getPosition)).map(categoryEntityMapper::toDomain)
                 .toList();
     }

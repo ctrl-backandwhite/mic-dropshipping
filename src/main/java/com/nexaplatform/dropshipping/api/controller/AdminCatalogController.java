@@ -181,6 +181,16 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
+    public ResponseEntity<List<BulkProductDtoIn>> exportProducts(int from, int to) {
+        return ResponseEntity.ok(catalogUseCase.exportProducts(from, to));
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Long>> exportCount() {
+        return ResponseEntity.ok(Map.of("count", catalogUseCase.countProducts()));
+    }
+
+    @Override
     public ResponseEntity<BulkResultDtoOut> bulkCategories(List<BulkCategoryDtoIn> rows) {
         return ResponseEntity.ok(catalogUseCase.bulkCreateCategories(rows));
     }

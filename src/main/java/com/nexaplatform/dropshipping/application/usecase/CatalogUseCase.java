@@ -11,6 +11,7 @@ import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
+import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
 import com.nexaplatform.dropshipping.domain.model.Product;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
@@ -111,6 +112,16 @@ public interface CatalogUseCase {
     /** Bulk-creates products from friendly JSON rows; returns created/failed counts and errors. */
     com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut bulkCreateProducts(
             java.util.List<com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn> rows);
+
+    /**
+     * Exports products in the given 1-based inclusive range (ordered deterministically by id) as the same
+     * {@link BulkProductDtoIn} JSON shape used to create them, so the result can be re-imported. Lets the
+     * admin export the catalog in fixed segments (1-1000, 1001-2000, …).
+     */
+    List<BulkProductDtoIn> exportProducts(int from, int to);
+
+    /** Total number of products (used to compute the export segments). */
+    long countProducts();
 
     /** Creates a single product manually from a friendly row; returns the new product id. */
     UUID createProductManual(com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn req);

@@ -36,7 +36,10 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEn
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductAttributeEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductSpecificationEntity;
+import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
+import com.nexaplatform.dropshipping.api.mapper.ProductBulkExportMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductPriceTierEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductReviewEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantOptionEntity;
@@ -60,7 +63,11 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -104,6 +111,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.VariantValueRepository variantValueRepository;
     private final JdbcTemplate jdbcTemplate;
     private final StorageService storageService;
+    private final ProductBulkExportMapper bulkExportMapper;
+
+    @PersistenceContext
+    private EntityManager em;
 
     // @Lazy field injection breaks the CatalogUseCaseImpl <-> CatalogFillWriter constructor cycle
     // (the writer ingests through this same use case).
@@ -960,6 +971,41 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (created > 0)
             productIndexer.reindexAll();
         return new com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut(created, failed, errors);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<BulkProductDtoIn> exportProducts(int from, int to) {
+        int safeFrom = Math.max(1, from);
+        int safeTo = Math.max(safeFrom, to);
+        int offset = safeFrom - 1;
+        int limit = safeTo - safeFrom + 1;
+        List<ProductEntity> products = em
+                .createQuery("SELECT p FROM ProductEntity p ORDER BY p.id ASC", ProductEntity.class)
+                .setFirstResult(offset).setMaxResults(limit).getResultList();
+        List<BulkProductDtoIn> out = new ArrayList<>();
+        for (ProductEntity p : products) {
+            var attributes = em.createQuery(
+                    "SELECT a FROM ProductAttributeEntity a WHERE a.product.id = :id", ProductAttributeEntity.class)
+                    .setParameter("id", p.getId()).getResultList();
+            var specs = em.createQuery(
+                    "SELECT s FROM ProductSpecificationEntity s WHERE s.product.id = :id ORDER BY s.position",
+                    ProductSpecificationEntity.class).setParameter("id", p.getId()).getResultList();
+            var tiers = em.createQuery(
+                    "SELECT t FROM ProductPriceTierEntity t WHERE t.product.id = :id ORDER BY t.minQty",
+                    ProductPriceTierEntity.class).setParameter("id", p.getId()).getResultList();
+            var reviews = em.createQuery(
+                    "SELECT r FROM ProductReviewEntity r WHERE r.product.id = :id ORDER BY r.createdAt",
+                    ProductReviewEntity.class).setParameter("id", p.getId()).getResultList();
+            out.add(bulkExportMapper.toBulk(p, attributes, specs, tiers, reviews));
+        }
+        return out;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countProducts() {
+        return em.createQuery("SELECT COUNT(p) FROM ProductEntity p", Long.class).getSingleResult();
     }
 
     @Override
