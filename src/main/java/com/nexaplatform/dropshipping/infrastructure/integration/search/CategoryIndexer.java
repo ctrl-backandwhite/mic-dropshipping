@@ -13,6 +13,8 @@ import org.opensearch.client.opensearch._types.mapping.TypeMapping;
 import org.opensearch.client.opensearch.core.IndexRequest;
 import org.opensearch.client.opensearch.indices.CreateIndexRequest;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,7 @@ public class CategoryIndexer {
 
     private final OpenSearchClient client;
     private final CategoryRepository categoryRepository;
+    private final CategorySearchService categorySearchService;
 
     @Value("${nexadrop.opensearch.categories-index:categories}")
     private String index;
@@ -57,6 +60,26 @@ public class CategoryIndexer {
             log.info("Created OpenSearch index '{}'", index);
         } catch (OpenSearchException | java.io.IOException e) {
             log.error("Failed to ensure OpenSearch category index: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Populates the index from the DB on startup when it is empty, so the OpenSearch-backed category
+     * listing has data without needing a manual reindex. Combined with the per-change indexing
+     * (create/update/delete), this keeps the index automatically in sync. Best-effort.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    @Transactional(readOnly = true)
+    public void warmUpOnStartup() {
+        try {
+            // Reuse the HTTP-based read path (the typed opensearch-java search() throws here). Empty
+            // Optional = empty index or OpenSearch down → (re)build it from the DB.
+            if (categorySearchService.listFromIndex(null).isEmpty()) {
+                log.info("Category index '{}' empty/unavailable on startup → reindexing", index);
+                reindexAll();
+            }
+        } catch (Exception e) {
+            log.warn("Category index warm-up skipped: {}", e.getMessage());
         }
     }
 

@@ -6,6 +6,9 @@ import com.nexaplatform.dropshipping.application.mapper.CategoryUpdateMapper;
 import com.nexaplatform.dropshipping.application.usecase.CategoryUseCase;
 import com.nexaplatform.dropshipping.domain.model.Category;
 import com.nexaplatform.dropshipping.domain.repository.CategoryRepository;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.CategorySearchService;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.CategorySearchService.IndexedCategory;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -16,9 +19,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -36,7 +41,8 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
 
     private final CategoryRepository categoryRepository;
     private final CategoryUpdateMapper categoryUpdateMapper;
-    private final com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer categoryIndexer;
+    private final CategoryIndexer categoryIndexer;
+    private final CategorySearchService categorySearchService;
 
     @PersistenceContext
     private EntityManager em;
@@ -45,11 +51,33 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
     @Transactional(readOnly = true)
     public List<Category> findAll() {
         Map<UUID, Long> productCount = productCountByCategory();
-        List<Category> categories = categoryRepository.findAll();
+        // DROP: list from the OpenSearch index (kept in sync on every change), falling back to the DB
+        // when the index is empty or OpenSearch is unavailable. productCount is not indexed, so it is
+        // resolved here with a single GROUP BY.
+        Optional<List<IndexedCategory>> indexed = categorySearchService.listFromIndex(null);
+        List<Category> categories = indexed.isPresent()
+                ? indexed.get().stream().map(this::fromIndexed).toList()
+                : categoryRepository.findAll();
         for (Category c : categories) {
             c.setProductCount(productCount.getOrDefault(c.getId(), 0L));
         }
         return categories;
+    }
+
+    /** Maps a category document read from the OpenSearch index to the domain model. */
+    private Category fromIndexed(IndexedCategory r) {
+        Map<String, String> names = new LinkedHashMap<>();
+        if (r.nameEs() != null) {
+            names.put("es", r.nameEs());
+        }
+        if (r.nameEn() != null) {
+            names.put("en", r.nameEn());
+        }
+        if (r.namePt() != null) {
+            names.put("pt", r.namePt());
+        }
+        return Category.builder().id(r.id()).slug(r.slug()).nameZh(r.nameZh()).names(names).icon(r.icon())
+                .position(r.position()).active(r.active()).parentId(r.parentId()).build();
     }
 
     @Override

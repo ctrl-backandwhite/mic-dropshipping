@@ -985,16 +985,16 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 .setFirstResult(offset).setMaxResults(limit).getResultList();
         List<BulkProductDtoIn> out = new ArrayList<>();
         for (ProductEntity p : products) {
-            var attributes = em.createQuery(
+            List<ProductAttributeEntity> attributes = em.createQuery(
                     "SELECT a FROM ProductAttributeEntity a WHERE a.product.id = :id", ProductAttributeEntity.class)
                     .setParameter("id", p.getId()).getResultList();
-            var specs = em.createQuery(
+            List<ProductSpecificationEntity> specs = em.createQuery(
                     "SELECT s FROM ProductSpecificationEntity s WHERE s.product.id = :id ORDER BY s.position",
                     ProductSpecificationEntity.class).setParameter("id", p.getId()).getResultList();
-            var tiers = em.createQuery(
+            List<ProductPriceTierEntity> tiers = em.createQuery(
                     "SELECT t FROM ProductPriceTierEntity t WHERE t.product.id = :id ORDER BY t.minQty",
                     ProductPriceTierEntity.class).setParameter("id", p.getId()).getResultList();
-            var reviews = em.createQuery(
+            List<ProductReviewEntity> reviews = em.createQuery(
                     "SELECT r FROM ProductReviewEntity r WHERE r.product.id = :id ORDER BY r.createdAt",
                     ProductReviewEntity.class).setParameter("id", p.getId()).getResultList();
             out.add(bulkExportMapper.toBulk(p, attributes, specs, tiers, reviews));
