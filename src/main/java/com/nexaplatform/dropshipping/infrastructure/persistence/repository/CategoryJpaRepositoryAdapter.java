@@ -25,14 +25,14 @@ public interface CategoryJpaRepositoryAdapter extends JpaRepository<CategoryEnti
     List<CategoryEntity> findAllWithTranslations();
 
     /**
-     * Indexed, paginated category listing with an optional free-text filter (slug, Chinese name or any
+     * Indexed, paginated category listing filtered by a non-null free-text term (slug, Chinese name or any
      * translated name). The DB applies LIMIT/OFFSET and the ordering uses the {@code (parent_id, position)}
-     * / {@code position} indexes (migration v57), so the query never loads the whole table into memory.
+     * / {@code position} indexes (migration v57). Callers pass a non-null {@code q}; the no-filter case
+     * uses {@code findAll(Pageable)} (a null bind here would make Postgres infer {@code lower(bytea)}).
      */
     @Query("""
             SELECT c FROM CategoryEntity c
-            WHERE :q IS NULL
-               OR LOWER(c.slug) LIKE LOWER(CONCAT('%', :q, '%'))
+            WHERE LOWER(c.slug) LIKE LOWER(CONCAT('%', :q, '%'))
                OR LOWER(c.nameZh) LIKE LOWER(CONCAT('%', :q, '%'))
                OR EXISTS (SELECT 1 FROM CategoryTranslationEntity t
                           WHERE t.category = c AND LOWER(t.name) LIKE LOWER(CONCAT('%', :q, '%')))

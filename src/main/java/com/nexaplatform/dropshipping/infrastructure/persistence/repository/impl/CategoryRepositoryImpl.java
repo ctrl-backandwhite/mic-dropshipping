@@ -8,6 +8,8 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryT
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.CategoryEntityMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryJpaRepositoryAdapter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
@@ -60,10 +62,14 @@ public class CategoryRepositoryImpl implements CategoryRepository {
     }
 
     @Override
-    public org.springframework.data.domain.Page<Category> search(String q,
-            org.springframework.data.domain.Pageable pageable) {
+    public Page<Category> search(String q, Pageable pageable) {
         String filter = (q == null || q.isBlank()) ? null : q.trim();
-        return categoryJpaRepositoryAdapter.search(filter, pageable).map(categoryEntityMapper::toDomain);
+        // No-filter case uses findAll(Pageable): binding a null term into the JPQL would make Postgres
+        // infer lower(bytea) and fail. With a term, the indexed search query runs.
+        Page<CategoryEntity> page = filter == null
+                ? categoryJpaRepositoryAdapter.findAll(pageable)
+                : categoryJpaRepositoryAdapter.search(filter, pageable);
+        return page.map(categoryEntityMapper::toDomain);
     }
 
     @Override
