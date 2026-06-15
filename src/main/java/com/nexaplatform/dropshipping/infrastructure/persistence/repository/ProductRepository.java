@@ -84,7 +84,11 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
               AND (CAST(:needle AS string) IS NULL
                    OR LOWER(p.titleZh) LIKE CONCAT('%', CAST(:needle AS string), '%')
                    OR LOWER(p.externalId) LIKE CONCAT('%', CAST(:needle AS string), '%')
-                   OR LOWER(p.slug) LIKE CONCAT('%', CAST(:needle AS string), '%'))
+                   OR LOWER(p.slug) LIKE CONCAT('%', CAST(:needle AS string), '%')
+                   OR EXISTS (SELECT 1 FROM ProductTranslationEntity t
+                              WHERE t.product = p
+                                AND (LOWER(t.title) LIKE CONCAT('%', CAST(:needle AS string), '%')
+                                     OR LOWER(t.shortDescription) LIKE CONCAT('%', CAST(:needle AS string), '%'))))
             """)
     Page<ProductEntity> searchStorefront(@Param("status") ProductStatus status, @Param("needle") String needle,
             @Param("categoryId") UUID categoryId, @Param("supplierId") UUID supplierId,
