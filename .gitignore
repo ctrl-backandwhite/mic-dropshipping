@@ -8,9 +8,9 @@ target/
 .env
 .env.local
 .env.*.local
-!.env.example
 *.log
 
 # Docker es solo para trabajo local (no versionado)
 Dockerfile
 **/Dockerfile
+.env*.example
