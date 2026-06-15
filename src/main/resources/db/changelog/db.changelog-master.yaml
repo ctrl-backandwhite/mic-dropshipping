@@ -119,3 +119,5 @@ databaseChangeLog:
       file: db/changelog/schema-v54-seed-warehouses.sql
   - include:
       file: db/changelog/schema-v55-shop-sync-observability.sql
+  - include:
+      file: db/changelog/schema-v56-affiliate-clicks-backfill.sql

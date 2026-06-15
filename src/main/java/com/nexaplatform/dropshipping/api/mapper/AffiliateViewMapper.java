@@ -27,7 +27,10 @@ public class AffiliateViewMapper {
 
     public AffiliateStats stats(List<AffiliateReferralCodeEntity> codes, List<AffiliateConversionEntity> conversions,
             List<AffiliateCommissionEntity> commissions, String currency) {
-        int clicks = codes.stream().mapToInt(AffiliateReferralCodeEntity::getClicks).sum();
+        // DROP-694: every conversion requires an attributed click, so clicks can never be fewer than
+        // conversions. Legacy/seed data left the per-code click counter at 0 while commissions existed,
+        // showing "0 clicks but paid commissions". Enforce the clicks >= conversions invariant on read.
+        int clicks = Math.max(codes.stream().mapToInt(AffiliateReferralCodeEntity::getClicks).sum(), conversions.size());
         long pending = sumByStatus(commissions, "PENDING");
         long approved = sumByStatus(commissions, "APPROVED");
         long paid = sumByStatus(commissions, "PAID");
@@ -45,7 +48,10 @@ public class AffiliateViewMapper {
 
     public AdminAffiliateRow toAdminRow(AffiliateEntity a, List<AffiliateReferralCodeEntity> codes,
             List<AffiliateCommissionEntity> commissions, String currency) {
-        int clicks = codes.stream().mapToInt(AffiliateReferralCodeEntity::getClicks).sum();
+        // DROP-694: clicks can never be fewer than confirmed conversions (referralsCount). Guards the
+        // admin panel against the "0 clicks but paid commissions" inconsistency from legacy/seed data.
+        int clicks = Math.max(codes.stream().mapToInt(AffiliateReferralCodeEntity::getClicks).sum(),
+                a.getReferralsCount());
         return new AdminAffiliateRow(a.getId(), a.getUser() != null ? a.getUser().getId() : null,
                 a.getUser() != null ? a.getUser().getDisplayName() : null,
                 a.getUser() != null ? a.getUser().getEmail() : null, a.getStatus(), codes.size(), clicks,
