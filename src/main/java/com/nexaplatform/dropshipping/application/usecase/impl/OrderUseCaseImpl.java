@@ -128,6 +128,20 @@ public class OrderUseCaseImpl implements OrderUseCase {
     }
 
     @Override
+    @Transactional
+    public Order createManualOrder(String customerEmail, CreateOrderRequest req) {
+        UUID userId = null;
+        if (customerEmail != null && !customerEmail.isBlank()) {
+            userId = userRepository.findByEmail(customerEmail.trim()).map(u -> u.getId())
+                    .orElseThrow(() -> new NotFoundException("No existe un usuario con email: " + customerEmail));
+        }
+        Order order = createOrder(null, userId, req);
+        log.info("Admin manual order {} created ({} items, customer={})", order.getOrderNumber(),
+                req.items().size(), customerEmail != null ? customerEmail : "guest");
+        return order;
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Order getOrder(UUID id) {
         return orderRepository.findById(id).orElseThrow(() -> new NotFoundException("Order not found: " + id));

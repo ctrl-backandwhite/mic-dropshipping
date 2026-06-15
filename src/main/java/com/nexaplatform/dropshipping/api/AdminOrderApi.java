@@ -1,16 +1,21 @@
 package com.nexaplatform.dropshipping.api;
 
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
+import com.nexaplatform.dropshipping.api.dto.in.AdminCreateOrderDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.AdminImportOrdersDtoIn;
+import com.nexaplatform.dropshipping.api.dto.out.AdminImportResultDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminOrderDetailDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminOrderRowDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.PartnerOrderDtoOut;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.UUID;
@@ -65,4 +70,14 @@ public interface AdminOrderApi {
     @ApiResponse(responseCode = "201", description = "Demo order created")
     @PostMapping("/demo")
     ResponseEntity<PartnerOrderDtoOut> createDemo();
+
+    @Operation(summary = "DROP-690: create a manual order from the admin panel")
+    @ApiResponse(responseCode = "201", description = "Order created")
+    @PostMapping
+    ResponseEntity<AdminOrderRowDtoOut> create(@Valid @RequestBody AdminCreateOrderDtoIn body);
+
+    @Operation(summary = "DROP-690: bulk import orders (per-row error reporting)")
+    @ApiResponse(responseCode = "200", description = "Import processed")
+    @PostMapping("/import")
+    ResponseEntity<AdminImportResultDtoOut> importOrders(@Valid @RequestBody AdminImportOrdersDtoIn body);
 }

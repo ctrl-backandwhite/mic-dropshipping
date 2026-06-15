@@ -22,6 +22,13 @@ public interface OrderUseCase extends BaseUseCase<Order, Order, UUID> {
     /** Creates an order, computing totals and snapshotting line items. */
     Order createOrder(UUID partnerAppId, UUID userId, CreateOrderRequest req);
 
+    /**
+     * DROP-690: admin manual order creation. Resolves the buyer by email (optional; must exist when
+     * provided) and reuses the core {@link #createOrder} flow. Used by the admin "create order" and
+     * "import orders" actions.
+     */
+    Order createManualOrder(String customerEmail, CreateOrderRequest req);
+
     /** Single order by id (throws when missing). */
     Order getOrder(UUID id);
 
