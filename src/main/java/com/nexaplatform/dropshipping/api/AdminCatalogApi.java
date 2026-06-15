@@ -125,6 +125,10 @@ public interface AdminCatalogApi {
     @DeleteMapping("/products/{id}")
     ResponseEntity<Void> deleteProduct(@PathVariable UUID id);
 
+    @Operation(summary = "Bulk-delete products by id (per-id error reporting; each refused if it has orders)")
+    @PostMapping("/products/bulk-delete")
+    ResponseEntity<Map<String, Object>> bulkDeleteProducts(@RequestBody List<UUID> ids);
+
     @Operation(summary = "Bulk-create products from a JSON array")
     @PostMapping("/products/bulk")
     ResponseEntity<BulkResultDtoOut> bulkProducts(@Valid @RequestBody List<BulkProductDtoIn> rows);

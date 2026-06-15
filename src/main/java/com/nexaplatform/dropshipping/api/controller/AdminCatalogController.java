@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -173,6 +174,21 @@ public class AdminCatalogController implements AdminCatalogApi {
     public ResponseEntity<Void> deleteProduct(UUID id) {
         catalogUseCase.deleteProduct(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> bulkDeleteProducts(List<UUID> ids) {
+        int deleted = 0;
+        List<String> errors = new ArrayList<>();
+        for (UUID id : ids) {
+            try {
+                catalogUseCase.deleteProduct(id); // per-id tx + cache evict; refused if it has orders
+                deleted++;
+            } catch (RuntimeException ex) {
+                errors.add(id + ": " + ex.getMessage());
+            }
+        }
+        return ResponseEntity.ok(Map.of("deleted", deleted, "failed", errors.size(), "errors", errors));
     }
 
     @Override
