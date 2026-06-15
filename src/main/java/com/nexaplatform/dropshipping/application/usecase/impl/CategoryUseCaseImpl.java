@@ -13,10 +13,15 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORIES_FLAT;
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORY_TREE;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -92,6 +97,8 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
 
     @Override
     @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_CATEGORY_TREE, allEntries = true),
+            @CacheEvict(value = CACHE_CATEGORIES_FLAT, allEntries = true)})
     public Category toggle(UUID id) {
         Category model = getById(id);
         model.setActive(!Boolean.TRUE.equals(model.getActive()));
@@ -103,6 +110,8 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
 
     @Override
     @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_CATEGORY_TREE, allEntries = true),
+            @CacheEvict(value = CACHE_CATEGORIES_FLAT, allEntries = true)})
     public Category update(Category model, UUID id) {
         Category existing = getById(id);
         if (!existing.getSlug().equals(model.getSlug())) {
@@ -134,6 +143,8 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
 
     @Override
     @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_CATEGORY_TREE, allEntries = true),
+            @CacheEvict(value = CACHE_CATEGORIES_FLAT, allEntries = true)})
     public void delete(UUID id) {
         getById(id);
         long products = productCount(id);

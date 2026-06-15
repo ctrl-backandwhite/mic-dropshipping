@@ -19,6 +19,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Produ
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -27,9 +28,13 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORIES_FLAT;
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORY_TREE;
+
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -53,18 +58,61 @@ public class CatalogStorefrontReadService {
 
     /* ============================ Categories ============================ */
 
+    // Cacheado por idioma (Caffeine 5 min / Redis): el catálogo de categorías cambia poco y lo consultan
+    // muchos usuarios a la vez. Spring+Caffeine coalescen los fallos de caché (solo 1 computa, el resto
+    // espera), evitando estampida con 30K usuarios concurrentes. Se invalida al crear/editar/borrar.
+    @Cacheable(value = CACHE_CATEGORIES_FLAT, key = "#lang")
     @Transactional(readOnly = true)
     public List<CategoryView> categoriesFlat(String lang) {
-        return categoryRepository.findAll().stream().filter(c -> c.getParent() == null)
-                .sorted(Comparator.comparingInt(CategoryEntity::getPosition)).map(c -> categoryView(c, lang, false))
-                .toList();
+        Map<UUID, Long> counts = productCountByCategory();
+        return categoryRepository.findByParentIsNullOrderByPositionAsc().stream()
+                .map(c -> viewWithCount(c, lang, List.of(), counts)).toList();
     }
 
+    @Cacheable(value = CACHE_CATEGORY_TREE, key = "#lang")
     @Transactional(readOnly = true)
     public List<CategoryView> categoriesTree(String lang) {
-        return categoryRepository.findAll().stream().filter(c -> c.getParent() == null)
-                .sorted(Comparator.comparingInt(CategoryEntity::getPosition)).map(c -> categoryView(c, lang, true))
-                .toList();
+        // O(n): one query for all categories (+translations), one GROUP BY for counts, tree built in
+        // memory. Avoids the per-node COUNT and the translations N+1 that made the cold build ~3s.
+        List<CategoryEntity> all = categoryRepository.findAllWithTranslations();
+        Map<UUID, Long> counts = productCountByCategory();
+        Map<UUID, List<CategoryEntity>> byParent = new HashMap<>();
+        List<CategoryEntity> roots = new ArrayList<>();
+        for (CategoryEntity c : all) {
+            if (c.getParent() == null) {
+                roots.add(c);
+            } else {
+                byParent.computeIfAbsent(c.getParent().getId(), k -> new ArrayList<>()).add(c);
+            }
+        }
+        roots.sort(Comparator.comparingInt(CategoryEntity::getPosition));
+        return roots.stream().map(r -> treeView(r, lang, byParent, counts)).toList();
+    }
+
+    /** Builds a category view (with its descendants) from the in-memory parent→children index. */
+    private CategoryView treeView(CategoryEntity c, String lang, Map<UUID, List<CategoryEntity>> byParent,
+            Map<UUID, Long> counts) {
+        List<CategoryEntity> kids = byParent.getOrDefault(c.getId(), List.of());
+        List<CategoryView> children = kids.stream().sorted(Comparator.comparingInt(CategoryEntity::getPosition))
+                .map(ch -> treeView(ch, lang, byParent, counts)).toList();
+        return viewWithCount(c, lang, children, counts);
+    }
+
+    private CategoryView viewWithCount(CategoryEntity c, String lang, List<CategoryView> children,
+            Map<UUID, Long> counts) {
+        long count = counts.getOrDefault(c.getId(), 0L);
+        return new CategoryView(c.getId(), c.getSlug(), translatedName(c, lang), c.getNameZh(),
+                c.getParent() != null ? c.getParent().getId() : null, c.getPosition(), c.getIcon(), (int) count,
+                children);
+    }
+
+    /** Product counts per category resolved in a single GROUP BY query. */
+    private Map<UUID, Long> productCountByCategory() {
+        Map<UUID, Long> map = new HashMap<>();
+        for (Object[] row : categoryRepository.productCountByCategory()) {
+            map.put((UUID) row[0], (Long) row[1]);
+        }
+        return map;
     }
 
     @Transactional(readOnly = true)

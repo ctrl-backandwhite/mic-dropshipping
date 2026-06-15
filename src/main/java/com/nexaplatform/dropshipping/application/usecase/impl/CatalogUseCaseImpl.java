@@ -73,6 +73,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORIES_FLAT;
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORY_TREE;
 import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRICING_AMOUNT;
 import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_DETAIL;
 import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_SUMMARY;
@@ -166,6 +168,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_CATEGORY_TREE, allEntries = true),
+            @CacheEvict(value = CACHE_CATEGORIES_FLAT, allEntries = true)})
     public CategoryEntity upsertCategory(IngestCategoryRequest req) {
         CategoryEntity entity = categoryRepository.findBySlug(req.slug())
                 .orElseGet(() -> CategoryEntity.builder().slug(req.slug()).active(true).build());
@@ -1488,6 +1492,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     }
 
     @Override
+    @Caching(evict = {@CacheEvict(value = CACHE_CATEGORY_TREE, allEntries = true),
+            @CacheEvict(value = CACHE_CATEGORIES_FLAT, allEntries = true)})
     public com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut bulkCreateCategories(
             java.util.List<com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn> rows) {
         int created = 0, failed = 0;
