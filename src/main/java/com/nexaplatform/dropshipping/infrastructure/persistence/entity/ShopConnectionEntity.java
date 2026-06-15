@@ -38,6 +38,13 @@ public class ShopConnectionEntity extends BaseEntity {
     @Column(name = "last_sync_at")
     private Instant lastSyncAt;
 
+    // DROP-693: resultado del último sync — por qué se publicaron 0 productos, o el error de la API.
+    @Column(name = "last_sync_error", length = 1000)
+    private String lastSyncError;
+
+    @Column(name = "last_sync_message", length = 500)
+    private String lastSyncMessage;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     @Builder.Default

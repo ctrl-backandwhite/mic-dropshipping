@@ -33,6 +33,9 @@ public class ShopListingDtoOut {
     @Schema(description = "Listing status")
     private String status;
 
+    @Schema(description = "DROP-693: publish error for this product, if status=ERROR")
+    private String errorMessage;
+
     @Schema(description = "Last push timestamp")
     private Instant lastPushedAt;
 }

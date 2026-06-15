@@ -33,6 +33,12 @@ public class ShopDtoOut {
     @Schema(description = "Last sync timestamp")
     private Instant lastSyncAt;
 
+    @Schema(description = "DROP-693: last sync result message (why 0 products, counts, etc.)")
+    private String lastSyncMessage;
+
+    @Schema(description = "DROP-693: last sync error, if any")
+    private String lastSyncError;
+
     @Schema(description = "Creation timestamp")
     private Instant createdAt;
 

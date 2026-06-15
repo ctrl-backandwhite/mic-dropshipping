@@ -20,4 +20,6 @@ public class ShopPlatform {
 
     private String code;
     private String label;
+    // DROP-701: si la integración está realmente disponible (conector implementado) o es "Próximamente".
+    private boolean available;
 }

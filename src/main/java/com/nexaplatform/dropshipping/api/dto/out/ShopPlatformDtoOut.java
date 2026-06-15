@@ -20,4 +20,7 @@ public class ShopPlatformDtoOut {
 
     @Schema(description = "Platform display label", example = "Shopify")
     private String label;
+
+    @Schema(description = "DROP-701: whether the integration is available (vs. coming soon)")
+    private boolean available;
 }

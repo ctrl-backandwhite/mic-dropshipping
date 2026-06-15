@@ -98,6 +98,7 @@ public class ShopProductListingRepositoryImpl implements ShopProductListingRepos
         }
         entity.setRemoteProductId(model.getRemoteProductId());
         entity.setStatus(model.getStatus());
+        entity.setErrorMessage(model.getErrorMessage());
         entity.setLastPushedAt(model.getLastPushedAt());
     }
 

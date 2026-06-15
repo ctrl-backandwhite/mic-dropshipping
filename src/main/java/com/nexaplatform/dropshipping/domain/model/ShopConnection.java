@@ -32,6 +32,8 @@ public class ShopConnection {
     private String accessTokenEnc;
     private String status;
     private Instant lastSyncAt;
+    private String lastSyncError;
+    private String lastSyncMessage;
     private Map<String, Object> metadata;
     private int listings;
     private Instant createdAt;

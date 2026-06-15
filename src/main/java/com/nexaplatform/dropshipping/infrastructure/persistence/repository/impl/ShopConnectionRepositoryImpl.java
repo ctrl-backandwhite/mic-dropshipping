@@ -82,6 +82,8 @@ public class ShopConnectionRepositoryImpl implements ShopConnectionRepository {
         entity.setAccessTokenEnc(model.getAccessTokenEnc());
         entity.setStatus(model.getStatus());
         entity.setLastSyncAt(model.getLastSyncAt());
+        entity.setLastSyncError(model.getLastSyncError());
+        entity.setLastSyncMessage(model.getLastSyncMessage());
         entity.setMetadata(model.getMetadata());
     }
 

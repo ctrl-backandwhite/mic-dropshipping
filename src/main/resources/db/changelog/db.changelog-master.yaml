@@ -117,3 +117,5 @@ databaseChangeLog:
       file: db/changelog/schema-v53-store-language.sql
   - include:
       file: db/changelog/schema-v54-seed-warehouses.sql
+  - include:
+      file: db/changelog/schema-v55-shop-sync-observability.sql

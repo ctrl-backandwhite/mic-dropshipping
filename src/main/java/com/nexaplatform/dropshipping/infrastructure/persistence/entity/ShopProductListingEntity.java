@@ -30,4 +30,7 @@ public class ShopProductListingEntity extends BaseEntity {
     private String status = "DRAFT";
     @Column(name = "last_pushed_at")
     private Instant lastPushedAt;
+    // DROP-693: error de publicación de este producto en la tienda (cuando status=ERROR).
+    @Column(name = "error_message", length = 1000)
+    private String errorMessage;
 }

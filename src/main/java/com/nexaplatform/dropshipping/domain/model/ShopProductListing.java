@@ -29,6 +29,7 @@ public class ShopProductListing {
     private String productTitle;
     private String remoteProductId;
     private String status;
+    private String errorMessage;
     private Instant lastPushedAt;
     private Instant createdAt;
     private Instant updatedAt;
