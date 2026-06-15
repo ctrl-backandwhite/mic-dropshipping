@@ -1,6 +1,5 @@
 package com.nexaplatform.dropshipping.api.dto.in;
 
-import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -30,7 +29,8 @@ public class BulkProductDtoIn {
     /** DROP-677: nombre de la categoría de origen en 1688 (resolución por nombre si no hay id mapeado). */
     private String category1688Name;
 
-    @NotBlank
+    // Ya NO es @NotBlank: el contenido puede venir por el mapa `translations` (cualquier idioma). El
+    // caso de uso valida que exista al menos un título y devuelve un mensaje claro si falta.
     private String titleEs;
 
     private String titleEn;

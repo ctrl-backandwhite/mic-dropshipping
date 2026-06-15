@@ -83,9 +83,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
-        List<String> details = ex.getBindingResult().getAllErrors().stream().map(ObjectError::getDefaultMessage)
-                .toList();
-        return new ResponseEntity<>(body("VE001", "Validation error", details), HttpStatus.BAD_REQUEST);
+        // DROP-682: el mensaje indica el/los campo(s) que fallan, no un genérico "Validation error".
+        List<String> details = ex.getBindingResult().getFieldErrors().stream()
+                .map(fe -> fe.getField() + ": " + fe.getDefaultMessage()).toList();
+        String msg = details.isEmpty() ? "Datos inválidos" : "Datos inválidos — " + String.join("; ", details);
+        return new ResponseEntity<>(body("VE001", msg, details), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(ConstraintViolationException.class)

@@ -435,11 +435,12 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     /** DROP-679: rellena meta_title/meta_description (solo si están vacíos) desde el contenido real. */
     private void generateSeoMetadata(ProductEntity p) {
         for (var tr : p.getTranslations()) {
-            String title = tr.getTitle() != null && !tr.getTitle().isBlank() ? tr.getTitle().trim() : null;
-            if (title == null) {
+            boolean zh = "zh".equalsIgnoreCase(tr.getLanguage());
+            String title = tr.getTitle() != null && !tr.getTitle().isBlank() ? sanitizeSeo(tr.getTitle(), zh) : null;
+            if (title == null || title.isBlank()) {
                 continue;
             }
-            if (tr.getMetaTitle() == null || tr.getMetaTitle().isBlank()) {
+            if (tr.getMetaTitle() == null || tr.getMetaTitle().isBlank() || (!zh && hasCjk(tr.getMetaTitle()))) {
                 String mt = title;
                 if (p.getBrand() != null && !p.getBrand().isBlank()
                         && !title.toLowerCase().contains(p.getBrand().toLowerCase())
@@ -448,17 +449,42 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 }
                 tr.setMetaTitle(mt.length() > 200 ? mt.substring(0, 200) : mt);
             }
-            if (tr.getMetaDescription() == null || tr.getMetaDescription().isBlank()) {
+            if (tr.getMetaDescription() == null || tr.getMetaDescription().isBlank()
+                    || (!zh && hasCjk(tr.getMetaDescription()))) {
                 String base = tr.getShortDescription() != null && !tr.getShortDescription().isBlank()
                         ? tr.getShortDescription()
                         : (tr.getDescription() != null ? tr.getDescription() : title);
-                String md = base.replaceAll("\\s+", " ").trim();
+                String md = sanitizeSeo(base, zh);
                 if (md.length() > 155) {
                     md = md.substring(0, 152).trim() + "…";
                 }
                 tr.setMetaDescription(md);
             }
         }
+    }
+
+    /**
+     * DROP-686: para idiomas no-chinos, elimina caracteres CJK (p.ej. 露趾) que se cuelan del origen,
+     * para que el SEO de un producto en español/inglés no contenga texto en chino. Colapsa espacios y
+     * limpia separadores huérfanos que queden tras la eliminación.
+     */
+    /** ¿Contiene caracteres CJK (chino/japonés/coreano)? */
+    private boolean hasCjk(String text) {
+        return text != null && text.matches(".*[\\u3400-\\u4DBF\\u4E00-\\u9FFF\\uF900-\\uFAFF].*");
+    }
+
+    private String sanitizeSeo(String text, boolean zh) {
+        if (text == null) {
+            return "";
+        }
+        String t = text;
+        if (!zh) {
+            t = t.replaceAll("[\\u3000-\\u303F\\u3400-\\u4DBF\\u4E00-\\u9FFF\\uF900-\\uFAFF\\uFF00-\\uFFEF]", " ");
+            t = t.replaceAll("\\s*([|·,;])\\s*([|·,;])", " $1 "); // separadores duplicados
+            t = t.replaceAll("\\s*([|·])\\s*$", "");             // separador colgante final
+            t = t.replaceAll("^\\s*([|·,;])\\s*", "");           // separador colgante inicial
+        }
+        return t.replaceAll("\\s+", " ").trim();
     }
 
     @Override
@@ -510,7 +536,14 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     public ProductDetailView duplicateProduct(UUID id, String lang) {
         ProductEntity src = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Product not found: " + id));
-        String newExt = src.getExternalId() + "-COPY-" + System.currentTimeMillis() % 100000;
+        // DROP-681: external_id es varchar(120). Con externalId largos (BULK-…), "-COPY-…" lo
+        // desbordaba y el insert fallaba (500). Se capa la base para que el resultado quepa en 120.
+        String copySuffix = "-COPY-" + (System.currentTimeMillis() % 100000);
+        String base = src.getExternalId() != null ? src.getExternalId() : "PRODUCT";
+        if (base.length() > 120 - copySuffix.length()) {
+            base = base.substring(0, 120 - copySuffix.length());
+        }
+        String newExt = base + copySuffix;
         ProductEntity copy = ProductEntity.builder().source(src.getSource()).externalId(newExt)
                 .titleZh(src.getTitleZh() + " (copy)").shortDescriptionZh(src.getShortDescriptionZh())
                 .descriptionZh(src.getDescriptionZh()).brand(src.getBrand()).moq(src.getMoq())
@@ -634,10 +667,14 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             if (p.getStatus() != ProductStatus.ACTIVE) {
                 continue;
             }
-            boolean missing = p.getTranslations().stream().anyMatch(tr ->
-                    tr.getTitle() != null && !tr.getTitle().isBlank()
-                            && (tr.getMetaTitle() == null || tr.getMetaTitle().isBlank()
-                                    || tr.getMetaDescription() == null || tr.getMetaDescription().isBlank()));
+            boolean missing = p.getTranslations().stream().anyMatch(tr -> {
+                boolean zh = "zh".equalsIgnoreCase(tr.getLanguage());
+                return tr.getTitle() != null && !tr.getTitle().isBlank()
+                        && (tr.getMetaTitle() == null || tr.getMetaTitle().isBlank()
+                                || tr.getMetaDescription() == null || tr.getMetaDescription().isBlank()
+                                // DROP-686: meta contaminado con CJK en idioma no-chino → regenerar.
+                                || (!zh && (hasCjk(tr.getMetaTitle()) || hasCjk(tr.getMetaDescription()))));
+            });
             if (missing) {
                 generateSeoMetadata(p);
                 productJpaRepository.save(p);
@@ -1025,6 +1062,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             }
         }
         String esTitle = r.getTitleEs();
+        // DROP-682: el título es obligatorio en al menos un idioma; mensaje claro (no genérico).
+        if (esTitle == null || esTitle.isBlank()) {
+            throw new BusinessException("Falta el título del producto en al menos un idioma (titleEs o translations).");
+        }
         String enTitle = (r.getTitleEn() != null && !r.getTitleEn().isBlank()) ? r.getTitleEn() : esTitle;
         String zhTitle = (r.getTitleZh() != null && !r.getTitleZh().isBlank()) ? r.getTitleZh() : esTitle;
         String esDesc = (r.getDescriptionEs() != null && !r.getDescriptionEs().isBlank()) ? r.getDescriptionEs()
@@ -1552,7 +1593,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             String name = (supplierName != null && !supplierName.isBlank()) ? supplierName.trim()
                     : ("Proveedor " + ext);
             String extId = ext.length() > 100 ? ext.substring(0, 100) : ext;
-            return supplierRepository.save(SupplierEntity.builder().source("1688").externalId(extId).name(name)
+            return supplierRepository.save(SupplierEntity.builder().source("1688").externalId(extId).name(name).country("CN")
                     .verified(false).trustPass(false).build()).getId();
         }
         // Si se da el nombre del proveedor/fábrica, buscar o CREAR uno con ese nombre — no reutilizar
@@ -1564,7 +1605,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 if (ext.length() > 100) {
                     ext = ext.substring(0, 100);
                 }
-                return supplierRepository.save(SupplierEntity.builder().source("1688").externalId(ext).name(name)
+                return supplierRepository.save(SupplierEntity.builder().source("1688").externalId(ext).name(name).country("CN")
                         .verified(false).trustPass(false).build()).getId();
             });
         }
