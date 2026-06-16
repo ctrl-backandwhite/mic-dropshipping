@@ -70,6 +70,19 @@ public interface PaymentUseCase extends BaseUseCase<Payment, Payment, UUID> {
     /** Dev-only mock-confirm of a pending order payment. */
     Payment confirmMockOrderPayment(UUID orderId, UUID paymentId);
 
+    /**
+     * Confirm an order payment against the REAL provider on buyer return: Stripe Checkout
+     * Session retrieve (payment_status=paid) or PayPal Orders capture. Falls back to a mock
+     * confirm when the provider is disabled. Marks the order PAID on success.
+     */
+    Payment confirmOrderPayment(UUID orderId, UUID paymentId);
+
+    /**
+     * Refund a SUCCEEDED order payment at the provider (Stripe Refund / PayPal capture refund).
+     * {@code amountCents <= 0} performs a full refund. Marks the payment REFUNDED.
+     */
+    Payment refundOrderPayment(UUID orderId, UUID paymentId, long amountCents);
+
     /* ============ Webhook dispatch (signature verified in the controller) ============ */
 
     /** Handle a signature-verified Stripe event; returns the HTTP body to echo back. */

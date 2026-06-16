@@ -41,4 +41,10 @@ public class MeOrderPaymentController implements MeOrderPaymentApi {
         return ResponseEntity
                 .ok(orderPaymentDtoMapper.toDtoOut(paymentUseCase.confirmMockOrderPayment(orderId, paymentId)));
     }
+
+    @Override
+    public ResponseEntity<OrderPaymentDtoOut> confirm(Authentication auth, UUID orderId, UUID paymentId) {
+        return ResponseEntity
+                .ok(orderPaymentDtoMapper.toDtoOut(paymentUseCase.confirmOrderPayment(orderId, paymentId)));
+    }
 }

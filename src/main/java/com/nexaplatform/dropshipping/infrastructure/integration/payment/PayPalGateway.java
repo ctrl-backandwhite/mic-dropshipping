@@ -44,6 +44,9 @@ public class PayPalGateway implements PaymentGateway {
     private String platformId;
     @Value("${nexadrop.paypal.platform-env:dev}")
     private String platformEnv;
+    /** Base pública del storefront, para la URL de retorno de los pagos de pedido. */
+    @Value("${nexadrop.storefront.base-url:http://localhost:3003}")
+    private String storefrontBaseUrl;
 
     private final WebClient.Builder webClientBuilder;
     public PayPalGateway(WebClient.Builder b) {
@@ -62,11 +65,19 @@ public class PayPalGateway implements PaymentGateway {
 
     @Override
     public InitiateResult initiate(PaymentEntity p) {
+        boolean isOrder = p.getOrderId() != null;
+        // Pagos de pedido vuelven al retorno unificado del checkout; recargas de wallet, al de wallet.
+        String effReturnUrl = isOrder
+                ? storefrontBaseUrl + "/checkout/return?provider=paypal&orderId=" + p.getOrderId() + "&paymentId="
+                        + p.getId()
+                : returnUrl;
+        String effCancelUrl = isOrder ? storefrontBaseUrl + "/checkout?cancelled=1" : cancelUrl;
+
         if (!isActive()) {
             String mock = "paypal_mock_" + p.getId();
             log.info("PayPal mock-mode for payment {}", p.getId());
-            return new InitiateResult(mock, null, "/wallet/paypal-return?token=" + mock + "&mock=1", null, null, null,
-                    Map.of("mock", true));
+            String mockReturn = isOrder ? effReturnUrl + "&mock=1" : "/wallet/paypal-return?token=" + mock + "&mock=1";
+            return new InitiateResult(mock, null, mockReturn, null, null, null, Map.of("mock", true));
         }
         String token = fetchAccessToken();
         BigDecimal amount = BigDecimal.valueOf(p.getAmountUsdCents()).divide(BigDecimal.valueOf(100), 2,
@@ -74,7 +85,6 @@ public class PayPalGateway implements PaymentGateway {
 
         // PayPal expone `custom_id` (max 127 chars) y `invoice_id` por purchase_unit:
         // los usamos para identificar la plataforma + entidad NX036.
-        boolean isOrder = p.getOrderId() != null;
         String description = platformId + " · " + (isOrder ? "order " + p.getOrderId() : "wallet recharge");
         String customId = platformId + ":" + (isOrder ? "order:" + p.getOrderId() : "wallet:" + p.getId());
 
@@ -88,7 +98,7 @@ public class PayPalGateway implements PaymentGateway {
 
         Map<String, Object> body = Map.of("intent", "CAPTURE", "purchase_units", List.of(purchase),
                 "application_context", Map.of("brand_name", "NX036 Dropshipping (" + platformEnv + ")", "user_action",
-                        "PAY_NOW", "return_url", returnUrl, "cancel_url", cancelUrl));
+                        "PAY_NOW", "return_url", effReturnUrl, "cancel_url", effCancelUrl));
 
         @SuppressWarnings("unchecked")
         Map<String, Object> resp = (Map<String, Object>) webClientBuilder.build().post()
@@ -131,6 +141,52 @@ public class PayPalGateway implements PaymentGateway {
         String status = String.valueOf(providerPayload.getOrDefault("status", ""));
         boolean ok = "COMPLETED".equalsIgnoreCase(status);
         return new ConfirmResult(ok, ok ? null : "PayPal status: " + status, providerPayload);
+    }
+
+    /**
+     * Refunds a captured payment. {@code captureId} is the capture id returned by
+     * {@link #capture(String)} (see {@link #extractCaptureId(Map)}). Full refund when
+     * {@code amountCents <= 0}; otherwise a partial refund of that USD amount.
+     */
+    public Map<String, Object> refund(String captureId, long amountCents) {
+        if (!isActive())
+            return Map.of("status", "COMPLETED", "mock", true);
+        String token = fetchAccessToken();
+        Map<String, Object> body = amountCents > 0
+                ? Map.of("amount", Map.of("currency_code", "USD", "value",
+                        BigDecimal.valueOf(amountCents).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
+                                .toPlainString()))
+                : Map.of();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resp = (Map<String, Object>) webClientBuilder.build().post()
+                .uri(baseUrl + "/v2/payments/captures/" + captureId + "/refund")
+                .header("Authorization", "Bearer " + token).header("Content-Type", "application/json").bodyValue(body)
+                .retrieve().bodyToMono(Map.class).timeout(Duration.ofSeconds(20)).block();
+        return resp != null ? resp : new HashMap<>();
+    }
+
+    /**
+     * Digs the capture id out of a PayPal Orders Capture response
+     * ({@code purchase_units[0].payments.captures[0].id}). Returns null if absent.
+     */
+    @SuppressWarnings("unchecked")
+    public static String extractCaptureId(Map<String, Object> captureResponse) {
+        if (captureResponse == null)
+            return null;
+        Object units = captureResponse.get("purchase_units");
+        if (!(units instanceof List<?> unitList) || unitList.isEmpty())
+            return null;
+        Object first = unitList.get(0);
+        if (!(first instanceof Map<?, ?> unit))
+            return null;
+        Object payments = ((Map<String, Object>) unit).get("payments");
+        if (!(payments instanceof Map<?, ?> pay))
+            return null;
+        Object captures = ((Map<String, Object>) pay).get("captures");
+        if (!(captures instanceof List<?> capList) || capList.isEmpty())
+            return null;
+        Object cap = capList.get(0);
+        return cap instanceof Map<?, ?> capMap ? String.valueOf(((Map<String, Object>) capMap).get("id")) : null;
     }
 
     private String fetchAccessToken() {

@@ -10,6 +10,8 @@ import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
 import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
+import com.nexaplatform.dropshipping.infrastructure.integration.payment.PayPalGateway;
+import com.nexaplatform.dropshipping.infrastructure.integration.payment.StripeGateway;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.Payment;
 import com.nexaplatform.dropshipping.domain.model.Wallet;
@@ -180,7 +182,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         if (p.getMethod() != PaymentMethod.PAYPAL)
             throw new BusinessException("Not a PayPal payment");
         PaymentGateway gw = resolveGateway(PaymentMethod.PAYPAL);
-        if (!(gw instanceof com.nexaplatform.dropshipping.infrastructure.integration.payment.PayPalGateway pp)) {
+        if (!(gw instanceof PayPalGateway pp)) {
             throw new BusinessException("PayPal gateway not configured");
         }
         Map<String, Object> resp = pp.capture(p.getProviderRef());
@@ -189,6 +191,92 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             return confirmSucceeded(p.getId(), resp);
         }
         return markFailed(p.getId(), "PayPal capture returned " + status, resp);
+    }
+
+    @Override
+    @Transactional
+    public Payment confirmOrderPayment(UUID orderId, UUID paymentId) {
+        Payment p = getOrderPayment(orderId, paymentId);
+        if (p.getStatus() == PaymentStatus.SUCCEEDED) {
+            return p; // idempotente
+        }
+        // Proveedor deshabilitado / mock-mode: el providerRef lleva el prefijo sintético.
+        String ref = p.getProviderRef() != null ? p.getProviderRef() : "";
+        boolean mock = ref.startsWith("cs_mock_") || ref.startsWith("paypal_mock_") || ref.startsWith("pi_mock_");
+        if (mock) {
+            return confirmSucceeded(p.getId(), Map.of("mock_confirm", true, "orderId", orderId.toString()));
+        }
+        if (p.getMethod() == PaymentMethod.PAYPAL) {
+            // El comprador ya aprobó la orden en PayPal; capturamos del lado servidor.
+            return capturePayPal(p.getId());
+        }
+        if (p.getMethod() == PaymentMethod.CARD) {
+            PaymentGateway gw = resolveGateway(PaymentMethod.CARD);
+            if (!(gw instanceof StripeGateway sg)) {
+                throw new BusinessException("Stripe gateway not configured");
+            }
+            Map<String, Object> resp = sg.retrieveCheckoutSession(p.getProviderRef());
+            String status = String.valueOf(resp.getOrDefault("status", ""));
+            if ("paid".equals(status) || Boolean.TRUE.equals(resp.get("mock"))) {
+                return confirmSucceeded(p.getId(), resp);
+            }
+            return markFailed(p.getId(), "Stripe session status: " + status, resp);
+        }
+        throw new BusinessException("Confirm not supported for method: " + p.getMethod());
+    }
+
+    @Override
+    @Transactional
+    public Payment refundOrderPayment(UUID orderId, UUID paymentId, long amountCents) {
+        Payment p = getOrderPayment(orderId, paymentId);
+        if (p.getStatus() != PaymentStatus.SUCCEEDED) {
+            throw new BusinessException("Only a succeeded payment can be refunded (status=" + p.getStatus() + ")");
+        }
+        Map<String, Object> pr = p.getProviderResponse() != null ? p.getProviderResponse() : Map.of();
+        Map<String, Object> result;
+
+        if (p.getMethod() == PaymentMethod.PAYPAL) {
+            PaymentGateway gw = resolveGateway(PaymentMethod.PAYPAL);
+            if (!(gw instanceof PayPalGateway pp)) {
+                throw new BusinessException("PayPal gateway not configured");
+            }
+            String captureId = PayPalGateway.extractCaptureId(pr);
+            if (captureId == null) {
+                captureId = p.getProviderRef(); // fallback (mock)
+            }
+            result = pp.refund(captureId, amountCents);
+            String status = String.valueOf(result.getOrDefault("status", ""));
+            boolean ok = "COMPLETED".equalsIgnoreCase(status) || "PENDING".equalsIgnoreCase(status)
+                    || Boolean.TRUE.equals(result.get("mock"));
+            if (!ok) {
+                throw new BusinessException("PayPal refund failed: " + status);
+            }
+        } else if (p.getMethod() == PaymentMethod.CARD) {
+            PaymentGateway gw = resolveGateway(PaymentMethod.CARD);
+            if (!(gw instanceof StripeGateway sg)) {
+                throw new BusinessException("Stripe gateway not configured");
+            }
+            String paymentIntentId = String.valueOf(pr.getOrDefault("paymentIntent", p.getProviderRef()));
+            result = sg.refund(paymentIntentId, amountCents);
+            String status = String.valueOf(result.getOrDefault("status", ""));
+            boolean ok = "succeeded".equalsIgnoreCase(status) || "pending".equalsIgnoreCase(status)
+                    || Boolean.TRUE.equals(result.get("mock"));
+            if (!ok) {
+                throw new BusinessException("Stripe refund failed: " + status);
+            }
+        } else {
+            throw new BusinessException("Refund not supported for method: " + p.getMethod());
+        }
+
+        p.setStatus(PaymentStatus.REFUNDED);
+        Map<String, Object> merged = new HashMap<>(pr);
+        merged.put("refund", result);
+        merged.put("refunded_at", Instant.now().toString());
+        p.setProviderResponse(merged);
+        p = paymentRepository.save(p);
+        auditLogger.log("order_payment.refunded", p.getUserEmail(),
+                Map.of("paymentId", p.getId(), "orderId", orderId, "method", p.getMethod(), "amountCents", amountCents));
+        return p;
     }
 
     @Override

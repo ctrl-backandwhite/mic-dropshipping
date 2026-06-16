@@ -34,4 +34,9 @@ public interface MeOrderPaymentApi {
     @PostMapping("/{orderId}/payments/{paymentId}/confirm-mock")
     ResponseEntity<OrderPaymentDtoOut> confirmMock(Authentication auth, @PathVariable UUID orderId,
             @PathVariable UUID paymentId);
+
+    @Operation(summary = "Confirm an order payment on buyer return (Stripe session / PayPal capture)")
+    @PostMapping("/{orderId}/payments/{paymentId}/confirm")
+    ResponseEntity<OrderPaymentDtoOut> confirm(Authentication auth, @PathVariable UUID orderId,
+            @PathVariable UUID paymentId);
 }

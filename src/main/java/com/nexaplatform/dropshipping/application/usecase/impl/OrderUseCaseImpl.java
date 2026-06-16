@@ -11,10 +11,13 @@ import com.nexaplatform.dropshipping.application.service.AffiliateProgramService
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
 import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
+import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
+import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
+import com.nexaplatform.dropshipping.domain.model.Payment;
 import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
@@ -67,6 +70,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final NotificationsPublisher notificationsPublisher;
     private final PricingService pricingService;
     private final AffiliateProgramService affiliateProgramService;
+    private final PaymentUseCase paymentUseCase;
 
     @Value("${nexadrop.demo.orders-enabled:false}")
     private boolean demoOrdersEnabled;
@@ -306,10 +310,21 @@ public class OrderUseCaseImpl implements OrderUseCase {
         if (o.getStatus() == OrderStatus.CANCELLED) {
             throw new BusinessException("Cannot refund a cancelled order");
         }
-        long amountCents = o.getTotalCents();
-        if (o.getUserId() != null && amountCents > 0) {
-            walletUseCase.deposit(o.getUserId(), amountCents, o.getId(), "refund-" + o.getId(),
-                    "Refund order " + o.getOrderNumber());
+        // Si la orden se pagó con un proveedor externo (Stripe/PayPal), el reembolso se hace
+        // EN el proveedor (devuelve el dinero a la tarjeta/cuenta PayPal del cliente). Sólo si se
+        // pagó con saldo de wallet (o sin pago externo) acreditamos el wallet.
+        Payment external = paymentUseCase.listOrderPayments(id).stream()
+                .filter(p -> p.getStatus() == PaymentStatus.SUCCEEDED)
+                .filter(p -> "stripe".equals(p.getProvider()) || "paypal".equals(p.getProvider())).findFirst()
+                .orElse(null);
+        if (external != null) {
+            paymentUseCase.refundOrderPayment(id, external.getId(), 0); // reembolso total en el proveedor
+        } else {
+            long amountCents = o.getTotalCents();
+            if (o.getUserId() != null && amountCents > 0) {
+                walletUseCase.deposit(o.getUserId(), amountCents, o.getId(), "refund-" + o.getId(),
+                        "Refund order " + o.getOrderNumber());
+            }
         }
         o.setStatus(OrderStatus.REFUNDED);
         o = orderRepository.save(o);
