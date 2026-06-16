@@ -25,7 +25,7 @@ import java.util.UUID;
 public class PriceRuleDtoIn {
 
     @NotNull
-    @Pattern(regexp = "^(GLOBAL|CATEGORY|SUPPLIER|PRODUCT|VARIANT)$")
+    @Pattern(regexp = "^(GLOBAL|CATEGORY|SUPPLIER|PRODUCT|PRODUCT_GROUP|VARIANT)$")
     @Schema(description = "Rule scope", example = "GLOBAL")
     private String scope;
 

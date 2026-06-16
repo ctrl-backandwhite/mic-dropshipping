@@ -6,6 +6,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PriceRule
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PriceRuleRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductGroupMemberRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +19,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -65,6 +67,7 @@ public class MarginService {
     }
 
     private final PriceRuleRepository repository;
+    private final ProductGroupMemberRepository groupMemberRepository;
     private final List<PriceRuleEntity> cache = new CopyOnWriteArrayList<>();
     private volatile Instant cacheStamp = Instant.EPOCH;
 
@@ -106,12 +109,16 @@ public class MarginService {
         UUID categoryId = (product != null && product.getCategory() != null) ? product.getCategory().getId() : null;
 
         for (PriceRuleScope scope : PriceRuleScope.values()) {
-            UUID target = switch (scope) {
-                case VARIANT -> variantId;
-                case PRODUCT -> productId;
-                case SUPPLIER -> supplierId;
-                case CATEGORY -> categoryId;
-                case GLOBAL -> null;
+            // A product can belong to several groups, so PRODUCT_GROUP matches a SET of scopeIds; the
+            // other scopes resolve to a single id. The group membership is only queried when there is at
+            // least one active PRODUCT_GROUP rule (keeps the pricing hot path free of extra queries).
+            final Set<UUID> targets = switch (scope) {
+                case VARIANT -> variantId != null ? Set.of(variantId) : Set.of();
+                case PRODUCT -> productId != null ? Set.of(productId) : Set.of();
+                case PRODUCT_GROUP -> (productId != null && hasGroupRules()) ? groupIdsOf(productId) : Set.of();
+                case SUPPLIER -> supplierId != null ? Set.of(supplierId) : Set.of();
+                case CATEGORY -> categoryId != null ? Set.of(categoryId) : Set.of();
+                case GLOBAL -> Set.of();
             };
             // DROP-630: when several active rules of the SAME scope match the same cost,
             // the declared VARIANT>PRODUCT>… order only disambiguates across levels, not within
@@ -120,12 +127,21 @@ public class MarginService {
             Optional<PriceRuleEntity> match = cache.stream().filter(PriceRuleEntity::isActive)
                     .filter(r -> r.getScope() == scope)
                     .filter(r -> scope == PriceRuleScope.GLOBAL
-                            || (r.getScopeId() != null && r.getScopeId().equals(target)))
+                            || (r.getScopeId() != null && targets.contains(r.getScopeId())))
                     .filter(r -> matchesCostRange(r, costUsd)).min(MOST_SPECIFIC);
             if (match.isPresent())
                 return match;
         }
         return Optional.empty();
+    }
+
+    /** Whether any cached rule targets a product group (gates the membership query). */
+    private boolean hasGroupRules() {
+        return cache.stream().anyMatch(r -> r.isActive() && r.getScope() == PriceRuleScope.PRODUCT_GROUP);
+    }
+
+    private Set<UUID> groupIdsOf(UUID productId) {
+        return Set.copyOf(groupMemberRepository.findGroupIdsByProductId(productId));
     }
 
     /* ============ Admin operations ============ */

@@ -123,3 +123,5 @@ databaseChangeLog:
       file: db/changelog/schema-v56-affiliate-clicks-backfill.sql
   - include:
       file: db/changelog/schema-v57-category-perf-indexes.sql
+  - include:
+      file: db/changelog/schema-v58-product-groups.sql

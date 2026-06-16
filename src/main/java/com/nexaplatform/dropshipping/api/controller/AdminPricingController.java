@@ -83,6 +83,7 @@ public class AdminPricingController implements AdminPricingApi {
                 + "FROM category c WHERE c.id IN (%s)"));
         names.putAll(lookup("SUPPLIER", idsByScope, "SELECT id, COALESCE(name, name_zh) FROM supplier WHERE id IN (%s)"));
         names.putAll(lookup("PRODUCT", idsByScope, "SELECT id, COALESCE(NULLIF(title_zh,''), slug) FROM product WHERE id IN (%s)"));
+        names.putAll(lookup("PRODUCT_GROUP", idsByScope, "SELECT id, name FROM product_group WHERE id IN (%s)"));
         names.putAll(lookup("VARIANT", idsByScope, "SELECT id, COALESCE(NULLIF(title,''), sku) FROM product_variant WHERE id IN (%s)"));
         for (PriceRuleDtoOut d : dtos) {
             if (d.getScopeId() != null) {
