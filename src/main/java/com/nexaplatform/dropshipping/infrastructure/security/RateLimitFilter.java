@@ -129,9 +129,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (path.startsWith("/api/v1/integrations/shops/"))
             return new RateRule("inbound.shop", Scope.PATH_SEG_3, 240, Duration.ofMinutes(1));
 
-        // Public storefront — per IP, generous but bounded.
+        // Public storefront API (versioned, for developers) — per IP, generous but bounded.
         if (path.startsWith("/api/v1/storefront/"))
             return new RateRule("storefront", Scope.IP, 60, Duration.ofMinutes(1));
+
+        // Public storefront API used by the web SPA (catalog browse) — per IP. Anti-clonado: frena el
+        // volcado masivo del catálogo/fichas sin molestar a un humano (una página son ~3-5 llamadas).
+        if (path.startsWith("/api/storefront/"))
+            return new RateRule("storefront.web", Scope.IP, 100, Duration.ofMinutes(1));
 
         return null;
     }
@@ -183,6 +188,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 planTiered("partner.shop.sync", "/api/v1/partner/shop/**", "per client_id (JWT sub)"),
                 policy("inbound.shop", "/api/v1/integrations/shops/{id}/**", "per shopConnection id", 240, "1m"),
                 policy("storefront", "/api/v1/storefront/**", "per IP", 60, "1m"),
+                policy("storefront.web", "/api/storefront/**", "per IP", 100, "1m"),
                 policy("oauth.token", "/oauth2/token", "per IP", 30, "1m"),
                 policy("auth.login", "/login", "per IP", 20, "1m"),
                 policy("auth.register", "/api/auth/register", "per IP", 5, "1h"),
