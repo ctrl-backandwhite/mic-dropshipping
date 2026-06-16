@@ -206,7 +206,9 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     @Override
     @Transactional(readOnly = true)
     public List<SubscriptionPlanEntity> listPublicPlans() {
-        return planRepository.findByActiveTrueOrderByPositionAsc();
+        // JOIN FETCH features: el mapper del controller los lee fuera de esta transacción (evita
+        // LazyInitializationException que tiraba todo el listado de planes con 500).
+        return planRepository.findActiveWithFeatures();
     }
 
     /** Resolves the managed plan entity by its unique code, failing if it does not exist. */
