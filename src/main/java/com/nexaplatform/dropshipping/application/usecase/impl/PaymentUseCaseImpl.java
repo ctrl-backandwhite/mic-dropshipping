@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
+import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
@@ -61,6 +62,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     private final AuditLogger auditLogger;
     private final PartnerPlanSyncService partnerPlanSyncService;
     private final ObjectMapper objectMapper;
+    private final OrderEmailService orderEmailService;
 
     @Override
     @Transactional
@@ -143,14 +145,22 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         if (isOrderPayment) {
             // El cobro externo (Stripe/PayPal/USDT) ya capturó el dinero. Marcamos
             // la orden como PAID para que el FulfillmentService la recoja.
-            orderRepository.findById(p.getOrderId()).ifPresent(o -> {
-                if (o.getStatus() == OrderStatus.PENDING || o.getStatus() == OrderStatus.AWAITING_PAYMENT) {
-                    o.setStatus(OrderStatus.PAID);
-                    orderRepository.save(o);
-                }
-            });
+            Order order = orderRepository.findById(p.getOrderId()).orElse(null);
+            if (order != null && (order.getStatus() == OrderStatus.PENDING
+                    || order.getStatus() == OrderStatus.AWAITING_PAYMENT)) {
+                order.setStatus(OrderStatus.PAID);
+                order = orderRepository.save(order);
+            }
             auditLogger.log("order_payment.succeeded", p.getUserEmail(), Map.of("paymentId", p.getId(), "orderId",
                     p.getOrderId(), "method", p.getMethod(), "amount_usd_cents", p.getAmountUsdCents()));
+            // Email de confirmación de pago + FACTURA al comprador.
+            if (order != null) {
+                String email = p.getUserEmail() != null ? p.getUserEmail()
+                        : userRepository.findById(p.getUserId()).map(u -> u.getEmail()).orElse(null);
+                String locale = userRepository.findById(p.getUserId()).map(u -> u.getLanguage()).orElse(null);
+                orderEmailService.paymentConfirmed(order, email, locale,
+                        p.getMethod() != null ? p.getMethod().name() : null);
+            }
         } else {
             // Recarga de wallet: acreditar saldo.
             String idempKey = "deposit-" + p.getId();
@@ -403,10 +413,14 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
         // La orden pasa a PAID — el FulfillmentService la recogerá.
         order.setStatus(OrderStatus.PAID);
-        orderRepository.save(order);
+        order = orderRepository.save(order);
 
         auditLogger.log("order_payment.wallet", p.getUserEmail(),
                 Map.of("orderId", orderId, "paymentId", p.getId(), "amountCents", amountUsdCents));
+        // Email de confirmación de pago + FACTURA (pago con saldo del wallet).
+        String email = userRepository.findById(payerUserId).map(u -> u.getEmail()).orElse(null);
+        String locale = userRepository.findById(payerUserId).map(u -> u.getLanguage()).orElse(null);
+        orderEmailService.paymentConfirmed(order, email, locale, "WALLET");
         return p;
     }
 

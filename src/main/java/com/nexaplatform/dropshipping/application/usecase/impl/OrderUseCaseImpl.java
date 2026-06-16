@@ -8,6 +8,7 @@ import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
+import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
 import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
@@ -71,6 +72,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final PricingService pricingService;
     private final AffiliateProgramService affiliateProgramService;
     private final PaymentUseCase paymentUseCase;
+    private final OrderEmailService orderEmailService;
 
     @Value("${nexadrop.demo.orders-enabled:false}")
     private boolean demoOrdersEnabled;
@@ -272,6 +274,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         o.setStatus(OrderStatus.SHIPPED);
         o.setShippedAt(Instant.now());
         o = orderRepository.save(o);
+        sendOrderEmail(o, "shipped");
         return publishAndEnrich(o, "order.shipped");
     }
 
@@ -286,6 +289,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         o.setStatus(OrderStatus.DELIVERED);
         o.setDeliveredAt(Instant.now());
         o = orderRepository.save(o);
+        sendOrderEmail(o, "delivered");
         return publishAndEnrich(o, "order.delivered");
     }
 
@@ -329,6 +333,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         o.setStatus(OrderStatus.REFUNDED);
         o = orderRepository.save(o);
         affiliateProgramService.rejectForOrder(o.getId()); // DROP-646: void any affiliate commission
+        sendOrderEmail(o, "refunded");
         return publishAndEnrich(o, "order.refunded");
     }
 
@@ -409,8 +414,14 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP).toPlainString();
         final String orderNumber = created.getOrderNumber();
         final String currency = created.getCurrency();
-        userRepository.findById(userId).ifPresent(u -> notificationsPublisher.orderPlaced(userId, u.getEmail(),
-                orderNumber, totalPlain, currency, u.getLanguage()));
+        final Order paidOrder = o;
+        userRepository.findById(userId).ifPresent(u -> {
+            notificationsPublisher.orderPlaced(userId, u.getEmail(), orderNumber, totalPlain, currency, u.getLanguage());
+            // Pago con saldo del wallet: la orden ya queda PAID → email de confirmación + FACTURA.
+            if (paidOrder.getStatus() == OrderStatus.PAID) {
+                orderEmailService.paymentConfirmed(paidOrder, u.getEmail(), u.getLanguage(), "WALLET");
+            }
+        });
 
         return o;
     }
@@ -432,6 +443,22 @@ public class OrderUseCaseImpl implements OrderUseCase {
         Order enriched = enrich(o);
         webhooks.publish(eventType, o.getId().toString(), toWebhookPayload(enriched));
         return enriched;
+    }
+
+    /** Resuelve email/idioma del comprador y dispara el email transaccional del pedido. */
+    private void sendOrderEmail(Order o, String kind) {
+        if (o.getUserId() == null) {
+            return;
+        }
+        userRepository.findById(o.getUserId()).ifPresent(u -> {
+            switch (kind) {
+                case "shipped" -> orderEmailService.shipped(o, u.getEmail(), u.getLanguage());
+                case "delivered" -> orderEmailService.delivered(o, u.getEmail(), u.getLanguage());
+                case "refunded" -> orderEmailService.refunded(o, u.getEmail(), u.getLanguage());
+                default -> {
+                    /* sin email para otros estados */ }
+            }
+        });
     }
 
     /** Fills the cross-aggregate read fields (customerEmail/shopName/shopHandle/supplierName). */

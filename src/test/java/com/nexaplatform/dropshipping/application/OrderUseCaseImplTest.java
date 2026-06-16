@@ -63,6 +63,8 @@ class OrderUseCaseImplTest {
     AffiliateProgramService affiliateProgramService;
     @Mock
     com.nexaplatform.dropshipping.application.usecase.PaymentUseCase paymentUseCase;
+    @Mock
+    com.nexaplatform.dropshipping.application.service.OrderEmailService orderEmailService;
 
     OrderUseCaseImpl orderUseCase;
 
@@ -70,7 +72,7 @@ class OrderUseCaseImplTest {
     void setup() {
         orderUseCase = new OrderUseCaseImpl(orderRepository, productRepository, variantRepository, userRepository,
                 shopConnectionRepository, userAddressRepository, webhooks, walletUseCase, notificationsPublisher,
-                pricingService, affiliateProgramService, paymentUseCase);
+                pricingService, affiliateProgramService, paymentUseCase, orderEmailService);
     }
 
     /** DROP-637: the checkout now bills the priced amount (retailUsd) from PricingService. */

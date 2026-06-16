@@ -47,13 +47,15 @@ class PaymentUseCaseImplTest {
     AuditLogger auditLogger;
     @Mock
     PartnerPlanSyncService partnerPlanSyncService;
+    @Mock
+    com.nexaplatform.dropshipping.application.service.OrderEmailService orderEmailService;
 
     private final OrderPaymentDtoMapper orderPaymentDtoMapper = Mappers.getMapper(OrderPaymentDtoMapper.class);
 
     private PaymentUseCaseImpl useCase() {
         return new PaymentUseCaseImpl(List.<PaymentGateway>of(), paymentRepository, paymentJpaRepositoryAdapter,
                 userRepository, orderRepository, walletUseCase, auditLogger, partnerPlanSyncService,
-                new ObjectMapper());
+                new ObjectMapper(), orderEmailService);
     }
 
     @Test
