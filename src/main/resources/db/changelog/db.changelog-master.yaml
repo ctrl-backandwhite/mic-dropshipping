@@ -125,3 +125,5 @@ databaseChangeLog:
       file: db/changelog/schema-v57-category-perf-indexes.sql
   - include:
       file: db/changelog/schema-v58-product-groups.sql
+  - include:
+      file: db/changelog/schema-v59-cainiao-fulfillment.sql

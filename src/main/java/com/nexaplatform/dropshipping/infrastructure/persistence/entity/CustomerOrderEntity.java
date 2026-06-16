@@ -88,6 +88,25 @@ public class CustomerOrderEntity extends BaseEntity {
     @Column(name = "cancelled_at")
     private Instant cancelledAt;
 
+    // Fulfillment / tracking de Cainiao.
+    @Column(length = 60)
+    private String carrier;
+
+    @Column(name = "tracking_number", length = 120)
+    private String trackingNumber;
+
+    @Column(name = "fulfillment_ref", length = 120)
+    private String fulfillmentRef;
+
+    @Column(name = "tracking_status", length = 60)
+    private String trackingStatus;
+
+    @Column(name = "estimated_delivery_at")
+    private Instant estimatedDeliveryAt;
+
+    @Column(name = "last_tracked_at")
+    private Instant lastTrackedAt;
+
     @Builder.Default
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<OrderItemEntity> items = new ArrayList<>();

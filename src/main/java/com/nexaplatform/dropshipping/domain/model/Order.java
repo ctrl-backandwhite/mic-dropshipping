@@ -45,6 +45,14 @@ public class Order {
     private Instant deliveredAt;
     private Instant cancelledAt;
 
+    // Fulfillment / tracking de Cainiao.
+    private String carrier;
+    private String trackingNumber;
+    private String fulfillmentRef;
+    private String trackingStatus;
+    private Instant estimatedDeliveryAt;
+    private Instant lastTrackedAt;
+
     @Builder.Default
     private List<OrderItem> items = new ArrayList<>();
 

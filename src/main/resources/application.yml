@@ -280,6 +280,21 @@ nexadrop:
     api-key: ${COINBASE_API_KEY:}
     webhook-secret: ${COINBASE_WEBHOOK_SECRET:}
 
+  # Fulfillment con Cainiao (菜鸟). Mock por defecto (sin credenciales): tarifa real por país desde la
+  # tabla cainiao_shipping_zone + tracking simulado que avanza con el tiempo. Con app-key/secret reales
+  # se activan las llamadas a la Cainiao Open Platform. Solo se envía a países cubiertos.
+  cainiao:
+    enabled: ${CAINIAO_ENABLED:false}
+    app-key: ${CAINIAO_APP_KEY:}
+    app-secret: ${CAINIAO_APP_SECRET:}
+    base-url: ${CAINIAO_BASE_URL:https://link.cainiao.com}
+    platform-id: ${CAINIAO_PLATFORM_ID:nexadrop-dropshipping}
+    platform-env: ${CAINIAO_PLATFORM_ENV:dev}
+    # Minutos por etapa del tracking simulado (mock) — pon un valor pequeño para ver el avance en demo.
+    mock-stage-minutes: ${CAINIAO_MOCK_STAGE_MINUTES:2}
+    # Cadencia del job que sincroniza el tracking y avanza el estado semiautomáticamente.
+    sync-enabled: ${CAINIAO_SYNC_ENABLED:true}
+
   usdt:
     enabled: ${USDT_ENABLED:true}
     manual-address: ${USDT_MANUAL_ADDRESS:TBd5jH7XPM2QwG1pVxLqkRtjY8bD3sxA1Z}
