@@ -21,6 +21,9 @@ import java.io.IOException;
  * and the forbidden {@code Sec-Fetch-*} headers (which page JavaScript cannot remove) on fetch/XHR and
  * navigations. A server-side HTTP client sends neither. The app's own SPA does not call {@code /api/v1/**}
  * at runtime (only the storefront {@code /api/storefront/**} and admin APIs), so nothing internal breaks.
+ *
+ * <p>The rejection message is returned in the consumer's language (resolved by {@link #resolveLang},
+ * via the {@code lang} query param or {@code Accept-Language} header), defaulting to English.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 6)
@@ -30,11 +33,11 @@ public class ServerToServerApiFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
         if (req.getRequestURI().startsWith("/api/v1/") && isBrowserOriginated(req)) {
+            String message = BrowserBlockedMessage.forCode(resolveLang(req)).message();
             res.setStatus(HttpServletResponse.SC_FORBIDDEN);
             res.setContentType("application/json;charset=UTF-8");
-            res.getWriter().write("{\"code\":\"BROWSER_NOT_ALLOWED\",\"message\":"
-                    + "\"This API must be consumed server-to-server. Build a backend and call it from there; "
-                    + "direct browser/frontend calls are not allowed.\"}");
+            res.setCharacterEncoding("UTF-8");
+            res.getWriter().write("{\"code\":\"BROWSER_NOT_ALLOWED\",\"message\":\"" + message + "\"}");
             return;
         }
         chain.doFilter(req, res);
@@ -50,5 +53,20 @@ public class ServerToServerApiFilter extends OncePerRequestFilter {
         // cannot strip them; server-side clients do not send them.
         return req.getHeader("Sec-Fetch-Site") != null || req.getHeader("Sec-Fetch-Mode") != null
                 || req.getHeader("Sec-Fetch-Dest") != null;
+    }
+
+    /**
+     * Language chosen by the consumer: the {@code lang} query param wins, then the first tag of the
+     * {@code Accept-Language} header. Returns the 2-letter code (or null, handled as English downstream).
+     */
+    private String resolveLang(HttpServletRequest req) {
+        String lang = req.getParameter("lang");
+        if (lang == null || lang.isBlank()) {
+            String accept = req.getHeader("Accept-Language");
+            if (accept != null && !accept.isBlank()) {
+                lang = accept.split(",")[0].trim();
+            }
+        }
+        return (lang != null && lang.length() >= 2) ? lang.substring(0, 2) : null;
     }
 }
