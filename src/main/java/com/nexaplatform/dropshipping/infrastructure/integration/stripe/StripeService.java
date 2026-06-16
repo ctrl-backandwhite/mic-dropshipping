@@ -21,11 +21,22 @@ public class StripeService {
     @Value("${nexadrop.stripe.secret-key:}")
     private String secretKey;
 
+    /**
+     * Identificador de plataforma que se adjunta como metadata a cada pago/suscripción. Permite filtrar
+     * en el dashboard de Stripe los cobros originados en la plataforma de Dropshipping cuando varias
+     * plataformas comparten la misma cuenta Stripe.
+     */
+    @Value("${nexadrop.stripe.platform-id:nexadrop-dropshipping}")
+    private String platformId;
+
+    @Value("${nexadrop.stripe.platform-env:dev}")
+    private String platformEnv;
+
     @PostConstruct
     public void init() {
         if (enabled && secretKey != null && !secretKey.isBlank()) {
             Stripe.apiKey = secretKey;
-            log.info("Stripe enabled");
+            log.info("Stripe enabled (platform={}, env={})", platformId, platformEnv);
         } else {
             log.info("Stripe disabled (test mode); checkout will return mock URLs");
         }
@@ -37,6 +48,11 @@ public class StripeService {
                 .setSuccessUrl(successUrl + "?session_id={CHECKOUT_SESSION_ID}").setCancelUrl(cancelUrl)
                 .setCustomerEmail(customerEmail)
                 .addLineItem(SessionCreateParams.LineItem.builder().setPrice(stripePriceId).setQuantity(1L).build())
+                // Identifica el origen del pago en Stripe (metadata en la sesión y, como mode=SUBSCRIPTION,
+                // también en la suscripción resultante → la metadata viaja a sus facturas/cargos).
+                .putMetadata("platform", platformId).putMetadata("platform_env", platformEnv)
+                .setSubscriptionData(SessionCreateParams.SubscriptionData.builder()
+                        .putMetadata("platform", platformId).putMetadata("platform_env", platformEnv).build())
                 .build();
         return Session.create(params);
     }
