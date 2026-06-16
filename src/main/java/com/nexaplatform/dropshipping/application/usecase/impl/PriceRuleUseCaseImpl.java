@@ -8,12 +8,19 @@ import com.nexaplatform.dropshipping.domain.model.PriceRule;
 import com.nexaplatform.dropshipping.domain.repository.PriceRuleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRICING_AMOUNT;
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_DETAIL;
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_LIST;
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_SUMMARY;
 
 /**
  * Pricing-rule use case. Operates on the {@link PriceRule} model and delegates
@@ -29,8 +36,14 @@ public class PriceRuleUseCaseImpl implements PriceRuleUseCase {
     private final PriceRuleUpdateMapper priceRuleUpdateMapper;
     private final MarginService marginService;
 
+    // Every rule mutation flushes the margin cache AND the price caches (priceFor result, PDP, summary,
+    // listing) so the change is reflected in prices immediately, across every currency.
     @Override
     @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public PriceRule save(PriceRule model) {
         PriceRule saved = priceRuleRepository.save(model);
         marginService.invalidateCache();
@@ -56,6 +69,10 @@ public class PriceRuleUseCaseImpl implements PriceRuleUseCase {
 
     @Override
     @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public PriceRule update(PriceRule model, UUID id) {
         PriceRule existing = getById(id);
         priceRuleUpdateMapper.updateFromModel(model, existing);
@@ -67,6 +84,25 @@ public class PriceRuleUseCaseImpl implements PriceRuleUseCase {
 
     @Override
     @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
+    public PriceRule toggle(UUID id) {
+        PriceRule existing = getById(id);
+        existing.setActive(!existing.isActive());
+        PriceRule saved = priceRuleRepository.update(existing);
+        marginService.invalidateCache();
+        log.info("::> [PRICING] Price rule {} -> active={}", id, saved.isActive());
+        return saved;
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void delete(UUID id) {
         getById(id);
         priceRuleRepository.delete(id);

@@ -63,6 +63,13 @@ public class AdminPricingController implements AdminPricingApi {
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
+    @Override
+    public ResponseEntity<PriceRuleDtoOut> toggle(UUID id) {
+        List<PriceRuleDtoOut> dto = List.of(mapper.toDtoOut(useCase.toggle(id)));
+        enrichScopeNames(dto);
+        return new ResponseEntity<>(dto.get(0), HttpStatus.OK);
+    }
+
     /* ------------------ DROP-630: scope name resolution ------------------ */
 
     /** Resolves the concrete entity name for each scoped rule, in batch per scope type. */

@@ -10,4 +10,7 @@ import java.util.UUID;
 public interface PriceRuleJpaRepositoryAdapter extends JpaRepository<PriceRuleEntity, UUID> {
 
     List<PriceRuleEntity> findByActiveTrueOrderByPositionAsc();
+
+    /** All rules (active and inactive) ordered by position — for the admin list (toggle visibility). */
+    List<PriceRuleEntity> findAllByOrderByPositionAsc();
 }

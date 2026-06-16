@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.infrastructure.persistence.repository.impl
 
 import com.nexaplatform.dropshipping.domain.model.PriceRule;
 import com.nexaplatform.dropshipping.domain.repository.PriceRuleRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PriceRuleEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.PriceRuleEntityMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PriceRuleJpaRepositoryAdapter;
 import lombok.RequiredArgsConstructor;
@@ -12,8 +13,8 @@ import java.util.UUID;
 
 /**
  * Infrastructure adapter implementing the {@link PriceRuleRepository} domain port
- * on top of Spring Data JPA. {@code findAll} preserves the legacy contract of the
- * admin list (active rules ordered by position).
+ * on top of Spring Data JPA. {@code findAll} returns ALL rules (active and inactive) ordered by
+ * position so the admin list can show — and reactivate — deactivated rules.
  */
 @Repository
 @RequiredArgsConstructor
@@ -24,13 +25,13 @@ public class PriceRuleRepositoryImpl implements PriceRuleRepository {
 
     @Override
     public PriceRule save(PriceRule model) {
-        var entity = priceRuleJpaRepositoryAdapter.save(priceRuleEntityMapper.toEntity(model));
+        PriceRuleEntity entity = priceRuleJpaRepositoryAdapter.save(priceRuleEntityMapper.toEntity(model));
         return priceRuleEntityMapper.toDomain(entity);
     }
 
     @Override
     public List<PriceRule> findAll() {
-        return priceRuleEntityMapper.toDomainList(priceRuleJpaRepositoryAdapter.findByActiveTrueOrderByPositionAsc());
+        return priceRuleEntityMapper.toDomainList(priceRuleJpaRepositoryAdapter.findAllByOrderByPositionAsc());
     }
 
     @Override

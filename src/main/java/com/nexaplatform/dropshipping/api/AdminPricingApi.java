@@ -44,4 +44,9 @@ public interface AdminPricingApi {
     @ApiResponse(responseCode = "204", description = "Rule deleted")
     @DeleteMapping("/{id}")
     ResponseEntity<Void> delete(@PathVariable UUID id);
+
+    @Operation(summary = "Activate/deactivate a price rule by id")
+    @ApiResponse(responseCode = "200", description = "Rule toggled")
+    @PutMapping("/{id}/toggle")
+    ResponseEntity<PriceRuleDtoOut> toggle(@PathVariable UUID id);
 }
