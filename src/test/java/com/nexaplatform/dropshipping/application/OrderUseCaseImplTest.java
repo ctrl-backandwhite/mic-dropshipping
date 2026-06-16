@@ -65,6 +65,8 @@ class OrderUseCaseImplTest {
     com.nexaplatform.dropshipping.application.usecase.PaymentUseCase paymentUseCase;
     @Mock
     com.nexaplatform.dropshipping.application.service.OrderEmailService orderEmailService;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.CainiaoFulfillmentService cainiao;
 
     OrderUseCaseImpl orderUseCase;
 
@@ -72,7 +74,11 @@ class OrderUseCaseImplTest {
     void setup() {
         orderUseCase = new OrderUseCaseImpl(orderRepository, productRepository, variantRepository, userRepository,
                 shopConnectionRepository, userAddressRepository, webhooks, walletUseCase, notificationsPublisher,
-                pricingService, affiliateProgramService, paymentUseCase, orderEmailService);
+                pricingService, affiliateProgramService, paymentUseCase, orderEmailService, cainiao);
+        // Por defecto, sin envío en los tests de billing (no altera el total = subtotal).
+        org.mockito.Mockito.lenient().when(cainiao.quote(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(com.nexaplatform.dropshipping.domain.model.ShippingQuote.unsupported("XX"));
     }
 
     /** DROP-637: the checkout now bills the priced amount (retailUsd) from PricingService. */

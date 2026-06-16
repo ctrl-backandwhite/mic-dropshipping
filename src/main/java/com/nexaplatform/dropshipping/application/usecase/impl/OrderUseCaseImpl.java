@@ -10,6 +10,8 @@ import com.nexaplatform.dropshipping.application.notifications.NotificationsPubl
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.CainiaoFulfillmentService;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
 import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
@@ -73,6 +75,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final AffiliateProgramService affiliateProgramService;
     private final PaymentUseCase paymentUseCase;
     private final OrderEmailService orderEmailService;
+    private final CainiaoFulfillmentService cainiao;
 
     @Value("${nexadrop.demo.orders-enabled:false}")
     private boolean demoOrdersEnabled;
@@ -94,6 +97,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         }
 
         int subtotal = 0;
+        int totalWeightGrams = 0;
         for (var itemReq : req.items()) {
             ProductEntity product = productRepository.findById(itemReq.productId())
                     .orElseThrow(() -> new NotFoundException("Product not found: " + itemReq.productId()));
@@ -123,12 +127,18 @@ public class OrderUseCaseImpl implements OrderUseCase {
                     .costCents(costCents).quantity(itemReq.quantity()).lineTotalCents(lineTotal).build());
 
             subtotal += lineTotal;
+            totalWeightGrams += packageWeightGrams(product, variant) * itemReq.quantity();
         }
 
+        // Envío con Cainiao: tarifa por destino. Si el país no está cubierto por Cainiao, el envío
+        // queda en 0 aquí (el checkout del storefront bloquea antes el destino no soportado).
+        ShippingQuote quote = cainiao.quote(order.getShippingCountry(), Math.max(1, totalWeightGrams));
+        int shippingCents = quote.supported() ? quote.amountUsdCents() : 0;
+
         order.setSubtotalCents(subtotal);
-        order.setShippingCents(0); // TODO: per-supplier shipping calc
+        order.setShippingCents(shippingCents);
         order.setTaxCents(0);
-        order.setTotalCents(subtotal);
+        order.setTotalCents(subtotal + shippingCents);
 
         return orderRepository.save(order);
     }
@@ -381,6 +391,11 @@ public class OrderUseCaseImpl implements OrderUseCase {
         }
         if (addr == null)
             throw new BusinessException("Shipping address is required");
+        // Cainiao solo envía a países cubiertos: bloqueamos el destino no soportado antes de cobrar.
+        if (!cainiao.isSupported(addr.country())) {
+            throw new BusinessException(
+                    "No realizamos envíos a este destino (" + addr.country() + "). Elige un país soportado.");
+        }
 
         List<OrderItemInput> items = req.getItems().stream()
                 .map(i -> new OrderItemInput(i.getProductId(), i.getVariantId(), i.getQuantity())).toList();
@@ -443,6 +458,25 @@ public class OrderUseCaseImpl implements OrderUseCase {
         Order enriched = enrich(o);
         webhooks.publish(eventType, o.getId().toString(), toWebhookPayload(enriched));
         return enriched;
+    }
+
+    /** Peso del paquete (g) por unidad: variante > producto, con 500g por defecto si no hay dato. */
+    private int packageWeightGrams(ProductEntity p, ProductVariantEntity v) {
+        if (v != null) {
+            if (v.getPackageWeightGrams() != null && v.getPackageWeightGrams() > 0) {
+                return v.getPackageWeightGrams();
+            }
+            if (v.getWeightGrams() != null && v.getWeightGrams() > 0) {
+                return v.getWeightGrams();
+            }
+        }
+        if (p.getPackageWeightGrams() != null && p.getPackageWeightGrams() > 0) {
+            return p.getPackageWeightGrams();
+        }
+        if (p.getWeightGrams() != null && p.getWeightGrams() > 0) {
+            return p.getWeightGrams();
+        }
+        return 500;
     }
 
     /** Resuelve email/idioma del comprador y dispara el email transaccional del pedido. */

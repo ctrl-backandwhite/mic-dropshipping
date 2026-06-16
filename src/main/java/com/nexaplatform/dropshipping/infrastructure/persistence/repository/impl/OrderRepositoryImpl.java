@@ -120,6 +120,13 @@ public class OrderRepositoryImpl implements OrderRepository {
         entity.setShippedAt(model.getShippedAt());
         entity.setDeliveredAt(model.getDeliveredAt());
         entity.setCancelledAt(model.getCancelledAt());
+        // Fulfillment / tracking de Cainiao.
+        entity.setCarrier(model.getCarrier());
+        entity.setTrackingNumber(model.getTrackingNumber());
+        entity.setFulfillmentRef(model.getFulfillmentRef());
+        entity.setTrackingStatus(model.getTrackingStatus());
+        entity.setEstimatedDeliveryAt(model.getEstimatedDeliveryAt());
+        entity.setLastTrackedAt(model.getLastTrackedAt());
 
         // Resolve / create the shipping & billing addresses only when the entity
         // does not already carry them (insert path); updates keep the managed ones.
