@@ -169,7 +169,9 @@ class CustomerSubscriptionUseCaseImplTest {
     @Test
     void listPublicPlans_delegatesToLegacyPlanRepository() {
         var plan = SubscriptionPlanEntity.builder().code("pro").build();
-        when(planRepository.findByActiveTrueOrderByPositionAsc()).thenReturn(List.of(plan));
+        // listPublicPlans usa findActiveWithFeatures() (JOIN FETCH de features) para evitar el
+        // LazyInitializationException al mapear plan.features fuera de la transacción.
+        when(planRepository.findActiveWithFeatures()).thenReturn(List.of(plan));
 
         assertThat(useCase.listPublicPlans()).containsExactly(plan);
     }

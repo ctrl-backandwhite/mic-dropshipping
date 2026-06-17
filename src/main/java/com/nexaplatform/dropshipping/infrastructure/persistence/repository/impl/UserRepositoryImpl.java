@@ -102,21 +102,12 @@ public class UserRepositoryImpl implements UserRepository {
 
     /** Copies the mutable model fields onto the managed entity (audit untouched). */
     private void applyModel(UserEntity entity, User model) {
-        entity.setEmail(model.getEmail());
+        // Campos escalares seguros vía MapStruct; auditoría y marketingOptOut quedan intactos.
+        userEntityMapper.updateEntity(entity, model);
+
+        // Campos sensibles con manejo especial: se aplican manualmente para no perder su semántica
+        // (credenciales y rol no deben quedar a merced del auto-mapeo).
         entity.setPasswordHash(model.getPasswordHash());
         entity.setRole(model.getRole());
-        entity.setActive(model.isActive());
-        entity.setActivationCode(model.getActivationCode());
-        entity.setActivationCodeExpiresAt(model.getActivationCodeExpiresAt());
-        entity.setFailedLoginCount(model.getFailedLoginCount());
-        entity.setLockedUntil(model.getLockedUntil());
-        entity.setLastLogin(model.getLastLogin());
-        entity.setDisplayName(model.getDisplayName());
-        entity.setCompanyName(model.getCompanyName());
-        entity.setCountry(model.getCountry());
-        entity.setPhone(model.getPhone());
-        entity.setAvatarUrl(model.getAvatarUrl());
-        entity.setLanguage(model.getLanguage());
-        entity.setGoogleLinked(model.isGoogleLinked());
     }
 }

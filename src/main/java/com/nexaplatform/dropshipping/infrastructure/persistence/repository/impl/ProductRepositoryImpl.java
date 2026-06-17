@@ -169,34 +169,11 @@ public class ProductRepositoryImpl implements ProductRepository {
 
     /** Applies the mutable model fields onto the entity, resolving relations and nested collections. */
     private void applyModel(ProductEntity entity, Product model) {
-        entity.setSlug(model.getSlug());
-        entity.setSource(model.getSource());
-        entity.setExternalId(model.getExternalId());
-        entity.setTitleZh(model.getTitleZh());
-        entity.setShortDescriptionZh(model.getShortDescriptionZh());
-        entity.setDescriptionZh(model.getDescriptionZh());
-        entity.setBrand(model.getBrand());
-        entity.setMoq(model.getMoq());
-        entity.setBasePrice(model.getBasePrice());
-        entity.setCurrency(model.getCurrency());
-        entity.setWeightGrams(model.getWeightGrams());
-        entity.setPackageWeightGrams(model.getPackageWeightGrams());
-        entity.setShipFrom(model.getShipFrom());
-        entity.setFreeShipping(model.getFreeShipping());
-        entity.setSelfPickup(model.getSelfPickup());
-        entity.setHasVideo(model.getHasVideo());
-        entity.setVideoUrl(model.getVideoUrl());
-        entity.setInventoryCount(model.getInventoryCount());
-        entity.setCertifications(model.getCertifications());
-        entity.setStatus(model.getStatus());
-        entity.setRating(model.getRating());
-        entity.setReviewCount(model.getReviewCount());
-        entity.setMonthlySales(model.getMonthlySales());
-        entity.setRepurchaseRate(model.getRepurchaseRate());
-        entity.setTrendScore(model.getTrendScore());
-        entity.setSourceUrl(model.getSourceUrl());
-        entity.setIngestedAt(model.getIngestedAt());
-        entity.setLastSyncedAt(model.getLastSyncedAt());
+        // Campos escalares simples vía MapStruct; las relaciones gestionadas
+        // (supplier, category) y las colecciones anidadas (images, variants,
+        // variantOptions, translations) se resuelven abajo porque requieren
+        // lookups de repositorio o reconstrucción de sub-entidades.
+        productEntityMapper.updateEntity(entity, model);
         entity.setSupplier(model.getSupplierId() == null
                 ? null
                 : supplierJpaRepositoryAdapter.findById(model.getSupplierId()).orElse(null));

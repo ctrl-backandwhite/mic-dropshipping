@@ -78,16 +78,11 @@ public class SourcingRequestRepositoryImpl implements SourcingRequestRepository 
 
     /** Applies the mutable model fields onto the entity, resolving the user relation. */
     private void applyModel(SourcingRequestEntity entity, SourcingRequest model) {
+        // Relación gestionada resuelta vía lookup de repositorio.
         if (model.getUserId() != null) {
             entity.setUser(userRepository.findById(model.getUserId()).orElseThrow());
         }
-        entity.setSource(model.getSource());
-        entity.setExternalId(model.getExternalId());
-        entity.setSourceUrl(model.getSourceUrl());
-        entity.setTitleHint(model.getTitleHint());
-        entity.setStatus(model.getStatus());
-        entity.setPlanQuota(model.getPlanQuota());
-        entity.setNotes(model.getNotes());
-        entity.setSelectedQuoteId(model.getSelectedQuoteId());
+        // Campos escalares vía MapStruct.
+        sourcingRequestEntityMapper.updateEntity(entity, model);
     }
 }

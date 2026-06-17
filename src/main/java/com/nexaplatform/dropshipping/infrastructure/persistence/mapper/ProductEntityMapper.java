@@ -17,6 +17,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantVa
 import org.mapstruct.Builder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 import org.mapstruct.Named;
 
 import java.util.List;
@@ -131,6 +132,27 @@ public interface ProductEntityMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
     ProductEntity toEntity(Product model);
+
+    /**
+     * Aplica los campos escalares simples del modelo sobre una entidad gestionada
+     * (ruta de actualización). El {@code id}, la auditoría y TODAS las relaciones /
+     * colecciones gestionadas (supplier, category, images, variants, translations,
+     * variantOptions y los priceTiers de su propia tabla) las resuelve el repositorio,
+     * por eso se ignoran aquí. MapStruct auto-mapea el resto por nombre; los campos
+     * que solo existen en la entidad (sin contraparte en el modelo) quedan intactos.
+     */
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "supplier", ignore = true)
+    @Mapping(target = "category", ignore = true)
+    @Mapping(target = "images", ignore = true)
+    @Mapping(target = "variants", ignore = true)
+    @Mapping(target = "translations", ignore = true)
+    @Mapping(target = "variantOptions", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
+    void updateEntity(@MappingTarget ProductEntity entity, Product model);
 
     List<Product> toDomainList(List<ProductEntity> entities);
 

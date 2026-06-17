@@ -7,6 +7,10 @@ import com.nexaplatform.dropshipping.domain.model.ShopInboundSecret;
 import com.nexaplatform.dropshipping.domain.model.ShopProductListing;
 import com.nexaplatform.dropshipping.domain.repository.ShopConnectionRepository;
 import com.nexaplatform.dropshipping.domain.repository.ShopProductListingRepository;
+import com.nexaplatform.dropshipping.infrastructure.integration.shop.ShopConnector;
+import com.nexaplatform.dropshipping.infrastructure.integration.shop.ShopConnectorRegistry;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.security.crypto.TokenCryptoService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,6 +26,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -34,6 +39,10 @@ class ShopConnectionUseCaseImplTest {
     ShopProductListingRepository listingRepository;
     @Mock
     TokenCryptoService tokenCrypto;
+    @Mock
+    ShopConnectorRegistry connectorRegistry;
+    @Mock
+    ProductRepository productRepository;
     @InjectMocks
     ShopConnectionUseCaseImpl useCase;
 
@@ -117,6 +126,11 @@ class ShopConnectionUseCaseImplTest {
         when(listingRepository.findByShopConnectionIdAndProductId(id, productId)).thenReturn(Optional.empty());
         when(listingRepository.save(any(ShopProductListing.class)))
                 .thenAnswer(inv -> ((ShopProductListing) inv.getArgument(0)).withId(UUID.randomUUID()));
+        // DROP-701: el push al conector debe tener éxito para que el listing quede LISTED.
+        ShopConnector connector = mock(ShopConnector.class);
+        when(connectorRegistry.connectorFor(any())).thenReturn(Optional.of(connector));
+        when(productRepository.findById(productId)).thenReturn(Optional.of(new ProductEntity()));
+        when(connector.push(any(), any(), any())).thenReturn(new ShopConnector.PushResult(true, "remote-123", null));
 
         ShopProductListing listing = useCase.listProduct(userId, id, productId);
 

@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PaymentEn
 import org.mapstruct.Builder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 
 import java.util.List;
 
@@ -74,6 +75,24 @@ public interface PaymentEntityMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
     PaymentEntity toEntity(Payment model);
+
+    /**
+     * Aplica los campos escalares del modelo sobre una entidad gestionada (ruta de actualización).
+     * Las relaciones gestionadas ({@code user}/{@code wallet}) y la auditoría las resuelve el
+     * repositorio, por eso se ignoran. {@code providerResponse} es un Map/JSON con converter especial
+     * y {@code purpose} conserva null-handling condicional; ambos se dejan manuales. MapStruct
+     * auto-mapea el resto por nombre.
+     */
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "user", ignore = true)
+    @Mapping(target = "wallet", ignore = true)
+    @Mapping(target = "purpose", ignore = true)
+    @Mapping(target = "providerResponse", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
+    void updateEntity(@MappingTarget PaymentEntity entity, Payment model);
 
     List<Payment> toDomainList(List<PaymentEntity> entities);
 }

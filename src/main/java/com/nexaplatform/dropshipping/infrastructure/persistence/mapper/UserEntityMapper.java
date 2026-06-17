@@ -9,6 +9,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntit
 import org.mapstruct.Builder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 import org.mapstruct.Named;
 
 /**
@@ -71,6 +72,24 @@ public interface UserEntityMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
     UserEntity toEntity(User model);
+
+    /**
+     * Aplica los campos escalares seguros del modelo sobre una entidad gestionada (ruta de
+     * actualización). MapStruct auto-mapea el resto por nombre. Se ignoran: id y auditoría
+     * ({@code createdAt}/{@code updatedAt}/{@code createdBy}/{@code updatedBy}), que resuelve
+     * el auditing de JPA; {@code marketingOptOut}, que no tiene contraparte en el modelo y lo
+     * gestiona su propio flujo; y los campos sensibles {@code passwordHash} y {@code role}, con
+     * manejo especial en el repositorio (no se deben sobreescribir con null en update).
+     */
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "passwordHash", ignore = true)
+    @Mapping(target = "role", ignore = true)
+    @Mapping(target = "marketingOptOut", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
+    void updateEntity(@MappingTarget UserEntity entity, User model);
 
     /** Maps a TOTP secret entity into its nested model (used when carrying 2FA data). */
     @Named("totpToModel")

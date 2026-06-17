@@ -103,28 +103,17 @@ public class PaymentRepositoryImpl implements PaymentRepository {
 
     /** Applies the mutable model fields onto the entity, resolving the managed relations. */
     private void applyModel(PaymentEntity entity, Payment model) {
+        // Relaciones gestionadas resueltas vía lookups de repositorio.
         entity.setUser(resolveUser(model.getUserId()));
         entity.setWallet(resolveWallet(model.getWalletId()));
-        entity.setOrderId(model.getOrderId());
+
+        // Campos escalares vía MapStruct. purpose y providerResponse se manejan aparte porque
+        // requieren null-handling condicional / converter JSON, por eso se ignoran en updateEntity.
         if (model.getPurpose() != null) {
             entity.setPurpose(model.getPurpose());
         }
-        entity.setMethod(model.getMethod());
-        entity.setStatus(model.getStatus());
-        entity.setAmountDisplay(model.getAmountDisplay());
-        entity.setCurrencyDisplay(model.getCurrencyDisplay());
-        entity.setAmountUsdCents(model.getAmountUsdCents());
-        entity.setSettlementCurrency(model.getSettlementCurrency());
-        entity.setSettlementAmount(model.getSettlementAmount());
-        entity.setProvider(model.getProvider());
-        entity.setProviderRef(model.getProviderRef());
+        paymentEntityMapper.updateEntity(entity, model);
         entity.setProviderResponse(model.getProviderResponse());
-        entity.setIdempotencyKey(model.getIdempotencyKey());
-        entity.setCryptoAddress(model.getCryptoAddress());
-        entity.setCryptoChain(model.getCryptoChain());
-        entity.setCryptoExpiresAt(model.getCryptoExpiresAt());
-        entity.setQrUrl(model.getQrUrl());
-        entity.setErrorMessage(model.getErrorMessage());
     }
 
     /** Resolves the paying user from its id, failing if it does not exist. */
