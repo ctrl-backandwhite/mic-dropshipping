@@ -11,6 +11,7 @@ import com.nexaplatform.dropshipping.domain.model.User;
 import com.nexaplatform.dropshipping.domain.repository.UserRepository;
 import com.nexaplatform.dropshipping.infrastructure.email.EmailQueueService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PasswordResetTokenEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PasswordResetTokenRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -180,7 +181,7 @@ class UserUseCaseImplTest {
                 Optional.of(User.builder().id(knownId).email("known@x.com").role(UserRole.USER).active(true).build()));
         when(userRepository.findByEmail("unknown@x.com")).thenReturn(Optional.empty());
         when(userJpaRepository.findById(knownId))
-                .thenReturn(Optional.of(com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity
+                .thenReturn(Optional.of(UserEntity
                         .builder().email("known@x.com").role(UserRole.USER).active(true).build()));
 
         useCase.requestPasswordReset("known@x.com");

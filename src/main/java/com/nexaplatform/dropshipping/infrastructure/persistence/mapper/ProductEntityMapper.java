@@ -9,6 +9,7 @@ import com.nexaplatform.dropshipping.domain.model.VariantOption;
 import com.nexaplatform.dropshipping.domain.model.VariantValue;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductPriceTierEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantOptionEntity;
@@ -164,8 +165,8 @@ public interface ProductEntityMapper {
     @Named("priceTierToDomain")
     @Mapping(target = "id", source = "id")
     ProductPriceTier toPriceTierDomain(
-            com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductPriceTierEntity entity);
+            ProductPriceTierEntity entity);
 
     List<ProductPriceTier> toPriceTierDomainList(
-            List<com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductPriceTierEntity> entities);
+            List<ProductPriceTierEntity> entities);
 }

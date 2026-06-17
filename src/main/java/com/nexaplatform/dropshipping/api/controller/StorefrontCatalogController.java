@@ -6,14 +6,20 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
+import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
+import com.nexaplatform.dropshipping.application.service.MarginService;
+import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.*;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,7 +27,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -52,12 +62,12 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     private final ProductHistoryRepository historyRepository;
     private final ProductMapper productMapper;
     // DROP-669/678: estimación de rentabilidad con datos reales (tramo aplicable + margen configurado).
-    private final com.nexaplatform.dropshipping.application.service.PricingService pricingService;
-    private final com.nexaplatform.dropshipping.application.service.MarginService marginService;
-    private final com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService currencyService;
-    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository priceTierRepository;
+    private final PricingService pricingService;
+    private final MarginService marginService;
+    private final CurrencyRateService currencyService;
+    private final ProductPriceTierRepository priceTierRepository;
     /** Comisión de plataforma (%). DROP-680: por defecto 0 — no se inventa una comisión. */
-    @org.springframework.beans.factory.annotation.Value("${nexadrop.platform.commission-pct:0}")
+    @Value("${nexadrop.platform.commission-pct:0}")
     private BigDecimal platformCommissionPct;
 
     /* =========================== VIEW RECORDS =========================== */
@@ -233,7 +243,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         // la variante traducida al idioma pedido cuando existe. Así el comprador ve el valor en su idioma
         // sin perder los atributos que solo existen como neutrales.
         var all = attributeRepository.findByProduct_Id(id);
-        java.util.LinkedHashMap<String, String> byKey = new java.util.LinkedHashMap<>();
+        LinkedHashMap<String, String> byKey = new LinkedHashMap<>();
         for (var a : all) {
             if (a.getLocale() == null) {
                 byKey.putIfAbsent(a.getAttrKey(), a.getAttrValue());
@@ -413,7 +423,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     /* =========================== IMPORT BY URL (DROP-15) =========================== */
 
-    public record ImportUrlRequest(@jakarta.validation.constraints.NotBlank String url) {
+    public record ImportUrlRequest(@NotBlank String url) {
     }
 
     public record ImportUrlResponse(boolean matched, String source, String externalId, ProductSummaryView product,
@@ -424,7 +434,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     @Transactional(readOnly = true)
     public ImportUrlResponse importByUrl(ImportUrlRequest req, String lang) {
         if (req == null || req.url() == null)
-            throw new com.nexaplatform.dropshipping.api.exception.BusinessException("url is required");
+            throw new BusinessException("url is required");
         String[] parsed = parseExternalUrl(req.url());
         String source = parsed[0], externalId = parsed[1];
         if (source == null || externalId == null) {
@@ -442,24 +452,24 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         if (url == null)
             return new String[]{null, null};
         String low = url.toLowerCase();
-        java.util.regex.Matcher m;
+        Matcher m;
         if (low.contains("1688.com") || low.contains("1688.cn")) {
-            m = java.util.regex.Pattern.compile("offer[/_-](\\d+)\\.html").matcher(low);
+            m = Pattern.compile("offer[/_-](\\d+)\\.html").matcher(low);
             if (m.find())
                 return new String[]{"1688", "OFFER-" + m.group(1)};
         }
         if (low.contains("taobao.com")) {
-            m = java.util.regex.Pattern.compile("id=(\\d+)").matcher(low);
+            m = Pattern.compile("id=(\\d+)").matcher(low);
             if (m.find())
                 return new String[]{"taobao", m.group(1)};
         }
         if (low.contains("aliexpress.com")) {
-            m = java.util.regex.Pattern.compile("item/(\\d+)\\.html").matcher(low);
+            m = Pattern.compile("item/(\\d+)\\.html").matcher(low);
             if (m.find())
                 return new String[]{"aliexpress", m.group(1)};
         }
         if (low.contains("ebay.com")) {
-            m = java.util.regex.Pattern.compile("/itm/(?:[^/]+/)?(\\d+)").matcher(low);
+            m = Pattern.compile("/itm/(?:[^/]+/)?(\\d+)").matcher(low);
             if (m.find())
                 return new String[]{"ebay", m.group(1)};
         }
@@ -481,12 +491,12 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         int seed = (req.imageBase64() != null
                 ? req.imageBase64().hashCode()
                 : req.imageUrl() != null ? req.imageUrl().hashCode() : 0);
-        java.util.Random r = new java.util.Random(seed | 1);
+        Random r = new Random(seed | 1);
         int limit = req.limit() != null ? Math.min(req.limit(), 24) : 12;
 
         List<ProductEntity> pool = new ArrayList<>(
                 productRepository.findByStatus(ProductStatus.ACTIVE, PageRequest.of(0, 200)).getContent());
-        java.util.Collections.shuffle(pool, r);
+        Collections.shuffle(pool, r);
         return pool.stream().limit(limit)
                 .map(p -> new ImageSearchResult(productMapper.toSummary(p, lang), 0.7 + r.nextDouble() * 0.29))
                 .sorted((a, b) -> Double.compare(b.score(), a.score())).toList();
@@ -494,13 +504,13 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     /* =========================== PRICE/STOCK HISTORY (DROP-25) =========================== */
 
-    public record HistoryPoint(java.time.LocalDate date, java.math.BigDecimal price, int stock) {
+    public record HistoryPoint(LocalDate date, BigDecimal price, int stock) {
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<HistoryPoint> priceHistory(UUID id, int days) {
-        java.time.LocalDate from = java.time.LocalDate.now().minusDays(Math.min(days, 365));
+        LocalDate from = LocalDate.now().minusDays(Math.min(days, 365));
         return historyRepository.findByProduct_IdAndSnapshotDateGreaterThanEqualOrderBySnapshotDateAsc(id, from)
                 .stream().map(h -> new HistoryPoint(h.getSnapshotDate(),
                         BigDecimal.valueOf(h.getPriceUsdCents()).movePointLeft(2), h.getStock()))
@@ -518,9 +528,9 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     @Transactional(readOnly = true)
     public MarginEstimate marginEstimate(UUID id, String country, int quantity, UUID variantId) {
         ProductEntity p = productRepository.findById(id)
-                .orElseThrow(() -> new com.nexaplatform.dropshipping.api.exception.NotFoundException("Product"));
+                .orElseThrow(() -> new NotFoundException("Product"));
         int qty = Math.max(1, quantity);
-        java.math.RoundingMode HU = java.math.RoundingMode.HALF_UP;
+        RoundingMode HU = RoundingMode.HALF_UP;
         // DROP-675: si se indica una variante, el envío usa su peso/dimensiones reales (no el del producto).
         ProductVariantEntity variant = variantId == null ? null : p.getVariants().stream()
                 .filter(v -> variantId.equals(v.getId())).findFirst().orElse(null);
@@ -597,10 +607,10 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     }
 
     /** DROP-669: tramo de precio real cuyo rango [minQty,maxQty] contiene la cantidad (o {@code null}). */
-    private com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductPriceTierEntity applicableTier(
+    private ProductPriceTierEntity applicableTier(
             UUID productId, int qty) {
         var tiers = priceTierRepository.findByProductIdOrderByMinQtyAsc(productId);
-        com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductPriceTierEntity best = null;
+        ProductPriceTierEntity best = null;
         for (var t : tiers) {
             Integer max = t.getMaxQty();
             if (qty >= t.getMinQty() && (max == null || qty <= max)) {

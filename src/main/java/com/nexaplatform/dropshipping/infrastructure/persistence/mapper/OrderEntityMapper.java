@@ -10,6 +10,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTr
 import org.mapstruct.Builder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 import org.mapstruct.Named;
 
 import java.util.HashMap;
@@ -107,6 +108,21 @@ public interface OrderEntityMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
     CustomerOrderEntity toEntity(Order model);
+
+    /**
+     * Aplica los campos escalares del modelo (incluidos los de tracking de Cainiao) sobre una entidad
+     * gestionada (ruta de actualización). Las relaciones gestionadas (direcciones, items) y la auditoría
+     * las resuelve el repositorio, por eso se ignoran aquí. MapStruct auto-mapea el resto por nombre.
+     */
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "shippingAddress", ignore = true)
+    @Mapping(target = "billingAddress", ignore = true)
+    @Mapping(target = "items", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
+    void updateEntity(@MappingTarget CustomerOrderEntity entity, Order model);
 
     @Mapping(target = "id", source = "id")
     @Mapping(target = "productId", expression = "java(item.getProduct() != null ? item.getProduct().getId() : null)")

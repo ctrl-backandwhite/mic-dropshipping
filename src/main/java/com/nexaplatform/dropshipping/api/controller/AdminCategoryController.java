@@ -13,6 +13,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -40,12 +42,27 @@ public class AdminCategoryController implements AdminCategoryApi {
     }
 
     @Override
-    public ResponseEntity<PageResponse<AdminCategoryDtoOut>> listPaged(String q, int page, int size) {
+    public ResponseEntity<PageResponse<AdminCategoryDtoOut>> listPaged(String q, Boolean hasProducts, int page,
+            int size) {
         // Ordered by position then slug — covered by the (position) / (parent_id, position) indexes (v57).
         var pageable = PageRequest.of(Math.max(0, page), Math.max(1, size),
                 Sort.by(Sort.Order.asc("position"), Sort.Order.asc("slug")));
-        var result = useCase.findAllPaged(q, pageable);
+        var result = useCase.findAllPaged(q, hasProducts, pageable);
         return ResponseEntity.ok(PageResponse.map(result, mapper::toDtoOut));
+    }
+
+    @Override
+    public ResponseEntity<List<AdminCategoryDtoOut>> listWithProducts() {
+        return ResponseEntity.ok(mapper.toDtoOutList(useCase.findWithProducts()));
+    }
+
+    /** Activa/desactiva varias categorías a la vez (botones de acción masiva del admin). */
+    @PutMapping("/bulk-active")
+    public ResponseEntity<Map<String, Object>> bulkActive(@RequestBody BulkActiveRequest req) {
+        return ResponseEntity.ok(Map.of("updated", useCase.setActiveBulk(req.ids(), req.active())));
+    }
+
+    public record BulkActiveRequest(List<UUID> ids, boolean active) {
     }
 
     /** Reindexa todas las categorías en OpenSearch (botón "Reindexar" del admin). */

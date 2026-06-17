@@ -50,18 +50,18 @@ public interface AdminSupplierMapper {
     @Mapping(target = "trustPass", source = "trustPass")
     AdminSupplierToggleDtoOut toTrustPassToggle(Supplier model);
 
-    @org.mapstruct.Mapping(target = "id", ignore = true)
-    @org.mapstruct.Mapping(target = "externalId", ignore = true)
-    @org.mapstruct.Mapping(target = "source", ignore = true)
-    @org.mapstruct.Mapping(target = "name", source = "name")
-    @org.mapstruct.Mapping(target = "nameZh", source = "nameZh")
-    @org.mapstruct.Mapping(target = "country", source = "country")
-    @org.mapstruct.Mapping(target = "city", source = "city")
-    @org.mapstruct.Mapping(target = "rating", source = "rating")
-    @org.mapstruct.Mapping(target = "yearsActive", source = "yearsActive")
-    @org.mapstruct.Mapping(target = "verified", source = "verified")
-    @org.mapstruct.Mapping(target = "trustPass", source = "trustPass")
-    @org.mapstruct.Mapping(target = "profileUrl", source = "profileUrl")
-    com.nexaplatform.dropshipping.domain.model.Supplier toDomain(AdminSupplierUpsertDtoIn req);
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "externalId", ignore = true)
+    @Mapping(target = "source", ignore = true)
+    @Mapping(target = "name", source = "name")
+    @Mapping(target = "nameZh", source = "nameZh")
+    @Mapping(target = "country", source = "country")
+    @Mapping(target = "city", source = "city")
+    @Mapping(target = "rating", source = "rating")
+    @Mapping(target = "yearsActive", source = "yearsActive")
+    @Mapping(target = "verified", source = "verified")
+    @Mapping(target = "trustPass", source = "trustPass")
+    @Mapping(target = "profileUrl", source = "profileUrl")
+    Supplier toDomain(AdminSupplierUpsertDtoIn req);
 
 }

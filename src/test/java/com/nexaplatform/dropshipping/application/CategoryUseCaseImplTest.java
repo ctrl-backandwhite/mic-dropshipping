@@ -6,6 +6,7 @@ import com.nexaplatform.dropshipping.application.mapper.CategoryUpdateMapper;
 import com.nexaplatform.dropshipping.application.usecase.impl.CategoryUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.model.Category;
 import com.nexaplatform.dropshipping.domain.repository.CategoryRepository;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,7 +32,7 @@ class CategoryUseCaseImplTest {
     @Mock
     EntityManager em;
     @Mock
-    com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer categoryIndexer;
+    CategoryIndexer categoryIndexer;
     @InjectMocks
     CategoryUseCaseImpl useCase;
 

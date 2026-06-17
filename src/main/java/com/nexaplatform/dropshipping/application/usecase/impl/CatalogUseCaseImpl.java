@@ -51,6 +51,35 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Produ
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductSpecificationRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierRepository;
+import com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut;
+import com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn;
+import com.nexaplatform.dropshipping.api.dto.out.Category1688MappingDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.CategoryAttributeSchemaDtoOut;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueTranslationEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryAttributeSchemaEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.Category1688MappingEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Category1688MappingRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryAttributeSchemaRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductReviewJpaRepositoryAdapter;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.VariantValueRepository;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer;
+import com.nexaplatform.dropshipping.infrastructure.seed.CatalogFillWriter;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
@@ -106,12 +135,12 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private final ProductMapper productMapper;
     private final CatalogStorefrontMapper catalogStorefrontMapper;
     private final KafkaTemplate<String, Object> kafkaTemplate;
-    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository variantRepository;
-    private final com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer productIndexer;
-    private final com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer categoryIndexer;
+    private final ProductVariantRepository variantRepository;
+    private final ProductIndexer productIndexer;
+    private final CategoryIndexer categoryIndexer;
     private final ProductAttributeRepository productAttributeRepository;
     private final ProductSpecificationRepository productSpecificationRepository;
-    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.VariantValueRepository variantValueRepository;
+    private final VariantValueRepository variantValueRepository;
     private final JdbcTemplate jdbcTemplate;
     private final StorageService storageService;
     private final ProductBulkExportMapper bulkExportMapper;
@@ -121,21 +150,21 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     // @Lazy field injection breaks the CatalogUseCaseImpl <-> CatalogFillWriter constructor cycle
     // (the writer ingests through this same use case).
-    @org.springframework.beans.factory.annotation.Autowired
-    @org.springframework.context.annotation.Lazy
-    private com.nexaplatform.dropshipping.infrastructure.seed.CatalogFillWriter catalogFillWriter;
+    @Autowired
+    @Lazy
+    private CatalogFillWriter catalogFillWriter;
 
     // DROP-677: mapeo de categorías 1688 → interna (inyección por campo para no alterar el constructor).
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.nexaplatform.dropshipping.infrastructure.persistence.repository.Category1688MappingRepository category1688MappingRepository;
+    @Autowired
+    private Category1688MappingRepository category1688MappingRepository;
 
     // DROP-670: esquema de atributos por categoría (inyección por campo para no alterar el constructor).
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryAttributeSchemaRepository categoryAttributeSchemaRepository;
+    @Autowired
+    private CategoryAttributeSchemaRepository categoryAttributeSchemaRepository;
 
     // Reseñas reales en la carga masiva (inyección por campo para no alterar el constructor).
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductReviewJpaRepositoryAdapter productReviewJpaRepositoryAdapter;
+    @Autowired
+    private ProductReviewJpaRepositoryAdapter productReviewJpaRepositoryAdapter;
 
     /* ============ Suppliers ============ */
 
@@ -533,7 +562,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             // Update the active-language translation (title/short/long description), not the canonical title_zh.
             var trOpt = p.getTranslations().stream().filter(t -> lang.equalsIgnoreCase(t.getLanguage())).findFirst();
             var tr = trOpt.orElseGet(() -> {
-                var n = com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity
+                var n = ProductTranslationEntity
                         .builder().product(p).language(lang).provider("admin").build();
                 p.getTranslations().add(n);
                 return n;
@@ -577,24 +606,24 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         ProductEntity saved = productJpaRepository.save(copy);
         for (var tr : src.getTranslations()) {
             saved.getTranslations()
-                    .add(com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity
+                    .add(ProductTranslationEntity
                             .builder().product(saved).language(tr.getLanguage())
                             .title((tr.getTitle() != null ? tr.getTitle() : "") + " (copy)")
                             .shortDescription(tr.getShortDescription()).description(tr.getDescription())
                             .provider("admin-duplicate").build());
         }
         productJpaRepository.save(saved);
-        return productMapper.toDetail(saved, lang, java.util.Collections.emptyList());
+        return productMapper.toDetail(saved, lang, Collections.emptyList());
     }
 
     @Override
-    public java.math.BigDecimal computeTrendScore(ProductEntity p) {
+    public BigDecimal computeTrendScore(ProductEntity p) {
         double salesNorm = Math.min(1.0, (p.getMonthlySales()) / 1000.0);
         double rating = p.getRating() != null ? p.getRating().doubleValue() / 5.0 : 0.0;
         double repurchase = p.getRepurchaseRate() != null ? p.getRepurchaseRate().doubleValue() / 100.0 : 0.0;
         double reviews = Math.min(1.0, p.getReviewCount() / 500.0);
         double score = 0.4 * salesNorm + 0.3 * rating + 0.2 * repurchase + 0.1 * reviews;
-        return java.math.BigDecimal.valueOf(score).setScale(4, java.math.RoundingMode.HALF_UP);
+        return BigDecimal.valueOf(score).setScale(4, RoundingMode.HALF_UP);
     }
 
     /* ============ helpers ============ */
@@ -640,7 +669,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             if (!p.getVariantOptions().isEmpty() || p.getVariants() == null || p.getVariants().isEmpty()) {
                 continue;
             }
-            java.util.LinkedHashMap<String, java.util.LinkedHashSet<String>> derived = new java.util.LinkedHashMap<>();
+            LinkedHashMap<String, LinkedHashSet<String>> derived = new LinkedHashMap<>();
             for (var v : p.getVariants()) {
                 if (v.getOptions() == null) {
                     continue;
@@ -649,7 +678,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                     if (e.getKey() == null || e.getKey().isBlank() || e.getValue() == null || e.getValue().isBlank()) {
                         continue;
                     }
-                    derived.computeIfAbsent(e.getKey().trim(), k -> new java.util.LinkedHashSet<>())
+                    derived.computeIfAbsent(e.getKey().trim(), k -> new LinkedHashSet<>())
                             .add(e.getValue().trim());
                 }
             }
@@ -658,14 +687,14 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             }
             int op = 0;
             for (var en : derived.entrySet()) {
-                var opt = new com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantOptionEntity();
+                var opt = new VariantOptionEntity();
                 opt.setProduct(p);
                 opt.setNameZh(en.getKey());
                 opt.setName(en.getKey());
                 opt.setPosition(op++);
                 int vp = 0;
                 for (String val : en.getValue()) {
-                    var vv = new com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueEntity();
+                    var vv = new VariantValueEntity();
                     vv.setOption(opt);
                     vv.setValueZh(val);
                     vv.setPosition(vp++);
@@ -760,7 +789,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true),
             @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
-    public VariantView updateVariantPrice(UUID variantId, java.math.BigDecimal price) {
+    public VariantView updateVariantPrice(UUID variantId, BigDecimal price) {
         if (price == null || price.signum() < 0) {
             throw new BusinessException("El precio de la variante debe ser ≥ 0");
         }
@@ -817,7 +846,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         String val = value != null ? value.trim() : null;
         v.getTranslations().removeIf(tt -> lang.equalsIgnoreCase(tt.getLanguage()));
         if (val != null && !val.isEmpty()) {
-            v.getTranslations().add(com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueTranslationEntity
+            v.getTranslations().add(VariantValueTranslationEntity
                     .builder().variantValue(v).language(lang).value(val).build());
         }
         variantValueRepository.save(v);
@@ -933,17 +962,17 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             img = productMainImage(v.getProduct());
         }
         v.setImageSourceUrl(img);
-        v.setOptions(req.getOptions() != null ? req.getOptions() : java.util.Map.of());
+        v.setOptions(req.getOptions() != null ? req.getOptions() : Map.of());
         v.setActive(req.getActive() == null || req.getActive());
     }
 
     /** Main image URL of an ingest payload (role MAIN first, then lowest position). */
-    private String mainImageUrlOf(java.util.List<IngestImage> images) {
+    private String mainImageUrlOf(List<IngestImage> images) {
         if (images == null || images.isEmpty()) {
             return null;
         }
         return images.stream().filter(i -> i.sourceUrl() != null && !i.sourceUrl().isBlank())
-                .min(java.util.Comparator
+                .min(Comparator
                         .comparingInt((IngestImage i) -> "MAIN"
                                 .equalsIgnoreCase(i.role()) ? 0 : 1)
                         .thenComparingInt(IngestImage::position))
@@ -958,7 +987,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         return p.getImages().stream()
                 .filter(i -> (i.getCdnUrl() != null && !i.getCdnUrl().isBlank())
                         || (i.getSourceUrl() != null && !i.getSourceUrl().isBlank()))
-                .min(java.util.Comparator
+                .min(Comparator
                         .comparingInt((ProductImageEntity i) -> "MAIN".equalsIgnoreCase(i.getRole()) ? 0 : 1)
                         .thenComparingInt(ProductImageEntity::getPosition))
                 .map(i -> i.getCdnUrl() != null && !i.getCdnUrl().isBlank() ? i.getCdnUrl() : i.getSourceUrl())
@@ -969,11 +998,11 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     /* ============ Bulk import (admin) ============ */
 
     @Override
-    public com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut bulkCreateProducts(
-            java.util.List<com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn> rows) {
+    public BulkResultDtoOut bulkCreateProducts(
+            List<BulkProductDtoIn> rows) {
         int created = 0, failed = 0;
-        java.util.List<String> errors = new java.util.ArrayList<>();
-        java.util.List<SupplierEntity> suppliers = supplierRepository.findAll();
+        List<String> errors = new ArrayList<>();
+        List<SupplierEntity> suppliers = supplierRepository.findAll();
         for (int i = 0; i < rows.size(); i++) {
             var r = rows.get(i);
             try {
@@ -986,7 +1015,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         }
         if (created > 0)
             productIndexer.reindexAll();
-        return new com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut(created, failed, errors);
+        return new BulkResultDtoOut(created, failed, errors);
     }
 
     @Override
@@ -1028,7 +1057,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
-    public UUID createProductManual(com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn req) {
+    public UUID createProductManual(BulkProductDtoIn req) {
         UUID id = buildAndWriteProduct(req, supplierRepository.findAll());
         productIndexer.indexProduct(id);
         return id;
@@ -1064,9 +1093,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     /** Rellena el campo fijo de un idioma (título/descr.) desde el mapa `translations` si está vacío. */
     private void mergeTranslationField(String lang,
-            java.util.Map<String, com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn.BulkTranslation> m,
-            java.util.function.Supplier<String> getTitle, java.util.function.Consumer<String> setTitle,
-            java.util.function.Supplier<String> getDesc, java.util.function.Consumer<String> setDesc) {
+            Map<String, BulkProductDtoIn.BulkTranslation> m,
+            Supplier<String> getTitle, Consumer<String> setTitle,
+            Supplier<String> getDesc, Consumer<String> setDesc) {
         var tr = m.get(lang);
         if (tr == null) {
             return;
@@ -1081,16 +1110,16 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     }
 
     /** Builds the heavy ingest request from a friendly row, persists it (via the writer) and returns its id. */
-    private UUID buildAndWriteProduct(com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn r,
-            java.util.List<SupplierEntity> suppliers) {
+    private UUID buildAndWriteProduct(BulkProductDtoIn r,
+            List<SupplierEntity> suppliers) {
         CategoryEntity cat = resolveBulkCategory(r);
         // DROP-670: si la categoría define atributos obligatorios, el producto debe traerlos (integridad).
         var requiredSchema = categoryAttributeSchemaRepository.findByCategory_IdOrderByPositionAsc(cat.getId()).stream()
-                .filter(com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryAttributeSchemaEntity::isRequired)
-                .map(com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryAttributeSchemaEntity::getAttrKey)
+                .filter(CategoryAttributeSchemaEntity::isRequired)
+                .map(CategoryAttributeSchemaEntity::getAttrKey)
                 .toList();
         if (!requiredSchema.isEmpty()) {
-            java.util.Set<String> provided = new java.util.HashSet<>();
+            Set<String> provided = new HashSet<>();
             if (r.getAttributes() != null) {
                 for (var a : r.getAttributes()) {
                     if (a.getKey() != null && a.getValue() != null && !a.getValue().isBlank()) {
@@ -1142,7 +1171,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 : esTitle;
         // DROP-680: el precio es dato real obligatorio; no se inventa. Si no viene explícito se toma
         // del tramo de precio más bajo (price break real); si tampoco hay tramos, se rechaza la fila.
-        java.math.BigDecimal price = r.getPrice();
+        BigDecimal price = r.getPrice();
         if (price == null && r.getTieredPricing() != null) {
             for (var t : r.getTieredPricing()) {
                 if (t.getUnitPrice() != null && (price == null || t.getUnitPrice().compareTo(price) < 0)) {
@@ -1168,20 +1197,20 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (externalId.length() > 120) {
             externalId = externalId.substring(0, 120);
         }
-        java.util.List<IngestImage> images = new java.util.ArrayList<>();
+        List<IngestImage> images = new ArrayList<>();
         if (r.getImageUrls() != null) {
             for (int k = 0; k < r.getImageUrls().size(); k++)
                 images.add(new IngestImage(
                         r.getImageUrls().get(k), k, k == 0 ? "MAIN" : "GALLERY"));
         }
         // Ejes de variación (Color/Talla) desde el JSON.
-        java.util.List<IngestVariantOption> options = new java.util.ArrayList<>();
+        List<IngestVariantOption> options = new ArrayList<>();
         if (r.getVariantAxes() != null) {
             for (var ax : r.getVariantAxes()) {
                 if (ax.getName() == null || ax.getName().isBlank()) {
                     continue;
                 }
-                java.util.List<IngestVariantValue> vals = new java.util.ArrayList<>();
+                List<IngestVariantValue> vals = new ArrayList<>();
                 if (ax.getValues() != null) {
                     int vp = 0;
                     for (String val : ax.getValues()) {
@@ -1198,7 +1227,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // orden. Así un import/alta que solo trae variantes (Color/Talla en optionValues) muestra el
         // selector en la ficha sin tener que repetir los ejes a mano.
         if (options.isEmpty() && r.getVariants() != null) {
-            java.util.LinkedHashMap<String, java.util.LinkedHashSet<String>> derived = new java.util.LinkedHashMap<>();
+            LinkedHashMap<String, LinkedHashSet<String>> derived = new LinkedHashMap<>();
             for (var v : r.getVariants()) {
                 if (v.getOptionValues() == null) {
                     continue;
@@ -1207,12 +1236,12 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                     if (e.getKey() == null || e.getKey().isBlank() || e.getValue() == null || e.getValue().isBlank()) {
                         continue;
                     }
-                    derived.computeIfAbsent(e.getKey().trim(), k -> new java.util.LinkedHashSet<>())
+                    derived.computeIfAbsent(e.getKey().trim(), k -> new LinkedHashSet<>())
                             .add(e.getValue().trim());
                 }
             }
             for (var en : derived.entrySet()) {
-                java.util.List<IngestVariantValue> vals = new java.util.ArrayList<>();
+                List<IngestVariantValue> vals = new ArrayList<>();
                 int vp = 0;
                 for (String val : en.getValue()) {
                     vals.add(new IngestVariantValue(val, vp++, null));
@@ -1221,7 +1250,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             }
         }
         // Variantes/SKU desde el JSON; si no vienen, una variante por defecto.
-        java.util.List<IngestVariant> variants = new java.util.ArrayList<>();
+        List<IngestVariant> variants = new ArrayList<>();
         if (r.getVariants() != null && !r.getVariants().isEmpty()) {
             int vi = 0;
             for (var v : r.getVariants()) {
@@ -1229,17 +1258,17 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                         : externalId + "-" + (vi + 1);
                 variants.add(new IngestVariant(sku, sku, esTitle,
                         v.getPrice() != null ? v.getPrice() : price, v.getStock() != null ? v.getStock() : 0,
-                        v.getImageUrl(), v.getOptionValues() != null ? v.getOptionValues() : java.util.Map.of()));
+                        v.getImageUrl(), v.getOptionValues() != null ? v.getOptionValues() : Map.of()));
                 vi++;
             }
         } else {
             // DROP-680: sin variantes declaradas no se inventa inventario (stock real desconocido = 0).
             variants.add(new IngestVariant(externalId + "-DEF", externalId + "-DEF", esTitle, price, 0, null,
-                    java.util.Map.of()));
+                    Map.of()));
         }
         // Tiered pricing (DROP-669): se persisten SOLO los tramos reales que declara el proveedor.
         // Si no hay tramos no se inventa ninguno: la ficha muestra únicamente el precio unitario.
-        java.util.List<IngestPriceTier> tiers = new java.util.ArrayList<>();
+        List<IngestPriceTier> tiers = new ArrayList<>();
         if (r.getTieredPricing() != null && !r.getTieredPricing().isEmpty()) {
             for (var t : r.getTieredPricing()) {
                 tiers.add(new IngestPriceTier(t.getMinQty() != null ? t.getMinQty() : 1, t.getMaxQty(),
@@ -1274,7 +1303,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     /** Crea las reseñas reales del producto desde la carga masiva (cada una con su idioma). */
     private void createBulkReviews(UUID productId,
-            java.util.List<com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn.BulkReview> reviews) {
+            List<BulkProductDtoIn.BulkReview> reviews) {
         if (reviews == null || reviews.isEmpty()) {
             return;
         }
@@ -1287,7 +1316,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 continue;
             }
             short rating = rv.getRating() != null ? (short) Math.max(1, Math.min(5, rv.getRating())) : 5;
-            var e = com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductReviewEntity.builder()
+            var e = ProductReviewEntity.builder()
                     .product(ref)
                     .authorName(rv.getAuthorName() != null && !rv.getAuthorName().isBlank() ? rv.getAuthorName().trim()
                             : "Anónimo")
@@ -1307,7 +1336,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     }
 
     /** Fija los campos de logística/aduana sobre la entidad gestionada (dentro de la transacción del writer). */
-    private void applyLogistics(ProductEntity p, com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn r) {
+    private void applyLogistics(ProductEntity p, BulkProductDtoIn r) {
         if (r.getPackageWeightGrams() != null) {
             p.setPackageWeightGrams(r.getPackageWeightGrams());
         }
@@ -1366,8 +1395,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             }
             p.setReviewCount(total);
             if (r.getRating() == null && total > 0) {
-                p.setRating(java.math.BigDecimal.valueOf((double) weighted / total)
-                        .setScale(2, java.math.RoundingMode.HALF_UP));
+                p.setRating(BigDecimal.valueOf((double) weighted / total)
+                        .setScale(2, RoundingMode.HALF_UP));
             }
         }
         if (r.getCrossBorderSupport() != null && !r.getCrossBorderSupport().isEmpty()) {
@@ -1382,8 +1411,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // supplierSkuId + peso/dimensiones por variante (DROP-675): se matchean por SKU sobre las
         // variantes ya creadas por upsertProduct.
         if (r.getVariants() != null && !r.getVariants().isEmpty()) {
-            java.util.Map<String, com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn.BulkVariant> bySku =
-                    new java.util.HashMap<>();
+            Map<String, BulkProductDtoIn.BulkVariant> bySku =
+                    new HashMap<>();
             for (var v : r.getVariants()) {
                 if (v.getSku() != null && !v.getSku().isBlank()) {
                     bySku.put(v.getSku(), v);
@@ -1419,7 +1448,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // Traducciones por idioma de los valores de variación (Color/Talla) desde el JSON: se matchean
         // por value_zh sobre los valores ya creados. Reemplaza las traducciones de ese valor.
         if (r.getVariantAxes() != null) {
-            java.util.Map<String, java.util.Map<String, String>> byValue = new java.util.HashMap<>();
+            Map<String, Map<String, String>> byValue = new HashMap<>();
             for (var ax : r.getVariantAxes()) {
                 if (ax.getValueTranslations() != null) {
                     byValue.putAll(ax.getValueTranslations());
@@ -1436,7 +1465,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                         for (var e : trMap.entrySet()) {
                             if (e.getKey() != null && !e.getKey().isBlank() && e.getValue() != null
                                     && !e.getValue().isBlank()) {
-                                vv.getTranslations().add(com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueTranslationEntity
+                                vv.getTranslations().add(VariantValueTranslationEntity
                                         .builder().variantValue(vv).language(e.getKey().trim().toLowerCase())
                                         .value(e.getValue().trim()).build());
                             }
@@ -1487,7 +1516,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 var existing = p.getTranslations().stream()
                         .filter(t -> lang.equalsIgnoreCase(t.getLanguage())).findFirst().orElse(null);
                 if (existing == null) {
-                    existing = com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity
+                    existing = ProductTranslationEntity
                             .builder().product(p).language(lang).provider("bulk").build();
                     p.getTranslations().add(existing);
                 }
@@ -1508,10 +1537,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Override
     @Caching(evict = {@CacheEvict(value = CACHE_CATEGORY_TREE, allEntries = true),
             @CacheEvict(value = CACHE_CATEGORIES_FLAT, allEntries = true)})
-    public com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut bulkCreateCategories(
-            java.util.List<com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn> rows) {
+    public BulkResultDtoOut bulkCreateCategories(
+            List<BulkCategoryDtoIn> rows) {
         int created = 0, failed = 0;
-        java.util.List<String> errors = new java.util.ArrayList<>();
+        List<String> errors = new ArrayList<>();
         for (int i = 0; i < rows.size(); i++) {
             var r = rows.get(i);
             try {
@@ -1532,14 +1561,14 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 }
                 upsertCategory(new IngestCategoryRequest(r.getSlug(), parentId, "1688", null, zh, position,
                         r.getIcon() != null ? r.getIcon() : "tag",
-                        java.util.Map.of("es", r.getNameEs(), "en", en, "pt", pt)));
+                        Map.of("es", r.getNameEs(), "en", en, "pt", pt)));
                 created++;
             } catch (Exception e) {
                 failed++;
                 errors.add("fila " + (i + 1) + ": " + e.getMessage());
             }
         }
-        return new com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut(created, failed, errors);
+        return new BulkResultDtoOut(created, failed, errors);
     }
 
     /**
@@ -1547,7 +1576,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
      * interno explícito; (2) mapeo por id de 1688; (3) mapeo por nombre de 1688. Si nada resuelve, se
      * rechaza la fila (no se inventa una categoría).
      */
-    private CategoryEntity resolveBulkCategory(com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn r) {
+    private CategoryEntity resolveBulkCategory(BulkProductDtoIn r) {
         if (r.getCategorySlug() != null && !r.getCategorySlug().isBlank()) {
             String slug = r.getCategorySlug().trim();
             return categoryRepository.findBySlug(slug)
@@ -1579,7 +1608,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 .orElseThrow(() -> new NotFoundException("Category not found: " + categoryId));
         var existing = category1688MappingRepository.findByExternal1688Id(external1688Id.trim());
         var m = existing.orElseGet(
-                com.nexaplatform.dropshipping.infrastructure.persistence.entity.Category1688MappingEntity::new);
+                Category1688MappingEntity::new);
         m.setExternal1688Id(external1688Id.trim());
         m.setExternal1688Name(external1688Name != null && !external1688Name.isBlank() ? external1688Name.trim() : null);
         m.setCategory(cat);
@@ -1588,9 +1617,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public java.util.List<com.nexaplatform.dropshipping.api.dto.out.Category1688MappingDtoOut> listCategory1688Mappings() {
+    public List<Category1688MappingDtoOut> listCategory1688Mappings() {
         return category1688MappingRepository.findAll().stream()
-                .map(m -> new com.nexaplatform.dropshipping.api.dto.out.Category1688MappingDtoOut(m.getId(),
+                .map(m -> new Category1688MappingDtoOut(m.getId(),
                         m.getExternal1688Id(), m.getExternal1688Name(),
                         m.getCategory() != null ? m.getCategory().getId() : null,
                         m.getCategory() != null ? m.getCategory().getSlug() : null,
@@ -1606,10 +1635,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public java.util.List<com.nexaplatform.dropshipping.api.dto.out.CategoryAttributeSchemaDtoOut> listCategoryAttributeSchema(
+    public List<CategoryAttributeSchemaDtoOut> listCategoryAttributeSchema(
             UUID categoryId) {
         return categoryAttributeSchemaRepository.findByCategory_IdOrderByPositionAsc(categoryId).stream()
-                .map(s -> new com.nexaplatform.dropshipping.api.dto.out.CategoryAttributeSchemaDtoOut(s.getId(),
+                .map(s -> new CategoryAttributeSchemaDtoOut(s.getId(),
                         s.getCategory() != null ? s.getCategory().getId() : null, s.getAttrKey(), s.getLabel(),
                         s.isRequired(), s.getPosition()))
                 .toList();
@@ -1626,7 +1655,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 .orElseThrow(() -> new NotFoundException("Category not found: " + categoryId));
         var existing = categoryAttributeSchemaRepository.findByCategory_IdAndAttrKey(categoryId, attrKey.trim());
         var s = existing.orElseGet(
-                com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryAttributeSchemaEntity::new);
+                CategoryAttributeSchemaEntity::new);
         s.setCategory(cat);
         s.setAttrKey(attrKey.trim());
         s.setLabel(label != null && !label.isBlank() ? label.trim() : null);
@@ -1647,12 +1676,12 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             return null;
         }
         return c.getTranslations().stream().filter(tr -> "es".equalsIgnoreCase(tr.getLanguage())).findFirst()
-                .map(com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryTranslationEntity::getName)
+                .map(CategoryTranslationEntity::getName)
                 .filter(n -> n != null && !n.isBlank())
                 .orElse(c.getNameZh() != null ? c.getNameZh() : c.getSlug());
     }
 
-    private UUID resolveBulkSupplier(java.util.List<SupplierEntity> suppliers, String supplierExternalId,
+    private UUID resolveBulkSupplier(List<SupplierEntity> suppliers, String supplierExternalId,
             String supplierName) {
         if (supplierExternalId != null && !supplierExternalId.isBlank()) {
             String ext = supplierExternalId.trim();

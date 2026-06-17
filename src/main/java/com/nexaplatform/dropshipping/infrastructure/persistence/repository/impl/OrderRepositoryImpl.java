@@ -104,29 +104,9 @@ public class OrderRepositoryImpl implements OrderRepository {
 
     /** Applies the mutable model fields onto the entity, resolving managed relations. */
     private void applyModel(CustomerOrderEntity entity, Order model) {
-        entity.setOrderNumber(model.getOrderNumber());
-        entity.setPartnerAppId(model.getPartnerAppId());
-        entity.setUserId(model.getUserId());
-        entity.setExternalOrderId(model.getExternalOrderId());
-        entity.setStatus(model.getStatus());
-        entity.setSubtotalCents(model.getSubtotalCents());
-        entity.setShippingCents(model.getShippingCents());
-        entity.setTaxCents(model.getTaxCents());
-        entity.setTotalCents(model.getTotalCents());
-        entity.setCurrency(model.getCurrency());
-        entity.setNotes(model.getNotes());
-        entity.setPlacedAt(model.getPlacedAt());
-        entity.setForwardedAt(model.getForwardedAt());
-        entity.setShippedAt(model.getShippedAt());
-        entity.setDeliveredAt(model.getDeliveredAt());
-        entity.setCancelledAt(model.getCancelledAt());
-        // Fulfillment / tracking de Cainiao.
-        entity.setCarrier(model.getCarrier());
-        entity.setTrackingNumber(model.getTrackingNumber());
-        entity.setFulfillmentRef(model.getFulfillmentRef());
-        entity.setTrackingStatus(model.getTrackingStatus());
-        entity.setEstimatedDeliveryAt(model.getEstimatedDeliveryAt());
-        entity.setLastTrackedAt(model.getLastTrackedAt());
+        // Campos escalares (incluido el tracking de Cainiao) vía MapStruct; las relaciones gestionadas
+        // (direcciones, items) se resuelven abajo porque requieren lookups de repositorio.
+        orderEntityMapper.updateEntity(entity, model);
 
         // Resolve / create the shipping & billing addresses only when the entity
         // does not already carry them (insert path); updates keep the managed ones.

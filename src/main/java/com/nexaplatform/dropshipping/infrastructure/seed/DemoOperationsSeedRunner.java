@@ -1,5 +1,7 @@
 package com.nexaplatform.dropshipping.infrastructure.seed;
 
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos;
+import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.domain.enums.MarginType;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
@@ -22,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
@@ -48,15 +51,15 @@ public class DemoOperationsSeedRunner {
     private final ShippingZoneRepository zoneRepository;
     private final ShippingRateRepository rateRepository;
     private final ProductHistoryRepository historyRepository;
-    private final com.nexaplatform.dropshipping.application.usecase.CatalogUseCase catalogService;
-    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.AgentProfileRepository agentProfileRepo;
-    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.AcademyCourseRepository courseRepo;
-    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.MentorProfileRepository mentorProfileRepo;
-    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.WarehouseRepository warehouseRepo;
-    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.AdTrendRepository adTrendRepo;
-    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.NotificationRepository notificationRepo;
-    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductWarehouseStockRepository pwsRepo;
-    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopConnectionRepository shopConnectionRepo;
+    private final CatalogUseCase catalogService;
+    private final AgentProfileRepository agentProfileRepo;
+    private final AcademyCourseRepository courseRepo;
+    private final MentorProfileRepository mentorProfileRepo;
+    private final WarehouseRepository warehouseRepo;
+    private final AdTrendRepository adTrendRepo;
+    private final NotificationRepository notificationRepo;
+    private final ProductWarehouseStockRepository pwsRepo;
+    private final ShopConnectionRepository shopConnectionRepo;
     private final WalletUseCase walletUseCase;
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
@@ -739,9 +742,9 @@ public class DemoOperationsSeedRunner {
             String slug = (String) e[0];
             if (categoryRepository.findBySlug(slug).isPresent())
                 continue;
-            catalogService.upsertCategory(new com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest(
+            catalogService.upsertCategory(new CatalogDtos.IngestCategoryRequest(
                     slug, null, "1688", (String) e[1], (String) e[2], (int) e[3], (String) e[4],
-                    java.util.Map.of("es", (String) e[5], "en", (String) e[6], "pt", (String) e[7])));
+                    Map.of("es", (String) e[5], "en", (String) e[6], "pt", (String) e[7])));
             created++;
         }
         if (created > 0)
@@ -793,17 +796,17 @@ public class DemoOperationsSeedRunner {
 
     /** 90 days of price/stock snapshots per active product with small daily noise. */
     private void seedPriceHistory() {
-        java.time.LocalDate today = java.time.LocalDate.now();
-        java.time.LocalDate from = today.minusDays(90);
+        LocalDate today = LocalDate.now();
+        LocalDate from = today.minusDays(90);
         List<ProductEntity> products = productRepository.findAll().stream()
                 .filter(p -> p.getStatus() != null && "ACTIVE".equals(p.getStatus().name())).toList();
         int created = 0;
         for (ProductEntity p : products) {
             if (p.getBasePrice() == null)
                 continue;
-            int basePriceCents = p.getBasePrice().multiply(new java.math.BigDecimal(100)).intValue();
+            int basePriceCents = p.getBasePrice().multiply(new BigDecimal(100)).intValue();
             int baseStock = p.getInventoryCount() != null ? p.getInventoryCount() : 500;
-            for (java.time.LocalDate d = from; !d.isAfter(today); d = d.plusDays(1)) {
+            for (LocalDate d = from; !d.isAfter(today); d = d.plusDays(1)) {
                 // ±8% price noise and ±20% stock noise so the chart shows variation.
                 double priceNoise = 1.0 + (rnd.nextDouble() - 0.5) * 0.16;
                 double stockNoise = 1.0 + (rnd.nextDouble() - 0.5) * 0.40;
@@ -836,11 +839,11 @@ public class DemoOperationsSeedRunner {
         for (Object[] a : agents) {
             @SuppressWarnings("unchecked")
             List<String> langs = (List<String>) a[3];
-            agentProfileRepo.save(com.nexaplatform.dropshipping.infrastructure.persistence.entity.AgentProfileEntity
+            agentProfileRepo.save(AgentProfileEntity
                     .builder().displayName((String) a[0]).tier((String) a[1]).bio((String) a[2]).languages(langs)
-                    .successRate(new java.math.BigDecimal(a[4].toString()))
-                    .avgResponseHours(new java.math.BigDecimal(a[5].toString()))
-                    .satisfaction(new java.math.BigDecimal(a[6].toString())).completedJobs((int) a[7])
+                    .successRate(new BigDecimal(a[4].toString()))
+                    .avgResponseHours(new BigDecimal(a[5].toString()))
+                    .satisfaction(new BigDecimal(a[6].toString())).completedJobs((int) a[7])
                     .hourlyRateUsdCents(2500 + rnd.nextInt(7500)).active(true).build());
         }
         log.info("Seeded {} sourcing agents", agents.length);
@@ -873,7 +876,7 @@ public class DemoOperationsSeedRunner {
                 {"intro-zh", "代发货入门", "业务基础与首个 30 天行动计划。", "Jesus Finol", 45, "zh", "BEGINNER"},};
         for (Object[] c : courses) {
             String slug = (String) c[0];
-            courseRepo.save(com.nexaplatform.dropshipping.infrastructure.persistence.entity.AcademyCourseEntity
+            courseRepo.save(AcademyCourseEntity
                     .builder().slug(slug).title((String) c[1]).description((String) c[2]).instructor((String) c[3])
                     .durationMinutes((int) c[4]).locale((String) c[5]).level((String) c[6])
                     .coverUrl(ACADEMY_COVERS[Math.floorMod(slug.hashCode(), ACADEMY_COVERS.length)])
@@ -910,7 +913,7 @@ public class DemoOperationsSeedRunner {
             UserEntity u = demoPartners.get(i);
             @SuppressWarnings("unchecked")
             List<String> expertise = (List<String>) headlines[i][1];
-            mentorProfileRepo.save(com.nexaplatform.dropshipping.infrastructure.persistence.entity.MentorProfileEntity
+            mentorProfileRepo.save(MentorProfileEntity
                     .builder().user(u).headline((String) headlines[i][0]).expertise(expertise)
                     .languages(List.of("en", "es")).hourlyRateUsdCents(6000 + rnd.nextInt(9000))
                     .bio("Hands-on dropshipping mentor. Booking includes call recording and notes.")
@@ -927,9 +930,9 @@ public class DemoOperationsSeedRunner {
                 {"PL-WAW", "Warsaw", "PL", "Warsaw"}, {"JP-TYO", "Tokyo", "JP", "Tokyo"},
                 {"ES-MAD", "Madrid", "ES", "Madrid"}, {"MY-KUL", "Kuala Lumpur", "MY", "Kuala Lumpur"},
                 {"MX-MEX", "Mexico City", "MX", "Mexico City"}, {"CA-YYZ", "Toronto", "CA", "Toronto"},};
-        List<com.nexaplatform.dropshipping.infrastructure.persistence.entity.WarehouseEntity> saved = new ArrayList<>();
+        List<WarehouseEntity> saved = new ArrayList<>();
         for (Object[] w : whs) {
-            saved.add(warehouseRepo.save(com.nexaplatform.dropshipping.infrastructure.persistence.entity.WarehouseEntity
+            saved.add(warehouseRepo.save(WarehouseEntity
                     .builder().code((String) w[0]).name((String) w[1]).country((String) w[2]).city((String) w[3])
                     .active(true).build()));
         }
@@ -937,9 +940,9 @@ public class DemoOperationsSeedRunner {
         List<ProductEntity> prods = productRepository.findAll();
         int stockRows = 0;
         for (ProductEntity p : prods.subList(0, Math.min(30, prods.size()))) {
-            java.util.Collections.shuffle(saved, rnd);
+            Collections.shuffle(saved, rnd);
             for (int i = 0; i < 4 && i < saved.size(); i++) {
-                pwsRepo.save(com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductWarehouseStockEntity
+                pwsRepo.save(ProductWarehouseStockEntity
                         .builder().product(p).warehouse(saved.get(i)).stock(20 + rnd.nextInt(2000)).build());
                 stockRows++;
             }
@@ -961,13 +964,13 @@ public class DemoOperationsSeedRunner {
             // DROP-642: use the translated (ES → EN) product title in the headline; never the
             // Chinese title_zh, which would surface CJK text to the user in the Ad Trends tab.
             String hook = hooks[rnd.nextInt(hooks.length)].replace("{}", displayTitleFor(p));
-            adTrendRepo.save(com.nexaplatform.dropshipping.infrastructure.persistence.entity.AdTrendEntity.builder()
+            adTrendRepo.save(AdTrendEntity.builder()
                     .source(src).headline(hook).productSlug(p.getSlug())
                     .impressions(10000L + (long) rnd.nextInt(900000)).engagement(500L + (long) rnd.nextInt(40000))
-                    .score(new java.math.BigDecimal(
-                            String.format(java.util.Locale.US, "%.3f", 0.5 + rnd.nextDouble() * 0.5)))
+                    .score(new BigDecimal(
+                            String.format(Locale.US, "%.3f", 0.5 + rnd.nextDouble() * 0.5)))
                     .region(new String[]{"US", "ES", "BR", "MX", "GB"}[rnd.nextInt(5)])
-                    .capturedAt(java.time.Instant.now().minus(rnd.nextInt(14), java.time.temporal.ChronoUnit.DAYS))
+                    .capturedAt(Instant.now().minus(rnd.nextInt(14), ChronoUnit.DAYS))
                     .build());
             created++;
         }
@@ -984,7 +987,7 @@ public class DemoOperationsSeedRunner {
             for (String lang : new String[]{"es", "en"}) {
                 String t = p.getTranslations().stream()
                         .filter(tr -> lang.equals(tr.getLanguage()))
-                        .map(com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity::getTitle)
+                        .map(ProductTranslationEntity::getTitle)
                         .filter(s -> s != null && !s.isBlank())
                         .findFirst().orElse(null);
                 if (t != null)
@@ -1004,7 +1007,7 @@ public class DemoOperationsSeedRunner {
         for (UserEntity u : demoCustomers.stream().limit(25).toList()) {
             for (int i = 0; i < 3; i++) {
                 String[] t = templates[rnd.nextInt(templates.length)];
-                notificationRepo.save(com.nexaplatform.dropshipping.infrastructure.persistence.entity.NotificationEntity
+                notificationRepo.save(NotificationEntity
                         .builder().user(u).eventType(t[0]).title(t[1]).body(t[2]).channel("IN_APP").build());
                 created++;
             }
@@ -1021,9 +1024,9 @@ public class DemoOperationsSeedRunner {
             String handle = (u.getDisplayName() != null
                     ? u.getDisplayName().toLowerCase().replaceAll("[^a-z0-9]+", "-")
                     : "shop-" + Integer.toHexString(u.hashCode())) + "-" + platform.toLowerCase().split("_")[0];
-            shopConnectionRepo.save(com.nexaplatform.dropshipping.infrastructure.persistence.entity.ShopConnectionEntity
+            shopConnectionRepo.save(ShopConnectionEntity
                     .builder().user(u).platform(platform).shopHandle(handle).status("CONNECTED")
-                    .lastSyncAt(java.time.Instant.now().minusSeconds(rnd.nextInt(86400))).build());
+                    .lastSyncAt(Instant.now().minusSeconds(rnd.nextInt(86400))).build());
             created++;
         }
         log.info("Seeded {} shop connections", created);

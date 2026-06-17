@@ -10,6 +10,7 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
+import com.nexaplatform.dropshipping.infrastructure.integration.locale.LocaleHolder;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductPriceTierEntity;
@@ -139,7 +140,7 @@ public class ProductMapper {
     private String resolveLanguage(String requested) {
         if (requested != null && !requested.isBlank())
             return requested.toLowerCase();
-        return com.nexaplatform.dropshipping.infrastructure.integration.locale.LocaleHolder.get();
+        return LocaleHolder.get();
     }
 
     private Optional<ProductTranslationEntity> findTranslation(List<ProductTranslationEntity> ts, String lang) {

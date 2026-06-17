@@ -12,6 +12,11 @@ import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView;
+import com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.Category1688MappingDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.CategoryAttributeSchemaDtoOut;
 import com.nexaplatform.dropshipping.domain.model.Product;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
@@ -19,6 +24,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierE
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,7 +47,7 @@ public interface CatalogUseCase {
 
     ProductEntity upsertProduct(IngestProductRequest req);
 
-    java.math.BigDecimal computeTrendScore(ProductEntity p);
+    BigDecimal computeTrendScore(ProductEntity p);
 
     /* ============ Products: read ============ */
 
@@ -62,13 +68,13 @@ public interface CatalogUseCase {
 
     UUID upsertCategory1688Mapping(String external1688Id, String external1688Name, UUID categoryId);
 
-    java.util.List<com.nexaplatform.dropshipping.api.dto.out.Category1688MappingDtoOut> listCategory1688Mappings();
+    List<Category1688MappingDtoOut> listCategory1688Mappings();
 
     void deleteCategory1688Mapping(UUID id);
 
     /* ============ DROP-670: esquema de atributos por categoría ============ */
 
-    java.util.List<com.nexaplatform.dropshipping.api.dto.out.CategoryAttributeSchemaDtoOut> listCategoryAttributeSchema(
+    List<CategoryAttributeSchemaDtoOut> listCategoryAttributeSchema(
             UUID categoryId);
 
     UUID upsertCategoryAttributeSchema(UUID categoryId, String attrKey, String label, boolean required, int position);
@@ -76,7 +82,7 @@ public interface CatalogUseCase {
     void deleteCategoryAttributeSchema(UUID id);
 
     /** Lists a product's variants with their RAW stored price (admin manage view, no margin/currency). */
-    java.util.List<VariantView> listVariantsForAdmin(UUID productId);
+    List<VariantView> listVariantsForAdmin(UUID productId);
 
     /** Creates a variant on a product and reindexes it. */
     VariantView createVariant(UUID productId, AdminVariantUpsertDtoIn req);
@@ -85,7 +91,7 @@ public interface CatalogUseCase {
     VariantView updateVariant(UUID variantId, AdminVariantUpsertDtoIn req);
 
     /** Partial update: sets only the variant's price (en moneda canónica) sin tocar el resto. */
-    VariantView updateVariantPrice(UUID variantId, java.math.BigDecimal price);
+    VariantView updateVariantPrice(UUID variantId, BigDecimal price);
 
     /** Renombra la etiqueta visible de un valor de variación (p.ej. un color) y reindexa el producto. */
     void renameVariantValue(UUID valueId, String label);
@@ -103,15 +109,15 @@ public interface CatalogUseCase {
     String uploadImage(byte[] bytes, String contentType, String originalName);
 
     /** Adds an image (by URL — typed or previously uploaded) to a product's gallery. */
-    com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView addProductImage(UUID productId, String url,
+    ProductImageView addProductImage(UUID productId, String url,
             String role);
 
     /** Removes a product image and reindexes its product. */
     void deleteProductImage(UUID imageId);
 
     /** Bulk-creates products from friendly JSON rows; returns created/failed counts and errors. */
-    com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut bulkCreateProducts(
-            java.util.List<com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn> rows);
+    BulkResultDtoOut bulkCreateProducts(
+            List<BulkProductDtoIn> rows);
 
     /**
      * Exports products in the given 1-based inclusive range (ordered deterministically by id) as the same
@@ -124,14 +130,14 @@ public interface CatalogUseCase {
     long countProducts();
 
     /** Creates a single product manually from a friendly row; returns the new product id. */
-    UUID createProductManual(com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn req);
+    UUID createProductManual(BulkProductDtoIn req);
 
     /** Permanently deletes a product and its catalog children (refused if it has orders). */
     void deleteProduct(UUID id);
 
     /** Bulk-creates categories from friendly JSON rows. */
-    com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut bulkCreateCategories(
-            java.util.List<com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn> rows);
+    BulkResultDtoOut bulkCreateCategories(
+            List<BulkCategoryDtoIn> rows);
 
     ProductSummaryView toSummaryView(Product product, String language);
 

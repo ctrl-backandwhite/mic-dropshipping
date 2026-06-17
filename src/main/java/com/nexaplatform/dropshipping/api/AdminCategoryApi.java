@@ -29,10 +29,15 @@ public interface AdminCategoryApi {
     @GetMapping
     ResponseEntity<List<AdminCategoryDtoOut>> list();
 
-    @Operation(summary = "Indexed, paginated category listing with optional free-text filter (q)")
+    @Operation(summary = "Indexed, paginated category listing. hasProducts: null=all, true=with products, false=empty")
     @GetMapping("/paged")
     ResponseEntity<PageResponse<AdminCategoryDtoOut>> listPaged(@RequestParam(required = false) String q,
+            @RequestParam(required = false) Boolean hasProducts,
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "50") int size);
+
+    @Operation(summary = "Categories that have at least one product (for catalog filters)")
+    @GetMapping("/with-products")
+    ResponseEntity<List<AdminCategoryDtoOut>> listWithProducts();
 
     @Operation(summary = "Toggle a category active state by id")
     @PutMapping("/{id}/toggle")

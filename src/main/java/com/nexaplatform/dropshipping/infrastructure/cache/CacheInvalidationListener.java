@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.cache;
 
+import com.nexaplatform.dropshipping.infrastructure.messaging.NexaTopics;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.CacheManager;
@@ -25,7 +26,7 @@ public class CacheInvalidationListener {
 
     private final CacheManager cacheManager;
 
-    @KafkaListener(topics = com.nexaplatform.dropshipping.infrastructure.messaging.NexaTopics.CACHE_INVALIDATION, groupId = "nexadrop-cache-invalidation", containerFactory = "kafkaListenerContainerFactory")
+    @KafkaListener(topics = NexaTopics.CACHE_INVALIDATION, groupId = "nexadrop-cache-invalidation", containerFactory = "kafkaListenerContainerFactory")
     public void onInvalidation(Map<String, Object> event) {
         Object cacheName = event.get("cache");
         Object key = event.get("key");

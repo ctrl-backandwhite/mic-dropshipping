@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.infrastructure.security.oauth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CustomerSubscriptionRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Bean;
@@ -20,6 +21,8 @@ import org.springframework.security.oauth2.server.authorization.client.Registere
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.settings.ClientSettings;
 import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
+import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
+import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
 
 import java.time.Duration;
 import java.util.UUID;
@@ -134,8 +137,8 @@ public class RegisteredClientConfig {
      * El RateLimitFilter consume `plan` para aplicar 1/min (sandbox) o 5/min (paid).
      */
     @Bean
-    public org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer<org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext> partnerPlanClaimCustomizer(
-            com.nexaplatform.dropshipping.infrastructure.persistence.repository.CustomerSubscriptionRepository subsRepo) {
+    public OAuth2TokenCustomizer<JwtEncodingContext> partnerPlanClaimCustomizer(
+            CustomerSubscriptionRepository subsRepo) {
         return context -> {
             if (!"access_token".equals(context.getTokenType().getValue()))
                 return;

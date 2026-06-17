@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.usecase.SupplierUseCase;
 import com.nexaplatform.dropshipping.domain.model.Supplier;
@@ -93,7 +94,7 @@ public class SupplierUseCaseImpl implements SupplierUseCase {
     @Transactional
     public Supplier create(Supplier model) {
         if (model.getName() == null || model.getName().isBlank()) {
-            throw new com.nexaplatform.dropshipping.api.exception.BusinessException("El nombre del proveedor es obligatorio");
+            throw new BusinessException("El nombre del proveedor es obligatorio");
         }
         model.setId(null);
         model.setSource(model.getSource() != null ? model.getSource() : "manual");
@@ -137,7 +138,7 @@ public class SupplierUseCaseImpl implements SupplierUseCase {
         Long products = em.createQuery("SELECT count(p) FROM ProductEntity p WHERE p.supplier.id = :id", Long.class)
                 .setParameter("id", id).getSingleResult();
         if (products != null && products > 0) {
-            throw new com.nexaplatform.dropshipping.api.exception.BusinessException(
+            throw new BusinessException(
                     "No se puede eliminar: el proveedor tiene " + products + " productos asociados");
         }
         supplierRepository.delete(id);

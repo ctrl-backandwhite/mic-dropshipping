@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application.service;
 
 import com.nexaplatform.dropshipping.infrastructure.integration.translation.TranslationProvider;
+import com.nexaplatform.dropshipping.infrastructure.messaging.ProductIngestedEvent;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
@@ -43,7 +44,7 @@ public class TranslationService {
 
     @KafkaListener(topics = "product.ingested", groupId = "nexadrop-translation")
     @Transactional
-    public void onProductIngested(com.nexaplatform.dropshipping.infrastructure.messaging.ProductIngestedEvent event) {
+    public void onProductIngested(ProductIngestedEvent event) {
         translateProduct(event.productId());
     }
 

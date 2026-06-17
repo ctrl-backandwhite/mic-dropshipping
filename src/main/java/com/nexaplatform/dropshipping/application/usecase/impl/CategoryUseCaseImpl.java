@@ -16,6 +16,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORIES_FLAT;
 import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORY_TREE;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -87,12 +90,56 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<Category> findAllPaged(String q, Pageable pageable) {
-        Page<Category> page = categoryRepository.search(q, pageable);
-        // One GROUP BY for the whole page instead of a COUNT per category (no N+1).
+    public Page<Category> findAllPaged(String q, Boolean hasProducts, Pageable pageable) {
         Map<UUID, Long> productCount = productCountByCategory();
-        page.getContent().forEach(c -> c.setProductCount(productCount.getOrDefault(c.getId(), 0L)));
-        return page;
+        if (hasProducts == null) {
+            // Camino eficiente: una GROUP BY para toda la página (sin N+1) y paginación en BD.
+            Page<Category> page = categoryRepository.search(q, pageable);
+            page.getContent().forEach(c -> c.setProductCount(productCount.getOrDefault(c.getId(), 0L)));
+            return page;
+        }
+        // Filtro con/sin productos: el conteo se calcula tras la query, así que filtramos en memoria
+        // (las categorías son pocas) y paginamos sobre el resultado filtrado.
+        List<Category> all = categoryRepository.search(q, PageRequest.of(0, 100_000)).getContent();
+        List<Category> filtered = new ArrayList<>();
+        for (Category c : all) {
+            long n = productCount.getOrDefault(c.getId(), 0L);
+            c.setProductCount(n);
+            if (hasProducts ? n > 0 : n == 0) {
+                filtered.add(c);
+            }
+        }
+        int start = (int) Math.min(pageable.getOffset(), filtered.size());
+        int end = Math.min(start + pageable.getPageSize(), filtered.size());
+        return new PageImpl<>(filtered.subList(start, end), pageable, filtered.size());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Category> findWithProducts() {
+        return findAll().stream().filter(c -> c.getProductCount() > 0).toList();
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_CATEGORY_TREE, allEntries = true),
+            @CacheEvict(value = CACHE_CATEGORIES_FLAT, allEntries = true)})
+    public int setActiveBulk(List<UUID> ids, boolean active) {
+        if (ids == null || ids.isEmpty()) {
+            return 0;
+        }
+        int updated = 0;
+        for (UUID id : ids) {
+            Category c = getById(id);
+            if (c == null || Boolean.valueOf(active).equals(c.getActive())) {
+                continue;
+            }
+            c.setActive(active);
+            categoryRepository.update(c);
+            categoryIndexer.indexCategory(id);
+            updated++;
+        }
+        return updated;
     }
 
     @Override

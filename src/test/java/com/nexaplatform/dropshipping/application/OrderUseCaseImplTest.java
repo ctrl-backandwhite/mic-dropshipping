@@ -7,12 +7,17 @@ import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
+import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
+import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.application.usecase.impl.OrderUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
+import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
+import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.CainiaoFulfillmentService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
@@ -34,13 +39,15 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class OrderUseCaseImplTest {
 
     @Mock
-    com.nexaplatform.dropshipping.domain.repository.OrderRepository orderRepository;
+    OrderRepository orderRepository;
     @Mock
     ProductRepository productRepository;
     @Mock
@@ -62,11 +69,11 @@ class OrderUseCaseImplTest {
     @Mock
     AffiliateProgramService affiliateProgramService;
     @Mock
-    com.nexaplatform.dropshipping.application.usecase.PaymentUseCase paymentUseCase;
+    PaymentUseCase paymentUseCase;
     @Mock
-    com.nexaplatform.dropshipping.application.service.OrderEmailService orderEmailService;
+    OrderEmailService orderEmailService;
     @Mock
-    com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.CainiaoFulfillmentService cainiao;
+    CainiaoFulfillmentService cainiao;
 
     OrderUseCaseImpl orderUseCase;
 
@@ -76,9 +83,7 @@ class OrderUseCaseImplTest {
                 shopConnectionRepository, userAddressRepository, webhooks, walletUseCase, notificationsPublisher,
                 pricingService, affiliateProgramService, paymentUseCase, orderEmailService, cainiao);
         // Por defecto, sin envío en los tests de billing (no altera el total = subtotal).
-        org.mockito.Mockito.lenient().when(cainiao.quote(org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.anyInt()))
-                .thenReturn(com.nexaplatform.dropshipping.domain.model.ShippingQuote.unsupported("XX"));
+        lenient().when(cainiao.quote(any(), anyInt())).thenReturn(ShippingQuote.unsupported("XX"));
     }
 
     /** DROP-637: the checkout now bills the priced amount (retailUsd) from PricingService. */

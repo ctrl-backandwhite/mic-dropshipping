@@ -5,13 +5,17 @@ import com.nexaplatform.dropshipping.application.usecase.ProductReviewUseCase;
 import com.nexaplatform.dropshipping.domain.model.ProductReview;
 import com.nexaplatform.dropshipping.domain.model.ProductReviewPage;
 import com.nexaplatform.dropshipping.domain.repository.ProductReviewRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductReviewEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductReviewEntityMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductReviewJpaRepositoryAdapter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -29,8 +33,8 @@ public class ProductReviewUseCaseImpl implements ProductReviewUseCase {
 
     private final ProductReviewRepository productReviewRepository;
     private final ProductRepository productRepo;
-    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductReviewJpaRepositoryAdapter reviewJpa;
-    private final com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductReviewEntityMapper reviewEntityMapper;
+    private final ProductReviewJpaRepositoryAdapter reviewJpa;
+    private final ProductReviewEntityMapper reviewEntityMapper;
 
     /** Lists approved reviews for a product with a rating histogram and average. */
     @Override
@@ -64,7 +68,7 @@ public class ProductReviewUseCaseImpl implements ProductReviewUseCase {
     public ProductReview create(UUID productId, ProductReview review) {
         var product = productRepo.findById(productId).orElseThrow(() -> new NotFoundException("Product"));
         short rating = (short) Math.max(1, Math.min(5, review.getRating()));
-        var entity = com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductReviewEntity.builder()
+        var entity = ProductReviewEntity.builder()
                 .product(product)
                 .authorName(review.getAuthorName() != null && !review.getAuthorName().isBlank()
                         ? review.getAuthorName() : "Anónimo")
@@ -80,7 +84,7 @@ public class ProductReviewUseCaseImpl implements ProductReviewUseCase {
         double avg = total == 0 ? 0.0
                 : dist.entrySet().stream().mapToDouble(e -> e.getKey() * e.getValue()).sum() / total;
         product.setReviewCount((int) total);
-        product.setRating(java.math.BigDecimal.valueOf(Math.round(avg * 100) / 100.0));
+        product.setRating(BigDecimal.valueOf(Math.round(avg * 100) / 100.0));
         productRepo.save(product);
 
         return reviewEntityMapper.toDomain(saved);

@@ -2,9 +2,11 @@ package com.nexaplatform.dropshipping.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.dto.out.OrderPaymentDtoOut;
+import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.api.mapper.OrderPaymentDtoMapper;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
 import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
+import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.application.usecase.impl.PaymentUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
@@ -28,6 +30,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -48,7 +51,7 @@ class PaymentUseCaseImplTest {
     @Mock
     PartnerPlanSyncService partnerPlanSyncService;
     @Mock
-    com.nexaplatform.dropshipping.application.service.OrderEmailService orderEmailService;
+    OrderEmailService orderEmailService;
 
     private final OrderPaymentDtoMapper orderPaymentDtoMapper = Mappers.getMapper(OrderPaymentDtoMapper.class);
 
@@ -83,7 +86,7 @@ class PaymentUseCaseImplTest {
         PaymentUseCaseImpl svc = useCase();
 
         assertThatThrownBy(() -> svc.getOrderPayment(orderId, paymentId))
-                .isInstanceOf(com.nexaplatform.dropshipping.api.exception.NotFoundException.class);
+                .isInstanceOf(NotFoundException.class);
     }
 
     @Test
@@ -93,7 +96,7 @@ class PaymentUseCaseImplTest {
         String body = useCase().handleStripeEvent("customer.subscription.updated", payload);
 
         assertThat(body).isEqualTo("ok");
-        org.mockito.Mockito.verify(partnerPlanSyncService).onSubscriptionEvent("sub_123", "active",
+        verify(partnerPlanSyncService).onSubscriptionEvent("sub_123", "active",
                 "customer.subscription.updated");
     }
 }

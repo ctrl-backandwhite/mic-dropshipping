@@ -367,7 +367,7 @@ public class UserUseCaseImpl implements UserUseCase {
         String display = ((firstName != null ? firstName : "") + " " + (lastName != null ? lastName : "")).trim();
         User user = User.builder()
                 .email(normalized)
-                .passwordHash(passwordEncoder.encode(java.util.UUID.randomUUID().toString()))
+                .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString()))
                 .role(UserRole.USER)
                 .active(true)
                 .googleLinked(true)
@@ -375,7 +375,7 @@ public class UserUseCaseImpl implements UserUseCase {
                 .language("es")
                 .build();
         User saved = userRepository.save(user);
-        auditLogger.log("auth.google.register", normalized, java.util.Map.of("userId", saved.getId()));
+        auditLogger.log("auth.google.register", normalized, Map.of("userId", saved.getId()));
         log.info("::> [GOOGLE-OAUTH2] New user registered userId={}", saved.getId());
         return new GoogleLoginOutcome(saved, false, normalized);
     }
@@ -387,7 +387,7 @@ public class UserUseCaseImpl implements UserUseCase {
         if (!user.isGoogleLinked()) {
             user.setGoogleLinked(true);
             userRepository.save(user);
-            auditLogger.log("auth.google.link", user.getEmail(), java.util.Map.of("userId", id));
+            auditLogger.log("auth.google.link", user.getEmail(), Map.of("userId", id));
             log.info("::> [GOOGLE-OAUTH2] Google identity linked to account userId={}", id);
         }
     }
@@ -398,7 +398,7 @@ public class UserUseCaseImpl implements UserUseCase {
     public void adminResetPassword(UUID id) {
         User user = findById(id);
         requestPasswordReset(user.getEmail());
-        auditLogger.log("auth.admin.password_reset", user.getEmail(), java.util.Map.of("userId", id));
+        auditLogger.log("auth.admin.password_reset", user.getEmail(), Map.of("userId", id));
     }
 
     @Override
@@ -409,7 +409,7 @@ public class UserUseCaseImpl implements UserUseCase {
             throw new BusinessException("No se puede eliminar una cuenta de administrador");
         }
         userRepository.delete(id);
-        auditLogger.log("auth.admin.delete", user.getEmail(), java.util.Map.of("userId", id));
+        auditLogger.log("auth.admin.delete", user.getEmail(), Map.of("userId", id));
     }
 
     @Override
@@ -428,7 +428,7 @@ public class UserUseCaseImpl implements UserUseCase {
         String activationCode = randomToken(32);
         User user = User.builder()
                 .email(normalized)
-                .passwordHash(passwordEncoder.encode(java.util.UUID.randomUUID().toString()))
+                .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString()))
                 .role(r)
                 .active(false)
                 .activationCode(activationCode)
@@ -437,9 +437,9 @@ public class UserUseCaseImpl implements UserUseCase {
                 .build();
         User saved = userRepository.save(user);
         emailQueueService.enqueue(normalized, "Te han invitado a NexaDrop", "emails/welcome",
-                java.util.Map.of("displayName", "", "dashboardUrl",
+                Map.of("displayName", "", "dashboardUrl",
                         "http://localhost:3003/activate?code=" + activationCode));
-        auditLogger.log("auth.admin.invite", normalized, java.util.Map.of("userId", saved.getId(), "role", r.name()));
+        auditLogger.log("auth.admin.invite", normalized, Map.of("userId", saved.getId(), "role", r.name()));
         return saved;
     }
 

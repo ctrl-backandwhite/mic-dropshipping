@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.security;
 
+import com.nexaplatform.dropshipping.infrastructure.security.ratelimit.BucketFactory;
 import com.nimbusds.jwt.JWTParser;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
@@ -8,6 +9,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -49,8 +51,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
     // local/dev y para una sola instancia). En prod multi-instancia se
     // sustituye por DistributedBucketFactory (Bucket4j sobre Redis) y todas
     // las réplicas comparten el mismo bucket → cuota global consistente.
-    @org.springframework.beans.factory.annotation.Autowired
-    private com.nexaplatform.dropshipping.infrastructure.security.ratelimit.BucketFactory bucketFactory;
+    @Autowired
+    private BucketFactory bucketFactory;
 
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 

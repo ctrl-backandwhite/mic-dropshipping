@@ -5,25 +5,37 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.UpdateProductStatusRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
+import com.nexaplatform.dropshipping.api.dto.in.AddProductImageDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.Category1688MappingDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.CategoryAttributeSchemaDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.ImageUploadDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.ReindexResultDtoOut;
+import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -139,24 +151,24 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
-    public ResponseEntity<com.nexaplatform.dropshipping.api.dto.out.ImageUploadDtoOut> uploadImage(
-            org.springframework.web.multipart.MultipartFile file) {
+    public ResponseEntity<ImageUploadDtoOut> uploadImage(
+            MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new com.nexaplatform.dropshipping.api.exception.BusinessException("No se ha enviado ningún archivo");
+            throw new BusinessException("No se ha enviado ningún archivo");
         }
         try {
             String url = catalogUseCase.uploadImage(file.getBytes(), file.getContentType(), file.getOriginalFilename());
-            return ResponseEntity.ok(new com.nexaplatform.dropshipping.api.dto.out.ImageUploadDtoOut(url));
-        } catch (java.io.IOException e) {
-            throw new com.nexaplatform.dropshipping.api.exception.BusinessException("No se pudo leer el archivo subido");
+            return ResponseEntity.ok(new ImageUploadDtoOut(url));
+        } catch (IOException e) {
+            throw new BusinessException("No se pudo leer el archivo subido");
         }
     }
 
     @Override
-    public ResponseEntity<com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView> addProductImage(
-            UUID productId, com.nexaplatform.dropshipping.api.dto.in.AddProductImageDtoIn req) {
+    public ResponseEntity<ProductImageView> addProductImage(
+            UUID productId, AddProductImageDtoIn req) {
         return new ResponseEntity<>(catalogUseCase.addProductImage(productId, req.getUrl(), req.getRole()),
-                org.springframework.http.HttpStatus.CREATED);
+                HttpStatus.CREATED);
     }
 
     @Override
@@ -213,12 +225,12 @@ public class AdminCatalogController implements AdminCatalogApi {
 
     /* ===================== DROP-677: mapeo categorías 1688 → interna ===================== */
 
-    @org.springframework.web.bind.annotation.GetMapping("/category-1688-mappings")
-    public ResponseEntity<List<com.nexaplatform.dropshipping.api.dto.out.Category1688MappingDtoOut>> listCategory1688Mappings() {
+    @GetMapping("/category-1688-mappings")
+    public ResponseEntity<List<Category1688MappingDtoOut>> listCategory1688Mappings() {
         return ResponseEntity.ok(catalogUseCase.listCategory1688Mappings());
     }
 
-    @org.springframework.web.bind.annotation.PostMapping("/category-1688-mappings")
+    @PostMapping("/category-1688-mappings")
     public ResponseEntity<UUID> upsertCategory1688Mapping(@RequestBody Map<String, String> body) {
         UUID categoryId = UUID.fromString(body.get("categoryId"));
         UUID id = catalogUseCase.upsertCategory1688Mapping(body.get("external1688Id"), body.get("external1688Name"),
@@ -226,7 +238,7 @@ public class AdminCatalogController implements AdminCatalogApi {
         return ResponseEntity.ok(id);
     }
 
-    @org.springframework.web.bind.annotation.DeleteMapping("/category-1688-mappings/{id}")
+    @DeleteMapping("/category-1688-mappings/{id}")
     public ResponseEntity<Void> deleteCategory1688Mapping(@PathVariable UUID id) {
         catalogUseCase.deleteCategory1688Mapping(id);
         return ResponseEntity.noContent().build();
@@ -234,13 +246,13 @@ public class AdminCatalogController implements AdminCatalogApi {
 
     /* ===================== DROP-670: esquema de atributos por categoría ===================== */
 
-    @org.springframework.web.bind.annotation.GetMapping("/categories/{categoryId}/attribute-schema")
-    public ResponseEntity<List<com.nexaplatform.dropshipping.api.dto.out.CategoryAttributeSchemaDtoOut>> listCategoryAttributeSchema(
+    @GetMapping("/categories/{categoryId}/attribute-schema")
+    public ResponseEntity<List<CategoryAttributeSchemaDtoOut>> listCategoryAttributeSchema(
             @PathVariable UUID categoryId) {
         return ResponseEntity.ok(catalogUseCase.listCategoryAttributeSchema(categoryId));
     }
 
-    @org.springframework.web.bind.annotation.PostMapping("/categories/{categoryId}/attribute-schema")
+    @PostMapping("/categories/{categoryId}/attribute-schema")
     public ResponseEntity<UUID> upsertCategoryAttributeSchema(@PathVariable UUID categoryId,
             @RequestBody Map<String, Object> body) {
         String attrKey = (String) body.get("attrKey");
@@ -251,7 +263,7 @@ public class AdminCatalogController implements AdminCatalogApi {
                 position));
     }
 
-    @org.springframework.web.bind.annotation.DeleteMapping("/category-attribute-schema/{id}")
+    @DeleteMapping("/category-attribute-schema/{id}")
     public ResponseEntity<Void> deleteCategoryAttributeSchema(@PathVariable UUID id) {
         catalogUseCase.deleteCategoryAttributeSchema(id);
         return ResponseEntity.noContent().build();

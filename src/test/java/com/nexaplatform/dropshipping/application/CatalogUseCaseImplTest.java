@@ -12,14 +12,22 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierE
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductImageRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductAttributeRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductSpecificationRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.VariantValueRepository;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer;
+import com.nexaplatform.dropshipping.infrastructure.integration.storage.StorageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 
 import java.math.BigDecimal;
@@ -58,21 +66,21 @@ class CatalogUseCaseImplTest {
     @Mock
     KafkaTemplate<String, Object> kafkaTemplate;
     @Mock
-    com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository variantRepository;
+    ProductVariantRepository variantRepository;
     @Mock
-    com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer productIndexer;
+    ProductIndexer productIndexer;
     @Mock
-    com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer categoryIndexer;
+    CategoryIndexer categoryIndexer;
     @Mock
-    com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductAttributeRepository productAttributeRepository;
+    ProductAttributeRepository productAttributeRepository;
     @Mock
-    com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductSpecificationRepository productSpecificationRepository;
+    ProductSpecificationRepository productSpecificationRepository;
     @Mock
-    com.nexaplatform.dropshipping.infrastructure.persistence.repository.VariantValueRepository variantValueRepository;
+    VariantValueRepository variantValueRepository;
     @Mock
-    org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    JdbcTemplate jdbcTemplate;
     @Mock
-    com.nexaplatform.dropshipping.infrastructure.integration.storage.StorageService storageService;
+    StorageService storageService;
     @Mock
     ProductBulkExportMapper bulkExportMapper;
 
