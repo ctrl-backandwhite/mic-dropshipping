@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.security.oauth;
 
+import com.nexaplatform.dropshipping.infrastructure.security.DeviceSessionRevocationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -7,6 +8,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 
@@ -18,7 +20,8 @@ public class BffSecurityConfig {
      */
     @Bean
     @Order(2)
-    public SecurityFilterChain bffFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain bffFilterChain(HttpSecurity http, DeviceSessionRevocationFilter deviceSessionFilter)
+            throws Exception {
         http.securityMatcher("/api/admin/**", "/api/storefront/**", "/api/me/**", "/api/auth/**", "/api/webhooks/**")
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
@@ -55,7 +58,9 @@ public class BffSecurityConfig {
                         .authenticated().anyRequest().authenticated())
                 .logout(logout -> logout.logoutUrl("/api/auth/logout")
                         .logoutSuccessHandler((req, res, auth) -> res.setStatus(204)).invalidateHttpSession(true)
-                        .deleteCookies("JSESSIONID", "XSRF-TOKEN"));
+                        .deleteCookies("JSESSIONID", "XSRF-TOKEN"))
+                // Tras autorizar, comprueba si el dispositivo fue revocado y cierra su sesión (401).
+                .addFilterAfter(deviceSessionFilter, AuthorizationFilter.class);
         return http.build();
     }
 }

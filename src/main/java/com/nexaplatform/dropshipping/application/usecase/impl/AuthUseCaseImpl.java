@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.application.usecase.impl;
 import com.nexaplatform.dropshipping.api.dto.in.ActivateDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.ChangePasswordDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.LoginDtoIn;
+import com.nexaplatform.dropshipping.application.service.DeviceSessionService;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetRequestDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.RegisterDtoIn;
@@ -59,6 +60,7 @@ public class AuthUseCaseImpl implements AuthUseCase {
     private final PasswordEncoder passwordEncoder;
     private final StorageService storageService;
     private final UserDtoMapper mapper;
+    private final DeviceSessionService deviceSessionService;
 
     private final SecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
 
@@ -84,6 +86,7 @@ public class AuthUseCaseImpl implements AuthUseCase {
             UUID id = UUID.fromString(auth.getName());
             User user = userUseCase.findById(id);
             completePendingGoogleLink(httpRequest, user);
+            deviceSessionService.recordLogin(id, httpRequest, httpResponse); // dispositivo conectado
             return mapper.toMeDtoOut(user, authorities(auth));
         } catch (DisabledException e) {
             throw new BusinessException("Account not yet activated. Check your email.");
