@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupportTi
 import org.mapstruct.Builder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 
 import java.util.List;
 
@@ -50,6 +51,24 @@ public interface SupportTicketEntityMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
     SupportTicketEntity toEntity(SupportTicket model);
+
+    /**
+     * Aplica los campos escalares del modelo sobre una entidad gestionada (ruta de actualización). El
+     * {@code user}, {@code order} y {@code assignedTo} (relaciones gestionadas), la auditoría y el
+     * {@code status} / {@code priority} (set condicional preservando el valor previo cuando es null) los
+     * resuelve el repositorio, por eso se ignoran aquí. MapStruct auto-mapea el resto por nombre.
+     */
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "user", ignore = true)
+    @Mapping(target = "order", ignore = true)
+    @Mapping(target = "status", ignore = true)
+    @Mapping(target = "priority", ignore = true)
+    @Mapping(target = "assignedTo", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
+    void updateEntity(@MappingTarget SupportTicketEntity entity, SupportTicket model);
 
     List<SupportTicket> toDomainList(List<SupportTicketEntity> entities);
 }

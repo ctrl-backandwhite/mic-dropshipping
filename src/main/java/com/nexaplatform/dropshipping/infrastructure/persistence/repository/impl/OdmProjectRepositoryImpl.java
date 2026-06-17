@@ -84,14 +84,13 @@ public class OdmProjectRepositoryImpl implements OdmProjectRepository {
 
     /** Applies the mutable model fields onto the entity, resolving the owning user. */
     private void applyModel(OdmProjectEntity entity, OdmProject model) {
+        // Campos escalares vía MapStruct; la relación gestionada (user) y el status condicional se
+        // resuelven abajo porque requieren un lookup de repositorio / preservar el valor previo.
+        odmProjectEntityMapper.updateEntity(entity, model);
+
         if (entity.getUser() == null) {
             entity.setUser(userRepository.findById(model.getUserId()).orElseThrow(() -> new NotFoundException("User")));
         }
-        entity.setKind(model.getKind());
-        entity.setTitle(model.getTitle());
-        entity.setBrief(model.getBrief());
-        entity.setBudgetUsdCents(model.getBudgetUsdCents());
-        entity.setSlaDays(model.getSlaDays());
         if (model.getStatus() != null) {
             entity.setStatus(model.getStatus());
         }

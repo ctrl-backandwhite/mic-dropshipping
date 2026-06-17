@@ -6,6 +6,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryT
 import org.mapstruct.Builder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 import org.mapstruct.Named;
 
 import java.util.HashMap;
@@ -57,6 +58,24 @@ public interface CategoryEntityMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
     CategoryEntity toEntity(Category model);
+
+    /**
+     * Aplica los campos escalares del modelo sobre una entidad gestionada (ruta de actualización).
+     * La relación auto-referente {@code parent} y la colección {@code translations} las resuelve el
+     * repositorio (upsert in-place), por eso se ignoran aquí; la auditoría también. {@code position}
+     * y {@code active} conservan el saneado null→0 / null→false del mapeo manual original. MapStruct
+     * auto-mapea el resto por nombre.
+     */
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "position", expression = "java(model.getPosition() != null ? model.getPosition() : 0)")
+    @Mapping(target = "active", expression = "java(model.getActive() != null && model.getActive())")
+    @Mapping(target = "parent", ignore = true)
+    @Mapping(target = "translations", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
+    void updateEntity(@MappingTarget CategoryEntity entity, Category model);
 
     List<Category> toDomainList(List<CategoryEntity> entities);
 

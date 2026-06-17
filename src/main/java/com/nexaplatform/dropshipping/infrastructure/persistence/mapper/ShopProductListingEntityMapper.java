@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ShopProdu
 import org.mapstruct.Builder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 
 import java.util.List;
 
@@ -45,6 +46,20 @@ public interface ShopProductListingEntityMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
     ShopProductListingEntity toEntity(ShopProductListing model);
+
+    /**
+     * Aplica los campos escalares del modelo sobre una entidad gestionada (ruta de actualización).
+     * Las relaciones gestionadas ({@code shopConnection}, {@code product}) y la auditoría las resuelve
+     * el repositorio, por eso se ignoran aquí. MapStruct auto-mapea el resto por nombre.
+     */
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "shopConnection", ignore = true)
+    @Mapping(target = "product", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
+    void updateEntity(@MappingTarget ShopProductListingEntity entity, ShopProductListing model);
 
     List<ShopProductListing> toDomainList(List<ShopProductListingEntity> entities);
 }

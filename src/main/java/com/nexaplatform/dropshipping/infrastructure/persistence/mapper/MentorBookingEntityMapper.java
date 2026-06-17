@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.MentorBoo
 import org.mapstruct.Builder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 
 import java.util.List;
 
@@ -47,6 +48,20 @@ public interface MentorBookingEntityMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
     MentorBookingEntity toEntity(MentorBooking model);
+
+    /**
+     * Aplica los campos escalares del modelo sobre una entidad gestionada (ruta de actualización).
+     * Las relaciones {@code mentor} y {@code learner} las resuelve el repositorio (condicionales a sus
+     * ids), por eso se ignoran aquí; la auditoría también. MapStruct auto-mapea el resto por nombre.
+     */
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "mentor", ignore = true)
+    @Mapping(target = "learner", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
+    void updateEntity(@MappingTarget MentorBookingEntity entity, MentorBooking model);
 
     List<MentorBooking> toDomainList(List<MentorBookingEntity> entities);
 

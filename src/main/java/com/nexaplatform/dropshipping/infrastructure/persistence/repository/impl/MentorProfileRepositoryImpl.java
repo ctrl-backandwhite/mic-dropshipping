@@ -73,15 +73,10 @@ public class MentorProfileRepositoryImpl implements MentorProfileRepository {
 
     /** Applies the mutable model fields onto the entity, resolving the user relation. */
     private void applyModel(MentorProfileEntity entity, MentorProfile model) {
+        // Campos escalares vía MapStruct; la relación user se resuelve abajo (condicional, requiere lookup).
+        mentorProfileEntityMapper.updateEntity(entity, model);
         if (model.getUserId() != null) {
             entity.setUser(userRepository.findById(model.getUserId()).orElseThrow(() -> new NotFoundException("User")));
         }
-        entity.setHeadline(model.getHeadline());
-        entity.setBio(model.getBio());
-        entity.setExpertise(model.getExpertise());
-        entity.setLanguages(model.getLanguages());
-        entity.setHourlyRateUsdCents(model.getHourlyRateUsdCents());
-        entity.setTimezone(model.getTimezone());
-        entity.setActive(model.isActive());
     }
 }

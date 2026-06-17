@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SourcingQ
 import org.mapstruct.Builder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 
 import java.util.List;
 
@@ -47,6 +48,20 @@ public interface SourcingQuoteEntityMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
     SourcingQuoteEntity toEntity(SourcingQuote model);
+
+    /**
+     * Aplica los campos escalares del modelo sobre una entidad gestionada (ruta de actualización). El
+     * {@code request} y {@code agent} (relaciones gestionadas) y la auditoría los resuelve el
+     * repositorio, por eso se ignoran aquí. MapStruct auto-mapea el resto por nombre.
+     */
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "request", ignore = true)
+    @Mapping(target = "agent", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
+    void updateEntity(@MappingTarget SourcingQuoteEntity entity, SourcingQuote model);
 
     List<SourcingQuote> toDomainList(List<SourcingQuoteEntity> entities);
 }

@@ -87,12 +87,13 @@ public class SupportTicketRepositoryImpl implements SupportTicketRepository {
 
     /** Applies the mutable model fields onto the entity, resolving user and optional order. */
     private void applyModel(SupportTicketEntity entity, SupportTicket model) {
+        // Campos escalares vía MapStruct; las relaciones gestionadas (user, order) y el status/priority
+        // condicionales se resuelven abajo porque requieren lookups de repositorio / preservar el previo.
+        supportTicketEntityMapper.updateEntity(entity, model);
+
         if (entity.getUser() == null) {
             entity.setUser(userRepository.findById(model.getUserId()).orElseThrow(() -> new NotFoundException("User")));
         }
-        entity.setKind(model.getKind());
-        entity.setSubject(model.getSubject());
-        entity.setBody(model.getBody());
         // Mirror the legacy "best-effort" order lookup: a missing order id silently clears it.
         entity.setOrder(model.getOrderId() == null ? null : orderRepository.findById(model.getOrderId()).orElse(null));
         if (model.getStatus() != null) {
@@ -101,6 +102,5 @@ public class SupportTicketRepositoryImpl implements SupportTicketRepository {
         if (model.getPriority() != null) {
             entity.setPriority(model.getPriority());
         }
-        entity.setResolution(model.getResolution());
     }
 }

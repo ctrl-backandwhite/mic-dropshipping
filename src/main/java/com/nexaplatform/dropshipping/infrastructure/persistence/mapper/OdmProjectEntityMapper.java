@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OdmProjec
 import org.mapstruct.Builder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 
 import java.util.List;
 
@@ -47,6 +48,22 @@ public interface OdmProjectEntityMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
     OdmProjectEntity toEntity(OdmProject model);
+
+    /**
+     * Aplica los campos escalares del modelo sobre una entidad gestionada (ruta de actualización). El
+     * {@code user} y {@code assignedTo} (relaciones gestionadas), la auditoría y el {@code status}
+     * (set condicional preservando el valor previo cuando es null) los resuelve el repositorio, por eso
+     * se ignoran aquí. MapStruct auto-mapea el resto por nombre.
+     */
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "user", ignore = true)
+    @Mapping(target = "status", ignore = true)
+    @Mapping(target = "assignedTo", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
+    void updateEntity(@MappingTarget OdmProjectEntity entity, OdmProject model);
 
     List<OdmProject> toDomainList(List<OdmProjectEntity> entities);
 }

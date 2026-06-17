@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomerS
 import org.mapstruct.Builder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 
 import java.util.List;
 
@@ -61,6 +62,20 @@ public interface CustomerSubscriptionEntityMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
     CustomerSubscriptionEntity toEntity(CustomerSubscription model);
+
+    /**
+     * Aplica los campos escalares del modelo sobre una entidad gestionada (ruta de actualización).
+     * Las relaciones gestionadas ({@code user}, {@code plan}) y la auditoría las resuelve el
+     * repositorio, por eso se ignoran aquí. MapStruct auto-mapea el resto por nombre.
+     */
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "user", ignore = true)
+    @Mapping(target = "plan", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
+    void updateEntity(@MappingTarget CustomerSubscriptionEntity entity, CustomerSubscription model);
 
     List<CustomerSubscription> toDomainList(List<CustomerSubscriptionEntity> entities);
 }

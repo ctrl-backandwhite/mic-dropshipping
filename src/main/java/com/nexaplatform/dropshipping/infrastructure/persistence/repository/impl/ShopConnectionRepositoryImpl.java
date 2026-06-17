@@ -74,17 +74,12 @@ public class ShopConnectionRepositoryImpl implements ShopConnectionRepository {
 
     /** Applies the mutable model fields onto the entity, resolving the owning user. */
     private void applyModel(ShopConnectionEntity entity, ShopConnection model) {
+        // Campos escalares (incluido metadata) vía MapStruct; la relación gestionada user se
+        // resuelve abajo porque requiere un lookup de repositorio.
+        shopConnectionEntityMapper.updateEntity(entity, model);
         if (entity.getUser() == null) {
             entity.setUser(resolveUser(model.getUserId()));
         }
-        entity.setPlatform(model.getPlatform());
-        entity.setShopHandle(model.getShopHandle());
-        entity.setAccessTokenEnc(model.getAccessTokenEnc());
-        entity.setStatus(model.getStatus());
-        entity.setLastSyncAt(model.getLastSyncAt());
-        entity.setLastSyncError(model.getLastSyncError());
-        entity.setLastSyncMessage(model.getLastSyncMessage());
-        entity.setMetadata(model.getMetadata());
     }
 
     /** Resolves the owning user from its id, failing if it does not exist. */

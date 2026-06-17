@@ -98,13 +98,9 @@ public class CategoryRepositoryImpl implements CategoryRepository {
 
     /** Applies the mutable model fields onto the entity, resolving parent and translations. */
     private void applyModel(CategoryEntity entity, Category model) {
-        entity.setSlug(model.getSlug());
-        entity.setSource(model.getSource());
-        entity.setExternalId(model.getExternalId());
-        entity.setNameZh(model.getNameZh());
-        entity.setPosition(model.getPosition() != null ? model.getPosition() : 0);
-        entity.setActive(model.getActive() != null && model.getActive());
-        entity.setIcon(model.getIcon());
+        // Campos escalares (incluido el saneado null→0/false de position/active) vía MapStruct; el parent
+        // auto-referente y las translations se resuelven abajo porque requieren lookups/upsert in-place.
+        categoryEntityMapper.updateEntity(entity, model);
         entity.setParent(resolveParent(model.getParentId()));
         upsertTranslations(entity, model.getNames());
     }

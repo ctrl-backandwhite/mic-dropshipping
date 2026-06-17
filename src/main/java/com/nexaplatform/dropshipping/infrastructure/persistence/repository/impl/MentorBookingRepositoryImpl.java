@@ -76,6 +76,9 @@ public class MentorBookingRepositoryImpl implements MentorBookingRepository {
 
     /** Applies the mutable model fields onto the entity, resolving mentor/learner relations. */
     private void applyModel(MentorBookingEntity entity, MentorBooking model) {
+        // Campos escalares vía MapStruct; las relaciones mentor/learner se resuelven abajo (condicionales,
+        // requieren lookups de repositorio).
+        mentorBookingEntityMapper.updateEntity(entity, model);
         if (model.getMentorId() != null) {
             entity.setMentor(mentorProfileJpaRepositoryAdapter.findById(model.getMentorId())
                     .orElseThrow(() -> new NotFoundException("Mentor")));
@@ -84,9 +87,5 @@ public class MentorBookingRepositoryImpl implements MentorBookingRepository {
             entity.setLearner(
                     userRepository.findById(model.getLearnerId()).orElseThrow(() -> new NotFoundException("User")));
         }
-        entity.setStartsAt(model.getStartsAt());
-        entity.setDurationMin(model.getDurationMin());
-        entity.setStatus(model.getStatus());
-        entity.setTopic(model.getTopic());
     }
 }

@@ -90,16 +90,15 @@ public class ShopProductListingRepositoryImpl implements ShopProductListingRepos
 
     /** Applies the mutable model fields onto the entity, resolving shop and product relations. */
     private void applyModel(ShopProductListingEntity entity, ShopProductListing model) {
+        // Campos escalares vía MapStruct; las relaciones gestionadas (shopConnection, product) se
+        // resuelven abajo porque requieren lookups de repositorio.
+        shopProductListingEntityMapper.updateEntity(entity, model);
         if (entity.getShopConnection() == null) {
             entity.setShopConnection(resolveShop(model.getShopConnectionId()));
         }
         if (entity.getProduct() == null) {
             entity.setProduct(resolveProduct(model.getProductId()));
         }
-        entity.setRemoteProductId(model.getRemoteProductId());
-        entity.setStatus(model.getStatus());
-        entity.setErrorMessage(model.getErrorMessage());
-        entity.setLastPushedAt(model.getLastPushedAt());
     }
 
     /** Resolves the owning shop connection from its id, failing if it does not exist. */

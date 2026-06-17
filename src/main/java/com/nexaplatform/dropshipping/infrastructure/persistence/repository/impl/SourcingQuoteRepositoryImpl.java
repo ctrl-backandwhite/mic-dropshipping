@@ -75,6 +75,10 @@ public class SourcingQuoteRepositoryImpl implements SourcingQuoteRepository {
 
     /** Applies the mutable model fields onto the entity, resolving request and agent. */
     private void applyModel(SourcingQuoteEntity entity, SourcingQuote model) {
+        // Campos escalares vía MapStruct; las relaciones gestionadas (request, agent) se resuelven abajo
+        // porque requieren lookups de repositorio.
+        sourcingQuoteEntityMapper.updateEntity(entity, model);
+
         if (model.getRequestId() != null) {
             entity.setRequest(sourcingRequestJpaRepositoryAdapter.findById(model.getRequestId())
                     .orElseThrow(() -> new NotFoundException("Sourcing request")));
@@ -85,10 +89,5 @@ public class SourcingQuoteRepositoryImpl implements SourcingQuoteRepository {
         } else {
             entity.setAgent(null);
         }
-        entity.setPriceUsdCents(model.getPriceUsdCents());
-        entity.setEtaDays(model.getEtaDays());
-        entity.setMoq(model.getMoq());
-        entity.setNotes(model.getNotes());
-        entity.setStatus(model.getStatus());
     }
 }

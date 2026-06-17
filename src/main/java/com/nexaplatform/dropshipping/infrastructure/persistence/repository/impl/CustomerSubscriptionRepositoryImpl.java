@@ -84,17 +84,11 @@ public class CustomerSubscriptionRepositoryImpl implements CustomerSubscriptionR
 
     /** Applies the mutable model fields onto the entity, resolving the managed relations. */
     private void applyModel(CustomerSubscriptionEntity entity, CustomerSubscription model) {
+        // Campos escalares vía MapStruct; las relaciones gestionadas (user, plan) se resuelven
+        // abajo porque requieren lookups de repositorio.
+        customerSubscriptionEntityMapper.updateEntity(entity, model);
         entity.setUser(resolveUser(model.getUserId()));
         entity.setPlan(resolvePlan(model.getPlanId()));
-        entity.setStatus(model.getStatus());
-        entity.setBillingPeriod(model.getBillingPeriod());
-        entity.setStripeCustomerId(model.getStripeCustomerId());
-        entity.setStripeSubscriptionId(model.getStripeSubscriptionId());
-        entity.setCurrentPeriodStart(model.getCurrentPeriodStart());
-        entity.setCurrentPeriodEnd(model.getCurrentPeriodEnd());
-        entity.setCancelAt(model.getCancelAt());
-        entity.setCanceledAt(model.getCanceledAt());
-        entity.setTrialEndsAt(model.getTrialEndsAt());
     }
 
     /** Resolves the owning user from its id, failing if it does not exist. */
