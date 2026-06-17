@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.Notificat
 import org.mapstruct.Builder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 
 import java.util.List;
 
@@ -46,6 +47,22 @@ public interface NotificationEntityMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
     NotificationEntity toEntity(PlatformNotification model);
+
+    /**
+     * Aplica los campos escalares del modelo sobre una entidad gestionada (ruta de actualización).
+     * La relación gestionada ({@code user}) y la auditoría las resuelve el repositorio, por eso se
+     * ignoran aquí. {@code channel}/{@code payload} también se ignoran porque el repositorio solo los
+     * aplica cuando no son nulos. MapStruct auto-mapea el resto por nombre.
+     */
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "user", ignore = true)
+    @Mapping(target = "channel", ignore = true)
+    @Mapping(target = "payload", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
+    void updateEntity(@MappingTarget NotificationEntity entity, PlatformNotification model);
 
     List<PlatformNotification> toDomainList(List<NotificationEntity> entities);
 }

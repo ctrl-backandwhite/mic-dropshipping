@@ -82,6 +82,10 @@ public class AcademyEnrollmentRepositoryImpl implements AcademyEnrollmentReposit
 
     /** Applies the mutable model fields onto the entity, resolving user/course relations. */
     private void applyModel(AcademyEnrollmentEntity entity, AcademyEnrollment model) {
+        // Campos escalares (progreso, fecha de finalización) vía MapStruct; las relaciones gestionadas
+        // (user, course) se resuelven abajo porque requieren lookups de repositorio.
+        academyEnrollmentEntityMapper.updateEntity(entity, model);
+
         if (model.getUserId() != null) {
             entity.setUser(userRepository.findById(model.getUserId()).orElseThrow(() -> new NotFoundException("User")));
         }
@@ -89,9 +93,5 @@ public class AcademyEnrollmentRepositoryImpl implements AcademyEnrollmentReposit
             entity.setCourse(academyCourseJpaRepositoryAdapter.findById(model.getCourseId())
                     .orElseThrow(() -> new NotFoundException("Course")));
         }
-        if (model.getProgressPct() != null) {
-            entity.setProgressPct(model.getProgressPct());
-        }
-        entity.setCompletedAt(model.getCompletedAt());
     }
 }

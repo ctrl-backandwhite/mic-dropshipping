@@ -76,13 +76,12 @@ public class AffiliateRepositoryImpl implements AffiliateRepository {
 
     /** Applies the mutable model fields onto the entity, resolving the user relation. */
     private void applyModel(AffiliateEntity entity, Affiliate model) {
+        // Campos escalares vía MapStruct; la relación gestionada (user) se resuelve abajo
+        // porque requiere un lookup de repositorio.
+        affiliateEntityMapper.updateEntity(entity, model);
+
         if (model.getUserId() != null) {
             entity.setUser(userRepository.findById(model.getUserId()).orElseThrow(() -> new NotFoundException("User")));
         }
-        entity.setCode(model.getCode());
-        entity.setEarningsUsdCents(model.getEarningsUsdCents());
-        entity.setPayoutUsdCents(model.getPayoutUsdCents());
-        entity.setReferralsCount(model.getReferralsCount());
-        entity.setActive(model.isActive());
     }
 }

@@ -82,12 +82,11 @@ public class IntelligenceAlertRepositoryImpl implements IntelligenceAlertReposit
 
     /** Applies the mutable model fields onto the entity, resolving user and category. */
     private void applyModel(IntelligenceAlertEntity entity, IntelligenceAlert model) {
+        // Campos escalares vía MapStruct; las relaciones gestionadas (user, category) se resuelven
+        // abajo porque requieren lookups de repositorio.
+        intelligenceAlertEntityMapper.updateEntity(entity, model);
         entity.setUser(resolveUser(model.getUserId()));
-        entity.setKeyword(model.getKeyword());
         entity.setCategory(resolveCategory(model.getCategoryId()));
-        entity.setChannel(model.getChannel());
-        entity.setThresholdScore(model.getThresholdScore());
-        entity.setActive(model.isActive());
     }
 
     /** Resolves the alert owner from its id (required by the entity). */

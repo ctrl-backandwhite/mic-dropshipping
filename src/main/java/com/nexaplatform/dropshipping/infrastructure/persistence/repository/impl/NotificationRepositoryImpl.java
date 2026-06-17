@@ -79,18 +79,18 @@ public class NotificationRepositoryImpl implements NotificationRepository {
 
     /** Applies the mutable model fields onto the entity, resolving the owning user. */
     private void applyModel(NotificationEntity entity, PlatformNotification model) {
+        // Campos escalares vía MapStruct; la relación gestionada (user) se resuelve abajo porque
+        // requiere un lookup de repositorio, y channel/payload solo se aplican cuando no son nulos.
+        notificationEntityMapper.updateEntity(entity, model);
+
         if (entity.getUser() == null) {
             entity.setUser(userRepository.findById(model.getUserId()).orElseThrow(() -> new NotFoundException("User")));
         }
-        entity.setEventType(model.getEventType());
-        entity.setTitle(model.getTitle());
-        entity.setBody(model.getBody());
         if (model.getChannel() != null) {
             entity.setChannel(model.getChannel());
         }
         if (model.getPayload() != null) {
             entity.setPayload(model.getPayload());
         }
-        entity.setReadAt(model.getReadAt());
     }
 }

@@ -79,11 +79,10 @@ public class WalletRepositoryImpl implements WalletRepository {
 
     /** Applies the mutable model fields onto the entity, resolving the managed user relation. */
     private void applyModel(WalletEntity entity, Wallet model) {
+        // Campos escalares vía MapStruct; la relación gestionada user se resuelve abajo
+        // porque requiere un lookup de repositorio desde el userId aplanado.
+        walletEntityMapper.updateEntity(entity, model);
         entity.setUser(resolveUser(model.getUserId()));
-        entity.setBalanceUsdCents(model.getBalanceUsdCents());
-        entity.setHoldUsdCents(model.getHoldUsdCents());
-        entity.setCurrencyDefault(model.getCurrencyDefault());
-        entity.setStatus(model.getStatus());
     }
 
     /** Resolves the owning user from its id, failing if it does not exist. */
