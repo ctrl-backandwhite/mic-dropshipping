@@ -135,11 +135,21 @@
             <artifactId>httpcore5</artifactId>
         </dependency>
         <!-- HttpClient5: opensearch-java lo trae en runtime (no expuesto en compilación). Lo
-             declaramos para configurar TLS + auth básica del cliente OpenSearch seguro. -->
+             declaramos para configurar TLS + auth básica del cliente OpenSearch seguro. SIN versión
+             fija: la gestiona el BOM de Spring Boot, alineada con httpcore5/httpcore5-h2 (un pin a
+             5.4.1 con httpcore5 5.4.2 rompía ClientH2UpgradeHandler → NoSuchMethodError al indexar). -->
         <dependency>
             <groupId>org.apache.httpcomponents.client5</groupId>
             <artifactId>httpclient5</artifactId>
-            <version>5.4.1</version>
+        </dependency>
+
+        <!-- ============ Object storage (MinIO / S3) ============ -->
+        <!-- Mirror de imágenes/multimedia de producto: descargamos de 1688 y servimos desde nuestro
+             bucket (MinIO en local/dev, S3 compatible en prod) para no depender del hotlink de alicdn. -->
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+            <version>8.5.17</version>
         </dependency>
 
         <!-- ============ Image processing ============ -->

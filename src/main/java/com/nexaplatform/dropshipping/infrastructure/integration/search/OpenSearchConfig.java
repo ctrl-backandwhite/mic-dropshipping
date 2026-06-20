@@ -69,24 +69,29 @@ public class OpenSearchConfig {
                     + "del servicio interno en red privada. No usar contra un OpenSearch público.");
         }
 
-        if (withAuth || useInsecureTls) {
-            BasicCredentialsProvider creds = new BasicCredentialsProvider();
-            if (withAuth) {
-                creds.setCredentials(new AuthScope(host),
-                        new UsernamePasswordCredentials(username, password.toCharArray()));
-            }
-            TlsStrategy tlsStrategy = useInsecureTls ? buildTrustAllTls() : null;
-            builder.setHttpClientConfigCallback(http -> {
-                if (withAuth) {
-                    http.setDefaultCredentialsProvider(creds);
-                }
-                if (tlsStrategy != null) {
-                    http.setConnectionManager(
-                            PoolingAsyncClientConnectionManagerBuilder.create().setTlsStrategy(tlsStrategy).build());
-                }
-                return http;
-            });
+        BasicCredentialsProvider creds = null;
+        if (withAuth) {
+            creds = new BasicCredentialsProvider();
+            creds.setCredentials(new AuthScope(host),
+                    new UsernamePasswordCredentials(username, password.toCharArray()));
         }
+        final BasicCredentialsProvider credsFinal = creds;
+        final TlsStrategy tlsStrategy = useInsecureTls ? buildTrustAllTls() : null;
+        // SIEMPRE configuramos el cliente para DESACTIVAR la compresión de contenido: httpclient5 5.6
+        // descomprime gzip de forma transparente, pero opensearch-java 2.18 vuelve a intentar
+        // descomprimir por el header Content-Encoding → doble gunzip ("Not in GZIP format"). Sin
+        // compresión, OpenSearch responde JSON plano y el parseo Jackson funciona.
+        builder.setHttpClientConfigCallback(http -> {
+            http.disableContentCompression();
+            if (credsFinal != null) {
+                http.setDefaultCredentialsProvider(credsFinal);
+            }
+            if (tlsStrategy != null) {
+                http.setConnectionManager(
+                        PoolingAsyncClientConnectionManagerBuilder.create().setTlsStrategy(tlsStrategy).build());
+            }
+            return http;
+        });
 
         OpenSearchTransport transport = builder.build();
         log.info("OpenSearch client configured against {} (tls={}, auth={}, insecureTls={})", uri, https, withAuth,
