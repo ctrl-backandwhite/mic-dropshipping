@@ -44,11 +44,11 @@ public class CainiaoFulfillmentService {
     private final CainiaoLinkClient linkClient;
     private final ObjectMapper objectMapper;
 
-    // ── msg_type de las APIs del gateway Link ────────────────────────────────────────────────
-    // TODO(real): sustituir por los nombres EXACTOS del producto logístico que contrates en Cainiao
-    // (Global Logistics Solution / CGS). Los de abajo son marcadores hasta tener la doc de tu app.
-    private static final String MSG_CREATE_SHIPMENT = "GLOBAL_CREATE_SHIPMENT";
-    private static final String MSG_GET_TRACE = "GLOBAL_GET_TRACE";
+    // ── msg_type de las APIs del producto "Cainiao Cross-border E-commerce Export" ───────────
+    // Nombres reales del catálogo de la app (appKey 682350). Los CAMPOS del payload/respuesta aún
+    // dependen de la doc de cada API (TODO en realCreateShipment/realTrack); el msg_type ya es el real.
+    private static final String MSG_CREATE_SHIPMENT = "CAINIAO_GLOBAL_TAKING_ORDER";   // crear envío (place order)
+    private static final String MSG_GET_TRACE = "LOGISTICS_DETAIL_QUERY";              // consultar tracking (pull)
 
     @Value("${nexadrop.cainiao.enabled:false}")
     private boolean enabled;
