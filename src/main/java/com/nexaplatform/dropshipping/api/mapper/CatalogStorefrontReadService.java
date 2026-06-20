@@ -140,7 +140,8 @@ public class CatalogStorefrontReadService {
     }
 
     @Cacheable(value = CACHE_PRODUCT_LIST,
-            key = "'cat:' + #idOrSlug + ':' + #page + ':' + #size + ':' + #lang + ':' + #sort")
+            key = "'cat:' + #idOrSlug + ':' + #page + ':' + #size + ':' + #lang + ':' + #sort + ':' "
+                    + "+ T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get()")
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productsByCategory(String idOrSlug, int page, int size, String lang,
             String sort) {
@@ -161,7 +162,8 @@ public class CatalogStorefrontReadService {
         return supplierView(supplierRepository.findById(id).orElseThrow(() -> new NotFoundException("Supplier")));
     }
 
-    @Cacheable(value = CACHE_PRODUCT_LIST, key = "'sup:' + #id + ':' + #page + ':' + #size + ':' + #lang + ':' + #sort")
+    @Cacheable(value = CACHE_PRODUCT_LIST, key = "'sup:' + #id + ':' + #page + ':' + #size + ':' + #lang + ':' + #sort "
+            + "+ ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get()")
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productsBySupplier(UUID id, int page, int size, String lang, String sort) {
         return productList(page, size, lang, null, null, id, null, null, sort);
@@ -192,8 +194,10 @@ public class CatalogStorefrontReadService {
     // Read-only tx keeps the Hibernate session open while mapping each product to a summary,
     // so the lazy `translations`/`images` collections load (otherwise LazyInitializationException).
     // Cacheado por la combinación de filtros (TTL 60 s / Redis; invalidado al mutar productos). La clave
-    // por defecto (SimpleKey con todos los parámetros) distingue cada consulta sin colisión.
-    @Cacheable(CACHE_PRODUCT_LIST)
+    // INCLUYE la moneda de display (keyGenerator) porque el precio mostrado depende de ella: sin eso, un
+    // usuario en EUR vería el precio cacheado en la primera moneda solicitada (el margen/conversión "no se
+    // reflejaría" por moneda).
+    @Cacheable(value = CACHE_PRODUCT_LIST, keyGenerator = "currencyAwareKeyGenerator")
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productListFull(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping,
@@ -207,27 +211,50 @@ public class CatalogStorefrontReadService {
         String needle = (q == null || q.isBlank()) ? null : q.trim().toLowerCase();
         String shipCc = shipFrom == null ? null : shipFrom.toUpperCase();
         BigDecimal minRatingBd = minRating == null ? null : BigDecimal.valueOf(minRating);
+        boolean certFilter = certification != null && !certification.isBlank();
+        boolean priceFilter = minPrice != null || maxPrice != null;
 
-        Page<ProductEntity> raw = productRepository.searchStorefront(ProductStatus.ACTIVE, needle, categoryId,
-                supplierId, minPrice, maxPrice, shipCc, freeShipping, selfPickup, hasVideo, minRatingBd, inventoryMin,
-                pageable);
-
-        List<ProductEntity> filtered;
-        if (certification != null && !certification.isBlank()) {
-            String certUp = certification.toUpperCase();
-            filtered = raw.getContent().stream().filter(p -> p.getCertifications() != null
-                    && p.getCertifications().stream().anyMatch(c -> c != null && c.toUpperCase().contains(certUp)))
-                    .toList();
-        } else {
-            filtered = raw.getContent();
+        // El filtro de precio y el de certificación se aplican en la capa de aplicación, NO en el SQL.
+        // Motivo del precio: el número que ve el usuario (displayPrice) se obtiene de la variante
+        // representativa → coste en USD → margen (reglas) → conversión a la moneda activa (X-Currency).
+        // El SQL solo conoce base_price en CNY, así que filtrar ahí daría rangos sin sentido para EUR/USD/etc.
+        // Por eso aquí filtramos sobre displayPrice, que está en la MISMA moneda que el usuario seleccionó
+        // → el filtro de precio funciona para cualquier moneda. Se pagina en memoria para que el total y
+        // las páginas sean correctos (el catálogo está acotado por el resto de filtros).
+        if (priceFilter || certFilter) {
+            String certUp = certFilter ? certification.toUpperCase() : null;
+            Pageable scan = PageRequest.of(0, 5000, sortSpec);
+            Page<ProductEntity> raw = productRepository.searchStorefront(ProductStatus.ACTIVE, needle, categoryId,
+                    supplierId, null, null, shipCc, freeShipping, selfPickup, hasVideo, minRatingBd, inventoryMin, scan);
+            List<ProductSummaryView> all = raw.getContent().stream()
+                    .filter(p -> certUp == null || (p.getCertifications() != null && p.getCertifications().stream()
+                            .anyMatch(c -> c != null && c.toUpperCase().contains(certUp))))
+                    .map(p -> productMapper.toSummary(p, lang))
+                    .filter(v -> withinPrice(v.displayPrice(), minPrice, maxPrice)).toList();
+            int total = all.size();
+            int from = Math.min(page * safeSize, total);
+            int to = Math.min(from + safeSize, total);
+            return PageResponse.from(new PageImpl<>(all.subList(from, to), pageable, total));
         }
 
-        List<ProductSummaryView> slice = filtered.stream().map(p -> productMapper.toSummary(p, lang)).toList();
-        Page<ProductSummaryView> pageObj = new PageImpl<>(slice, pageable, raw.getTotalElements());
-        return PageResponse.from(pageObj);
+        Page<ProductEntity> raw = productRepository.searchStorefront(ProductStatus.ACTIVE, needle, categoryId,
+                supplierId, null, null, shipCc, freeShipping, selfPickup, hasVideo, minRatingBd, inventoryMin, pageable);
+        List<ProductSummaryView> slice = raw.getContent().stream().map(p -> productMapper.toSummary(p, lang)).toList();
+        return PageResponse.from(new PageImpl<>(slice, pageable, raw.getTotalElements()));
     }
 
-    @Cacheable(CACHE_PRODUCT_LIST)
+    /** El precio ya viene en la moneda del usuario (displayPrice); rango inclusivo, excluye nulos si hay filtro. */
+    private boolean withinPrice(BigDecimal price, BigDecimal min, BigDecimal max) {
+        if (min == null && max == null) {
+            return true;
+        }
+        if (price == null) {
+            return false;
+        }
+        return (min == null || price.compareTo(min) >= 0) && (max == null || price.compareTo(max) <= 0);
+    }
+
+    @Cacheable(value = CACHE_PRODUCT_LIST, keyGenerator = "currencyAwareKeyGenerator")
     public PageResponse<ProductSummaryView> productList(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String sort) {
         return productListFull(page, size, lang, q, categoryId, supplierId, minPrice, maxPrice, null, null, null, null,

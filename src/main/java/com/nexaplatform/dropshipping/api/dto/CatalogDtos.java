@@ -79,11 +79,12 @@ public final class CatalogDtos {
     public record VariantOptionView(UUID id, String nameZh, String name, int position, List<VariantValueView> values) {
     }
 
-    public record VariantView(UUID id, String sku, String title, BigDecimal price, int stock, String imageUrl,
-            Map<String, String> options, boolean active) {
+    public record VariantView(UUID id, String sku, String title, BigDecimal price, String priceFormatted, int stock,
+            String imageUrl, Map<String, String> options, boolean active) {
     }
 
-    public record PriceTierView(int minQty, Integer maxQty, BigDecimal unitPrice, String currency) {
+    public record PriceTierView(int minQty, Integer maxQty, BigDecimal unitPrice, String currency,
+            String unitPriceFormatted) {
     }
 
     public record ProductSummaryView(UUID id, String slug, String title, String mainImage, BigDecimal basePrice, // legacy display in CNY (kept for back-compat)
@@ -93,6 +94,7 @@ public final class CatalogDtos {
             BigDecimal priceUsd, // retail in USD canon
             BigDecimal displayPrice, // converted to user's currency (X-Currency)
             String displayCurrency, String displaySymbol,
+            String displayFormatted, // string ya formateado por el backend ("28,26 €") — el front solo lo pinta
             // stock: inventoryCount es el rollup del proveedor; availableUnits es
             // la suma del stock por variantes activas (más fiel para fulfillment).
             Integer inventoryCount, Integer availableUnits) {
@@ -107,7 +109,7 @@ public final class CatalogDtos {
             List<PriceTierView> priceTiers,
             // pricing
             BigDecimal costUsd, BigDecimal retailUsd, BigDecimal displayPrice, String displayCurrency,
-            String displaySymbol, BigDecimal appliedMarginPercent,
+            String displaySymbol, String displayFormatted, BigDecimal appliedMarginPercent,
             // DROP-679: SEO por idioma (generado al publicar a partir del contenido real)
             String metaTitle, String metaDescription) {
     }

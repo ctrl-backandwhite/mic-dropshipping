@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.application.service;
 
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,22 +31,43 @@ import java.util.Map;
 public class InvoiceService {
 
     private final TemplateEngine templateEngine;
+    private final CurrencyRateService currencyRateService;
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
-    /** Construye el modelo de la factura (textos i18n + datos del pedido) para la plantilla. */
+    /** Modelo de factura en la moneda del pedido (USD canónico). */
     public Map<String, Object> model(Order o, String locale, String downloadUrl) {
-        boolean es = locale == null || locale.toLowerCase(Locale.ROOT).startsWith("es");
-        String cur = o.getCurrency() != null ? o.getCurrency() : "USD";
+        return model(o, locale, downloadUrl, o.getCurrency() != null ? o.getCurrency() : "USD");
+    }
 
+    /**
+     * Construye el modelo de la factura en la moneda indicada (la de pago: EUR si se pagó en EUR, USD en
+     * otro caso). Los importes del pedido están en céntimos USD canónicos; se convierten a la moneda de la
+     * factura con la tasa del día (2 decimales, redondeo arriba).
+     */
+    public Map<String, Object> model(Order o, String locale, String downloadUrl, String invoiceCurrency) {
+        boolean es = locale == null || locale.toLowerCase(Locale.ROOT).startsWith("es");
+        String cur = invoiceCurrency != null && !invoiceCurrency.isBlank() ? invoiceCurrency.toUpperCase() : "USD";
+
+        // Precio por línea en la moneda de la factura (2 dec hacia arriba), igual que el carrito y el cobro.
+        // El subtotal/total se SUMAN de las líneas para que la factura sea internamente coherente y coincida
+        // con lo cobrado (no se convierte el total una sola vez).
         List<Map<String, Object>> items = new ArrayList<>();
+        BigDecimal subtotalDisp = BigDecimal.ZERO;
         if (o.getItems() != null) {
             for (OrderItem it : o.getItems()) {
+                BigDecimal unit = conv(it.getUnitPriceCents(), cur);
+                BigDecimal lineDisp = unit.multiply(BigDecimal.valueOf(it.getQuantity()));
+                subtotalDisp = subtotalDisp.add(lineDisp);
                 items.add(Map.of("title", it.getTitleSnapshot() != null ? it.getTitleSnapshot() : "—", "sku",
                         it.getSkuSnapshot() != null ? it.getSkuSnapshot() : "", "qty", it.getQuantity(), "unit",
-                        money(it.getUnitPriceCents(), cur), "lineTotal", money(it.getLineTotalCents(), cur)));
+                        fmt(unit, cur), "lineTotal", fmt(lineDisp, cur), "image",
+                        it.getImageUrlSnapshot() != null ? it.getImageUrlSnapshot() : ""));
             }
         }
+        BigDecimal shippingDisp = conv(o.getShippingCents(), cur);
+        BigDecimal taxDisp = conv(o.getTaxCents(), cur);
+        BigDecimal totalDisp = subtotalDisp.add(shippingDisp).add(taxDisp);
         String city = join(o.getShippingCity(), o.getShippingState(), o.getShippingPostalCode());
         Instant when = o.getPlacedAt() != null ? o.getPlacedAt() : o.getCreatedAt();
 
@@ -74,10 +96,12 @@ public class InvoiceService {
         m.put("labelShipping", es ? "Envío" : "Shipping");
         m.put("labelTax", es ? "Impuestos" : "Tax");
         m.put("labelTotal", "Total");
-        m.put("subtotal", money(o.getSubtotalCents(), cur));
-        m.put("shipping", money(o.getShippingCents(), cur));
-        m.put("tax", money(o.getTaxCents(), cur));
-        m.put("total", money(o.getTotalCents(), cur));
+        m.put("subtotal", fmt(subtotalDisp, cur));
+        m.put("shipping", fmt(shippingDisp, cur));
+        m.put("tax", fmt(taxDisp, cur));
+        m.put("total", fmt(totalDisp, cur));
+        // Color del lienzo (fuera del cuadro): lavanda en el email; el PDF lo sobreescribe a blanco.
+        m.put("bodyBg", "#F4F1FB");
         m.put("ctaUrl", downloadUrl);
         m.put("ctaLabel", es ? "Descargar factura (PDF)" : "Download invoice (PDF)");
         m.put("footer", es
@@ -86,16 +110,39 @@ public class InvoiceService {
         return m;
     }
 
-    /** Renderiza la factura como HTML (cuerpo del email). */
+    /** Renderiza la factura como HTML (cuerpo del email) en la moneda del pedido. */
     public String renderHtml(Order o, String locale, String downloadUrl) {
+        return renderHtml(o, locale, downloadUrl, o.getCurrency() != null ? o.getCurrency() : "USD");
+    }
+
+    /** Renderiza la factura HTML en la moneda indicada. */
+    public String renderHtml(Order o, String locale, String downloadUrl, String currency) {
         Context ctx = new Context();
-        model(o, locale, downloadUrl).forEach(ctx::setVariable);
+        model(o, locale, downloadUrl, currency).forEach(ctx::setVariable);
         return templateEngine.process("emails/invoice", ctx);
     }
 
-    /** Renderiza la factura como PDF (descargable). */
+    /** Renderiza la factura PDF en la moneda del pedido. */
     public byte[] renderPdf(Order o, String locale) {
-        String html = renderHtml(o, locale, null); // sin CTA en el PDF
+        return renderPdf(o, locale, o.getCurrency() != null ? o.getCurrency() : "USD");
+    }
+
+    /** Renderiza la factura PDF en la moneda indicada (la de pago: EUR si se pagó en EUR, USD en otro caso). */
+    public byte[] renderPdf(Order o, String locale, String currency) {
+        // El PDF es un documento descargable → lienzo BLANCO (no el lavanda del email). Sin CTA.
+        Map<String, Object> m = model(o, locale, null, currency);
+        m.put("bodyBg", "#ffffff");
+        // En el PDF acortamos el nombre del producto a 40 caracteres + "…" para que no se desborde la fila.
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> pdfItems = ((List<Map<String, Object>>) m.get("items")).stream().map(it -> {
+            Map<String, Object> copy = new java.util.HashMap<>(it);
+            copy.put("title", ellipsis((String) it.get("title"), 40));
+            return copy;
+        }).toList();
+        m.put("items", pdfItems);
+        Context ctx = new Context();
+        m.forEach(ctx::setVariable);
+        String html = templateEngine.process("emails/invoice", ctx);
         try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
             PdfRendererBuilder builder = new PdfRendererBuilder();
             builder.useFastMode();
@@ -109,9 +156,26 @@ public class InvoiceService {
         }
     }
 
-    private static String money(int cents, String currency) {
-        BigDecimal v = BigDecimal.valueOf(cents).movePointLeft(2);
-        return ("USD".equalsIgnoreCase(currency) ? "$" : currency + " ") + v.toPlainString();
+    /** Acorta un texto a {@code max} caracteres añadiendo "…" si lo supera. */
+    private static String ellipsis(String s, int max) {
+        if (s == null) {
+            return "";
+        }
+        return s.length() > max ? s.substring(0, max).trim() + "…" : s;
+    }
+
+    /** Convierte céntimos USD canónicos a {@code currency} (2 decimales hacia arriba). */
+    private BigDecimal conv(int usdCents, String currency) {
+        BigDecimal usd = BigDecimal.valueOf(usdCents).movePointLeft(2);
+        return "USD".equalsIgnoreCase(currency) ? usd.setScale(2, java.math.RoundingMode.UP)
+                : currencyRateService.usdTo(usd, currency);
+    }
+
+    /** Formatea un importe ya convertido con el símbolo de la moneda. */
+    private String fmt(BigDecimal v, String currency) {
+        String symbol = currencyRateService.symbolOf(currency);
+        boolean prefixSymbol = symbol != null && !symbol.equalsIgnoreCase(currency);
+        return prefixSymbol ? symbol + v.toPlainString() : currency + " " + v.toPlainString();
     }
 
     private static String nz(String s) {

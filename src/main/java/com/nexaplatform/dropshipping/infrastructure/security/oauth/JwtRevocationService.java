@@ -34,10 +34,15 @@ import java.util.concurrent.ConcurrentHashMap;
 public class JwtRevocationService {
 
     private static final String PREFIX = "nx:jwt:revoked-before:";
-    private static final Duration TTL = Duration.ofHours(13); // un poco más que el JWT TTL
+    private static final String JTI_PREFIX = "nx:jwt:refresh-jti:";
+    // Debe ser ≥ la vida del token más largo que protege. El refresh de usuario vive 14 días,
+    // así que la marca de revocación debe persistir más que eso; si no, un refresh robado
+    // volvería a ser válido al expirar la entrada. (Los tokens de partner viven 12h.)
+    private static final Duration TTL = Duration.ofDays(15);
 
     private final StringRedisTemplate redis;
     private final ConcurrentHashMap<String, Long> fallback = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Long> usedJtis = new ConcurrentHashMap<>();
 
     public JwtRevocationService(@Autowired(required = false) StringRedisTemplate redis) {
         this.redis = redis;
@@ -63,6 +68,23 @@ public class JwtRevocationService {
     public void revokeAllForClients(java.util.Collection<String> clientIds) {
         for (String c : clientIds)
             revokeAllForClient(c);
+    }
+
+    /**
+     * Marca un {@code jti} de refresh token como consumido (rotación). Atómico:
+     * devuelve {@code true} solo la PRIMERA vez. Un {@code false} significa que ese
+     * refresh ya se canjeó → reuso → posible robo del token (el llamador debe revocar
+     * todo el sujeto). TTL ≥ vida del refresh (15 días) para cubrir su ventana completa.
+     */
+    public boolean consumeRefreshJti(String jti) {
+        if (jti == null || jti.isBlank()) {
+            return false; // un refresh sin jti se trata como inválido
+        }
+        if (redis != null) {
+            Boolean firstUse = redis.opsForValue().setIfAbsent(JTI_PREFIX + jti, "1", TTL);
+            return Boolean.TRUE.equals(firstUse);
+        }
+        return usedJtis.putIfAbsent(jti, Instant.now().getEpochSecond()) == null;
     }
 
     /**

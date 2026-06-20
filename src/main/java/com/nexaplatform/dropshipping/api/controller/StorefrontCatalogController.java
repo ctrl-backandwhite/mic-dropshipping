@@ -23,8 +23,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -387,6 +390,60 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
                     return new ShippingQuoteItem(s.getId(), r.getMethod(), r.getCarrier(), r.getTransitDaysMin(),
                             r.getTransitDaysMax(), cost, "USD");
                 }).sorted(Comparator.comparing(ShippingQuoteItem::cost)).toList();
+    }
+
+    /* =========================== CART QUOTE (precio actual = el que se cobra) =========================== */
+
+    public record CartQuoteItemIn(UUID productId, UUID variantId, int quantity) {
+    }
+
+    public record CartQuoteLineOut(UUID productId, UUID variantId, BigDecimal unit, BigDecimal lineTotal,
+            String unitFormatted, String lineTotalFormatted) {
+    }
+
+    public record CartQuoteOut(String currency, String symbol, List<CartQuoteLineOut> items, BigDecimal subtotal,
+            String subtotalFormatted) {
+    }
+
+    /**
+     * Cotiza el carrito con el precio ACTUAL de cada producto (margen + tasa del día, 2 decimales hacia
+     * arriba por línea) en la moneda activa — EXACTAMENTE lo que se factura y se cobra. El carrito del
+     * cliente "congela" el precio al añadir, así que el checkout debe re-cotizar aquí para que lo mostrado
+     * coincida con lo cobrado (evita "veo X y me cobran Y" cuando el precio cambió tras añadir al carrito).
+     */
+    @PostMapping("/cart-quote")
+    @Transactional(readOnly = true)
+    public CartQuoteOut cartQuote(@RequestBody List<CartQuoteItemIn> items) {
+        List<CartQuoteLineOut> lines = new ArrayList<>();
+        BigDecimal subtotal = BigDecimal.ZERO;
+        if (items != null) {
+            for (CartQuoteItemIn it : items) {
+                if (it == null || it.productId() == null) {
+                    continue;
+                }
+                ProductEntity p = productRepository.findById(it.productId()).orElse(null);
+                if (p == null) {
+                    continue;
+                }
+                ProductVariantEntity v = it.variantId() == null ? null
+                        : p.getVariants().stream().filter(x -> it.variantId().equals(x.getId())).findFirst()
+                                .orElse(null);
+                int qty = Math.max(1, it.quantity());
+                BigDecimal unit = pricingService.priceFor(p, v).displayAmount();
+                if (unit == null) {
+                    continue;
+                }
+                BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(qty));
+                subtotal = subtotal.add(lineTotal);
+                String displayCode = pricingService.displayCurrencyCode();
+                lines.add(new CartQuoteLineOut(p.getId(), v != null ? v.getId() : null, unit, lineTotal,
+                        currencyService.formatDisplay(unit, displayCode),
+                        currencyService.formatDisplay(lineTotal, displayCode)));
+            }
+        }
+        String displayCode = pricingService.displayCurrencyCode();
+        return new CartQuoteOut(displayCode, pricingService.displayCurrencySymbol(), lines, subtotal,
+                currencyService.formatDisplay(subtotal, displayCode));
     }
 
     /* =========================== HOME SECTIONS (DROP-20) =========================== */

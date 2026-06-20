@@ -27,6 +27,7 @@ public interface AdminOrderMapper {
     @Mapping(target = "orderNumber", source = "orderNumber")
     @Mapping(target = "status", expression = "java(order.getStatus() != null ? order.getStatus().name() : null)")
     @Mapping(target = "partnerAppId", source = "partnerAppId")
+    @Mapping(target = "source", source = "source")
     @Mapping(target = "subtotalCents", source = "subtotalCents")
     @Mapping(target = "shippingCents", source = "shippingCents")
     @Mapping(target = "totalCents", source = "totalCents")
@@ -49,6 +50,7 @@ public interface AdminOrderMapper {
     @Mapping(target = "orderNumber", source = "orderNumber")
     @Mapping(target = "status", expression = "java(order.getStatus() != null ? order.getStatus().name() : null)")
     @Mapping(target = "partnerAppId", source = "partnerAppId")
+    @Mapping(target = "source", source = "source")
     @Mapping(target = "subtotalCents", source = "subtotalCents")
     @Mapping(target = "shippingCents", source = "shippingCents")
     @Mapping(target = "taxCents", source = "taxCents")
@@ -71,11 +73,13 @@ public interface AdminOrderMapper {
     AdminOrderDetailDtoOut toDetail(Order order);
 
     @Mapping(target = "id", source = "id")
+    @Mapping(target = "productId", source = "productId")
     @Mapping(target = "sku", source = "skuSnapshot")
     @Mapping(target = "title", expression = "java(resolveTitle(item))")
     @Mapping(target = "qty", source = "quantity")
     @Mapping(target = "unitPriceCents", source = "unitPriceCents")
     @Mapping(target = "lineTotalCents", source = "lineTotalCents")
+    @Mapping(target = "productSourceUrl", source = "productSourceUrl")
     AdminOrderLineDtoOut toLine(OrderItem item);
 
     List<AdminOrderLineDtoOut> toLines(List<OrderItem> items);

@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.entity;
 
 import com.nexaplatform.dropshipping.domain.enums.MarginType;
+import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.domain.enums.PriceRuleScope;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -53,4 +54,10 @@ public class PriceRuleEntity extends BaseEntity {
 
     @Column(length = 300)
     private String description;
+
+    /** Canal al que aplica la regla. STOREFRONT (tienda propia) por defecto; INTEGRATION para apps API. */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private PriceRuleChannel channel = PriceRuleChannel.STOREFRONT;
 }

@@ -27,6 +27,11 @@ public class MeOrderDetailDtoOut {
     BigDecimal tax;
     BigDecimal total;
     String currency;
+    // DROP-637: importes ya FORMATEADOS por el backend en la moneda mostrada (el front solo pinta).
+    String subtotalFormatted;
+    String shippingFormatted;
+    String taxFormatted;
+    String totalFormatted;
     MeOrderAddressDtoOut shippingAddress;
     MeOrderAddressDtoOut billingAddress;
     String notes;

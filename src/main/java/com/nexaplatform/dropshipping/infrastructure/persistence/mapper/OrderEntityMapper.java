@@ -132,12 +132,14 @@ public interface OrderEntityMapper {
     @Mapping(target = "skuSnapshot", source = "skuSnapshot")
     @Mapping(target = "unitPriceCents", source = "unitPriceCents")
     @Mapping(target = "costCents", source = "costCents")
+    @Mapping(target = "costCnyCents", source = "costCnyCents")
     @Mapping(target = "quantity", source = "quantity")
     @Mapping(target = "lineTotalCents", source = "lineTotalCents")
     @Mapping(target = "productTitleZh", expression = "java(item.getProduct() != null ? item.getProduct().getTitleZh() : null)")
     @Mapping(target = "variantName", expression = "java(item.getVariant() != null ? item.getVariant().getTitle() : null)")
     @Mapping(target = "supplierName", expression = "java(item.getProduct() != null && item.getProduct().getSupplier() != null ? item.getProduct().getSupplier().getName() : null)")
     @Mapping(target = "productImageUrl", source = "product", qualifiedByName = "resolveLiveImage")
+    @Mapping(target = "productSourceUrl", expression = "java(item.getProduct() != null ? item.getProduct().getSourceUrl() : null)")
     @Mapping(target = "productTitles", source = "product", qualifiedByName = "resolveTitles")
     OrderItem toItemDomain(OrderItemEntity item);
 

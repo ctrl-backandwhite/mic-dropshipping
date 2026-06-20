@@ -20,6 +20,8 @@ public class AdminOrderDetailDtoOut {
     String orderNumber;
     String status;
     UUID partnerAppId;
+    /** Origen: PLATFORM (tienda propia) o INTEGRATION (tienda conectada). */
+    String source;
     int subtotalCents;
     int shippingCents;
     int taxCents;

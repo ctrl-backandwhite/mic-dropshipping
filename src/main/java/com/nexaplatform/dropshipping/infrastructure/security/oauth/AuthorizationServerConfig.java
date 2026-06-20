@@ -55,6 +55,16 @@ public class AuthorizationServerConfig {
         return OAuth2AuthorizationServerConfiguration.jwtDecoder(jwkSource);
     }
 
+    /**
+     * Encoder para firmar los JWT de USUARIO (access/refresh) que emite el login por token.
+     * Usa el mismo JWKSource RSA rotado por {@code JwkKeyService}, de modo que el mismo
+     * {@link JwtDecoder} valida tanto los tokens de partner como los de usuario.
+     */
+    @Bean
+    public org.springframework.security.oauth2.jwt.JwtEncoder jwtEncoder(JWKSource<SecurityContext> jwkSource) {
+        return new org.springframework.security.oauth2.jwt.NimbusJwtEncoder(jwkSource);
+    }
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(12);

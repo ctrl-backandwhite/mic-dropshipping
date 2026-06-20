@@ -25,6 +25,9 @@ public class MeOrderItemDetailDtoOut {
     int quantity;
     BigDecimal unitPrice;
     BigDecimal lineTotal;
+    // DROP-637: precios de línea ya formateados por el backend en la moneda mostrada.
+    String unitPriceFormatted;
+    String lineTotalFormatted;
 
     public static MeOrderItemDetailDtoOut from(OrderItemEntity i) {
         return from(i, "es");

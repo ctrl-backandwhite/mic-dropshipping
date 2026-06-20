@@ -3,7 +3,9 @@ package com.nexaplatform.dropshipping.application.service;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
+import com.nexaplatform.dropshipping.domain.model.User;
 import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
+import com.nexaplatform.dropshipping.domain.repository.UserRepository;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.CainiaoFulfillmentService;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.CainiaoFulfillmentService.FulfillmentResult;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.CainiaoFulfillmentService.TrackingSnapshot;
@@ -17,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -36,6 +39,8 @@ public class FulfillmentService {
     private final OrderRepository orderRepository;
     private final OrderTrackingEventRepository trackingRepository;
     private final CainiaoFulfillmentService cainiao;
+    private final UserRepository userRepository;
+    private final OrderEmailService orderEmailService;
 
     /** Estado actual del pedido + estado objetivo del envío tras sondear el tracking. */
     public record TrackingProgress(OrderStatus current, OrderStatus target) {
@@ -89,18 +94,46 @@ public class FulfillmentService {
         for (OrderTrackingEventEntity e : existing) {
             seen.add(e.getStatus() + "|" + e.getDescription());
         }
+        // Notificación por cada cambio de estado del envío. El estado interno FORWARDED ("registrado en
+        // Cainiao") NO se notifica. El PRIMER paso SHIPPED ("Recogido por el transportista") y el paso
+        // DELIVERED los notifican shipped()/delivered() en el use case al avanzar el OrderStatus, así que
+        // aquí solo notificamos los pasos intermedios SHIPPED (en tránsito, llegó al país, en reparto) para
+        // no duplicar.
+        boolean shippedSeen = existing.stream().anyMatch(e -> OrderStatus.SHIPPED.name().equals(e.getStatus()));
+        List<TrackingStep> toNotify = new ArrayList<>();
         for (TrackingStep step : snap.steps()) {
             String key = step.status().name() + "|" + step.description();
             if (seen.add(key)) {
                 appendEvent(o.getId(), step.status().name(), step.description(), step.location(), "CAINIAO",
                         step.occurredAt());
+                if (step.status() == OrderStatus.SHIPPED) {
+                    if (shippedSeen) {
+                        toNotify.add(step); // paso intermedio → notificar
+                    } else {
+                        shippedSeen = true; // primer SHIPPED = "Recogido" → lo cubre shipped()
+                    }
+                }
             }
         }
         o.setLastTrackedAt(Instant.now());
         o.setTrackingStatus(snap.currentStatus().name());
         OrderStatus current = o.getStatus();
         orderRepository.save(o);
+        notifyTrackingSteps(o, toNotify);
         return new TrackingProgress(current, snap.currentStatus());
+    }
+
+    /** Envía un email por cada paso intermedio del envío al comprador (resuelve email/idioma del usuario). */
+    private void notifyTrackingSteps(Order o, List<TrackingStep> steps) {
+        if (steps.isEmpty() || o.getUserId() == null) {
+            return;
+        }
+        User u = userRepository.getById(o.getUserId());
+        if (u == null) {
+            return;
+        }
+        steps.forEach(s -> orderEmailService.trackingUpdate(o, u.getEmail(), u.getLanguage(), s.description(),
+                s.location()));
     }
 
     /** Timeline de eventos de un pedido (orden cronológico). */

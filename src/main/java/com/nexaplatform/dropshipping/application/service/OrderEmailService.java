@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.service;
 
+import com.nexaplatform.dropshipping.domain.enums.ShipmentEventMessage;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.infrastructure.email.EmailQueueService;
 import lombok.RequiredArgsConstructor;
@@ -36,12 +37,22 @@ public class OrderEmailService {
 
     /** Pago confirmado → email con la FACTURA del pedido + enlace para descargar el PDF. */
     public void paymentConfirmed(Order o, String email, String locale, String paymentMethod) {
+        paymentConfirmed(o, email, locale, paymentMethod, null);
+    }
+
+    /**
+     * Email de pago confirmado + factura. {@code invoiceCurrency} es la moneda de pago (EUR si se pagó en
+     * EUR, USD en otro caso); si es null se usa la del pedido (USD).
+     */
+    public void paymentConfirmed(Order o, String email, String locale, String paymentMethod, String invoiceCurrency) {
         if (blank(email)) {
             return;
         }
         try {
             String orderUrl = baseUrl + "/orders/" + o.getId();
-            Map<String, Object> vars = new HashMap<>(invoiceService.model(o, locale, orderUrl));
+            String cur = invoiceCurrency != null && !invoiceCurrency.isBlank() ? invoiceCurrency
+                    : (o.getCurrency() != null ? o.getCurrency() : "USD");
+            Map<String, Object> vars = new HashMap<>(invoiceService.model(o, locale, orderUrl, cur));
             if (paymentMethod != null) {
                 vars.put("paymentMethod", paymentMethod);
             }
@@ -96,6 +107,33 @@ public class OrderEmailService {
                         : "We have processed the refund for your order <strong>" + o.getOrderNumber()
                                 + "</strong>. The amount will be returned to your original payment method.",
                 es ? "Ver pedido" : "View order", o);
+    }
+
+    /**
+     * Notificación por cada cambio de estado del envío en el timeline de tracking (En tránsito, Llegó al
+     * país, En reparto…). El estado interno "registrado en Cainiao" NO llega aquí (lo filtra el llamador) y
+     * los saltos "en camino"/"entregado" los cubren {@link #shipped}/{@link #delivered}.
+     */
+    public void trackingUpdate(Order o, String email, String locale, String description, String location) {
+        if (blank(email)) {
+            return;
+        }
+        boolean es = es(locale);
+        String state = ShipmentEventMessage.translate(description, es);
+        StringBuilder body = new StringBuilder(es
+                ? "Tu pedido <strong>" + o.getOrderNumber() + "</strong> ha cambiado de estado: <strong>" + state
+                        + "</strong>."
+                : "Your order <strong>" + o.getOrderNumber() + "</strong> has a new status: <strong>" + state
+                        + "</strong>.");
+        if (!blank(location)) {
+            body.append(es ? "<br/>Ubicación: " : "<br/>Location: ").append(location);
+        }
+        if (!blank(o.getTrackingNumber())) {
+            body.append(es ? "<br/>Nº de seguimiento: <strong>" : "<br/>Tracking number: <strong>")
+                    .append(o.getTrackingNumber()).append("</strong>");
+        }
+        notify(email, es ? "Actualización de tu envío 🚚" : "Shipment update 🚚", body.toString(),
+                es ? "Seguir mi pedido" : "Track my order", o);
     }
 
     private void notify(String email, String title, String bodyHtml, String ctaLabel, Order o) {

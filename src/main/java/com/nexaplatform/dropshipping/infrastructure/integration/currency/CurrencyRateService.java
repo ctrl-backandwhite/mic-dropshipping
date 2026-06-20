@@ -50,6 +50,12 @@ public class CurrencyRateService {
                 .sorted((a, b) -> a.getCode().compareTo(b.getCode())).toList();
     }
 
+    /** Todas las monedas (activas e inactivas), ordenadas por código — para la pantalla de admin. */
+    public List<CurrencyRateEntity> listAll() {
+        ensureFresh();
+        return cache.values().stream().sorted((a, b) -> a.getCode().compareTo(b.getCode())).toList();
+    }
+
     public Optional<CurrencyRateEntity> find(String code) {
         if (code == null)
             return Optional.empty();
@@ -71,11 +77,13 @@ public class CurrencyRateService {
     public BigDecimal usdTo(BigDecimal amountUsd, String targetCode) {
         if (amountUsd == null)
             return null;
+        // Precio final al cliente: 2 decimales SIEMPRE redondeado hacia arriba (RoundingMode.UP) para no
+        // perder fracciones de céntimo en la conversión. Aplica a la moneda mostrada y a la de cobro.
         if ("USD".equalsIgnoreCase(targetCode)) {
-            return amountUsd.setScale(2, RoundingMode.HALF_UP);
+            return amountUsd.setScale(2, RoundingMode.UP);
         }
-        return find(targetCode).map(r -> amountUsd.multiply(r.getRateVsUsd()).setScale(2, RoundingMode.HALF_UP))
-                .orElse(amountUsd.setScale(2, RoundingMode.HALF_UP));
+        return find(targetCode).map(r -> amountUsd.multiply(r.getRateVsUsd()).setScale(2, RoundingMode.UP))
+                .orElse(amountUsd.setScale(2, RoundingMode.UP));
     }
 
     /** Convert an amount in any source currency to USD (used at order creation to fix USD canonical). */
@@ -94,6 +102,27 @@ public class CurrencyRateService {
 
     public String localeOf(String code) {
         return find(code).map(CurrencyRateEntity::getLocale).orElse("en-US");
+    }
+
+    /**
+     * Formatea un importe (ya en la moneda de display) a string localizado según el `locale` de la
+     * moneda en BD: "28,26 €" (es-ES/EUR), "$32.56" (en-US/USD), "¥220.03" (zh-CN/CNY). El frontend
+     * SOLO PINTA este string; ningún cálculo ni formateo de precio vive en el cliente. El importe ya
+     * viene redondeado (2 dec UP) desde el pipeline de precios; aquí solo se le da forma textual.
+     */
+    public String formatDisplay(BigDecimal amountDisplay, String code) {
+        if (amountDisplay == null || code == null) {
+            return null;
+        }
+        Locale locale = Locale.forLanguageTag(localeOf(code));
+        try {
+            java.text.NumberFormat nf = java.text.NumberFormat.getCurrencyInstance(locale);
+            nf.setCurrency(java.util.Currency.getInstance(code.toUpperCase(Locale.ROOT)));
+            return nf.format(amountDisplay);
+        } catch (RuntimeException nonIsoOrUnknown) {
+            // Códigos no ISO (p.ej. USDT) o locale inválido: símbolo de BD + número plano.
+            return symbolOf(code) + " " + amountDisplay.toPlainString();
+        }
     }
 
     /* ============ Admin ============ */
@@ -125,17 +154,30 @@ public class CurrencyRateService {
         }
         Instant now = Instant.now();
         int updated = 0;
+        int created = 0;
         for (var entry : ratesFromProvider.entrySet()) {
-            var existing = repository.findByCodeIgnoreCase(entry.getKey()).orElse(null);
-            if (existing == null)
-                continue;
-            existing.setRateVsUsd(entry.getValue());
-            existing.setLastSyncedAt(now);
+            String code = entry.getKey() == null ? null : entry.getKey().toUpperCase();
+            if (code == null || code.length() != 3) {
+                continue; // ignorar metales/cripto u otros códigos no ISO de 3 letras
+            }
+            CurrencyRateEntity existing = repository.findByCodeIgnoreCase(code).orElse(null);
+            if (existing == null) {
+                // Moneda nueva del proveedor: se PERSISTE pero INACTIVA por defecto (solo las que usa la
+                // app quedan activas). El admin puede activarla desde la pantalla de monedas.
+                existing = CurrencyRateEntity.builder().code(code).name(CurrencySymbols.nameFor(code))
+                        .symbol(CurrencySymbols.symbolFor(code)).locale("en-US").rateVsUsd(entry.getValue())
+                        .active(false).lastSyncedAt(now).build();
+                created++;
+            } else {
+                existing.setRateVsUsd(entry.getValue());
+                existing.setLastSyncedAt(now);
+                updated++;
+            }
             repository.save(existing);
-            updated++;
         }
         refreshCache();
-        log.info("Currency sync: updated {} rates from provider", updated);
+        log.info("Currency sync: {} actualizadas, {} nuevas persistidas (inactivas) desde el proveedor", updated,
+                created);
     }
 
     /* ============ cache plumbing ============ */

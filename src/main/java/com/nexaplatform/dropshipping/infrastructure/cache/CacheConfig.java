@@ -1,14 +1,17 @@
 package com.nexaplatform.dropshipping.infrastructure.cache;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.caffeine.CaffeineCacheManager;
+import org.springframework.cache.interceptor.KeyGenerator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
 
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -43,6 +46,22 @@ public class CacheConfig {
      * tiene su propia copia — válido para desarrollo local pero NO para prod
      * multi-instancia (esa coherencia la da {@link RedisCacheConfig}).
      */
+    /**
+     * Clave de caché que INCLUYE la moneda de display activa (X-Currency) además del método + args.
+     * Imprescindible para los listados de productos: el precio mostrado depende de la moneda del usuario,
+     * así que sin la moneda en la clave un usuario en EUR vería el precio cacheado del primer usuario
+     * (p. ej. USD) y el margen/conversión "no se reflejaría" por moneda. El nombre del método separa el
+     * listado genérico del de categoría/proveedor aunque compartan bucket.
+     */
+    @Bean("currencyAwareKeyGenerator")
+    public KeyGenerator currencyAwareKeyGenerator() {
+        // Incluye moneda Y canal (STOREFRONT 150% vs INTEGRATION 75%): el precio depende de ambos, así
+        // que el storefront y las apps conectadas (Shopify/WooCommerce) NO deben compartir entrada de caché.
+        return (target, method, params) -> method.getName() + ':' + CurrencyHolder.get() + ':'
+                + com.nexaplatform.dropshipping.application.service.PricingChannelHolder.get() + ':'
+                + Arrays.deepToString(params);
+    }
+
     @Bean
     @Primary
     @Profile({"local", "dev", "default", "test"})

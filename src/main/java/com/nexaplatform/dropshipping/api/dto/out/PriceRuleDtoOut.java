@@ -52,4 +52,7 @@ public class PriceRuleDtoOut {
 
     @Schema(description = "Human-readable description")
     private String description;
+
+    @Schema(description = "Canal: STOREFRONT (tienda propia) o INTEGRATION (apps API: Shopify/WooCommerce)", example = "STOREFRONT")
+    private String channel;
 }

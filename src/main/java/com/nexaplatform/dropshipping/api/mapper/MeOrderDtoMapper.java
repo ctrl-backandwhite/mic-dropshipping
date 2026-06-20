@@ -5,58 +5,75 @@ import com.nexaplatform.dropshipping.api.dto.out.MeOrderDetailDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MeOrderItemDetailDtoOut;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.Named;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * API-layer mapper projecting the {@link Order} domain model into the authenticated
- * user's order detail DtoOut. Injected in the controller. Money is converted from
- * integer cents to BigDecimal (4 dp); the per-line display title is already resolved
- * by the use case into {@code titleSnapshot} (request-language fallback chain). The
- * address blocks are built from the order's flat snapshot fields.
+ * Proyecta el modelo de dominio {@link Order} (importes canónicos en céntimos USD) al detalle del
+ * pedido del usuario, CONVERTIDO a la moneda activa (header {@code X-Currency}) y FORMATEADO en el
+ * backend (el front solo pinta).
+ *
+ * <p>DROP-637: la conversión se hace <b>línea a línea</b> (cada línea {@code usdTo}, 2 dec hacia
+ * arriba) y luego se SUMA — exactamente igual que el cobro ({@code PaymentUseCaseImpl
+ * .perLineSettlementAmount}). Convertir el total USD de una sola vez daba 1–5 céntimos menos que lo
+ * realmente cobrado (p.ej. el pedido mostraba 85,76 € mientras Stripe cobró 85,81 €).
  */
-@Mapper(componentModel = "spring")
-public interface MeOrderDtoMapper {
+@Component
+@RequiredArgsConstructor
+public class MeOrderDtoMapper {
 
-    @Mapping(target = "id", source = "id")
-    @Mapping(target = "orderNumber", source = "orderNumber")
-    @Mapping(target = "externalOrderId", source = "externalOrderId")
-    @Mapping(target = "status", expression = "java(model.getStatus() != null ? model.getStatus().name() : null)")
-    @Mapping(target = "subtotal", source = "subtotalCents", qualifiedByName = "centsToDecimal")
-    @Mapping(target = "shipping", source = "shippingCents", qualifiedByName = "centsToDecimal")
-    @Mapping(target = "tax", source = "taxCents", qualifiedByName = "centsToDecimal")
-    @Mapping(target = "total", source = "totalCents", qualifiedByName = "centsToDecimal")
-    @Mapping(target = "currency", source = "currency")
-    @Mapping(target = "shippingAddress", expression = "java(shippingAddress(model))")
-    @Mapping(target = "billingAddress", expression = "java(billingAddress(model))")
-    @Mapping(target = "notes", source = "notes")
-    @Mapping(target = "trackingCarrier", ignore = true)
-    @Mapping(target = "trackingNumber", ignore = true)
-    @Mapping(target = "placedAt", source = "placedAt")
-    @Mapping(target = "shippedAt", source = "shippedAt")
-    @Mapping(target = "deliveredAt", source = "deliveredAt")
-    @Mapping(target = "cancelledAt", source = "cancelledAt")
-    @Mapping(target = "items", source = "items")
-    MeOrderDetailDtoOut toDetailDtoOut(Order model);
+    private final CurrencyRateService currencyRateService;
 
-    @Mapping(target = "id", source = "id")
-    @Mapping(target = "productId", source = "productId")
-    @Mapping(target = "variantId", source = "variantId")
-    @Mapping(target = "productTitle", source = "titleSnapshot")
-    @Mapping(target = "variantName", source = "variantName")
-    @Mapping(target = "imageUrl", expression = "java(image(item))")
-    @Mapping(target = "quantity", source = "quantity")
-    @Mapping(target = "unitPrice", source = "unitPriceCents", qualifiedByName = "centsToDecimal")
-    @Mapping(target = "lineTotal", source = "lineTotalCents", qualifiedByName = "centsToDecimal")
-    MeOrderItemDetailDtoOut toItemDetail(OrderItem item);
+    public MeOrderDetailDtoOut toDetailDtoOut(Order model) {
+        if (model == null) {
+            return null;
+        }
+        String ccy = CurrencyHolder.get();
+
+        BigDecimal subtotal = BigDecimal.ZERO;
+        List<MeOrderItemDetailDtoOut> items = new ArrayList<>();
+        for (OrderItem item : model.getItems()) {
+            BigDecimal usdUnit = BigDecimal.valueOf(item.getUnitPriceCents()).movePointLeft(2);
+            BigDecimal unit = currencyRateService.usdTo(usdUnit, ccy);
+            BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(item.getQuantity()));
+            subtotal = subtotal.add(lineTotal);
+            items.add(toItemDetail(item, unit, lineTotal, ccy));
+        }
+        BigDecimal shipping = currencyRateService.usdTo(BigDecimal.valueOf(model.getShippingCents()).movePointLeft(2),
+                ccy);
+        BigDecimal tax = currencyRateService.usdTo(BigDecimal.valueOf(model.getTaxCents()).movePointLeft(2), ccy);
+        BigDecimal total = subtotal.add(shipping).add(tax);
+
+        return MeOrderDetailDtoOut.builder().id(model.getId()).orderNumber(model.getOrderNumber())
+                .externalOrderId(model.getExternalOrderId())
+                .status(model.getStatus() != null ? model.getStatus().name() : null)
+                .subtotal(subtotal).shipping(shipping).tax(tax).total(total).currency(ccy)
+                .subtotalFormatted(currencyRateService.formatDisplay(subtotal, ccy))
+                .shippingFormatted(currencyRateService.formatDisplay(shipping, ccy))
+                .taxFormatted(currencyRateService.formatDisplay(tax, ccy))
+                .totalFormatted(currencyRateService.formatDisplay(total, ccy))
+                .shippingAddress(shippingAddress(model)).billingAddress(billingAddress(model)).notes(model.getNotes())
+                .trackingCarrier(null).trackingNumber(null).placedAt(model.getPlacedAt()).shippedAt(model.getShippedAt())
+                .deliveredAt(model.getDeliveredAt()).cancelledAt(model.getCancelledAt()).items(items).build();
+    }
+
+    private MeOrderItemDetailDtoOut toItemDetail(OrderItem item, BigDecimal unit, BigDecimal lineTotal, String ccy) {
+        return MeOrderItemDetailDtoOut.builder().id(item.getId()).productId(item.getProductId())
+                .variantId(item.getVariantId()).productTitle(item.getTitleSnapshot())
+                .variantName(item.getVariantName()).imageUrl(image(item)).quantity(item.getQuantity())
+                .unitPrice(unit).lineTotal(lineTotal)
+                .unitPriceFormatted(currencyRateService.formatDisplay(unit, ccy))
+                .lineTotalFormatted(currencyRateService.formatDisplay(lineTotal, ccy)).build();
+    }
 
     /** Prefers a live catalog image over the snapshot (often a placeholder or empty). */
-    default String image(OrderItem item) {
+    private String image(OrderItem item) {
         String image = item.getImageUrlSnapshot();
         if ((image == null || image.isBlank()) && item.getProductImageUrl() != null) {
             image = item.getProductImageUrl();
@@ -65,7 +82,7 @@ public interface MeOrderDtoMapper {
     }
 
     /** Builds the shipping address block from the order's flat snapshot fields. */
-    default MeOrderAddressDtoOut shippingAddress(Order model) {
+    private MeOrderAddressDtoOut shippingAddress(Order model) {
         if (model.getShippingFullName() == null && model.getShippingLine1() == null) {
             return null;
         }
@@ -76,7 +93,7 @@ public interface MeOrderDtoMapper {
     }
 
     /** Builds the billing address block from the order's flat snapshot fields (nullable). */
-    default MeOrderAddressDtoOut billingAddress(Order model) {
+    private MeOrderAddressDtoOut billingAddress(Order model) {
         if (model.getBillingFullName() == null && model.getBillingLine1() == null) {
             return null;
         }
@@ -85,12 +102,4 @@ public interface MeOrderDtoMapper {
                 .city(model.getBillingCity()).state(model.getBillingState()).postalCode(model.getBillingPostalCode())
                 .country(model.getBillingCountry()).build();
     }
-
-    /** Converts integer cents to a 4-dp BigDecimal amount. */
-    @Named("centsToDecimal")
-    default BigDecimal centsToDecimal(int cents) {
-        return BigDecimal.valueOf(cents).divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
-    }
-
-    List<MeOrderItemDetailDtoOut> toItemDetails(List<OrderItem> items);
 }

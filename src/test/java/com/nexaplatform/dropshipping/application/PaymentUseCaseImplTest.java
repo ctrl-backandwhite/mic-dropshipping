@@ -7,6 +7,7 @@ import com.nexaplatform.dropshipping.api.mapper.OrderPaymentDtoMapper;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
 import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.application.usecase.impl.PaymentUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
@@ -52,13 +53,15 @@ class PaymentUseCaseImplTest {
     PartnerPlanSyncService partnerPlanSyncService;
     @Mock
     OrderEmailService orderEmailService;
+    @Mock
+    CurrencyRateService currencyRateService;
 
     private final OrderPaymentDtoMapper orderPaymentDtoMapper = Mappers.getMapper(OrderPaymentDtoMapper.class);
 
     private PaymentUseCaseImpl useCase() {
         return new PaymentUseCaseImpl(List.<PaymentGateway>of(), paymentRepository, paymentJpaRepositoryAdapter,
                 userRepository, orderRepository, walletUseCase, auditLogger, partnerPlanSyncService,
-                new ObjectMapper(), orderEmailService);
+                new ObjectMapper(), orderEmailService, currencyRateService);
     }
 
     @Test

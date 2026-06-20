@@ -37,6 +37,11 @@ public class CustomerOrderEntity extends BaseEntity {
     @Column(name = "partner_app_id")
     private UUID partnerAppId;
 
+    /** Origen de la orden: PLATFORM (tienda propia) o INTEGRATION (tienda conectada). */
+    @Column(name = "source", nullable = false, length = 20)
+    @lombok.Builder.Default
+    private String source = "PLATFORM";
+
     @Column(name = "user_id")
     private UUID userId;
 

@@ -21,6 +21,7 @@ import com.nexaplatform.dropshipping.api.dto.out.CategoryAttributeSchemaDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.ImageUploadDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.ReindexResultDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
+import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -197,10 +198,29 @@ public class AdminCatalogController implements AdminCatalogApi {
                 catalogUseCase.deleteProduct(id); // per-id tx + cache evict; refused if it has orders
                 deleted++;
             } catch (RuntimeException ex) {
-                errors.add(id + ": " + ex.getMessage());
+                errors.add(id + ": " + ErrorMessages.humanize(ex));
             }
         }
         return ResponseEntity.ok(Map.of("deleted", deleted, "failed", errors.size(), "errors", errors));
+    }
+
+    /** Bulk publish/pause/archive the selected products (sets status: ACTIVE/PAUSED/ARCHIVED). */
+    @PutMapping("/products/bulk-status")
+    public ResponseEntity<Map<String, Object>> bulkProductStatus(@RequestBody BulkStatusRequest req) {
+        int succeeded = 0;
+        List<String> errors = new ArrayList<>();
+        for (UUID id : req.ids()) {
+            try {
+                catalogUseCase.updateStatus(id, req.status());
+                succeeded++;
+            } catch (RuntimeException ex) {
+                errors.add(id + ": " + ErrorMessages.humanize(ex));
+            }
+        }
+        return ResponseEntity.ok(Map.of("succeeded", succeeded, "failed", errors.size(), "errors", errors));
+    }
+
+    public record BulkStatusRequest(List<UUID> ids, String status) {
     }
 
     @Override

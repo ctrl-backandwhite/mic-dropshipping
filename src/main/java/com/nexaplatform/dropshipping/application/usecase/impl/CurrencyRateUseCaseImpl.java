@@ -40,6 +40,35 @@ public class CurrencyRateUseCaseImpl implements CurrencyRateUseCase {
 
     @Override
     @Transactional(readOnly = true)
+    public List<CurrencyRate> listAll() {
+        return currencyRateEntityMapper.toDomainList(currencyRateService.listAll());
+    }
+
+    @Override
+    @Transactional
+    public CurrencyRate setActive(String code, boolean active) {
+        return currencyRateEntityMapper.toDomain(currencyRateService.setActive(code, active));
+    }
+
+    @Override
+    @Transactional
+    public int bulkSetActive(List<String> codes, boolean active) {
+        if (codes == null) {
+            return 0;
+        }
+        int changed = 0;
+        for (String code : codes) {
+            try {
+                currencyRateService.setActive(code, active);
+                changed++;
+            } catch (RuntimeException ignored) {
+                /* una moneda desconocida no aborta el lote */ }
+        }
+        return changed;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public CurrencyRate one(String code) {
         return currencyRateEntityMapper.toDomain(currencyRateService.require(code));
     }

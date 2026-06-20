@@ -65,6 +65,14 @@ public class SupplierUseCaseImpl implements SupplierUseCase {
 
     @Override
     @Transactional
+    public Supplier setVerified(UUID id, boolean verified) {
+        Supplier s = getById(id);
+        s.setVerified(verified);
+        return supplierRepository.update(s);
+    }
+
+    @Override
+    @Transactional
     public Supplier toggleTrustPass(UUID id) {
         Supplier s = getById(id);
         s.setTrustPass(!s.isTrustPass());

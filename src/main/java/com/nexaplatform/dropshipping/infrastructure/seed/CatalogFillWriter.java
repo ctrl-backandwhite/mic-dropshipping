@@ -49,11 +49,14 @@ public class CatalogFillWriter {
         if (managed == null)
             return saved.getId();
 
-        managed.getTranslations().clear();
-        addTranslation(managed, "es", esTitle, descEs);
-        addTranslation(managed, "en", blankTo(enTitle, esTitle), blankTo(descEn, descEs));
-        addTranslation(managed, "zh", zhTitle, blankTo(descZh, descEs));
-        addTranslation(managed, "pt", blankTo(ptTitle, esTitle), blankTo(descPt, descEs));
+        // Upsert in-place por idioma. NO usamos clear()+add: con orphanRemoval, Hibernate ejecuta los
+        // INSERT antes que los DELETE en el flush, y al reimportar un producto existente chocaría con la
+        // unique (product_id, language) [ux_prodtr_prod_lang]. Actualizando la fila existente (o creándola
+        // si falta) la reimportación es idempotente y nunca viola la constraint.
+        upsertTranslation(managed, "es", esTitle, descEs);
+        upsertTranslation(managed, "en", blankTo(enTitle, esTitle), blankTo(descEn, descEs));
+        upsertTranslation(managed, "zh", zhTitle, blankTo(descZh, descEs));
+        upsertTranslation(managed, "pt", blankTo(ptTitle, esTitle), blankTo(descPt, descEs));
 
         if (enrich != null) {
             enrich.accept(managed);
@@ -72,10 +75,19 @@ public class CatalogFillWriter {
         return saved.getId();
     }
 
-    private static void addTranslation(ProductEntity p, String lang, String title, String desc) {
+    /** Crea o actualiza la traducción del idioma sin borrar/reinsertar (evita el choque de unique). */
+    private static void upsertTranslation(ProductEntity p, String lang, String title, String desc) {
         String shortDesc = desc != null && desc.length() > 2000 ? desc.substring(0, 2000) : desc;
-        p.getTranslations().add(ProductTranslationEntity.builder().product(p).language(lang).title(title)
-                .shortDescription(shortDesc).description(desc).provider("seed").build());
+        ProductTranslationEntity existing = p.getTranslations().stream()
+                .filter(t -> lang.equalsIgnoreCase(t.getLanguage())).findFirst().orElse(null);
+        if (existing != null) {
+            existing.setTitle(title);
+            existing.setShortDescription(shortDesc);
+            existing.setDescription(desc);
+        } else {
+            p.getTranslations().add(ProductTranslationEntity.builder().product(p).language(lang).title(title)
+                    .shortDescription(shortDesc).description(desc).provider("seed").build());
+        }
     }
 
     private static String blankTo(String v, String fallback) {

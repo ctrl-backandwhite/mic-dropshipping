@@ -10,6 +10,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -53,6 +54,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
     // las réplicas comparten el mismo bucket → cuota global consistente.
     @Autowired
     private BucketFactory bucketFactory;
+
+    // Nº de proxies de confianza por delante (LB/edge). La IP real del cliente es la que
+    // añade el proxy de confianza al final de X-Forwarded-For; los valores que el cliente
+    // pueda inyectar quedan a la izquierda. 1 = un único proxy (típico Railway/Nginx).
+    @Value("${nexadrop.security.trusted-proxy-count:1}")
+    private int trustedProxyCount;
 
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
@@ -106,7 +113,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
      * El plan viene del claim `plan` del JWT del partner.
      */
     private RateRule ruleFor(String path, String plan) {
-        // Auth abuse-prevention buckets (per-IP)
+        // Auth abuse-prevention buckets (per-IP). El login real es /api/auth/login (no /login):
+        // sin esta regla la fuerza bruta/credential-stuffing pasaba sin freno.
+        if (path.equals("/api/auth/login"))
+            return new RateRule("auth.login.api", Scope.IP, 10, Duration.ofMinutes(1));
+        if (path.equals("/api/auth/refresh"))
+            return new RateRule("auth.refresh", Scope.IP, 30, Duration.ofMinutes(1));
         if (path.equals("/api/auth/register"))
             return new RateRule("auth.register", Scope.IP, 5, Duration.ofHours(1));
         if (path.equals("/api/auth/password-reset/request"))
@@ -175,9 +187,16 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private String clientIp(HttpServletRequest req) {
         String xff = req.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank())
-            return xff.split(",")[0].trim();
-        return req.getRemoteAddr();
+        if (xff == null || xff.isBlank())
+            return req.getRemoteAddr();
+        String[] parts = xff.split(",");
+        // Tomamos la IP que añadió el proxy de confianza (a `trustedProxyCount` desde el final),
+        // NO la primera, que el cliente puede falsificar para evadir el rate limit por IP.
+        int idx = parts.length - Math.max(1, trustedProxyCount);
+        if (idx < 0)
+            idx = 0;
+        String ip = parts[idx].trim();
+        return ip.isEmpty() ? req.getRemoteAddr() : ip;
     }
 
     /**
@@ -193,6 +212,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 policy("storefront.web", "/api/storefront/**", "per IP", 100, "1m"),
                 policy("oauth.token", "/oauth2/token", "per IP", 30, "1m"),
                 policy("auth.login", "/login", "per IP", 20, "1m"),
+                policy("auth.login.api", "/api/auth/login", "per IP", 10, "1m"),
+                policy("auth.refresh", "/api/auth/refresh", "per IP", 30, "1m"),
                 policy("auth.register", "/api/auth/register", "per IP", 5, "1h"),
                 policy("auth.reset.req", "/api/auth/password-reset/request", "per IP", 3, "1h"),
                 policy("auth.reset.conf", "/api/auth/password-reset/confirm", "per IP", 5, "1h"));

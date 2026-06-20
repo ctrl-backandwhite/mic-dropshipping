@@ -14,9 +14,12 @@ import java.util.UUID;
 public class AdminOrderLineDtoOut {
 
     UUID id;
+    UUID productId;
     String sku;
     String title;
     int qty;
     int unitPriceCents;
     int lineTotalCents;
+    // URL de la ficha original del producto: el operador la abre para gestionar/procesar la orden.
+    String productSourceUrl;
 }

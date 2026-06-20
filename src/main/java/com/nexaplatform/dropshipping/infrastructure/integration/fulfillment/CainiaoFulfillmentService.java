@@ -58,6 +58,16 @@ public class CainiaoFulfillmentService {
         return zone(countryCode).isPresent();
     }
 
+    /** Destino soportado por Cainiao: código ISO-2 + nombre, para pintar el banner de cobertura. */
+    public record SupportedCountry(String countryCode, String countryName) {
+    }
+
+    /** Países a los que Cainiao envía (zonas habilitadas), ordenados por nombre. */
+    public List<SupportedCountry> supportedCountries() {
+        return zoneRepository.findByEnabledTrueOrderByCountryNameAsc().stream()
+                .map(z -> new SupportedCountry(z.getCountryCode(), z.getCountryName())).toList();
+    }
+
     private Optional<CainiaoZoneEntity> zone(String countryCode) {
         if (countryCode == null || countryCode.isBlank()) {
             return Optional.empty();
@@ -77,8 +87,8 @@ public class CainiaoFulfillmentService {
         CainiaoZoneEntity zn = z.get();
         double kg = Math.max(0.1, totalWeightGrams / 1000.0);
         int amount = zn.getBaseCents() + (int) Math.round(zn.getPerKgCents() * kg);
-        return new ShippingQuote(true, zn.getCountryCode(), amount, "Cainiao", "Cainiao Standard", zn.getEtaMinDays(),
-                zn.getEtaMaxDays(), zn.getZone());
+        return new ShippingQuote(true, zn.getCountryCode(), amount, "Standard Shipping", "Standard Shipping",
+                zn.getEtaMinDays(), zn.getEtaMaxDays(), zn.getZone());
     }
 
     /** Resultado de crear el envío en Cainiao. */
@@ -95,7 +105,7 @@ public class CainiaoFulfillmentService {
             String hex = order.getId().toString().replace("-", "").substring(0, 12).toUpperCase();
             log.info("Cainiao mock-mode: envío simulado para pedido {} (platform={})", order.getOrderNumber(),
                     platformId);
-            return new FulfillmentResult("Cainiao", "CN" + hex + "YQ", "LP" + hex, etaMax);
+            return new FulfillmentResult("Standard Shipping", "CN" + hex + "YQ", "LP" + hex, etaMax);
         }
         // TODO(real): POST a la Cainiao Open Platform (Global Logistics) con app-key/secret firmados.
         throw new UnsupportedOperationException("Cainiao real API no configurada todavía");
@@ -126,7 +136,7 @@ public class CainiaoFulfillmentService {
         String country = countryCode != null ? countryCode : "destino";
 
         String[][] plan = {
-                { "FORWARDED", "Envío registrado en Cainiao", "Shenzhen, CN" },
+                { "FORWARDED", "Envío registrado", "Shenzhen, CN" },
                 { "SHIPPED", "Recogido por el transportista", "Shenzhen, CN" },
                 { "SHIPPED", "En tránsito internacional", "Hub internacional" },
                 { "SHIPPED", "Llegó al país de destino", country },

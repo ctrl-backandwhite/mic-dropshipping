@@ -46,7 +46,7 @@ class ProductMapperTest {
 
         pricingService = new PricingService(currencyService, marginService);
 
-        productMapper = new ProductMapper(supplierMapper, pricingService, currencyService);
+        productMapper = new ProductMapper(supplierMapper, pricingService, currencyService, marginService);
     }
 
     @Test

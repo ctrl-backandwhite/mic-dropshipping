@@ -19,6 +19,8 @@ public class AdminOrderRowDtoOut {
     String orderNumber;
     String status;
     UUID partnerAppId;
+    /** Origen: PLATFORM (tienda propia) o INTEGRATION (tienda conectada). */
+    String source;
     int subtotalCents;
     int shippingCents;
     int totalCents;

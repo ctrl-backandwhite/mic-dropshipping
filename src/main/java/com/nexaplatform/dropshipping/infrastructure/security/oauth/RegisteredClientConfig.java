@@ -11,7 +11,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
-import org.springframework.security.oauth2.core.oidc.OidcScopes;
 import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationConsentService;
 import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationConsentService;
@@ -30,18 +29,6 @@ import java.util.UUID;
 @Configuration
 public class RegisteredClientConfig {
 
-    @Value("${nexadrop.oauth.admin-spa.client-id}")
-    private String adminClientId;
-    @Value("${nexadrop.oauth.admin-spa.redirect-uri}")
-    private String adminRedirect;
-    @Value("${nexadrop.oauth.admin-spa.post-logout-redirect-uri}")
-    private String adminPostLogout;
-    @Value("${nexadrop.oauth.storefront-spa.client-id}")
-    private String storefrontClientId;
-    @Value("${nexadrop.oauth.storefront-spa.redirect-uri}")
-    private String storefrontRedirect;
-    @Value("${nexadrop.oauth.storefront-spa.post-logout-redirect-uri}")
-    private String storefrontPostLogout;
     @Value("${nexadrop.oauth.partner-api.default-secret}")
     private String partnerSecret;
 
@@ -71,33 +58,9 @@ public class RegisteredClientConfig {
 
     @EventListener(ApplicationReadyEvent.class)
     public void seedClients(ApplicationReadyEvent event) {
-        if (repo.findByClientId(adminClientId) == null) {
-            repo.save(RegisteredClient.withId(UUID.randomUUID().toString()).clientId(adminClientId)
-                    .clientName("NX036 Admin SPA").clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
-                    .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                    .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN).redirectUri(adminRedirect)
-                    .postLogoutRedirectUri(adminPostLogout).scope(OidcScopes.OPENID).scope(OidcScopes.PROFILE)
-                    .scope(OidcScopes.EMAIL).scope("admin")
-                    .clientSettings(
-                            ClientSettings.builder().requireProofKey(true).requireAuthorizationConsent(false).build())
-                    .tokenSettings(TokenSettings.builder().accessTokenTimeToLive(Duration.ofMinutes(15))
-                            .refreshTokenTimeToLive(Duration.ofDays(7)).reuseRefreshTokens(false).build())
-                    .build());
-        }
-
-        if (repo.findByClientId(storefrontClientId) == null) {
-            repo.save(RegisteredClient.withId(UUID.randomUUID().toString()).clientId(storefrontClientId)
-                    .clientName("NX036 Storefront SPA").clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
-                    .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                    .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN).redirectUri(storefrontRedirect)
-                    .postLogoutRedirectUri(storefrontPostLogout).scope(OidcScopes.OPENID).scope(OidcScopes.PROFILE)
-                    .scope(OidcScopes.EMAIL).scope("storefront")
-                    .clientSettings(
-                            ClientSettings.builder().requireProofKey(true).requireAuthorizationConsent(false).build())
-                    .tokenSettings(TokenSettings.builder().accessTokenTimeToLive(Duration.ofMinutes(15))
-                            .refreshTokenTimeToLive(Duration.ofDays(30)).reuseRefreshTokens(false).build())
-                    .build());
-        }
+        // NOTA: los antiguos clientes SPA admin/storefront (authorization_code + PKCE) se
+        // eliminaron al migrar el login del SPA a token Bearer propio (/api/auth/login).
+        // El authorization server solo conserva el flujo partner (client_credentials).
 
         // Free / sandbox tier — 1 req/min. UPSERT: re-aplicamos settings y TTL si ya existe.
         upsertPartnerClient("demo-partner", "Demo Partner — Sandbox / Free (server-to-server)", partnerSecret,

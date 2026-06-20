@@ -10,10 +10,13 @@ import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
 import com.nexaplatform.dropshipping.infrastructure.integration.payment.PayPalGateway;
 import com.nexaplatform.dropshipping.infrastructure.integration.payment.StripeGateway;
 import com.nexaplatform.dropshipping.domain.model.Order;
+import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.domain.model.Payment;
 import com.nexaplatform.dropshipping.domain.model.Wallet;
 import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
@@ -63,6 +66,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     private final PartnerPlanSyncService partnerPlanSyncService;
     private final ObjectMapper objectMapper;
     private final OrderEmailService orderEmailService;
+    private final CurrencyRateService currencyRateService;
 
     @Override
     @Transactional
@@ -159,7 +163,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                         : userRepository.findById(p.getUserId()).map(u -> u.getEmail()).orElse(null);
                 String locale = userRepository.findById(p.getUserId()).map(u -> u.getLanguage()).orElse(null);
                 orderEmailService.paymentConfirmed(order, email, locale,
-                        p.getMethod() != null ? p.getMethod().name() : null);
+                        p.getMethod() != null ? p.getMethod().name() : null, p.getSettlementCurrency());
             }
         } else {
             // Recarga de wallet: acreditar saldo.
@@ -349,11 +353,21 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             throw new NotFoundException("User");
         Wallet wallet = walletUseCase.getOrCreate(payerUserId);
 
+        // Moneda de cobro: con Stripe (CARD) se cobra en EUR si el usuario navega en EUR; en cualquier
+        // otra moneda se cobra el equivalente en USD. El resto de métodos liquidan en USD (o USDT).
+        // El monto se calcula SUMANDO el precio por línea convertido a la moneda de cobro (2 decimales
+        // hacia arriba por línea, igual que el carrito y el catálogo) — NO convirtiendo el total una vez,
+        // para que lo cobrado coincida EXACTAMENTE con lo que el cliente vio en el carrito.
+        String displayCcy = CurrencyHolder.get();
+        boolean stripeEur = method == PaymentMethod.CARD && "EUR".equalsIgnoreCase(displayCcy);
+        String settlementCcy = method == PaymentMethod.USDT ? "USDT" : (stripeEur ? "EUR" : "USD");
+        BigDecimal settlementAmount = perLineSettlementAmount(order, settlementCcy);
+
         Payment p = Payment.builder().userId(payerUserId).walletId(wallet.getId()).method(method)
                 .status(PaymentStatus.PENDING).amountUsdCents(amountUsdCents)
                 .amountDisplay(BigDecimal.valueOf(amountUsdCents).movePointLeft(2))
-                .currencyDisplay(order.getCurrency() != null ? order.getCurrency() : "USD")
-                .settlementCurrency(method == PaymentMethod.USDT ? "USDT" : "USD").idempotencyKey(idempotencyKey)
+                .currencyDisplay(displayCcy)
+                .settlementCurrency(settlementCcy).settlementAmount(settlementAmount).idempotencyKey(idempotencyKey)
                 .orderId(orderId).purpose("ORDER_PAYMENT").build();
         p = paymentRepository.save(p);
 
@@ -384,6 +398,27 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         auditLogger.log("order_payment.initiate", p.getUserEmail(),
                 Map.of("orderId", orderId, "paymentId", p.getId(), "method", method, "amountCents", amountUsdCents));
         return p;
+    }
+
+    /**
+     * Monto a cobrar en {@code ccy} = SUMA del precio por línea convertido a esa moneda (2 decimales hacia
+     * arriba por línea, igual que el carrito y el catálogo) + el envío convertido. Así lo cobrado coincide
+     * con el total que el cliente ve en el carrito (que también suma línea a línea), evitando el desfase de
+     * céntimos de convertir el total una sola vez.
+     */
+    private BigDecimal perLineSettlementAmount(Order order, String ccy) {
+        if ("USDT".equalsIgnoreCase(ccy)) {
+            return BigDecimal.valueOf(order.getTotalCents()).movePointLeft(2);
+        }
+        BigDecimal sum = BigDecimal.ZERO;
+        for (OrderItem it : order.getItems()) {
+            BigDecimal usdUnit = BigDecimal.valueOf(it.getUnitPriceCents()).movePointLeft(2);
+            BigDecimal unit = currencyRateService.usdTo(usdUnit, ccy);
+            sum = sum.add(unit.multiply(BigDecimal.valueOf(it.getQuantity())));
+        }
+        BigDecimal ship = currencyRateService.usdTo(BigDecimal.valueOf(order.getShippingCents()).movePointLeft(2), ccy);
+        BigDecimal tax = currencyRateService.usdTo(BigDecimal.valueOf(order.getTaxCents()).movePointLeft(2), ccy);
+        return sum.add(ship).add(tax);
     }
 
     @Override

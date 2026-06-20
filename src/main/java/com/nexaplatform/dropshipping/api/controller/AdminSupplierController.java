@@ -4,15 +4,22 @@ import com.nexaplatform.dropshipping.api.AdminSupplierApi;
 import com.nexaplatform.dropshipping.api.dto.in.AdminSupplierUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.AdminSupplierDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminSupplierToggleDtoOut;
+import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.api.mapper.AdminSupplierMapper;
 import com.nexaplatform.dropshipping.application.usecase.SupplierUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * Admin Suppliers controller. Pure implementation of {@link AdminSupplierApi}:
@@ -61,5 +68,37 @@ public class AdminSupplierController implements AdminSupplierApi {
     public ResponseEntity<Void> delete(UUID id) {
         useCase.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /* ===================== Bulk admin actions (per-id error reporting) ===================== */
+
+    /** Bulk verify/unverify the selected suppliers (sets the flag to a specific value). */
+    @PutMapping("/bulk-verify")
+    public ResponseEntity<Map<String, Object>> bulkVerify(@RequestBody BulkVerifyRequest req) {
+        return bulkApply(req.ids(), id -> useCase.setVerified(id, req.verified()));
+    }
+
+    /** Bulk delete the selected suppliers (each refused if it still has products). */
+    @PostMapping("/bulk-delete")
+    public ResponseEntity<Map<String, Object>> bulkDelete(@RequestBody List<UUID> ids) {
+        return bulkApply(ids, useCase::delete);
+    }
+
+    public record BulkVerifyRequest(List<UUID> ids, boolean verified) {
+    }
+
+    /** Runs an action over each id, isolating failures so one bad id never aborts the batch. */
+    private ResponseEntity<Map<String, Object>> bulkApply(List<UUID> ids, Consumer<UUID> action) {
+        int succeeded = 0;
+        List<String> errors = new ArrayList<>();
+        for (UUID id : ids) {
+            try {
+                action.accept(id);
+                succeeded++;
+            } catch (RuntimeException ex) {
+                errors.add(id + ": " + ErrorMessages.humanize(ex));
+            }
+        }
+        return ResponseEntity.ok(Map.of("succeeded", succeeded, "failed", errors.size(), "errors", errors));
     }
 }

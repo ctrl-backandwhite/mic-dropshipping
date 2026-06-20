@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 /**
  * Canonical pricing pipeline:
@@ -45,9 +46,15 @@ public class PricingService {
         var withMargin = marginService.apply(costUsd, product, effective);
         BigDecimal retailUsd = withMargin.retailUsd();
         String displayCode = CurrencyHolder.get();
-        BigDecimal displayAmount = currencyService.usdToDisplay(retailUsd);
+        // El precio MOSTRADO se deriva del USD ya redondeado a 2 decimales (el USD canónico que se cobra),
+        // no del retail crudo, para que el precio en cualquier moneda COINCIDA EXACTAMENTE con lo que se
+        // cobra (catálogo == carrito == cobro). El pedido también redondea retailUsd a 2 dec hacia arriba.
+        BigDecimal retailUsd2 = retailUsd != null ? retailUsd.setScale(2, RoundingMode.UP) : null;
+        BigDecimal displayAmount = currencyService.usdToDisplay(retailUsd2);
+        // El string formateado lo produce el BACKEND (locale de la moneda en BD); el frontend solo pinta.
+        String displayFormatted = currencyService.formatDisplay(displayAmount, displayCode);
         return new PricedAmount(costUsd, retailUsd, displayAmount, displayCode, currencyService.symbolOf(displayCode),
-                withMargin.appliedRule() != null ? withMargin.appliedRule().getId() : null,
+                displayFormatted, withMargin.appliedRule() != null ? withMargin.appliedRule().getId() : null,
                 withMargin.appliedPercentage());
     }
 
@@ -92,7 +99,7 @@ public class PricingService {
     }
 
     public record PricedAmount(BigDecimal costUsd, BigDecimal retailUsd, BigDecimal displayAmount,
-            String displayCurrency, String displaySymbol, java.util.UUID appliedRuleId,
+            String displayCurrency, String displaySymbol, String displayFormatted, java.util.UUID appliedRuleId,
             BigDecimal appliedMarginPercent) {
     }
 }

@@ -91,11 +91,16 @@ public class StripeGateway implements PaymentGateway {
                     + "&paymentId=" + p.getId() + "&session_id={CHECKOUT_SESSION_ID}";
             String cancelUrl = storefrontBaseUrl + "/checkout?cancelled=1";
 
+            // Moneda de cobro = la liquidación fijada al iniciar el pago (EUR si el usuario navega en EUR,
+            // USD en cualquier otro caso). El monto va en esa moneda (céntimos).
+            String chargeCcy = "EUR".equalsIgnoreCase(p.getSettlementCurrency()) ? "eur" : "usd";
+            long chargeCents = chargeCents(p);
+
             SessionCreateParams params = SessionCreateParams.builder().setMode(SessionCreateParams.Mode.PAYMENT)
                     .setSuccessUrl(successUrl).setCancelUrl(cancelUrl).setCustomerEmail(p.getUser().getEmail())
                     .addLineItem(SessionCreateParams.LineItem.builder().setQuantity(1L)
-                            .setPriceData(SessionCreateParams.LineItem.PriceData.builder().setCurrency("usd")
-                                    .setUnitAmount(p.getAmountUsdCents())
+                            .setPriceData(SessionCreateParams.LineItem.PriceData.builder().setCurrency(chargeCcy)
+                                    .setUnitAmount(chargeCents)
                                     .setProductData(SessionCreateParams.LineItem.PriceData.ProductData.builder()
                                             .setName("NX036 Dropshipping · order " + shortId(p.getOrderId().toString()))
                                             .build())
@@ -207,6 +212,14 @@ public class StripeGateway implements PaymentGateway {
 
     private String shortId(String id) {
         return id.length() > 8 ? id.substring(0, 8) : id;
+    }
+
+    /** Monto a cobrar en céntimos de la moneda de liquidación (settlementAmount); fallback al USD canónico. */
+    private long chargeCents(PaymentEntity p) {
+        if (p.getSettlementAmount() != null) {
+            return p.getSettlementAmount().movePointRight(2).setScale(0, java.math.RoundingMode.HALF_UP).longValueExact();
+        }
+        return p.getAmountUsdCents();
     }
 
     private boolean isActive() {

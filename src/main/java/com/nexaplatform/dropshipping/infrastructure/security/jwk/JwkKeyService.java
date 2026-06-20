@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.infrastructure.security.jwk;
 
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.JwkKeyEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.JwkKeyRepository;
+import com.nexaplatform.dropshipping.infrastructure.security.crypto.TokenCryptoService;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.JWKSource;
@@ -32,6 +33,7 @@ import java.util.stream.Collectors;
 public class JwkKeyService {
 
     private final JwkKeyRepository jwkKeyRepository;
+    private final TokenCryptoService tokenCryptoService;
 
     @PostConstruct
     void init() {
@@ -47,10 +49,13 @@ public class JwkKeyService {
             gen.initialize(2048);
             KeyPair pair = gen.generateKeyPair();
             String kid = UUID.randomUUID().toString();
+            // La clave PÚBLICA se guarda en claro (es pública); la PRIVADA se cifra en reposo
+            // (AES-256-GCM vía TokenCryptoService / NX_TOKEN_KEKS). Si se filtra la BD, sin la KEK
+            // no se puede recuperar la clave de firma → no se pueden forjar tokens.
+            String privB64 = Base64.getEncoder().encodeToString(pair.getPrivate().getEncoded());
             JwkKeyEntity entity = JwkKeyEntity.builder().kid(kid)
                     .publicKey(Base64.getEncoder().encodeToString(pair.getPublic().getEncoded()))
-                    .privateKey(Base64.getEncoder().encodeToString(pair.getPrivate().getEncoded())).active(true)
-                    .build();
+                    .privateKey(tokenCryptoService.encrypt(privB64)).active(true).build();
             return jwkKeyRepository.save(entity);
         } catch (Exception e) {
             throw new IllegalStateException("Cannot generate RSA key pair", e);
@@ -71,7 +76,9 @@ public class JwkKeyService {
         try {
             KeyFactory kf = KeyFactory.getInstance("RSA");
             byte[] pubBytes = Base64.getDecoder().decode(entity.getPublicKey());
-            byte[] privBytes = Base64.getDecoder().decode(entity.getPrivateKey());
+            // decrypt() devuelve el Base64 en claro tal cual si la entrada no lleva prefijo
+            // `gcm:`/`enc:` → retrocompatibilidad automática con claves antiguas sin cifrar.
+            byte[] privBytes = Base64.getDecoder().decode(tokenCryptoService.decrypt(entity.getPrivateKey()));
             RSAPublicKey pub = (RSAPublicKey) kf.generatePublic(new X509EncodedKeySpec(pubBytes));
             RSAPrivateKey priv = (RSAPrivateKey) kf.generatePrivate(new PKCS8EncodedKeySpec(privBytes));
             return new RSAKey.Builder(pub).privateKey(priv).keyID(entity.getKid()).build();

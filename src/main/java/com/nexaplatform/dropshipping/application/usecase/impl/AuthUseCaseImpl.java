@@ -6,10 +6,13 @@ import com.nexaplatform.dropshipping.api.dto.in.LoginDtoIn;
 import com.nexaplatform.dropshipping.application.service.DeviceSessionService;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetRequestDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.RefreshTokenDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.RegisterDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.UpdateProfileDtoIn;
+import com.nexaplatform.dropshipping.api.dto.out.LoginDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MeDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.RegisterDtoOut;
+import com.nexaplatform.dropshipping.infrastructure.security.jwt.UserTokenService;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.mapper.UserDtoMapper;
 import com.nexaplatform.dropshipping.application.usecase.AuthUseCase;
@@ -23,16 +26,10 @@ import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.DisabledException;
-import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
-import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -61,8 +58,7 @@ public class AuthUseCaseImpl implements AuthUseCase {
     private final StorageService storageService;
     private final UserDtoMapper mapper;
     private final DeviceSessionService deviceSessionService;
-
-    private final SecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
+    private final UserTokenService userTokenService;
 
     @Override
     public RegisterDtoOut register(RegisterDtoIn req) {
@@ -72,27 +68,45 @@ public class AuthUseCaseImpl implements AuthUseCase {
     }
 
     @Override
-    public MeDtoOut login(LoginDtoIn req, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
-        // BadCredentialsException propagates to the global handler -> 401.
-        try {
-            Authentication auth = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(req.getEmail().toLowerCase().trim(), req.getPassword()));
+    public LoginDtoOut login(LoginDtoIn req, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        // Toda excepción de autenticación (credenciales inválidas, usuario inexistente, cuenta
+        // no activada o bloqueada) se deja propagar como AuthenticationException → 401 genérico
+        // idéntico. Así NO se puede enumerar qué emails existen ni su estado de cuenta.
+        // (DisabledException/LockedException extienden AuthenticationException.)
+        Authentication auth = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(req.getEmail().toLowerCase().trim(), req.getPassword()));
 
-            SecurityContext context = SecurityContextHolder.createEmptyContext();
-            context.setAuthentication(auth);
-            SecurityContextHolder.setContext(context);
-            securityContextRepository.saveContext(context, httpRequest, httpResponse);
+        UUID id = UUID.fromString(auth.getName());
+        User user = userUseCase.findById(id);
+        completePendingGoogleLink(httpRequest, user);
+        // Registro de dispositivo: auditoría best-effort (la cookie nx_device no viaja
+        // cross-site, pero la fila sirve para histórico de IP/agente).
+        deviceSessionService.recordLogin(id, httpRequest, httpResponse);
+        return buildLogin(user, authorities(auth));
+    }
 
-            UUID id = UUID.fromString(auth.getName());
-            User user = userUseCase.findById(id);
-            completePendingGoogleLink(httpRequest, user);
-            deviceSessionService.recordLogin(id, httpRequest, httpResponse); // dispositivo conectado
-            return mapper.toMeDtoOut(user, authorities(auth));
-        } catch (DisabledException e) {
-            throw new BusinessException("Account not yet activated. Check your email.");
-        } catch (LockedException e) {
-            throw new BusinessException("Account temporarily locked due to repeated failed attempts. Try again later.");
+    @Override
+    public LoginDtoOut refresh(RefreshTokenDtoIn req) {
+        UUID id = userTokenService.validateAndRotate(req.getRefreshToken());
+        User user = userUseCase.findById(id);
+        return buildLogin(user, Set.of(user.getRole().authority()));
+    }
+
+    @Override
+    public void logout(Authentication authentication) {
+        if (authentication == null || authentication.getName() == null) {
+            return;
         }
+        userTokenService.revokeAll(authentication.getName());
+    }
+
+    /** Emite el par de tokens para {@code user} y arma la respuesta de login. */
+    private LoginDtoOut buildLogin(User user, Set<String> authorities) {
+        UserTokenService.Tokens tokens = userTokenService.issue(user.getId(), user.getEmail(),
+                user.getRole().name(), authorities);
+        return LoginDtoOut.builder().token(tokens.accessToken()).refreshToken(tokens.refreshToken())
+                .tokenType("Bearer").expiresIn(tokens.expiresInSeconds()).user(mapper.toMeDtoOut(user, authorities))
+                .build();
     }
 
     /**

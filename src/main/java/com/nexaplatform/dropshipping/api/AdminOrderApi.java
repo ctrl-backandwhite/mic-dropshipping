@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -80,4 +82,29 @@ public interface AdminOrderApi {
     @ApiResponse(responseCode = "200", description = "Import processed")
     @PostMapping("/import")
     ResponseEntity<AdminImportResultDtoOut> importOrders(@Valid @RequestBody AdminImportOrdersDtoIn body);
+
+    @Operation(summary = "Bulk forward orders (per-id error reporting; skips invalid transitions)")
+    @ApiResponse(responseCode = "200", description = "Bulk processed")
+    @PostMapping("/bulk-forward")
+    ResponseEntity<Map<String, Object>> bulkForward(@RequestBody List<UUID> ids);
+
+    @Operation(summary = "Bulk ship orders (per-id error reporting; skips invalid transitions)")
+    @ApiResponse(responseCode = "200", description = "Bulk processed")
+    @PostMapping("/bulk-ship")
+    ResponseEntity<Map<String, Object>> bulkShip(@RequestBody List<UUID> ids);
+
+    @Operation(summary = "Bulk deliver orders (per-id error reporting; skips invalid transitions)")
+    @ApiResponse(responseCode = "200", description = "Bulk processed")
+    @PostMapping("/bulk-deliver")
+    ResponseEntity<Map<String, Object>> bulkDeliver(@RequestBody List<UUID> ids);
+
+    @Operation(summary = "Bulk cancel orders (per-id error reporting; skips invalid transitions)")
+    @ApiResponse(responseCode = "200", description = "Bulk processed")
+    @PostMapping("/bulk-cancel")
+    ResponseEntity<Map<String, Object>> bulkCancel(@RequestBody List<UUID> ids);
+
+    @Operation(summary = "Bulk refund orders (per-id error reporting; skips invalid transitions)")
+    @ApiResponse(responseCode = "200", description = "Bulk processed")
+    @PostMapping("/bulk-refund")
+    ResponseEntity<Map<String, Object>> bulkRefund(@RequestBody List<UUID> ids);
 }

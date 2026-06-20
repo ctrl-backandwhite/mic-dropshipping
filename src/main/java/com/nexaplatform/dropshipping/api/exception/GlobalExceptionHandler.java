@@ -93,7 +93,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleConstraintViolation(ConstraintViolationException ex) {
         List<String> details = ex.getConstraintViolations().stream().map(ConstraintViolation::getMessage).toList();
-        return new ResponseEntity<>(body("VE001", "Validation error", details), HttpStatus.BAD_REQUEST);
+        String msg = details.isEmpty() ? "Datos inválidos" : "Datos inválidos — " + String.join("; ", details);
+        return new ResponseEntity<>(body("VE001", msg, details), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(MissingServletRequestParameterException.class)
@@ -110,14 +111,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleNotReadable(HttpMessageNotReadableException ex) {
-        return new ResponseEntity<>(body("VE004", "Malformed JSON request", List.of()), HttpStatus.BAD_REQUEST);
+        return new ResponseEntity<>(body("VE004", "El contenido enviado no es un JSON válido. Revisa el formato.",
+                List.of()), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleDataIntegrity(DataIntegrityViolationException ex) {
-        return new ResponseEntity<>(
-                body("DB001", "Data integrity violation", List.of(ex.getMostSpecificCause().getMessage())),
-                HttpStatus.CONFLICT);
+        // Nunca exponer el SQL crudo: se traduce a un mensaje claro y accionable para el usuario.
+        String human = ErrorMessages.humanize(ex);
+        log.warn("Data integrity violation ({}): {}", human, ex.getMostSpecificCause().getMessage());
+        return new ResponseEntity<>(body("DB001", human, List.of(human)), HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler({AccessDeniedException.class, AuthorizationDeniedException.class})
@@ -127,7 +130,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleUnauthorized(AuthenticationException ex) {
-        return new ResponseEntity<>(body("SE002", "Unauthorized", List.of(ex.getMessage())), HttpStatus.UNAUTHORIZED);
+        // Respuesta UNIFORME: nunca se expone el motivo real (credenciales malas, cuenta no
+        // activada, bloqueada, usuario inexistente, token caído…) para no permitir enumeración
+        // de cuentas ni dar pistas a un atacante. El detalle se queda en logs, no en la respuesta.
+        log.debug("Authentication failed: {}", ex.getMessage());
+        return new ResponseEntity<>(body("SE002", "Unauthorized", List.of("Invalid credentials")),
+                HttpStatus.UNAUTHORIZED);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
@@ -144,7 +152,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleGlobal(Exception ex) {
         log.error("Unhandled exception: {}", ex.getMessage(), ex);
-        return new ResponseEntity<>(body("IS001", "Internal server error", List.of()),
-                HttpStatus.INTERNAL_SERVER_ERROR);
+        return new ResponseEntity<>(body("IS001", "Ocurrió un error inesperado. Inténtalo de nuevo en unos minutos.",
+                List.of()), HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }

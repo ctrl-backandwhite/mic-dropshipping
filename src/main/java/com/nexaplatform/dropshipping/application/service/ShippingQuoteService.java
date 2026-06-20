@@ -25,6 +25,11 @@ public class ShippingQuoteService {
     public record Line(UUID productId, int quantity) {
     }
 
+    /** Países a los que Cainiao envía (para el banner de cobertura de la home). */
+    public List<CainiaoFulfillmentService.SupportedCountry> supportedCountries() {
+        return cainiao.supportedCountries();
+    }
+
     /** Cotiza el envío a {@code country} para las líneas dadas (suma el peso real de cada producto). */
     public ShippingQuote quote(String country, List<Line> lines) {
         int weightGrams = 0;

@@ -103,6 +103,21 @@ public class PriceRuleUseCaseImpl implements PriceRuleUseCase {
             @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
+    public PriceRule setActive(UUID id, boolean active) {
+        PriceRule existing = getById(id);
+        existing.setActive(active);
+        PriceRule saved = priceRuleRepository.update(existing);
+        marginService.invalidateCache();
+        log.info("::> [PRICING] Price rule {} -> active={}", id, saved.isActive());
+        return saved;
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void delete(UUID id) {
         getById(id);
         priceRuleRepository.delete(id);

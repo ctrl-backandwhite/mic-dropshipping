@@ -7,6 +7,7 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantOptionView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantValueView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
+import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
@@ -18,6 +19,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTr
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantOptionEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueEntity;
+import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -33,6 +35,7 @@ public class ProductMapper {
     private final SupplierMapper supplierMapper;
     private final PricingService pricingService;
     private final CurrencyRateService currencyRateService;
+    private final MarginService marginService;
 
     public ProductSummaryView toSummary(ProductEntity p, String language) {
         if (p == null)
@@ -51,12 +54,19 @@ public class ProductMapper {
         return new ProductSummaryView(p.getId(), p.getSlug(), title, image, p.getBasePrice(), p.getCurrency(),
                 p.getRating(), p.getMonthlySales(), p.getTrendScore(),
                 p.getStatus() != null ? p.getStatus().name() : null, priced.retailUsd(), priced.displayAmount(),
-                priced.displayCurrency(), priced.displaySymbol(), p.getInventoryCount(), availableUnits);
+                priced.displayCurrency(), priced.displaySymbol(), priced.displayFormatted(), p.getInventoryCount(),
+                availableUnits);
     }
 
     public ProductDetailView toDetail(ProductEntity p, String language, List<ProductPriceTierEntity> tiers) {
         ProductTranslationEntity tr = resolveTranslation(p.getTranslations(), language);
         PricedAmount priced = pricingService.priceFor(p);
+        // Coste y margen/ganancia SOLO para ADMIN. OPERATOR (soporte) y USER ven el precio de venta
+        // (displayAmount/displayFormatted) pero NO el coste (costUsd), el retail USD ni el % de margen.
+        boolean admin = SecurityUtils.isAdmin();
+        BigDecimal costUsd = admin ? priced.costUsd() : null;
+        BigDecimal retailUsd = admin ? priced.retailUsd() : null;
+        BigDecimal appliedMarginPercent = admin ? priced.appliedMarginPercent() : null;
         return new ProductDetailView(p.getId(), p.getSlug(), p.getSource(), p.getExternalId(),
                 p.getSupplier() != null ? supplierMapper.toView(p.getSupplier()) : null,
                 p.getCategory() != null ? p.getCategory().getId() : null, tr != null ? tr.getTitle() : p.getTitleZh(),
@@ -69,8 +79,8 @@ public class ProductMapper {
                 p.getVariantOptions().stream().map(o -> toOptionView(o, language)).toList(),
                 p.getVariants().stream().map(v -> toVariantView(p, v)).toList(),
                 tiers == null ? Collections.emptyList() : tiers.stream().map(this::toPriceTierView).toList(),
-                priced.costUsd(), priced.retailUsd(), priced.displayAmount(), priced.displayCurrency(),
-                priced.displaySymbol(), priced.appliedMarginPercent(),
+                costUsd, retailUsd, priced.displayAmount(), priced.displayCurrency(),
+                priced.displaySymbol(), priced.displayFormatted(), appliedMarginPercent,
                 tr != null ? tr.getMetaTitle() : null, tr != null ? tr.getMetaDescription() : null);
     }
 
@@ -82,13 +92,13 @@ public class ProductMapper {
         // Display variant price converted via PricingService too
         PricedAmount priced = pricingService.priceFor(product, v);
         return new VariantView(v.getId(), v.getSku(), v.getTitle(), priced.displayAmount(), // shown in user currency
-                v.getStock(), pickVariantImage(v), v.getOptions(), v.isActive());
+                priced.displayFormatted(), v.getStock(), pickVariantImage(v), v.getOptions(), v.isActive());
     }
 
     /** Back-compat overload (without product); used by ProductMapperTest. */
     public VariantView toVariantView(ProductVariantEntity v) {
-        return new VariantView(v.getId(), v.getSku(), v.getTitle(), v.getPrice(), v.getStock(), pickVariantImage(v),
-                v.getOptions(), v.isActive());
+        return new VariantView(v.getId(), v.getSku(), v.getTitle(), v.getPrice(), null, v.getStock(),
+                pickVariantImage(v), v.getOptions(), v.isActive());
     }
 
     /** Back-compat: opción sin idioma (no resuelve traducción) — usado por tests/llamadas heredadas. */
@@ -119,11 +129,16 @@ public class ProductMapper {
     }
 
     public PriceTierView toPriceTierView(ProductPriceTierEntity t) {
-        // Tier prices are stored in CNY (supplier currency); convert to display
-        BigDecimal usd = currencyRateService.toUsd(t.getUnitPrice(), t.getCurrency() != null ? t.getCurrency() : "CNY");
-        // (margin not applied to tiered B2B costs here — tiers reflect supplier ladder)
-        BigDecimal displayAmount = currencyRateService.usdToDisplay(usd);
-        return new PriceTierView(t.getMinQty(), t.getMaxQty(), displayAmount, pricingService.displayCurrencyCode());
+        // El tramo se guarda en la moneda del proveedor (CNY) como COSTE. Para mostrarlo al cliente hay que
+        // aplicar el MISMO margen que el headline/variante/pedido; si no, el PDP enseñaría el coste (p.ej.
+        // 14,13 €) y al pagar se cobraría con margen (28,26 €). Coste → USD → margen → moneda de display.
+        BigDecimal costUsd = currencyRateService.toUsd(t.getUnitPrice(), t.getCurrency() != null ? t.getCurrency()
+                : "CNY");
+        BigDecimal retailUsd = marginService.apply(costUsd, t.getProduct(), null).retailUsd();
+        BigDecimal displayAmount = currencyRateService.usdToDisplay(retailUsd != null ? retailUsd : costUsd);
+        String displayCode = pricingService.displayCurrencyCode();
+        return new PriceTierView(t.getMinQty(), t.getMaxQty(), displayAmount, displayCode,
+                currencyRateService.formatDisplay(displayAmount, displayCode));
     }
 
     /* ------------------ helpers ------------------ */

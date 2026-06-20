@@ -8,6 +8,7 @@ import com.nexaplatform.dropshipping.api.dto.out.AdminImportResultDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminOrderDetailDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminOrderRowDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.PartnerOrderDtoOut;
+import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.api.mapper.AdminOrderMapper;
 import com.nexaplatform.dropshipping.api.mapper.PartnerOrderDtoMapper;
 import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
@@ -23,7 +24,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * Admin orders controller. Pure implementation of {@link AdminOrderApi}: injects the
@@ -105,9 +108,52 @@ public class AdminOrderController implements AdminOrderApi {
             } catch (RuntimeException ex) {
                 // Per-row isolation: a bad row must not abort the batch (DROP-690).
                 log.warn("Order import: row {} failed: {}", idx, ex.getMessage());
-                errors.add("Fila " + idx + ": " + ex.getMessage());
+                errors.add("Fila " + idx + ": " + ErrorMessages.humanize(ex));
             }
         }
         return ResponseEntity.ok(new AdminImportResultDtoOut(created.size(), errors.size(), created, errors));
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> bulkForward(List<UUID> ids) {
+        return bulkApply(ids, orderUseCase::forwardOrder);
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> bulkShip(List<UUID> ids) {
+        return bulkApply(ids, orderUseCase::shipOrder);
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> bulkDeliver(List<UUID> ids) {
+        return bulkApply(ids, orderUseCase::deliverOrder);
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> bulkCancel(List<UUID> ids) {
+        return bulkApply(ids, orderUseCase::cancelOrder);
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> bulkRefund(List<UUID> ids) {
+        return bulkApply(ids, orderUseCase::refundOrder);
+    }
+
+    /**
+     * Applies a single-order transition to every id, isolating failures per id. An invalid
+     * transition for an order's current state surfaces as that id's error, never aborting the batch.
+     */
+    private ResponseEntity<Map<String, Object>> bulkApply(List<UUID> ids, Consumer<UUID> action) {
+        int succeeded = 0;
+        List<String> errors = new ArrayList<>();
+        for (UUID id : ids) {
+            try {
+                action.accept(id);
+                succeeded++;
+            } catch (RuntimeException ex) {
+                errors.add(id + ": " + ErrorMessages.humanize(ex));
+            }
+        }
+        return ResponseEntity.ok(Map.of("succeeded", succeeded, "failed", errors.size(), "errors", errors));
     }
 }

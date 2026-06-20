@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.CurrencyApi;
+import com.nexaplatform.dropshipping.api.dto.in.CurrencyBulkActiveDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.UpdateRateDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.CurrencyDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CurrencySyncResultDtoOut;
@@ -13,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Currency controller. Pure implementation of {@link CurrencyApi}: injects the
@@ -29,6 +31,22 @@ public class CurrencyController implements CurrencyApi {
     @Override
     public ResponseEntity<List<CurrencyDtoOut>> listActive() {
         return new ResponseEntity<>(mapper.toDtoOutList(useCase.listActive()), HttpStatus.OK);
+    }
+
+    @Override
+    public ResponseEntity<List<CurrencyDtoOut>> listAll() {
+        return new ResponseEntity<>(mapper.toDtoOutList(useCase.listAll()), HttpStatus.OK);
+    }
+
+    @Override
+    public ResponseEntity<CurrencyDtoOut> setActive(String code, boolean active) {
+        return new ResponseEntity<>(mapper.toDtoOut(useCase.setActive(code, active)), HttpStatus.OK);
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> bulkActive(CurrencyBulkActiveDtoIn req) {
+        int changed = useCase.bulkSetActive(req.getCodes(), req.isActive());
+        return ResponseEntity.ok(Map.of("changed", changed));
     }
 
     @Override

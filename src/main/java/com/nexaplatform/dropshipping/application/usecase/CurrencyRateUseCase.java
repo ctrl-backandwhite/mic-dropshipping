@@ -17,6 +17,15 @@ public interface CurrencyRateUseCase extends BaseUseCase<CurrencyRate, CurrencyR
     /** Lists active currency rates ordered by code. */
     java.util.List<CurrencyRate> listActive();
 
+    /** Lists ALL currencies (active and inactive) ordered by code — for the admin screen. */
+    java.util.List<CurrencyRate> listAll();
+
+    /** Toggles the active flag of a currency without touching its rate. */
+    CurrencyRate setActive(String code, boolean active);
+
+    /** Activates/deactivates several currencies at once; returns how many changed. */
+    int bulkSetActive(java.util.List<String> codes, boolean active);
+
     /** Gets a single currency by its ISO code (throws if unknown). */
     CurrencyRate one(String code);
 

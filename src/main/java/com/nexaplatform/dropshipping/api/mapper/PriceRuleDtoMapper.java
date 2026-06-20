@@ -27,6 +27,7 @@ public interface PriceRuleDtoMapper {
     @Mapping(target = "active", source = "active")
     @Mapping(target = "position", source = "position")
     @Mapping(target = "description", source = "description")
+    @Mapping(target = "channel", expression = "java(model.getChannel() != null ? model.getChannel().name() : null)")
     PriceRuleDtoOut toDtoOut(PriceRule model);
 
     List<PriceRuleDtoOut> toDtoOutList(List<PriceRule> models);
@@ -45,5 +46,7 @@ public interface PriceRuleDtoMapper {
     @Mapping(target = "active", expression = "java(dtoIn.getActive() == null || dtoIn.getActive())")
     @Mapping(target = "position", expression = "java(dtoIn.getPosition() == null ? 0 : dtoIn.getPosition())")
     @Mapping(target = "description", source = "description")
+    // El canal no se crea desde el admin: queda null → el entity mapper aplica STOREFRONT por defecto.
+    @Mapping(target = "channel", ignore = true)
     PriceRule toDomain(PriceRuleDtoIn dtoIn);
 }

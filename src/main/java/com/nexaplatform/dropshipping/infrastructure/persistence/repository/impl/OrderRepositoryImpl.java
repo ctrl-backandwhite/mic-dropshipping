@@ -164,7 +164,7 @@ public class OrderRepositoryImpl implements OrderRepository {
         return OrderItemEntity.builder().order(order).product(product).variant(variant)
                 .titleSnapshot(itemModel.getTitleSnapshot()).imageUrlSnapshot(itemModel.getImageUrlSnapshot())
                 .skuSnapshot(itemModel.getSkuSnapshot()).unitPriceCents(itemModel.getUnitPriceCents())
-                .costCents(itemModel.getCostCents()).quantity(itemModel.getQuantity())
-                .lineTotalCents(itemModel.getLineTotalCents()).build();
+                .costCents(itemModel.getCostCents()).costCnyCents(itemModel.getCostCnyCents())
+                .quantity(itemModel.getQuantity()).lineTotalCents(itemModel.getLineTotalCents()).build();
     }
 }

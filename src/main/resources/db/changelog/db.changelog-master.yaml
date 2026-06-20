@@ -129,3 +129,15 @@ databaseChangeLog:
       file: db/changelog/schema-v59-cainiao-fulfillment.sql
   - include:
       file: db/changelog/schema-v60-user-sessions.sql
+  - include:
+      file: db/changelog/schema-v61-country-tax.sql
+  - include:
+      file: db/changelog/schema-v62-cny-only-and-channel-rules.sql
+  - include:
+      file: db/changelog/schema-v63-operator-commission.sql
+  - include:
+      file: db/changelog/schema-v64-order-source.sql
+  - include:
+      file: db/changelog/schema-v65-category-group-footwear.sql
+  - include:
+      file: db/changelog/schema-v66-country-tax-seed.sql

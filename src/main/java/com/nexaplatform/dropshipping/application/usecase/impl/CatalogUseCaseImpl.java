@@ -18,6 +18,7 @@ import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
+import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.infrastructure.integration.storage.StorageService;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -419,7 +420,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = CACHE_PRODUCT_DETAIL, key = "#slug + ':' + #language + ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get()")
+    @Cacheable(value = CACHE_PRODUCT_DETAIL, key = "#slug + ':' + #language + ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get() + ':' + T(com.nexaplatform.dropshipping.application.service.PricingChannelHolder).get() + ':' + T(com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils).isAdmin()")
     public ProductDetailView getProductBySlug(String slug, String language) {
         ProductEntity p = productJpaRepository.findWithDetailsBySlug(slug)
                 .orElseThrow(() -> new NotFoundException("Product not found: " + slug));
@@ -429,7 +430,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = CACHE_PRODUCT_DETAIL, key = "'id:' + #id + ':' + #language + ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get()")
+    @Cacheable(value = CACHE_PRODUCT_DETAIL, key = "'id:' + #id + ':' + #language + ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get() + ':' + T(com.nexaplatform.dropshipping.application.service.PricingChannelHolder).get() + ':' + T(com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils).isAdmin()")
     public ProductDetailView getProductById(UUID id, String language) {
         ProductEntity p = productJpaRepository.findWithDetailsById(id)
                 .orElseThrow(() -> new NotFoundException("Product not found: " + id));
@@ -922,8 +923,19 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     public void deleteProductImage(UUID imageId) {
         ProductImageEntity img = imageRepository.findById(imageId)
                 .orElseThrow(() -> new NotFoundException("Image not found"));
-        UUID productId = img.getProduct() != null ? img.getProduct().getId() : null;
-        imageRepository.delete(img);
+        ProductEntity product = img.getProduct();
+        UUID productId = product != null ? product.getId() : null;
+        // Product.images es @OneToMany(orphanRemoval=true): NO basta con imageRepository.delete(img),
+        // porque el producto gestionado sigue referenciando la imagen en su colección y Hibernate la
+        // re-asocia en el flush (el borrado "se pierde" → respondía 204 pero quedaban las 4). Hay que
+        // QUITARLA de la colección del padre; orphanRemoval emite entonces el DELETE. Forzamos el flush
+        // para que el reindex y la respuesta reflejen ya el borrado persistido.
+        if (product != null && product.getImages() != null) {
+            product.getImages().removeIf(i -> imageId.equals(i.getId()));
+        } else {
+            imageRepository.delete(img);
+        }
+        imageRepository.flush();
         if (productId != null) {
             productIndexer.indexProduct(productId);
         }
@@ -1010,7 +1022,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 created++;
             } catch (Exception e) {
                 failed++;
-                errors.add("fila " + (i + 1) + ": " + e.getMessage());
+                errors.add("Fila " + (i + 1) + ": " + ErrorMessages.humanize(e));
             }
         }
         if (created > 0)
@@ -1565,7 +1577,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 created++;
             } catch (Exception e) {
                 failed++;
-                errors.add("fila " + (i + 1) + ": " + e.getMessage());
+                errors.add("Fila " + (i + 1) + ": " + ErrorMessages.humanize(e));
             }
         }
         return new BulkResultDtoOut(created, failed, errors);

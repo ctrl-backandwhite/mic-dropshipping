@@ -7,6 +7,7 @@ import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
+import com.nexaplatform.dropshipping.application.service.CountryTaxService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
@@ -74,6 +75,11 @@ class OrderUseCaseImplTest {
     OrderEmailService orderEmailService;
     @Mock
     CainiaoFulfillmentService cainiao;
+    @Mock
+    CountryTaxService countryTaxService;
+
+    @Mock
+    com.nexaplatform.dropshipping.application.service.OperatorCommissionService operatorCommissionService;
 
     OrderUseCaseImpl orderUseCase;
 
@@ -81,15 +87,18 @@ class OrderUseCaseImplTest {
     void setup() {
         orderUseCase = new OrderUseCaseImpl(orderRepository, productRepository, variantRepository, userRepository,
                 shopConnectionRepository, userAddressRepository, webhooks, walletUseCase, notificationsPublisher,
-                pricingService, affiliateProgramService, paymentUseCase, orderEmailService, cainiao);
+                pricingService, affiliateProgramService, paymentUseCase, orderEmailService, cainiao, countryTaxService,
+                operatorCommissionService);
         // Por defecto, sin envío en los tests de billing (no altera el total = subtotal).
         lenient().when(cainiao.quote(any(), anyInt())).thenReturn(ShippingQuote.unsupported("XX"));
+        // Por defecto, sin impuesto (mantiene total = subtotal + envío en los tests existentes).
+        lenient().when(countryTaxService.taxCentsFor(any(), anyInt())).thenReturn(0);
     }
 
     /** DROP-637: the checkout now bills the priced amount (retailUsd) from PricingService. */
     private static PricingService.PricedAmount priced(String retail) {
         BigDecimal r = retail == null ? null : new BigDecimal(retail);
-        return new PricingService.PricedAmount(r, r, r, "USD", "$", null, BigDecimal.ZERO);
+        return new PricingService.PricedAmount(r, r, r, "USD", "$", null, null, BigDecimal.ZERO);
     }
 
     @Test

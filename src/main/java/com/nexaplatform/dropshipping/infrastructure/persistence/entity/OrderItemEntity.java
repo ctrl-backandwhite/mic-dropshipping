@@ -60,6 +60,11 @@ public class OrderItemEntity {
     @Column(name = "cost_cents", nullable = false)
     private int costCents;
 
+    /** Coste unitario en YUAN (CNY) céntimos, congelado al crear la orden. Base de la comisión del operador. */
+    @Column(name = "cost_cny_cents", nullable = false)
+    @lombok.Builder.Default
+    private long costCnyCents = 0L;
+
     @Column(nullable = false)
     private int quantity;
 

@@ -66,9 +66,14 @@ public class HttpCacheFilter extends OncePerRequestFilter {
         if (path.contains("/categories") || path.contains("/suppliers") || path.contains("/warehouses")) {
             return "public, max-age=300, stale-while-revalidate=600";
         }
-        // Listings y PDP — TTL corto, SWR generoso
+        // Listings y PDP — llevan PRECIOS sensibles al margen/moneda/tramos, que pueden cambiar en
+        // CUALQUIER momento (activar/desactivar una regla, cambiar el %, crear una regla más específica,
+        // o una nueva tasa de cambio). Con max-age el navegador servía el precio viejo de su caché hasta
+        // 60s sin preguntar al backend → "activo el margen, recargo y sigue igual". Forzamos revalidación
+        // SIEMPRE (no-cache) apoyándonos en el ETag: el cliente manda If-None-Match y recibe 304 barato si
+        // no cambió, o 200 con el precio nuevo en cuanto cambia. Así el cambio es inmediato todo el tiempo.
         if (path.contains("/products/") || path.endsWith("/products")) {
-            return "public, max-age=60, stale-while-revalidate=300";
+            return "no-cache, must-revalidate";
         }
         return "public, max-age=30, stale-while-revalidate=120";
     }

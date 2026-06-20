@@ -2,10 +2,12 @@ package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.application.service.ShippingQuoteService;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.CainiaoFulfillmentService.SupportedCountry;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -39,5 +41,11 @@ public class ShippingQuoteController {
                 ? List.of()
                 : req.items().stream().map(i -> new ShippingQuoteService.Line(i.productId(), i.quantity())).toList();
         return ResponseEntity.ok(shippingQuoteService.quote(req.country(), lines));
+    }
+
+    @Operation(summary = "Países a los que se puede enviar (cobertura real de Cainiao)")
+    @GetMapping("/countries")
+    public ResponseEntity<List<SupportedCountry>> supportedCountries() {
+        return ResponseEntity.ok(shippingQuoteService.supportedCountries());
     }
 }

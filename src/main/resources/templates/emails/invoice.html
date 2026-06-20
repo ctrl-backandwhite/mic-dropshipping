@@ -3,43 +3,56 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <title th:text="${subject}">Factura</title>
     <style>
         @page { size: A4; margin: 24px; }
         body { margin: 0; padding: 0; }
+        a { text-decoration: none; }
     </style>
 </head>
-<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#0f172a;">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;" th:text="${preheader} ?: ''"></div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 12px;">
+<body th:attr="style=|margin:0;padding:0;background:${bodyBg};font-family:Arial,Helvetica,sans-serif;color:#1F1B2E;|" style="margin:0;padding:0;background:#F4F1FB;font-family:Arial,Helvetica,sans-serif;color:#1F1B2E;">
+<!-- preheader oculto -->
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;" th:text="${preheader} ?: ''"></div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" th:attr="style=|background:${bodyBg};padding:28px 12px;|" style="background:#F4F1FB;padding:28px 12px;">
   <tr><td align="center">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(15,23,42,.08);">
+    <table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #E7E3F3;box-shadow:0 10px 32px rgba(124,108,208,0.22);-fs-box-shadow:0 10px 32px 0 rgba(124,108,208,0.22);">
 
-      <!-- header -->
-      <tr><td style="background:#4f46e5;padding:22px 28px;">
-        <span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:.3px;">NX036</span>
-        <span style="color:#c7d2fe;font-size:13px;margin-left:6px;">Dropshipping</span>
+      <!-- header: wordmark + etiqueta FACTURA -->
+      <tr><td style="background:#F4F1FB;border-bottom:1px solid #E7E3F3;padding:24px 32px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td align="left" style="vertical-align:middle;">
+              <span style="color:#7C6CD0;font-size:19px;font-weight:700;letter-spacing:.3px;">NX036</span>
+              <span style="color:#6B6780;font-size:14px;font-weight:400;"> &#183; Dropshipping</span>
+            </td>
+            <td align="right" style="vertical-align:middle;">
+              <div style="color:#7C6CD0;font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;" th:text="${labelInvoice}">Factura</div>
+              <div style="color:#1F1B2E;font-size:14px;font-weight:700;margin-top:2px;" th:text="${orderNumber}">NX-000</div>
+            </td>
+          </tr>
+        </table>
       </td></tr>
 
       <!-- intro -->
-      <tr><td style="padding:28px 28px 8px;">
-        <h1 style="margin:0 0 6px;font-size:20px;font-weight:700;" th:text="${title}">Pago confirmado</h1>
-        <p style="margin:0;font-size:14px;line-height:1.6;color:#334155;" th:text="${intro}">Gracias por tu compra.</p>
+      <tr><td style="padding:32px 32px 8px;">
+        <h1 style="margin:0 0 8px;font-size:21px;font-weight:700;color:#1F1B2E;" th:text="${title}">Pago confirmado</h1>
+        <p style="margin:0;font-size:14px;line-height:1.6;color:#6B6780;" th:text="${intro}">Gracias por tu compra.</p>
       </td></tr>
 
-      <!-- meta -->
-      <tr><td style="padding:16px 28px 0;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;color:#475569;">
+      <!-- meta: datos factura (izq) / enviar a (der) -->
+      <tr><td style="padding:24px 32px 0;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F1FB;border:1px solid #E7E3F3;border-radius:12px;">
           <tr>
-            <td style="vertical-align:top;padding-bottom:10px;">
-              <div style="font-weight:700;color:#0f172a;" th:text="${labelInvoice}">Factura</div>
-              <div th:text="${orderNumber}">NX-000</div>
+            <td style="vertical-align:top;padding:18px 20px;font-size:13px;color:#6B6780;line-height:1.7;">
+              <div style="font-weight:700;color:#7C6CD0;font-size:11px;letter-spacing:.6px;text-transform:uppercase;margin-bottom:6px;" th:text="${labelInvoice}">Factura</div>
+              <div style="color:#1F1B2E;font-weight:600;" th:text="${orderNumber}">NX-000</div>
               <div th:text="${invoiceDate}">17/06/2026</div>
-              <div th:if="${paymentMethod}"><span th:text="${labelMethod}">Método</span>: <span th:text="${paymentMethod}">CARD</span></div>
+              <div th:if="${paymentMethod}"><span th:text="${labelMethod}">Método</span>: <span style="color:#1F1B2E;" th:text="${paymentMethod}">CARD</span></div>
             </td>
-            <td style="vertical-align:top;padding-bottom:10px;text-align:right;">
-              <div style="font-weight:700;color:#0f172a;" th:text="${labelShipTo}">Enviar a</div>
-              <div th:text="${shipName}">Nombre</div>
+            <td style="vertical-align:top;padding:18px 20px;text-align:right;font-size:13px;color:#6B6780;line-height:1.7;">
+              <div style="font-weight:700;color:#7C6CD0;font-size:11px;letter-spacing:.6px;text-transform:uppercase;margin-bottom:6px;" th:text="${labelShipTo}">Enviar a</div>
+              <div style="color:#1F1B2E;font-weight:600;" th:text="${shipName}">Nombre</div>
               <div th:text="${shipLine1}">Calle</div>
               <div th:text="${shipCityLine}">Ciudad</div>
               <div th:text="${shipCountry}">País</div>
@@ -49,48 +62,83 @@
       </td></tr>
 
       <!-- items -->
-      <tr><td style="padding:16px 28px 0;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;border-collapse:collapse;">
-          <tr style="background:#f8fafc;">
-            <th align="left"  style="padding:8px 10px;color:#64748b;font-weight:600;border-bottom:1px solid #e2e8f0;" th:text="${colItem}">Artículo</th>
-            <th align="center" style="padding:8px 10px;color:#64748b;font-weight:600;border-bottom:1px solid #e2e8f0;" th:text="${colQty}">Cant.</th>
-            <th align="right" style="padding:8px 10px;color:#64748b;font-weight:600;border-bottom:1px solid #e2e8f0;" th:text="${colPrice}">Precio</th>
-            <th align="right" style="padding:8px 10px;color:#64748b;font-weight:600;border-bottom:1px solid #e2e8f0;" th:text="${colTotal}">Total</th>
+      <tr><td style="padding:28px 32px 0;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;border-collapse:collapse;">
+          <tr style="background:#F4F1FB;">
+            <th align="left"   style="padding:11px 12px;color:#6B6780;font-weight:700;font-size:11px;letter-spacing:.5px;text-transform:uppercase;border-bottom:2px solid #E7E3F3;border-top-left-radius:8px;" th:text="${colItem}">Artículo</th>
+            <th align="center" style="padding:11px 12px;color:#6B6780;font-weight:700;font-size:11px;letter-spacing:.5px;text-transform:uppercase;border-bottom:2px solid #E7E3F3;" th:text="${colQty}">Cant.</th>
+            <th align="right"  style="padding:11px 12px;color:#6B6780;font-weight:700;font-size:11px;letter-spacing:.5px;text-transform:uppercase;border-bottom:2px solid #E7E3F3;" th:text="${colPrice}">Precio</th>
+            <th align="right"  style="padding:11px 12px;color:#6B6780;font-weight:700;font-size:11px;letter-spacing:.5px;text-transform:uppercase;border-bottom:2px solid #E7E3F3;border-top-right-radius:8px;" th:text="${colTotal}">Total</th>
           </tr>
           <tr th:each="it : ${items}">
-            <td style="padding:10px;border-bottom:1px solid #f1f5f9;color:#0f172a;">
-              <span th:text="${it.title}">Producto</span>
-              <span th:if="${it.sku}" style="display:block;color:#94a3b8;font-size:11px;" th:text="${it.sku}">SKU</span>
+            <td style="padding:13px 12px;border-bottom:1px solid #E7E3F3;color:#1F1B2E;vertical-align:top;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+                <td th:if="${it.image != ''}" style="vertical-align:top;padding-right:10px;width:52px;">
+                  <img th:src="${it.image}" width="52" height="52" alt=""
+                       style="display:block;width:52px;height:52px;border-radius:8px;border:1px solid #E7E3F3;" />
+                </td>
+                <td style="vertical-align:top;">
+                  <span style="font-weight:600;" th:text="${it.title}">Producto</span>
+                  <span th:if="${it.sku}" style="display:block;color:#A99FE0;font-size:11px;margin-top:2px;" th:text="${it.sku}">SKU</span>
+                </td>
+              </tr></table>
             </td>
-            <td align="center" style="padding:10px;border-bottom:1px solid #f1f5f9;" th:text="${it.qty}">1</td>
-            <td align="right" style="padding:10px;border-bottom:1px solid #f1f5f9;" th:text="${it.unit}">$0.00</td>
-            <td align="right" style="padding:10px;border-bottom:1px solid #f1f5f9;font-weight:600;" th:text="${it.lineTotal}">$0.00</td>
+            <td align="center" style="padding:13px 12px;border-bottom:1px solid #E7E3F3;color:#6B6780;vertical-align:top;" th:text="${it.qty}">1</td>
+            <td align="right"  style="padding:13px 12px;border-bottom:1px solid #E7E3F3;color:#6B6780;vertical-align:top;font-variant-numeric:tabular-nums;" th:text="${it.unit}">$0.00</td>
+            <td align="right"  style="padding:13px 12px;border-bottom:1px solid #E7E3F3;color:#1F1B2E;font-weight:700;vertical-align:top;font-variant-numeric:tabular-nums;" th:text="${it.lineTotal}">$0.00</td>
           </tr>
         </table>
       </td></tr>
 
       <!-- totals -->
-      <tr><td style="padding:8px 28px 0;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;">
-          <tr><td align="right" style="padding:4px 10px;color:#64748b;" th:text="${labelSubtotal}">Subtotal</td><td align="right" width="110" style="padding:4px 10px;" th:text="${subtotal}">$0.00</td></tr>
-          <tr><td align="right" style="padding:4px 10px;color:#64748b;" th:text="${labelShipping}">Envío</td><td align="right" style="padding:4px 10px;" th:text="${shipping}">$0.00</td></tr>
-          <tr><td align="right" style="padding:4px 10px;color:#64748b;" th:text="${labelTax}">Impuestos</td><td align="right" style="padding:4px 10px;" th:text="${tax}">$0.00</td></tr>
-          <tr><td align="right" style="padding:10px;font-weight:700;font-size:15px;border-top:1px solid #e2e8f0;" th:text="${labelTotal}">Total</td><td align="right" style="padding:10px;font-weight:700;font-size:15px;border-top:1px solid #e2e8f0;color:#4f46e5;" th:text="${total}">$0.00</td></tr>
+      <tr><td style="padding:18px 32px 0;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;">
+          <tr>
+            <td></td>
+            <td width="240">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="left"  style="padding:5px 0;color:#6B6780;" th:text="${labelSubtotal}">Subtotal</td>
+                  <td align="right" style="padding:5px 0;color:#1F1B2E;font-variant-numeric:tabular-nums;" th:text="${subtotal}">$0.00</td>
+                </tr>
+                <tr>
+                  <td align="left"  style="padding:5px 0;color:#6B6780;" th:text="${labelShipping}">Envío</td>
+                  <td align="right" style="padding:5px 0;color:#1F1B2E;font-variant-numeric:tabular-nums;" th:text="${shipping}">$0.00</td>
+                </tr>
+                <tr>
+                  <td align="left"  style="padding:5px 0;color:#6B6780;" th:text="${labelTax}">Impuestos</td>
+                  <td align="right" style="padding:5px 0;color:#1F1B2E;font-variant-numeric:tabular-nums;" th:text="${tax}">$0.00</td>
+                </tr>
+                <tr>
+                  <td align="left"  style="padding:12px 0 4px;font-weight:700;font-size:15px;color:#1F1B2E;border-top:2px solid #E7E3F3;" th:text="${labelTotal}">Total</td>
+                  <td align="right" style="padding:12px 0 4px;font-weight:700;font-size:17px;color:#7C6CD0;border-top:2px solid #E7E3F3;font-variant-numeric:tabular-nums;" th:text="${total}">$0.00</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
         </table>
       </td></tr>
 
-      <!-- CTA download (solo email) -->
-      <tr th:if="${ctaUrl}"><td style="padding:8px 28px 24px;">
-        <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0;">
-          <tr><td style="border-radius:10px;background:#4f46e5;">
-            <a th:href="${ctaUrl}" th:text="${ctaLabel}" style="display:inline-block;padding:12px 24px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;border-radius:10px;">Descargar factura</a>
+      <!-- CTA (bulletproof button, solo email) -->
+      <tr th:if="${ctaUrl}"><td align="center" style="padding:28px 32px 8px;">
+        <!--[if mso]>
+        <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" th:attr="href=${ctaUrl}" style="height:46px;v-text-anchor:middle;width:260px;" arcsize="22%" stroke="f" fillcolor="#7C6CD0">
+          <w:anchorlock/>
+          <center style="color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;" th:text="${ctaLabel}">Descargar factura</center>
+        </v:roundrect>
+        <![endif]-->
+        <!--[if !mso]><!-->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
+          <tr><td align="center" style="border-radius:10px;background:#7C6CD0;">
+            <a th:href="${ctaUrl}" th:text="${ctaLabel}" style="display:inline-block;padding:13px 32px;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;border-radius:10px;font-family:Arial,Helvetica,sans-serif;">Descargar factura</a>
           </td></tr>
         </table>
+        <!--<![endif]-->
       </td></tr>
 
       <!-- footer -->
-      <tr><td style="padding:18px 28px;border-top:1px solid #e2e8f0;">
-        <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.5;" th:text="${footer}">NX036 Dropshipping</p>
+      <tr><td style="padding:24px 32px;border-top:1px solid #E7E3F3;background:#F4F1FB;">
+        <p style="margin:0;color:#6B6780;font-size:12px;line-height:1.6;" th:text="${footer}">NX036 · Dropshipping</p>
       </td></tr>
 
     </table>

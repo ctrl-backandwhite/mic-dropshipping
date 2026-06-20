@@ -16,6 +16,9 @@ public interface SupplierUseCase {
 
     Supplier toggleVerified(UUID id);
 
+    /** Sets the verified flag of a supplier to a specific value (bulk verify/unverify). */
+    Supplier setVerified(UUID id, boolean verified);
+
     Supplier toggleTrustPass(UUID id);
 
     /** Creates a supplier manually. */

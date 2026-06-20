@@ -1,11 +1,13 @@
 package com.nexaplatform.dropshipping.application.service;
 
 import com.nexaplatform.dropshipping.domain.enums.MarginType;
+import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.domain.enums.PriceRuleScope;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PriceRuleEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PriceRuleRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryGroupMemberRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductGroupMemberRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -68,6 +70,7 @@ public class MarginService {
 
     private final PriceRuleRepository repository;
     private final ProductGroupMemberRepository groupMemberRepository;
+    private final CategoryGroupMemberRepository categoryGroupMemberRepository;
     private final List<PriceRuleEntity> cache = new CopyOnWriteArrayList<>();
     private volatile Instant cacheStamp = Instant.EPOCH;
 
@@ -103,6 +106,9 @@ public class MarginService {
 
     public Optional<PriceRuleEntity> resolve(ProductEntity product, ProductVariantEntity variant, BigDecimal costUsd) {
         ensureFresh();
+        // Solo se consideran reglas del canal del request (STOREFRONT por defecto; INTEGRATION para apps API).
+        // Así conviven el margen del storefront (p. ej. 150%) y el de integración (p. ej. 75%) sin colisionar.
+        final PriceRuleChannel channel = PricingChannelHolder.get();
         UUID productId = product != null ? product.getId() : null;
         UUID variantId = variant != null ? variant.getId() : null;
         UUID supplierId = (product != null && product.getSupplier() != null) ? product.getSupplier().getId() : null;
@@ -118,6 +124,10 @@ public class MarginService {
                 case PRODUCT_GROUP -> (productId != null && hasGroupRules()) ? groupIdsOf(productId) : Set.of();
                 case SUPPLIER -> supplierId != null ? Set.of(supplierId) : Set.of();
                 case CATEGORY -> categoryId != null ? Set.of(categoryId) : Set.of();
+                // Una regla CATEGORY_GROUP aplica si la categoría del producto pertenece a alguno de sus grupos.
+                case CATEGORY_GROUP -> (categoryId != null && hasCategoryGroupRules())
+                        ? categoryGroupIdsOf(categoryId)
+                        : Set.of();
                 case GLOBAL -> Set.of();
             };
             // DROP-630: when several active rules of the SAME scope match the same cost,
@@ -125,6 +135,7 @@ public class MarginService {
             // one. Pick deterministically: narrowest cost range (most specific) → lowest
             // position → most recently created → id, so resolution is never order-dependent.
             Optional<PriceRuleEntity> match = cache.stream().filter(PriceRuleEntity::isActive)
+                    .filter(r -> r.getChannel() == channel)
                     .filter(r -> r.getScope() == scope)
                     .filter(r -> scope == PriceRuleScope.GLOBAL
                             || (r.getScopeId() != null && targets.contains(r.getScopeId())))
@@ -142,6 +153,15 @@ public class MarginService {
 
     private Set<UUID> groupIdsOf(UUID productId) {
         return Set.copyOf(groupMemberRepository.findGroupIdsByProductId(productId));
+    }
+
+    /** Whether any cached rule targets a category group (gates the membership query). */
+    private boolean hasCategoryGroupRules() {
+        return cache.stream().anyMatch(r -> r.isActive() && r.getScope() == PriceRuleScope.CATEGORY_GROUP);
+    }
+
+    private Set<UUID> categoryGroupIdsOf(UUID categoryId) {
+        return Set.copyOf(categoryGroupMemberRepository.findGroupIdsByCategoryId(categoryId));
     }
 
     /* ============ Admin operations ============ */

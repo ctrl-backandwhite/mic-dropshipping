@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.api.controller;
 import com.nexaplatform.dropshipping.api.AdminPricingApi;
 import com.nexaplatform.dropshipping.api.dto.in.PriceRuleDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.PriceRuleDtoOut;
+import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.api.mapper.PriceRuleDtoMapper;
 import com.nexaplatform.dropshipping.application.usecase.PriceRuleUseCase;
 import com.nexaplatform.dropshipping.domain.model.PriceRule;
@@ -10,6 +11,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -18,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -70,6 +75,38 @@ public class AdminPricingController implements AdminPricingApi {
         return new ResponseEntity<>(dto.get(0), HttpStatus.OK);
     }
 
+    /* ===================== Bulk admin actions (per-id error reporting) ===================== */
+
+    /** Bulk activate/deactivate the selected rules (sets active to a specific value). */
+    @PutMapping("/bulk-toggle")
+    public ResponseEntity<Map<String, Object>> bulkToggle(@RequestBody BulkToggleRequest req) {
+        return bulkApply(req.ids(), id -> useCase.setActive(id, req.active()));
+    }
+
+    /** Bulk delete the selected rules. */
+    @PostMapping("/bulk-delete")
+    public ResponseEntity<Map<String, Object>> bulkDelete(@RequestBody List<UUID> ids) {
+        return bulkApply(ids, useCase::delete);
+    }
+
+    public record BulkToggleRequest(List<UUID> ids, boolean active) {
+    }
+
+    /** Runs an action over each id, isolating failures so one bad id never aborts the batch. */
+    private ResponseEntity<Map<String, Object>> bulkApply(List<UUID> ids, Consumer<UUID> action) {
+        int succeeded = 0;
+        List<String> errors = new ArrayList<>();
+        for (UUID id : ids) {
+            try {
+                action.accept(id);
+                succeeded++;
+            } catch (RuntimeException ex) {
+                errors.add(id + ": " + ErrorMessages.humanize(ex));
+            }
+        }
+        return ResponseEntity.ok(Map.of("succeeded", succeeded, "failed", errors.size(), "errors", errors));
+    }
+
     /* ------------------ DROP-630: scope name resolution ------------------ */
 
     /** Resolves the concrete entity name for each scoped rule, in batch per scope type. */
@@ -91,6 +128,7 @@ public class AdminPricingController implements AdminPricingApi {
         names.putAll(lookup("SUPPLIER", idsByScope, "SELECT id, COALESCE(name, name_zh) FROM supplier WHERE id IN (%s)"));
         names.putAll(lookup("PRODUCT", idsByScope, "SELECT id, COALESCE(NULLIF(title_zh,''), slug) FROM product WHERE id IN (%s)"));
         names.putAll(lookup("PRODUCT_GROUP", idsByScope, "SELECT id, name FROM product_group WHERE id IN (%s)"));
+        names.putAll(lookup("CATEGORY_GROUP", idsByScope, "SELECT id, name FROM category_group WHERE id IN (%s)"));
         names.putAll(lookup("VARIANT", idsByScope, "SELECT id, COALESCE(NULLIF(title,''), sku) FROM product_variant WHERE id IN (%s)"));
         for (PriceRuleDtoOut d : dtos) {
             if (d.getScopeId() != null) {

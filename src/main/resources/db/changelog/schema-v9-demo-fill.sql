@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
---changeset nexadrop:v9-fill-suppliers splitStatements:false runOnChange:false endDelimiter:;
+--changeset nexadrop:v9-fill-suppliers splitStatements:false runOnChange:false endDelimiter:; context:demo
 --comment: Demo data fill — every collection >= 20 records so the admin UI is exercisable.
 
 DO $$
@@ -21,7 +21,7 @@ BEGIN
     END IF;
 END $$;
 
---changeset nexadrop:v9-fill-warehouses splitStatements:false endDelimiter:;
+--changeset nexadrop:v9-fill-warehouses splitStatements:false endDelimiter:; context:demo
 DO $$
 DECLARE cur int;
 BEGIN
@@ -43,7 +43,7 @@ BEGIN
     END IF;
 END $$;
 
---changeset nexadrop:v9-fill-mentor-profiles splitStatements:false endDelimiter:;
+--changeset nexadrop:v9-fill-mentor-profiles splitStatements:false endDelimiter:; context:demo
 DO $$
 DECLARE cur int; candidates uuid[]; g int;
 BEGIN
@@ -71,7 +71,7 @@ BEGIN
     END IF;
 END $$;
 
---changeset nexadrop:v9-fill-sourcing-requests splitStatements:false endDelimiter:;
+--changeset nexadrop:v9-fill-sourcing-requests splitStatements:false endDelimiter:; context:demo
 DO $$
 DECLARE cur int; usr uuid; i int;
 BEGIN
@@ -95,7 +95,7 @@ BEGIN
     END IF;
 END $$;
 
---changeset nexadrop:v9-fill-sourcing-quotes splitStatements:false endDelimiter:;
+--changeset nexadrop:v9-fill-sourcing-quotes splitStatements:false endDelimiter:; context:demo
 DO $$
 DECLARE cur int; req uuid; agent uuid; i int;
 BEGIN
@@ -119,7 +119,7 @@ BEGIN
     END IF;
 END $$;
 
---changeset nexadrop:v9-fill-pod-designs splitStatements:false endDelimiter:;
+--changeset nexadrop:v9-fill-pod-designs splitStatements:false endDelimiter:; context:demo
 DO $$
 DECLARE cur int; usr uuid; prod uuid; i int;
 BEGIN
@@ -143,7 +143,7 @@ BEGIN
     END IF;
 END $$;
 
---changeset nexadrop:v9-fill-odm-projects splitStatements:false endDelimiter:;
+--changeset nexadrop:v9-fill-odm-projects splitStatements:false endDelimiter:; context:demo
 DO $$
 DECLARE cur int; usr uuid; i int;
 BEGIN
@@ -167,7 +167,7 @@ BEGIN
     END IF;
 END $$;
 
---changeset nexadrop:v9-fill-support-tickets splitStatements:false endDelimiter:;
+--changeset nexadrop:v9-fill-support-tickets splitStatements:false endDelimiter:; context:demo
 DO $$
 DECLARE cur int; usr uuid; i int;
 BEGIN
@@ -189,7 +189,7 @@ BEGIN
     END IF;
 END $$;
 
---changeset nexadrop:v9-fill-intel-alerts splitStatements:false endDelimiter:;
+--changeset nexadrop:v9-fill-intel-alerts splitStatements:false endDelimiter:; context:demo
 DO $$
 DECLARE cur int; usr uuid; i int;
 BEGIN
@@ -210,7 +210,7 @@ BEGIN
     END IF;
 END $$;
 
---changeset nexadrop:v9-fill-academy-enrollments splitStatements:false endDelimiter:;
+--changeset nexadrop:v9-fill-academy-enrollments splitStatements:false endDelimiter:; context:demo
 DO $$
 DECLARE cur int; usr uuid; course uuid; i int;
 BEGIN
@@ -232,7 +232,7 @@ BEGIN
     END IF;
 END $$;
 
---changeset nexadrop:v9-fill-mentor-bookings splitStatements:false endDelimiter:;
+--changeset nexadrop:v9-fill-mentor-bookings splitStatements:false endDelimiter:; context:demo
 DO $$
 DECLARE cur int; mentor uuid; learner uuid; i int;
 BEGIN
@@ -255,7 +255,7 @@ BEGIN
     END IF;
 END $$;
 
---changeset nexadrop:v9-fill-affiliates splitStatements:false endDelimiter:;
+--changeset nexadrop:v9-fill-affiliates splitStatements:false endDelimiter:; context:demo
 DO $$
 DECLARE cur int; usr uuid; i int;
 BEGIN
@@ -275,7 +275,7 @@ BEGIN
     END IF;
 END $$;
 
---changeset nexadrop:v9-fill-affiliate-referrals splitStatements:false endDelimiter:;
+--changeset nexadrop:v9-fill-affiliate-referrals splitStatements:false endDelimiter:; context:demo
 DO $$
 DECLARE cur int; aff uuid; usr uuid; i int;
 BEGIN
@@ -296,7 +296,7 @@ BEGIN
     END IF;
 END $$;
 
---changeset nexadrop:v9-fill-partner-apps splitStatements:false endDelimiter:;
+--changeset nexadrop:v9-fill-partner-apps splitStatements:false endDelimiter:; context:demo
 DO $$
 DECLARE cur int; usr uuid; i int;
 BEGIN
@@ -322,7 +322,7 @@ BEGIN
     END IF;
 END $$;
 
---changeset nexadrop:v9-fill-webhook-subscriptions splitStatements:false endDelimiter:;
+--changeset nexadrop:v9-fill-webhook-subscriptions splitStatements:false endDelimiter:; context:demo
 DO $$
 DECLARE cur int; usr uuid; i int;
 BEGIN
@@ -347,7 +347,7 @@ BEGIN
     END IF;
 END $$;
 
---changeset nexadrop:v9-fill-shop-listings splitStatements:false endDelimiter:;
+--changeset nexadrop:v9-fill-shop-listings splitStatements:false endDelimiter:; context:demo
 DO $$
 DECLARE cur int; conn uuid; prod uuid; i int;
 BEGIN

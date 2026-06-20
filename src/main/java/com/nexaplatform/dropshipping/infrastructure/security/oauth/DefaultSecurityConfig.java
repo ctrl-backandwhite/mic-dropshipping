@@ -1,6 +1,8 @@
 package com.nexaplatform.dropshipping.infrastructure.security.oauth;
 
 import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
+import com.nexaplatform.dropshipping.infrastructure.security.jwt.UserTokenService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -8,13 +10,18 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 
 @Configuration
 public class DefaultSecurityConfig {
 
+    @Value("${nexadrop.storefront.base-url}")
+    private String frontBaseUrl;
+
     @Bean
-    public GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler(UserUseCase userUseCase) {
-        return new GoogleOAuth2SuccessHandler(userUseCase);
+    public GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler(UserUseCase userUseCase,
+            UserTokenService userTokenService) {
+        return new GoogleOAuth2SuccessHandler(userUseCase, userTokenService, frontBaseUrl);
     }
 
     @Bean
@@ -27,6 +34,10 @@ public class DefaultSecurityConfig {
                         // inbound webhooks (signed HMAC), Stripe / PayPal payment callbacks.
                         .ignoringRequestMatchers("/oauth2/token", "/login/oauth2/code/**", "/actuator/**",
                                 "/api/v1/storefront/**", "/api/v1/integrations/**", "/api/webhooks/**"))
+                .headers(h -> h
+                        .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31536000))
+                        .frameOptions(fo -> fo.deny())
+                        .referrerPolicy(r -> r.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER)))
                 .authorizeHttpRequests(reg -> reg
                         .requestMatchers("/", "/login", "/login/**", "/register", "/activate", "/activate/**",
                                 "/password-reset", "/password-reset/**", "/error", "/.well-known/**", "/oauth2/**",
@@ -41,7 +52,8 @@ public class DefaultSecurityConfig {
                         .hasAnyAuthority("ROLE_ADMIN", "ROLE_OPERATOR").anyRequest().authenticated())
                 .formLogin(form -> form.loginPage("/login").permitAll())
                 .oauth2Login(oauth -> oauth.loginPage("/login").successHandler(googleOAuth2SuccessHandler)
-                        .failureUrl("/login?error=google").permitAll());
+                        .failureHandler((req, res, ex) -> res.sendRedirect(frontBaseUrl + "/login?error=google"))
+                        .permitAll());
         return http.build();
     }
 }

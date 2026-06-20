@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.HexFormat;
 
 /**
@@ -69,17 +70,26 @@ public class PaymentWebhookController implements PaymentWebhookApi {
     }
 
     private boolean verifyHmac(String payload, String signature, String secret) {
+        // Fail-closed: sin secreto configurado NO se acepta ningún webhook (antes se
+        // devolvía true → cualquiera podía falsificar un pago y marcar órdenes pagadas).
         if (secret == null || secret.isBlank()) {
-            log.warn("Webhook secret missing — accepting in dev mode");
-            return true;
+            log.warn("Webhook rejected: no secret configured for this provider");
+            return false;
         }
-        if (signature == null)
+        if (signature == null || signature.isBlank())
             return false;
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            String expected = HexFormat.of().formatHex(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
-            return expected.equalsIgnoreCase(signature);
+            byte[] expected = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
+            byte[] provided;
+            try {
+                provided = HexFormat.of().parseHex(signature.trim().toLowerCase());
+            } catch (IllegalArgumentException badHex) {
+                return false;
+            }
+            // Comparación en tiempo constante para no filtrar la firma por timing.
+            return MessageDigest.isEqual(expected, provided);
         } catch (Exception e) {
             log.error("HMAC verification error", e);
             return false;

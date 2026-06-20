@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.domain.model;
 
 import com.nexaplatform.dropshipping.domain.enums.MarginType;
+import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.domain.enums.PriceRuleScope;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -33,6 +34,8 @@ public class PriceRule {
     private boolean active;
     private int position;
     private String description;
+    /** Canal al que aplica (STOREFRONT por defecto; INTEGRATION para apps API). */
+    private PriceRuleChannel channel;
     private Instant createdAt;
     private Instant updatedAt;
     private String createdBy;

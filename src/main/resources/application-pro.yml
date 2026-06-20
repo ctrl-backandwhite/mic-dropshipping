@@ -1,0 +1,49 @@
+# =====================================================================================
+# Perfil PRO (despliegue remoto Railway, producción)
+#   Frontend: https://front-dropshipping-pro.up.railway.app
+#   Backend : https://back-dropshipping-pro.up.railway.app  (servidor de autorización)
+#
+# Local sigue usando application-local.yml (localhost). Aquí solo se sobrescriben las URLs
+# públicas: issuer del authorization server (backend) y los dominios de confianza (frontend)
+# para redirects OAuth, callback de Google, CORS y enlaces de email.
+#
+# Los SECRETOS (Google client id/secret, BD, KEKs, etc.) NUNCA van aquí: se inyectan por
+# variables de entorno en Railway (ya soportadas en application.yml).
+# =====================================================================================
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+  liquibase:
+    # Datos reales: NO ejecutar los seeds demo (context:demo).
+    contexts: "!demo"
+  kafka:
+    # Kafka KRaft seguro (SASL/SCRAM). El JAAS (usuario+password) llega por env.
+    properties:
+      security.protocol: ${KAFKA_SECURITY_PROTOCOL:SASL_PLAINTEXT}
+      sasl.mechanism: ${KAFKA_SASL_MECHANISM:SCRAM-SHA-256}
+      sasl.jaas.config: ${KAFKA_SASL_JAAS:}
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            # Auth por token (sin proxy nginx): Google redirige al BACKEND; su success handler
+            # emite el token y redirige al front (<front>/auth/callback#token=…).
+            redirect-uri: "https://back-dropshipping-pro.up.railway.app/login/oauth2/code/google"
+
+server:
+  servlet:
+    session:
+      cookie:
+        secure: true
+        same-site: lax
+
+nexadrop:
+  storefront:
+    base-url: https://front-dropshipping-pro.up.railway.app
+  oauth:
+    issuer: https://back-dropshipping-pro.up.railway.app
+  cors:
+    allowed-origins: https://front-dropshipping-pro.up.railway.app,https://back-dropshipping-pro.up.railway.app

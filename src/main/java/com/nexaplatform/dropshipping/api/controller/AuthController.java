@@ -5,8 +5,9 @@ import com.nexaplatform.dropshipping.api.dto.in.ActivateDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.LoginDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetRequestDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.RefreshTokenDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.RegisterDtoIn;
-import com.nexaplatform.dropshipping.api.dto.out.MeDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.LoginDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.RegisterDtoOut;
 import com.nexaplatform.dropshipping.application.usecase.AuthUseCase;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,6 +15,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -35,9 +37,20 @@ public class AuthController implements AuthApi {
     }
 
     @Override
-    public ResponseEntity<MeDtoOut> login(LoginDtoIn req, HttpServletRequest httpRequest,
+    public ResponseEntity<LoginDtoOut> login(LoginDtoIn req, HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
         return new ResponseEntity<>(authUseCase.login(req, httpRequest, httpResponse), HttpStatus.OK);
+    }
+
+    @Override
+    public ResponseEntity<LoginDtoOut> refresh(RefreshTokenDtoIn req) {
+        return new ResponseEntity<>(authUseCase.refresh(req), HttpStatus.OK);
+    }
+
+    @Override
+    public ResponseEntity<Void> logout(Authentication authentication) {
+        authUseCase.logout(authentication);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
     @Override

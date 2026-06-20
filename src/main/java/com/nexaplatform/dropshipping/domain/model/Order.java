@@ -28,6 +28,8 @@ public class Order {
     private UUID id;
     private String orderNumber;
     private UUID partnerAppId;
+    /** Origen: PLATFORM (tienda propia) o INTEGRATION (tienda conectada Shopify/WooCommerce/API). */
+    private String source;
     private UUID userId;
     private String externalOrderId;
     private UUID shippingAddressId;

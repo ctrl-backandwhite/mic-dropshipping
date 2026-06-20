@@ -8,6 +8,10 @@ import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
+import com.nexaplatform.dropshipping.application.service.CountryTaxService;
+import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
+import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
+import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
@@ -23,6 +27,7 @@ import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.domain.model.Payment;
 import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserAddressEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
@@ -76,6 +81,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final PaymentUseCase paymentUseCase;
     private final OrderEmailService orderEmailService;
     private final CainiaoFulfillmentService cainiao;
+    private final CountryTaxService countryTaxService;
+    private final OperatorCommissionService operatorCommissionService;
 
     @Value("${nexadrop.demo.orders-enabled:false}")
     private boolean demoOrdersEnabled;
@@ -87,7 +94,12 @@ public class OrderUseCaseImpl implements OrderUseCase {
             throw new BusinessException("Order must have at least one item");
         }
 
+        // Origen de la orden: si la petición viene por una integración (Shopify/WooCommerce/API de partners)
+        // el filtro de canal marcó INTEGRATION; el checkout propio de la web/app queda STOREFRONT → PLATFORM.
+        // Determina la comisión del operador (10% propias / 5% integradas).
+        String orderSource = PricingChannelHolder.get() == PriceRuleChannel.INTEGRATION ? "INTEGRATION" : "PLATFORM";
         Order order = Order.builder().orderNumber(generateOrderNumber()).partnerAppId(partnerAppId).userId(userId)
+                .source(orderSource)
                 .externalOrderId(req.externalOrderId()).status(OrderStatus.PENDING).currency("USD").notes(req.notes())
                 .placedAt(Instant.now()).items(new ArrayList<>()).build();
 
@@ -95,6 +107,13 @@ public class OrderUseCaseImpl implements OrderUseCase {
         if (req.billingAddress() != null) {
             applyAddress(order, req.billingAddress(), true);
         }
+
+        // Idioma del pedido = idioma del usuario (para snapshotear el título del producto en su idioma, no en
+        // chino). Así la factura/email salen en un único idioma coherente. Sin usuario → español por defecto.
+        String orderLang = userId != null
+                ? userRepository.findById(userId).map(u -> u.getLanguage()).filter(l -> l != null && !l.isBlank())
+                        .orElse("es")
+                : "es";
 
         int subtotal = 0;
         int totalWeightGrams = 0;
@@ -114,17 +133,28 @@ public class OrderUseCaseImpl implements OrderUseCase {
             if (unitPrice == null) {
                 throw new BusinessException("Product " + product.getSlug() + " has no price");
             }
-            int unitCents = unitPrice.multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).intValue();
+            // El precio de línea debe COINCIDIR con el precio que ve el usuario en el catálogo/carrito, que
+            // se redondea a 2 decimales HACIA ARRIBA (RoundingMode.UP). Antes usaba HALF_UP y cobraba 1 cént.
+            // menos (p.ej. mostraba 1.90 y cobraba 1.89). Redondeamos el retail a 2 decimales arriba y a céntimos.
+            int unitCents = unitPrice.setScale(2, RoundingMode.UP).movePointRight(2).intValueExact();
             int costCents = priced.costUsd() != null
                     ? priced.costUsd().multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).intValue()
                     : unitCents;
+            // DROP: coste en YUAN (CNY) congelado al crear la orden = precio del proveedor (variante o base),
+            // SIEMPRE en CNY (los productos se persisten solo en CNY). Base de la comisión del operador (15%).
+            BigDecimal cnyUnit = variant != null && variant.getPrice() != null ? variant.getPrice()
+                    : product.getBasePrice();
+            long costCnyCents = cnyUnit != null
+                    ? cnyUnit.multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).longValueExact()
+                    : 0L;
             int lineTotal = unitCents * itemReq.quantity();
 
             order.getItems().add(OrderItem.builder().productId(product.getId())
-                    .variantId(variant != null ? variant.getId() : null).titleSnapshot(product.getTitleZh())
+                    .variantId(variant != null ? variant.getId() : null).titleSnapshot(orderTitle(product, orderLang))
                     .imageUrlSnapshot(product.getImages().isEmpty() ? null : product.getImages().get(0).getSourceUrl())
                     .skuSnapshot(variant != null ? variant.getSku() : null).unitPriceCents(unitCents)
-                    .costCents(costCents).quantity(itemReq.quantity()).lineTotalCents(lineTotal).build());
+                    .costCents(costCents).costCnyCents(costCnyCents).quantity(itemReq.quantity())
+                    .lineTotalCents(lineTotal).build());
 
             subtotal += lineTotal;
             totalWeightGrams += packageWeightGrams(product, variant) * itemReq.quantity();
@@ -135,10 +165,13 @@ public class OrderUseCaseImpl implements OrderUseCase {
         ShippingQuote quote = cainiao.quote(order.getShippingCountry(), Math.max(1, totalWeightGrams));
         int shippingCents = quote.supported() ? quote.amountUsdCents() : 0;
 
+        // Impuesto (IVA/sales tax) por país de envío, si está configurado. Base imponible = subtotal + envío.
+        // Se incluye en el total y, por tanto, en el cobro y la factura.
+        int taxCents = countryTaxService.taxCentsFor(order.getShippingCountry(), subtotal + shippingCents);
         order.setSubtotalCents(subtotal);
         order.setShippingCents(shippingCents);
-        order.setTaxCents(0);
-        order.setTotalCents(subtotal + shippingCents);
+        order.setTaxCents(taxCents);
+        order.setTotalCents(subtotal + shippingCents + taxCents);
 
         return orderRepository.save(order);
     }
@@ -299,6 +332,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
         o.setStatus(OrderStatus.DELIVERED);
         o.setDeliveredAt(Instant.now());
         o = orderRepository.save(o);
+        // Acredita al operador que entrega la comisión del 15% (CNY) y registra la operación (histórico).
+        operatorCommissionService.recordDelivery(o);
         sendOrderEmail(o, "delivered");
         return publishAndEnrich(o, "order.delivered");
     }
@@ -560,6 +595,40 @@ public class OrderUseCaseImpl implements OrderUseCase {
         if (o.getSupplierName() != null)
             r.put("supplierName", o.getSupplierName());
         return r;
+    }
+
+    /** Título del producto en {@code lang} para el snapshot del pedido (fallback en → es → cualquiera → zh). */
+    private String orderTitle(ProductEntity p, String lang) {
+        String byLang = translationTitle(p, lang);
+        if (byLang != null) {
+            return byLang;
+        }
+        String en = translationTitle(p, "en");
+        if (en != null) {
+            return en;
+        }
+        String es = translationTitle(p, "es");
+        if (es != null) {
+            return es;
+        }
+        if (p.getTranslations() != null) {
+            for (ProductTranslationEntity tr : p.getTranslations()) {
+                if (tr.getTitle() != null && !tr.getTitle().isBlank()) {
+                    return tr.getTitle();
+                }
+            }
+        }
+        return p.getTitleZh();
+    }
+
+    private String translationTitle(ProductEntity p, String lang) {
+        if (p.getTranslations() == null || lang == null) {
+            return null;
+        }
+        return p.getTranslations().stream()
+                .filter(tr -> lang.equalsIgnoreCase(tr.getLanguage()) && tr.getTitle() != null
+                        && !tr.getTitle().isBlank())
+                .map(ProductTranslationEntity::getTitle).findFirst().orElse(null);
     }
 
     /** Applies an inline address onto the order's flat shipping/billing snapshot fields. */

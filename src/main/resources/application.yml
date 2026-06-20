@@ -52,6 +52,11 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6479}
+      # Railway/managed Redis exige auth. Vacío en local (sin password). SSL solo si el proveedor lo pide.
+      username: ${REDIS_USERNAME:}
+      password: ${REDIS_PASSWORD:}
+      ssl:
+        enabled: ${REDIS_SSL:false}
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:19192}
@@ -114,7 +119,8 @@ spring:
             redirect-uri: "${GOOGLE_REDIRECT_URI:http://localhost:3003/login/oauth2/code/google}"
 
 server:
-  port: ${SERVER_PORT:18082}
+  # Railway/Heroku inyectan PORT en runtime; si no, usamos SERVER_PORT y por último 18082 (local).
+  port: ${PORT:${SERVER_PORT:18082}}
   forward-headers-strategy: framework
   max-http-request-header-size: 16KB
   # Plan 300k: graceful shutdown para que el LB drene tráfico antes del kill.
@@ -190,19 +196,20 @@ nexadrop:
   email:
     from: ${EMAIL_FROM:noreply@nexadrop.local}  # Gmail: set to your Gmail address
     from-name: ${EMAIL_FROM_NAME:NX036 Dropshipping}
-  # ============================ (legado abajo) ============================
   oauth:
+    # Identidad del authorization server y emisor de los JWT de usuario (login por token).
     issuer: ${OAUTH_ISSUER:http://localhost:18082}
-    admin-spa:
-      client-id: nexadrop-admin
-      redirect-uri: http://localhost:3003/auth/callback
-      post-logout-redirect-uri: http://localhost:3003/
-    storefront-spa:
-      client-id: nexadrop-storefront
-      redirect-uri: http://localhost:3003/auth/callback
-      post-logout-redirect-uri: http://localhost:3003/
     partner-api:
       default-secret: ${PARTNER_DEFAULT_SECRET:dev-partner-secret-change-me}
+
+  # Admin inicial. La contraseña NUNCA está en el código: dev/pro la exigen por entorno.
+  bootstrap:
+    admin-email: ${NEXADROP_BOOTSTRAP_ADMIN_EMAIL:admin@nx036.local}
+    admin-password: ${NEXADROP_BOOTSTRAP_ADMIN_PASSWORD:}
+
+  # Seguridad: nº de proxies de confianza por delante (para resolver la IP real en el rate limit).
+  security:
+    trusted-proxy-count: ${TRUSTED_PROXY_COUNT:1}
 
   # AES-256-GCM key encryption for at-rest secrets (shop access tokens, webhook secrets).
   # Comma-separated list of Base64-encoded 32-byte keys. First entry is the active KEK.
@@ -228,6 +235,7 @@ nexadrop:
     uris: ${OPENSEARCH_URIS:http://localhost:9400}
     products-index: products
     categories-index: categories
+    operator-actions-index: operator-actions
 
   crawler:
     base-url: ${CRAWLER_URL:http://localhost:8001}
@@ -248,13 +256,6 @@ nexadrop:
     # por metadata['platform'] = "nexadrop-dropshipping" para aislar lo de esta plataforma.
     platform-id: ${STRIPE_PLATFORM_ID:nexadrop-dropshipping}
     platform-env: ${STRIPE_PLATFORM_ENV:dev}
-
-  bestseller:
-    refresh-cron: "0 0 3 * * *"
-    sources:
-      - https://kj.1688.com/best_seller.html
-      - https://kj.1688.com/ranking_list.html
-      - https://kj.1688.com/pdt_ranking.html
 
   demo-seed:
     enabled: ${DEMO_SEED_ENABLED:true}

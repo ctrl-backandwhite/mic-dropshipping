@@ -29,6 +29,8 @@ public class OrderItem {
     private String skuSnapshot;
     private int unitPriceCents;
     private int costCents;
+    /** Coste unitario en YUAN (CNY) céntimos, congelado al crear la orden (base de la comisión del operador). */
+    private long costCnyCents;
     private int quantity;
     private int lineTotalCents;
 
@@ -41,6 +43,9 @@ public class OrderItem {
 
     // Live catalog image (cdnUrl preferred over sourceUrl), resolved by the adapter.
     private String productImageUrl;
+
+    // URL de la ficha original del producto (proveedor), para que el operador abra el detalle al procesar.
+    private String productSourceUrl;
 
     // Language -> product translation title, resolved by the adapter; the use case
     // picks the request-language title with the legacy fallback chain.

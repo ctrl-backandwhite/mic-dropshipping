@@ -26,6 +26,7 @@ public interface PriceRuleEntityMapper {
     @Mapping(target = "active", source = "active")
     @Mapping(target = "position", source = "position")
     @Mapping(target = "description", source = "description")
+    @Mapping(target = "channel", source = "channel")
     @Mapping(target = "createdAt", source = "createdAt")
     @Mapping(target = "updatedAt", source = "updatedAt")
     @Mapping(target = "createdBy", source = "createdBy")
@@ -42,6 +43,8 @@ public interface PriceRuleEntityMapper {
     @Mapping(target = "active", source = "active")
     @Mapping(target = "position", source = "position")
     @Mapping(target = "description", source = "description")
+    // Admin no gestiona el canal: si el modelo no lo trae (reglas creadas desde el admin), por defecto STOREFRONT.
+    @Mapping(target = "channel", source = "channel", defaultValue = "STOREFRONT")
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)

@@ -18,7 +18,9 @@ public class CorsConfig {
         CorsConfiguration cfg = new CorsConfiguration();
         cfg.setAllowedOrigins(Arrays.stream(allowed.split(",")).map(String::trim).toList());
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        cfg.setAllowedHeaders(List.of("*"));
+        // Lista explícita en vez de "*": solo las cabeceras que el SPA usa de verdad.
+        cfg.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Accept-Language", "X-Currency",
+                "X-XSRF-TOKEN", "Idempotency-Key"));
         cfg.setExposedHeaders(List.of("Location", "X-Total-Count", "X-RateLimit-Remaining"));
         cfg.setAllowCredentials(true);
         cfg.setMaxAge(3600L);

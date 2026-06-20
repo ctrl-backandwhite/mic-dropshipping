@@ -10,6 +10,8 @@ import org.mapstruct.MappingTarget;
 public interface PriceRuleUpdateMapper {
 
     @Mapping(target = "id", ignore = true)
+    // El canal no se gestiona desde el admin: se preserva el de la regla existente (no lo pisa el update).
+    @Mapping(target = "channel", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
