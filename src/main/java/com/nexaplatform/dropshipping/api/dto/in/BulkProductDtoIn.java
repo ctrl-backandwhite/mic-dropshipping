@@ -72,6 +72,13 @@ public class BulkProductDtoIn {
     /** Optional stable id; generated from the title when omitted. */
     private String externalId;
 
+    /**
+     * URL de origen del producto (ficha de detalle en 1688). El operador la usa en la gestión de
+     * órdenes para ir a comprar el producto al proveedor. Si se omite, se deriva del externalId
+     * ({@code https://detail.1688.com/offer/<externalId>.html}).
+     */
+    private String sourceUrl;
+
     // ── Logística / aduana internacional (mapean a columnas existentes de product) ──
     /** Peso neto del producto en gramos. */
     private Integer weightGrams;

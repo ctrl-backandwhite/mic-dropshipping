@@ -1256,8 +1256,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 r.getMoq() != null ? r.getMoq() : 1, price, "CNY", r.getWeightGrams(),
                 r.getMonthlySales() != null ? r.getMonthlySales() : 0, null,
                 r.getRating(), 0,
-                "https://detail.1688.com/offer/" + externalId + ".html", supplierId, cat.getId(), images,
-                options, variants, tiers);
+                (r.getSourceUrl() != null && !r.getSourceUrl().isBlank()) ? r.getSourceUrl().trim()
+                        : "https://detail.1688.com/offer/" + externalId + ".html",
+                supplierId, cat.getId(), images, options, variants, tiers);
         String ptTitle = (r.getTitlePt() != null && !r.getTitlePt().isBlank()) ? r.getTitlePt() : esTitle;
         // El writer corre @Transactional: aplica títulos+descripciones por idioma y la logística
         // (vía el hook) sobre la entidad gestionada, evitando LazyInitialization.
