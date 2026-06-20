@@ -131,6 +131,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private final CategoryRepository categoryRepository;
     private final ProductPriceTierRepository priceTierRepository;
     private final ProductImageRepository imageRepository;
+    private final com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService objectStorage;
     private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository productJpaRepository;
     private final ProductMapper productMapper;
     private final CatalogStorefrontMapper catalogStorefrontMapper;
@@ -903,13 +904,14 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 }
             });
         }
-        // The URL is already reachable (uploaded to our storage or an external CDN), so expose it
-        // directly as the cdnUrl and mark it MIRRORED — no async mirroring needed to display it.
-        // Persist via the image repository so the generated id is returned (the product→images
-        // collection is not cascade-persist). Role demotions above flush with the transaction.
+        // Si la URL ya apunta a NUESTRO storage (S3/MinIO) está lista → MIRRORED. Si es externa
+        // (1688/alicdn u otro CDN), la dejamos PENDING para que el ImageMirrorService la descargue y la
+        // suba a S3 (y deje de depender del hotlink). Persist vía el repo para devolver el id generado.
+        boolean alreadyOurs = url != null && objectStorage.publicUrl() != null
+                && !objectStorage.publicUrl().isBlank() && url.startsWith(objectStorage.publicUrl());
         ProductImageEntity img = ProductImageEntity.builder().product(product).position(nextPos)
-                .role(asMain ? "MAIN" : "GALLERY").sourceUrl(url).cdnUrl(url)
-                .mirrorStatus(MirrorStatus.MIRRORED).build();
+                .role(asMain ? "MAIN" : "GALLERY").sourceUrl(url).cdnUrl(alreadyOurs ? url : null)
+                .mirrorStatus(alreadyOurs ? MirrorStatus.MIRRORED : MirrorStatus.PENDING).build();
         ProductImageEntity saved = imageRepository.save(img);
         productIndexer.indexProduct(productId);
         return productMapper.toImageView(saved);
