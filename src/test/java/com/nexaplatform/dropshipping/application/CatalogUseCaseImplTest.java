@@ -21,7 +21,6 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Suppl
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.VariantValueRepository;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer;
-import com.nexaplatform.dropshipping.infrastructure.integration.storage.StorageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -80,8 +79,6 @@ class CatalogUseCaseImplTest {
     @Mock
     JdbcTemplate jdbcTemplate;
     @Mock
-    StorageService storageService;
-    @Mock
     ProductBulkExportMapper bulkExportMapper;
 
     CatalogUseCaseImpl useCase;
@@ -91,7 +88,7 @@ class CatalogUseCaseImplTest {
         useCase = new CatalogUseCaseImpl(productRepository, supplierRepository, categoryRepository, priceTierRepository,
                 imageRepository, productJpaRepository, productMapper, catalogStorefrontMapper, kafkaTemplate,
                 variantRepository, productIndexer, categoryIndexer, productAttributeRepository,
-                productSpecificationRepository, variantValueRepository, jdbcTemplate, storageService, bulkExportMapper);
+                productSpecificationRepository, variantValueRepository, jdbcTemplate, bulkExportMapper);
     }
 
     @Test

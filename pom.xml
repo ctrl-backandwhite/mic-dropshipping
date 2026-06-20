@@ -28,7 +28,6 @@
         <!-- 2.8.x exige SB 3.x; 2.7.0 es la última línea con shim para SB 4.0.x. -->
         <springdoc.version>2.7.0</springdoc.version>
         <bucket4j.version>8.10.1</bucket4j.version>
-        <aws.s3.version>2.30.4</aws.s3.version>
         <opensearch.version>2.18.0</opensearch.version>
         <stripe.version>28.2.0</stripe.version>
         <google.translate.version>2.55.0</google.translate.version>
@@ -134,13 +133,6 @@
         <dependency>
             <groupId>org.apache.httpcomponents.core5</groupId>
             <artifactId>httpcore5</artifactId>
-        </dependency>
-
-        <!-- ============ S3 / MinIO ============ -->
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>s3</artifactId>
-            <version>${aws.s3.version}</version>
         </dependency>
 
         <!-- ============ Image processing ============ -->

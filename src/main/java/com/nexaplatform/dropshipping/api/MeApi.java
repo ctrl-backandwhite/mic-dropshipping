@@ -6,15 +6,12 @@ import com.nexaplatform.dropshipping.api.dto.out.MeDtoOut;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.multipart.MultipartFile;
 
 /**
  * API contract + OpenAPI documentation for the authenticated user's Profile resource.
@@ -35,8 +32,4 @@ public interface MeApi {
     @Operation(summary = "Update the authenticated user's profile")
     @PutMapping
     ResponseEntity<MeDtoOut> updateProfile(Authentication authentication, @Valid @RequestBody UpdateProfileDtoIn req);
-
-    @Operation(summary = "Upload the authenticated user's avatar image")
-    @PostMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    ResponseEntity<MeDtoOut> uploadAvatar(Authentication authentication, @RequestParam("file") MultipartFile file);
 }

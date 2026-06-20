@@ -20,7 +20,6 @@ import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
-import com.nexaplatform.dropshipping.infrastructure.integration.storage.StorageService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontMapper;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
@@ -28,7 +27,6 @@ import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.domain.model.Product;
 import com.nexaplatform.dropshipping.domain.repository.ProductRepository;
-import com.nexaplatform.dropshipping.infrastructure.messaging.ImageMirrorEvent;
 import com.nexaplatform.dropshipping.infrastructure.messaging.NexaTopics;
 import com.nexaplatform.dropshipping.infrastructure.messaging.ProductIngestedEvent;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity;
@@ -143,7 +141,6 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private final ProductSpecificationRepository productSpecificationRepository;
     private final VariantValueRepository variantValueRepository;
     private final JdbcTemplate jdbcTemplate;
-    private final StorageService storageService;
     private final ProductBulkExportMapper bulkExportMapper;
 
     @PersistenceContext
@@ -336,12 +333,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (product.getId() != null) {
             kafkaTemplate.send(NexaTopics.PRODUCT_INGESTED, product.getId().toString(), new ProductIngestedEvent(
                     product.getId(), product.getSlug(), product.getSource(), product.getExternalId()));
-            for (ProductImageEntity img : product.getImages()) {
-                if (img.getMirrorStatus() == MirrorStatus.PENDING && img.getId() != null) {
-                    kafkaTemplate.send(NexaTopics.IMAGE_FETCH, img.getId().toString(), new ImageMirrorEvent(img.getId(),
-                            product.getId(), img.getSourceUrl(), "PRODUCT", img.getPosition()));
-                }
-            }
+            // Imágenes: se conservan con su URL de origen; sin espejo a S3.
         }
 
         log.info("Upserted product {} ({} - {})", product.getId(), product.getSource(), product.getExternalId());
@@ -870,17 +862,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         productIndexer.indexProduct(productId);
     }
 
-    /* ============ Images (upload + product gallery) ============ */
-
-    @Override
-    public String uploadImage(byte[] bytes, String contentType, String originalName) {
-        if (bytes == null || bytes.length == 0) {
-            throw new BusinessException("El archivo de imagen está vacío");
-        }
-        String ext = extensionFor(contentType, originalName);
-        String key = "uploads/" + UUID.randomUUID() + ext;
-        return storageService.putBytes(key, bytes, contentType != null && !contentType.isBlank() ? contentType : "application/octet-stream");
-    }
+    /* ============ Images (product gallery) ============ */
 
     @Override
     @Transactional
@@ -939,26 +921,6 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (productId != null) {
             productIndexer.indexProduct(productId);
         }
-    }
-
-    private String extensionFor(String contentType, String originalName) {
-        if (originalName != null && originalName.contains(".")) {
-            String ext = originalName.substring(originalName.lastIndexOf('.')).toLowerCase();
-            if (ext.matches("\\.[a-z0-9]{2,5}")) {
-                return ext;
-            }
-        }
-        if (contentType == null) {
-            return "";
-        }
-        return switch (contentType.toLowerCase()) {
-            case "image/jpeg", "image/jpg" -> ".jpg";
-            case "image/png" -> ".png";
-            case "image/webp" -> ".webp";
-            case "image/gif" -> ".gif";
-            case "image/avif" -> ".avif";
-            default -> "";
-        };
     }
 
     private void applyVariant(ProductVariantEntity v, AdminVariantUpsertDtoIn req) {

@@ -14,7 +14,6 @@ import com.nexaplatform.dropshipping.api.dto.out.RegisterDtoOut;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Use case for authentication and the authenticated user's profile. Holds all
@@ -52,7 +51,4 @@ public interface AuthUseCase {
 
     /** Update the authenticated user's profile and return the refreshed view. */
     MeDtoOut updateProfile(Authentication authentication, UpdateProfileDtoIn req);
-
-    /** Upload the authenticated user's avatar and return the refreshed view. */
-    MeDtoOut uploadAvatar(Authentication authentication, MultipartFile file);
 }

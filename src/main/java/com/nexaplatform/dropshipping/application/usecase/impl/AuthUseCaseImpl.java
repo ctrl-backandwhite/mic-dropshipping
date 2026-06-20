@@ -18,7 +18,6 @@ import com.nexaplatform.dropshipping.api.mapper.UserDtoMapper;
 import com.nexaplatform.dropshipping.application.usecase.AuthUseCase;
 import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
 import com.nexaplatform.dropshipping.domain.model.User;
-import com.nexaplatform.dropshipping.infrastructure.integration.storage.StorageService;
 import com.nexaplatform.dropshipping.infrastructure.security.oauth.GoogleOAuth2SuccessHandler;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -32,10 +31,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -55,7 +51,6 @@ public class AuthUseCaseImpl implements AuthUseCase {
     private final UserUseCase userUseCase;
     private final AuthenticationManager authenticationManager;
     private final PasswordEncoder passwordEncoder;
-    private final StorageService storageService;
     private final UserDtoMapper mapper;
     private final DeviceSessionService deviceSessionService;
     private final UserTokenService userTokenService;
@@ -186,48 +181,6 @@ public class AuthUseCaseImpl implements AuthUseCase {
             user.setLanguage(req.getLanguage());
         User saved = userUseCase.updateUser(user);
         return mapper.toMeDtoOut(saved, authorities(authentication));
-    }
-
-    @Override
-    @Transactional
-    public MeDtoOut uploadAvatar(Authentication authentication, MultipartFile file) {
-        if (authentication == null)
-            throw new BusinessException("Not authenticated");
-        if (file == null || file.isEmpty())
-            throw new BusinessException("Empty file");
-        if (file.getSize() > 2L * 1024 * 1024)
-            throw new BusinessException("Avatar exceeds 2 MB");
-        String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase();
-        String ext;
-        switch (contentType) {
-            case "image/jpeg" :
-            case "image/jpg" :
-                ext = "jpg";
-                break;
-            case "image/png" :
-                ext = "png";
-                break;
-            case "image/webp" :
-                ext = "webp";
-                break;
-            default :
-                throw new BusinessException("Only JPG/PNG/WEBP are allowed");
-        }
-
-        UUID id = UUID.fromString(authentication.getName());
-        User user = userUseCase.findById(id);
-
-        try {
-            // Cache-buster with epoch so the browser refreshes the image on change.
-            String key = "avatars/" + user.getId() + "-" + Instant.now().getEpochSecond() + "." + ext;
-            String url = storageService.putBytes(key, file.getBytes(), contentType);
-            user.setAvatarUrl(url);
-            user = userUseCase.updateUser(user);
-        } catch (IOException e) {
-            throw new BusinessException("Could not read uploaded file: " + e.getMessage());
-        }
-
-        return mapper.toMeDtoOut(user, authorities(authentication));
     }
 
     private static Set<String> authorities(Authentication authentication) {

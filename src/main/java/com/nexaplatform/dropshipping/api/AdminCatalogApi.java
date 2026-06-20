@@ -15,12 +15,10 @@ import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut;
-import com.nexaplatform.dropshipping.api.dto.out.ImageUploadDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.ReindexResultDtoOut;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,7 +27,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -104,12 +101,7 @@ public interface AdminCatalogApi {
     @DeleteMapping("/variants/{id}")
     ResponseEntity<Void> deleteVariant(@PathVariable UUID id);
 
-    /* ============================ Images (URL or upload) ============================ */
-
-    @Operation(summary = "Upload an image file (returns its public URL) for a product or variant")
-    @PostMapping(value = "/images/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    ResponseEntity<ImageUploadDtoOut> uploadImage(
-            @RequestParam("file") MultipartFile file);
+    /* ============================ Images (by URL) ============================ */
 
     @Operation(summary = "Add an image (by URL) to a product's gallery")
     @PostMapping("/products/{productId}/images")

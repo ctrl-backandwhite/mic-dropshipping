@@ -222,15 +222,6 @@ nexadrop:
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:3003}
 
-  storage:
-    endpoint: ${S3_ENDPOINT:http://localhost:9100}
-    region: ${S3_REGION:us-east-1}
-    access-key: ${S3_ACCESS_KEY:nexadrop}
-    secret-key: ${S3_SECRET_KEY:nexadrop-secret}
-    bucket: ${S3_BUCKET:product-images}
-    public-base-url: ${S3_PUBLIC_URL:http://localhost:9100/product-images}
-    path-style-access: true
-
   opensearch:
     uris: ${OPENSEARCH_URIS:http://localhost:9400}
     products-index: products

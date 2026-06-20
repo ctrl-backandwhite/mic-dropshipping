@@ -18,7 +18,6 @@ import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.Category1688MappingDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CategoryAttributeSchemaDtoOut;
-import com.nexaplatform.dropshipping.api.dto.out.ImageUploadDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.ReindexResultDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
@@ -34,9 +33,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -149,20 +146,6 @@ public class AdminCatalogController implements AdminCatalogApi {
     public ResponseEntity<Void> deleteVariant(UUID id) {
         catalogUseCase.deleteVariant(id);
         return ResponseEntity.noContent().build();
-    }
-
-    @Override
-    public ResponseEntity<ImageUploadDtoOut> uploadImage(
-            MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new BusinessException("No se ha enviado ningún archivo");
-        }
-        try {
-            String url = catalogUseCase.uploadImage(file.getBytes(), file.getContentType(), file.getOriginalFilename());
-            return ResponseEntity.ok(new ImageUploadDtoOut(url));
-        } catch (IOException e) {
-            throw new BusinessException("No se pudo leer el archivo subido");
-        }
     }
 
     @Override

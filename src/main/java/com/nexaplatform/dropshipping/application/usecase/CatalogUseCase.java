@@ -105,10 +105,7 @@ public interface CatalogUseCase {
     /** Deletes a variant and reindexes its product. */
     void deleteVariant(UUID variantId);
 
-    /** Uploads raw image bytes to object storage and returns the public URL (for products/variants). */
-    String uploadImage(byte[] bytes, String contentType, String originalName);
-
-    /** Adds an image (by URL — typed or previously uploaded) to a product's gallery. */
+    /** Adds an image (by URL) to a product's gallery. */
     ProductImageView addProductImage(UUID productId, String url,
             String role);
 
