@@ -292,6 +292,21 @@ nexadrop:
     # Cadencia del job que sincroniza el tracking y avanza el estado semiautomáticamente.
     sync-enabled: ${CAINIAO_SYNC_ENABLED:true}
 
+  # Almacenamiento de objetos (MinIO/S3) para el mirror de imágenes de producto. El backend descarga
+  # la imagen de origen (1688/alicdn, sin Referer) y la sube al bucket; el `public-url` es la base con
+  # la que se sirve al navegador. Así dejamos de depender del hotlink de alicdn.
+  storage:
+    enabled: ${STORAGE_ENABLED:true}
+    endpoint: ${STORAGE_ENDPOINT:http://minio:9000}              # interno backend → MinIO/S3
+    public-url: ${STORAGE_PUBLIC_URL:http://localhost:9100/product-images}  # base navegable (browser)
+    bucket: ${STORAGE_BUCKET:product-images}
+    access-key: ${STORAGE_ACCESS_KEY:nexadrop}
+    secret-key: ${STORAGE_SECRET_KEY:}
+    region: ${STORAGE_REGION:us-east-1}
+    # Cadencia/tamaño del job que espeja imágenes PENDING (importación + backfill).
+    mirror-enabled: ${STORAGE_MIRROR_ENABLED:true}
+    mirror-batch: ${STORAGE_MIRROR_BATCH:25}
+
   usdt:
     enabled: ${USDT_ENABLED:true}
     manual-address: ${USDT_MANUAL_ADDRESS:TBd5jH7XPM2QwG1pVxLqkRtjY8bD3sxA1Z}

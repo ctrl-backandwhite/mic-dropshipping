@@ -143,6 +143,15 @@
             <artifactId>httpclient5</artifactId>
         </dependency>
 
+        <!-- ============ Object storage (MinIO / S3) ============ -->
+        <!-- Mirror de imágenes/multimedia de producto: descargamos de 1688 y servimos desde nuestro
+             bucket (MinIO en local/dev, S3 compatible en prod) para no depender del hotlink de alicdn. -->
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+            <version>8.5.17</version>
+        </dependency>
+
         <!-- ============ Image processing ============ -->
         <dependency>
             <groupId>net.coobird</groupId>
