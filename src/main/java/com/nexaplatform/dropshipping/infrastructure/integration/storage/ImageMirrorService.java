@@ -56,11 +56,27 @@ public class ImageMirrorService {
         pool.shutdownNow();
     }
 
+    /** Una vez por arranque: reencola las imágenes cuyo cdn_url no apunta al storage vigente. */
+    private volatile boolean healedStaleUrls = false;
+
     /** Job: espeja un lote de imágenes PENDING. Drena importación + backfill con el tiempo. */
     @Scheduled(fixedDelayString = "${nexadrop.storage.mirror-interval-ms:8000}")
     public void mirrorPendingScheduled() {
         if (!mirrorEnabled || !storage.isReady()) {
             return;
+        }
+        // Auto-heal (1 vez/arranque): si hay cdn_url de otro entorno (p.ej. localhost tras cambiar a
+        // un MinIO nuevo) o muertos, se reencolan a PENDING para re-espejar con la URL pública vigente.
+        if (!healedStaleUrls) {
+            try {
+                int n = imageRepository.requeueNotMirrored(storage.publicUrl() + "%");
+                if (n > 0) {
+                    log.info("Mirror auto-heal: {} imágenes con cdn_url no-vigente reencoladas a PENDING", n);
+                }
+            } catch (Exception e) {
+                log.warn("Mirror auto-heal falló: {}", e.getMessage());
+            }
+            healedStaleUrls = true;
         }
         mirrorPendingBatch(mirrorBatch);
     }
