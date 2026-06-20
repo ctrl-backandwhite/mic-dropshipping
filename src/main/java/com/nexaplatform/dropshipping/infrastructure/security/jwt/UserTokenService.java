@@ -1,10 +1,13 @@
 package com.nexaplatform.dropshipping.infrastructure.security.jwt;
 
+import com.nexaplatform.dropshipping.infrastructure.security.jwk.JwkKeyService;
 import com.nexaplatform.dropshipping.infrastructure.security.oauth.JwtRevocationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
@@ -43,6 +46,7 @@ public class UserTokenService {
     private final JwtEncoder jwtEncoder;
     private final JwtDecoder jwtDecoder;
     private final JwtRevocationService revocationService;
+    private final JwkKeyService jwkKeyService;
 
     @Value("${nexadrop.oauth.issuer}")
     private String issuer;
@@ -60,8 +64,11 @@ public class UserTokenService {
         // `jti` único por refresh → permite detectar reuso (rotación) en /api/auth/refresh.
         JwtClaimsSet refresh = JwtClaimsSet.builder().issuer(issuer).issuedAt(now).expiresAt(now.plus(REFRESH_TTL))
                 .subject(userId.toString()).id(UUID.randomUUID().toString()).claim("typ", "refresh").build();
-        String accessToken = jwtEncoder.encode(JwtEncoderParameters.from(access)).getTokenValue();
-        String refreshToken = jwtEncoder.encode(JwtEncoderParameters.from(refresh)).getTokenValue();
+        // Firmar indicando el `kid` de la clave ACTIVA: tras una rotación hay >1 clave en el
+        // JWKSource (las viejas siguen para validar) y, sin `kid`, el encoder no sabe cuál usar.
+        JwsHeader header = JwsHeader.with(SignatureAlgorithm.RS256).keyId(jwkKeyService.activeKid()).build();
+        String accessToken = jwtEncoder.encode(JwtEncoderParameters.from(header, access)).getTokenValue();
+        String refreshToken = jwtEncoder.encode(JwtEncoderParameters.from(header, refresh)).getTokenValue();
         return new Tokens(accessToken, refreshToken, ACCESS_TTL.toSeconds());
     }
 

@@ -66,6 +66,18 @@ public class JwkKeyService {
         return (jwkSelector, context) -> jwkSelector.select(loadJwkSet());
     }
 
+    /**
+     * {@code kid} de la clave ACTIVA más reciente, para firmar. El {@link JWKSource} expone TODAS
+     * las claves (hay que validar tokens firmados con claves ya rotadas), así que al firmar hay que
+     * indicar el {@code kid} explícitamente: si no, con &gt;1 clave el encoder no sabe cuál elegir
+     * y falla con "multiple keys for the signing algorithm".
+     */
+    public String activeKid() {
+        return jwkKeyRepository.findAllByActiveTrueOrderByCreatedAtDesc().stream().findFirst()
+                .map(JwkKeyEntity::getKid)
+                .orElseThrow(() -> new IllegalStateException("No active JWK key available to sign tokens"));
+    }
+
     public JWKSet loadJwkSet() {
         List<RSAKey> keys = jwkKeyRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toRsaKey)
                 .collect(Collectors.toList());

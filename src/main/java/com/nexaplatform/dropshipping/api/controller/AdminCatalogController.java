@@ -68,8 +68,9 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
-    public PageResponse<ProductSummaryView> list(String status, UUID categoryId, int page, int size, String lang) {
-        return PageResponse.from(catalogUseCase.listProductsForAdmin(status, categoryId, page, size, lang));
+    public PageResponse<ProductSummaryView> list(String status, UUID categoryId, int page, int size, String lang,
+            String sort) {
+        return PageResponse.from(catalogUseCase.listProductsForAdmin(status, categoryId, page, size, lang, sort));
     }
 
     @Override
