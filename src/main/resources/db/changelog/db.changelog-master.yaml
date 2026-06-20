@@ -141,3 +141,5 @@ databaseChangeLog:
       file: db/changelog/schema-v65-category-group-footwear.sql
   - include:
       file: db/changelog/schema-v66-country-tax-seed.sql
+  - include:
+      file: db/changelog/schema-v67-product-source-taobao.sql
