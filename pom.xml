@@ -134,6 +134,13 @@
             <groupId>org.apache.httpcomponents.core5</groupId>
             <artifactId>httpcore5</artifactId>
         </dependency>
+        <!-- HttpClient5: opensearch-java lo trae en runtime (no expuesto en compilación). Lo
+             declaramos para configurar TLS + auth básica del cliente OpenSearch seguro. -->
+        <dependency>
+            <groupId>org.apache.httpcomponents.client5</groupId>
+            <artifactId>httpclient5</artifactId>
+            <version>5.4.1</version>
+        </dependency>
 
         <!-- ============ Image processing ============ -->
         <dependency>

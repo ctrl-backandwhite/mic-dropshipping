@@ -224,6 +224,9 @@ nexadrop:
 
   opensearch:
     uris: ${OPENSEARCH_URIS:http://localhost:9400}
+    # Auth básica del plugin de seguridad (vacío en local sin auth; en remoto seguro = admin + clave).
+    username: ${OPENSEARCH_USERNAME:}
+    password: ${OPENSEARCH_PASSWORD:}
     products-index: products
     categories-index: categories
     operator-actions-index: operator-actions
