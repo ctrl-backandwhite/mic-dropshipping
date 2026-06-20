@@ -3,6 +3,9 @@ package com.nexaplatform.dropshipping.infrastructure.integration.fulfillment;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CainiaoZoneEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CainiaoZoneRepository;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +41,14 @@ import java.util.Optional;
 public class CainiaoFulfillmentService {
 
     private final CainiaoZoneRepository zoneRepository;
+    private final CainiaoLinkClient linkClient;
+    private final ObjectMapper objectMapper;
+
+    // ── msg_type de las APIs del gateway Link ────────────────────────────────────────────────
+    // TODO(real): sustituir por los nombres EXACTOS del producto logístico que contrates en Cainiao
+    // (Global Logistics Solution / CGS). Los de abajo son marcadores hasta tener la doc de tu app.
+    private static final String MSG_CREATE_SHIPMENT = "GLOBAL_CREATE_SHIPMENT";
+    private static final String MSG_GET_TRACE = "GLOBAL_GET_TRACE";
 
     @Value("${nexadrop.cainiao.enabled:false}")
     private boolean enabled;
@@ -107,8 +118,53 @@ public class CainiaoFulfillmentService {
                     platformId);
             return new FulfillmentResult("Standard Shipping", "CN" + hex + "YQ", "LP" + hex, etaMax);
         }
-        // TODO(real): POST a la Cainiao Open Platform (Global Logistics) con app-key/secret firmados.
-        throw new UnsupportedOperationException("Cainiao real API no configurada todavía");
+        return realCreateShipment(order, etaMax);
+    }
+
+    /**
+     * Llamada REAL al gateway Link para crear el envío. La fontanería (firma + POST) la hace
+     * {@link CainiaoLinkClient}; aquí se construye el JSON de negocio y se parsea la respuesta.
+     *
+     * <p><b>TODO(real)</b>: ajustar {@code MSG_CREATE_SHIPMENT}, los campos del payload y las rutas de
+     * parseo ({@code mailNo}/{@code lpCode}/…) al esquema EXACTO del producto que contrates. Tal cual,
+     * envía un payload mínimo y lee los campos más habituales; si no aparecen, lanza un error con la
+     * respuesta cruda para que puedas mapearla durante la integración.
+     */
+    private FulfillmentResult realCreateShipment(Order order, int etaMax) {
+        try {
+            ObjectNode body = objectMapper.createObjectNode();
+            body.put("orderCode", order.getOrderNumber());
+            body.put("countryCode", order.getShippingCountry());
+            body.put("logisticProviderId", appKey);
+            // TODO(real): añadir remitente/destinatario/items/peso según la API contratada.
+            String resp = linkClient.invoke(MSG_CREATE_SHIPMENT, objectMapper.writeValueAsString(body), "");
+            JsonNode r = objectMapper.readTree(resp);
+            if (!r.path("success").asBoolean(true) && r.has("errorCode")) {
+                throw new IllegalStateException("Cainiao createShipment rechazado: " + resp);
+            }
+            String tracking = firstText(r, "mailNo", "trackingNumber", "waybillCode");
+            String ref = firstText(r, "lpCode", "fulfillmentOrderCode", "orderCode");
+            String carrier = firstText(r, "cpName", "carrier");
+            if (tracking == null) {
+                throw new IllegalStateException("Cainiao createShipment sin nº de seguimiento; mapea la respuesta: " + resp);
+            }
+            log.info("Cainiao: envío real creado para pedido {} (tracking={})", order.getOrderNumber(), tracking);
+            return new FulfillmentResult(carrier != null ? carrier : "Standard Shipping", tracking,
+                    ref != null ? ref : tracking, etaMax);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("Cainiao createShipment: error de JSON", e);
+        }
+    }
+
+    /** Primer campo no vacío de entre varios nombres candidatos (la respuesta varía según el producto). */
+    private static String firstText(JsonNode node, String... keys) {
+        for (String k : keys) {
+            String v = node.path(k).asText(null);
+            if (v != null && !v.isBlank()) {
+                return v;
+            }
+        }
+        return null;
     }
 
     /** Un paso de la línea temporal de tracking. */
@@ -126,8 +182,7 @@ public class CainiaoFulfillmentService {
      */
     public TrackingSnapshot track(String trackingNumber, Instant forwardedAt, String countryCode) {
         if (isActive()) {
-            // TODO(real): GET tracking de Cainiao por trackingNumber y mapear sus estados a OrderStatus.
-            throw new UnsupportedOperationException("Cainiao real API no configurada todavía");
+            return realTrack(trackingNumber, countryCode);
         }
         Instant start = forwardedAt != null ? forwardedAt : Instant.now();
         long elapsedMin = Math.max(0, Duration.between(start, Instant.now()).toMinutes());
@@ -150,5 +205,49 @@ public class CainiaoFulfillmentService {
         }
         OrderStatus current = OrderStatus.valueOf(plan[stage][0]);
         return new TrackingSnapshot(current, steps);
+    }
+
+    /**
+     * Tracking REAL: pide la traza al gateway y la mapea a la línea temporal interna.
+     *
+     * <p><b>TODO(real)</b>: ajustar {@code MSG_GET_TRACE}, el campo del array de eventos
+     * ({@code traceDetailList}/…) y la traducción de cada código de acción de Cainiao a
+     * {@link OrderStatus} (mapa {@code action -> status}). Tal cual, recorre el array más habitual y,
+     * a falta de mapa, marca cada evento como {@code SHIPPED} y el último como {@code DELIVERED}.
+     */
+    private TrackingSnapshot realTrack(String trackingNumber, String countryCode) {
+        try {
+            ObjectNode body = objectMapper.createObjectNode();
+            body.put("mailNo", trackingNumber);
+            body.put("logisticProviderId", appKey);
+            String resp = linkClient.invoke(MSG_GET_TRACE, objectMapper.writeValueAsString(body), "");
+            JsonNode r = objectMapper.readTree(resp);
+            JsonNode events = r.has("traceDetailList") ? r.get("traceDetailList")
+                    : r.path("data").path("traceDetailList");
+            List<TrackingStep> steps = new ArrayList<>();
+            if (events.isArray()) {
+                for (int i = 0; i < events.size(); i++) {
+                    JsonNode ev = events.get(i);
+                    boolean last = i == events.size() - 1;
+                    // TODO(real): traducir ev.get("action") a OrderStatus con un mapa por código de Cainiao.
+                    OrderStatus st = last ? OrderStatus.DELIVERED : OrderStatus.SHIPPED;
+                    String desc = firstText(ev, "desc", "standerdDesc", "remark");
+                    String loc = firstText(ev, "city", "location");
+                    long ts = ev.path("time").asLong(0L);
+                    Instant when = ts > 0 ? Instant.ofEpochMilli(ts) : Instant.now();
+                    steps.add(new TrackingStep(st, desc != null ? desc : st.name(),
+                            loc != null ? loc : (countryCode != null ? countryCode : "destino"), when));
+                }
+            }
+            if (steps.isEmpty()) {
+                // Aún sin eventos: el envío está registrado pero el transportista no lo ha escaneado.
+                steps.add(new TrackingStep(OrderStatus.FORWARDED, "Envío registrado en Cainiao", "Shenzhen, CN",
+                        Instant.now()));
+            }
+            OrderStatus current = steps.get(steps.size() - 1).status();
+            return new TrackingSnapshot(current, steps);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("Cainiao track: error de JSON", e);
+        }
     }
 }
