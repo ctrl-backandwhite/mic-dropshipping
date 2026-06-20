@@ -1197,6 +1197,11 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 images.add(new IngestImage(
                         r.getImageUrls().get(k), k, k == 0 ? "MAIN" : "GALLERY"));
         }
+        // Calidad de datos: NO se importan productos sin imagen (ni por JSON ni por formulario).
+        if (images.stream().noneMatch(i -> i.sourceUrl() != null && !i.sourceUrl().isBlank())) {
+            throw new BusinessException("El producto '" + r.getExternalId()
+                    + "' no tiene imágenes — no se importa (se requiere al menos una imagen).");
+        }
         // Ejes de variación (Color/Talla) desde el JSON.
         List<IngestVariantOption> options = new ArrayList<>();
         if (r.getVariantAxes() != null) {

@@ -43,7 +43,7 @@ import java.util.UUID;
 @Slf4j
 @Component
 @Order(100)
-@ConditionalOnProperty(prefix = "nexadrop.catalog-fill", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "nexadrop.catalog-fill", name = "enabled", havingValue = "true", matchIfMissing = false)
 @RequiredArgsConstructor
 public class CategoryProductFiller {
 

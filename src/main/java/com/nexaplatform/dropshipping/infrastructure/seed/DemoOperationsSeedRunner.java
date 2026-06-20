@@ -37,7 +37,7 @@ import java.util.*;
 @Slf4j
 @Component
 @Order(20) // run after DemoCatalogSeedRunner + plan seed
-@ConditionalOnProperty(prefix = "nexadrop.demo-seed", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "nexadrop.demo-seed", name = "enabled", havingValue = "true", matchIfMissing = false)
 @RequiredArgsConstructor
 public class DemoOperationsSeedRunner {
 
