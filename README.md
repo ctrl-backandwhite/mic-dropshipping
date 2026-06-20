@@ -106,14 +106,27 @@ Completa el asistente (preview → audit) y **envía la app a revisión**. Mient
 
 ## Configuración del backend (variables de entorno)
 
-`application.yml` lee estas variables (todas con prefijo `CAINIAO_`):
+**El flag `enabled` lo decide el PROFILE de Spring** (no hay que tocar nada al cambiar de entorno):
+
+| Profile (`SPRING_PROFILES_ACTIVE`) | `cainiao.enabled` por defecto | `base-url` por defecto |
+|---|---|---|
+| `local` | **false** → MOCK | sandbox |
+| `dev` | **true** → REAL | sandbox (`linkdaily.tbsandbox.com`) |
+| `pro` | **true** → REAL | producción (`link.cainiao.com`) |
+
+Cada default sigue siendo **sobreescribible por env var** (`${CAINIAO_ENABLED:...}`), que sirve de **freno**:
+mientras la app NO esté aprobada por Cainiao y los campos sin mapear, se deja `CAINIAO_ENABLED=false` en
+el entorno `dev` (Railway) para mantenerlo en mock; al **quitar esa variable**, el default del profile (`true`)
+activa la integración real automáticamente.
+
+Resto de variables (secretos / por entorno, **NUNCA en el repo**):
 
 | Variable | Valor |
 |---|---|
-| `CAINIAO_ENABLED` | `false` hasta que la app esté aprobada **y** el mapeo de campos del payload/respuesta esté hecho; luego `true`. |
 | `CAINIAO_APP_KEY` | AppKey de la consola |
-| `CAINIAO_APP_SECRET` | appSecret (**solo por entorno; NUNCA en el repo ni en capturas**) |
-| `CAINIAO_BASE_URL` | sandbox `https://linkdaily.tbsandbox.com/gateway/link.do` · prod `https://link.cainiao.com/gateway/link.do` |
+| `CAINIAO_APP_SECRET` | appSecret (solo por entorno; nunca en repo ni capturas) |
+| `CAINIAO_BASE_URL` | opcional; si no se pone, el profile usa el default de arriba |
+| `CAINIAO_ENABLED` | opcional; **override/freno** del default del profile |
 
 **Dónde se ponen:**
 - **Local**: `infra/docker/.env` (gitignored) + passthrough ya presente en `infra/docker/docker-compose.yml`

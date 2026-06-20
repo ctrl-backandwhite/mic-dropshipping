@@ -47,3 +47,8 @@ nexadrop:
     issuer: https://back-dropshipping-pro.up.railway.app
   cors:
     allowed-origins: https://front-dropshipping-pro.up.railway.app,https://back-dropshipping-pro.up.railway.app
+  cainiao:
+    # En PRODUCCIÓN: integración real activa por defecto, contra el gateway de PRODUCCIÓN de Cainiao.
+    # appKey/appSecret de la cuenta de PROD se inyectan por env (CAINIAO_APP_KEY / CAINIAO_APP_SECRET).
+    enabled: ${CAINIAO_ENABLED:true}
+    base-url: ${CAINIAO_BASE_URL:https://link.cainiao.com/gateway/link.do}
