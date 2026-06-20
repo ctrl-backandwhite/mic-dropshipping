@@ -87,6 +87,7 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -343,8 +344,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Override
     @Transactional(readOnly = true)
     public Page<ProductSummaryView> listProductsForAdmin(String status, UUID categoryId, int page, int size,
-            String language) {
-        Pageable pageable = PageRequest.of(page, Math.min(size, 200));
+            String language, String sort) {
+        Pageable pageable = PageRequest.of(page, Math.min(size, 200), adminSort(sort));
         ProductStatus st = parseStatusTolerant(status);
         if (categoryId == null) {
             return listProducts(st, pageable, language);
@@ -353,6 +354,23 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 ? productJpaRepository.findByCategoryId(categoryId, pageable)
                 : productJpaRepository.findByCategoryIdAndStatus(categoryId, st, pageable);
         return entities.map(p -> productMapper.toSummary(p, language));
+    }
+
+    /**
+     * Orden para el listado de admin. {@code price_*} ordena por el precio CNY persistido
+     * ({@code basePrice}) — el margen es multiplicativo, así que el orden coincide con el de venta.
+     */
+    private static Sort adminSort(String sort) {
+        if (sort == null || sort.isBlank()) {
+            return Sort.unsorted();
+        }
+        return switch (sort) {
+            case "price_asc" -> Sort.by(Sort.Direction.ASC, "basePrice");
+            case "price_desc" -> Sort.by(Sort.Direction.DESC, "basePrice");
+            case "newest" -> Sort.by(Sort.Direction.DESC, "ingestedAt");
+            case "oldest" -> Sort.by(Sort.Direction.ASC, "ingestedAt");
+            default -> Sort.unsorted();
+        };
     }
 
     @Override

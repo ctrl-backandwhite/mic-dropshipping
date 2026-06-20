@@ -53,7 +53,8 @@ public interface CatalogUseCase {
 
     Page<ProductSummaryView> listProducts(ProductStatus status, Pageable pageable, String language);
 
-    Page<ProductSummaryView> listProductsForAdmin(String status, UUID categoryId, int page, int size, String language);
+    Page<ProductSummaryView> listProductsForAdmin(String status, UUID categoryId, int page, int size, String language,
+            String sort);
 
     /** Reindexes every product into OpenSearch; returns the number indexed. */
     int reindexAllProducts();

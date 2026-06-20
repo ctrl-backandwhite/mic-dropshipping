@@ -52,11 +52,12 @@ public interface AdminCatalogApi {
     @PostMapping("/products")
     ResponseEntity<UUID> upsertProduct(@Valid @RequestBody IngestProductRequest req);
 
-    @Operation(summary = "List products with paging and optional status/category filter")
+    @Operation(summary = "List products with paging and optional status/category filter + sort")
     @GetMapping("/products")
     PageResponse<ProductSummaryView> list(@RequestParam(required = false) String status,
             @RequestParam(required = false) UUID categoryId, @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "30") int size, @RequestParam(defaultValue = "es") String lang);
+            @RequestParam(defaultValue = "30") int size, @RequestParam(defaultValue = "es") String lang,
+            @RequestParam(required = false) String sort);
 
     @Operation(summary = "Get product detail by id")
     @GetMapping("/products/{id}")
