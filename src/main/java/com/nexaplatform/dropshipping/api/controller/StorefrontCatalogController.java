@@ -471,11 +471,26 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         sections.add(new HomeSection("video", "Video Products", video));
         sections.add(new HomeSection("top_selling", "Top Selling", topSales));
 
-        // Hot Categories — root cats with the highest direct product count.
-        // DROP-269: never surface a category with zero products on the homepage.
-        var hot = storefrontRead.categoriesFlat(lang).stream().filter(v -> v.directProductCount() > 0)
+        // Hot Categories — las categorías (de CUALQUIER nivel) con más productos directos.
+        // Antes solo miraba raíces, pero los productos suelen estar en subcategorías (Calzado, Ropa de
+        // mujer…), así que la home mostraba una sola. Ahora aplanamos el árbol y destacamos las que más
+        // productos tienen. DROP-269: nunca una categoría con 0 productos.
+        List<CategoryView> allCats = new ArrayList<>();
+        flattenCategories(storefrontRead.categoriesTree(lang), allCats);
+        var hot = allCats.stream().filter(v -> v.directProductCount() > 0)
                 .sorted((a, b) -> Integer.compare(b.directProductCount(), a.directProductCount())).limit(8).toList();
         return new HomeSectionsResponse(sections, hot);
+    }
+
+    /** Aplana el árbol de categorías (raíces + todas sus descendientes) en una lista plana. */
+    private static void flattenCategories(List<CategoryView> nodes, List<CategoryView> out) {
+        if (nodes == null) {
+            return;
+        }
+        for (CategoryView n : nodes) {
+            out.add(n);
+            flattenCategories(n.children(), out);
+        }
     }
 
     /* =========================== IMPORT BY URL (DROP-15) =========================== */
