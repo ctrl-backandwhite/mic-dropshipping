@@ -78,6 +78,11 @@ public class OrderRepositoryImpl implements OrderRepository {
     }
 
     @Override
+    public Optional<Order> findByTrackingNumber(String trackingNumber) {
+        return orderJpaRepositoryAdapter.findByTrackingNumber(trackingNumber).map(orderEntityMapper::toDomain);
+    }
+
+    @Override
     public List<Order> findByPartnerAppId(UUID partnerAppId) {
         return orderJpaRepositoryAdapter.findByPartnerAppId(partnerAppId).stream().map(orderEntityMapper::toDomain)
                 .toList();

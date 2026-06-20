@@ -90,6 +90,20 @@ public class CainiaoLinkClient {
         }
     }
 
+    /**
+     * Verifica la firma de un push ENTRANTE de Cainiao (webhooks): el {@code data_digest} recibido debe
+     * coincidir con la firma calculada sobre el {@code logistics_interface}. Comparación en tiempo
+     * constante. Fail-closed: si falta el digest o no coincide, devuelve false.
+     */
+    public boolean verify(String logisticsInterface, String dataDigest) {
+        if (logisticsInterface == null || dataDigest == null || dataDigest.isBlank()
+                || appSecret == null || appSecret.isBlank()) {
+            return false;
+        }
+        return MessageDigest.isEqual(sign(logisticsInterface).getBytes(StandardCharsets.UTF_8),
+                dataDigest.getBytes(StandardCharsets.UTF_8));
+    }
+
     /** Firma del gateway Link: {@code Base64( MD5( logistics_interface + appSecret ) )}. */
     String sign(String logisticsInterface) {
         try {

@@ -12,5 +12,7 @@ public interface OrderJpaRepositoryAdapter extends JpaRepository<CustomerOrderEn
 
     Optional<CustomerOrderEntity> findByOrderNumber(String orderNumber);
 
+    Optional<CustomerOrderEntity> findByTrackingNumber(String trackingNumber);
+
     List<CustomerOrderEntity> findByPartnerAppId(UUID partnerAppId);
 }
