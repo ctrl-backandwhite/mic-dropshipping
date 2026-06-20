@@ -70,6 +70,23 @@ public class ObjectStorageService {
         return publicUrl;
     }
 
+    /** Lista TODAS las claves de objeto del bucket (para verificar qué imágenes existen realmente). */
+    public java.util.Set<String> listKeys() {
+        java.util.Set<String> keys = new java.util.HashSet<>();
+        if (client == null) {
+            return keys;
+        }
+        try {
+            for (io.minio.Result<io.minio.messages.Item> r : client.listObjects(
+                    io.minio.ListObjectsArgs.builder().bucket(bucket).recursive(true).build())) {
+                keys.add(r.get().objectName());
+            }
+        } catch (Exception e) {
+            log.warn("No se pudieron listar las claves del bucket {}: {}", bucket, e.getMessage());
+        }
+        return keys;
+    }
+
     /** Sube los bytes con la clave dada y devuelve la URL pública navegable. */
     public String upload(String key, byte[] data, String contentType) throws Exception {
         client.putObject(PutObjectArgs.builder().bucket(bucket).object(key)

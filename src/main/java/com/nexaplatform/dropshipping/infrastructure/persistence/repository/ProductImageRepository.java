@@ -19,6 +19,9 @@ public interface ProductImageRepository extends JpaRepository<ProductImageEntity
 
     long countByMirrorStatus(MirrorStatus status);
 
+    /** Imágenes MIRRORED cuyo cdn_url empieza por el prefijo dado (nuestro storage) — para verificar objetos. */
+    List<ProductImageEntity> findByMirrorStatusAndCdnUrlStartingWith(MirrorStatus status, String cdnUrlPrefix);
+
     /** Marca una imagen como espejada: fija la cdn_url (S3/MinIO) + metadatos. Cada llamada, su propia tx. */
     @Modifying
     @Transactional
