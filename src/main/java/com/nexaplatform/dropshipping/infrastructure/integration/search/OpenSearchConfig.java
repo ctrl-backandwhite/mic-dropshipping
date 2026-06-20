@@ -43,22 +43,39 @@ public class OpenSearchConfig {
     @Bean
     public OpenSearchClient openSearchClient(@Value("${nexadrop.opensearch.uris}") String uris,
             @Value("${nexadrop.opensearch.username:}") String username,
-            @Value("${nexadrop.opensearch.password:}") String password, ObjectMapper objectMapper) {
+            @Value("${nexadrop.opensearch.password:}") String password,
+            @Value("${nexadrop.opensearch.tls-insecure:false}") boolean tlsInsecure, ObjectMapper objectMapper) {
         URI uri = URI.create(uris.split(",")[0].trim());
         boolean https = "https".equalsIgnoreCase(uri.getScheme());
         boolean withAuth = username != null && !username.isBlank();
-        HttpHost host = new HttpHost(uri.getScheme(), uri.getHost(), uri.getPort() == -1 ? 9200 : uri.getPort());
 
+        // Nunca enviar auth básica en claro: si hay credenciales, exige https (fail-closed).
+        if (withAuth && !https) {
+            throw new IllegalStateException(
+                    "OpenSearch con credenciales pero URI no es https — me niego a enviar Basic auth en claro. "
+                            + "Usa https en nexadrop.opensearch.uris.");
+        }
+
+        HttpHost host = new HttpHost(uri.getScheme(), uri.getHost(), uri.getPort() == -1 ? 9200 : uri.getPort());
         ApacheHttpClient5TransportBuilder builder = ApacheHttpClient5TransportBuilder.builder(host)
                 .setMapper(new JacksonJsonpMapper(objectMapper));
 
-        if (withAuth || https) {
+        // TLS relajado (confía en cert autofirmado, sin verificar hostname) SOLO si se opta
+        // explícitamente con nexadrop.opensearch.tls-insecure=true. Por defecto: TLS estricto
+        // (truststore del sistema). Pensado para el cert autofirmado del OpenSearch interno.
+        boolean useInsecureTls = https && tlsInsecure;
+        if (https && tlsInsecure) {
+            log.warn("OpenSearch TLS en modo INSEGURO (trust-all): solo válido para el cert autofirmado "
+                    + "del servicio interno en red privada. No usar contra un OpenSearch público.");
+        }
+
+        if (withAuth || useInsecureTls) {
             BasicCredentialsProvider creds = new BasicCredentialsProvider();
             if (withAuth) {
                 creds.setCredentials(new AuthScope(host),
                         new UsernamePasswordCredentials(username, password.toCharArray()));
             }
-            TlsStrategy tlsStrategy = https ? buildTrustAllTls() : null;
+            TlsStrategy tlsStrategy = useInsecureTls ? buildTrustAllTls() : null;
             builder.setHttpClientConfigCallback(http -> {
                 if (withAuth) {
                     http.setDefaultCredentialsProvider(creds);
@@ -72,7 +89,8 @@ public class OpenSearchConfig {
         }
 
         OpenSearchTransport transport = builder.build();
-        log.info("OpenSearch client configured against {} (tls={}, auth={})", uri, https, withAuth);
+        log.info("OpenSearch client configured against {} (tls={}, auth={}, insecureTls={})", uri, https, withAuth,
+                useInsecureTls);
         return new OpenSearchClient(transport);
     }
 

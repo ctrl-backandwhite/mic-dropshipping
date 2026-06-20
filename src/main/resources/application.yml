@@ -227,6 +227,8 @@ nexadrop:
     # Auth básica del plugin de seguridad (vacío en local sin auth; en remoto seguro = admin + clave).
     username: ${OPENSEARCH_USERNAME:}
     password: ${OPENSEARCH_PASSWORD:}
+    # TLS relajado SOLO para el cert autofirmado del OpenSearch interno (red privada). Estricto por defecto.
+    tls-insecure: ${OPENSEARCH_TLS_INSECURE:false}
     products-index: products
     categories-index: categories
     operator-actions-index: operator-actions
