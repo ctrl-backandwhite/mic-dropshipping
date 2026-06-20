@@ -69,9 +69,29 @@ public class ImageMirrorService {
         // un MinIO nuevo) o muertos, se reencolan a PENDING para re-espejar con la URL pública vigente.
         if (!healedStaleUrls) {
             try {
+                // (a) cdn_url de otro entorno/dominio o nulo → reencolar.
                 int n = imageRepository.requeueNotMirrored(storage.publicUrl() + "%");
                 if (n > 0) {
                     log.info("Mirror auto-heal: {} imágenes con cdn_url no-vigente reencoladas a PENDING", n);
+                }
+                // (b) cdn_url con nuestro dominio pero cuyo OBJETO ya no existe (p.ej. MinIO reseteado):
+                //     listamos las claves reales del bucket y reencolamos las que falten.
+                java.util.Set<String> keys = storage.listKeys();
+                if (!keys.isEmpty()) {
+                    String base = storage.publicUrl().replaceAll("/+$", "") + "/";
+                    int missing = 0;
+                    for (ProductImageEntity img : imageRepository
+                            .findByMirrorStatusAndCdnUrlStartingWith(MirrorStatus.MIRRORED, base)) {
+                        String cdn = img.getCdnUrl();
+                        String key = cdn.length() > base.length() ? cdn.substring(base.length()) : "";
+                        if (!keys.contains(key)) {
+                            imageRepository.markStatus(img.getId(), MirrorStatus.PENDING);
+                            missing++;
+                        }
+                    }
+                    if (missing > 0) {
+                        log.info("Mirror auto-heal: {} imágenes MIRRORED con objeto inexistente reencoladas", missing);
+                    }
                 }
             } catch (Exception e) {
                 log.warn("Mirror auto-heal falló: {}", e.getMessage());
