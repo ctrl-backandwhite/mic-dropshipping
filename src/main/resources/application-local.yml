@@ -10,3 +10,8 @@ nexadrop:
   demo:
     # local-only: lets the admin UI create synthetic orders for QA.
     orders-enabled: true
+  cainiao:
+    # En LOCAL siempre MOCK: el flujo de fulfillment funciona simulado sin llamar a Cainiao.
+    # (La env var CAINIAO_ENABLED puede forzarlo a true si algún día quieres probar real en local con túnel.)
+    enabled: ${CAINIAO_ENABLED:false}
+    base-url: ${CAINIAO_BASE_URL:https://linkdaily.tbsandbox.com/gateway/link.do}

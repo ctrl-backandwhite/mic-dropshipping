@@ -1,5 +1,8 @@
 package com.nexaplatform.dropshipping.application.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
@@ -41,6 +44,7 @@ public class FulfillmentService {
     private final CainiaoFulfillmentService cainiao;
     private final UserRepository userRepository;
     private final OrderEmailService orderEmailService;
+    private final ObjectMapper objectMapper;
 
     /** Estado actual del pedido + estado objetivo del envío tras sondear el tracking. */
     public record TrackingProgress(OrderStatus current, OrderStatus target) {
@@ -184,5 +188,122 @@ public class FulfillmentService {
         trackingRepository.save(OrderTrackingEventEntity.builder().orderId(orderId).status(status)
                 .description(description).location(location).source(source)
                 .occurredAt(occurredAt != null ? occurredAt : Instant.now()).createdAt(Instant.now()).build());
+    }
+
+    // ─────────────────────── Fase 2: push entrante de Cainiao (webhooks) ───────────────────────
+
+    /**
+     * Aplica un push de Cainiao ({@code TRACEPUSH} o {@code CAINIAO_GLOBAL_FULFILL_STATUS_SYNC}) al timeline
+     * del pedido. La firma ya la valida el controller; aquí solo se resuelve el pedido y se añaden los
+     * eventos NUEVOS (dedup por estado+descripción, igual que el sondeo).
+     *
+     * <p><b>TODO(real)</b>: ajustar los nombres de campo del payload (mailNo/orderCode, array de trazas,
+     * códigos de acción→OrderStatus) cuando tengamos el detalle exacto de cada API. De momento prueba los
+     * nombres más habituales; lo que no reconoce, lo registra en log para mapearlo.
+     */
+    @Transactional
+    public void applyPush(String msgType, String logisticsInterface) {
+        JsonNode root;
+        try {
+            root = objectMapper.readTree(logisticsInterface);
+        } catch (JsonProcessingException e) {
+            log.warn("Cainiao push {}: JSON inválido", msgType);
+            return;
+        }
+        Order o = resolvePushOrder(root);
+        if (o == null) {
+            log.warn("Cainiao push {}: pedido no encontrado en payload {}", msgType, logisticsInterface);
+            return;
+        }
+        JsonNode events = firstArrayNode(root, "traceDetailList", "traces", "detailList", "actionList");
+        boolean changed = false;
+        if (events != null && events.isArray() && !events.isEmpty()) {
+            for (JsonNode ev : events) {
+                changed |= appendIfNew(o, mapPushStatus(firstNodeText(ev, "action", "status", "logisticsStatus")),
+                        firstNodeText(ev, "desc", "standerdDesc", "remark", "statusDesc"),
+                        firstNodeText(ev, "city", "location"), pushInstant(ev));
+            }
+        } else {
+            // FULFILL_STATUS_SYNC y otros de un solo estado.
+            String desc = firstNodeText(root, "statusDesc", "logisticsStatusDesc", "desc", "action");
+            if (desc != null) {
+                changed = appendIfNew(o, mapPushStatus(firstNodeText(root, "logisticsStatus", "status", "action")),
+                        desc, firstNodeText(root, "city", "location"), pushInstant(root));
+            }
+        }
+        if (changed) {
+            o.setLastTrackedAt(Instant.now());
+            orderRepository.save(o);
+            log.info("Cainiao push {}: timeline actualizado para pedido {}", msgType, o.getOrderNumber());
+        }
+    }
+
+    /** Resuelve el pedido del push por mailNo (tracking) u orderCode (orderNumber). */
+    private Order resolvePushOrder(JsonNode root) {
+        String mailNo = firstNodeText(root, "mailNo", "trackingNumber", "waybillCode", "lpCode");
+        if (mailNo != null) {
+            Order o = orderRepository.findByTrackingNumber(mailNo).orElse(null);
+            if (o != null) {
+                return o;
+            }
+        }
+        String orderCode = firstNodeText(root, "orderCode", "tradeOrderId", "outOrderId");
+        return orderCode != null ? orderRepository.findByOrderNumber(orderCode).orElse(null) : null;
+    }
+
+    /** Añade el evento si no existe ya (dedup por estado|descripción). Devuelve true si lo añadió. */
+    private boolean appendIfNew(Order o, OrderStatus status, String desc, String location, Instant when) {
+        if (desc == null || desc.isBlank()) {
+            return false;
+        }
+        String key = status.name() + "|" + desc;
+        boolean exists = trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId()).stream()
+                .anyMatch(e -> key.equals(e.getStatus() + "|" + e.getDescription()));
+        if (exists) {
+            return false;
+        }
+        appendEvent(o.getId(), status.name(), desc, location, "CAINIAO", when);
+        o.setTrackingStatus(status.name());
+        return true;
+    }
+
+    /** Mapea el texto/código de estado de Cainiao a {@link OrderStatus}. TODO(real): mapa por código exacto. */
+    private static OrderStatus mapPushStatus(String raw) {
+        if (raw == null) {
+            return OrderStatus.SHIPPED;
+        }
+        String s = raw.toUpperCase();
+        if (s.contains("DELIVER") || s.contains("SIGN") || s.contains("SIGNED")) {
+            return OrderStatus.DELIVERED;
+        }
+        if (s.contains("ACCEPT") || s.contains("CREATE") || s.contains("REGIST")) {
+            return OrderStatus.FORWARDED;
+        }
+        return OrderStatus.SHIPPED;
+    }
+
+    private static JsonNode firstArrayNode(JsonNode node, String... keys) {
+        for (String k : keys) {
+            JsonNode v = node.get(k);
+            if (v != null && v.isArray()) {
+                return v;
+            }
+        }
+        return null;
+    }
+
+    private static String firstNodeText(JsonNode node, String... keys) {
+        for (String k : keys) {
+            String v = node.path(k).asText(null);
+            if (v != null && !v.isBlank()) {
+                return v;
+            }
+        }
+        return null;
+    }
+
+    private static Instant pushInstant(JsonNode node) {
+        long ts = node.path("time").asLong(node.path("occurTime").asLong(node.path("gmtModified").asLong(0L)));
+        return ts > 0 ? Instant.ofEpochMilli(ts) : Instant.now();
     }
 }

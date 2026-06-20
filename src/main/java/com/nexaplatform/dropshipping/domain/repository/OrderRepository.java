@@ -17,6 +17,9 @@ public interface OrderRepository extends BaseRepository<Order, Order, UUID> {
     /** Looks up an order by its unique human-facing order number. */
     Optional<Order> findByOrderNumber(String orderNumber);
 
+    /** Looks up an order by its carrier tracking number (used by inbound Cainiao webhooks). */
+    Optional<Order> findByTrackingNumber(String trackingNumber);
+
     /** Orders placed through the given partner application. */
     List<Order> findByPartnerAppId(UUID partnerAppId);
 
