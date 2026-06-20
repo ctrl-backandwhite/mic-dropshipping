@@ -135,11 +135,12 @@
             <artifactId>httpcore5</artifactId>
         </dependency>
         <!-- HttpClient5: opensearch-java lo trae en runtime (no expuesto en compilación). Lo
-             declaramos para configurar TLS + auth básica del cliente OpenSearch seguro. -->
+             declaramos para configurar TLS + auth básica del cliente OpenSearch seguro. SIN versión
+             fija: la gestiona el BOM de Spring Boot, alineada con httpcore5/httpcore5-h2 (un pin a
+             5.4.1 con httpcore5 5.4.2 rompía ClientH2UpgradeHandler → NoSuchMethodError al indexar). -->
         <dependency>
             <groupId>org.apache.httpcomponents.client5</groupId>
             <artifactId>httpclient5</artifactId>
-            <version>5.4.1</version>
         </dependency>
 
         <!-- ============ Image processing ============ -->
