@@ -42,4 +42,29 @@ public interface CustomerSubscriptionUseCase extends BaseUseCase<CustomerSubscri
 
     /** Active public plan entities ordered by position (kept as entities for the feature-derived limits). */
     List<SubscriptionPlanEntity> listPublicPlans();
+
+    // ---- Métodos de pago en el perfil (tarjeta guardada vía Stripe Elements) ----
+
+    /** Tarjeta guardada del usuario (datos no sensibles). */
+    record CardInfo(String id, String brand, String last4, Long expMonth, Long expYear, boolean isDefault) {
+    }
+
+    /** Config pública de billing para el frontend. */
+    record BillingConfigInfo(String publishableKey, boolean enabled) {
+    }
+
+    /** Publishable key + estado de Stripe (para inicializar Elements en el front). */
+    BillingConfigInfo billingConfig();
+
+    /** Crea un SetupIntent para que el usuario guarde una tarjeta; devuelve su client_secret. */
+    String createSetupIntentSecret(UUID userId) throws Exception;
+
+    /** Tarjetas guardadas del usuario. */
+    List<CardInfo> listCards(UUID userId) throws Exception;
+
+    /** Fija la tarjeta por defecto (la que cobra las suscripciones). */
+    void setDefaultCard(UUID userId, String paymentMethodId) throws Exception;
+
+    /** Borra (desvincula) una tarjeta guardada. */
+    void deleteCard(UUID userId, String paymentMethodId) throws Exception;
 }

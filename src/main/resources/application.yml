@@ -246,6 +246,9 @@ nexadrop:
   stripe:
     enabled: ${STRIPE_ENABLED:false}
     secret-key: ${STRIPE_SECRET_KEY:}
+    # Clave PÚBLICA (pk_test/pk_live): se expone al frontend para Stripe Elements (guardar tarjeta).
+    # Acepta STRIPE_PUBLISHABLE_KEY o, por compatibilidad con el .env actual, STRIPE_PUBLIC_KEY.
+    publishable-key: ${STRIPE_PUBLISHABLE_KEY:${STRIPE_PUBLIC_KEY:}}
     webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
     # Identificadores que se inyectan como metadata en cada PaymentIntent.
     # Útil cuando varias plataformas comparten la misma cuenta Stripe — filtras en el dashboard

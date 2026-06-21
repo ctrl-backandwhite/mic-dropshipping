@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.mapper.CustomerSubscriptionUpdateMapper;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
@@ -11,7 +12,11 @@ import com.nexaplatform.dropshipping.domain.model.SubscriptionPlan;
 import com.nexaplatform.dropshipping.domain.repository.CustomerSubscriptionRepository;
 import com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SubscriptionPlanEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SubscriptionPlanRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
+import com.stripe.model.Customer;
+import com.stripe.model.PaymentMethod;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -43,6 +48,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     private final SubscriptionPlanRepository planRepository;
     private final SubscriptionPlanUseCase subscriptionPlanUseCase;
     private final StripeService stripeService;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional
@@ -214,5 +220,93 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     /** Resolves the managed plan entity by its unique code, failing if it does not exist. */
     private SubscriptionPlanEntity getPlanEntityByCode(String code) {
         return planRepository.findByCode(code).orElseThrow(() -> new NotFoundException("Plan not found: " + code));
+    }
+
+    // =============================================================================================
+    // Métodos de pago en el perfil (tarjeta guardada vía Stripe Elements)
+    // =============================================================================================
+
+    @Override
+    public BillingConfigInfo billingConfig() {
+        return new BillingConfigInfo(stripeService.publishableKey(), stripeService.isEnabled());
+    }
+
+    @Override
+    @Transactional
+    public String createSetupIntentSecret(UUID userId) throws Exception {
+        requireStripe();
+        String customerId = resolveStripeCustomerId(userId);
+        return stripeService.createSetupIntent(customerId).getClientSecret();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CardInfo> listCards(UUID userId) throws Exception {
+        requireStripe();
+        UserEntity user = loadUser(userId);
+        String customerId = user.getStripeCustomerId();
+        if (customerId == null || customerId.isBlank()) {
+            return List.of();
+        }
+        String defaultPm = stripeService.defaultPaymentMethodId(customerId);
+        return stripeService.listCards(customerId).stream().map(pm -> toCardInfo(pm, defaultPm)).toList();
+    }
+
+    @Override
+    @Transactional
+    public void setDefaultCard(UUID userId, String paymentMethodId) throws Exception {
+        requireStripe();
+        String customerId = resolveStripeCustomerId(userId);
+        assertCardBelongsToCustomer(customerId, paymentMethodId);
+        stripeService.setDefaultPaymentMethod(customerId, paymentMethodId);
+    }
+
+    @Override
+    @Transactional
+    public void deleteCard(UUID userId, String paymentMethodId) throws Exception {
+        requireStripe();
+        String customerId = resolveStripeCustomerId(userId);
+        assertCardBelongsToCustomer(customerId, paymentMethodId);
+        stripeService.detachPaymentMethod(paymentMethodId);
+    }
+
+    private void requireStripe() {
+        if (!stripeService.isEnabled()) {
+            throw new BusinessException("Los pagos con tarjeta no están activos en este entorno.");
+        }
+    }
+
+    private UserEntity loadUser(UUID userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found: " + userId));
+    }
+
+    /** Devuelve el customerId de Stripe del usuario; lo crea y persiste de forma perezosa si no lo tiene. */
+    private String resolveStripeCustomerId(UUID userId) throws Exception {
+        UserEntity user = loadUser(userId);
+        if (user.getStripeCustomerId() != null && !user.getStripeCustomerId().isBlank()) {
+            return user.getStripeCustomerId();
+        }
+        Customer customer = stripeService.getOrCreateCustomer(null, user.getEmail(), userId.toString());
+        user.setStripeCustomerId(customer.getId());
+        userRepository.save(user);
+        log.info("::> [BILLING] Stripe customer creado user={} customer={}", userId, customer.getId());
+        return customer.getId();
+    }
+
+    /** Evita que un usuario manipule (default/borrado) una tarjeta que no es de su Customer. */
+    private void assertCardBelongsToCustomer(String customerId, String paymentMethodId) throws Exception {
+        boolean owned = stripeService.listCards(customerId).stream()
+                .anyMatch(pm -> pm.getId().equals(paymentMethodId));
+        if (!owned) {
+            throw new NotFoundException("Tarjeta no encontrada para el usuario");
+        }
+    }
+
+    private CardInfo toCardInfo(PaymentMethod pm, String defaultPaymentMethodId) {
+        PaymentMethod.Card card = pm.getCard();
+        return new CardInfo(pm.getId(), card != null ? card.getBrand() : null, card != null ? card.getLast4() : null,
+                card != null ? card.getExpMonth() : null, card != null ? card.getExpYear() : null,
+                pm.getId().equals(defaultPaymentMethodId));
     }
 }
