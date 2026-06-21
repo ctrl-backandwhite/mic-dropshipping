@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.infrastructure.cache;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.caffeine.CaffeineCacheManager;
@@ -9,7 +10,6 @@ import org.springframework.cache.interceptor.KeyGenerator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.context.annotation.Profile;
 
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
@@ -62,9 +62,14 @@ public class CacheConfig {
                 + Arrays.deepToString(params);
     }
 
+    // Cache manager por defecto en CUALQUIER perfil mientras no se active el cache distribuido
+    // (nexadrop.cache.distributed=false, el default). Antes estaba atado a perfiles concretos
+    // (local/dev/default/test) y dejaba a `pre` y `pro` SIN cache manager → 500 "Cannot find cache".
+    // Al depender de la propiedad y no del nombre del perfil, queda correcto para todos los entornos.
     @Bean
     @Primary
-    @Profile({"local", "dev", "default", "test"})
+    @ConditionalOnProperty(prefix = "nexadrop.cache", name = "distributed", havingValue = "false",
+            matchIfMissing = true)
     public CacheManager caffeineCacheManager() {
         CaffeineCacheManager mgr = new CaffeineCacheManager(CACHE_PRODUCT_DETAIL, CACHE_PRODUCT_SUMMARY,
                 CACHE_PRODUCT_LIST, CACHE_CATEGORY_TREE, CACHE_CATEGORIES_FLAT, CACHE_SUPPLIERS_FLAT,

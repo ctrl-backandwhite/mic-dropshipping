@@ -11,7 +11,6 @@ import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.context.annotation.Profile;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -25,9 +24,11 @@ import java.util.Map;
 import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.*;
 
 /**
- * Cache distribuido en Redis. Activo en perfil {@code prod} / {@code cluster}
- * (cuando hay más de una instancia detrás del LB y la coherencia de cache
- * tiene que estar fuera del proceso).
+ * Cache distribuido en Redis. Se activa SOLO cuando {@code nexadrop.cache.distributed=true}
+ * (env {@code CACHE_DISTRIBUTED=true}), independiente del nombre del perfil — así prod lo enciende
+ * sin acoplar el cache al nombre del entorno. Si está en false (default), se usa el Caffeine L1 de
+ * {@link CacheConfig}. Pensado para cuando hay más de una instancia detrás del LB y la coherencia de
+ * cache tiene que estar fuera del proceso.
  * <p>
  * El TTL es agresivo por defecto (60 s para listings, 5 min para PDP) porque
  * en dropshipping los datos cambian rápido pero son razonables consistir
@@ -35,8 +36,7 @@ import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.*;
  * Redis solo ve el "long tail" de cache misses.
  */
 @Configuration
-@Profile({"prod", "cluster"})
-@ConditionalOnProperty(prefix = "nexadrop.cache", name = "distributed", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "nexadrop.cache", name = "distributed", havingValue = "true")
 public class RedisCacheConfig {
 
     @Bean
