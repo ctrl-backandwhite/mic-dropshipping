@@ -92,4 +92,12 @@ public interface CustomerSubscriptionUseCase extends BaseUseCase<CustomerSubscri
      * cancelación programada. Cubre renovación, fallo de cobro (PAST_DUE) y cancelación desde Stripe.
      */
     void syncFromStripe(String stripeSubscriptionId, String stripeStatus, Long currentPeriodEnd, Long cancelAtEpoch);
+
+    /** Factura del historial del usuario (datos no sensibles de Stripe). */
+    record InvoiceView(String number, Long total, String currency, String status, Long created, String pdfUrl,
+            String hostedUrl) {
+    }
+
+    /** Historial de facturas del usuario (de Stripe), las más recientes primero. */
+    List<InvoiceView> listInvoices(UUID userId) throws Exception;
 }

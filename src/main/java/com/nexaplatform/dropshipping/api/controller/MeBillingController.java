@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.api.controller;
 import com.nexaplatform.dropshipping.api.MeBillingApi;
 import com.nexaplatform.dropshipping.api.dto.in.SubscribeDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BillingConfigDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.BillingInvoiceDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MySubscriptionDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.PaymentMethodDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SetupIntentDtoOut;
@@ -90,5 +91,14 @@ public class MeBillingController implements MeBillingApi {
     public ResponseEntity<Void> cancelSubscription(Authentication auth) throws Exception {
         useCase.cancelMySubscription(UUID.fromString(auth.getName()));
         return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    public ResponseEntity<List<BillingInvoiceDtoOut>> invoices(Authentication auth) throws Exception {
+        List<BillingInvoiceDtoOut> out = useCase.listInvoices(UUID.fromString(auth.getName())).stream()
+                .map(i -> BillingInvoiceDtoOut.builder().number(i.number()).total(i.total()).currency(i.currency())
+                        .status(i.status()).created(i.created()).pdfUrl(i.pdfUrl()).hostedUrl(i.hostedUrl()).build())
+                .toList();
+        return ResponseEntity.ok(out);
     }
 }

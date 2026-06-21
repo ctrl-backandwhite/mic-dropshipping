@@ -401,6 +401,22 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<InvoiceView> listInvoices(UUID userId) throws Exception {
+        if (!stripeService.isEnabled()) {
+            return List.of();
+        }
+        String customerId = loadUser(userId).getStripeCustomerId();
+        if (customerId == null || customerId.isBlank()) {
+            return List.of();
+        }
+        return stripeService.listInvoices(customerId, 24).stream()
+                .map(i -> new InvoiceView(i.number(), i.total(), i.currency(), i.status(), i.created(), i.pdfUrl(),
+                        i.hostedUrl()))
+                .toList();
+    }
+
+    @Override
     @Transactional
     public void syncFromStripe(String stripeSubscriptionId, String stripeStatus, Long currentPeriodEnd,
             Long cancelAtEpoch) {

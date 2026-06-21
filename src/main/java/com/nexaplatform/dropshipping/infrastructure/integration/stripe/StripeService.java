@@ -5,6 +5,7 @@ import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Customer;
 import com.stripe.model.Event;
+import com.stripe.model.Invoice;
 import com.stripe.model.PaymentMethod;
 import com.stripe.model.Price;
 import com.stripe.model.SetupIntent;
@@ -18,6 +19,7 @@ import com.stripe.param.PaymentMethodListParams;
 import com.stripe.param.PriceCreateParams;
 import com.stripe.param.PriceListParams;
 import com.stripe.param.SetupIntentCreateParams;
+import com.stripe.param.InvoiceListParams;
 import com.stripe.param.SubscriptionCreateParams;
 import com.stripe.param.SubscriptionUpdateParams;
 import com.stripe.param.TaxRateCreateParams;
@@ -273,6 +275,20 @@ public class StripeService {
 
     private SubResult toResult(Subscription s) {
         return new SubResult(s.getId(), s.getStatus(), s.getCurrentPeriodStart(), s.getCurrentPeriodEnd());
+    }
+
+    /** Resumen de factura (datos no sensibles) para el historial del usuario. */
+    public record InvoiceInfo(String number, Long total, String currency, String status, Long created, String pdfUrl,
+            String hostedUrl) {
+    }
+
+    /** Facturas del Customer (las más recientes primero), para el historial de facturación del perfil. */
+    public List<InvoiceInfo> listInvoices(String customerId, int limit) throws StripeException {
+        return Invoice.list(InvoiceListParams.builder().setCustomer(customerId).setLimit((long) Math.max(1, limit))
+                .build()).getData().stream()
+                .map(inv -> new InvoiceInfo(inv.getNumber(), inv.getTotal(), inv.getCurrency(), inv.getStatus(),
+                        inv.getCreated(), inv.getInvoicePdf(), inv.getHostedInvoiceUrl()))
+                .toList();
     }
 
     // =================================================================================================

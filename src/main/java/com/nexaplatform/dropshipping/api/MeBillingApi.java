@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.api;
 
 import com.nexaplatform.dropshipping.api.dto.in.SubscribeDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BillingConfigDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.BillingInvoiceDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MySubscriptionDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.PaymentMethodDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SetupIntentDtoOut;
@@ -68,4 +69,9 @@ public interface MeBillingApi {
     @ApiResponse(responseCode = "204", description = "Cancelación programada")
     @PostMapping("/subscription/cancel")
     ResponseEntity<Void> cancelSubscription(Authentication auth) throws Exception;
+
+    @Operation(summary = "Historial de facturas del usuario (de Stripe)")
+    @ApiResponse(responseCode = "200", description = "Facturas listadas")
+    @GetMapping("/billing/invoices")
+    ResponseEntity<List<BillingInvoiceDtoOut>> invoices(Authentication auth) throws Exception;
 }
