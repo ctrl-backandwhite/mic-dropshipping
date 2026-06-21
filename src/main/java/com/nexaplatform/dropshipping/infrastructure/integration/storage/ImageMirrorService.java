@@ -15,6 +15,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -54,8 +55,10 @@ public class ImageMirrorService {
     @Value("${nexadrop.storage.mirror-batch:50}")
     private int mirrorBatch;
 
+    // Redirects NO automáticos: se siguen a mano validando cada salto (anti-SSRF). Un origen no puede
+    // redirigir a una IP interna/metadata sin pasar de nuevo por assertPublicHttpUrl.
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10))
-            .followRedirects(HttpClient.Redirect.NORMAL).build();
+            .followRedirects(HttpClient.Redirect.NEVER).build();
     private final ExecutorService pool = Executors.newFixedThreadPool(8);
 
     @PreDestroy
@@ -194,45 +197,100 @@ public class ImageMirrorService {
 
     /**
      * Descarga la imagen de origen <b>sin Referer</b> (el HttpClient no lo añade → alicdn no la bloquea),
-     * la sube al bucket con clave por content-hash (dedup) y devuelve la URL pública. Lanza si el origen
-     * no responde 2xx o viene vacío. Reutilizado por el mirror de producto y de variante/valor.
+     * la sube al bucket con clave por content-hash (dedup) y devuelve la URL pública. Reutilizado por el
+     * mirror de producto y de variante/valor.
+     *
+     * <p>Endurecido por seguridad:
+     * <ul>
+     *   <li><b>Anti-SSRF</b>: solo http/https a hosts que NO resuelvan a IP privada/loopback/link-local/
+     *       metadata (169.254.169.254, etc.); los redirects se siguen a mano revalidando cada salto.</li>
+     *   <li><b>Anti-XSS por content-type</b>: se verifican los <b>magic bytes</b> y solo se almacenan
+     *       imágenes ráster reales (jpg/png/webp/gif) con su content-type correcto. Un SVG/HTML (aunque el
+     *       origen mienta en el header) se descarta y NUNCA entra al bucket → no se puede servir ni ejecutar.</li>
+     * </ul>
      */
     private Stored fetchAndStore(String src) throws Exception {
-        HttpResponse<byte[]> res = http.send(HttpRequest.newBuilder(URI.create(src.trim()))
-                .header("User-Agent", "Mozilla/5.0 (compatible; NX036ImageMirror/1.0)")
-                .timeout(Duration.ofSeconds(25)).GET().build(), HttpResponse.BodyHandlers.ofByteArray());
+        HttpResponse<byte[]> res = fetchFollowingRedirects(src.trim(), 5);
         byte[] data = res.body();
         if (res.statusCode() / 100 != 2 || data == null || data.length == 0) {
             throw new IllegalStateException("HTTP " + res.statusCode());
         }
-        String ct = res.headers().firstValue("content-type").orElse("image/jpeg");
+        String type = sniffRasterImage(data); // jpg/png/webp/gif o lanza (descarta SVG/HTML/otros)
+        String contentType = "image/" + ("jpg".equals(type) ? "jpeg" : type);
         String hash = sha256(data);
-        String key = "media/" + hash.substring(0, 2) + "/" + hash + extOf(ct, src);
-        return new Stored(storage.upload(key, data, ct), data.length, hash);
+        String key = "media/" + hash.substring(0, 2) + "/" + hash + "." + type;
+        return new Stored(storage.upload(key, data, contentType), data.length, hash);
     }
 
-    private static String extOf(String contentType, String src) {
-        String ct = contentType.toLowerCase();
-        if (ct.contains("png")) {
-            return ".png";
+    /** Sigue redirects MANUALMENTE (máx {@code maxHops}), validando cada URL contra SSRF antes de pedirla. */
+    private HttpResponse<byte[]> fetchFollowingRedirects(String url, int maxHops) throws Exception {
+        String current = url;
+        for (int hop = 0; hop <= maxHops; hop++) {
+            URI uri = URI.create(current);
+            assertPublicHttpUrl(uri);
+            HttpResponse<byte[]> res = http.send(HttpRequest.newBuilder(uri)
+                    .header("User-Agent", "Mozilla/5.0 (compatible; NX036ImageMirror/1.0)")
+                    .timeout(Duration.ofSeconds(25)).GET().build(), HttpResponse.BodyHandlers.ofByteArray());
+            if (res.statusCode() / 100 == 3) {
+                String loc = res.headers().firstValue("location").orElse(null);
+                if (loc == null) {
+                    return res;
+                }
+                current = uri.resolve(loc).toString(); // resuelve también redirects relativos
+                continue;
+            }
+            return res;
         }
-        if (ct.contains("webp")) {
-            return ".webp";
+        throw new IllegalStateException("Demasiados redirects para " + url);
+    }
+
+    /** Anti-SSRF: rechaza esquemas no http(s) y hosts que resuelvan a IP no enrutable públicamente. */
+    static void assertPublicHttpUrl(URI uri) throws Exception {
+        String scheme = uri.getScheme();
+        if (scheme == null || !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))) {
+            throw new SecurityException("Esquema no permitido para descarga de imagen: " + scheme);
         }
-        if (ct.contains("gif")) {
-            return ".gif";
+        String host = uri.getHost();
+        if (host == null || host.isBlank()) {
+            throw new SecurityException("URL de imagen sin host");
         }
-        if (ct.contains("jpeg") || ct.contains("jpg")) {
-            return ".jpg";
+        for (InetAddress addr : InetAddress.getAllByName(host)) {
+            if (addr.isLoopbackAddress() || addr.isAnyLocalAddress() || addr.isLinkLocalAddress()
+                    || addr.isSiteLocalAddress() || addr.isMulticastAddress()) {
+                throw new SecurityException("Host resuelve a IP no pública (posible SSRF): "
+                        + host + " → " + addr.getHostAddress());
+            }
+            byte[] b = addr.getAddress();
+            if (b.length == 4) { // rangos privados no cubiertos por isSiteLocalAddress
+                int o0 = b[0] & 0xff;
+                int o1 = b[1] & 0xff;
+                if (o0 == 100 && o1 >= 64 && o1 <= 127) { // CGNAT 100.64.0.0/10
+                    throw new SecurityException("Host en rango CGNAT (posible SSRF): " + addr.getHostAddress());
+                }
+            }
         }
-        String s = src.toLowerCase();
-        if (s.contains(".png")) {
-            return ".png";
+    }
+
+    /**
+     * Devuelve la extensión/tipo ({@code jpg|png|webp|gif}) según los <b>magic bytes</b> reales del
+     * contenido; lanza si NO es una imagen ráster soportada. Así un SVG/HTML disfrazado de imagen (o un
+     * content-type mentido por el origen) se descarta y nunca llega al bucket.
+     */
+    static String sniffRasterImage(byte[] d) {
+        if (d.length >= 3 && (d[0] & 0xff) == 0xFF && (d[1] & 0xff) == 0xD8 && (d[2] & 0xff) == 0xFF) {
+            return "jpg";
         }
-        if (s.contains(".webp")) {
-            return ".webp";
+        if (d.length >= 8 && (d[0] & 0xff) == 0x89 && d[1] == 'P' && d[2] == 'N' && d[3] == 'G') {
+            return "png";
         }
-        return ".jpg";
+        if (d.length >= 6 && d[0] == 'G' && d[1] == 'I' && d[2] == 'F' && d[3] == '8') {
+            return "gif";
+        }
+        if (d.length >= 12 && d[0] == 'R' && d[1] == 'I' && d[2] == 'F' && d[3] == 'F'
+                && d[8] == 'W' && d[9] == 'E' && d[10] == 'B' && d[11] == 'P') {
+            return "webp";
+        }
+        throw new IllegalStateException("Contenido no es imagen ráster soportada (jpg/png/webp/gif) — descartado");
     }
 
     private static String sha256(byte[] data) {
