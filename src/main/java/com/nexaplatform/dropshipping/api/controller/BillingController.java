@@ -44,11 +44,12 @@ public class BillingController implements BillingApi {
                     currencyService.toUsd(BigDecimal.valueOf(p.getPriceMonthlyCents()).movePointLeft(2), src));
             BigDecimal yearly = currencyService.usdToDisplay(
                     currencyService.toUsd(BigDecimal.valueOf(p.getPriceYearlyCents()).movePointLeft(2), src));
+            // Precio de plan REDONDEADO a entero (HALF_UP) — se muestra "25 €", no "25,28 €".
             p.setDisplayCurrency(displayCode);
-            p.setDisplayMonthly(monthly);
-            p.setDisplayYearly(yearly);
-            p.setDisplayMonthlyFormatted(currencyService.formatDisplay(monthly, displayCode));
-            p.setDisplayYearlyFormatted(currencyService.formatDisplay(yearly, displayCode));
+            p.setDisplayMonthly(monthly.setScale(0, java.math.RoundingMode.HALF_UP));
+            p.setDisplayYearly(yearly.setScale(0, java.math.RoundingMode.HALF_UP));
+            p.setDisplayMonthlyFormatted(currencyService.formatDisplayRounded(monthly, displayCode));
+            p.setDisplayYearlyFormatted(currencyService.formatDisplayRounded(yearly, displayCode));
         }
         return ResponseEntity.ok(plans);
     }

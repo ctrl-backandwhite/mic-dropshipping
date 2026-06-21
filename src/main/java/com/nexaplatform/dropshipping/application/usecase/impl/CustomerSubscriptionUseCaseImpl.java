@@ -4,6 +4,7 @@ import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.mapper.CustomerSubscriptionUpdateMapper;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
+import com.nexaplatform.dropshipping.application.service.CountryTaxService;
 import com.nexaplatform.dropshipping.application.usecase.SubscriptionPlanUseCase;
 import com.nexaplatform.dropshipping.domain.enums.SubscriptionStatus;
 import com.nexaplatform.dropshipping.domain.model.CustomerSubscription;
@@ -53,6 +54,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     private final StripeService stripeService;
     private final UserRepository userRepository;
     private final CurrencyRateService currencyService;
+    private final CountryTaxService countryTaxService;
 
     @Override
     @Transactional
@@ -339,6 +341,11 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         }
         // Fija la tarjeta como predeterminada del customer (idempotente) para futuras renovaciones/UI.
         stripeService.setDefaultPaymentMethod(customerId, defaultPm);
+        // IVA por país del usuario (misma config que productos: CountryTaxService.rateBpsFor) → TaxRate de
+        // Stripe; la contratación incluye el IVA y aparece desglosado en la factura de Stripe.
+        UserEntity user = loadUser(userId);
+        int taxBps = countryTaxService.rateBpsFor(user.getCountry());
+        String taxRateId = stripeService.ensureTaxRate(user.getCountry(), taxBps);
         // Precio del plan en CNY (moneda de 1688) → USD para el cobro en Stripe (igual que los productos).
         String src = plan.getCurrency() != null && !plan.getCurrency().isBlank() ? plan.getCurrency() : "CNY";
         BigDecimal cny = BigDecimal.valueOf(cnyCents).movePointLeft(2);
@@ -354,8 +361,8 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
                 .planId(plan.getId()).status(SubscriptionStatus.INCOMPLETE).billingPeriod(billingPeriod)
                 .stripeCustomerId(customerId).build());
 
-        StripeService.SubResult res = stripeService.createSubscription(customerId, priceId, defaultPm, planCode,
-                userId.toString(), local.getId().toString());
+        StripeService.SubResult res = stripeService.createSubscription(customerId, priceId, defaultPm, taxRateId,
+                planCode, userId.toString(), local.getId().toString());
 
         customerSubscriptionRepository.save(local.withStripeSubscriptionId(res.id())
                 .withStatus(mapStripeStatus(res.status()))

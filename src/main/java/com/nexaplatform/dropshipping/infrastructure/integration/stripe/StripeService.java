@@ -9,6 +9,7 @@ import com.stripe.model.PaymentMethod;
 import com.stripe.model.Price;
 import com.stripe.model.SetupIntent;
 import com.stripe.model.Subscription;
+import com.stripe.model.TaxRate;
 import com.stripe.model.checkout.Session;
 import com.stripe.net.Webhook;
 import com.stripe.param.CustomerCreateParams;
@@ -19,7 +20,11 @@ import com.stripe.param.PriceListParams;
 import com.stripe.param.SetupIntentCreateParams;
 import com.stripe.param.SubscriptionCreateParams;
 import com.stripe.param.SubscriptionUpdateParams;
+import com.stripe.param.TaxRateCreateParams;
+import com.stripe.param.TaxRateListParams;
 import com.stripe.param.checkout.SessionCreateParams;
+
+import java.math.BigDecimal;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -199,13 +204,38 @@ public class StripeService {
     }
 
     /**
+     * Find-or-create de un TaxRate (IVA) por país+bps; devuelve su id o null si bps&lt;=0. El % viene de
+     * {@code CountryTaxService.rateBpsFor(country)} (la misma config de IVA que los productos). Al adjuntarlo
+     * a la suscripción, Stripe añade el IVA a cada factura (aparece desglosado en la factura).
+     */
+    public String ensureTaxRate(String country, int bps) throws StripeException {
+        if (bps <= 0) {
+            return null;
+        }
+        String tag = "nx_iva_" + (country == null ? "" : country.toLowerCase()) + "_" + bps;
+        for (TaxRate tr : TaxRate.list(TaxRateListParams.builder().setActive(true).setLimit(100L).build()).getData()) {
+            if (tr.getMetadata() != null && tag.equals(tr.getMetadata().get("nx_tag"))) {
+                return tr.getId();
+            }
+        }
+        TaxRateCreateParams.Builder b = TaxRateCreateParams.builder()
+                .setDisplayName("IVA" + (country != null && !country.isBlank() ? " " + country.toUpperCase() : ""))
+                .setPercentage(BigDecimal.valueOf(bps).movePointLeft(2)).setInclusive(false)
+                .putMetadata("nx_tag", tag).putMetadata("platform", platformId);
+        if (country != null && country.trim().length() == 2) {
+            b.setCountry(country.trim().toUpperCase());
+        }
+        return TaxRate.create(b.build()).getId();
+    }
+
+    /**
      * Crea una suscripción recurrente cobrando YA con la tarjeta por defecto del Customer
      * ({@code ERROR_IF_INCOMPLETE}: si la tarjeta requiere 3DS o falla, lanza). Metadata marca el origen
-     * como PLAN ({@code purpose=subscription}, {@code plan_code}, {@code user_id}) para distinguir el
-     * ingreso en Stripe.
+     * como PLAN ({@code purpose=subscription}, {@code plan_code}, {@code user_id}). Si {@code taxRateId} no
+     * es null, se aplica como IVA por defecto → Stripe lo añade a la factura.
      */
     public SubResult createSubscription(String customerId, String priceId, String defaultPaymentMethodId,
-            String planCode, String userId, String localSubscriptionId) throws StripeException {
+            String taxRateId, String planCode, String userId, String localSubscriptionId) throws StripeException {
         SubscriptionCreateParams.Builder b = SubscriptionCreateParams.builder().setCustomer(customerId)
                 .addItem(SubscriptionCreateParams.Item.builder().setPrice(priceId).build())
                 .setProrationBehavior(SubscriptionCreateParams.ProrationBehavior.CREATE_PRORATIONS)
@@ -215,6 +245,9 @@ public class StripeService {
                 .putMetadata("user_id", userId).putMetadata("subscription_id", localSubscriptionId);
         if (defaultPaymentMethodId != null && !defaultPaymentMethodId.isBlank()) {
             b.setDefaultPaymentMethod(defaultPaymentMethodId);
+        }
+        if (taxRateId != null && !taxRateId.isBlank()) {
+            b.addDefaultTaxRate(taxRateId);
         }
         return toResult(Subscription.create(b.build()));
     }
