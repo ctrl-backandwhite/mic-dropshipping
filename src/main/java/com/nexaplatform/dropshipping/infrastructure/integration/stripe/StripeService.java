@@ -6,6 +6,7 @@ import com.stripe.exception.StripeException;
 import com.stripe.model.Customer;
 import com.stripe.model.Event;
 import com.stripe.model.PaymentMethod;
+import com.stripe.model.Price;
 import com.stripe.model.SetupIntent;
 import com.stripe.model.Subscription;
 import com.stripe.model.checkout.Session;
@@ -13,6 +14,8 @@ import com.stripe.net.Webhook;
 import com.stripe.param.CustomerCreateParams;
 import com.stripe.param.CustomerUpdateParams;
 import com.stripe.param.PaymentMethodListParams;
+import com.stripe.param.PriceCreateParams;
+import com.stripe.param.PriceListParams;
 import com.stripe.param.SetupIntentCreateParams;
 import com.stripe.param.SubscriptionCreateParams;
 import com.stripe.param.SubscriptionUpdateParams;
@@ -151,49 +154,92 @@ public class StripeService {
         return c.getInvoiceSettings() == null ? null : c.getInvoiceSettings().getDefaultPaymentMethod();
     }
 
+    /** Método de pago por defecto o, si no hay default fijado, la primera tarjeta guardada (o null). */
+    public String defaultOrFirstCardId(String customerId) throws StripeException {
+        String def = defaultPaymentMethodId(customerId);
+        if (def != null && !def.isBlank()) {
+            return def;
+        }
+        List<PaymentMethod> cards = listCards(customerId);
+        return cards.isEmpty() ? null : cards.get(0).getId();
+    }
+
     // =================================================================================================
-    // Suscripción (cobro recurrente con la tarjeta por defecto), MARCADA como pago de plan
+    // Precios recurrentes (find-or-create) + Suscripción, MARCADA como pago de plan
     // =================================================================================================
 
+    /** Resultado app-friendly de una operación de suscripción Stripe (sin exponer el SDK). */
+    public record SubResult(String id, String status, Long periodStart, Long periodEnd) {
+    }
+
     /**
-     * Crea una suscripción recurrente cobrando con la tarjeta por defecto del Customer. La metadata marca
-     * el origen como PLAN ({@code purpose=subscription}, {@code plan_code}, {@code user_id}) para poder
-     * distinguir el ingreso en Stripe. Expande {@code latest_invoice.payment_intent} para detectar 3DS.
+     * Find-or-create de un Price recurrente. La {@code lookup_key} incluye importe+moneda+periodo, así un
+     * cambio de precio del plan en admin genera AUTOMÁTICAMENTE un Price nuevo (los Price de Stripe son
+     * inmutables). Idempotente: si ya existe ese importe/periodo, reutiliza el Price. El importe va en la
+     * moneda de COBRO ya convertida (USD), no en CNY. Crea el Product inline la primera vez.
      */
-    public Subscription createSubscription(String customerId, String priceId, String defaultPaymentMethodId,
+    public String ensureRecurringPrice(String planCode, String period, long amountCents, String chargeCurrency,
+            String planName) throws StripeException {
+        String cur = (chargeCurrency == null || chargeCurrency.isBlank()) ? "usd" : chargeCurrency.toLowerCase();
+        String key = ("nx_" + planCode + "_" + period + "_" + amountCents + "_" + cur).toLowerCase()
+                .replaceAll("[^a-z0-9_]", "");
+        java.util.List<Price> found = Price.list(PriceListParams.builder().addLookupKey(key).build()).getData();
+        if (!found.isEmpty()) {
+            return found.get(0).getId();
+        }
+        PriceCreateParams.Recurring.Interval interval = "YEARLY".equalsIgnoreCase(period)
+                ? PriceCreateParams.Recurring.Interval.YEAR
+                : PriceCreateParams.Recurring.Interval.MONTH;
+        PriceCreateParams params = PriceCreateParams.builder().setCurrency(cur).setUnitAmount(amountCents)
+                .setLookupKey(key).setTransferLookupKey(true)
+                .setRecurring(PriceCreateParams.Recurring.builder().setInterval(interval).build())
+                .setProductData(PriceCreateParams.ProductData.builder().setName(planName + " — " + period).build())
+                .putMetadata("platform", platformId).putMetadata("plan_code", planCode).build();
+        return Price.create(params).getId();
+    }
+
+    /**
+     * Crea una suscripción recurrente cobrando YA con la tarjeta por defecto del Customer
+     * ({@code ERROR_IF_INCOMPLETE}: si la tarjeta requiere 3DS o falla, lanza). Metadata marca el origen
+     * como PLAN ({@code purpose=subscription}, {@code plan_code}, {@code user_id}) para distinguir el
+     * ingreso en Stripe.
+     */
+    public SubResult createSubscription(String customerId, String priceId, String defaultPaymentMethodId,
             String planCode, String userId, String localSubscriptionId) throws StripeException {
         SubscriptionCreateParams.Builder b = SubscriptionCreateParams.builder().setCustomer(customerId)
                 .addItem(SubscriptionCreateParams.Item.builder().setPrice(priceId).build())
                 .setProrationBehavior(SubscriptionCreateParams.ProrationBehavior.CREATE_PRORATIONS)
-                .setPaymentBehavior(SubscriptionCreateParams.PaymentBehavior.DEFAULT_INCOMPLETE)
-                .addExpand("latest_invoice.payment_intent")
+                .setPaymentBehavior(SubscriptionCreateParams.PaymentBehavior.ERROR_IF_INCOMPLETE)
                 .putMetadata("platform", platformId).putMetadata("env", platformEnv)
                 .putMetadata("purpose", "subscription").putMetadata("plan_code", planCode)
                 .putMetadata("user_id", userId).putMetadata("subscription_id", localSubscriptionId);
         if (defaultPaymentMethodId != null && !defaultPaymentMethodId.isBlank()) {
             b.setDefaultPaymentMethod(defaultPaymentMethodId);
         }
-        return Subscription.create(b.build());
+        return toResult(Subscription.create(b.build()));
     }
 
     /** Cambia el precio/plan de una suscripción existente con prorrateo (upgrade/downgrade). */
-    public Subscription changeSubscriptionPrice(String subscriptionId, String newPriceId, String planCode)
+    public SubResult changeSubscriptionPrice(String subscriptionId, String newPriceId, String planCode)
             throws StripeException {
         Subscription sub = Subscription.retrieve(subscriptionId);
         String itemId = sub.getItems().getData().get(0).getId();
-        return sub.update(SubscriptionUpdateParams.builder()
+        return toResult(sub.update(SubscriptionUpdateParams.builder()
                 .addItem(SubscriptionUpdateParams.Item.builder().setId(itemId).setPrice(newPriceId).build())
                 .setProrationBehavior(SubscriptionUpdateParams.ProrationBehavior.CREATE_PRORATIONS)
-                .putMetadata("plan_code", planCode).build());
+                .putMetadata("plan_code", planCode).build()));
     }
 
     /** Cancela una suscripción: al final del periodo (atPeriodEnd=true) o de inmediato. */
-    public Subscription cancelSubscription(String subscriptionId, boolean atPeriodEnd) throws StripeException {
+    public SubResult cancelSubscription(String subscriptionId, boolean atPeriodEnd) throws StripeException {
         Subscription sub = Subscription.retrieve(subscriptionId);
-        if (atPeriodEnd) {
-            return sub.update(SubscriptionUpdateParams.builder().setCancelAtPeriodEnd(true).build());
-        }
-        return sub.cancel();
+        return toResult(atPeriodEnd
+                ? sub.update(SubscriptionUpdateParams.builder().setCancelAtPeriodEnd(true).build())
+                : sub.cancel());
+    }
+
+    private SubResult toResult(Subscription s) {
+        return new SubResult(s.getId(), s.getStatus(), s.getCurrentPeriodStart(), s.getCurrentPeriodEnd());
     }
 
     // =================================================================================================

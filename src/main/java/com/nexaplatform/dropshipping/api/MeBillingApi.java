@@ -1,17 +1,22 @@
 package com.nexaplatform.dropshipping.api;
 
+import com.nexaplatform.dropshipping.api.dto.in.SubscribeDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BillingConfigDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.MySubscriptionDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.PaymentMethodDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SetupIntentDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.SubscribeStatusDtoOut;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.List;
 
@@ -47,4 +52,20 @@ public interface MeBillingApi {
     @ApiResponse(responseCode = "204", description = "Tarjeta borrada")
     @DeleteMapping("/payment-methods/{id}")
     ResponseEntity<Void> delete(Authentication auth, @PathVariable String id) throws Exception;
+
+    @Operation(summary = "Contrata un plan cobrando con la tarjeta guardada por defecto")
+    @ApiResponse(responseCode = "200", description = "Suscripción creada")
+    @PostMapping("/subscription")
+    ResponseEntity<SubscribeStatusDtoOut> subscribe(Authentication auth, @Valid @RequestBody SubscribeDtoIn req)
+            throws Exception;
+
+    @Operation(summary = "Suscripción vigente del usuario (o 204 si no tiene)")
+    @ApiResponse(responseCode = "200", description = "Suscripción vigente")
+    @GetMapping("/subscription")
+    ResponseEntity<MySubscriptionDtoOut> currentSubscription(Authentication auth);
+
+    @Operation(summary = "Cancela la suscripción vigente al final del periodo")
+    @ApiResponse(responseCode = "204", description = "Cancelación programada")
+    @PostMapping("/subscription/cancel")
+    ResponseEntity<Void> cancelSubscription(Authentication auth) throws Exception;
 }

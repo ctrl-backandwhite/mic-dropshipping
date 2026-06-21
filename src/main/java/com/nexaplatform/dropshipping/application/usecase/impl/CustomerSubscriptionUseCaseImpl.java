@@ -10,6 +10,7 @@ import com.nexaplatform.dropshipping.domain.model.CustomerSubscription;
 import com.nexaplatform.dropshipping.domain.model.SubscribeResult;
 import com.nexaplatform.dropshipping.domain.model.SubscriptionPlan;
 import com.nexaplatform.dropshipping.domain.repository.CustomerSubscriptionRepository;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SubscriptionPlanEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
@@ -22,6 +23,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
@@ -49,6 +52,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     private final SubscriptionPlanUseCase subscriptionPlanUseCase;
     private final StripeService stripeService;
     private final UserRepository userRepository;
+    private final CurrencyRateService currencyService;
 
     @Override
     @Transactional
@@ -308,5 +312,98 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         return new CardInfo(pm.getId(), card != null ? card.getBrand() : null, card != null ? card.getLast4() : null,
                 card != null ? card.getExpMonth() : null, card != null ? card.getExpYear() : null,
                 pm.getId().equals(defaultPaymentMethodId));
+    }
+
+    // =============================================================================================
+    // Contratación de plan con la tarjeta guardada
+    // =============================================================================================
+
+    @Override
+    @Transactional
+    public SubscribeOutcome subscribeWithSavedCard(UUID userId, String planCode, String period) throws Exception {
+        requireStripe();
+        SubscriptionPlanEntity plan = getPlanEntityByCode(planCode);
+        String billingPeriod = "YEARLY".equalsIgnoreCase(period) ? "YEARLY" : "MONTHLY";
+        int cnyCents = "YEARLY".equals(billingPeriod) ? plan.getPriceYearlyCents() : plan.getPriceMonthlyCents();
+
+        // Plan gratis: suscripción ACTIVE directa, sin pasar por Stripe.
+        if (cnyCents <= 0) {
+            CustomerSubscription free = createSubscription(userId, planCode, billingPeriod);
+            return new SubscribeOutcome(free.getId().toString(), "active");
+        }
+
+        String customerId = resolveStripeCustomerId(userId);
+        String defaultPm = stripeService.defaultOrFirstCardId(customerId);
+        if (defaultPm == null || defaultPm.isBlank()) {
+            throw new BusinessException("Añade una tarjeta en tu perfil antes de contratar un plan.");
+        }
+        // Fija la tarjeta como predeterminada del customer (idempotente) para futuras renovaciones/UI.
+        stripeService.setDefaultPaymentMethod(customerId, defaultPm);
+        // Precio del plan en CNY (moneda de 1688) → USD para el cobro en Stripe (igual que los productos).
+        String src = plan.getCurrency() != null && !plan.getCurrency().isBlank() ? plan.getCurrency() : "CNY";
+        BigDecimal cny = BigDecimal.valueOf(cnyCents).movePointLeft(2);
+        long usdCents = currencyService.toUsd(cny, src).movePointRight(2).setScale(0, RoundingMode.HALF_UP)
+                .longValueExact();
+        if (usdCents <= 0) {
+            usdCents = 1; // Stripe exige importe > 0
+        }
+        String priceId = stripeService.ensureRecurringPrice(planCode, billingPeriod, usdCents, "usd", plan.getName());
+
+        // Fila local (INCOMPLETE) para pasar su id como metadata a Stripe; se actualiza con el resultado.
+        CustomerSubscription local = customerSubscriptionRepository.save(CustomerSubscription.builder().userId(userId)
+                .planId(plan.getId()).status(SubscriptionStatus.INCOMPLETE).billingPeriod(billingPeriod)
+                .stripeCustomerId(customerId).build());
+
+        StripeService.SubResult res = stripeService.createSubscription(customerId, priceId, defaultPm, planCode,
+                userId.toString(), local.getId().toString());
+
+        customerSubscriptionRepository.save(local.withStripeSubscriptionId(res.id())
+                .withStatus(mapStripeStatus(res.status()))
+                .withCurrentPeriodStart(res.periodStart() != null ? Instant.ofEpochSecond(res.periodStart()) : null)
+                .withCurrentPeriodEnd(res.periodEnd() != null ? Instant.ofEpochSecond(res.periodEnd()) : null));
+        log.info("::> [BILLING] Subscribed user={} plan={} status={}", userId, planCode, res.status());
+        return new SubscribeOutcome(res.id(), res.status());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CustomerSubscription currentSubscription(UUID userId) {
+        return customerSubscriptionRepository.findByUserId(userId).stream()
+                .filter(s -> s.getStatus() != SubscriptionStatus.CANCELED)
+                .max(Comparator.comparing(CustomerSubscription::getCreatedAt,
+                        Comparator.nullsFirst(Comparator.naturalOrder())))
+                .orElse(null);
+    }
+
+    @Override
+    @Transactional
+    public void cancelMySubscription(UUID userId) throws Exception {
+        CustomerSubscription sub = currentSubscription(userId);
+        if (sub == null) {
+            throw new NotFoundException("No tienes una suscripción activa");
+        }
+        if (sub.getStripeSubscriptionId() != null && !sub.getStripeSubscriptionId().isBlank()) {
+            StripeService.SubResult res = stripeService.cancelSubscription(sub.getStripeSubscriptionId(), true);
+            customerSubscriptionRepository.save(sub.withStatus(mapStripeStatus(res.status()))
+                    .withCancelAt(res.periodEnd() != null ? Instant.ofEpochSecond(res.periodEnd()) : Instant.now()));
+        } else {
+            customerSubscriptionRepository
+                    .save(sub.withStatus(SubscriptionStatus.CANCELED).withCanceledAt(Instant.now()));
+        }
+        log.info("::> [BILLING] Subscription canceled user={}", userId);
+    }
+
+    private SubscriptionStatus mapStripeStatus(String s) {
+        if (s == null) {
+            return SubscriptionStatus.INCOMPLETE;
+        }
+        return switch (s) {
+            case "active" -> SubscriptionStatus.ACTIVE;
+            case "trialing" -> SubscriptionStatus.TRIALING;
+            case "past_due" -> SubscriptionStatus.PAST_DUE;
+            case "canceled" -> SubscriptionStatus.CANCELED;
+            case "paused" -> SubscriptionStatus.PAUSED;
+            default -> SubscriptionStatus.INCOMPLETE;
+        };
     }
 }

@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;
 
@@ -32,14 +33,31 @@ public class BillingPlanDtoOut {
     @Schema(description = "Plan description")
     private String description;
 
-    @Schema(description = "Monthly price in cents")
+    @Schema(description = "Monthly price in cents, in the plan's source currency (CNY, moneda de 1688)")
     private int priceMonthlyCents;
 
-    @Schema(description = "Yearly price in cents")
+    @Schema(description = "Yearly price in cents, in the plan's source currency (CNY)")
     private int priceYearlyCents;
 
-    @Schema(description = "ISO currency code")
+    @Schema(description = "ISO currency code de origen del plan (CNY)")
     private String currency;
+
+    // Precios YA convertidos a la moneda de display del usuario (X-Currency), como los productos.
+    // El frontend SOLO pinta el *Formatted; ningún cálculo de precio vive en el cliente.
+    @Schema(description = "Precio mensual convertido a la moneda de display del usuario")
+    private BigDecimal displayMonthly;
+
+    @Schema(description = "Precio anual convertido a la moneda de display del usuario")
+    private BigDecimal displayYearly;
+
+    @Schema(description = "Precio mensual ya formateado (símbolo + locale) para pintar")
+    private String displayMonthlyFormatted;
+
+    @Schema(description = "Precio anual ya formateado para pintar")
+    private String displayYearlyFormatted;
+
+    @Schema(description = "Moneda de display aplicada (X-Currency)")
+    private String displayCurrency;
 
     @Schema(description = "Ordering position")
     private int position;

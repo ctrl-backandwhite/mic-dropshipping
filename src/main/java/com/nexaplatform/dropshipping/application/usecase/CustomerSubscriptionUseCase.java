@@ -67,4 +67,23 @@ public interface CustomerSubscriptionUseCase extends BaseUseCase<CustomerSubscri
 
     /** Borra (desvincula) una tarjeta guardada. */
     void deleteCard(UUID userId, String paymentMethodId) throws Exception;
+
+    // ---- Contratación de plan con la tarjeta guardada ----
+
+    /** Resultado de contratar: id de suscripción Stripe (o local si es gratis) + estado normalizado. */
+    record SubscribeOutcome(String subscriptionId, String status) {
+    }
+
+    /**
+     * Contrata un plan cobrando con la tarjeta por defecto del usuario. El precio del plan está en CNY
+     * (moneda de 1688) y se convierte a USD para el cobro en Stripe (igual que los productos). Plan gratis
+     * (importe 0) → suscripción ACTIVE directa sin Stripe. Asocia/actualiza la CustomerSubscription.
+     */
+    SubscribeOutcome subscribeWithSavedCard(UUID userId, String planCode, String period) throws Exception;
+
+    /** Suscripción "vigente" del usuario (la más reciente no cancelada), o null si no tiene. */
+    CustomerSubscription currentSubscription(UUID userId);
+
+    /** Cancela la suscripción vigente del usuario al final del periodo. */
+    void cancelMySubscription(UUID userId) throws Exception;
 }

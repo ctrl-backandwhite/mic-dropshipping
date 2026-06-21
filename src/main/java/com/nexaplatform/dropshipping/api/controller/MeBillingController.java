@@ -1,10 +1,14 @@
 package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.MeBillingApi;
+import com.nexaplatform.dropshipping.api.dto.in.SubscribeDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BillingConfigDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.MySubscriptionDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.PaymentMethodDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SetupIntentDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.SubscribeStatusDtoOut;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
+import com.nexaplatform.dropshipping.domain.model.CustomerSubscription;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -59,6 +63,32 @@ public class MeBillingController implements MeBillingApi {
     @Override
     public ResponseEntity<Void> delete(Authentication auth, String id) throws Exception {
         useCase.deleteCard(UUID.fromString(auth.getName()), id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    public ResponseEntity<SubscribeStatusDtoOut> subscribe(Authentication auth, SubscribeDtoIn req) throws Exception {
+        CustomerSubscriptionUseCase.SubscribeOutcome outcome = useCase
+                .subscribeWithSavedCard(UUID.fromString(auth.getName()), req.getPlanCode(), req.getPeriod());
+        return ResponseEntity.ok(SubscribeStatusDtoOut.builder().subscriptionId(outcome.subscriptionId())
+                .status(outcome.status()).build());
+    }
+
+    @Override
+    public ResponseEntity<MySubscriptionDtoOut> currentSubscription(Authentication auth) {
+        CustomerSubscription s = useCase.currentSubscription(UUID.fromString(auth.getName()));
+        if (s == null) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(MySubscriptionDtoOut.builder()
+                .planId(s.getPlanId() != null ? s.getPlanId().toString() : null)
+                .status(s.getStatus() != null ? s.getStatus().name() : null).billingPeriod(s.getBillingPeriod())
+                .currentPeriodEnd(s.getCurrentPeriodEnd()).cancelAt(s.getCancelAt()).build());
+    }
+
+    @Override
+    public ResponseEntity<Void> cancelSubscription(Authentication auth) throws Exception {
+        useCase.cancelMySubscription(UUID.fromString(auth.getName()));
         return ResponseEntity.noContent().build();
     }
 }
