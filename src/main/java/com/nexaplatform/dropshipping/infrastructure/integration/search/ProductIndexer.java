@@ -113,6 +113,11 @@ public class ProductIndexer {
         doc.put("rating", p.getRating());
         doc.put("supplierId", p.getSupplier() != null ? p.getSupplier().getId().toString() : null);
         doc.put("categoryId", p.getCategory() != null ? p.getCategory().getId().toString() : null);
+        // hasImage: true solo si hay al menos una imagen ya espejada a nuestro storage (cdn_url no nulo).
+        // La búsqueda filtra por este flag para no devolver productos cuya imagen no renderiza (igual
+        // criterio que el filtro SQL del escaparate).
+        boolean hasMirroredImage = p.getImages().stream().anyMatch(i -> i.getCdnUrl() != null);
+        doc.put("hasImage", hasMirroredImage);
         if (!p.getImages().isEmpty()) {
             var img = p.getImages().get(0);
             doc.put("mainImage", img.getCdnUrl() != null ? img.getCdnUrl() : img.getSourceUrl());

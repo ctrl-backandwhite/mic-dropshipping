@@ -284,7 +284,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         String needle = q == null ? "" : q.trim().toLowerCase();
         if (needle.isEmpty())
             return List.of();
-        return productRepository.findByStatus(ProductStatus.ACTIVE, PageRequest.of(0, 200)).getContent().stream()
+        return productRepository.findVisibleByStatus(ProductStatus.ACTIVE, PageRequest.of(0, 200)).getContent().stream()
                 .filter(p -> matchesNeedle(p, needle)).limit(limit).map(p -> new SuggestionView("product",
                         firstNonNull(translatedTitle(p, lang), p.getTitleZh()), p.getSlug()))
                 .toList();
@@ -461,7 +461,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         var trending = catalogUseCase.listBestsellers(null, p, lang).getContent();
         var newest = storefrontRead.productList(0, perSection, lang, null, null, null, null, null, "newest").items();
         var topSales = storefrontRead.productList(0, perSection, lang, null, null, null, null, null, "sales").items();
-        var video = productRepository.findByStatus(ProductStatus.ACTIVE, PageRequest.of(0, 500)).getContent().stream()
+        var video = productRepository.findVisibleByStatus(ProductStatus.ACTIVE, PageRequest.of(0, 500)).getContent().stream()
                 .filter(x -> Boolean.TRUE.equals(x.getHasVideo())).limit(perSection)
                 .map(x -> productMapper.toSummary(x, lang)).toList();
 
@@ -567,7 +567,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         int limit = req.limit() != null ? Math.min(req.limit(), 24) : 12;
 
         List<ProductEntity> pool = new ArrayList<>(
-                productRepository.findByStatus(ProductStatus.ACTIVE, PageRequest.of(0, 200)).getContent());
+                productRepository.findVisibleByStatus(ProductStatus.ACTIVE, PageRequest.of(0, 200)).getContent());
         Collections.shuffle(pool, r);
         return pool.stream().limit(limit)
                 .map(p -> new ImageSearchResult(productMapper.toSummary(p, lang), 0.7 + r.nextDouble() * 0.29))

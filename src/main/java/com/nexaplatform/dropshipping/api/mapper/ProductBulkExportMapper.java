@@ -73,9 +73,14 @@ public class ProductBulkExportMapper {
         d.setMonthlySales(p.getMonthlySales());
         d.setRating(p.getRating());
 
+        // imageUrls del export: se prefiere la URL de origen, pero si falta (p.ej. imagen añadida solo
+        // con cdn_url) se cae a la cdn_url espejada. Así reexportar→reimportar conserva las imágenes y
+        // el producto no se rechaza por "sin imágenes" en el round-trip.
         d.setImageUrls(safe(p.getImages()).stream()
                 .sorted(Comparator.comparingInt(ProductImageEntity::getPosition))
-                .map(ProductImageEntity::getSourceUrl).filter(java.util.Objects::nonNull).toList());
+                .map(img -> img.getSourceUrl() != null && !img.getSourceUrl().isBlank()
+                        ? img.getSourceUrl() : img.getCdnUrl())
+                .filter(java.util.Objects::nonNull).toList());
 
         // Logistics / customs (direct columns).
         d.setWeightGrams(p.getWeightGrams());

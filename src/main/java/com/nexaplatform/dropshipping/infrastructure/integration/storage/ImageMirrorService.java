@@ -2,11 +2,16 @@ package com.nexaplatform.dropshipping.infrastructure.integration.storage;
 
 import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductImageRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.VariantValueRepository;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -40,6 +45,8 @@ import java.util.concurrent.Future;
 public class ImageMirrorService {
 
     private final ProductImageRepository imageRepository;
+    private final ProductVariantRepository variantRepository;
+    private final VariantValueRepository variantValueRepository;
     private final ObjectStorageService storage;
 
     @Value("${nexadrop.storage.mirror-enabled:true}")
@@ -99,6 +106,43 @@ public class ImageMirrorService {
             healedStaleUrls = true;
         }
         mirrorPendingBatch(mirrorBatch);
+        mirrorVariantImagesBatch(mirrorBatch);
+    }
+
+    /**
+     * Espeja a storage las imágenes de las VARIANTES y de los VALORES de eje (p.ej. la foto de cada
+     * color) que aún apuntan al origen. La capa de vista ({@code pickVariantImage}/{@code pickValueImage})
+     * ya prefiere {@code image_cdn_url}, así que basta con poblarla. Lote acotado; los orígenes muertos
+     * se reintentan en ciclos posteriores (no hay estado FAILED para variantes, son pocas).
+     */
+    public void mirrorVariantImagesBatch(int limit) {
+        if (!storage.isReady()) {
+            return;
+        }
+        String prefix = storage.publicUrl().replaceAll("/+$", "") + "%";
+        PageRequest top = PageRequest.of(0, Math.max(1, limit));
+        int ok = 0;
+        for (ProductVariantEntity v : variantRepository.findNeedingImageMirror(prefix, top)) {
+            try {
+                variantRepository.markImageCdn(v.getId(), fetchAndStore(v.getImageSourceUrl()).url());
+                ok++;
+            } catch (Exception e) {
+                log.debug("Mirror imagen de variante {} falló ({}): {}", v.getId(), v.getImageSourceUrl(), e.toString());
+                variantRepository.markImageFailed(v.getId(), Instant.now());
+            }
+        }
+        for (VariantValueEntity vv : variantValueRepository.findNeedingImageMirror(prefix, top)) {
+            try {
+                variantValueRepository.markImageCdn(vv.getId(), fetchAndStore(vv.getImageSourceUrl()).url());
+                ok++;
+            } catch (Exception e) {
+                log.debug("Mirror imagen de valor {} falló ({}): {}", vv.getId(), vv.getImageSourceUrl(), e.toString());
+                variantValueRepository.markImageFailed(vv.getId(), Instant.now());
+            }
+        }
+        if (ok > 0) {
+            log.info("Mirror imágenes de variante/valor: {} subidas a storage", ok);
+        }
     }
 
     /** Procesa hasta {@code limit} imágenes PENDING en paralelo. Devuelve cuántas se espejaron. */
@@ -134,25 +178,37 @@ public class ImageMirrorService {
             return false;
         }
         try {
-            // Descarga SIN Referer (el HttpClient no lo añade) → alicdn no la bloquea.
-            HttpResponse<byte[]> res = http.send(HttpRequest.newBuilder(URI.create(src.trim()))
-                    .header("User-Agent", "Mozilla/5.0 (compatible; NX036ImageMirror/1.0)")
-                    .timeout(Duration.ofSeconds(25)).GET().build(), HttpResponse.BodyHandlers.ofByteArray());
-            byte[] data = res.body();
-            if (res.statusCode() / 100 != 2 || data == null || data.length == 0) {
-                throw new IllegalStateException("HTTP " + res.statusCode());
-            }
-            String ct = res.headers().firstValue("content-type").orElse("image/jpeg");
-            String hash = sha256(data);
-            String key = "media/" + hash.substring(0, 2) + "/" + hash + extOf(ct, src);
-            String url = storage.upload(key, data, ct);
-            imageRepository.markMirrored(id, url, (long) data.length, hash, MirrorStatus.MIRRORED, Instant.now());
+            Stored s = fetchAndStore(src);
+            imageRepository.markMirrored(id, s.url(), s.bytes(), s.hash(), MirrorStatus.MIRRORED, Instant.now());
             return true;
         } catch (Exception e) {
             log.debug("Mirror falló imagen {} ({}): {}", id, src, e.toString());
             imageRepository.markStatus(id, MirrorStatus.FAILED);
             return false;
         }
+    }
+
+    /** Resultado de subir una imagen al storage: URL pública navegable + metadatos para auditoría/dedup. */
+    private record Stored(String url, long bytes, String hash) {
+    }
+
+    /**
+     * Descarga la imagen de origen <b>sin Referer</b> (el HttpClient no lo añade → alicdn no la bloquea),
+     * la sube al bucket con clave por content-hash (dedup) y devuelve la URL pública. Lanza si el origen
+     * no responde 2xx o viene vacío. Reutilizado por el mirror de producto y de variante/valor.
+     */
+    private Stored fetchAndStore(String src) throws Exception {
+        HttpResponse<byte[]> res = http.send(HttpRequest.newBuilder(URI.create(src.trim()))
+                .header("User-Agent", "Mozilla/5.0 (compatible; NX036ImageMirror/1.0)")
+                .timeout(Duration.ofSeconds(25)).GET().build(), HttpResponse.BodyHandlers.ofByteArray());
+        byte[] data = res.body();
+        if (res.statusCode() / 100 != 2 || data == null || data.length == 0) {
+            throw new IllegalStateException("HTTP " + res.statusCode());
+        }
+        String ct = res.headers().firstValue("content-type").orElse("image/jpeg");
+        String hash = sha256(data);
+        String key = "media/" + hash.substring(0, 2) + "/" + hash + extOf(ct, src);
+        return new Stored(storage.upload(key, data, ct), data.length, hash);
     }
 
     private static String extOf(String contentType, String src) {

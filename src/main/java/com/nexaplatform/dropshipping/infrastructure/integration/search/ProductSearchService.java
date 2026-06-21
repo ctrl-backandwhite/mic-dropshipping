@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.api.dto.out.SearchResultDtoOut;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.opensearch.client.opensearch.OpenSearchClient;
+import org.opensearch.client.opensearch._types.FieldValue;
 import org.opensearch.client.opensearch._types.query_dsl.Query;
 import org.opensearch.client.opensearch._types.SortOrder;
 import org.opensearch.client.opensearch.core.SearchRequest;
@@ -32,9 +33,7 @@ public class ProductSearchService {
         try {
             SearchResponse<Map> response = client.search(SearchRequest.of(s -> s.index(index).from(page * size)
                     .size(size)
-                    .query(keyword == null || keyword.isBlank()
-                            ? Query.of(q -> q.matchAll(m -> m))
-                            : Query.of(q -> q.multiMatch(m -> m.query(keyword).fields(field, "titleZh", "titleEn"))))
+                    .query(withImageFilter(keyword, field))
                     .sort(srt -> srt.field(f -> f.field("trendScore").order(SortOrder.Desc)))), Map.class);
 
             List<Map<String, Object>> hits = response.hits().hits().stream().map(h -> {
@@ -71,9 +70,7 @@ public class ProductSearchService {
         try {
             SearchResponse<Map> response = client.search(SearchRequest.of(s -> s.index(index).from(fromOffset)
                     .size(pageSize)
-                    .query(keyword == null || keyword.isBlank()
-                            ? Query.of(q -> q.matchAll(m -> m))
-                            : Query.of(q -> q.multiMatch(m -> m.query(keyword).fields(field, "titleZh", "titleEn"))))
+                    .query(withImageFilter(keyword, field))
                     .sort(srt -> srt.field(f -> f.field("trendScore").order(SortOrder.Desc)))), Map.class);
 
             List<SearchHitDtoOut> hits = response.hits().hits().stream().map(h -> {
@@ -89,6 +86,25 @@ public class ProductSearchService {
             log.error("Search failed: {}", e.getMessage());
             return SearchResultDtoOut.builder().items(List.of()).total(0L).page(page).size(size).build();
         }
+    }
+
+    /**
+     * Construye la query de búsqueda (matchAll si no hay keyword; multiMatch si la hay) envuelta en un
+     * filtro de imagen: solo se devuelven productos con {@code hasImage=true} (imagen espejada a nuestro
+     * storage) — mismo criterio que el filtro SQL del escaparate. Es tolerante con los documentos viejos
+     * que aún no tienen el campo {@code hasImage} (se incluyen hasta el siguiente reindexado), para no
+     * vaciar la búsqueda durante la transición.
+     */
+    private Query withImageFilter(String keyword, String field) {
+        Query content = (keyword == null || keyword.isBlank())
+                ? Query.of(q -> q.matchAll(m -> m))
+                : Query.of(q -> q.multiMatch(m -> m.query(keyword).fields(field, "titleZh", "titleEn")));
+        return Query.of(q -> q.bool(b -> b
+                .must(content)
+                .filter(f -> f.bool(bb -> bb
+                        .should(s1 -> s1.term(t -> t.field("hasImage").value(FieldValue.of(true))))
+                        .should(s2 -> s2.bool(mn -> mn.mustNot(e -> e.exists(ex -> ex.field("hasImage")))))
+                        .minimumShouldMatch("1")))));
     }
 
     private static String capitalize(String s) {

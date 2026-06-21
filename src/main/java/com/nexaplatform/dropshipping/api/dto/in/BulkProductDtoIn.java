@@ -64,7 +64,20 @@ public class BulkProductDtoIn {
     /** Optional product manufacturer (stored in the product's brand field). */
     private String manufacturer;
 
+    /**
+     * URLs de imagen del producto. Se aceptan claves alternativas comunes ({@code images},
+     * {@code photos}, {@code pictures}, {@code mainImage}) para que un JSON razonable no se rechace
+     * por el nombre del campo. Para una sola imagen como string, usar {@link #imageUrl}.
+     */
+    @com.fasterxml.jackson.annotation.JsonAlias({"images", "photos", "pictures", "mainImage", "imageURLs"})
     private List<String> imageUrls;
+
+    /**
+     * Atajo para una sola imagen como string ({@code "imageUrl": "https://..."}). Se pliega sobre
+     * {@link #imageUrls} en el caso de uso. Acepta también las claves {@code image} y {@code photo}.
+     */
+    @com.fasterxml.jackson.annotation.JsonAlias({"image", "photo"})
+    private String imageUrl;
 
     /** ACTIVE (default) or DRAFT. */
     private String status;

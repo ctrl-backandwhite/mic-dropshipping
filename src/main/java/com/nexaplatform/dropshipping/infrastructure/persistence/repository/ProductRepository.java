@@ -35,15 +35,32 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
 
     Page<ProductEntity> findByStatus(ProductStatus status, Pageable pageable);
 
+    /**
+     * Variante de escaparate de {@link #findByStatus}: solo productos con al menos UNA imagen ya
+     * espejada a nuestro storage (cdn_url no nulo). Garantiza que lo listado siempre renderiza una
+     * imagen y oculta los productos sin imagen utilizable, sin borrarlos (el admin los sigue viendo;
+     * reaparecen solos en cuanto se les espeje una imagen). Usar esta en rutas públicas; dejar
+     * {@link #findByStatus} para conteos/admin.
+     */
+    @Query("""
+            SELECT p FROM ProductEntity p
+            WHERE p.status = :status
+              AND EXISTS (SELECT 1 FROM ProductImageEntity i WHERE i.product = p AND i.cdnUrl IS NOT NULL)
+            """)
+    Page<ProductEntity> findVisibleByStatus(@Param("status") ProductStatus status, Pageable pageable);
+
     /** Admin product list filtered by category (any status). */
     Page<ProductEntity> findByCategoryId(UUID categoryId, Pageable pageable);
 
     /** Admin product list filtered by category and status. */
     Page<ProductEntity> findByCategoryIdAndStatus(UUID categoryId, ProductStatus status, Pageable pageable);
 
+    // Escaparate: EXISTS sobre una imagen con cdn_url no nulo → solo se listan productos cuya imagen
+    // renderiza de verdad (espejada a nuestro storage). Misma lógica que findVisibleByStatus.
     @Query("""
             SELECT p FROM ProductEntity p
             WHERE p.status = :status
+              AND EXISTS (SELECT 1 FROM ProductImageEntity i WHERE i.product = p AND i.cdnUrl IS NOT NULL)
             ORDER BY p.trendScore DESC NULLS LAST
             """)
     Page<ProductEntity> findTopByTrendScore(@Param("status") ProductStatus status, Pageable pageable);
@@ -51,6 +68,7 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
     @Query("""
             SELECT p FROM ProductEntity p
             WHERE p.status = :status AND p.category.id = :categoryId
+              AND EXISTS (SELECT 1 FROM ProductImageEntity i WHERE i.product = p AND i.cdnUrl IS NOT NULL)
             ORDER BY p.trendScore DESC NULLS LAST
             """)
     Page<ProductEntity> findByCategoryOrderByTrend(@Param("categoryId") UUID categoryId,
@@ -74,6 +92,7 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
     @Query("""
             SELECT p FROM ProductEntity p
             WHERE p.status = :status
+              AND EXISTS (SELECT 1 FROM ProductImageEntity i WHERE i.product = p AND i.cdnUrl IS NOT NULL)
               AND (:categoryId IS NULL OR p.category.id = :categoryId)
               AND (:supplierId IS NULL OR p.supplier.id = :supplierId)
               AND (:minPrice   IS NULL OR p.basePrice >= :minPrice)
