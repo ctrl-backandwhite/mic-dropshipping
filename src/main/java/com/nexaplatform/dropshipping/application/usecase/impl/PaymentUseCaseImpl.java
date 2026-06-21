@@ -64,6 +64,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     private final WalletUseCase walletUseCase;
     private final AuditLogger auditLogger;
     private final PartnerPlanSyncService partnerPlanSyncService;
+    private final com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase customerSubscriptionUseCase;
     private final ObjectMapper objectMapper;
     private final OrderEmailService orderEmailService;
     private final CurrencyRateService currencyRateService;
@@ -538,6 +539,10 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                     || "customer.subscription.deleted".equals(eventType)) {
                 String stripeSubId = String.valueOf(data.get("id"));
                 String stripeStatus = String.valueOf(data.get("status"));
+                // Sincroniza la CustomerSubscription local (estado, fin de periodo, cancelación) + el tier
+                // del partner. Cubre renovación, fallo de cobro (PAST_DUE) y cancelación desde Stripe.
+                customerSubscriptionUseCase.syncFromStripe(stripeSubId, stripeStatus,
+                        asEpoch(data.get("current_period_end")), asEpoch(data.get("cancel_at")));
                 partnerPlanSyncService.onSubscriptionEvent(stripeSubId, stripeStatus, eventType);
                 return "ok";
             }
@@ -554,6 +559,21 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             log.error("Stripe webhook processing failed: {}", e.getMessage(), e);
         }
         return "ok";
+    }
+
+    /** Convierte un valor JSON (Number/String/null) a epoch-segundos Long, o null. */
+    private static Long asEpoch(Object v) {
+        if (v == null) {
+            return null;
+        }
+        if (v instanceof Number n) {
+            return n.longValue();
+        }
+        try {
+            return Long.parseLong(String.valueOf(v));
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     @SuppressWarnings("unchecked")

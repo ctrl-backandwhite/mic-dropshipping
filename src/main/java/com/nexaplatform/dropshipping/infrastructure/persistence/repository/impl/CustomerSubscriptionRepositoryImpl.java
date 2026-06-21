@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -50,6 +51,12 @@ public class CustomerSubscriptionRepositoryImpl implements CustomerSubscriptionR
     public List<CustomerSubscription> findByUserId(UUID userId) {
         return customerSubscriptionEntityMapper
                 .toDomainList(customerSubscriptionJpaRepositoryAdapter.findByUserId(userId));
+    }
+
+    @Override
+    public Optional<CustomerSubscription> findByStripeSubscriptionId(String stripeSubscriptionId) {
+        return customerSubscriptionJpaRepositoryAdapter.findByStripeSubscriptionId(stripeSubscriptionId)
+                .map(customerSubscriptionEntityMapper::toDomain);
     }
 
     @Override

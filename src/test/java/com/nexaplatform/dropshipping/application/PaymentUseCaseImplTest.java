@@ -52,6 +52,8 @@ class PaymentUseCaseImplTest {
     @Mock
     PartnerPlanSyncService partnerPlanSyncService;
     @Mock
+    com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase customerSubscriptionUseCase;
+    @Mock
     OrderEmailService orderEmailService;
     @Mock
     CurrencyRateService currencyRateService;
@@ -61,7 +63,7 @@ class PaymentUseCaseImplTest {
     private PaymentUseCaseImpl useCase() {
         return new PaymentUseCaseImpl(List.<PaymentGateway>of(), paymentRepository, paymentJpaRepositoryAdapter,
                 userRepository, orderRepository, walletUseCase, auditLogger, partnerPlanSyncService,
-                new ObjectMapper(), orderEmailService, currencyRateService);
+                customerSubscriptionUseCase, new ObjectMapper(), orderEmailService, currencyRateService);
     }
 
     @Test

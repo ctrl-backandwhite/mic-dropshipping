@@ -86,4 +86,10 @@ public interface CustomerSubscriptionUseCase extends BaseUseCase<CustomerSubscri
 
     /** Cancela la suscripción vigente del usuario al final del periodo. */
     void cancelMySubscription(UUID userId) throws Exception;
+
+    /**
+     * Sincroniza la suscripción local desde un evento de Stripe (webhook): estado, fin de periodo y
+     * cancelación programada. Cubre renovación, fallo de cobro (PAST_DUE) y cancelación desde Stripe.
+     */
+    void syncFromStripe(String stripeSubscriptionId, String stripeStatus, Long currentPeriodEnd, Long cancelAtEpoch);
 }

@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.domain.repository;
 import com.nexaplatform.dropshipping.domain.model.CustomerSubscription;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -18,4 +19,7 @@ public interface CustomerSubscriptionRepository
 
     /** All subscriptions owned by the given user (storefront listing). */
     List<CustomerSubscription> findByUserId(UUID userId);
+
+    /** Subscription by its Stripe id (para sincronizar desde webhooks). */
+    Optional<CustomerSubscription> findByStripeSubscriptionId(String stripeSubscriptionId);
 }

@@ -400,6 +400,28 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         log.info("::> [BILLING] Subscription canceled user={}", userId);
     }
 
+    @Override
+    @Transactional
+    public void syncFromStripe(String stripeSubscriptionId, String stripeStatus, Long currentPeriodEnd,
+            Long cancelAtEpoch) {
+        if (stripeSubscriptionId == null || stripeSubscriptionId.isBlank()) {
+            return;
+        }
+        customerSubscriptionRepository.findByStripeSubscriptionId(stripeSubscriptionId).ifPresent(sub -> {
+            CustomerSubscription u = sub.withStatus(mapStripeStatus(stripeStatus))
+                    .withCancelAt(cancelAtEpoch != null ? Instant.ofEpochSecond(cancelAtEpoch) : null);
+            if (currentPeriodEnd != null) {
+                u = u.withCurrentPeriodEnd(Instant.ofEpochSecond(currentPeriodEnd));
+            }
+            if ("canceled".equals(stripeStatus)) {
+                u = u.withCanceledAt(Instant.now());
+            }
+            customerSubscriptionRepository.save(u);
+            log.info("::> [BILLING] Subscription synced from Stripe id={} status={}", stripeSubscriptionId,
+                    stripeStatus);
+        });
+    }
+
     private SubscriptionStatus mapStripeStatus(String s) {
         if (s == null) {
             return SubscriptionStatus.INCOMPLETE;
