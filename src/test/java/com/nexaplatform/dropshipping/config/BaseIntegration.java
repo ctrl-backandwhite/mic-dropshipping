@@ -54,9 +54,11 @@ public abstract class BaseIntegration {
 
     /** TRUNCATE de todas las tablas de negocio (deja fuera las de Liquibase). */
     protected void cleanAllTables() {
+        // jwk_keys se excluye: la clave RSA activa se genera al arrancar el contexto (una sola vez);
+        // si se truncara, JwtTestUtil no podría firmar tokens en los tests siguientes.
         List<String> tables = jdbcTemplate.queryForList(
                 "SELECT tablename FROM pg_tables WHERE schemaname = 'public' "
-                        + "AND tablename NOT LIKE 'databasechange%'",
+                        + "AND tablename NOT LIKE 'databasechange%' AND tablename <> 'jwk_keys'",
                 String.class);
         if (tables.isEmpty()) {
             return;
