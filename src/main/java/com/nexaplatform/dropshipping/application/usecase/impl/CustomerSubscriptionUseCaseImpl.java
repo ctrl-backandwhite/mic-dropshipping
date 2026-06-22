@@ -1,22 +1,31 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.mapper.CustomerSubscriptionUpdateMapper;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
+import com.nexaplatform.dropshipping.application.service.CountryTaxService;
 import com.nexaplatform.dropshipping.application.usecase.SubscriptionPlanUseCase;
 import com.nexaplatform.dropshipping.domain.enums.SubscriptionStatus;
 import com.nexaplatform.dropshipping.domain.model.CustomerSubscription;
 import com.nexaplatform.dropshipping.domain.model.SubscribeResult;
 import com.nexaplatform.dropshipping.domain.model.SubscriptionPlan;
 import com.nexaplatform.dropshipping.domain.repository.CustomerSubscriptionRepository;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SubscriptionPlanEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SubscriptionPlanRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
+import com.stripe.model.Customer;
+import com.stripe.model.PaymentMethod;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
@@ -43,6 +52,9 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     private final SubscriptionPlanRepository planRepository;
     private final SubscriptionPlanUseCase subscriptionPlanUseCase;
     private final StripeService stripeService;
+    private final UserRepository userRepository;
+    private final CurrencyRateService currencyService;
+    private final CountryTaxService countryTaxService;
 
     @Override
     @Transactional
@@ -214,5 +226,229 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     /** Resolves the managed plan entity by its unique code, failing if it does not exist. */
     private SubscriptionPlanEntity getPlanEntityByCode(String code) {
         return planRepository.findByCode(code).orElseThrow(() -> new NotFoundException("Plan not found: " + code));
+    }
+
+    // =============================================================================================
+    // Métodos de pago en el perfil (tarjeta guardada vía Stripe Elements)
+    // =============================================================================================
+
+    @Override
+    public BillingConfigInfo billingConfig() {
+        return new BillingConfigInfo(stripeService.publishableKey(), stripeService.isEnabled());
+    }
+
+    @Override
+    @Transactional
+    public String createSetupIntentSecret(UUID userId) throws Exception {
+        requireStripe();
+        String customerId = resolveStripeCustomerId(userId);
+        return stripeService.createSetupIntent(customerId).getClientSecret();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CardInfo> listCards(UUID userId) throws Exception {
+        requireStripe();
+        UserEntity user = loadUser(userId);
+        String customerId = user.getStripeCustomerId();
+        if (customerId == null || customerId.isBlank()) {
+            return List.of();
+        }
+        String defaultPm = stripeService.defaultPaymentMethodId(customerId);
+        return stripeService.listCards(customerId).stream().map(pm -> toCardInfo(pm, defaultPm)).toList();
+    }
+
+    @Override
+    @Transactional
+    public void setDefaultCard(UUID userId, String paymentMethodId) throws Exception {
+        requireStripe();
+        String customerId = resolveStripeCustomerId(userId);
+        assertCardBelongsToCustomer(customerId, paymentMethodId);
+        stripeService.setDefaultPaymentMethod(customerId, paymentMethodId);
+    }
+
+    @Override
+    @Transactional
+    public void deleteCard(UUID userId, String paymentMethodId) throws Exception {
+        requireStripe();
+        String customerId = resolveStripeCustomerId(userId);
+        assertCardBelongsToCustomer(customerId, paymentMethodId);
+        stripeService.detachPaymentMethod(paymentMethodId);
+    }
+
+    private void requireStripe() {
+        if (!stripeService.isEnabled()) {
+            throw new BusinessException("Los pagos con tarjeta no están activos en este entorno.");
+        }
+    }
+
+    private UserEntity loadUser(UUID userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found: " + userId));
+    }
+
+    /** Devuelve el customerId de Stripe del usuario; lo crea y persiste de forma perezosa si no lo tiene. */
+    private String resolveStripeCustomerId(UUID userId) throws Exception {
+        UserEntity user = loadUser(userId);
+        if (user.getStripeCustomerId() != null && !user.getStripeCustomerId().isBlank()) {
+            return user.getStripeCustomerId();
+        }
+        Customer customer = stripeService.getOrCreateCustomer(null, user.getEmail(), userId.toString());
+        user.setStripeCustomerId(customer.getId());
+        userRepository.save(user);
+        log.info("::> [BILLING] Stripe customer creado user={} customer={}", userId, customer.getId());
+        return customer.getId();
+    }
+
+    /** Evita que un usuario manipule (default/borrado) una tarjeta que no es de su Customer. */
+    private void assertCardBelongsToCustomer(String customerId, String paymentMethodId) throws Exception {
+        boolean owned = stripeService.listCards(customerId).stream()
+                .anyMatch(pm -> pm.getId().equals(paymentMethodId));
+        if (!owned) {
+            throw new NotFoundException("Tarjeta no encontrada para el usuario");
+        }
+    }
+
+    private CardInfo toCardInfo(PaymentMethod pm, String defaultPaymentMethodId) {
+        PaymentMethod.Card card = pm.getCard();
+        return new CardInfo(pm.getId(), card != null ? card.getBrand() : null, card != null ? card.getLast4() : null,
+                card != null ? card.getExpMonth() : null, card != null ? card.getExpYear() : null,
+                pm.getId().equals(defaultPaymentMethodId));
+    }
+
+    // =============================================================================================
+    // Contratación de plan con la tarjeta guardada
+    // =============================================================================================
+
+    @Override
+    @Transactional
+    public SubscribeOutcome subscribeWithSavedCard(UUID userId, String planCode, String period) throws Exception {
+        requireStripe();
+        SubscriptionPlanEntity plan = getPlanEntityByCode(planCode);
+        String billingPeriod = "YEARLY".equalsIgnoreCase(period) ? "YEARLY" : "MONTHLY";
+        int cnyCents = "YEARLY".equals(billingPeriod) ? plan.getPriceYearlyCents() : plan.getPriceMonthlyCents();
+
+        // Plan gratis: suscripción ACTIVE directa, sin pasar por Stripe.
+        if (cnyCents <= 0) {
+            CustomerSubscription free = createSubscription(userId, planCode, billingPeriod);
+            return new SubscribeOutcome(free.getId().toString(), "active");
+        }
+
+        String customerId = resolveStripeCustomerId(userId);
+        String defaultPm = stripeService.defaultOrFirstCardId(customerId);
+        if (defaultPm == null || defaultPm.isBlank()) {
+            throw new BusinessException("Añade una tarjeta en tu perfil antes de contratar un plan.");
+        }
+        // Fija la tarjeta como predeterminada del customer (idempotente) para futuras renovaciones/UI.
+        stripeService.setDefaultPaymentMethod(customerId, defaultPm);
+        // IVA por país del usuario (misma config que productos: CountryTaxService.rateBpsFor) → TaxRate de
+        // Stripe; la contratación incluye el IVA y aparece desglosado en la factura de Stripe.
+        UserEntity user = loadUser(userId);
+        int taxBps = countryTaxService.rateBpsFor(user.getCountry());
+        String taxRateId = stripeService.ensureTaxRate(user.getCountry(), taxBps);
+        // Precio del plan en CNY (moneda de 1688) → USD para el cobro en Stripe (igual que los productos).
+        String src = plan.getCurrency() != null && !plan.getCurrency().isBlank() ? plan.getCurrency() : "CNY";
+        BigDecimal cny = BigDecimal.valueOf(cnyCents).movePointLeft(2);
+        long usdCents = currencyService.toUsd(cny, src).movePointRight(2).setScale(0, RoundingMode.HALF_UP)
+                .longValueExact();
+        if (usdCents <= 0) {
+            usdCents = 1; // Stripe exige importe > 0
+        }
+        String priceId = stripeService.ensureRecurringPrice(planCode, billingPeriod, usdCents, "usd", plan.getName());
+
+        // Fila local (INCOMPLETE) para pasar su id como metadata a Stripe; se actualiza con el resultado.
+        CustomerSubscription local = customerSubscriptionRepository.save(CustomerSubscription.builder().userId(userId)
+                .planId(plan.getId()).status(SubscriptionStatus.INCOMPLETE).billingPeriod(billingPeriod)
+                .stripeCustomerId(customerId).build());
+
+        StripeService.SubResult res = stripeService.createSubscription(customerId, priceId, defaultPm, taxRateId,
+                planCode, userId.toString(), local.getId().toString());
+
+        customerSubscriptionRepository.save(local.withStripeSubscriptionId(res.id())
+                .withStatus(mapStripeStatus(res.status()))
+                .withCurrentPeriodStart(res.periodStart() != null ? Instant.ofEpochSecond(res.periodStart()) : null)
+                .withCurrentPeriodEnd(res.periodEnd() != null ? Instant.ofEpochSecond(res.periodEnd()) : null));
+        log.info("::> [BILLING] Subscribed user={} plan={} status={}", userId, planCode, res.status());
+        return new SubscribeOutcome(res.id(), res.status());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CustomerSubscription currentSubscription(UUID userId) {
+        return customerSubscriptionRepository.findByUserId(userId).stream()
+                .filter(s -> s.getStatus() != SubscriptionStatus.CANCELED)
+                .max(Comparator.comparing(CustomerSubscription::getCreatedAt,
+                        Comparator.nullsFirst(Comparator.naturalOrder())))
+                .orElse(null);
+    }
+
+    @Override
+    @Transactional
+    public void cancelMySubscription(UUID userId) throws Exception {
+        CustomerSubscription sub = currentSubscription(userId);
+        if (sub == null) {
+            throw new NotFoundException("No tienes una suscripción activa");
+        }
+        if (sub.getStripeSubscriptionId() != null && !sub.getStripeSubscriptionId().isBlank()) {
+            StripeService.SubResult res = stripeService.cancelSubscription(sub.getStripeSubscriptionId(), true);
+            customerSubscriptionRepository.save(sub.withStatus(mapStripeStatus(res.status()))
+                    .withCancelAt(res.periodEnd() != null ? Instant.ofEpochSecond(res.periodEnd()) : Instant.now()));
+        } else {
+            customerSubscriptionRepository
+                    .save(sub.withStatus(SubscriptionStatus.CANCELED).withCanceledAt(Instant.now()));
+        }
+        log.info("::> [BILLING] Subscription canceled user={}", userId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<InvoiceView> listInvoices(UUID userId) throws Exception {
+        if (!stripeService.isEnabled()) {
+            return List.of();
+        }
+        String customerId = loadUser(userId).getStripeCustomerId();
+        if (customerId == null || customerId.isBlank()) {
+            return List.of();
+        }
+        return stripeService.listInvoices(customerId, 24).stream()
+                .map(i -> new InvoiceView(i.number(), i.total(), i.currency(), i.status(), i.created(), i.pdfUrl(),
+                        i.hostedUrl()))
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public void syncFromStripe(String stripeSubscriptionId, String stripeStatus, Long currentPeriodEnd,
+            Long cancelAtEpoch) {
+        if (stripeSubscriptionId == null || stripeSubscriptionId.isBlank()) {
+            return;
+        }
+        customerSubscriptionRepository.findByStripeSubscriptionId(stripeSubscriptionId).ifPresent(sub -> {
+            CustomerSubscription u = sub.withStatus(mapStripeStatus(stripeStatus))
+                    .withCancelAt(cancelAtEpoch != null ? Instant.ofEpochSecond(cancelAtEpoch) : null);
+            if (currentPeriodEnd != null) {
+                u = u.withCurrentPeriodEnd(Instant.ofEpochSecond(currentPeriodEnd));
+            }
+            if ("canceled".equals(stripeStatus)) {
+                u = u.withCanceledAt(Instant.now());
+            }
+            customerSubscriptionRepository.save(u);
+            log.info("::> [BILLING] Subscription synced from Stripe id={} status={}", stripeSubscriptionId,
+                    stripeStatus);
+        });
+    }
+
+    private SubscriptionStatus mapStripeStatus(String s) {
+        if (s == null) {
+            return SubscriptionStatus.INCOMPLETE;
+        }
+        return switch (s) {
+            case "active" -> SubscriptionStatus.ACTIVE;
+            case "trialing" -> SubscriptionStatus.TRIALING;
+            case "past_due" -> SubscriptionStatus.PAST_DUE;
+            case "canceled" -> SubscriptionStatus.CANCELED;
+            case "paused" -> SubscriptionStatus.PAUSED;
+            default -> SubscriptionStatus.INCOMPLETE;
+        };
     }
 }

@@ -111,17 +111,34 @@ public class CurrencyRateService {
      * viene redondeado (2 dec UP) desde el pipeline de precios; aquí solo se le da forma textual.
      */
     public String formatDisplay(BigDecimal amountDisplay, String code) {
+        return formatDisplay(amountDisplay, code, false);
+    }
+
+    /**
+     * Variante que REDONDEA a número entero (HALF_UP: ≥0.5 arriba, &lt;0.5 abajo) y formatea SIN decimales.
+     * Pensada para los precios de PLANES, que se muestran redondeados (p.ej. "25 €" en vez de "25,28 €").
+     */
+    public String formatDisplayRounded(BigDecimal amountDisplay, String code) {
+        return formatDisplay(amountDisplay, code, true);
+    }
+
+    private String formatDisplay(BigDecimal amountDisplay, String code, boolean wholeNumber) {
         if (amountDisplay == null || code == null) {
             return null;
         }
+        BigDecimal amount = wholeNumber ? amountDisplay.setScale(0, java.math.RoundingMode.HALF_UP) : amountDisplay;
         Locale locale = Locale.forLanguageTag(localeOf(code));
         try {
             java.text.NumberFormat nf = java.text.NumberFormat.getCurrencyInstance(locale);
             nf.setCurrency(java.util.Currency.getInstance(code.toUpperCase(Locale.ROOT)));
-            return nf.format(amountDisplay);
+            if (wholeNumber) {
+                nf.setMaximumFractionDigits(0);
+                nf.setMinimumFractionDigits(0);
+            }
+            return nf.format(amount);
         } catch (RuntimeException nonIsoOrUnknown) {
             // Códigos no ISO (p.ej. USDT) o locale inválido: símbolo de BD + número plano.
-            return symbolOf(code) + " " + amountDisplay.toPlainString();
+            return symbolOf(code) + " " + amount.toPlainString();
         }
     }
 

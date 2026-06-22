@@ -145,3 +145,7 @@ databaseChangeLog:
       file: db/changelog/schema-v67-product-source-taobao.sql
   - include:
       file: db/changelog/schema-v68-variant-image-mirror-failed.sql
+  - include:
+      file: db/changelog/schema-v69-user-stripe-customer.sql
+  - include:
+      file: db/changelog/schema-v70-plan-currency-cny.sql

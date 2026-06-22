@@ -43,6 +43,8 @@ class ShopConnectionUseCaseImplTest {
     ShopConnectorRegistry connectorRegistry;
     @Mock
     ProductRepository productRepository;
+    @Mock
+    com.nexaplatform.dropshipping.application.service.PlanLimitService planLimitService;
     @InjectMocks
     ShopConnectionUseCaseImpl useCase;
 

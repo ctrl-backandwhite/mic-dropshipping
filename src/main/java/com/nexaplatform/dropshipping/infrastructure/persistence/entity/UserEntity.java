@@ -62,6 +62,10 @@ public class UserEntity extends BaseEntity {
     @Column(name = "company_name", length = 180)
     private String companyName;
 
+    /** Customer de Stripe del usuario (para tarjetas guardadas + suscripciones recurrentes). */
+    @Column(name = "stripe_customer_id", length = 64)
+    private String stripeCustomerId;
+
     @Column(length = 60)
     private String country;
 

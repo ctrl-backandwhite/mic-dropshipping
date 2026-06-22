@@ -44,6 +44,7 @@ public class ShopConnectionUseCaseImpl implements ShopConnectionUseCase {
     private final TokenCryptoService tokenCrypto;
     private final ShopConnectorRegistry connectorRegistry;
     private final ProductRepository productRepository;
+    private final com.nexaplatform.dropshipping.application.service.PlanLimitService planLimitService;
 
     @Override
     @Transactional(readOnly = true)
@@ -58,6 +59,8 @@ public class ShopConnectionUseCaseImpl implements ShopConnectionUseCase {
     @Override
     @Transactional
     public ShopConnection connect(UUID userId, ShopConnection model) {
+        // Límite por plan: nº de tiendas conectadas (max_shops). Lanza si se supera el del plan del usuario.
+        planLimitService.assertWithinLimit(userId, "max_shops", shopRepository.findByUserId(userId).size());
         // AES-256-GCM with envelope key (rotation supported via TokenCryptoService).
         String encoded = tokenCrypto.encrypt(model.getAccessTokenEnc());
         ShopConnection toPersist = model.withUserId(userId)

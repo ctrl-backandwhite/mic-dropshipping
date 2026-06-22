@@ -42,4 +42,62 @@ public interface CustomerSubscriptionUseCase extends BaseUseCase<CustomerSubscri
 
     /** Active public plan entities ordered by position (kept as entities for the feature-derived limits). */
     List<SubscriptionPlanEntity> listPublicPlans();
+
+    // ---- Métodos de pago en el perfil (tarjeta guardada vía Stripe Elements) ----
+
+    /** Tarjeta guardada del usuario (datos no sensibles). */
+    record CardInfo(String id, String brand, String last4, Long expMonth, Long expYear, boolean isDefault) {
+    }
+
+    /** Config pública de billing para el frontend. */
+    record BillingConfigInfo(String publishableKey, boolean enabled) {
+    }
+
+    /** Publishable key + estado de Stripe (para inicializar Elements en el front). */
+    BillingConfigInfo billingConfig();
+
+    /** Crea un SetupIntent para que el usuario guarde una tarjeta; devuelve su client_secret. */
+    String createSetupIntentSecret(UUID userId) throws Exception;
+
+    /** Tarjetas guardadas del usuario. */
+    List<CardInfo> listCards(UUID userId) throws Exception;
+
+    /** Fija la tarjeta por defecto (la que cobra las suscripciones). */
+    void setDefaultCard(UUID userId, String paymentMethodId) throws Exception;
+
+    /** Borra (desvincula) una tarjeta guardada. */
+    void deleteCard(UUID userId, String paymentMethodId) throws Exception;
+
+    // ---- Contratación de plan con la tarjeta guardada ----
+
+    /** Resultado de contratar: id de suscripción Stripe (o local si es gratis) + estado normalizado. */
+    record SubscribeOutcome(String subscriptionId, String status) {
+    }
+
+    /**
+     * Contrata un plan cobrando con la tarjeta por defecto del usuario. El precio del plan está en CNY
+     * (moneda de 1688) y se convierte a USD para el cobro en Stripe (igual que los productos). Plan gratis
+     * (importe 0) → suscripción ACTIVE directa sin Stripe. Asocia/actualiza la CustomerSubscription.
+     */
+    SubscribeOutcome subscribeWithSavedCard(UUID userId, String planCode, String period) throws Exception;
+
+    /** Suscripción "vigente" del usuario (la más reciente no cancelada), o null si no tiene. */
+    CustomerSubscription currentSubscription(UUID userId);
+
+    /** Cancela la suscripción vigente del usuario al final del periodo. */
+    void cancelMySubscription(UUID userId) throws Exception;
+
+    /**
+     * Sincroniza la suscripción local desde un evento de Stripe (webhook): estado, fin de periodo y
+     * cancelación programada. Cubre renovación, fallo de cobro (PAST_DUE) y cancelación desde Stripe.
+     */
+    void syncFromStripe(String stripeSubscriptionId, String stripeStatus, Long currentPeriodEnd, Long cancelAtEpoch);
+
+    /** Factura del historial del usuario (datos no sensibles de Stripe). */
+    record InvoiceView(String number, Long total, String currency, String status, Long created, String pdfUrl,
+            String hostedUrl) {
+    }
+
+    /** Historial de facturas del usuario (de Stripe), las más recientes primero. */
+    List<InvoiceView> listInvoices(UUID userId) throws Exception;
 }

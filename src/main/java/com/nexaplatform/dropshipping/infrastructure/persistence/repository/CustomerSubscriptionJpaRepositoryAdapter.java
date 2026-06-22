@@ -4,10 +4,13 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomerS
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /** Spring Data JPA adapter backing the {@code CustomerSubscriptionRepository} domain port. */
 public interface CustomerSubscriptionJpaRepositoryAdapter extends JpaRepository<CustomerSubscriptionEntity, UUID> {
 
     List<CustomerSubscriptionEntity> findByUserId(UUID userId);
+
+    Optional<CustomerSubscriptionEntity> findByStripeSubscriptionId(String stripeSubscriptionId);
 }
