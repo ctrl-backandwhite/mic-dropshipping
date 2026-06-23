@@ -79,6 +79,7 @@
                 </td>
                 <td style="vertical-align:top;">
                   <span style="font-weight:600;" th:text="${it.title}">Producto</span>
+                  <span th:if="${it.variant != null and it.variant != ''}" style="display:block;color:#6B6780;font-size:12px;margin-top:2px;" th:text="${it.variant}">Negro / M</span>
                   <span th:if="${it.sku}" style="display:block;color:#A99FE0;font-size:11px;margin-top:2px;" th:text="${it.sku}">SKU</span>
                 </td>
               </tr></table>

@@ -60,7 +60,8 @@ public class InvoiceService {
                 BigDecimal lineDisp = unit.multiply(BigDecimal.valueOf(it.getQuantity()));
                 subtotalDisp = subtotalDisp.add(lineDisp);
                 items.add(Map.of("title", it.getTitleSnapshot() != null ? it.getTitleSnapshot() : "—", "sku",
-                        it.getSkuSnapshot() != null ? it.getSkuSnapshot() : "", "qty", it.getQuantity(), "unit",
+                        it.getSkuSnapshot() != null ? it.getSkuSnapshot() : "", "variant",
+                        it.getVariantName() != null ? it.getVariantName() : "", "qty", it.getQuantity(), "unit",
                         fmt(unit, cur), "lineTotal", fmt(lineDisp, cur), "image",
                         it.getImageUrlSnapshot() != null ? it.getImageUrlSnapshot() : ""));
             }

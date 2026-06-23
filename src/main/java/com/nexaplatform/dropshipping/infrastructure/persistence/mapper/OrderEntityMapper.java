@@ -7,6 +7,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderItem
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import org.mapstruct.Builder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -136,7 +137,7 @@ public interface OrderEntityMapper {
     @Mapping(target = "quantity", source = "quantity")
     @Mapping(target = "lineTotalCents", source = "lineTotalCents")
     @Mapping(target = "productTitleZh", expression = "java(item.getProduct() != null ? item.getProduct().getTitleZh() : null)")
-    @Mapping(target = "variantName", expression = "java(item.getVariant() != null ? item.getVariant().getTitle() : null)")
+    @Mapping(target = "variantName", expression = "java(variantLabel(item.getVariant()))")
     @Mapping(target = "supplierName", expression = "java(item.getProduct() != null && item.getProduct().getSupplier() != null ? item.getProduct().getSupplier().getName() : null)")
     @Mapping(target = "productImageUrl", source = "product", qualifiedByName = "resolveLiveImage")
     @Mapping(target = "productSourceUrl", expression = "java(item.getProduct() != null ? item.getProduct().getSourceUrl() : null)")
@@ -144,6 +145,35 @@ public interface OrderEntityMapper {
     OrderItem toItemDomain(OrderItemEntity item);
 
     List<OrderItem> toItemDomainList(List<OrderItemEntity> items);
+
+    /**
+     * Nombre legible de la variante para mostrar en carrito/checkout/factura.
+     * Prioriza el {@code title} de la variante; si está vacío (caso de los
+     * productos importados, que solo traen {@code options_json}), compone la
+     * etiqueta uniendo los valores de opción (p. ej. "Negro / M").
+     */
+    default String variantLabel(ProductVariantEntity v) {
+        if (v == null) {
+            return null;
+        }
+        if (v.getTitle() != null && !v.getTitle().isBlank()) {
+            return v.getTitle();
+        }
+        Map<String, String> opts = v.getOptions();
+        if (opts == null || opts.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String val : opts.values()) {
+            if (val != null && !val.isBlank()) {
+                if (sb.length() > 0) {
+                    sb.append(" / ");
+                }
+                sb.append(val);
+            }
+        }
+        return sb.length() == 0 ? null : sb.toString();
+    }
 
     /** Picks the first live catalog image, preferring the CDN url over the source url. */
     @Named("resolveLiveImage")

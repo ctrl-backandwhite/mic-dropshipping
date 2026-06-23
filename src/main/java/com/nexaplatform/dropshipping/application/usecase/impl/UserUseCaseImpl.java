@@ -17,6 +17,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntit
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PasswordResetTokenRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -65,6 +66,14 @@ public class UserUseCaseImpl implements UserUseCase {
     private final AuditLogger auditLogger;
     private final UserUpdateMapper userUpdateMapper;
 
+    /**
+     * Base URL pública del storefront para los enlaces de los emails
+     * (activación / reset). Configurable por entorno ({@code STOREFRONT_BASE_URL});
+     * en producción debe apuntar al dominio real, NO a localhost.
+     */
+    @Value("${nexadrop.storefront.base-url:http://localhost:3003}")
+    private String storefrontBaseUrl;
+
     /* ============ Registration / activation ============ */
 
     @Override
@@ -90,7 +99,7 @@ public class UserUseCaseImpl implements UserUseCase {
 
         emailQueueService.enqueue(email, "Confirma tu cuenta NexaDrop", "emails/welcome",
                 Map.of("displayName", saved.getDisplayName() != null ? saved.getDisplayName() : "", "dashboardUrl",
-                        "http://localhost:3003/activate?code=" + activationCode));
+                        storefrontBaseUrl + "/activate?code=" + activationCode));
 
         auditLogger.log("auth.register", email, Map.of("userId", saved.getId(), "role", saved.getRole().name()));
         return saved;
@@ -159,7 +168,7 @@ public class UserUseCaseImpl implements UserUseCase {
                     .expiresAt(Instant.now().plus(RESET_TTL_MINUTES, ChronoUnit.MINUTES)).build());
             emailQueueService.enqueue(normalized, "Restablece tu contraseña NexaDrop", "emails/welcome",
                     Map.of("displayName", user.getDisplayName() != null ? user.getDisplayName() : "", "dashboardUrl",
-                            "http://localhost:3003/password-reset?token=" + raw));
+                            storefrontBaseUrl + "/password-reset?token=" + raw));
         });
         auditLogger.log("auth.password_reset.request", normalized, Map.of());
     }
@@ -438,7 +447,7 @@ public class UserUseCaseImpl implements UserUseCase {
         User saved = userRepository.save(user);
         emailQueueService.enqueue(normalized, "Te han invitado a NexaDrop", "emails/welcome",
                 Map.of("displayName", "", "dashboardUrl",
-                        "http://localhost:3003/activate?code=" + activationCode));
+                        storefrontBaseUrl + "/activate?code=" + activationCode));
         auditLogger.log("auth.admin.invite", normalized, Map.of("userId", saved.getId(), "role", r.name()));
         return saved;
     }
