@@ -48,6 +48,11 @@ public class CustomerOrderEntity extends BaseEntity {
     @Column(name = "external_order_id", length = 120)
     private String externalOrderId;
 
+    /** Clave de idempotencia del checkout (hash del carrito): reintentos del mismo
+     *  carrito reutilizan la orden aún sin pagar en vez de crear un duplicado. */
+    @Column(name = "idempotency_key", length = 80)
+    private String idempotencyKey;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "shipping_address_id", nullable = false)
     private AddressEntity shippingAddress;
