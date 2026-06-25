@@ -6,12 +6,14 @@ import com.nexaplatform.dropshipping.infrastructure.integration.currency.Currenc
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -32,6 +34,25 @@ public class InvoiceService {
 
     private final TemplateEngine templateEngine;
     private final CurrencyRateService currencyRateService;
+
+    // Datos fiscales del EMISOR (la plataforma) para que la factura sea un documento legal.
+    // Se configuran por entorno (nunca se inventan); si legal-name está vacío, el bloque no se pinta.
+    @Value("${nexadrop.invoice.issuer.legal-name:}")
+    private String issuerLegalName;
+    @Value("${nexadrop.invoice.issuer.tax-id:}")
+    private String issuerTaxId;
+    @Value("${nexadrop.invoice.issuer.address:}")
+    private String issuerAddress;
+    @Value("${nexadrop.invoice.issuer.city-line:}")
+    private String issuerCityLine;
+    @Value("${nexadrop.invoice.issuer.country:}")
+    private String issuerCountry;
+    @Value("${nexadrop.invoice.issuer.email:}")
+    private String issuerEmail;
+    @Value("${nexadrop.invoice.issuer.registry:}")
+    private String issuerRegistry;
+    @Value("${nexadrop.invoice.legal-note:}")
+    private String legalNote;
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
@@ -69,6 +90,12 @@ public class InvoiceService {
         BigDecimal shippingDisp = conv(o.getShippingCents(), cur);
         BigDecimal taxDisp = conv(o.getTaxCents(), cur);
         BigDecimal totalDisp = subtotalDisp.add(shippingDisp).add(taxDisp);
+        // Base imponible = subtotal + envío (lo gravado por el IVA). Tipo efectivo derivado de los
+        // importes para mostrar "IVA (X%)" sin depender de un campo de tipo separado.
+        BigDecimal baseDisp = subtotalDisp.add(shippingDisp);
+        int vatRate = baseDisp.signum() > 0
+                ? taxDisp.multiply(BigDecimal.valueOf(100)).divide(baseDisp, 0, RoundingMode.HALF_UP).intValue()
+                : 0;
         String city = join(o.getShippingCity(), o.getShippingState(), o.getShippingPostalCode());
         Instant when = o.getPlacedAt() != null ? o.getPlacedAt() : o.getCreatedAt();
 
@@ -95,12 +122,29 @@ public class InvoiceService {
         m.put("items", items);
         m.put("labelSubtotal", es ? "Subtotal" : "Subtotal");
         m.put("labelShipping", es ? "Envío" : "Shipping");
-        m.put("labelTax", es ? "Impuestos" : "Tax");
+        m.put("labelBase", es ? "Base imponible" : "Taxable base");
+        m.put("labelTax", (es ? "IVA" : "VAT") + " (" + vatRate + "%)");
         m.put("labelTotal", "Total");
         m.put("subtotal", fmt(subtotalDisp, cur));
         m.put("shipping", fmt(shippingDisp, cur));
+        m.put("base", fmt(baseDisp, cur));
         m.put("tax", fmt(taxDisp, cur));
         m.put("total", fmt(totalDisp, cur));
+
+        // Bloque fiscal del EMISOR (solo si está configurado: no inventamos datos legales).
+        boolean hasIssuer = issuerLegalName != null && !issuerLegalName.isBlank();
+        m.put("hasIssuer", hasIssuer);
+        m.put("labelIssuer", es ? "Emisor" : "Issuer");
+        m.put("labelBillTo", es ? "Facturar a" : "Bill to");
+        m.put("labelTaxId", es ? "NIF/CIF" : "Tax ID");
+        m.put("issuerLegalName", nz(issuerLegalName));
+        m.put("issuerTaxId", nz(issuerTaxId));
+        m.put("issuerAddress", nz(issuerAddress));
+        m.put("issuerCityLine", nz(issuerCityLine));
+        m.put("issuerCountry", nz(issuerCountry));
+        m.put("issuerEmail", nz(issuerEmail));
+        m.put("issuerRegistry", nz(issuerRegistry));
+        m.put("legalNote", nz(legalNote));
         // Color del lienzo (fuera del cuadro): lavanda en el email; el PDF lo sobreescribe a blanco.
         m.put("bodyBg", "#F4F1FB");
         m.put("ctaUrl", downloadUrl);
@@ -133,14 +177,8 @@ public class InvoiceService {
         // El PDF es un documento descargable → lienzo BLANCO (no el lavanda del email). Sin CTA.
         Map<String, Object> m = model(o, locale, null, currency);
         m.put("bodyBg", "#ffffff");
-        // En el PDF acortamos el nombre del producto a 40 caracteres + "…" para que no se desborde la fila.
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> pdfItems = ((List<Map<String, Object>>) m.get("items")).stream().map(it -> {
-            Map<String, Object> copy = new java.util.HashMap<>(it);
-            copy.put("title", ellipsis((String) it.get("title"), 40));
-            return copy;
-        }).toList();
-        m.put("items", pdfItems);
+        // El nombre del producto se muestra COMPLETO (la celda hace wrap); antes se truncaba a 40
+        // caracteres pero la factura debe llevar la descripción íntegra del artículo.
         Context ctx = new Context();
         m.forEach(ctx::setVariable);
         String html = templateEngine.process("emails/invoice", ctx);
