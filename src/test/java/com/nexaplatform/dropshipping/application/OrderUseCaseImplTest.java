@@ -50,6 +50,8 @@ class OrderUseCaseImplTest {
     @Mock
     OrderRepository orderRepository;
     @Mock
+    com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderRepository orderEntityRepository;
+    @Mock
     ProductRepository productRepository;
     @Mock
     ProductVariantRepository variantRepository;
@@ -85,7 +87,7 @@ class OrderUseCaseImplTest {
 
     @BeforeEach
     void setup() {
-        orderUseCase = new OrderUseCaseImpl(orderRepository, productRepository, variantRepository, userRepository,
+        orderUseCase = new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository, userRepository,
                 shopConnectionRepository, userAddressRepository, webhooks, walletUseCase, notificationsPublisher,
                 pricingService, affiliateProgramService, paymentUseCase, orderEmailService, cainiao, countryTaxService,
                 operatorCommissionService);
