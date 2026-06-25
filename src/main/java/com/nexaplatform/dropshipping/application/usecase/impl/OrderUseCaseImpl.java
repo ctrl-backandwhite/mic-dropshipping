@@ -26,6 +26,7 @@ import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.domain.model.Payment;
 import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomerOrderEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
@@ -68,6 +69,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private static final SecureRandom RNG = new SecureRandom();
 
     private final OrderRepository orderRepository;
+    // Repo JPA de la entidad (mismo nombre simple que el puerto de dominio → FQN): se usa
+    // solo para la idempotencia a nivel de orden (buscar reutilizable + sellar el idem).
+    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderRepository orderEntityRepository;
     private final ProductRepository productRepository;
     private final ProductVariantRepository variantRepository;
     private final UserRepository userRepository;
@@ -435,9 +439,24 @@ public class OrderUseCaseImpl implements OrderUseCase {
         List<OrderItemInput> items = req.getItems().stream()
                 .map(i -> new OrderItemInput(i.getProductId(), i.getVariantId(), i.getQuantity())).toList();
 
-        var orderReq = new CreateOrderRequest("ME-" + Instant.now().getEpochSecond(), addr, null, items,
-                req.getNotes());
-        Order created = createOrder(null, userId, orderReq);
+        // Idempotencia a nivel de orden: si este mismo carrito (mismo idem) ya creó una
+        // orden AÚN SIN PAGAR, la reutilizamos en vez de crear un duplicado. Así un intento
+        // abandonado en la pasarela + un reintento no dejan dos órdenes.
+        String idemKeyTrim = (idem != null && !idem.isBlank()) ? idem.trim() : null;
+        CustomerOrderEntity reusable = idemKeyTrim == null ? null
+                : orderEntityRepository.findFirstByUserIdAndIdempotencyKeyAndStatusInOrderByCreatedAtDesc(
+                        userId, idemKeyTrim, List.of(OrderStatus.PENDING, OrderStatus.AWAITING_PAYMENT)).orElse(null);
+        boolean reused = reusable != null;
+
+        Order created;
+        if (reused) {
+            created = orderRepository.findById(reusable.getId())
+                    .orElseThrow(() -> new NotFoundException("Order"));
+        } else {
+            var orderReq = new CreateOrderRequest("ME-" + Instant.now().getEpochSecond(), addr, null, items,
+                    req.getNotes());
+            created = createOrder(null, userId, orderReq);
+        }
 
         // DROP-549: only charge the wallet when the requested method is WALLET.
         // For CARD/PAYPAL/USDT the order stays PENDING and the client follows up
@@ -454,9 +473,21 @@ public class OrderUseCaseImpl implements OrderUseCase {
         }
         o = orderRepository.save(o);
 
+        // Sella el idem en la orden para que un reintento del MISMO carrito la reutilice
+        // (se hace al final: save() de dominio hace update parcial y no toca esta columna).
+        if (idemKeyTrim != null && !reused) {
+            final UUID savedId = o.getId();
+            orderEntityRepository.findById(savedId).ifPresent(e -> {
+                e.setIdempotencyKey(idemKeyTrim);
+                orderEntityRepository.save(e);
+            });
+        }
+
         // DROP-645/646: capture an affiliate conversion + commission for this confirmed order
-        // (no-op if the customer has no live referral attribution).
-        affiliateProgramService.onOrderPlaced(o.getId(), userId, o.getSubtotalCents(), o.getCurrency());
+        // (no-op if the customer has no live referral attribution). Solo la 1ª vez (no en reuso).
+        if (!reused) {
+            affiliateProgramService.onOrderPlaced(o.getId(), userId, o.getSubtotalCents(), o.getCurrency());
+        }
 
         // Plan 300k: publish to the notifications outbox in the same tx as the order
         // so we never end up with an "order without notification".
@@ -465,8 +496,12 @@ public class OrderUseCaseImpl implements OrderUseCase {
         final String orderNumber = created.getOrderNumber();
         final String currency = created.getCurrency();
         final Order paidOrder = o;
+        final boolean wasReused = reused;
         userRepository.findById(userId).ifPresent(u -> {
-            notificationsPublisher.orderPlaced(userId, u.getEmail(), orderNumber, totalPlain, currency, u.getLanguage());
+            // El email "pedido recibido" solo la primera vez (en reuso ya se envió).
+            if (!wasReused) {
+                notificationsPublisher.orderPlaced(userId, u.getEmail(), orderNumber, totalPlain, currency, u.getLanguage());
+            }
             // Pago con saldo del wallet: la orden ya queda PAID → email de confirmación + FACTURA.
             if (paidOrder.getStatus() == OrderStatus.PAID) {
                 orderEmailService.paymentConfirmed(paidOrder, u.getEmail(), u.getLanguage(), "WALLET");

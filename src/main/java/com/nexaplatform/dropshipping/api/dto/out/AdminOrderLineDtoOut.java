@@ -17,6 +17,8 @@ public class AdminOrderLineDtoOut {
     UUID productId;
     String sku;
     String title;
+    // Variante seleccionada (color / talla), p. ej. "Negro / M".
+    String variantName;
     int qty;
     int unitPriceCents;
     int lineTotalCents;

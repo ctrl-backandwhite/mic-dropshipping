@@ -76,6 +76,7 @@ public interface AdminOrderMapper {
     @Mapping(target = "productId", source = "productId")
     @Mapping(target = "sku", source = "skuSnapshot")
     @Mapping(target = "title", expression = "java(resolveTitle(item))")
+    @Mapping(target = "variantName", source = "variantName")
     @Mapping(target = "qty", source = "quantity")
     @Mapping(target = "unitPriceCents", source = "unitPriceCents")
     @Mapping(target = "lineTotalCents", source = "lineTotalCents")

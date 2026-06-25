@@ -149,3 +149,7 @@ databaseChangeLog:
       file: db/changelog/schema-v69-user-stripe-customer.sql
   - include:
       file: db/changelog/schema-v70-plan-currency-cny.sql
+  - include:
+      file: db/changelog/schema-v71-warehouses-keep-two.sql
+  - include:
+      file: db/changelog/schema-v72-order-idempotency.sql
