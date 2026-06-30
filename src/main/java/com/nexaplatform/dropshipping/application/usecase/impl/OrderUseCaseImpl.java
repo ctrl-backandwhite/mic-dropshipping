@@ -171,7 +171,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
 
         // Impuesto (IVA/sales tax) por país de envío, si está configurado. Base imponible = subtotal + envío.
         // Se incluye en el total y, por tanto, en el cobro y la factura.
-        int taxCents = countryTaxService.taxCentsFor(order.getShippingCountry(), subtotal + shippingCents);
+        // IVA por estado/provincia (US/CA/BR) si la dirección lo indica; si no, tasa nacional.
+        int taxCents = countryTaxService.taxCentsFor(order.getShippingCountry(), order.getShippingState(),
+                subtotal + shippingCents);
         order.setSubtotalCents(subtotal);
         order.setShippingCents(shippingCents);
         order.setTaxCents(taxCents);

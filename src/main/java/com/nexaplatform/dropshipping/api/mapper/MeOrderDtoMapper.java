@@ -48,7 +48,11 @@ public class MeOrderDtoMapper {
         BigDecimal shipping = currencyRateService.usdTo(BigDecimal.valueOf(model.getShippingCents()).movePointLeft(2),
                 ccy);
         BigDecimal tax = currencyRateService.usdTo(BigDecimal.valueOf(model.getTaxCents()).movePointLeft(2), ccy);
-        BigDecimal total = subtotal.add(shipping).add(tax);
+        // Total = suma de los componentes YA redondeados a 2 decimales, para que el desglose mostrado
+        // cuadre exactamente (subtotal + envío + IVA = total) y coincida con el resumen del checkout.
+        BigDecimal total = subtotal.setScale(2, java.math.RoundingMode.HALF_UP)
+                .add(shipping.setScale(2, java.math.RoundingMode.HALF_UP))
+                .add(tax.setScale(2, java.math.RoundingMode.HALF_UP));
 
         return MeOrderDetailDtoOut.builder().id(model.getId()).orderNumber(model.getOrderNumber())
                 .externalOrderId(model.getExternalOrderId())
@@ -61,6 +65,32 @@ public class MeOrderDtoMapper {
                 .shippingAddress(shippingAddress(model)).billingAddress(billingAddress(model)).notes(model.getNotes())
                 .trackingCarrier(null).trackingNumber(null).placedAt(model.getPlacedAt()).shippedAt(model.getShippedAt())
                 .deliveredAt(model.getDeliveredAt()).cancelledAt(model.getCancelledAt()).items(items).build();
+    }
+
+    /**
+     * Total del pedido en la moneda activa, calculado EXACTAMENTE igual que el detalle (conversión línea a
+     * línea + suma de componentes redondeados), para que la lista de pedidos muestre el MISMO total que el
+     * detalle (evita desfases de céntimos entre ambas vistas).
+     */
+    public String formatOrderTotal(Order o) {
+        if (o == null) {
+            return null;
+        }
+        String ccy = CurrencyHolder.get();
+        BigDecimal subtotal = BigDecimal.ZERO;
+        if (o.getItems() != null) {
+            for (OrderItem item : o.getItems()) {
+                BigDecimal usdUnit = BigDecimal.valueOf(item.getUnitPriceCents()).movePointLeft(2);
+                subtotal = subtotal.add(currencyRateService.usdTo(usdUnit, ccy)
+                        .multiply(BigDecimal.valueOf(item.getQuantity())));
+            }
+        }
+        BigDecimal shipping = currencyRateService.usdTo(BigDecimal.valueOf(o.getShippingCents()).movePointLeft(2), ccy);
+        BigDecimal tax = currencyRateService.usdTo(BigDecimal.valueOf(o.getTaxCents()).movePointLeft(2), ccy);
+        BigDecimal total = subtotal.setScale(2, java.math.RoundingMode.HALF_UP)
+                .add(shipping.setScale(2, java.math.RoundingMode.HALF_UP))
+                .add(tax.setScale(2, java.math.RoundingMode.HALF_UP));
+        return currencyRateService.formatDisplay(total, ccy);
     }
 
     private MeOrderItemDetailDtoOut toItemDetail(OrderItem item, BigDecimal unit, BigDecimal lineTotal, String ccy) {

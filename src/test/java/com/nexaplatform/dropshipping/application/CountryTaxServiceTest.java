@@ -2,7 +2,9 @@ package com.nexaplatform.dropshipping.application;
 
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.service.CountryTaxService;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CountryRegionEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CountryTaxRateEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CountryRegionRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CountryTaxRateRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,11 +27,69 @@ class CountryTaxServiceTest {
 
     @Mock
     CountryTaxRateRepository repository;
+    @Mock
+    CountryRegionRepository regionRepository;
     @InjectMocks
     CountryTaxService service;
 
     private static CountryTaxRateEntity rate(String code, int bps, boolean active) {
         return CountryTaxRateEntity.builder().countryCode(code).rateBps(bps).active(active).build();
+    }
+
+    private static CountryRegionEntity region(String country, String code, Integer bps, boolean active) {
+        return CountryRegionEntity.builder().countryCode(country).regionCode(code).regionName(code)
+                .rateBps(bps).active(active).build();
+    }
+
+    // ===== IVA resuelto por REGIÓN (estado/provincia) =====
+
+    @Test
+    void rateByRegion_regionWithOwnRateOverridesNational() {
+        lenient().when(repository.findByCountryCodeIgnoreCase("US")).thenReturn(Optional.of(rate("US", 0, true)));
+        when(regionRepository.findByCountryCodeIgnoreCaseAndRegionCodeIgnoreCase("US", "CA"))
+                .thenReturn(Optional.of(region("US", "CA", 725, true)));
+        assertThat(service.rateBpsFor("US", "CA")).isEqualTo(725); // California 7.25%
+    }
+
+    @Test
+    void rateByRegion_regionWithoutOwnRateFallsBackToNational() {
+        when(repository.findByCountryCodeIgnoreCase("ES")).thenReturn(Optional.of(rate("ES", 2100, true)));
+        when(regionRepository.findByCountryCodeIgnoreCaseAndRegionCodeIgnoreCase("ES", "MD"))
+                .thenReturn(Optional.of(region("ES", "MD", null, true)));
+        assertThat(service.rateBpsFor("ES", "MD")).isEqualTo(2100); // Madrid -> nacional 21%
+    }
+
+    @Test
+    void rateByRegion_inactiveRegionFallsBackToNational() {
+        when(repository.findByCountryCodeIgnoreCase("US")).thenReturn(Optional.of(rate("US", 0, true)));
+        when(regionRepository.findByCountryCodeIgnoreCaseAndRegionCodeIgnoreCase("US", "CA"))
+                .thenReturn(Optional.of(region("US", "CA", 725, false)));
+        assertThat(service.rateBpsFor("US", "CA")).isZero(); // región desactivada -> nacional US 0%
+    }
+
+    @Test
+    void rateByRegion_noRegionUsesNational() {
+        when(repository.findByCountryCodeIgnoreCase("ES")).thenReturn(Optional.of(rate("ES", 2100, true)));
+        when(regionRepository.findByCountryCodeIgnoreCaseAndRegionCodeIgnoreCase("ES", "ZZ"))
+                .thenReturn(Optional.empty());
+        assertThat(service.rateBpsFor("ES", "ZZ")).isEqualTo(2100);
+    }
+
+    @Test
+    void rateByRegion_nullRegionUsesNational() {
+        when(repository.findByCountryCodeIgnoreCase("IL")).thenReturn(Optional.of(rate("IL", 1800, true)));
+        assertThat(service.rateBpsFor("IL", null)).isEqualTo(1800); // Israel 18%
+    }
+
+    @Test
+    void taxCentsFor_byRegion_usesResolvedRate() {
+        lenient().when(repository.findByCountryCodeIgnoreCase("US")).thenReturn(Optional.of(rate("US", 0, true)));
+        lenient().when(regionRepository.findByCountryCodeIgnoreCaseAndRegionCodeIgnoreCase("US", "CA"))
+                .thenReturn(Optional.of(region("US", "CA", 725, true)));
+        // 10000 céntimos (100,00) * 7.25% = 725 céntimos
+        assertThat(service.taxCentsFor("US", "CA", 10000)).isEqualTo(725);
+        // sin región -> nacional US 0%
+        assertThat(service.taxCentsFor("US", null, 10000)).isZero();
     }
 
     @Test
