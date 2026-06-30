@@ -156,23 +156,27 @@ public interface OrderEntityMapper {
         if (v == null) {
             return null;
         }
-        if (v.getTitle() != null && !v.getTitle().isBlank()) {
-            return v.getTitle();
-        }
+        // Etiqueta = valores de opción (Color/Talla), p. ej. "Negro / 27". Se compone PRIMERO desde las
+        // opciones porque en los productos importados (1688) el `title` de la variante suele ser el título
+        // del producto, y usarlo duplicaba la descripción en la factura/pedido en vez de mostrar la variante.
         Map<String, String> opts = v.getOptions();
-        if (opts == null || opts.isEmpty()) {
-            return null;
-        }
-        StringBuilder sb = new StringBuilder();
-        for (String val : opts.values()) {
-            if (val != null && !val.isBlank()) {
-                if (sb.length() > 0) {
-                    sb.append(" / ");
+        if (opts != null && !opts.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (String val : opts.values()) {
+                if (val != null && !val.isBlank()) {
+                    if (sb.length() > 0) {
+                        sb.append(" / ");
+                    }
+                    sb.append(val);
                 }
-                sb.append(val);
+            }
+            if (sb.length() > 0) {
+                return sb.toString();
             }
         }
-        return sb.length() == 0 ? null : sb.toString();
+        // Sin opciones no hay variante real que mostrar. NO usamos v.getTitle() porque en estos productos
+        // es el título del producto y duplicaría la descripción.
+        return null;
     }
 
     /** Picks the first live catalog image, preferring the CDN url over the source url. */

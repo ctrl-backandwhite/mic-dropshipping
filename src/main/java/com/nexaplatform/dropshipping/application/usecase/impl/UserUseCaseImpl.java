@@ -31,6 +31,10 @@ import java.util.Base64;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
+import com.nexaplatform.dropshipping.domain.enums.AuthEmailLabel;
+import com.nexaplatform.dropshipping.domain.enums.InvoiceLabel;
+import com.nexaplatform.dropshipping.domain.enums.OrderEmailLabel;
+
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -97,9 +101,14 @@ public class UserUseCaseImpl implements UserUseCase {
 
         User saved = userRepository.save(user);
 
-        emailQueueService.enqueue(email, "Confirma tu cuenta NexaDrop", "emails/welcome",
-                Map.of("displayName", saved.getDisplayName() != null ? saved.getDisplayName() : "", "dashboardUrl",
-                        storefrontBaseUrl + "/activate?code=" + activationCode));
+        String confirmLang = InvoiceLabel.lang(saved.getLanguage());
+        emailQueueService.enqueue(email, AuthEmailLabel.CONFIRM_SUBJECT.of(confirmLang), "emails/welcome",
+                Map.of("title", AuthEmailLabel.CONFIRM_TITLE.of(confirmLang),
+                        "bodyHtml", AuthEmailLabel.CONFIRM_BODY.of(confirmLang, saved.getDisplayName()),
+                        "ctaLabel", AuthEmailLabel.CONFIRM_CTA.of(confirmLang),
+                        "ctaUrl", storefrontBaseUrl + "/activate?code=" + activationCode,
+                        "icon", "circle-check",
+                        "footerNote", OrderEmailLabel.AUTO_NOTE.of(confirmLang)));
 
         auditLogger.log("auth.register", email, Map.of("userId", saved.getId(), "role", saved.getRole().name()));
         return saved;
@@ -166,9 +175,14 @@ public class UserUseCaseImpl implements UserUseCase {
                     .orElseThrow(() -> new NotFoundException("User not found"));
             resetTokenRepository.save(PasswordResetTokenEntity.builder().user(managed).tokenHash(hash)
                     .expiresAt(Instant.now().plus(RESET_TTL_MINUTES, ChronoUnit.MINUTES)).build());
-            emailQueueService.enqueue(normalized, "Restablece tu contraseña NexaDrop", "emails/welcome",
-                    Map.of("displayName", user.getDisplayName() != null ? user.getDisplayName() : "", "dashboardUrl",
-                            storefrontBaseUrl + "/password-reset?token=" + raw));
+            String resetLang = InvoiceLabel.lang(user.getLanguage());
+            emailQueueService.enqueue(normalized, AuthEmailLabel.RESET_SUBJECT.of(resetLang), "emails/welcome",
+                    Map.of("title", AuthEmailLabel.RESET_TITLE.of(resetLang),
+                            "bodyHtml", AuthEmailLabel.RESET_BODY.of(resetLang, user.getDisplayName()),
+                            "ctaLabel", AuthEmailLabel.RESET_CTA.of(resetLang),
+                            "ctaUrl", storefrontBaseUrl + "/password-reset?token=" + raw,
+                            "icon", "circle-check",
+                            "footerNote", OrderEmailLabel.AUTO_NOTE.of(resetLang)));
         });
         auditLogger.log("auth.password_reset.request", normalized, Map.of());
     }
@@ -445,9 +459,14 @@ public class UserUseCaseImpl implements UserUseCase {
                 .language("es")
                 .build();
         User saved = userRepository.save(user);
-        emailQueueService.enqueue(normalized, "Te han invitado a NexaDrop", "emails/welcome",
-                Map.of("displayName", "", "dashboardUrl",
-                        storefrontBaseUrl + "/activate?code=" + activationCode));
+        String inviteLang = InvoiceLabel.lang(saved.getLanguage());
+        emailQueueService.enqueue(normalized, AuthEmailLabel.INVITE_SUBJECT.of(inviteLang), "emails/welcome",
+                Map.of("title", AuthEmailLabel.INVITE_TITLE.of(inviteLang),
+                        "bodyHtml", AuthEmailLabel.INVITE_BODY.of(inviteLang, ""),
+                        "ctaLabel", AuthEmailLabel.INVITE_CTA.of(inviteLang),
+                        "ctaUrl", storefrontBaseUrl + "/activate?code=" + activationCode,
+                        "icon", "circle-check",
+                        "footerNote", OrderEmailLabel.AUTO_NOTE.of(inviteLang)));
         auditLogger.log("auth.admin.invite", normalized, Map.of("userId", saved.getId(), "role", r.name()));
         return saved;
     }

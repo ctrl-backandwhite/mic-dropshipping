@@ -8,16 +8,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.thymeleaf.TemplateEngine;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,9 +43,18 @@ class InvoiceServiceTest {
                 .build();
     }
 
+    // El formateo de importes delega ahora en CurrencyRateService.formatDisplay (locale-aware).
+    // Lo simulamos como "símbolo + valor" (€ para EUR, $ resto) para asertar los importes.
+    private static String display(InvocationOnMock inv) {
+        BigDecimal v = inv.getArgument(0);
+        String c = inv.getArgument(1);
+        return ("EUR".equals(c) ? "€" : "$") + v.setScale(2, RoundingMode.HALF_UP).toPlainString();
+    }
+
     @Test
     void model_usdSumsLinesAndUsesSpanishLabels() {
-        when(currencyRateService.symbolOf("USD")).thenReturn("$");
+        when(currencyRateService.formatDisplay(any(BigDecimal.class), anyString()))
+                .thenAnswer(InvoiceServiceTest::display);
         // 1000c=10.00 x2 = 20.00 ; 550c=5.50 x1 = 5.50 ; subtotal 25.50 ; +ship 5.00 +tax 2.10 = 32.60
         Map<String, Object> m = service.model(order("USD", item(1000, 2, "Camiseta"), item(550, 1, "Gorra")),
                 "es", "http://dl");
@@ -51,7 +63,7 @@ class InvoiceServiceTest {
         assertThat(m.get("shipping")).isEqualTo("$5.00");
         assertThat(m.get("tax")).isEqualTo("$2.10");
         assertThat(m.get("total")).isEqualTo("$32.60");
-        assertThat(m.get("labelTax")).isEqualTo("Impuestos");
+        assertThat((String) m.get("labelTax")).startsWith("IVA");
         assertThat(m.get("title")).isEqualTo("Pago confirmado");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> items = (List<Map<String, Object>>) m.get("items");
@@ -61,16 +73,18 @@ class InvoiceServiceTest {
 
     @Test
     void model_englishLabelsWhenLocaleNotEs() {
-        when(currencyRateService.symbolOf("USD")).thenReturn("$");
+        when(currencyRateService.formatDisplay(any(BigDecimal.class), anyString()))
+                .thenAnswer(InvoiceServiceTest::display);
         Map<String, Object> m = service.model(order("USD", item(1000, 1, "Tee")), "en", "http://dl");
-        assertThat(m.get("labelTax")).isEqualTo("Tax");
+        assertThat((String) m.get("labelTax")).startsWith("VAT");
         assertThat(m.get("title")).isEqualTo("Payment confirmed");
         assertThat(m.get("subject")).isEqualTo("Invoice NX-100");
     }
 
     @Test
     void model_nonUsdCurrencyConvertsViaRateService() {
-        lenient().when(currencyRateService.symbolOf("EUR")).thenReturn("€");
+        when(currencyRateService.formatDisplay(any(BigDecimal.class), anyString()))
+                .thenAnswer(InvoiceServiceTest::display);
         // Cada importe (línea, envío, impuesto) se convierte con usdTo; devolvemos valores deterministas.
         when(currencyRateService.usdTo(eq(new BigDecimal("10.00")), eq("EUR"))).thenReturn(new BigDecimal("9.00"));
         when(currencyRateService.usdTo(eq(new BigDecimal("5.00")), eq("EUR"))).thenReturn(new BigDecimal("4.50"));

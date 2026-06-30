@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Outbo
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -15,7 +16,11 @@ import org.thymeleaf.context.Context;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -46,14 +51,25 @@ public class EmailQueueService {
     public void dispatchPending() {
         for (OutboundEmailEntity email : repo.findTop20ByStatusOrderByCreatedAtAsc("PENDING")) {
             try {
+                String html = email.getBodyHtml();
+                // Iconos FontAwesome incrustados como adjuntos inline (CID): funcionan en Gmail sin
+                // necesidad de hosting público (los data-URI/SVG los bloquea). multipart solo si hay alguno.
+                Set<String> cids = referencedCids(html);
                 MimeMessage msg = mailSender.createMimeMessage();
-                MimeMessageHelper helper = new MimeMessageHelper(msg, false, StandardCharsets.UTF_8.name());
+                MimeMessageHelper helper = new MimeMessageHelper(msg, !cids.isEmpty(),
+                        StandardCharsets.UTF_8.name());
                 helper.setTo(email.getToAddress());
                 helper.setSubject(email.getSubject());
-                helper.setText(email.getBodyHtml(), true);
+                helper.setText(html, true);
                 // Named From + Reply-To greatly reduces Gmail spam classification.
                 helper.setFrom(new jakarta.mail.internet.InternetAddress(fromAddress, fromName, "UTF-8"));
                 helper.setReplyTo(fromAddress);
+                for (String cid : cids) {
+                    ClassPathResource icon = new ClassPathResource("email-icons/" + cid + ".png");
+                    if (icon.exists()) {
+                        helper.addInline(cid, icon, "image/png");
+                    }
+                }
                 mailSender.send(msg);
                 email.setStatus("SENT");
                 email.setSentAt(Instant.now());
@@ -65,5 +81,19 @@ public class EmailQueueService {
             }
             repo.save(email);
         }
+    }
+
+    private static final Pattern CID_REF = Pattern.compile("cid:([A-Za-z0-9_-]+)");
+
+    /** Extrae los identificadores referenciados como {@code src="cid:NAME"} en el HTML del email. */
+    private static Set<String> referencedCids(String html) {
+        Set<String> cids = new LinkedHashSet<>();
+        if (html != null) {
+            Matcher m = CID_REF.matcher(html);
+            while (m.find()) {
+                cids.add(m.group(1));
+            }
+        }
+        return cids;
     }
 }

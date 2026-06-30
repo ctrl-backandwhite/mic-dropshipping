@@ -73,7 +73,7 @@ public class FulfillmentService {
         o.setEstimatedDeliveryAt(Instant.now().plus(Duration.ofDays(r.etaMaxDays())));
         o.setLastTrackedAt(Instant.now());
         orderRepository.save(o);
-        appendEvent(o.getId(), OrderStatus.FORWARDED.name(), "Envío registrado en Cainiao", "Shenzhen, CN", "SYSTEM",
+        appendEvent(o.getId(), OrderStatus.FORWARDED.name(), "Envío registrado para entrega", "Shenzhen, CN", "SYSTEM",
                 o.getForwardedAt() != null ? o.getForwardedAt() : Instant.now());
         log.info("Cainiao: envío {} creado para pedido {}", r.trackingNumber(), o.getOrderNumber());
     }

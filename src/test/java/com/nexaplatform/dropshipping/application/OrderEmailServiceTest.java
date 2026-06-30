@@ -112,7 +112,7 @@ class OrderEmailServiceTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> varsCap = ArgumentCaptor.forClass(Map.class);
-        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Tu pedido va en camino 🚚"), eq("emails/notification"),
+        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Tu pedido va en camino"), eq("emails/notification"),
                 varsCap.capture());
         Map<String, Object> vars = varsCap.getValue();
         assertThat((String) vars.get("bodyHtml")).contains("NX-200").contains("TRK-1").contains("Cainiao");
@@ -127,7 +127,7 @@ class OrderEmailServiceTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> varsCap = ArgumentCaptor.forClass(Map.class);
-        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Your order is on its way 🚚"), eq("emails/notification"),
+        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Your order is on its way"), eq("emails/notification"),
                 varsCap.capture());
         assertThat((String) varsCap.getValue().get("bodyHtml")).contains("has been shipped").doesNotContain("Tracking");
     }
@@ -146,7 +146,7 @@ class OrderEmailServiceTest {
 
         service.delivered(o, "buyer@x.com", "es");
 
-        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Tu pedido ha sido entregado 📦"),
+        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Tu pedido ha sido entregado"),
                 eq("emails/notification"), anyMap());
     }
 
@@ -175,7 +175,7 @@ class OrderEmailServiceTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> varsCap = ArgumentCaptor.forClass(Map.class);
-        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Actualización de tu envío 🚚"),
+        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Actualización de tu envío"),
                 eq("emails/notification"), varsCap.capture());
         String body = (String) varsCap.getValue().get("bodyHtml");
         assertThat(body).contains("NX-500").contains("Madrid").contains("TRK-9");

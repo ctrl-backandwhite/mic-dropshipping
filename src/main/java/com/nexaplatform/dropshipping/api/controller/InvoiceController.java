@@ -80,7 +80,12 @@ public class InvoiceController {
         String resolved = lang != null && !lang.isBlank() ? lang : "es";
         Order o = orderUseCase.getAdminOrderDetail(id, resolved);
         // Reutiliza el mismo email de factura (mismo diseño/idioma/moneda) enviándolo a la dirección de prueba.
-        orderEmailService.paymentConfirmed(o, email, resolved, "TEST", invoiceCurrency(o));
+        // Usamos el método de pago REAL del pedido (traducido en el email); si no hay pago registrado
+        // (p. ej. pago con wallet o pedido de prueba), mostramos CARD como método representativo.
+        String method = paymentRepository.findByOrderIdOrderByCreatedAtDesc(id).stream()
+                .map(p -> p.getMethod()).filter(m -> m != null).map(m -> m.name())
+                .findFirst().orElse("CARD");
+        orderEmailService.paymentConfirmed(o, email, resolved, method, invoiceCurrency(o));
         return ResponseEntity.ok(Map.of("sent", true, "to", email, "order", o.getOrderNumber()));
     }
 
