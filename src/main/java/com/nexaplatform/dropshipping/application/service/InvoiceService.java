@@ -7,9 +7,11 @@ import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import com.nexaplatform.dropshipping.domain.enums.InvoiceLabel;
+import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PaymentJpaRepositoryAdapter;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +45,19 @@ public class InvoiceService {
 
     private final TemplateEngine templateEngine;
     private final CurrencyRateService currencyRateService;
+    private final PaymentJpaRepositoryAdapter paymentRepository;
+
+    /** Importe realmente cobrado (settlement) del pago satisfactorio si coincide con la moneda de la factura. */
+    private BigDecimal settlementTotal(java.util.UUID orderId, String ccy) {
+        if (orderId == null || ccy == null) {
+            return null;
+        }
+        return paymentRepository.findByOrderIdOrderByCreatedAtDesc(orderId).stream()
+                .filter(p -> p.getStatus() == PaymentStatus.SUCCEEDED)
+                .filter(p -> p.getSettlementAmount() != null && ccy.equalsIgnoreCase(p.getSettlementCurrency()))
+                .map(p -> p.getSettlementAmount())
+                .findFirst().orElse(null);
+    }
 
     // Datos fiscales del EMISOR (la plataforma) para que la factura sea un documento legal.
     // Se configuran por entorno (nunca se inventan); si legal-name está vacío, el bloque no se pinta.
@@ -102,6 +117,16 @@ public class InvoiceService {
         BigDecimal shippingDisp = conv(o.getShippingCents(), cur);
         BigDecimal taxDisp = conv(o.getTaxCents(), cur);
         BigDecimal totalDisp = subtotalDisp.add(shippingDisp).add(taxDisp);
+        // Pedido ya pagado: la factura muestra EXACTAMENTE lo cobrado (settlement), no la re-conversión a la
+        // tasa actual (que deriva con el tiempo). Escalamos el desglose (conversión lineal) para que cuadre.
+        BigDecimal settle = settlementTotal(o.getId(), cur);
+        if (settle != null && totalDisp.signum() > 0) {
+            BigDecimal f = settle.divide(totalDisp, 10, RoundingMode.HALF_UP);
+            subtotalDisp = subtotalDisp.multiply(f).setScale(2, RoundingMode.HALF_UP);
+            shippingDisp = shippingDisp.multiply(f).setScale(2, RoundingMode.HALF_UP);
+            totalDisp = settle.setScale(2, RoundingMode.HALF_UP);
+            taxDisp = totalDisp.subtract(subtotalDisp).subtract(shippingDisp);
+        }
         // Base imponible = subtotal + envío (lo gravado por el IVA). Tipo efectivo derivado de los
         // importes para mostrar "IVA (X%)" sin depender de un campo de tipo separado.
         BigDecimal baseDisp = subtotalDisp.add(shippingDisp);
