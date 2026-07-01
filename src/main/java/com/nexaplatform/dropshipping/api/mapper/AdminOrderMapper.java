@@ -77,11 +77,27 @@ public interface AdminOrderMapper {
     @Mapping(target = "sku", source = "skuSnapshot")
     @Mapping(target = "title", expression = "java(resolveTitle(item))")
     @Mapping(target = "variantName", source = "variantName")
+    @Mapping(target = "imageUrl", expression = "java(lineImage(item))")
     @Mapping(target = "qty", source = "quantity")
     @Mapping(target = "unitPriceCents", source = "unitPriceCents")
     @Mapping(target = "lineTotalCents", source = "lineTotalCents")
     @Mapping(target = "productSourceUrl", source = "productSourceUrl")
     AdminOrderLineDtoOut toLine(OrderItem item);
+
+    /**
+     * Miniatura de la línea. Prioriza la imagen de la VARIANTE seleccionada (color concreto) para que
+     * coincida con lo pedido; si no hay, cae al snapshot del pedido y luego a la imagen viva del producto.
+     */
+    default String lineImage(OrderItem item) {
+        if (item.getVariantImageUrl() != null && !item.getVariantImageUrl().isBlank()) {
+            return item.getVariantImageUrl();
+        }
+        String image = item.getImageUrlSnapshot();
+        if ((image == null || image.isBlank()) && item.getProductImageUrl() != null) {
+            image = item.getProductImageUrl();
+        }
+        return image;
+    }
 
     List<AdminOrderLineDtoOut> toLines(List<OrderItem> items);
 

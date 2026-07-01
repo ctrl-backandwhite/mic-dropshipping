@@ -5,12 +5,15 @@ import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomerOrderEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderItemEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -126,5 +129,43 @@ class OrderEntityMapperTest {
         assertThat(item.getQuantity()).isEqualTo(4);
         assertThat(item.getLineTotalCents()).isEqualTo(2000);
         assertThat(item.getCostCnyCents()).isEqualTo(1500L);
+    }
+
+    // ---------------- variantLabel: se compone desde las opciones (Color/Talla), no del título ----------------
+
+    @Test
+    void variantLabel_composesFromOptionsNotTitle() {
+        Map<String, String> opts = new LinkedHashMap<>();
+        opts.put("Color", "Negro");
+        opts.put("Talla", "27");
+        ProductVariantEntity v = new ProductVariantEntity();
+        v.setOptions(opts);
+        v.setTitle("Zapatillas deportivas (título del producto)"); // no debe usarse
+        assertThat(mapper.variantLabel(v)).isEqualTo("Negro / 27");
+    }
+
+    @Test
+    void variantLabel_nullWhenNoOptions() {
+        ProductVariantEntity v = new ProductVariantEntity();
+        v.setTitle("Producto X");
+        assertThat(mapper.variantLabel(v)).isNull();
+        assertThat(mapper.variantLabel(null)).isNull();
+    }
+
+    // ---------------- resolveVariantImage: imagen propia de la variante, CDN preferido ----------------
+
+    @Test
+    void resolveVariantImage_prefersCdnThenSource() {
+        ProductVariantEntity cdn = new ProductVariantEntity();
+        cdn.setImageCdnUrl("http://cdn/img.png");
+        cdn.setImageSourceUrl("http://origin/img.png");
+        assertThat(mapper.resolveVariantImage(cdn)).isEqualTo("http://cdn/img.png");
+
+        ProductVariantEntity onlySource = new ProductVariantEntity();
+        onlySource.setImageSourceUrl("http://origin/only.png");
+        assertThat(mapper.resolveVariantImage(onlySource)).isEqualTo("http://origin/only.png");
+
+        assertThat(mapper.resolveVariantImage(new ProductVariantEntity())).isNull();
+        assertThat(mapper.resolveVariantImage(null)).isNull();
     }
 }

@@ -102,8 +102,14 @@ public class MeOrderDtoMapper {
                 .lineTotalFormatted(currencyRateService.formatDisplay(lineTotal, ccy)).build();
     }
 
-    /** Prefers a live catalog image over the snapshot (often a placeholder or empty). */
+    /**
+     * Imagen de la línea. Prioriza la imagen de la VARIANTE seleccionada (color concreto) para que la
+     * miniatura coincida con lo pedido; si no hay, usa el snapshot y luego la imagen viva del producto.
+     */
     private String image(OrderItem item) {
+        if (item.getVariantImageUrl() != null && !item.getVariantImageUrl().isBlank()) {
+            return item.getVariantImageUrl();
+        }
         String image = item.getImageUrlSnapshot();
         if ((image == null || image.isBlank()) && item.getProductImageUrl() != null) {
             image = item.getProductImageUrl();

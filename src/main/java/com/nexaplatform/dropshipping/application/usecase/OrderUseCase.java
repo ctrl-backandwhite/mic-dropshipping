@@ -82,4 +82,12 @@ public interface OrderUseCase extends BaseUseCase<Order, Order, UUID> {
 
     /** Order detail for the authenticated user (ownership-checked); resolves the request language. */
     Order getMyOrderDetail(UUID userId, UUID id, String lang);
+
+    /**
+     * Customer self-cancellation from their orders panel. Only allowed while the order is {@code PAID}
+     * (paid but not yet forwarded to the supplier): refunds the money and marks the order CANCELLED.
+     * {@code refundToWallet} = true credits the wallet (immediate); false refunds to the original method
+     * (card/PayPal via the provider, with its own processing time).
+     */
+    Order cancelMyOrder(UUID userId, UUID orderId, boolean refundToWallet);
 }

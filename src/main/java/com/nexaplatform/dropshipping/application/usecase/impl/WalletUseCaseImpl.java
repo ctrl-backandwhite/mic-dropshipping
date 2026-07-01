@@ -162,7 +162,7 @@ public class WalletUseCaseImpl implements WalletUseCase {
             throw new BusinessException("Charge amount must be positive");
         Wallet w = require(userId);
         if (available(w) < amountUsdCents) {
-            throw new BusinessException("Insufficient wallet balance");
+            throw new BusinessException("WALLET_INSUFFICIENT_BALANCE", "Insufficient wallet balance");
         }
         return record(userId, "PAYMENT", -amountUsdCents, null, orderId, idempotencyKey, description, null);
     }
@@ -179,7 +179,7 @@ public class WalletUseCaseImpl implements WalletUseCase {
     public WalletTransaction hold(UUID userId, long amountUsdCents, UUID orderId, String idempotencyKey) {
         Wallet w = require(userId);
         if (available(w) < amountUsdCents)
-            throw new BusinessException("Insufficient balance to hold");
+            throw new BusinessException("WALLET_INSUFFICIENT_BALANCE", "Insufficient balance to hold");
         w.setHoldUsdCents(w.getHoldUsdCents() + amountUsdCents);
         w = walletRepository.save(w);
         return record(userId, "HOLD", -amountUsdCents, null, orderId, idempotencyKey, "Hold for order", w);

@@ -1,0 +1,148 @@
+package com.nexaplatform.dropshipping.api.exception;
+
+import java.util.Locale;
+
+/**
+ * Mensajes de error localizados a los 8 idiomas soportados, resueltos por el CÓDIGO estable que lleva
+ * cada excepción. Es la ÚNICA fuente de verdad de los textos de error: el {@link GlobalExceptionHandler}
+ * traduce el mensaje según el idioma de la petición ({@code LocaleHolder}). Escalable: para localizar un
+ * error basta con lanzarlo con un código que exista aquí; añadir un error = una constante con sus 8
+ * traducciones, en un solo sitio. Mismo patrón que {@code InvoiceLabel}/{@code OrderEmailLabel}.
+ *
+ * <p>Los códigos por defecto de cada tipo de excepción (BR001, ENF001, AE001, DM001, CF001, RL001,
+ * IS001) tienen un mensaje GENÉRICO localizado, para que TODO error salga en el idioma del usuario aunque
+ * no tenga un código específico.
+ */
+public enum ErrorCode {
+
+    // ---------- genéricos por tipo de excepción ----------
+    BR001("No se pudo completar la operación. Revisa los datos e inténtalo de nuevo.",
+            "The operation could not be completed. Please check your input and try again.",
+            "Não foi possível concluir a operação. Verifique os dados e tente novamente.",
+            "无法完成操作。请检查输入后重试。",
+            "L'opération n'a pas pu être effectuée. Vérifiez vos informations et réessayez.",
+            "Der Vorgang konnte nicht abgeschlossen werden. Bitte überprüfe deine Eingaben und versuche es erneut.",
+            "Impossibile completare l'operazione. Controlla i dati e riprova.",
+            "De bewerking kon niet worden voltooid. Controleer je gegevens en probeer het opnieuw."),
+    ENF001("No se encontró el recurso solicitado.", "The requested item was not found.",
+            "O recurso solicitado não foi encontrado.", "未找到请求的资源。",
+            "La ressource demandée est introuvable.", "Die angeforderte Ressource wurde nicht gefunden.",
+            "La risorsa richiesta non è stata trovata.", "De gevraagde bron is niet gevonden."),
+    AE001("Hay datos no válidos. Revisa los campos e inténtalo de nuevo.",
+            "Some data is invalid. Please review the fields and try again.",
+            "Alguns dados são inválidos. Reveja os campos e tente novamente.",
+            "部分数据无效。请检查字段后重试。",
+            "Certaines données sont invalides. Vérifiez les champs et réessayez.",
+            "Einige Daten sind ungültig. Überprüfe die Felder und versuche es erneut.",
+            "Alcuni dati non sono validi. Controlla i campi e riprova.",
+            "Sommige gegevens zijn ongeldig. Controleer de velden en probeer het opnieuw."),
+    DM001("El recurso ya existe o hay un conflicto con el estado actual.",
+            "The resource already exists or conflicts with the current state.",
+            "O recurso já existe ou há um conflito com o estado atual.", "资源已存在或与当前状态冲突。",
+            "La ressource existe déjà ou est en conflit avec l'état actuel.",
+            "Die Ressource existiert bereits oder steht im Konflikt mit dem aktuellen Status.",
+            "La risorsa esiste già o è in conflitto con lo stato attuale.",
+            "De bron bestaat al of is in conflict met de huidige status."),
+    CF001("El recurso ya existe o hay un conflicto con el estado actual.",
+            "The resource already exists or conflicts with the current state.",
+            "O recurso já existe ou há um conflito com o estado atual.", "资源已存在或与当前状态冲突。",
+            "La ressource existe déjà ou est en conflit avec l'état actuel.",
+            "Die Ressource existiert bereits oder steht im Konflikt mit dem aktuellen Status.",
+            "La risorsa esiste già o è in conflitto con lo stato attuale.",
+            "De bron bestaat al of is in conflict met de huidige status."),
+    RL001("Demasiadas solicitudes. Espera unos segundos e inténtalo de nuevo.",
+            "Too many requests. Please wait a few seconds and try again.",
+            "Demasiados pedidos. Aguarde alguns segundos e tente novamente.", "请求过于频繁。请稍等几秒后重试。",
+            "Trop de requêtes. Patientez quelques secondes et réessayez.",
+            "Zu viele Anfragen. Bitte warte einige Sekunden und versuche es erneut.",
+            "Troppe richieste. Attendi qualche secondo e riprova.",
+            "Te veel verzoeken. Wacht enkele seconden en probeer het opnieuw."),
+    IS001("Ocurrió un error inesperado. Inténtalo de nuevo en unos minutos.",
+            "An unexpected error occurred. Please try again in a few minutes.",
+            "Ocorreu um erro inesperado. Tente novamente dentro de alguns minutos.", "发生意外错误。请稍后几分钟再试。",
+            "Une erreur inattendue s'est produite. Réessayez dans quelques minutes.",
+            "Ein unerwarteter Fehler ist aufgetreten. Bitte versuche es in einigen Minuten erneut.",
+            "Si è verificato un errore imprevisto. Riprova tra qualche minuto.",
+            "Er is een onverwachte fout opgetreden. Probeer het over een paar minuten opnieuw."),
+
+    // ---------- específicos ----------
+    ORDER_NOT_CANCELLABLE(
+            "Este pedido ya ha sido procesado y no puede cancelarse. Si deseas devolverlo, contáctanos cuando lo recibas y gestionaremos la devolución.",
+            "This order has already been processed and can no longer be cancelled. If you'd like to return it, please contact us once you receive it and we'll arrange the return.",
+            "Este pedido já foi processado e não pode ser cancelado. Se desejar devolvê-lo, contacte-nos quando o receber e trataremos da devolução.",
+            "此订单已处理,无法取消。如需退货,请在收到后联系我们,我们将为您办理退货。",
+            "Cette commande a déjà été traitée et ne peut plus être annulée. Si vous souhaitez la retourner, contactez-nous dès réception et nous organiserons le retour.",
+            "Diese Bestellung wurde bereits bearbeitet und kann nicht mehr storniert werden. Wenn du sie zurückgeben möchtest, kontaktiere uns nach Erhalt und wir kümmern uns um die Rücksendung.",
+            "Questo ordine è già stato elaborato e non può più essere annullato. Se desideri restituirlo, contattaci una volta ricevuto e gestiremo il reso.",
+            "Deze bestelling is al verwerkt en kan niet meer worden geannuleerd. Als je hem wilt retourneren, neem dan contact met ons op zodra je hem hebt ontvangen en wij regelen de retour."),
+    ORDER_NOT_FOUND("No se encontró el pedido.", "The order could not be found.", "Não foi possível encontrar o pedido.",
+            "找不到该订单。", "Commande introuvable.", "Bestellung nicht gefunden.", "Ordine non trovato.",
+            "Bestelling niet gevonden."),
+    WALLET_INSUFFICIENT_BALANCE("No tienes saldo suficiente en tu billetera.",
+            "You don't have enough balance in your wallet.", "Não tem saldo suficiente na sua carteira.",
+            "您的钱包余额不足。", "Vous n'avez pas assez de solde dans votre portefeuille.",
+            "Du hast nicht genügend Guthaben in deinem Wallet.", "Non hai saldo sufficiente nel tuo wallet.",
+            "Je hebt niet genoeg saldo in je wallet."),
+    CART_EMPTY("Tu carrito debe tener al menos un producto.", "Your cart must have at least one product.",
+            "O seu carrinho deve ter pelo menos um produto.", "您的购物车至少需要一件商品。",
+            "Votre panier doit contenir au moins un produit.", "Dein Warenkorb muss mindestens ein Produkt enthalten.",
+            "Il tuo carrello deve contenere almeno un prodotto.", "Je winkelwagen moet minstens één product bevatten."),
+    SHIPPING_ADDRESS_REQUIRED("Debes indicar una dirección de envío.", "A shipping address is required.",
+            "É necessário indicar uma morada de envio.", "需要填写收货地址。", "Une adresse de livraison est requise.",
+            "Eine Lieferadresse ist erforderlich.", "È necessario un indirizzo di spedizione.",
+            "Een verzendadres is verplicht.");
+
+    private final String es;
+    private final String en;
+    private final String pt;
+    private final String zh;
+    private final String fr;
+    private final String de;
+    private final String it;
+    private final String nl;
+
+    ErrorCode(String es, String en, String pt, String zh, String fr, String de, String it, String nl) {
+        this.es = es;
+        this.en = en;
+        this.pt = pt;
+        this.zh = zh;
+        this.fr = fr;
+        this.de = de;
+        this.it = it;
+        this.nl = nl;
+    }
+
+    public String of(String lang) {
+        String l = lang == null ? "es" : lang.trim().toLowerCase(Locale.ROOT).split("[-_]")[0];
+        switch (l) {
+            case "en":
+                return en;
+            case "pt":
+                return pt;
+            case "zh":
+                return zh;
+            case "fr":
+                return fr;
+            case "de":
+                return de;
+            case "it":
+                return it;
+            case "nl":
+                return nl;
+            default:
+                return es;
+        }
+    }
+
+    /** Mensaje localizado para el {@code code} indicado, o {@code null} si el código no está catalogado. */
+    public static String localize(String code, String lang) {
+        if (code == null || code.isBlank()) {
+            return null;
+        }
+        try {
+            return valueOf(code.trim()).of(lang);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+}

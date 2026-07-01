@@ -65,6 +65,10 @@ class InvoiceServiceTest {
         assertThat(m.get("total")).isEqualTo("$32.60");
         assertThat((String) m.get("labelTax")).startsWith("IVA");
         assertThat(m.get("title")).isEqualTo("Pago confirmado");
+        // País con nombre completo (ISO "ES" → "España"), QR de verificación y URL con el nº de pedido.
+        assertThat(m.get("shipCountry")).isEqualTo("España");
+        assertThat((String) m.get("qr")).startsWith("data:image/png;base64,");
+        assertThat((String) m.get("verifyUrl")).contains("NX-100");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> items = (List<Map<String, Object>>) m.get("items");
         assertThat(items).hasSize(2);

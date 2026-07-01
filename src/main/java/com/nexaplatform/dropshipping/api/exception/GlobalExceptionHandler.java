@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.api.exception;
 
 import com.nexaplatform.dropshipping.api.dto.ApiResponseDtoOut;
+import com.nexaplatform.dropshipping.infrastructure.integration.locale.LocaleHolder;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
@@ -33,8 +34,11 @@ import java.util.List;
 public class GlobalExceptionHandler {
 
     private static ApiResponseDtoOut<?> body(String code, String message, List<String> details) {
-        return ApiResponseDtoOut.builder().code(code).message(message).details(details).timestamp(ZonedDateTime.now())
-                .build();
+        // Fuente ÚNICA de i18n de errores: si el código está catalogado en ErrorCode, devolvemos el
+        // mensaje en el idioma de la petición (LocaleHolder); si no, el mensaje original de la excepción.
+        String localized = ErrorCode.localize(code, LocaleHolder.get());
+        return ApiResponseDtoOut.builder().code(code).message(localized != null ? localized : message)
+                .details(details).timestamp(ZonedDateTime.now()).build();
     }
 
     // ---------------- Domain hierarchy ----------------

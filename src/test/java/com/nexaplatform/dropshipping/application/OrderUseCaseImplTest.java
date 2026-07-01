@@ -208,4 +208,106 @@ class OrderUseCaseImplTest {
                 org.mockito.ArgumentMatchers.eq(2500L), org.mockito.ArgumentMatchers.eq(id),
                 org.mockito.ArgumentMatchers.eq("refund-" + id), org.mockito.ArgumentMatchers.anyString());
     }
+
+    // ---------------- cancelación por el cliente (cancelMyOrder) ----------------
+
+    @Test
+    void cancelMyOrder_toWallet_refundsWalletAndCancels() {
+        UUID id = UUID.randomUUID();
+        UUID buyer = UUID.randomUUID();
+        Order order = Order.builder().status(OrderStatus.PAID).userId(buyer).orderNumber("NX-9").totalCents(1500)
+                .build();
+        order.setId(id);
+        when(orderRepository.findById(id)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        orderUseCase.cancelMyOrder(buyer, id, true); // reembolso a la wallet (inmediato)
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        org.mockito.Mockito.verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer),
+                org.mockito.ArgumentMatchers.eq(1500L), org.mockito.ArgumentMatchers.eq(id),
+                org.mockito.ArgumentMatchers.eq("cancel-" + id), org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void cancelMyOrder_toOriginal_refundsCardViaProvider() {
+        UUID id = UUID.randomUUID();
+        UUID buyer = UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        Order order = Order.builder().status(OrderStatus.PAID).userId(buyer).orderNumber("NX-8").totalCents(4000)
+                .build();
+        order.setId(id);
+        com.nexaplatform.dropshipping.domain.model.Payment card =
+                com.nexaplatform.dropshipping.domain.model.Payment.builder().id(paymentId)
+                        .status(com.nexaplatform.dropshipping.domain.enums.PaymentStatus.SUCCEEDED)
+                        .provider("stripe").build();
+        when(orderRepository.findById(id)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentUseCase.listOrderPayments(id)).thenReturn(List.of(card));
+
+        orderUseCase.cancelMyOrder(buyer, id, false); // reembolso al método original (tarjeta → Stripe)
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        org.mockito.Mockito.verify(paymentUseCase).refundOrderPayment(id, paymentId, 0);
+        org.mockito.Mockito.verify(walletUseCase, org.mockito.Mockito.never()).deposit(any(), org.mockito
+                .ArgumentMatchers.anyLong(), any(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void cancelMyOrder_rejectsWhenNotOwner() {
+        UUID id = UUID.randomUUID();
+        Order order = Order.builder().status(OrderStatus.PAID).userId(UUID.randomUUID()).build();
+        order.setId(id);
+        when(orderRepository.findById(id)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> orderUseCase.cancelMyOrder(UUID.randomUUID(), id, true))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void cancelMyOrder_rejectsWhenAlreadyForwarded() {
+        UUID id = UUID.randomUUID();
+        UUID buyer = UUID.randomUUID();
+        Order order = Order.builder().status(OrderStatus.FORWARDED).userId(buyer).build();
+        order.setId(id);
+        when(orderRepository.findById(id)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> orderUseCase.cancelMyOrder(buyer, id, true))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    // ---------------- cancelación por el admin (cancelOrder): reembolsa si estaba pagado ----------------
+
+    @Test
+    void cancelOrder_refundsWhenOrderWasPaid() {
+        UUID id = UUID.randomUUID();
+        UUID buyer = UUID.randomUUID();
+        Order order = Order.builder().status(OrderStatus.PAID).userId(buyer).orderNumber("NX-7").totalCents(3000)
+                .build();
+        order.setId(id);
+        when(orderRepository.findById(id)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        orderUseCase.cancelOrder(id);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        org.mockito.Mockito.verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer),
+                org.mockito.ArgumentMatchers.eq(3000L), org.mockito.ArgumentMatchers.eq(id),
+                org.mockito.ArgumentMatchers.eq("cancel-" + id), org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void cancelOrder_noRefundWhenUnpaid() {
+        UUID id = UUID.randomUUID();
+        Order order = Order.builder().status(OrderStatus.PENDING).userId(UUID.randomUUID()).totalCents(1000).build();
+        order.setId(id);
+        when(orderRepository.findById(id)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        orderUseCase.cancelOrder(id);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        org.mockito.Mockito.verifyNoInteractions(walletUseCase);
+    }
 }
