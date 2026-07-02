@@ -8,7 +8,7 @@ import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
-import com.nexaplatform.dropshipping.application.service.CountryTaxService;
+import com.nexaplatform.dropshipping.application.service.CainiaoTaxService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
 import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
 import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
@@ -85,7 +85,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final PaymentUseCase paymentUseCase;
     private final OrderEmailService orderEmailService;
     private final CainiaoFulfillmentService cainiao;
-    private final CountryTaxService countryTaxService;
+    private final CainiaoTaxService cainiaoTaxService;
     private final OperatorCommissionService operatorCommissionService;
 
     @Value("${nexadrop.demo.orders-enabled:false}")
@@ -177,7 +177,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // Impuesto (IVA/sales tax) por país de envío, si está configurado. Base imponible = subtotal + envío.
         // Se incluye en el total y, por tanto, en el cobro y la factura.
         // IVA por estado/provincia (US/CA/BR) si la dirección lo indica; si no, tasa nacional.
-        int taxCents = countryTaxService.taxCentsFor(order.getShippingCountry(), order.getShippingState(),
+        // Fuente del impuesto conmutable por entorno (local: tabla country_tax_rate; pre: Cainiao con
+        // fallback a la tabla). Mismo cálculo que la cotización del checkout.
+        int taxCents = cainiaoTaxService.taxCentsFor(order.getShippingCountry(), order.getShippingState(),
                 subtotal + shippingCents);
         order.setSubtotalCents(subtotal);
         order.setShippingCents(shippingCents);
@@ -368,7 +370,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         o = orderRepository.save(o);
         affiliateProgramService.rejectForOrder(o.getId()); // DROP-646: void any affiliate commission
         if (wasPaid) {
-            sendOrderEmail(o, "refunded"); // avisamos al cliente del reembolso
+            sendRefundEmail(o, false); // admin: reembolso al método original del cliente
         }
         return publishAndEnrich(o, "order.cancelled");
     }
@@ -387,7 +389,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         o.setStatus(OrderStatus.REFUNDED);
         o = orderRepository.save(o);
         affiliateProgramService.rejectForOrder(o.getId()); // DROP-646: void any affiliate commission
-        sendOrderEmail(o, "refunded");
+        sendRefundEmail(o, false); // admin: reembolso al método original del cliente
         return publishAndEnrich(o, "order.refunded");
     }
 
@@ -418,7 +420,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         o.setCancelledAt(Instant.now());
         o = orderRepository.save(o);
         affiliateProgramService.rejectForOrder(o.getId());
-        sendOrderEmail(o, "refunded"); // el cliente recibe el aviso de reembolso
+        sendRefundEmail(o, refundToWallet); // el cliente recibe el aviso de reembolso (destino que eligió)
         return publishAndEnrich(o, "order.cancelled");
     }
 
@@ -629,6 +631,26 @@ public class OrderUseCaseImpl implements OrderUseCase {
                     /* sin email para otros estados */ }
             }
         });
+    }
+
+    /**
+     * Email de reembolso enriquecido: resuelve del pago satisfactorio el método original y la moneda
+     * cobrada para que el correo muestre el importe exacto y el destino correcto del reembolso.
+     *
+     * @param toWallet true si el reembolso se acreditó al saldo (inmediato); false = al método original.
+     */
+    private void sendRefundEmail(Order o, boolean toWallet) {
+        if (o.getUserId() == null) {
+            return;
+        }
+        Payment paid = paymentUseCase.listOrderPayments(o.getId()).stream()
+                .filter(p -> p.getStatus() == PaymentStatus.SUCCEEDED).findFirst().orElse(null);
+        String method = paid != null && paid.getMethod() != null ? paid.getMethod().name() : "WALLET";
+        String ccy = paid != null && paid.getSettlementCurrency() != null && !paid.getSettlementCurrency().isBlank()
+                ? paid.getSettlementCurrency()
+                : (o.getCurrency() != null ? o.getCurrency() : "USD");
+        userRepository.findById(o.getUserId()).ifPresent(u -> orderEmailService.refunded(
+                o, u.getEmail(), u.getLanguage(), toWallet, ccy, method));
     }
 
     /** Fills the cross-aggregate read fields (customerEmail/shopName/shopHandle/supplierName). */

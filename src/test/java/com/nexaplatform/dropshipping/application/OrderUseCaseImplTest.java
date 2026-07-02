@@ -7,7 +7,7 @@ import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
-import com.nexaplatform.dropshipping.application.service.CountryTaxService;
+import com.nexaplatform.dropshipping.application.service.CainiaoTaxService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
@@ -78,7 +78,7 @@ class OrderUseCaseImplTest {
     @Mock
     CainiaoFulfillmentService cainiao;
     @Mock
-    CountryTaxService countryTaxService;
+    CainiaoTaxService cainiaoTaxService;
 
     @Mock
     com.nexaplatform.dropshipping.application.service.OperatorCommissionService operatorCommissionService;
@@ -89,12 +89,12 @@ class OrderUseCaseImplTest {
     void setup() {
         orderUseCase = new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository, userRepository,
                 shopConnectionRepository, userAddressRepository, webhooks, walletUseCase, notificationsPublisher,
-                pricingService, affiliateProgramService, paymentUseCase, orderEmailService, cainiao, countryTaxService,
+                pricingService, affiliateProgramService, paymentUseCase, orderEmailService, cainiao, cainiaoTaxService,
                 operatorCommissionService);
         // Por defecto, sin envío en los tests de billing (no altera el total = subtotal).
         lenient().when(cainiao.quote(any(), anyInt())).thenReturn(ShippingQuote.unsupported("XX"));
         // Por defecto, sin impuesto (mantiene total = subtotal + envío en los tests existentes).
-        lenient().when(countryTaxService.taxCentsFor(any(), anyInt())).thenReturn(0);
+        lenient().when(cainiaoTaxService.taxCentsFor(any(), any(), anyInt())).thenReturn(0);
     }
 
     /** DROP-637: the checkout now bills the priced amount (retailUsd) from PricingService. */

@@ -115,6 +115,26 @@ public class CurrencyRateService {
     }
 
     /**
+     * Formatea {@code amount} en la moneda {@code code} usando los separadores de miles/decimales del
+     * {@code localeTag} indicado (la convención del país que MIRA), no la de la moneda. Así un usuario que
+     * trabaja en español ve tanto EUR como USD con coma decimal y punto de miles ("1.234,56 €", "1.234,56 US$"),
+     * igual que Stripe. El símbolo lo pone la moneda; los separadores, el locale del visor.
+     */
+    public String formatIn(BigDecimal amount, String code, String localeTag) {
+        if (amount == null || code == null) {
+            return null;
+        }
+        Locale locale = Locale.forLanguageTag(localeTag != null && !localeTag.isBlank() ? localeTag : localeOf(code));
+        try {
+            java.text.NumberFormat nf = java.text.NumberFormat.getCurrencyInstance(locale);
+            nf.setCurrency(java.util.Currency.getInstance(code.toUpperCase(Locale.ROOT)));
+            return nf.format(amount);
+        } catch (RuntimeException nonIsoOrUnknown) {
+            return symbolOf(code) + " " + amount.toPlainString();
+        }
+    }
+
+    /**
      * Variante que REDONDEA a número entero (HALF_UP: ≥0.5 arriba, &lt;0.5 abajo) y formatea SIN decimales.
      * Pensada para los precios de PLANES, que se muestran redondeados (p.ej. "25 €" en vez de "25,28 €").
      */

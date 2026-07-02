@@ -56,6 +56,12 @@ public class CainiaoFulfillmentService {
     private String appKey;
     @Value("${nexadrop.cainiao.platform-id:nexadrop-dropshipping}")
     private String platformId;
+    /** Código de recurso (资源码) de la app en Cainiao Open Platform → viaja en el campo {@code to_code}. */
+    @Value("${nexadrop.cainiao.to-code:}")
+    private String toCode;
+    /** Cotizar el ENVÍO con Cainiao (con fallback a la tabla de zonas). false = tabla local (local). */
+    @Value("${nexadrop.cainiao.shipping-quote-enabled:false}")
+    private boolean shippingQuoteEnabled;
     /** Minutos por etapa del tracking simulado (mock). Permite ver el avance del estado en una demo. */
     @Value("${nexadrop.cainiao.mock-stage-minutes:2}")
     private long mockStageMinutes;
@@ -97,9 +103,30 @@ public class CainiaoFulfillmentService {
         }
         CainiaoZoneEntity zn = z.get();
         double kg = Math.max(0.1, totalWeightGrams / 1000.0);
+        // Coste de envío conmutable por entorno: en PRE (shipping-quote-enabled + Cainiao activo) se intenta
+        // la tarifa de Cainiao; ante cualquier fallo/indisponibilidad se cae a la tabla de zonas (local).
+        if (shippingQuoteEnabled && isActive()) {
+            Integer cnCents = tryCainiaoShippingCents(zn, totalWeightGrams);
+            if (cnCents != null) {
+                return new ShippingQuote(true, zn.getCountryCode(), cnCents, "Cainiao", "Cainiao",
+                        zn.getEtaMinDays(), zn.getEtaMaxDays(), zn.getZone());
+            }
+        }
         int amount = zn.getBaseCents() + (int) Math.round(zn.getPerKgCents() * kg);
         return new ShippingQuote(true, zn.getCountryCode(), amount, "Standard Shipping", "Standard Shipping",
                 zn.getEtaMinDays(), zn.getEtaMaxDays(), zn.getZone());
+    }
+
+    /**
+     * Tarifa de envío vía Cainiao (céntimos USD).
+     *
+     * <p><b>TODO(real):</b> cuando esté aprobada la app y conozcamos el msg_type + payload de la API de
+     * cotización de tarifa (o venga en la respuesta de {@code CAINIAO_GLOBAL_TAKING_ORDER}), construir el
+     * {@code logistics_interface} (país destino, peso, dimensiones) y parsear el importe → céntimos USD.
+     * Devolver {@code null} ante error para caer a la tabla de zonas. De momento devuelve {@code null}.
+     */
+    private Integer tryCainiaoShippingCents(CainiaoZoneEntity zone, int totalWeightGrams) {
+        return null; // placeholder honesto: sin API real (app pendiente), se usa la tabla de zonas.
     }
 
     /** Resultado de crear el envío en Cainiao. */
@@ -137,7 +164,7 @@ public class CainiaoFulfillmentService {
             body.put("countryCode", order.getShippingCountry());
             body.put("logisticProviderId", appKey);
             // TODO(real): añadir remitente/destinatario/items/peso según la API contratada.
-            String resp = linkClient.invoke(MSG_CREATE_SHIPMENT, objectMapper.writeValueAsString(body), "");
+            String resp = linkClient.invoke(MSG_CREATE_SHIPMENT, objectMapper.writeValueAsString(body), toCode);
             JsonNode r = objectMapper.readTree(resp);
             if (!r.path("success").asBoolean(true) && r.has("errorCode")) {
                 throw new IllegalStateException("Cainiao createShipment rechazado: " + resp);
@@ -220,7 +247,7 @@ public class CainiaoFulfillmentService {
             ObjectNode body = objectMapper.createObjectNode();
             body.put("mailNo", trackingNumber);
             body.put("logisticProviderId", appKey);
-            String resp = linkClient.invoke(MSG_GET_TRACE, objectMapper.writeValueAsString(body), "");
+            String resp = linkClient.invoke(MSG_GET_TRACE, objectMapper.writeValueAsString(body), toCode);
             JsonNode r = objectMapper.readTree(resp);
             JsonNode events = r.has("traceDetailList") ? r.get("traceDetailList")
                     : r.path("data").path("traceDetailList");

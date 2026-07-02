@@ -30,13 +30,20 @@ public class NewsletterService {
     private final NewsletterCampaignRepository campaignRepo;
     private final EventPublisher eventPublisher;
 
+    /** Resultado de suscribir: el estado final y si el correo YA estaba suscrito (para el aviso al usuario). */
+    public record SubscribeResult(String status, boolean alreadySubscribed) {
+    }
+
     @Transactional
-    public NewsletterSubscriberEntity subscribe(String email, UUID userId, String source) {
+    public SubscribeResult subscribe(String email, UUID userId, String source) {
         if (email == null || email.isBlank()) {
             throw new BusinessException("Email obligatorio");
         }
         String normalized = email.trim().toLowerCase();
         NewsletterSubscriberEntity sub = subscriberRepo.findByEmailIgnoreCase(normalized).orElse(null);
+        // Idempotente: un mismo correo NUNCA crea filas duplicadas (además del UNIQUE(email) en BD). Si ya
+        // estaba suscrito, lo indicamos para que el front muestre "ya estabas suscrito" en vez de "gracias".
+        boolean alreadySubscribed = sub != null && "SUBSCRIBED".equals(sub.getStatus());
         if (sub == null) {
             sub = NewsletterSubscriberEntity.builder().email(normalized).userId(userId).status("SUBSCRIBED")
                     .token(UUID.randomUUID().toString().replace("-", "")).source(source != null ? source : "storefront")
@@ -47,7 +54,8 @@ public class NewsletterService {
                 sub.setUserId(userId);
             }
         }
-        return subscriberRepo.save(sub);
+        NewsletterSubscriberEntity saved = subscriberRepo.save(sub);
+        return new SubscribeResult(saved.getStatus(), alreadySubscribed);
     }
 
     @Transactional

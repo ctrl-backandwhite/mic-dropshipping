@@ -157,3 +157,5 @@ databaseChangeLog:
       file: db/changelog/schema-v73-region-tax.sql
   - include:
       file: db/changelog/schema-v74-region-seed-rest.sql
+  - include:
+      file: db/changelog/schema-v75-product-favorites.sql

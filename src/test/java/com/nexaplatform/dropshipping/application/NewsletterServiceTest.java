@@ -52,8 +52,13 @@ class NewsletterServiceTest {
         when(subscriberRepo.save(any(NewsletterSubscriberEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         UUID userId = UUID.randomUUID();
 
-        NewsletterSubscriberEntity saved = service.subscribe("  USER@Mail.com  ", userId, "footer");
+        NewsletterService.SubscribeResult result = service.subscribe("  USER@Mail.com  ", userId, "footer");
 
+        assertThat(result.status()).isEqualTo("SUBSCRIBED");
+        assertThat(result.alreadySubscribed()).isFalse();
+        ArgumentCaptor<NewsletterSubscriberEntity> cap = ArgumentCaptor.forClass(NewsletterSubscriberEntity.class);
+        verify(subscriberRepo).save(cap.capture());
+        NewsletterSubscriberEntity saved = cap.getValue();
         assertThat(saved.getEmail()).isEqualTo("user@mail.com");
         assertThat(saved.getUserId()).isEqualTo(userId);
         assertThat(saved.getStatus()).isEqualTo("SUBSCRIBED");
@@ -66,9 +71,11 @@ class NewsletterServiceTest {
         when(subscriberRepo.findByEmailIgnoreCase("a@b.com")).thenReturn(Optional.empty());
         when(subscriberRepo.save(any(NewsletterSubscriberEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        NewsletterSubscriberEntity saved = service.subscribe("a@b.com", null, null);
+        service.subscribe("a@b.com", null, null);
 
-        assertThat(saved.getSource()).isEqualTo("storefront");
+        ArgumentCaptor<NewsletterSubscriberEntity> cap = ArgumentCaptor.forClass(NewsletterSubscriberEntity.class);
+        verify(subscriberRepo).save(cap.capture());
+        assertThat(cap.getValue().getSource()).isEqualTo("storefront");
     }
 
     @Test
@@ -79,8 +86,13 @@ class NewsletterServiceTest {
         when(subscriberRepo.save(any(NewsletterSubscriberEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         UUID userId = UUID.randomUUID();
 
-        NewsletterSubscriberEntity saved = service.subscribe("a@b.com", userId, "ignored");
+        NewsletterService.SubscribeResult result = service.subscribe("a@b.com", userId, "ignored");
 
+        // Estaba UNSUBSCRIBED → no contaba como "ya suscrito"; se reactiva sobre la MISMA fila (idempotente).
+        assertThat(result.alreadySubscribed()).isFalse();
+        ArgumentCaptor<NewsletterSubscriberEntity> cap = ArgumentCaptor.forClass(NewsletterSubscriberEntity.class);
+        verify(subscriberRepo).save(cap.capture());
+        NewsletterSubscriberEntity saved = cap.getValue();
         assertThat(saved).isSameAs(existing);
         assertThat(saved.getStatus()).isEqualTo("SUBSCRIBED");
         assertThat(saved.getUserId()).isEqualTo(userId);

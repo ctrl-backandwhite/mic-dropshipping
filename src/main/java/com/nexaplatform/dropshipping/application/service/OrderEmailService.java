@@ -11,7 +11,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -92,15 +94,81 @@ public class OrderEmailService {
                 OrderEmailLabel.CTA_VIEW_ORDER.of(lang), o, "box-open", lang);
     }
 
-    /** Reembolso procesado. */
+    /** Reembolso procesado. Retrocompat: reembolso al método original, moneda del pedido. */
     public void refunded(Order o, String email, String locale) {
+        refunded(o, email, locale, false, null, null);
+    }
+
+    /**
+     * Reembolso procesado, con un bloque de detalle profesional (nº de pedido, fecha, importe, artículos y
+     * destino del reembolso) en el idioma del usuario.
+     *
+     * @param toWallet        true si el reembolso se acreditó al saldo (inmediato); false = método original.
+     * @param settlementCcy   moneda en la que se cobró/reembolsa (EUR/USD/USDT); null → moneda del pedido.
+     * @param paymentMethod   método de pago original (CARD/PAYPAL/WALLET/USDT) para describir el destino.
+     */
+    public void refunded(Order o, String email, String locale, boolean toWallet, String settlementCcy,
+            String paymentMethod) {
         if (blank(email)) {
             return;
         }
         String lang = InvoiceLabel.lang(locale);
+        String cur = settlementCcy != null && !settlementCcy.isBlank() ? settlementCcy
+                : (o.getCurrency() != null ? o.getCurrency() : "USD");
+
+        List<String[]> details = new ArrayList<>();
+        details.add(new String[] { OrderEmailLabel.REFUND_L_ORDER.of(lang), o.getOrderNumber() });
+        String date = refundDate(o, locale);
+        if (!blank(date)) {
+            details.add(new String[] { OrderEmailLabel.REFUND_L_DATE.of(lang), date });
+        }
+        String amount = refundAmount(o, locale, cur);
+        if (!blank(amount)) {
+            details.add(new String[] { OrderEmailLabel.REFUND_L_AMOUNT.of(lang), amount });
+        }
+        if (o.getItems() != null && !o.getItems().isEmpty()) {
+            details.add(new String[] { OrderEmailLabel.REFUND_L_ITEMS.of(lang),
+                    String.valueOf(o.getItems().size()) });
+        }
+        details.add(new String[] { OrderEmailLabel.REFUND_L_DEST.of(lang),
+                refundDestination(lang, toWallet, paymentMethod) });
+
         notify(email, OrderEmailLabel.REFUNDED_TITLE.of(lang),
                 OrderEmailLabel.REFUNDED_BODY.of(lang, o.getOrderNumber()),
-                OrderEmailLabel.CTA_VIEW_ORDER.of(lang), o, "money-bill-transfer", lang);
+                OrderEmailLabel.CTA_VIEW_ORDER.of(lang), o, "money-bill-transfer", lang, details);
+    }
+
+    /** Texto del destino del reembolso: billetera (inmediato) o el método original (tarjeta/PayPal). */
+    private static String refundDestination(String lang, boolean toWallet, String paymentMethod) {
+        if (toWallet) {
+            return OrderEmailLabel.REFUND_DEST_WALLET.of(lang);
+        }
+        String m = paymentMethod == null ? "" : paymentMethod.toUpperCase(Locale.ROOT);
+        if ("CARD".equals(m)) {
+            return OrderEmailLabel.REFUND_DEST_CARD.of(lang);
+        }
+        if ("PAYPAL".equals(m)) {
+            return OrderEmailLabel.REFUND_DEST_PAYPAL.of(lang);
+        }
+        // Wallet como método original (o USDT/desconocido): se acredita al saldo, inmediato.
+        return OrderEmailLabel.REFUND_DEST_WALLET.of(lang);
+    }
+
+    /** Fecha del reembolso (cancelledAt, o ahora) formateada según la factura. */
+    private String refundDate(Order o, String locale) {
+        java.time.Instant when = o.getCancelledAt() != null ? o.getCancelledAt() : java.time.Instant.now();
+        return invoiceService.formatDate(when);
+    }
+
+    /** Importe reembolsado ya formateado en la moneda cobrada (= exactamente lo que se devuelve). */
+    private String refundAmount(Order o, String locale, String cur) {
+        try {
+            Object total = invoiceService.model(o, locale, baseUrl + "/orders/" + o.getId(), cur).get("total");
+            return total != null ? String.valueOf(total) : null;
+        } catch (RuntimeException e) {
+            log.warn("refund amount formatting failed for {}: {}", o.getOrderNumber(), e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -129,11 +197,19 @@ public class OrderEmailService {
 
     private void notify(String email, String title, String bodyHtml, String ctaLabel, Order o, String icon,
             String lang) {
+        notify(email, title, bodyHtml, ctaLabel, o, icon, lang, null);
+    }
+
+    private void notify(String email, String title, String bodyHtml, String ctaLabel, Order o, String icon,
+            String lang, List<String[]> details) {
         try {
             Map<String, Object> vars = new HashMap<>();
             vars.put("title", title);
             vars.put("icon", icon); // nombre del icono FontAwesome (PNG inline por CID); null = sin icono
             vars.put("bodyHtml", bodyHtml);
+            if (details != null && !details.isEmpty()) {
+                vars.put("details", details); // bloque etiqueta/valor con el resumen (pedido/reembolso)
+            }
             vars.put("preheader", title);
             vars.put("ctaUrl", baseUrl + "/orders/" + o.getId());
             vars.put("ctaLabel", ctaLabel);

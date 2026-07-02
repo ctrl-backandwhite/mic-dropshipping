@@ -299,6 +299,13 @@ nexadrop:
     enabled: ${CAINIAO_ENABLED:false}
     app-key: ${CAINIAO_APP_KEY:}
     app-secret: ${CAINIAO_APP_SECRET:}
+    # Código de recurso (资源码) de la app en Cainiao Open Platform → campo to_code de las llamadas.
+    to-code: ${CAINIAO_TO_CODE:}
+    # Impuesto (IVA/aduana) con Cainiao. false = tabla local country_tax_rate (local); true = Cainiao con
+    # fallback a la tabla local (pre). Ver CainiaoTaxService.
+    tax-enabled: ${CAINIAO_TAX_ENABLED:false}
+    # Cotización de ENVÍO con Cainiao. false = tabla de zonas (local); true = Cainiao con fallback a zonas (pre).
+    shipping-quote-enabled: ${CAINIAO_SHIPPING_QUOTE_ENABLED:false}
     base-url: ${CAINIAO_BASE_URL:https://link.cainiao.com}
     platform-id: ${CAINIAO_PLATFORM_ID:nexadrop-dropshipping}
     platform-env: ${CAINIAO_PLATFORM_ENV:dev}

@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.controller;
 
+import com.nexaplatform.dropshipping.application.service.CainiaoTaxService;
 import com.nexaplatform.dropshipping.application.service.CountryTaxService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.ShippingQuoteService;
@@ -38,6 +39,7 @@ public class ShippingQuoteController {
 
     private final ShippingQuoteService shippingQuoteService;
     private final CountryTaxService countryTaxService;
+    private final CainiaoTaxService cainiaoTaxService;
     private final PricingService pricingService;
     private final CurrencyRateService currencyService;
     private final ProductRepository productRepository;
@@ -98,9 +100,10 @@ public class ShippingQuoteController {
         int shippingUsdCents = q.supported() ? q.amountUsdCents() : 0;
         // IVA resuelto por REGIÓN (estado/provincia con tasa propia → esa; si no, la nacional), sobre la
         // base imponible en céntimos USD = subtotal + envío. Idéntico al cálculo del pedido.
-        int taxRateBps = countryTaxService.rateBpsFor(req.country(), req.region());
-        int taxUsdCents = countryTaxService.taxCentsFor(req.country(), req.region(),
-                subtotalUsdCents + shippingUsdCents);
+        // Fuente del impuesto conmutable por entorno (local: tabla; pre: Cainiao con fallback a tabla).
+        int taxBase = subtotalUsdCents + shippingUsdCents;
+        int taxRateBps = cainiaoTaxService.rateBpsFor(req.country(), req.region(), taxBase);
+        int taxUsdCents = cainiaoTaxService.taxCentsFor(req.country(), req.region(), taxBase);
         // Importes en la moneda activa: cada componente convertido y REDONDEADO a 2 decimales; el total
         // es la SUMA de esos componentes redondeados (igual que el detalle del pedido), para que el
         // desglose cuadre exactamente en pantalla (subtotal + envío + IVA = total) y coincida con el pedido.

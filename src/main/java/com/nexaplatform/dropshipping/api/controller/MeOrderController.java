@@ -49,7 +49,11 @@ public class MeOrderController implements MeOrderApi {
         // método del mapper), para que lista y detalle muestren el mismo importe. toMeRows preserva el orden.
         List<MeOrderRowDtoOut> out = new java.util.ArrayList<>(rows.size());
         for (int i = 0; i < rows.size(); i++) {
-            out.add(rows.get(i).toBuilder().totalFormatted(meOrderDtoMapper.formatOrderTotal(orders.get(i))).build());
+            com.nexaplatform.dropshipping.domain.model.Order order = orders.get(i);
+            out.add(rows.get(i).toBuilder()
+                    .totalFormatted(meOrderDtoMapper.formatOrderTotal(order))
+                    .paymentMethod(resolvePaymentMethod(order.getId())) // para el botón de cancelar de la lista
+                    .build());
         }
         return ResponseEntity.ok(out);
     }
@@ -75,10 +79,14 @@ public class MeOrderController implements MeOrderApi {
      * pago externo (se pagó con saldo), es WALLET. El front lo usa para decidir a dónde ofrecer el reembolso.
      */
     private MeOrderDetailDtoOut withPaymentMethod(MeOrderDetailDtoOut dto, UUID orderId) {
-        String method = paymentRepository.findByOrderIdOrderByCreatedAtDesc(orderId).stream()
+        return dto.toBuilder().paymentMethod(resolvePaymentMethod(orderId)).build();
+    }
+
+    /** Método de pago ORIGINAL (CARD/PAYPAL/USDT) del pago satisfactorio; WALLET si no hubo pago externo. */
+    private String resolvePaymentMethod(UUID orderId) {
+        return paymentRepository.findByOrderIdOrderByCreatedAtDesc(orderId).stream()
                 .filter(p -> p.getStatus() == PaymentStatus.SUCCEEDED)
                 .map(p -> p.getMethod()).filter(m -> m != null).map(m -> m.name())
                 .findFirst().orElse("WALLET");
-        return dto.toBuilder().paymentMethod(method).build();
     }
 }

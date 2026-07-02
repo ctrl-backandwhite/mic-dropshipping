@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -163,6 +164,42 @@ class OrderEmailServiceTest {
         verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Refund processed"), eq("emails/notification"),
                 varsCap.capture());
         assertThat((String) varsCap.getValue().get("bodyHtml")).contains("NX-400").contains("refund");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void refunded_toCard_includesDetailBlockWithAmountAndOriginalCardDestination() {
+        Order o = order("NX-401", null, null, "USD");
+        Map<String, Object> model = new HashMap<>();
+        model.put("total", "27,80 €");
+        when(invoiceService.model(eq(o), eq("es"), any(), eq("EUR"))).thenReturn(model);
+
+        service.refunded(o, "buyer@x.com", "es", false, "EUR", "CARD");
+
+        ArgumentCaptor<Map<String, Object>> varsCap = ArgumentCaptor.forClass(Map.class);
+        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Reembolso procesado"), eq("emails/notification"),
+                varsCap.capture());
+        List<String[]> details = (List<String[]>) varsCap.getValue().get("details");
+        assertThat(details).isNotNull();
+        // Nº de pedido, importe y destino (tarjeta original) presentes en el bloque.
+        assertThat(details).anySatisfy(r -> assertThat(r[1]).isEqualTo("NX-401"));
+        assertThat(details).anySatisfy(r -> assertThat(r[1]).isEqualTo("27,80 €"));
+        assertThat(details).anySatisfy(r -> assertThat(r[1]).contains("Tarjeta original"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void refunded_toWallet_marksImmediateWalletDestination() {
+        Order o = order("NX-402", null, null, "USD");
+        when(invoiceService.model(any(), any(), any(), any())).thenReturn(new HashMap<>());
+
+        service.refunded(o, "buyer@x.com", "es", true, "EUR", "CARD");
+
+        ArgumentCaptor<Map<String, Object>> varsCap = ArgumentCaptor.forClass(Map.class);
+        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Reembolso procesado"), eq("emails/notification"),
+                varsCap.capture());
+        List<String[]> details = (List<String[]>) varsCap.getValue().get("details");
+        assertThat(details).anySatisfy(r -> assertThat(r[1]).contains("Billetera"));
     }
 
     /* ---------------- trackingUpdate ---------------- */

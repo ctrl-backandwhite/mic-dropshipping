@@ -17,6 +17,8 @@ public class MeOrderRowDtoOut {
     UUID id;
     String orderNumber;
     String status;
+    // Método de pago original (CARD/PAYPAL/USDT/WALLET): decide a dónde ofrecer el reembolso al cancelar.
+    String paymentMethod;
     int totalCents;
     /** Total YA convertido a la moneda activa y formateado (igual que el detalle), p.ej. "19,22 €". */
     String totalFormatted;

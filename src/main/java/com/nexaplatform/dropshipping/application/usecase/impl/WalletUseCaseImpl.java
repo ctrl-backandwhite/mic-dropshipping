@@ -67,6 +67,15 @@ public class WalletUseCaseImpl implements WalletUseCase {
         w.setBalanceDisplay(display);
         w.setDisplayCurrency(currency);
         w.setDisplaySymbol(currencyService.symbolOf(currency));
+        // Formateo EN EL BACKEND con la convención del país del visor (locale de la divisa activa): tanto el
+        // saldo en divisa como el canónico en USD llevan los mismos separadores (coma decimal/punto de miles
+        // en español), igual que Stripe. El front solo pinta estos strings.
+        String vLocale = currencyService.localeOf(currency);
+        BigDecimal holdUsd = BigDecimal.valueOf(w.getHoldUsdCents()).divide(BigDecimal.valueOf(100), 4,
+                RoundingMode.HALF_UP);
+        w.setBalanceFormatted(currencyService.formatIn(display, currency, vLocale));
+        w.setBalanceUsdFormatted(currencyService.formatIn(usd, "USD", vLocale));
+        w.setHoldUsdFormatted(currencyService.formatIn(holdUsd, "USD", vLocale));
         return w;
     }
 
@@ -74,7 +83,21 @@ public class WalletUseCaseImpl implements WalletUseCase {
     @Transactional(readOnly = true)
     public List<WalletTransaction> getMyTransactions(UUID userId, int page, int size) {
         Wallet w = getOrCreate(userId);
-        return txRepository.findByWalletIdOrderByCreatedAtDesc(w.getId(), page, Math.min(size, 100));
+        List<WalletTransaction> txs = txRepository.findByWalletIdOrderByCreatedAtDesc(w.getId(), page,
+                Math.min(size, 100));
+        // Importes del libro mayor (USD canónico) formateados EN EL BACKEND con la convención del país del
+        // visor (locale de la divisa activa) y con signo. El front solo pinta.
+        String vLocale = currencyService.localeOf(CurrencyHolder.get());
+        for (WalletTransaction t : txs) {
+            BigDecimal amt = BigDecimal.valueOf(t.getAmountUsdCents()).divide(BigDecimal.valueOf(100), 2,
+                    RoundingMode.HALF_UP);
+            BigDecimal after = BigDecimal.valueOf(t.getBalanceAfterCents()).divide(BigDecimal.valueOf(100), 2,
+                    RoundingMode.HALF_UP);
+            String sign = t.getAmountUsdCents() >= 0 ? "+" : "-";
+            t.setAmountFormatted(sign + currencyService.formatIn(amt.abs(), "USD", vLocale));
+            t.setBalanceAfterFormatted(currencyService.formatIn(after, "USD", vLocale));
+        }
+        return txs;
     }
 
     @Override

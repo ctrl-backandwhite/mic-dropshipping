@@ -34,4 +34,9 @@ public class WalletTransaction {
     private String description;
     private Map<String, Object> metadata;
     private Instant createdAt;
+
+    // Importes YA formateados por el backend (USD canónico) con la convención del país del visor; con signo
+    // en el importe (+/−). El front solo pinta estos strings.
+    private String amountFormatted;
+    private String balanceAfterFormatted;
 }

@@ -35,6 +35,7 @@ public class MeWalletController implements MeWalletApi {
     private final WalletUseCase walletUseCase;
     private final PaymentUseCase paymentUseCase;
     private final MeWalletDtoMapper meWalletDtoMapper;
+    private final com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService currencyRateService;
 
     @Override
     public ResponseEntity<MeWalletDtoOut> wallet(Authentication auth) {
@@ -59,7 +60,27 @@ public class MeWalletController implements MeWalletApi {
         UUID userId = UUID.fromString(auth.getName());
         Payment p = paymentUseCase.initiateRecharge(userId, PaymentMethod.valueOf(req.getMethod()),
                 req.getAmountUsdCents(), req.getCurrencyDisplay(), req.getAmountDisplay(), idem, req.getCryptoChain());
-        return ResponseEntity.ok(meWalletDtoMapper.toRechargeDtoOut(p));
+        MeWalletRechargeDtoOut dto = meWalletDtoMapper.toRechargeDtoOut(p);
+        // Importe de cobro formateado por el backend en su moneda (EUR/USD): lo que se cargará realmente.
+        dto.setChargeCurrency(p.getSettlementCurrency());
+        if (p.getSettlementAmount() != null && p.getSettlementCurrency() != null) {
+            dto.setChargeFormatted(currencyRateService.formatDisplay(p.getSettlementAmount(), p.getSettlementCurrency()));
+        }
+        return ResponseEntity.ok(dto);
+    }
+
+    @Override
+    public ResponseEntity<com.nexaplatform.dropshipping.application.usecase.RechargeOptions> rechargeOptions(
+            String currency) {
+        return ResponseEntity.ok(paymentUseCase.rechargeOptions(currency));
+    }
+
+    @Override
+    public ResponseEntity<MeWalletPaymentStatusDtoOut> confirmRecharge(Authentication auth, UUID paymentId) {
+        UUID userId = UUID.fromString(auth.getName());
+        Payment p = paymentUseCase.confirmRecharge(userId, paymentId);
+        return ResponseEntity.ok(MeWalletPaymentStatusDtoOut.builder().paymentId(p.getId()).status(p.getStatus().name())
+                .balanceUsdCents(walletUseCase.getOrCreate(userId).getBalanceUsdCents()).build());
     }
 
     @Override

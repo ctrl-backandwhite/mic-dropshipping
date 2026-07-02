@@ -83,6 +83,11 @@ public class InvoiceService {
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
+    /** Fecha formateada con el mismo patrón que la factura (para reutilizar en emails). */
+    public String formatDate(java.time.Instant when) {
+        return when != null ? DATE.format(when.atZone(ZoneId.systemDefault())) : "";
+    }
+
     /** Modelo de factura en la moneda del pedido (USD canónico). */
     public Map<String, Object> model(Order o, String locale, String downloadUrl) {
         return model(o, locale, downloadUrl, o.getCurrency() != null ? o.getCurrency() : "USD");
