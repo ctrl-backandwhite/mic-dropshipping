@@ -40,6 +40,11 @@ public class Wallet {
     private BigDecimal balanceDisplay;
     private String displayCurrency;
     private String displaySymbol;
+    // Importes YA formateados por el backend con la convención del país del visor (el front solo pinta):
+    // saldo en la divisa activa, saldo canónico en USD y saldo retenido en USD.
+    private String balanceFormatted;
+    private String balanceUsdFormatted;
+    private String holdUsdFormatted;
 
     private Instant createdAt;
     private Instant updatedAt;

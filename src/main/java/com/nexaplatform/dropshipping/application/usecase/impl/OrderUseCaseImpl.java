@@ -8,7 +8,7 @@ import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
-import com.nexaplatform.dropshipping.application.service.CountryTaxService;
+import com.nexaplatform.dropshipping.application.service.CainiaoTaxService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
 import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
 import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
@@ -85,7 +85,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final PaymentUseCase paymentUseCase;
     private final OrderEmailService orderEmailService;
     private final CainiaoFulfillmentService cainiao;
-    private final CountryTaxService countryTaxService;
+    private final CainiaoTaxService cainiaoTaxService;
     private final OperatorCommissionService operatorCommissionService;
 
     @Value("${nexadrop.demo.orders-enabled:false}")
@@ -95,7 +95,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Transactional
     public Order createOrder(UUID partnerAppId, UUID userId, CreateOrderRequest req) {
         if (req.items() == null || req.items().isEmpty()) {
-            throw new BusinessException("Order must have at least one item");
+            throw new BusinessException("CART_EMPTY", "Order must have at least one item");
         }
 
         // Origen de la orden: si la petición viene por una integración (Shopify/WooCommerce/API de partners)
@@ -155,7 +155,12 @@ public class OrderUseCaseImpl implements OrderUseCase {
 
             order.getItems().add(OrderItem.builder().productId(product.getId())
                     .variantId(variant != null ? variant.getId() : null).titleSnapshot(orderTitle(product, orderLang))
-                    .imageUrlSnapshot(product.getImages().isEmpty() ? null : product.getImages().get(0).getSourceUrl())
+                    .imageUrlSnapshot(variant != null && variant.getImageCdnUrl() != null
+                            && !variant.getImageCdnUrl().isBlank() ? variant.getImageCdnUrl()
+                            : variant != null && variant.getImageSourceUrl() != null
+                                    && !variant.getImageSourceUrl().isBlank() ? variant.getImageSourceUrl()
+                                    : product.getImages().isEmpty() ? null
+                                            : product.getImages().get(0).getSourceUrl())
                     .skuSnapshot(variant != null ? variant.getSku() : null).unitPriceCents(unitCents)
                     .costCents(costCents).costCnyCents(costCnyCents).quantity(itemReq.quantity())
                     .lineTotalCents(lineTotal).build());
@@ -171,7 +176,11 @@ public class OrderUseCaseImpl implements OrderUseCase {
 
         // Impuesto (IVA/sales tax) por país de envío, si está configurado. Base imponible = subtotal + envío.
         // Se incluye en el total y, por tanto, en el cobro y la factura.
-        int taxCents = countryTaxService.taxCentsFor(order.getShippingCountry(), subtotal + shippingCents);
+        // IVA por estado/provincia (US/CA/BR) si la dirección lo indica; si no, tasa nacional.
+        // Fuente del impuesto conmutable por entorno (local: tabla country_tax_rate; pre: Cainiao con
+        // fallback a la tabla). Mismo cálculo que la cotización del checkout.
+        int taxCents = cainiaoTaxService.taxCentsFor(order.getShippingCountry(), order.getShippingState(),
+                subtotal + shippingCents);
         order.setSubtotalCents(subtotal);
         order.setShippingCents(shippingCents);
         order.setTaxCents(taxCents);
@@ -346,10 +355,23 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Transactional
     public Order cancelOrder(UUID id) {
         Order o = orderRepository.findById(id).orElseThrow();
+        if (o.getStatus() == OrderStatus.CANCELLED) {
+            return enrich(o); // idempotente
+        }
+        // Si el pedido ya estaba PAGADO (aunque haya avanzado), al cancelarlo se le devuelve el dinero
+        // al cliente (a su método de pago original o al wallet). Los no pagados no generan reembolso.
+        boolean wasPaid = o.getStatus() == OrderStatus.PAID || o.getStatus() == OrderStatus.FORWARDED
+                || o.getStatus() == OrderStatus.SHIPPED || o.getStatus() == OrderStatus.DELIVERED;
+        if (wasPaid) {
+            issueRefund(o, "cancel-", false); // admin: reembolso al método original del cliente
+        }
         o.setStatus(OrderStatus.CANCELLED);
         o.setCancelledAt(Instant.now());
         o = orderRepository.save(o);
         affiliateProgramService.rejectForOrder(o.getId()); // DROP-646: void any affiliate commission
+        if (wasPaid) {
+            sendRefundEmail(o, false); // admin: reembolso al método original del cliente
+        }
         return publishAndEnrich(o, "order.cancelled");
     }
 
@@ -363,27 +385,73 @@ public class OrderUseCaseImpl implements OrderUseCase {
         if (o.getStatus() == OrderStatus.CANCELLED) {
             throw new BusinessException("Cannot refund a cancelled order");
         }
-        // Si la orden se pagó con un proveedor externo (Stripe/PayPal), el reembolso se hace
-        // EN el proveedor (devuelve el dinero a la tarjeta/cuenta PayPal del cliente). Sólo si se
-        // pagó con saldo de wallet (o sin pago externo) acreditamos el wallet.
-        Payment external = paymentUseCase.listOrderPayments(id).stream()
-                .filter(p -> p.getStatus() == PaymentStatus.SUCCEEDED)
-                .filter(p -> "stripe".equals(p.getProvider()) || "paypal".equals(p.getProvider())).findFirst()
-                .orElse(null);
-        if (external != null) {
-            paymentUseCase.refundOrderPayment(id, external.getId(), 0); // reembolso total en el proveedor
-        } else {
-            long amountCents = o.getTotalCents();
-            if (o.getUserId() != null && amountCents > 0) {
-                walletUseCase.deposit(o.getUserId(), amountCents, o.getId(), "refund-" + o.getId(),
-                        "Refund order " + o.getOrderNumber());
-            }
-        }
+        issueRefund(o, "refund-", false); // admin: reembolso al método original del cliente
         o.setStatus(OrderStatus.REFUNDED);
         o = orderRepository.save(o);
         affiliateProgramService.rejectForOrder(o.getId()); // DROP-646: void any affiliate commission
-        sendOrderEmail(o, "refunded");
+        sendRefundEmail(o, false); // admin: reembolso al método original del cliente
         return publishAndEnrich(o, "order.refunded");
+    }
+
+    /**
+     * Cancelación por el PROPIO cliente desde su panel de pedidos. Solo se permite mientras el pedido
+     * está {@code PAID} (pagado pero aún NO enviado al proveedor): se le devuelve el dinero y el pedido
+     * queda {@code CANCELLED}. Si ya avanzó (enviado a proveedor/en camino/entregado) NO se puede cancelar
+     * — eso sería una devolución, que se gestiona manualmente cuando recibimos el producto de vuelta.
+     */
+    @Override
+    @Transactional
+    public Order cancelMyOrder(UUID userId, UUID orderId, boolean refundToWallet) {
+        // Los mensajes son un fallback técnico (en inglés, para logs); el texto que ve el usuario lo
+        // localiza el front a partir del CODE devuelto, en su idioma de navegación.
+        Order o = orderRepository.findById(orderId)
+                .orElseThrow(() -> new NotFoundException("ORDER_NOT_FOUND", "Order not found"));
+        if (o.getUserId() == null || !o.getUserId().equals(userId)) {
+            throw new NotFoundException("ORDER_NOT_FOUND", "Order not found"); // no filtramos pedidos ajenos
+        }
+        if (o.getStatus() != OrderStatus.PAID) {
+            // Ya avanzó (enviado a proveedor/en camino/entregado) o ya está cancelado/reembolsado.
+            throw new BusinessException("ORDER_NOT_CANCELLABLE",
+                    "The order can no longer be cancelled because it is already being processed.");
+        }
+        // El cliente elige: wallet (inmediato) o su método original (tarjeta/PayPal, con sus tiempos).
+        issueRefund(o, "cancel-", refundToWallet);
+        o.setStatus(OrderStatus.CANCELLED);
+        o.setCancelledAt(Instant.now());
+        o = orderRepository.save(o);
+        affiliateProgramService.rejectForOrder(o.getId());
+        sendRefundEmail(o, refundToWallet); // el cliente recibe el aviso de reembolso (destino que eligió)
+        return publishAndEnrich(o, "order.cancelled");
+    }
+
+    /**
+     * Devuelve el importe del pedido al destino que corresponda:
+     * <ul>
+     *   <li>{@code toWallet == true}: se acredita el WALLET del comprador (inmediato), sea cual sea el
+     *       método original. Es la opción "sugerida" que el cliente puede elegir.</li>
+     *   <li>{@code toWallet == false}: se devuelve al MÉTODO ORIGINAL — si se pagó con tarjeta/PayPal el
+     *       reembolso se hace EN el proveedor (Stripe/PayPal, con sus tiempos); si se pagó con wallet (o
+     *       sin pago externo) se acredita el wallet.</li>
+     * </ul>
+     * {@code refPrefix} identifica el movimiento (idempotencia del abono al wallet).
+     */
+    private void issueRefund(Order o, String refPrefix, boolean toWallet) {
+        if (!toWallet) {
+            Payment external = paymentUseCase.listOrderPayments(o.getId()).stream()
+                    .filter(p -> p.getStatus() == PaymentStatus.SUCCEEDED)
+                    .filter(p -> "stripe".equals(p.getProvider()) || "paypal".equals(p.getProvider())).findFirst()
+                    .orElse(null);
+            if (external != null) {
+                paymentUseCase.refundOrderPayment(o.getId(), external.getId(), 0); // reembolso total en el proveedor
+                return;
+            }
+            // Sin pago externo (pago con wallet): no hay nada que reembolsar en proveedor → wallet.
+        }
+        long amountCents = o.getTotalCents();
+        if (o.getUserId() != null && amountCents > 0) {
+            walletUseCase.deposit(o.getUserId(), amountCents, o.getId(), refPrefix + o.getId(),
+                    "Refund order " + o.getOrderNumber());
+        }
     }
 
     @Override
@@ -429,7 +497,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
                     saved.getCity(), saved.getState(), saved.getPostalCode(), saved.getCountry());
         }
         if (addr == null)
-            throw new BusinessException("Shipping address is required");
+            throw new BusinessException("SHIPPING_ADDRESS_REQUIRED", "Shipping address is required");
         // Cainiao solo envía a países cubiertos: bloqueamos el destino no soportado antes de cobrar.
         if (!cainiao.isSupported(addr.country())) {
             throw new BusinessException(
@@ -563,6 +631,26 @@ public class OrderUseCaseImpl implements OrderUseCase {
                     /* sin email para otros estados */ }
             }
         });
+    }
+
+    /**
+     * Email de reembolso enriquecido: resuelve del pago satisfactorio el método original y la moneda
+     * cobrada para que el correo muestre el importe exacto y el destino correcto del reembolso.
+     *
+     * @param toWallet true si el reembolso se acreditó al saldo (inmediato); false = al método original.
+     */
+    private void sendRefundEmail(Order o, boolean toWallet) {
+        if (o.getUserId() == null) {
+            return;
+        }
+        Payment paid = paymentUseCase.listOrderPayments(o.getId()).stream()
+                .filter(p -> p.getStatus() == PaymentStatus.SUCCEEDED).findFirst().orElse(null);
+        String method = paid != null && paid.getMethod() != null ? paid.getMethod().name() : "WALLET";
+        String ccy = paid != null && paid.getSettlementCurrency() != null && !paid.getSettlementCurrency().isBlank()
+                ? paid.getSettlementCurrency()
+                : (o.getCurrency() != null ? o.getCurrency() : "USD");
+        userRepository.findById(o.getUserId()).ifPresent(u -> orderEmailService.refunded(
+                o, u.getEmail(), u.getLanguage(), toWallet, ccy, method));
     }
 
     /** Fills the cross-aggregate read fields (customerEmail/shopName/shopHandle/supplierName). */

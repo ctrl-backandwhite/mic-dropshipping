@@ -45,4 +45,10 @@ public class MeWalletTxDtoOut {
 
     @Schema(description = "Creation timestamp")
     private Instant createdAt;
+
+    @Schema(description = "Signed amount (USD) formatted by the backend (country convention)")
+    private String amountFormatted;
+
+    @Schema(description = "Balance after (USD) formatted by the backend (country convention)")
+    private String balanceAfterFormatted;
 }

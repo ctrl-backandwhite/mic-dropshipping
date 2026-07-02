@@ -243,6 +243,27 @@ public class CatalogStorefrontReadService {
         return PageResponse.from(new PageImpl<>(slice, pageable, raw.getTotalElements()));
     }
 
+    /**
+     * Lista los productos FAVORITOS (por sus IDs, en el orden dado = del más reciente al más antiguo) con el
+     * mismo pipeline de precios/formateo que el catálogo. Los inactivos se omiten. Pagina en memoria.
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<ProductSummaryView> favorites(List<UUID> productIds, int page, int size, String lang) {
+        int safe = Math.min(size, 100);
+        Pageable pageable = PageRequest.of(page, safe);
+        if (productIds == null || productIds.isEmpty()) {
+            return PageResponse.from(new PageImpl<>(List.of(), pageable, 0));
+        }
+        java.util.Map<UUID, ProductEntity> byId = productRepository.findAllById(productIds).stream()
+                .filter(p -> p.getStatus() == ProductStatus.ACTIVE)
+                .collect(java.util.stream.Collectors.toMap(ProductEntity::getId, p -> p, (a, b) -> a));
+        List<ProductSummaryView> all = productIds.stream().map(byId::get).filter(java.util.Objects::nonNull)
+                .map(p -> productMapper.toSummary(p, lang)).toList();
+        int from = Math.min(page * safe, all.size());
+        int to = Math.min(from + safe, all.size());
+        return PageResponse.from(new PageImpl<>(all.subList(from, to), pageable, all.size()));
+    }
+
     /** El precio ya viene en la moneda del usuario (displayPrice); rango inclusivo, excluye nulos si hay filtro. */
     private boolean withinPrice(BigDecimal price, BigDecimal min, BigDecimal max) {
         if (min == null && max == null) {

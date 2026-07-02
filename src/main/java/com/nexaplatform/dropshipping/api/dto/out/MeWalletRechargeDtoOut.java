@@ -31,6 +31,12 @@ public class MeWalletRechargeDtoOut {
     @Schema(description = "Amount in USD cents")
     private long amountUsdCents;
 
+    @Schema(description = "Charge currency (EUR/USD/USDT): where the actual charge is made")
+    private String chargeCurrency;
+
+    @Schema(description = "Charge amount already formatted by the backend in the charge currency")
+    private String chargeFormatted;
+
     @Schema(description = "Provider name")
     private String provider;
 

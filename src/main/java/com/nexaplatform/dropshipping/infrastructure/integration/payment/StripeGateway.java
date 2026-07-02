@@ -4,10 +4,8 @@ import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PaymentEntity;
 import com.stripe.Stripe;
 import com.stripe.exception.StripeException;
-import com.stripe.model.PaymentIntent;
 import com.stripe.model.Refund;
 import com.stripe.model.checkout.Session;
-import com.stripe.param.PaymentIntentCreateParams;
 import com.stripe.param.RefundCreateParams;
 import com.stripe.param.checkout.SessionCreateParams;
 import lombok.extern.slf4j.Slf4j;
@@ -18,17 +16,14 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Stripe gateway. Two flows depending on the payment purpose:
+ * Stripe gateway. Tanto el <b>pago de pedido</b> (orderId presente) como la <b>recarga de wallet</b>
+ * (sin orderId) usan el MISMO <b>Checkout Session</b> hospedado (mode=payment): el comprador se
+ * redirige a la página PCI de Stripe y vuelve a {@code /checkout/return} o {@code /wallet/recharge/return},
+ * y el servidor confirma recuperando la sesión. Ningún dato de tarjeta pasa por nuestro frontend.
  *
- * <ul>
- *   <li><b>Order checkout</b> (orderId present): hosted <b>Checkout Session</b> (mode=payment).
- *       The buyer is redirected to Stripe's PCI-compliant page and back to {@code /checkout/return};
- *       the server then confirms by retrieving the session. No card data ever touches our frontend.</li>
- *   <li><b>Wallet recharge</b> (no orderId): {@link PaymentIntent} + clientSecret (Elements) flow.</li>
- * </ul>
- *
- * Settles in USD. If Stripe is disabled or the secret key is missing, returns a deterministic mock
- * so the end-to-end flow works without external dependencies.
+ * Cobra en EUR si el usuario trabaja la web en EUR; en USD en cualquier otro caso. Si Stripe está
+ * deshabilitado o falta la clave, devuelve un mock determinista para que el flujo end-to-end funcione
+ * sin dependencias externas.
  */
 @Slf4j
 @Component
@@ -69,52 +64,68 @@ public class StripeGateway implements PaymentGateway {
     public InitiateResult initiate(PaymentEntity p) {
         boolean isOrder = p.getOrderId() != null;
         if (!isActive()) {
-            if (isOrder) {
-                String mock = "cs_mock_" + p.getId();
-                String url = storefrontBaseUrl + "/checkout/return?provider=stripe&orderId=" + p.getOrderId()
-                        + "&paymentId=" + p.getId() + "&mock=1";
-                log.info("Stripe mock-mode (order checkout) for payment {}", p.getId());
-                return new InitiateResult(mock, null, url, null, null, null, Map.of("mock", true));
-            }
-            String mock = "pi_mock_" + p.getId();
-            log.info("Stripe mock-mode (wallet) for payment {}", p.getId());
-            return new InitiateResult(mock, mock + "_secret_mock", null, null, null, null, Map.of("mock", true));
+            // Mock-mode: tanto pedido como recarga usan el flujo de Checkout hospedado (redirect a la
+            // página de retorno correspondiente, que confirma del lado servidor).
+            String mock = "cs_mock_" + p.getId();
+            String url = isOrder
+                    ? storefrontBaseUrl + "/checkout/return?provider=stripe&orderId=" + p.getOrderId()
+                            + "&paymentId=" + p.getId() + "&mock=1"
+                    : storefrontBaseUrl + "/wallet/recharge/return?provider=stripe&paymentId=" + p.getId() + "&mock=1";
+            log.info("Stripe mock-mode ({}) for payment {}", isOrder ? "order checkout" : "wallet recharge", p.getId());
+            return new InitiateResult(mock, null, url, null, null, null, Map.of("mock", true));
         }
         Stripe.apiKey = secretKey;
-        return isOrder ? initiateCheckoutSession(p) : initiatePaymentIntent(p);
+        // Recarga de wallet Y pago de pedido usan el MISMO Stripe Checkout hospedado (redirect), para que
+        // la tarjeta se introduzca en la página segura de Stripe y el cobro se confirme al volver.
+        return initiateCheckoutSession(p);
     }
 
-    /** Order checkout → hosted Stripe Checkout Session (redirect flow). */
+    /** Checkout hospedado (redirect) para pago de PEDIDO o RECARGA de wallet. */
     private InitiateResult initiateCheckoutSession(PaymentEntity p) {
         try {
-            String successUrl = storefrontBaseUrl + "/checkout/return?provider=stripe&orderId=" + p.getOrderId()
-                    + "&paymentId=" + p.getId() + "&session_id={CHECKOUT_SESSION_ID}";
-            String cancelUrl = storefrontBaseUrl + "/checkout?cancelled=1";
+            boolean isOrder = p.getOrderId() != null;
+            String successUrl = isOrder
+                    ? storefrontBaseUrl + "/checkout/return?provider=stripe&orderId=" + p.getOrderId()
+                            + "&paymentId=" + p.getId() + "&session_id={CHECKOUT_SESSION_ID}"
+                    : storefrontBaseUrl + "/wallet/recharge/return?provider=stripe&paymentId=" + p.getId()
+                            + "&session_id={CHECKOUT_SESSION_ID}";
+            String cancelUrl = isOrder ? storefrontBaseUrl + "/checkout?cancelled=1"
+                    : storefrontBaseUrl + "/wallet/recharge?cancelled=1";
+            String productName = isOrder
+                    ? "NX036 Dropshipping · order " + shortId(p.getOrderId().toString())
+                    : "NX036 Dropshipping · wallet recharge";
+            String description = isOrder ? platformId + " · order " + p.getOrderId()
+                    : platformId + " · wallet recharge";
 
             // Moneda de cobro = la liquidación fijada al iniciar el pago (EUR si el usuario navega en EUR,
             // USD en cualquier otro caso). El monto va en esa moneda (céntimos).
             String chargeCcy = "EUR".equalsIgnoreCase(p.getSettlementCurrency()) ? "eur" : "usd";
             long chargeCents = chargeCents(p);
 
-            SessionCreateParams params = SessionCreateParams.builder().setMode(SessionCreateParams.Mode.PAYMENT)
+            SessionCreateParams.PaymentIntentData.Builder piData = SessionCreateParams.PaymentIntentData.builder()
+                    .putMetadata("platform", platformId).putMetadata("env", platformEnv)
+                    .putMetadata("paymentId", p.getId().toString()).setDescription(description);
+            SessionCreateParams.Builder builder = SessionCreateParams.builder()
+                    .setMode(SessionCreateParams.Mode.PAYMENT)
                     .setSuccessUrl(successUrl).setCancelUrl(cancelUrl).setCustomerEmail(p.getUser().getEmail())
                     .addLineItem(SessionCreateParams.LineItem.builder().setQuantity(1L)
                             .setPriceData(SessionCreateParams.LineItem.PriceData.builder().setCurrency(chargeCcy)
                                     .setUnitAmount(chargeCents)
                                     .setProductData(SessionCreateParams.LineItem.PriceData.ProductData.builder()
-                                            .setName("NX036 Dropshipping · order " + shortId(p.getOrderId().toString()))
-                                            .build())
+                                            .setName(productName).build())
                                     .build())
                             .build())
                     // Metadata en la sesión y en el PaymentIntent resultante → viaja al cargo/recibo.
                     .putMetadata("platform", platformId).putMetadata("env", platformEnv)
-                    .putMetadata("orderId", p.getOrderId().toString()).putMetadata("paymentId", p.getId().toString())
-                    .setPaymentIntentData(SessionCreateParams.PaymentIntentData.builder()
-                            .putMetadata("platform", platformId).putMetadata("env", platformEnv)
-                            .putMetadata("orderId", p.getOrderId().toString())
-                            .putMetadata("paymentId", p.getId().toString())
-                            .setDescription(platformId + " · order " + p.getOrderId()).build())
-                    .build();
+                    .putMetadata("paymentId", p.getId().toString());
+            if (isOrder) {
+                builder.putMetadata("orderId", p.getOrderId().toString());
+                piData.putMetadata("orderId", p.getOrderId().toString());
+            } else {
+                builder.putMetadata("purpose", "WALLET_RECHARGE");
+                piData.putMetadata("purpose", "WALLET_RECHARGE");
+            }
+            SessionCreateParams params = builder.setPaymentIntentData(piData.build()).build();
 
             Session session = Session.create(params);
             Map<String, Object> raw = new HashMap<>();
@@ -128,29 +139,6 @@ public class StripeGateway implements PaymentGateway {
         }
     }
 
-    /** Wallet recharge → PaymentIntent + clientSecret (Elements). */
-    private InitiateResult initiatePaymentIntent(PaymentEntity p) {
-        try {
-            PaymentIntentCreateParams.Builder b = PaymentIntentCreateParams.builder().setAmount(p.getAmountUsdCents())
-                    .setCurrency("usd")
-                    .setAutomaticPaymentMethods(
-                            PaymentIntentCreateParams.AutomaticPaymentMethods.builder().setEnabled(true).build())
-                    .putMetadata("platform", platformId).putMetadata("env", platformEnv)
-                    .putMetadata("paymentId", p.getId().toString()).putMetadata("userId", p.getUser().getId().toString())
-                    .putMetadata("purpose", p.getPurpose() != null ? p.getPurpose() : "WALLET_RECHARGE")
-                    .setReceiptEmail(p.getUser().getEmail()).setDescription(platformId + " · wallet recharge")
-                    .setStatementDescriptorSuffix("WALLET");
-            PaymentIntent pi = PaymentIntent.create(b.build());
-            Map<String, Object> raw = new HashMap<>();
-            raw.put("id", pi.getId());
-            raw.put("status", pi.getStatus());
-            raw.put("clientSecret", pi.getClientSecret());
-            return new InitiateResult(pi.getId(), pi.getClientSecret(), null, null, null, null, raw);
-        } catch (StripeException e) {
-            log.error("Stripe initiate failed", e);
-            throw new RuntimeException("Stripe payment initiation failed: " + e.getMessage(), e);
-        }
-    }
 
     /**
      * Retrieves a Checkout Session and reports whether it settled. Used by the server-side

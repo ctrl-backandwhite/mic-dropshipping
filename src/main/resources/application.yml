@@ -117,6 +117,14 @@ spring:
             client-secret: ${GOOGLE_CLIENT_SECRET:changeme-google-client-secret}
             scope: openid,email,profile
             redirect-uri: "${GOOGLE_REDIRECT_URI:http://localhost:3003/login/oauth2/code/google}"
+          github:
+            # GitHub es un proveedor común de Spring (no requiere bloque provider). Pedimos
+            # user:email porque el correo puede ser privado: el primario verificado se resuelve
+            # vía /user/emails en GithubOAuth2UserService.
+            client-id: ${GITHUB_CLIENT_ID:changeme-github-client-id}
+            client-secret: ${GITHUB_CLIENT_SECRET:changeme-github-client-secret}
+            scope: read:user,user:email
+            redirect-uri: "${GITHUB_REDIRECT_URI:http://localhost:3003/login/oauth2/code/github}"
 
 server:
   # Railway/Heroku inyectan PORT en runtime; si no, usamos SERVER_PORT y por último 18082 (local).
@@ -299,6 +307,13 @@ nexadrop:
     enabled: ${CAINIAO_ENABLED:false}
     app-key: ${CAINIAO_APP_KEY:}
     app-secret: ${CAINIAO_APP_SECRET:}
+    # Código de recurso (资源码) de la app en Cainiao Open Platform → campo to_code de las llamadas.
+    to-code: ${CAINIAO_TO_CODE:}
+    # Impuesto (IVA/aduana) con Cainiao. false = tabla local country_tax_rate (local); true = Cainiao con
+    # fallback a la tabla local (pre). Ver CainiaoTaxService.
+    tax-enabled: ${CAINIAO_TAX_ENABLED:false}
+    # Cotización de ENVÍO con Cainiao. false = tabla de zonas (local); true = Cainiao con fallback a zonas (pre).
+    shipping-quote-enabled: ${CAINIAO_SHIPPING_QUOTE_ENABLED:false}
     base-url: ${CAINIAO_BASE_URL:https://link.cainiao.com}
     platform-id: ${CAINIAO_PLATFORM_ID:nexadrop-dropshipping}
     platform-env: ${CAINIAO_PLATFORM_ENV:dev}

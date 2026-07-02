@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -112,7 +113,7 @@ class OrderEmailServiceTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> varsCap = ArgumentCaptor.forClass(Map.class);
-        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Tu pedido va en camino 🚚"), eq("emails/notification"),
+        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Tu pedido va en camino"), eq("emails/notification"),
                 varsCap.capture());
         Map<String, Object> vars = varsCap.getValue();
         assertThat((String) vars.get("bodyHtml")).contains("NX-200").contains("TRK-1").contains("Cainiao");
@@ -127,7 +128,7 @@ class OrderEmailServiceTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> varsCap = ArgumentCaptor.forClass(Map.class);
-        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Your order is on its way 🚚"), eq("emails/notification"),
+        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Your order is on its way"), eq("emails/notification"),
                 varsCap.capture());
         assertThat((String) varsCap.getValue().get("bodyHtml")).contains("has been shipped").doesNotContain("Tracking");
     }
@@ -146,7 +147,7 @@ class OrderEmailServiceTest {
 
         service.delivered(o, "buyer@x.com", "es");
 
-        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Tu pedido ha sido entregado 📦"),
+        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Tu pedido ha sido entregado"),
                 eq("emails/notification"), anyMap());
     }
 
@@ -165,6 +166,42 @@ class OrderEmailServiceTest {
         assertThat((String) varsCap.getValue().get("bodyHtml")).contains("NX-400").contains("refund");
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void refunded_toCard_includesDetailBlockWithAmountAndOriginalCardDestination() {
+        Order o = order("NX-401", null, null, "USD");
+        Map<String, Object> model = new HashMap<>();
+        model.put("total", "27,80 €");
+        when(invoiceService.model(eq(o), eq("es"), any(), eq("EUR"))).thenReturn(model);
+
+        service.refunded(o, "buyer@x.com", "es", false, "EUR", "CARD");
+
+        ArgumentCaptor<Map<String, Object>> varsCap = ArgumentCaptor.forClass(Map.class);
+        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Reembolso procesado"), eq("emails/notification"),
+                varsCap.capture());
+        List<String[]> details = (List<String[]>) varsCap.getValue().get("details");
+        assertThat(details).isNotNull();
+        // Nº de pedido, importe y destino (tarjeta original) presentes en el bloque.
+        assertThat(details).anySatisfy(r -> assertThat(r[1]).isEqualTo("NX-401"));
+        assertThat(details).anySatisfy(r -> assertThat(r[1]).isEqualTo("27,80 €"));
+        assertThat(details).anySatisfy(r -> assertThat(r[1]).contains("Tarjeta original"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void refunded_toWallet_marksImmediateWalletDestination() {
+        Order o = order("NX-402", null, null, "USD");
+        when(invoiceService.model(any(), any(), any(), any())).thenReturn(new HashMap<>());
+
+        service.refunded(o, "buyer@x.com", "es", true, "EUR", "CARD");
+
+        ArgumentCaptor<Map<String, Object>> varsCap = ArgumentCaptor.forClass(Map.class);
+        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Reembolso procesado"), eq("emails/notification"),
+                varsCap.capture());
+        List<String[]> details = (List<String[]>) varsCap.getValue().get("details");
+        assertThat(details).anySatisfy(r -> assertThat(r[1]).contains("Billetera"));
+    }
+
     /* ---------------- trackingUpdate ---------------- */
 
     @Test
@@ -175,7 +212,7 @@ class OrderEmailServiceTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> varsCap = ArgumentCaptor.forClass(Map.class);
-        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Actualización de tu envío 🚚"),
+        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Actualización de tu envío"),
                 eq("emails/notification"), varsCap.capture());
         String body = (String) varsCap.getValue().get("bodyHtml");
         assertThat(body).contains("NX-500").contains("Madrid").contains("TRK-9");

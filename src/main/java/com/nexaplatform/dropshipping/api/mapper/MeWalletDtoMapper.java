@@ -3,9 +3,12 @@ package com.nexaplatform.dropshipping.api.mapper;
 import com.nexaplatform.dropshipping.api.dto.out.MeWalletDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MeWalletRechargeDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MeWalletTxDtoOut;
+import com.nexaplatform.dropshipping.domain.enums.PaymentMethodLabel;
+import com.nexaplatform.dropshipping.domain.enums.WalletTxMessage;
 import com.nexaplatform.dropshipping.domain.model.Payment;
 import com.nexaplatform.dropshipping.domain.model.Wallet;
 import com.nexaplatform.dropshipping.domain.model.WalletTransaction;
+import com.nexaplatform.dropshipping.infrastructure.integration.locale.LocaleHolder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -37,7 +40,7 @@ public interface MeWalletDtoMapper {
     @Mapping(target = "amountUsdCents", source = "amountUsdCents")
     @Mapping(target = "balanceAfterCents", source = "balanceAfterCents")
     @Mapping(target = "status", source = "status")
-    @Mapping(target = "description", source = "description")
+    @Mapping(target = "description", expression = "java(localizedDescription(model.getDescription()))")
     @Mapping(target = "paymentId", source = "paymentId")
     @Mapping(target = "orderId", source = "orderId")
     @Mapping(target = "createdAt", source = "createdAt")
@@ -58,6 +61,31 @@ public interface MeWalletDtoMapper {
     @Mapping(target = "qrUrl", expression = "java(meta(model, \"qrUrl\"))")
     @Mapping(target = "expiresAt", source = "cryptoExpiresAt")
     MeWalletRechargeDtoOut toRechargeDtoOut(Payment model);
+
+    /**
+     * Localiza la descripción del movimiento del wallet al idioma activo (X-Lang) a partir del texto en
+     * inglés guardado. Reconoce los patrones que genera el backend: "Wallet recharge via {METHOD}",
+     * "Refund order {ORDER}" y "Order {ORDER}". Cualquier otro texto se devuelve tal cual (legado).
+     */
+    default String localizedDescription(String desc) {
+        if (desc == null || desc.isBlank()) {
+            return desc;
+        }
+        String lang = LocaleHolder.get();
+        if (desc.startsWith("Wallet recharge via ")) {
+            String method = desc.substring("Wallet recharge via ".length()).trim();
+            return WalletTxMessage.RECHARGE.of(lang).replace("{method}", PaymentMethodLabel.localize(method, lang));
+        }
+        if (desc.startsWith("Refund order ")) {
+            String order = desc.substring("Refund order ".length()).trim();
+            return WalletTxMessage.REFUND.of(lang).replace("{order}", order);
+        }
+        if (desc.startsWith("Order ")) {
+            String order = desc.substring("Order ".length()).trim();
+            return WalletTxMessage.ORDER_PAYMENT.of(lang).replace("{order}", order);
+        }
+        return desc;
+    }
 
     /** Reads a string value from the payment provider-response metadata map. */
     default String meta(Payment model, String key) {

@@ -15,13 +15,15 @@ import java.util.UUID;
  * {@code MeOrderDetailView} record the controller exposed.
  */
 @Value
-@Builder
+@Builder(toBuilder = true)
 public class MeOrderDetailDtoOut {
 
     UUID id;
     String orderNumber;
     String externalOrderId;
     String status;
+    // Método de pago original (CARD/PAYPAL/USDT/WALLET): el front decide a dónde ofrecer el reembolso.
+    String paymentMethod;
     BigDecimal subtotal;
     BigDecimal shipping;
     BigDecimal tax;

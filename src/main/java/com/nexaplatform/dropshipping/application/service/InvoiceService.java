@@ -1,8 +1,17 @@
 package com.nexaplatform.dropshipping.application.service;
 
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.EncodeHintType;
+import com.google.zxing.client.j2se.MatrixToImageWriter;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
+import com.nexaplatform.dropshipping.domain.enums.InvoiceLabel;
+import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PaymentJpaRepositoryAdapter;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +27,8 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -34,6 +45,19 @@ public class InvoiceService {
 
     private final TemplateEngine templateEngine;
     private final CurrencyRateService currencyRateService;
+    private final PaymentJpaRepositoryAdapter paymentRepository;
+
+    /** Importe realmente cobrado (settlement) del pago satisfactorio si coincide con la moneda de la factura. */
+    private BigDecimal settlementTotal(java.util.UUID orderId, String ccy) {
+        if (orderId == null || ccy == null) {
+            return null;
+        }
+        return paymentRepository.findByOrderIdOrderByCreatedAtDesc(orderId).stream()
+                .filter(p -> p.getStatus() == PaymentStatus.SUCCEEDED)
+                .filter(p -> p.getSettlementAmount() != null && ccy.equalsIgnoreCase(p.getSettlementCurrency()))
+                .map(p -> p.getSettlementAmount())
+                .findFirst().orElse(null);
+    }
 
     // Datos fiscales del EMISOR (la plataforma) para que la factura sea un documento legal.
     // Se configuran por entorno (nunca se inventan); si legal-name está vacío, el bloque no se pinta.
@@ -53,8 +77,16 @@ public class InvoiceService {
     private String issuerRegistry;
     @Value("${nexadrop.invoice.legal-note:}")
     private String legalNote;
+    // Base pública para el QR de verificación de la factura (apunta al endpoint público de verificación).
+    @Value("${nexadrop.invoice.verify-base-url:http://localhost:18082}")
+    private String verifyBaseUrl;
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
+    /** Fecha formateada con el mismo patrón que la factura (para reutilizar en emails). */
+    public String formatDate(java.time.Instant when) {
+        return when != null ? DATE.format(when.atZone(ZoneId.systemDefault())) : "";
+    }
 
     /** Modelo de factura en la moneda del pedido (USD canónico). */
     public Map<String, Object> model(Order o, String locale, String downloadUrl) {
@@ -90,6 +122,16 @@ public class InvoiceService {
         BigDecimal shippingDisp = conv(o.getShippingCents(), cur);
         BigDecimal taxDisp = conv(o.getTaxCents(), cur);
         BigDecimal totalDisp = subtotalDisp.add(shippingDisp).add(taxDisp);
+        // Pedido ya pagado: la factura muestra EXACTAMENTE lo cobrado (settlement), no la re-conversión a la
+        // tasa actual (que deriva con el tiempo). Escalamos el desglose (conversión lineal) para que cuadre.
+        BigDecimal settle = settlementTotal(o.getId(), cur);
+        if (settle != null && totalDisp.signum() > 0) {
+            BigDecimal f = settle.divide(totalDisp, 10, RoundingMode.HALF_UP);
+            subtotalDisp = subtotalDisp.multiply(f).setScale(2, RoundingMode.HALF_UP);
+            shippingDisp = shippingDisp.multiply(f).setScale(2, RoundingMode.HALF_UP);
+            totalDisp = settle.setScale(2, RoundingMode.HALF_UP);
+            taxDisp = totalDisp.subtract(subtotalDisp).subtract(shippingDisp);
+        }
         // Base imponible = subtotal + envío (lo gravado por el IVA). Tipo efectivo derivado de los
         // importes para mostrar "IVA (X%)" sin depender de un campo de tipo separado.
         BigDecimal baseDisp = subtotalDisp.add(shippingDisp);
@@ -99,35 +141,47 @@ public class InvoiceService {
         String city = join(o.getShippingCity(), o.getShippingState(), o.getShippingPostalCode());
         Instant when = o.getPlacedAt() != null ? o.getPlacedAt() : o.getCreatedAt();
 
+        String lang = InvoiceLabel.lang(locale); // idioma de navegación → la factura se emite en él
         Map<String, Object> m = new java.util.HashMap<>();
-        m.put("subject", (es ? "Factura " : "Invoice ") + o.getOrderNumber());
-        m.put("title", es ? "Pago confirmado" : "Payment confirmed");
-        m.put("intro", es ? "Gracias por tu compra. Aquí tienes la factura de tu pedido."
-                : "Thank you for your purchase. Here is the invoice for your order.");
-        m.put("preheader", (es ? "Factura " : "Invoice ") + o.getOrderNumber());
-        m.put("labelInvoice", es ? "Factura" : "Invoice");
-        m.put("labelShipTo", es ? "Enviar a" : "Ship to");
-        m.put("labelMethod", es ? "Método de pago" : "Payment method");
+        // Por defecto el modelo es para el EMAIL (lleva saludo/CTA). renderPdf lo pone a true para
+        // ocultar lo propio del email y dejar un documento de factura limpio y profesional.
+        m.put("pdf", false);
+        m.put("subject", InvoiceLabel.INVOICE.of(lang) + " " + o.getOrderNumber());
+        m.put("title", InvoiceLabel.TITLE_PAID.of(lang));
+        m.put("icon", "circle-check"); // icono FontAwesome (PNG inline por CID) junto al saludo del email
+        m.put("intro", InvoiceLabel.INTRO.of(lang));
+        m.put("preheader", InvoiceLabel.INVOICE.of(lang) + " " + o.getOrderNumber());
+        m.put("labelInvoice", InvoiceLabel.INVOICE.of(lang));
+        m.put("labelShipTo", InvoiceLabel.BILL_TO.of(lang));
+        m.put("labelMethod", InvoiceLabel.PAYMENT_METHOD.of(lang));
         m.put("orderNumber", o.getOrderNumber());
         m.put("invoiceDate", when != null ? DATE.format(when.atZone(ZoneId.systemDefault())) : "");
+        m.put("labelIssueDate", InvoiceLabel.ISSUE_DATE.of(lang));
         m.put("paymentMethod", null);
+        // Estado del pedido como insignia (PAGADA en verde si está pagado/cumplido).
+        String statusName = o.getStatus() != null ? o.getStatus().name() : "";
+        boolean paid = statusName.equals("PAID") || statusName.equals("SHIPPED")
+                || statusName.equals("DELIVERED") || statusName.equals("FULFILLED") || statusName.equals("COMPLETED");
+        m.put("statusPaid", paid);
+        m.put("statusLabel", statusName.isEmpty() ? ""
+                : (paid ? InvoiceLabel.PAID.of(lang) : InvoiceLabel.PENDING.of(lang)));
         m.put("shipName", nz(o.getShippingFullName()));
+        m.put("shipEmail", nz(o.getShippingEmail()));
+        m.put("shipPhone", nz(o.getShippingPhone()));
         m.put("shipLine1", nz(o.getShippingLine1()));
         m.put("shipCityLine", city);
-        m.put("shipCountry", nz(o.getShippingCountry()));
-        m.put("colItem", es ? "Artículo" : "Item");
-        m.put("colQty", es ? "Cant." : "Qty");
-        m.put("colPrice", es ? "Precio" : "Price");
-        m.put("colTotal", "Total");
+        m.put("shipCountry", countryName(o.getShippingCountry(), locale));
+        m.put("colItem", InvoiceLabel.DESCRIPTION.of(lang));
+        m.put("colQty", InvoiceLabel.QTY.of(lang));
+        m.put("colPrice", InvoiceLabel.PRICE.of(lang));
+        m.put("colTotal", InvoiceLabel.TOTAL.of(lang));
         m.put("items", items);
-        m.put("labelSubtotal", es ? "Subtotal" : "Subtotal");
-        m.put("labelShipping", es ? "Envío" : "Shipping");
-        m.put("labelBase", es ? "Base imponible" : "Taxable base");
-        m.put("labelTax", (es ? "IVA" : "VAT") + " (" + vatRate + "%)");
-        m.put("labelTotal", "Total");
+        m.put("labelSubtotal", InvoiceLabel.SUBTOTAL.of(lang));
+        m.put("labelShipping", InvoiceLabel.SHIPPING.of(lang));
+        m.put("labelTax", InvoiceLabel.VAT.of(lang) + " (" + vatRate + "%)");
+        m.put("labelTotal", InvoiceLabel.TOTAL.of(lang));
         m.put("subtotal", fmt(subtotalDisp, cur));
         m.put("shipping", fmt(shippingDisp, cur));
-        m.put("base", fmt(baseDisp, cur));
         m.put("tax", fmt(taxDisp, cur));
         m.put("total", fmt(totalDisp, cur));
 
@@ -135,8 +189,8 @@ public class InvoiceService {
         boolean hasIssuer = issuerLegalName != null && !issuerLegalName.isBlank();
         m.put("hasIssuer", hasIssuer);
         m.put("labelIssuer", es ? "Emisor" : "Issuer");
-        m.put("labelBillTo", es ? "Facturar a" : "Bill to");
-        m.put("labelTaxId", es ? "NIF/CIF" : "Tax ID");
+        m.put("labelBillTo", InvoiceLabel.BILL_TO.of(lang));
+        m.put("labelTaxId", InvoiceLabel.TAX_ID.of(lang));
         m.put("issuerLegalName", nz(issuerLegalName));
         m.put("issuerTaxId", nz(issuerTaxId));
         m.put("issuerAddress", nz(issuerAddress));
@@ -145,13 +199,33 @@ public class InvoiceService {
         m.put("issuerEmail", nz(issuerEmail));
         m.put("issuerRegistry", nz(issuerRegistry));
         m.put("legalNote", nz(legalNote));
+
+        // Línea legal del pie: razón social · CIF · email · nº de factura (lo que esté configurado).
+        StringBuilder legal = new StringBuilder();
+        if (hasIssuer) {
+            legal.append(issuerLegalName);
+            if (issuerTaxId != null && !issuerTaxId.isBlank()) {
+                legal.append(" · ").append(InvoiceLabel.TAX_ID_PREFIX.of(lang)).append(issuerTaxId);
+            }
+            if (issuerEmail != null && !issuerEmail.isBlank()) {
+                legal.append(" · ").append(issuerEmail);
+            }
+        }
+        legal.append(legal.length() > 0 ? " · " : "").append(o.getOrderNumber());
+        m.put("footerLegal", legal.toString());
+
+        // QR de verificación: codifica la URL pública de verificación de esta factura.
+        String base = verifyBaseUrl != null ? verifyBaseUrl.replaceAll("/+$", "") : "";
+        String verifyUrl = base + "/api/v1/storefront/invoices/" + o.getOrderNumber() + "/verify";
+        m.put("verifyUrl", verifyUrl);
+        m.put("qr", qrDataUri(verifyUrl));
+        m.put("labelVerify", InvoiceLabel.VERIFY.of(lang));
+        m.put("verifyNote", InvoiceLabel.VERIFY_NOTE.of(lang));
         // Color del lienzo (fuera del cuadro): lavanda en el email; el PDF lo sobreescribe a blanco.
         m.put("bodyBg", "#F4F1FB");
         m.put("ctaUrl", downloadUrl);
-        m.put("ctaLabel", es ? "Descargar factura (PDF)" : "Download invoice (PDF)");
-        m.put("footer", es
-                ? "NX036 Dropshipping · Este es un comprobante de tu pedido. Conserva esta factura."
-                : "NX036 Dropshipping · This is your order receipt. Please keep this invoice.");
+        m.put("ctaLabel", InvoiceLabel.CTA_DOWNLOAD.of(lang));
+        m.put("footer", "NX036 Dropshipping · " + InvoiceLabel.RECEIPT_NOTE.of(lang));
         return m;
     }
 
@@ -177,6 +251,7 @@ public class InvoiceService {
         // El PDF es un documento descargable → lienzo BLANCO (no el lavanda del email). Sin CTA.
         Map<String, Object> m = model(o, locale, null, currency);
         m.put("bodyBg", "#ffffff");
+        m.put("pdf", true); // documento de factura: sin saludo de email ni CTA
         // El nombre del producto se muestra COMPLETO (la celda hace wrap); antes se truncaba a 40
         // caracteres pero la factura debe llevar la descripción íntegra del artículo.
         Context ctx = new Context();
@@ -193,6 +268,135 @@ public class InvoiceService {
             log.error("No se pudo generar el PDF de la factura del pedido {}", o.getOrderNumber(), e);
             throw new IllegalStateException("Invoice PDF generation failed: " + e.getMessage(), e);
         }
+    }
+
+    // =============================================================================================
+    // Factura de CONTRATACIÓN DE PLAN — MISMA plantilla/diseño/formato que la de productos.
+    // =============================================================================================
+
+    /** Datos de una factura de plan (tomados de la factura real de Stripe) para renderizar el PDF. */
+    public record PlanInvoiceData(String number, String currency, long subtotalCents, long taxCents, long totalCents,
+            String lineDescription, Long periodStart, Long periodEnd, Long created, String customerName,
+            String customerEmail, boolean paid, String hostedUrl) {
+    }
+
+    /** Renderiza la factura de un plan con la MISMA plantilla y diseño que la de productos. */
+    public byte[] renderPlanInvoicePdf(PlanInvoiceData d, String locale) {
+        Map<String, Object> m = planModel(d, locale);
+        Context ctx = new Context();
+        m.forEach(ctx::setVariable);
+        String html = templateEngine.process("emails/invoice", ctx);
+        try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
+            PdfRendererBuilder builder = new PdfRendererBuilder();
+            builder.useFastMode();
+            builder.withHtmlContent(html, null);
+            builder.toStream(os);
+            builder.run();
+            return os.toByteArray();
+        } catch (Exception e) {
+            log.error("No se pudo generar el PDF de la factura del plan {}", d.number(), e);
+            throw new IllegalStateException("Plan invoice PDF generation failed: " + e.getMessage(), e);
+        }
+    }
+
+    /** Modelo de la factura del plan con las MISMAS claves que la de pedidos (importes ya en la moneda de cobro). */
+    private Map<String, Object> planModel(PlanInvoiceData d, String locale) {
+        boolean es = locale == null || locale.toLowerCase(Locale.ROOT).startsWith("es");
+        String cur = d.currency() != null && !d.currency().isBlank() ? d.currency().toUpperCase() : "USD";
+        String lang = InvoiceLabel.lang(locale);
+
+        BigDecimal subtotal = BigDecimal.valueOf(d.subtotalCents()).movePointLeft(2);
+        BigDecimal tax = BigDecimal.valueOf(d.taxCents()).movePointLeft(2);
+        BigDecimal total = BigDecimal.valueOf(d.totalCents()).movePointLeft(2);
+        int vatRate = subtotal.signum() > 0
+                ? tax.multiply(BigDecimal.valueOf(100)).divide(subtotal, 0, RoundingMode.HALF_UP).intValue()
+                : 0;
+
+        DateTimeFormatter dOnly = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        String period = "";
+        if (d.periodStart() != null && d.periodEnd() != null) {
+            period = dOnly.format(Instant.ofEpochSecond(d.periodStart()).atZone(ZoneId.systemDefault())) + " – "
+                    + dOnly.format(Instant.ofEpochSecond(d.periodEnd()).atZone(ZoneId.systemDefault()));
+        }
+        List<Map<String, Object>> items = new ArrayList<>();
+        items.add(Map.of("title", d.lineDescription() != null ? d.lineDescription() : "—", "sku", "", "variant", period,
+                "qty", 1, "unit", fmt(subtotal, cur), "lineTotal", fmt(subtotal, cur), "image", ""));
+
+        Instant when = d.created() != null ? Instant.ofEpochSecond(d.created()) : Instant.now();
+
+        Map<String, Object> m = new java.util.HashMap<>();
+        m.put("pdf", true);
+        m.put("bodyBg", "#ffffff");
+        m.put("subject", InvoiceLabel.INVOICE.of(lang) + " " + nz(d.number()));
+        m.put("title", InvoiceLabel.TITLE_PAID.of(lang));
+        m.put("icon", "circle-check");
+        m.put("intro", InvoiceLabel.INTRO.of(lang));
+        m.put("preheader", InvoiceLabel.INVOICE.of(lang) + " " + nz(d.number()));
+        m.put("labelInvoice", InvoiceLabel.INVOICE.of(lang));
+        m.put("labelShipTo", InvoiceLabel.BILL_TO.of(lang));
+        m.put("labelMethod", InvoiceLabel.PAYMENT_METHOD.of(lang));
+        m.put("orderNumber", nz(d.number()));
+        m.put("invoiceDate", DATE.format(when.atZone(ZoneId.systemDefault())));
+        m.put("labelIssueDate", InvoiceLabel.ISSUE_DATE.of(lang));
+        m.put("paymentMethod", null);
+        m.put("statusPaid", d.paid());
+        m.put("statusLabel", d.paid() ? InvoiceLabel.PAID.of(lang) : InvoiceLabel.PENDING.of(lang));
+        m.put("shipName", nz(d.customerName()));
+        m.put("shipEmail", nz(d.customerEmail()));
+        m.put("shipPhone", "");
+        m.put("shipLine1", "");
+        m.put("shipCityLine", "");
+        m.put("shipCountry", "");
+        m.put("colItem", InvoiceLabel.DESCRIPTION.of(lang));
+        m.put("colQty", InvoiceLabel.QTY.of(lang));
+        m.put("colPrice", InvoiceLabel.PRICE.of(lang));
+        m.put("colTotal", InvoiceLabel.TOTAL.of(lang));
+        m.put("items", items);
+        m.put("labelSubtotal", InvoiceLabel.SUBTOTAL.of(lang));
+        m.put("labelShipping", InvoiceLabel.SHIPPING.of(lang));
+        m.put("labelTax", InvoiceLabel.VAT.of(lang) + " (" + vatRate + "%)");
+        m.put("labelTotal", InvoiceLabel.TOTAL.of(lang));
+        m.put("subtotal", fmt(subtotal, cur));
+        m.put("shipping", fmt(BigDecimal.ZERO, cur));
+        m.put("tax", fmt(tax, cur));
+        m.put("total", fmt(total, cur));
+
+        boolean hasIssuer = issuerLegalName != null && !issuerLegalName.isBlank();
+        m.put("hasIssuer", hasIssuer);
+        m.put("labelIssuer", es ? "Emisor" : "Issuer");
+        m.put("labelBillTo", InvoiceLabel.BILL_TO.of(lang));
+        m.put("labelTaxId", InvoiceLabel.TAX_ID.of(lang));
+        m.put("issuerLegalName", nz(issuerLegalName));
+        m.put("issuerTaxId", nz(issuerTaxId));
+        m.put("issuerAddress", nz(issuerAddress));
+        m.put("issuerCityLine", nz(issuerCityLine));
+        m.put("issuerCountry", nz(issuerCountry));
+        m.put("issuerEmail", nz(issuerEmail));
+        m.put("issuerRegistry", nz(issuerRegistry));
+        m.put("legalNote", nz(legalNote));
+
+        StringBuilder legal = new StringBuilder();
+        if (hasIssuer) {
+            legal.append(issuerLegalName);
+            if (issuerTaxId != null && !issuerTaxId.isBlank()) {
+                legal.append(" · ").append(InvoiceLabel.TAX_ID_PREFIX.of(lang)).append(issuerTaxId);
+            }
+            if (issuerEmail != null && !issuerEmail.isBlank()) {
+                legal.append(" · ").append(issuerEmail);
+            }
+        }
+        legal.append(legal.length() > 0 ? " · " : "").append(nz(d.number()));
+        m.put("footerLegal", legal.toString());
+
+        String verifyUrl = d.hostedUrl() != null ? d.hostedUrl() : "";
+        m.put("verifyUrl", verifyUrl);
+        m.put("qr", verifyUrl.isBlank() ? "" : qrDataUri(verifyUrl));
+        m.put("labelVerify", InvoiceLabel.VERIFY.of(lang));
+        m.put("verifyNote", InvoiceLabel.VERIFY_NOTE.of(lang));
+        m.put("ctaUrl", null);
+        m.put("ctaLabel", InvoiceLabel.CTA_DOWNLOAD.of(lang));
+        m.put("footer", "NX036 Dropshipping · " + InvoiceLabel.RECEIPT_NOTE.of(lang));
+        return m;
     }
 
     /** Acorta un texto a {@code max} caracteres añadiendo "…" si lo supera. */
@@ -212,13 +416,55 @@ public class InvoiceService {
 
     /** Formatea un importe ya convertido con el símbolo de la moneda. */
     private String fmt(BigDecimal v, String currency) {
-        String symbol = currencyRateService.symbolOf(currency);
-        boolean prefixSymbol = symbol != null && !symbol.equalsIgnoreCase(currency);
-        return prefixSymbol ? symbol + v.toPlainString() : currency + " " + v.toPlainString();
+        // Mismo formateo locale-aware que el resto de la web ("62,15 €"), no "€62.15", para que la
+        // factura sea consistente con el "Resumen de pago" del pedido y luzca profesional.
+        return currencyRateService.formatDisplay(v, currency);
     }
 
     private static String nz(String s) {
         return s != null ? s : "";
+    }
+
+    /**
+     * Genera un código QR del {@code content} y lo devuelve como data-URI PNG en base64 para incrustarlo
+     * en el HTML/PDF de la factura. Si falla, devuelve "" (la plantilla simplemente no pinta el QR).
+     */
+    private String qrDataUri(String content) {
+        if (content == null || content.isBlank()) {
+            return "";
+        }
+        try {
+            Map<EncodeHintType, Object> hints = new EnumMap<>(EncodeHintType.class);
+            hints.put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.M);
+            hints.put(EncodeHintType.MARGIN, 1);
+            hints.put(EncodeHintType.CHARACTER_SET, "UTF-8");
+            BitMatrix matrix = new QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, 240, 240, hints);
+            try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
+                MatrixToImageWriter.writeToStream(matrix, "PNG", os);
+                return "data:image/png;base64," + Base64.getEncoder().encodeToString(os.toByteArray());
+            }
+        } catch (Exception e) {
+            log.warn("QR generation failed: {}", e.getMessage());
+            return "";
+        }
+    }
+
+    /**
+     * Nombre del país a partir del código ISO ("ES" → "España"), en el idioma del usuario. Si no se
+     * reconoce el código, se devuelve tal cual para no perder el dato.
+     */
+    private static String countryName(String code, String locale) {
+        if (code == null || code.isBlank()) {
+            return "";
+        }
+        String lang = locale == null ? "es" : locale.trim().toLowerCase(Locale.ROOT).split("[-_]")[0];
+        try {
+            String name = new Locale("", code.trim().toUpperCase(Locale.ROOT))
+                    .getDisplayCountry(Locale.forLanguageTag(lang));
+            return name == null || name.isBlank() || name.equalsIgnoreCase(code) ? code : name;
+        } catch (RuntimeException e) {
+            return code;
+        }
     }
 
     private static String join(String... parts) {

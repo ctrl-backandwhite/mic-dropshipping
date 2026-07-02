@@ -18,8 +18,9 @@ import java.util.Set;
  */
 public final class LocaleHolder {
 
-    public static final Set<String> SUPPORTED = Set.of("en", "es", "pt", "zh");
-    private static final String DEFAULT = "en";
+    // Los 8 idiomas soportados por la plataforma (mismo conjunto que la i18n del front/emails/factura).
+    public static final Set<String> SUPPORTED = Set.of("en", "es", "pt", "zh", "fr", "de", "it", "nl");
+    private static final String DEFAULT = "es";
     private static final ThreadLocal<String> CURRENT = ThreadLocal.withInitial(() -> DEFAULT);
 
     private LocaleHolder() {
@@ -50,7 +51,9 @@ public final class LocaleHolder {
         protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
                 throws ServletException, IOException {
             try {
-                LocaleHolder.set(req.getHeader("Accept-Language"));
+                // Preferimos el idioma SELECCIONADO en la web (header X-Lang); si no viene, el del navegador.
+                String selected = req.getHeader("X-Lang");
+                LocaleHolder.set(selected != null && !selected.isBlank() ? selected : req.getHeader("Accept-Language"));
                 chain.doFilter(req, res);
             } finally {
                 LocaleHolder.clear();

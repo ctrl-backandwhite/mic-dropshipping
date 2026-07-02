@@ -45,4 +45,13 @@ public class MeWalletDtoOut {
 
     @Schema(description = "Display currency symbol")
     private String displaySymbol;
+
+    @Schema(description = "Balance in the active currency, formatted by the backend (country convention)")
+    private String balanceFormatted;
+
+    @Schema(description = "Canonical USD balance, formatted by the backend (country convention)")
+    private String balanceUsdFormatted;
+
+    @Schema(description = "Held (USD) amount, formatted by the backend (country convention)")
+    private String holdUsdFormatted;
 }

@@ -153,3 +153,9 @@ databaseChangeLog:
       file: db/changelog/schema-v71-warehouses-keep-two.sql
   - include:
       file: db/changelog/schema-v72-order-idempotency.sql
+  - include:
+      file: db/changelog/schema-v73-region-tax.sql
+  - include:
+      file: db/changelog/schema-v74-region-seed-rest.sql
+  - include:
+      file: db/changelog/schema-v75-product-favorites.sql

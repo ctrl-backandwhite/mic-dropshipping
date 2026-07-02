@@ -19,6 +19,8 @@ public class AdminOrderLineDtoOut {
     String title;
     // Variante seleccionada (color / talla), p. ej. "Negro / M".
     String variantName;
+    // Miniatura del producto/variante (snapshot del pedido o imagen viva del catálogo).
+    String imageUrl;
     int qty;
     int unitPriceCents;
     int lineTotalCents;

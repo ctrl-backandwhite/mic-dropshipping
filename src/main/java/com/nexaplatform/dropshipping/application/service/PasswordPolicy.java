@@ -31,8 +31,8 @@ public class PasswordPolicy {
             "administrator", "changeme", "iloveyou", "abc12345", "monkey", "dragon", "trustno1");
 
     public void validate(String password) {
-        if (password == null || password.length() < 12) {
-            throw new BusinessException("Password must be at least 12 characters long");
+        if (password == null || password.length() < 8) {
+            throw new BusinessException("Password must be at least 8 characters long");
         }
         if (password.length() > 128) {
             throw new BusinessException("Password must be at most 128 characters long");

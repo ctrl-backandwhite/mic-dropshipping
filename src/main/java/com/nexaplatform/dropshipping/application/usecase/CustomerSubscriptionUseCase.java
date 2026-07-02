@@ -100,4 +100,7 @@ public interface CustomerSubscriptionUseCase extends BaseUseCase<CustomerSubscri
 
     /** Historial de facturas del usuario (de Stripe), las más recientes primero. */
     List<InvoiceView> listInvoices(UUID userId) throws Exception;
+
+    /** Renderiza en PDF (diseño propio, igual que productos) una factura de plan del usuario, por su número. */
+    byte[] renderInvoicePdf(UUID userId, String number, String locale) throws Exception;
 }

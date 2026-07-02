@@ -44,6 +44,10 @@ public class OrderItem {
     // Live catalog image (cdnUrl preferred over sourceUrl), resolved by the adapter.
     private String productImageUrl;
 
+    // Imagen de la VARIANTE seleccionada (color concreto); tiene prioridad para que la miniatura
+    // coincida con la variante pedida, no con la imagen genérica del producto.
+    private String variantImageUrl;
+
     // URL de la ficha original del producto (proveedor), para que el operador abra el detalle al procesar.
     private String productSourceUrl;
 

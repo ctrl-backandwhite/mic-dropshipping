@@ -5,12 +5,14 @@ import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.mapper.CustomerSubscriptionUpdateMapper;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.service.CountryTaxService;
+import com.nexaplatform.dropshipping.application.service.InvoiceService;
 import com.nexaplatform.dropshipping.application.usecase.SubscriptionPlanUseCase;
 import com.nexaplatform.dropshipping.domain.enums.SubscriptionStatus;
 import com.nexaplatform.dropshipping.domain.model.CustomerSubscription;
 import com.nexaplatform.dropshipping.domain.model.SubscribeResult;
 import com.nexaplatform.dropshipping.domain.model.SubscriptionPlan;
 import com.nexaplatform.dropshipping.domain.repository.CustomerSubscriptionRepository;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SubscriptionPlanEntity;
@@ -55,6 +57,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     private final UserRepository userRepository;
     private final CurrencyRateService currencyService;
     private final CountryTaxService countryTaxService;
+    private final InvoiceService invoiceService;
 
     @Override
     @Transactional
@@ -346,15 +349,35 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         UserEntity user = loadUser(userId);
         int taxBps = countryTaxService.rateBpsFor(user.getCountry());
         String taxRateId = stripeService.ensureTaxRate(user.getCountry(), taxBps);
-        // Precio del plan en CNY (moneda de 1688) → USD para el cobro en Stripe (igual que los productos).
+        // Precio del plan en CNY (moneda de 1688) → USD canónico (igual que los productos).
         String src = plan.getCurrency() != null && !plan.getCurrency().isBlank() ? plan.getCurrency() : "CNY";
         BigDecimal cny = BigDecimal.valueOf(cnyCents).movePointLeft(2);
-        long usdCents = currencyService.toUsd(cny, src).movePointRight(2).setScale(0, RoundingMode.HALF_UP)
-                .longValueExact();
-        if (usdCents <= 0) {
-            usdCents = 1; // Stripe exige importe > 0
+        BigDecimal usdAmount = currencyService.toUsd(cny, src);
+        // Moneda e importe de COBRO del plan: MISMA regla que checkout/recarga y COINCIDE con el precio
+        // MOSTRADO (BillingController redondea a entero en la divisa activa). EUR si la web está en EUR;
+        // USD si está en USD; cualquier otra divisa, su equivalente en USD.
+        String displayCode = CurrencyHolder.get();
+        String chargeCurrency;
+        long chargeCents;
+        if ("EUR".equalsIgnoreCase(displayCode)) {
+            chargeCurrency = "eur";
+            chargeCents = currencyService.usdTo(usdAmount, "EUR").setScale(0, RoundingMode.HALF_UP)
+                    .movePointRight(2).longValueExact();
+        } else if (displayCode == null || displayCode.isBlank() || "USD".equalsIgnoreCase(displayCode)) {
+            chargeCurrency = "usd";
+            chargeCents = usdAmount.setScale(0, RoundingMode.HALF_UP).movePointRight(2).longValueExact();
+        } else {
+            // Otra divisa: se muestra el precio en esa divisa (redondeado); se cobra su equivalente en USD.
+            chargeCurrency = "usd";
+            BigDecimal shown = currencyService.usdTo(usdAmount, displayCode).setScale(0, RoundingMode.HALF_UP);
+            chargeCents = currencyService.toUsd(shown, displayCode).movePointRight(2)
+                    .setScale(0, RoundingMode.HALF_UP).longValueExact();
         }
-        String priceId = stripeService.ensureRecurringPrice(planCode, billingPeriod, usdCents, "usd", plan.getName());
+        if (chargeCents <= 0) {
+            chargeCents = 1; // Stripe exige importe > 0
+        }
+        String priceId = stripeService.ensureRecurringPrice(planCode, billingPeriod, chargeCents, chargeCurrency,
+                plan.getName());
 
         // Fila local (INCOMPLETE) para pasar su id como metadata a Stripe; se actualiza con el resultado.
         CustomerSubscription local = customerSubscriptionRepository.save(CustomerSubscription.builder().userId(userId)
@@ -414,6 +437,27 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
                 .map(i -> new InvoiceView(i.number(), i.total(), i.currency(), i.status(), i.created(), i.pdfUrl(),
                         i.hostedUrl()))
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] renderInvoicePdf(UUID userId, String number, String locale) throws Exception {
+        requireStripe();
+        String customerId = loadUser(userId).getStripeCustomerId();
+        if (customerId == null || customerId.isBlank()) {
+            throw new NotFoundException("Invoice");
+        }
+        // Propiedad: solo facturas del propio Customer del usuario (se busca por número entre las suyas).
+        StripeService.InvoiceInfo inv = stripeService.listInvoices(customerId, 50).stream()
+                .filter(i -> number.equals(i.number()))
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("Invoice"));
+        boolean paid = "paid".equalsIgnoreCase(inv.status());
+        InvoiceService.PlanInvoiceData data = new InvoiceService.PlanInvoiceData(inv.number(), inv.currency(),
+                inv.subtotal(), inv.tax(), inv.total() != null ? inv.total() : 0L, inv.lineDescription(),
+                inv.periodStart(), inv.periodEnd(), inv.created(), inv.customerName(), inv.customerEmail(), paid,
+                inv.hostedUrl());
+        return invoiceService.renderPlanInvoicePdf(data, locale);
     }
 
     @Override

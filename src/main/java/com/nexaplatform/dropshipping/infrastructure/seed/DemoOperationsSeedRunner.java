@@ -5,8 +5,6 @@ import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.domain.enums.MarginType;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
-import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
-import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
 import com.nexaplatform.dropshipping.domain.enums.PriceRuleScope;
 import com.nexaplatform.dropshipping.domain.enums.SubscriptionStatus;
 import com.nexaplatform.dropshipping.domain.enums.UserRole;
@@ -44,7 +42,6 @@ public class DemoOperationsSeedRunner {
     private final UserRepository userRepository;
     private final UserAddressRepository addressRepository;
     private final AddressRepository orderAddressRepository;
-    private final WalletRepository walletRepository;
     private final ProductSpecificationRepository specRepository;
     private final ProductAttributeRepository attrRepository;
     private final ProductTagRepository tagRepository;
@@ -98,8 +95,8 @@ public class DemoOperationsSeedRunner {
 
         if (addressRepository.count() < 50)
             seedAddressesFor(demoCustomers, demoPartners);
-        if (paymentRepository.count() < 50)
-            seedWalletDeposits(demoCustomers, demoPartners);
+        // NOTA: NO se siembra saldo de wallet (recargas/depósitos de prueba). La wallet arranca en 0 y solo
+        // se acredita con recargas reales (Stripe/PayPal) o reembolsos. Ver decisión 2026-07-01.
         if (orderRepository.count() < 30)
             seedOrders(demoCustomers, 60);
         if (subscriptionRepository.count() < 5)
@@ -265,42 +262,6 @@ public class DemoOperationsSeedRunner {
         return created;
     }
 
-    /* ============================== wallet recharges ============================== */
-
-    private void seedWalletDeposits(List<UserEntity> customers, List<UserEntity> partners) {
-        int deposits = 0;
-        for (UserEntity u : customers) {
-            int dCount = 1 + rnd.nextInt(3);
-            for (int i = 0; i < dCount; i++) {
-                long cents = 5000L + (long) rnd.nextInt(95000); // $50 — $1000
-                createDeposit(u, cents, pickMethod());
-                deposits++;
-            }
-        }
-        for (UserEntity u : partners) {
-            int dCount = 2 + rnd.nextInt(4);
-            for (int i = 0; i < dCount; i++) {
-                long cents = 50000L + (long) rnd.nextInt(950000); // $500 — $10k
-                createDeposit(u, cents, pickMethod());
-                deposits++;
-            }
-        }
-        log.info("Seeded {} wallet deposits (payments + transactions)", deposits);
-    }
-
-    private void createDeposit(UserEntity u, long cents, PaymentMethod method) {
-        walletUseCase.getOrCreate(u.getId());
-        WalletEntity w = walletRepository.findByUser_Id(u.getId()).orElseThrow();
-        PaymentEntity p = PaymentEntity.builder().user(u).wallet(w).method(method).status(PaymentStatus.SUCCEEDED)
-                .amountUsdCents(cents).settlementCurrency("USD")
-                .settlementAmount(BigDecimal.valueOf(cents).divide(BigDecimal.valueOf(100)))
-                .provider(providerFor(method)).providerRef("seed_" + UUID.randomUUID().toString().substring(0, 12))
-                .idempotencyKey("seed-dep-" + UUID.randomUUID()).build();
-        paymentRepository.save(p);
-        walletUseCase.deposit(u.getId(), cents, p.getId(), "seed-tx-" + UUID.randomUUID(),
-                "Recarga de prueba (" + method.name() + ")");
-    }
-
     /* ============================== orders ============================== */
 
     private List<CustomerOrderEntity> seedOrders(List<UserEntity> customers, int count) {
@@ -393,16 +354,8 @@ public class DemoOperationsSeedRunner {
             // Apply status + matching timestamps
             applyStatusTimeline(o, status);
             CustomerOrderEntity saved = orderRepository.save(o);
-
-            // Charge wallet for orders that progressed past PAID (only if balance suffices)
-            if (status == OrderStatus.PAID || status == OrderStatus.FORWARDED || status == OrderStatus.SHIPPED
-                    || status == OrderStatus.DELIVERED) {
-                WalletEntity w = walletRepository.findByUser_Id(customer.getId()).orElse(null);
-                if (w != null && (w.getBalanceUsdCents() - w.getHoldUsdCents()) >= saved.getTotalCents()) {
-                    walletUseCase.charge(customer.getId(), saved.getTotalCents(), saved.getId(),
-                            "seed-charge-" + saved.getId(), "Order " + saved.getOrderNumber());
-                }
-            }
+            // NOTA: no se cobra la wallet en el seed (no hay saldo sembrado). Los pedidos demo se generan
+            // con su estado/timeline; la wallet real solo se mueve con recargas/pagos reales.
             created.add(saved);
         }
         log.info("Seeded {} orders", created.size());
@@ -1059,23 +1012,6 @@ public class DemoOperationsSeedRunner {
     }
 
     /* ============================== tiny helpers ============================== */
-
-    private PaymentMethod pickMethod() {
-        int r = rnd.nextInt(10);
-        if (r < 6)
-            return PaymentMethod.CARD;
-        if (r < 9)
-            return PaymentMethod.PAYPAL;
-        return PaymentMethod.USDT;
-    }
-
-    private String providerFor(PaymentMethod m) {
-        return switch (m) {
-            case CARD -> "stripe";
-            case PAYPAL -> "paypal";
-            case USDT -> "manual";
-        };
-    }
 
     private static String slugify(String s) {
         return s.toLowerCase().replaceAll("[áàä]", "a").replaceAll("[éèë]", "e").replaceAll("[íìï]", "i")

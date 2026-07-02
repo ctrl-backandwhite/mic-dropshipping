@@ -19,9 +19,17 @@ public interface PaymentUseCase extends BaseUseCase<Payment, Payment, UUID> {
 
     /* ============ Wallet recharge ============ */
 
-    /** Initiate a wallet recharge with the resolved gateway; returns the payment with provider metadata. */
-    Payment initiateRecharge(UUID userId, PaymentMethod method, long amountUsdCents, String currencyDisplay,
+    /**
+     * Initiate a wallet recharge with the resolved gateway; returns the payment with provider metadata.
+     * The canonical USD amount is derived in the backend from {@code amountDisplay}+{@code currencyDisplay}
+     * (single source of truth); {@code amountUsdCents} is only an optional fallback when no display amount
+     * is provided.
+     */
+    Payment initiateRecharge(UUID userId, PaymentMethod method, Long amountUsdCents, String currencyDisplay,
             BigDecimal amountDisplay, String idempotencyKey, String cryptoChain);
+
+    /** Rounded recharge presets in the active currency, already formatted by the backend. */
+    RechargeOptions rechargeOptions(String currency);
 
     /** Confirm a payment SUCCEEDED (idempotent): credit the wallet, or mark the order PAID. */
     Payment confirmSucceeded(UUID paymentId, Map<String, Object> providerPayload);
@@ -34,6 +42,12 @@ public interface PaymentUseCase extends BaseUseCase<Payment, Payment, UUID> {
 
     /** Dev-only mock-confirm of a wallet recharge; returns the (re)credited wallet balance in cents. */
     Payment confirmMockRecharge(UUID userId, UUID paymentId);
+
+    /**
+     * Confirm a wallet recharge on return from the provider (Stripe Checkout Session / PayPal): verifies
+     * the charge settled and credits the wallet (idempotent). Mirrors {@code confirmOrderPayment}.
+     */
+    Payment confirmRecharge(UUID userId, UUID paymentId);
 
     /** A single payment by id. */
     Payment find(UUID id);

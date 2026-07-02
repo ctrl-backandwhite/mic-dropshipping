@@ -7,6 +7,7 @@ import com.nexaplatform.dropshipping.application.service.AuditLogger;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
+import com.nexaplatform.dropshipping.application.usecase.RechargeOptions;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
@@ -71,11 +72,15 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
     @Override
     @Transactional
-    public Payment initiateRecharge(UUID userId, PaymentMethod method, long amountUsdCents, String currencyDisplay,
+    public Payment initiateRecharge(UUID userId, PaymentMethod method, Long amountUsdCents, String currencyDisplay,
             BigDecimal amountDisplay, String idempotencyKey, String cryptoChain) {
-        if (amountUsdCents < 100)
+        // El importe canónico en USD se calcula EN EL BACKUP a partir de lo que el usuario introdujo en su
+        // divisa activa (amountDisplay + currencyDisplay). Solo se usa amountUsdCents del cliente como
+        // fallback si no llega importe en divisa (compatibilidad hacia atrás).
+        long usdCents = resolveRechargeUsdCents(amountUsdCents, currencyDisplay, amountDisplay);
+        if (usdCents < 100)
             throw new BusinessException("Minimum recharge is $1.00 USD");
-        if (amountUsdCents > 1_000_000_00L)
+        if (usdCents > 1_000_000_00L)
             throw new BusinessException("Maximum recharge is $1,000,000 USD");
 
         // idempotency
@@ -91,9 +96,17 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             throw new NotFoundException("User");
         Wallet wallet = walletUseCase.getOrCreate(userId);
 
+        // Moneda de cobro de la recarga: MISMA lógica que el checkout. Con Stripe (CARD) se cobra en EUR si
+        // el usuario trabaja la web en EUR; en cualquier otra divisa se cobra el equivalente en USD. PayPal
+        // liquida en USD y USDT en USDT. El saldo del wallet SIEMPRE se acredita en USD canónico.
+        String displayCcy = currencyDisplay != null && !currencyDisplay.isBlank() ? currencyDisplay : "USD";
+        boolean stripeEur = method == PaymentMethod.CARD && "EUR".equalsIgnoreCase(displayCcy);
+        String settlementCcy = method == PaymentMethod.USDT ? "USDT" : (stripeEur ? "EUR" : "USD");
+        BigDecimal settlementAmount = rechargeSettlementAmount(settlementCcy, displayCcy, usdCents, amountDisplay);
+
         Payment p = Payment.builder().userId(userId).walletId(wallet.getId()).method(method)
                 .status(PaymentStatus.PENDING).amountDisplay(amountDisplay).currencyDisplay(currencyDisplay)
-                .amountUsdCents(amountUsdCents).settlementCurrency(method == PaymentMethod.USDT ? "USDT" : "USD")
+                .amountUsdCents(usdCents).settlementCurrency(settlementCcy).settlementAmount(settlementAmount)
                 .idempotencyKey(idempotencyKey).build();
         p = paymentRepository.save(p);
 
@@ -113,7 +126,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         p = paymentRepository.save(p);
 
         auditLogger.log("payment.initiate", p.getUserEmail(),
-                Map.of("paymentId", p.getId(), "method", method, "amount_usd_cents", amountUsdCents));
+                Map.of("paymentId", p.getId(), "method", method, "amount_usd_cents", usdCents));
 
         // attach client metadata to provider_response so the controller can return it
         Map<String, Object> meta = new HashMap<>(p.getProviderResponse());
@@ -129,6 +142,73 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         }
         p.setProviderResponse(meta);
         return paymentRepository.save(p);
+    }
+
+    /**
+     * Importe a cobrar de la recarga en la moneda de liquidación:
+     * <ul>
+     *   <li>USD → el USD canónico (amountUsdCents / 100).</li>
+     *   <li>Liquidación == divisa que ve el usuario (EUR) y viene su importe → se cobra EXACTAMENTE lo que
+     *       introdujo, sin reconvertir (evita desfases de céntimos).</li>
+     *   <li>En otro caso → se convierte el USD canónico a la moneda de liquidación con la tasa del día.</li>
+     * </ul>
+     */
+    private BigDecimal rechargeSettlementAmount(String settlementCcy, String displayCcy, long amountUsdCents,
+            BigDecimal amountDisplay) {
+        BigDecimal usd = BigDecimal.valueOf(amountUsdCents).movePointLeft(2);
+        if ("USD".equalsIgnoreCase(settlementCcy)) {
+            return usd;
+        }
+        if (amountDisplay != null && settlementCcy.equalsIgnoreCase(displayCcy)) {
+            return amountDisplay;
+        }
+        return currencyRateService.usdTo(usd, settlementCcy);
+    }
+
+    /** Importes base de recarga (en USD) sobre los que se generan los presets de cada divisa. */
+    private static final int[] RECHARGE_PRESETS_USD = { 10, 25, 50, 100, 250, 500 };
+
+    /**
+     * Importe canónico en USD (céntimos) de la recarga. Se calcula EN EL BACKEND a partir de lo que el
+     * usuario introdujo en su divisa activa; solo se cae al {@code amountUsdCents} del cliente si no llega
+     * importe en divisa (compatibilidad).
+     */
+    private long resolveRechargeUsdCents(Long amountUsdCents, String currencyDisplay, BigDecimal amountDisplay) {
+        if (amountDisplay != null && amountDisplay.signum() > 0) {
+            String ccy = currencyDisplay != null && !currencyDisplay.isBlank() ? currencyDisplay : "USD";
+            return currencyRateService.toUsd(amountDisplay, ccy).movePointRight(2)
+                    .setScale(0, java.math.RoundingMode.HALF_UP).longValueExact();
+        }
+        if (amountUsdCents != null && amountUsdCents > 0) {
+            return amountUsdCents;
+        }
+        throw new BusinessException("Recharge amount is required");
+    }
+
+    @Override
+    public RechargeOptions rechargeOptions(String currency) {
+        String ccy = currency != null && !currency.isBlank() ? currency.toUpperCase(java.util.Locale.ROOT) : "USD";
+        // EUR/USD conservan los importes estándar (10/25/50/…); el resto se convierten y se REDONDEAN a un
+        // número "bonito" (2 cifras significativas) para no mostrar cantidades como 41 234 o 353 217.
+        boolean standard = "USD".equals(ccy) || "EUR".equals(ccy);
+        List<RechargeOptions.Preset> presets = new java.util.ArrayList<>(RECHARGE_PRESETS_USD.length);
+        for (int base : RECHARGE_PRESETS_USD) {
+            BigDecimal amount = standard ? BigDecimal.valueOf(base)
+                    : niceRound(currencyRateService.usdTo(BigDecimal.valueOf(base), ccy));
+            presets.add(new RechargeOptions.Preset(amount, currencyRateService.formatDisplay(amount, ccy)));
+        }
+        return new RechargeOptions(ccy, currencyRateService.symbolOf(ccy), presets);
+    }
+
+    /** Redondea a 2 cifras significativas (41 234 → 41 000; 1 490 → 1 500; 306 → 310). */
+    private static BigDecimal niceRound(BigDecimal value) {
+        if (value == null || value.signum() <= 0) {
+            return BigDecimal.ZERO;
+        }
+        double d = value.doubleValue();
+        int magnitude = (int) Math.floor(Math.log10(d)); // p.ej. 41234 → 4
+        BigDecimal step = BigDecimal.TEN.pow(Math.max(0, magnitude - 1)); // 2 cifras significativas
+        return value.divide(step, 0, java.math.RoundingMode.HALF_UP).multiply(step);
     }
 
     @Override
@@ -298,6 +378,40 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Transactional
     public Payment confirmMockRecharge(UUID userId, UUID paymentId) {
         return confirmSucceeded(paymentId, Map.of("mock_confirm", true));
+    }
+
+    @Override
+    @Transactional
+    public Payment confirmRecharge(UUID userId, UUID paymentId) {
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException("Payment"));
+        if (p.getUserId() == null || !p.getUserId().equals(userId)) {
+            throw new NotFoundException("Payment"); // no filtramos pagos ajenos
+        }
+        if (p.getStatus() == PaymentStatus.SUCCEEDED) {
+            return p; // idempotente: el wallet ya se acreditó
+        }
+        // Proveedor deshabilitado / mock-mode: el providerRef lleva un prefijo sintético.
+        String ref = p.getProviderRef() != null ? p.getProviderRef() : "";
+        boolean mock = ref.startsWith("cs_mock_") || ref.startsWith("paypal_mock_") || ref.startsWith("pi_mock_");
+        if (mock) {
+            return confirmSucceeded(p.getId(), Map.of("mock_confirm", true));
+        }
+        if (p.getMethod() == PaymentMethod.PAYPAL) {
+            return capturePayPal(p.getId()); // el usuario ya aprobó en PayPal; capturamos del lado servidor
+        }
+        if (p.getMethod() == PaymentMethod.CARD) {
+            PaymentGateway gw = resolveGateway(PaymentMethod.CARD);
+            if (!(gw instanceof StripeGateway sg)) {
+                throw new BusinessException("Stripe gateway not configured");
+            }
+            Map<String, Object> resp = sg.retrieveCheckoutSession(p.getProviderRef());
+            String status = String.valueOf(resp.getOrDefault("status", ""));
+            if ("paid".equals(status) || Boolean.TRUE.equals(resp.get("mock"))) {
+                return confirmSucceeded(p.getId(), resp); // acredita el wallet (branch no-order)
+            }
+            throw new BusinessException("Payment not completed (status " + status + ")");
+        }
+        throw new BusinessException("Unsupported method for recharge confirm");
     }
 
     @Override

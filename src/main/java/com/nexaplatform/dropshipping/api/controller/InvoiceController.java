@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.application.service.InvoiceService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
+import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.User;
@@ -34,6 +35,7 @@ import java.util.UUID;
 public class InvoiceController {
 
     private final OrderUseCase orderUseCase;
+    private final CustomerSubscriptionUseCase customerSubscriptionUseCase;
     private final InvoiceService invoiceService;
     private final UserRepository userRepository;
     private final PaymentJpaRepositoryAdapter paymentRepository;
@@ -59,6 +61,18 @@ public class InvoiceController {
         return pdf(orderUseCase.getAdminOrderDetail(id, resolved), resolved);
     }
 
+    @Operation(summary = "Descargar la factura (PDF) de un plan del usuario autenticado (mismo diseño que pedidos)")
+    @GetMapping("/api/me/billing/invoices/{number}/invoice.pdf")
+    public ResponseEntity<byte[]> myPlanInvoice(Authentication auth, @PathVariable String number,
+            @RequestParam(required = false) String lang) throws Exception {
+        UUID userId = UUID.fromString(auth.getName());
+        String resolved = resolveLang(lang, userId);
+        byte[] bytes = customerSubscriptionUseCase.renderInvoicePdf(userId, number, resolved);
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"factura-" + number + ".pdf\"")
+                .body(bytes);
+    }
+
     /** Idioma efectivo: el pedido por query, o el del usuario, o español por defecto. */
     private String resolveLang(String lang, UUID userId) {
         if (lang != null && !lang.isBlank()) {
@@ -80,7 +94,12 @@ public class InvoiceController {
         String resolved = lang != null && !lang.isBlank() ? lang : "es";
         Order o = orderUseCase.getAdminOrderDetail(id, resolved);
         // Reutiliza el mismo email de factura (mismo diseño/idioma/moneda) enviándolo a la dirección de prueba.
-        orderEmailService.paymentConfirmed(o, email, resolved, "TEST", invoiceCurrency(o));
+        // Usamos el método de pago REAL del pedido (traducido en el email); si no hay pago registrado
+        // (p. ej. pago con wallet o pedido de prueba), mostramos CARD como método representativo.
+        String method = paymentRepository.findByOrderIdOrderByCreatedAtDesc(id).stream()
+                .map(p -> p.getMethod()).filter(m -> m != null).map(m -> m.name())
+                .findFirst().orElse("CARD");
+        orderEmailService.paymentConfirmed(o, email, resolved, method, invoiceCurrency(o));
         return ResponseEntity.ok(Map.of("sent", true, "to", email, "order", o.getOrderNumber()));
     }
 

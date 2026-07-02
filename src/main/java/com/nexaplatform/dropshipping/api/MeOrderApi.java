@@ -43,4 +43,11 @@ public interface MeOrderApi {
     @GetMapping("/{id}")
     ResponseEntity<MeOrderDetailDtoOut> detail(Authentication auth, @PathVariable UUID id,
             @RequestParam(defaultValue = "es") String lang);
+
+    @Operation(summary = "Cancel the authenticated user's order (only while PAID, not yet forwarded) and refund")
+    @ApiResponse(responseCode = "200", description = "Order cancelled and refunded")
+    @PostMapping("/{id}/cancel")
+    ResponseEntity<MeOrderDetailDtoOut> cancel(Authentication auth, @PathVariable UUID id,
+            @RequestParam(defaultValue = "es") String lang,
+            @RequestParam(defaultValue = "true") boolean refundToWallet);
 }
