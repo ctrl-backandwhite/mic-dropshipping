@@ -337,16 +337,23 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
             return new SubscribeOutcome(free.getId().toString(), "active");
         }
 
+        // El país del perfil es obligatorio para contratar un plan de pago (se usa para el IVA de la factura).
+        UserEntity user = loadUser(userId);
+        if (user.getCountry() == null || user.getCountry().isBlank()) {
+            throw new BusinessException("PLAN_COUNTRY_REQUIRED",
+                    "Selecciona un país en tu perfil antes de contratar un plan.");
+        }
+
         String customerId = resolveStripeCustomerId(userId);
         String defaultPm = stripeService.defaultOrFirstCardId(customerId);
         if (defaultPm == null || defaultPm.isBlank()) {
-            throw new BusinessException("Añade una tarjeta en tu perfil antes de contratar un plan.");
+            throw new BusinessException("PLAN_CARD_REQUIRED",
+                    "Añade una tarjeta en tu perfil antes de contratar un plan.");
         }
         // Fija la tarjeta como predeterminada del customer (idempotente) para futuras renovaciones/UI.
         stripeService.setDefaultPaymentMethod(customerId, defaultPm);
         // IVA por país del usuario (misma config que productos: CountryTaxService.rateBpsFor) → TaxRate de
         // Stripe; la contratación incluye el IVA y aparece desglosado en la factura de Stripe.
-        UserEntity user = loadUser(userId);
         int taxBps = countryTaxService.rateBpsFor(user.getCountry());
         String taxRateId = stripeService.ensureTaxRate(user.getCountry(), taxBps);
         // Precio del plan en CNY (moneda de 1688) → USD canónico (igual que los productos).

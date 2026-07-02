@@ -90,7 +90,21 @@ public enum ErrorCode {
     SHIPPING_ADDRESS_REQUIRED("Debes indicar una dirección de envío.", "A shipping address is required.",
             "É necessário indicar uma morada de envio.", "需要填写收货地址。", "Une adresse de livraison est requise.",
             "Eine Lieferadresse ist erforderlich.", "È necessario un indirizzo di spedizione.",
-            "Een verzendadres is verplicht.");
+            "Een verzendadres is verplicht."),
+    PLAN_COUNTRY_REQUIRED("Selecciona un país en tu perfil antes de contratar un plan.",
+            "Select a country in your profile before subscribing to a plan.",
+            "Selecione um país no seu perfil antes de contratar um plano.", "订阅套餐前,请先在个人资料中选择国家/地区。",
+            "Sélectionnez un pays dans votre profil avant de souscrire à un plan.",
+            "Wähle ein Land in deinem Profil, bevor du einen Plan abschließt.",
+            "Seleziona un paese nel tuo profilo prima di sottoscrivere un piano.",
+            "Selecteer een land in je profiel voordat je een abonnement afsluit."),
+    PLAN_CARD_REQUIRED("Añade una tarjeta en tu perfil antes de contratar un plan.",
+            "Add a card in your profile before subscribing to a plan.",
+            "Adicione um cartão no seu perfil antes de contratar um plano.", "订阅套餐前,请先在个人资料中添加银行卡。",
+            "Ajoutez une carte dans votre profil avant de souscrire à un plan.",
+            "Füge eine Karte in deinem Profil hinzu, bevor du einen Plan abschließt.",
+            "Aggiungi una carta nel tuo profilo prima di sottoscrivere un piano.",
+            "Voeg een kaart toe in je profiel voordat je een abonnement afsluit.");
 
     private final String es;
     private final String en;
