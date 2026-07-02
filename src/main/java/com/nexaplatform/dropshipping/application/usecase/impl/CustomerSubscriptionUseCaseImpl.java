@@ -340,13 +340,15 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         // El país del perfil es obligatorio para contratar un plan de pago (se usa para el IVA de la factura).
         UserEntity user = loadUser(userId);
         if (user.getCountry() == null || user.getCountry().isBlank()) {
-            throw new BusinessException("Selecciona un país en tu perfil antes de contratar un plan.");
+            throw new BusinessException("PLAN_COUNTRY_REQUIRED",
+                    "Selecciona un país en tu perfil antes de contratar un plan.");
         }
 
         String customerId = resolveStripeCustomerId(userId);
         String defaultPm = stripeService.defaultOrFirstCardId(customerId);
         if (defaultPm == null || defaultPm.isBlank()) {
-            throw new BusinessException("Añade una tarjeta en tu perfil antes de contratar un plan.");
+            throw new BusinessException("PLAN_CARD_REQUIRED",
+                    "Añade una tarjeta en tu perfil antes de contratar un plan.");
         }
         // Fija la tarjeta como predeterminada del customer (idempotente) para futuras renovaciones/UI.
         stripeService.setDefaultPaymentMethod(customerId, defaultPm);
