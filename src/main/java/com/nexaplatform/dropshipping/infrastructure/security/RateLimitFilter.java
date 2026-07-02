@@ -122,7 +122,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (path.equals("/api/auth/register"))
             return new RateRule("auth.register", Scope.IP, 5, Duration.ofHours(1));
         if (path.equals("/api/auth/password-reset/request"))
-            return new RateRule("auth.reset.req", Scope.IP, 3, Duration.ofHours(1));
+            return new RateRule("auth.reset.req", Scope.IP, 20, Duration.ofHours(1));
         if (path.equals("/api/auth/password-reset/confirm"))
             return new RateRule("auth.reset.conf", Scope.IP, 5, Duration.ofHours(1));
         if (path.equals("/login"))
@@ -215,7 +215,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 policy("auth.login.api", "/api/auth/login", "per IP", 10, "1m"),
                 policy("auth.refresh", "/api/auth/refresh", "per IP", 30, "1m"),
                 policy("auth.register", "/api/auth/register", "per IP", 5, "1h"),
-                policy("auth.reset.req", "/api/auth/password-reset/request", "per IP", 3, "1h"),
+                policy("auth.reset.req", "/api/auth/password-reset/request", "per IP", 20, "1h"),
                 policy("auth.reset.conf", "/api/auth/password-reset/confirm", "per IP", 5, "1h"));
     }
 
