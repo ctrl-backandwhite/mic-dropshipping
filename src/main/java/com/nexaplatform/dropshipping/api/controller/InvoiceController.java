@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.application.service.InvoiceService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
+import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.User;
@@ -34,6 +35,7 @@ import java.util.UUID;
 public class InvoiceController {
 
     private final OrderUseCase orderUseCase;
+    private final CustomerSubscriptionUseCase customerSubscriptionUseCase;
     private final InvoiceService invoiceService;
     private final UserRepository userRepository;
     private final PaymentJpaRepositoryAdapter paymentRepository;
@@ -57,6 +59,18 @@ public class InvoiceController {
         String resolved = resolveLang(lang, order.getUserId());
         // Re-resolvemos el detalle con el idioma definitivo para que los títulos coincidan con la plantilla.
         return pdf(orderUseCase.getAdminOrderDetail(id, resolved), resolved);
+    }
+
+    @Operation(summary = "Descargar la factura (PDF) de un plan del usuario autenticado (mismo diseño que pedidos)")
+    @GetMapping("/api/me/billing/invoices/{number}/invoice.pdf")
+    public ResponseEntity<byte[]> myPlanInvoice(Authentication auth, @PathVariable String number,
+            @RequestParam(required = false) String lang) throws Exception {
+        UUID userId = UUID.fromString(auth.getName());
+        String resolved = resolveLang(lang, userId);
+        byte[] bytes = customerSubscriptionUseCase.renderInvoicePdf(userId, number, resolved);
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"factura-" + number + ".pdf\"")
+                .body(bytes);
     }
 
     /** Idioma efectivo: el pedido por query, o el del usuario, o español por defecto. */

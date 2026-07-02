@@ -6,6 +6,7 @@ import com.stripe.exception.StripeException;
 import com.stripe.model.Customer;
 import com.stripe.model.Event;
 import com.stripe.model.Invoice;
+import com.stripe.model.InvoiceLineItem;
 import com.stripe.model.PaymentMethod;
 import com.stripe.model.Price;
 import com.stripe.model.SetupIntent;
@@ -277,18 +278,38 @@ public class StripeService {
         return new SubResult(s.getId(), s.getStatus(), s.getCurrentPeriodStart(), s.getCurrentPeriodEnd());
     }
 
-    /** Resumen de factura (datos no sensibles) para el historial del usuario. */
-    public record InvoiceInfo(String number, Long total, String currency, String status, Long created, String pdfUrl,
-            String hostedUrl) {
+    /** Resumen de factura (datos no sensibles) para el historial y el PDF propio del usuario. */
+    public record InvoiceInfo(String id, String number, Long total, String currency, String status, Long created,
+            String pdfUrl, String hostedUrl, long subtotal, long tax, Long periodStart, Long periodEnd,
+            String lineDescription, String customerName, String customerEmail) {
     }
 
     /** Facturas del Customer (las más recientes primero), para el historial de facturación del perfil. */
     public List<InvoiceInfo> listInvoices(String customerId, int limit) throws StripeException {
         return Invoice.list(InvoiceListParams.builder().setCustomer(customerId).setLimit((long) Math.max(1, limit))
                 .build()).getData().stream()
-                .map(inv -> new InvoiceInfo(inv.getNumber(), inv.getTotal(), inv.getCurrency(), inv.getStatus(),
-                        inv.getCreated(), inv.getInvoicePdf(), inv.getHostedInvoiceUrl()))
+                .map(this::toInvoiceInfo)
                 .toList();
+    }
+
+    /** Mapea una factura de Stripe al resumen propio, extrayendo subtotal, IVA, periodo y descripción de línea. */
+    private InvoiceInfo toInvoiceInfo(Invoice inv) {
+        String description = null;
+        Long periodStart = null;
+        Long periodEnd = null;
+        if (inv.getLines() != null && inv.getLines().getData() != null && !inv.getLines().getData().isEmpty()) {
+            InvoiceLineItem line = inv.getLines().getData().get(0);
+            description = line.getDescription();
+            if (line.getPeriod() != null) {
+                periodStart = line.getPeriod().getStart();
+                periodEnd = line.getPeriod().getEnd();
+            }
+        }
+        long subtotal = inv.getSubtotal() != null ? inv.getSubtotal() : 0L;
+        long tax = inv.getTax() != null ? inv.getTax() : 0L;
+        return new InvoiceInfo(inv.getId(), inv.getNumber(), inv.getTotal(), inv.getCurrency(), inv.getStatus(),
+                inv.getCreated(), inv.getInvoicePdf(), inv.getHostedInvoiceUrl(), subtotal, tax, periodStart, periodEnd,
+                description, inv.getCustomerName(), inv.getCustomerEmail());
     }
 
     // =================================================================================================
