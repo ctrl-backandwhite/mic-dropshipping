@@ -19,8 +19,11 @@ public class CorsConfig {
         cfg.setAllowedOrigins(Arrays.stream(allowed.split(",")).map(String::trim).toList());
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         // Lista explícita en vez de "*": solo las cabeceras que el SPA usa de verdad.
+        // X-Lang: el SPA la manda en CADA petición (locale seleccionada); si falta aquí, el preflight
+        // no la aprueba y el navegador bloquea TODAS las llamadas cross-origin con "CORS error"
+        // (catálogo/imágenes no cargan y /api/me falla → login no queda autenticado).
         cfg.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Accept-Language", "X-Currency",
-                "X-XSRF-TOKEN", "Idempotency-Key"));
+                "X-Lang", "X-XSRF-TOKEN", "Idempotency-Key"));
         cfg.setExposedHeaders(List.of("Location", "X-Total-Count", "X-RateLimit-Remaining"));
         cfg.setAllowCredentials(true);
         cfg.setMaxAge(3600L);
