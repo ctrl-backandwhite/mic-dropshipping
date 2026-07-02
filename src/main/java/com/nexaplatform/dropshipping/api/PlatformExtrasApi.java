@@ -14,6 +14,7 @@ import com.nexaplatform.dropshipping.api.dto.out.PodAiGenerateDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.PodBlankProductDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.PodDesignDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.ShippingRateDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.SupportReplyDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SupportTicketDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.UnreadCountDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.WarehouseDtoOut;
@@ -32,6 +33,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -112,6 +114,23 @@ public interface PlatformExtrasApi {
     @Operation(summary = "Resolve a support ticket (admin)")
     @PutMapping("/admin/tickets/{id}/resolve")
     SupportTicketDtoOut resolve(@PathVariable UUID id, @RequestBody SupportTicketResolveDtoIn req);
+
+    @Operation(summary = "List messages of a support ticket (owner)")
+    @GetMapping("/me/tickets/{id}/replies")
+    List<SupportReplyDtoOut> myTicketReplies(Authentication auth, @PathVariable UUID id);
+
+    @Operation(summary = "Post a message to a support ticket (owner)")
+    @PostMapping("/me/tickets/{id}/replies")
+    SupportReplyDtoOut myTicketReply(Authentication auth, @PathVariable UUID id, @RequestBody Map<String, String> body);
+
+    @Operation(summary = "List messages of any support ticket (admin)")
+    @GetMapping("/admin/tickets/{id}/replies")
+    List<SupportReplyDtoOut> adminTicketReplies(@PathVariable UUID id);
+
+    @Operation(summary = "Post a message to any support ticket (admin/support)")
+    @PostMapping("/admin/tickets/{id}/replies")
+    SupportReplyDtoOut adminTicketReply(Authentication auth, @PathVariable UUID id,
+            @RequestBody Map<String, String> body);
 
     @Operation(summary = "List the current user's notifications")
     @GetMapping("/me/notifications")

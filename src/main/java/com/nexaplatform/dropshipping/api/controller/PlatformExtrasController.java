@@ -15,7 +15,9 @@ import com.nexaplatform.dropshipping.api.dto.out.PodAiGenerateDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.PodBlankProductDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.PodDesignDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.ShippingRateDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.SupportReplyDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SupportTicketDtoOut;
+import com.nexaplatform.dropshipping.domain.model.SupportTicketReply;
 import com.nexaplatform.dropshipping.api.dto.out.UnreadCountDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.WarehouseDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.WarehouseStockDtoOut;
@@ -37,6 +39,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -160,6 +163,35 @@ public class PlatformExtrasController implements PlatformExtrasApi {
     @Override
     public SupportTicketDtoOut resolve(UUID id, SupportTicketResolveDtoIn req) {
         return ticketMapper.toDtoOut(ticketUseCase.resolve(id, req.getResolution()));
+    }
+
+    @Override
+    public List<SupportReplyDtoOut> myTicketReplies(Authentication auth, UUID id) {
+        return toReplyDtos(ticketUseCase.listReplies(id, UUID.fromString(auth.getName()), false));
+    }
+
+    @Override
+    public SupportReplyDtoOut myTicketReply(Authentication auth, UUID id, Map<String, String> body) {
+        return toReplyDto(ticketUseCase.addReply(id, UUID.fromString(auth.getName()), false, body.get("body")));
+    }
+
+    @Override
+    public List<SupportReplyDtoOut> adminTicketReplies(UUID id) {
+        return toReplyDtos(ticketUseCase.listReplies(id, null, true));
+    }
+
+    @Override
+    public SupportReplyDtoOut adminTicketReply(Authentication auth, UUID id, Map<String, String> body) {
+        return toReplyDto(ticketUseCase.addReply(id, UUID.fromString(auth.getName()), true, body.get("body")));
+    }
+
+    private static List<SupportReplyDtoOut> toReplyDtos(List<SupportTicketReply> replies) {
+        return replies.stream().map(PlatformExtrasController::toReplyDto).toList();
+    }
+
+    private static SupportReplyDtoOut toReplyDto(SupportTicketReply r) {
+        return SupportReplyDtoOut.builder().id(r.id()).fromSupport(r.fromSupport()).body(r.body())
+                .createdAt(r.createdAt()).build();
     }
 
     /* ============================== DROP-11 Notifications ============================== */
