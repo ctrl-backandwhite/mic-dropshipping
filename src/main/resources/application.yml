@@ -117,6 +117,14 @@ spring:
             client-secret: ${GOOGLE_CLIENT_SECRET:changeme-google-client-secret}
             scope: openid,email,profile
             redirect-uri: "${GOOGLE_REDIRECT_URI:http://localhost:3003/login/oauth2/code/google}"
+          github:
+            # GitHub es un proveedor común de Spring (no requiere bloque provider). Pedimos
+            # user:email porque el correo puede ser privado: el primario verificado se resuelve
+            # vía /user/emails en GithubOAuth2UserService.
+            client-id: ${GITHUB_CLIENT_ID:changeme-github-client-id}
+            client-secret: ${GITHUB_CLIENT_SECRET:changeme-github-client-secret}
+            scope: read:user,user:email
+            redirect-uri: "${GITHUB_REDIRECT_URI:http://localhost:3003/login/oauth2/code/github}"
 
 server:
   # Railway/Heroku inyectan PORT en runtime; si no, usamos SERVER_PORT y por último 18082 (local).

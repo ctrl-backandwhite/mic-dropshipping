@@ -27,7 +27,8 @@ public class DefaultSecurityConfig {
     @Bean
     @Order(3)
     public SecurityFilterChain defaultFilterChain(HttpSecurity http,
-            GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler) throws Exception {
+            GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler,
+            GithubOAuth2UserService githubOAuth2UserService) throws Exception {
         http.cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                         // CSRF off for: OAuth2 token, OAuth callbacks, actuator, public storefront API,
@@ -51,7 +52,11 @@ public class DefaultSecurityConfig {
                                 "/swagger-ui.html", "/swagger-ui/**", "/swagger-resources/**", "/webjars/**")
                         .hasAnyAuthority("ROLE_ADMIN", "ROLE_OPERATOR").anyRequest().authenticated())
                 .formLogin(form -> form.loginPage("/login").permitAll())
-                .oauth2Login(oauth -> oauth.loginPage("/login").successHandler(googleOAuth2SuccessHandler)
+                .oauth2Login(oauth -> oauth.loginPage("/login")
+                        // GitHub (no-OIDC) usa nuestro user service para resolver el email verificado;
+                        // Google (OIDC) sigue con el OidcUserService por defecto.
+                        .userInfoEndpoint(userInfo -> userInfo.userService(githubOAuth2UserService))
+                        .successHandler(googleOAuth2SuccessHandler)
                         .failureHandler((req, res, ex) -> res.sendRedirect(frontBaseUrl + "/login?error=google"))
                         .permitAll());
         return http.build();
