@@ -77,8 +77,11 @@ public class InvoiceService {
     private String issuerRegistry;
     @Value("${nexadrop.invoice.legal-note:}")
     private String legalNote;
-    // Base pública para el QR de verificación de la factura (apunta al endpoint público de verificación).
-    @Value("${nexadrop.invoice.verify-base-url:http://localhost:18082}")
+    // Base pública para el QR de verificación de la factura. Debe apuntar al entorno donde se emite
+    // (localhost / DES / PRE). Si no se fija una URL de verificación propia, usa la base del storefront
+    // (ya configurada por entorno: localhost:3003 / front-des / front-pre), cuyo nginx proxya /api al
+    // backend → el QR queda con la URL correcta del entorno sin necesidad de variables extra en Railway.
+    @Value("${nexadrop.invoice.verify-base-url:${nexadrop.storefront.base-url:http://localhost:3003}}")
     private String verifyBaseUrl;
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
