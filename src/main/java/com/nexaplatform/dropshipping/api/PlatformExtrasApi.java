@@ -132,9 +132,10 @@ public interface PlatformExtrasApi {
     SupportReplyDtoOut adminTicketReply(Authentication auth, @PathVariable UUID id,
             @RequestBody Map<String, String> body);
 
-    @Operation(summary = "List the current user's notifications")
+    @Operation(summary = "List the current user's notifications by folder (inbox/archived/trash), newest first")
     @GetMapping("/me/notifications")
-    List<PlatformNotificationDtoOut> notifications(Authentication auth);
+    List<PlatformNotificationDtoOut> notifications(Authentication auth,
+            @RequestParam(defaultValue = "inbox") String folder);
 
     @Operation(summary = "Get the current user's unread notification count")
     @GetMapping("/me/notifications/unread-count")
@@ -147,6 +148,30 @@ public interface PlatformExtrasApi {
     @Operation(summary = "Mark all of the current user's notifications as read")
     @PostMapping("/me/notifications/read-all")
     void markAllRead(Authentication auth);
+
+    @Operation(summary = "Archive a notification (moves it out of the inbox)")
+    @PostMapping("/me/notifications/{id}/archive")
+    void archiveNotification(@PathVariable UUID id);
+
+    @Operation(summary = "Move an archived notification back to the inbox")
+    @PostMapping("/me/notifications/{id}/unarchive")
+    void unarchiveNotification(@PathVariable UUID id);
+
+    @Operation(summary = "Move a notification to the trash (soft delete)")
+    @DeleteMapping("/me/notifications/{id}")
+    void trashNotification(@PathVariable UUID id);
+
+    @Operation(summary = "Restore a notification from the trash")
+    @PostMapping("/me/notifications/{id}/restore")
+    void restoreNotification(@PathVariable UUID id);
+
+    @Operation(summary = "Permanently delete a notification (only from the trash)")
+    @DeleteMapping("/me/notifications/{id}/permanent")
+    void deleteNotificationPermanently(@PathVariable UUID id);
+
+    @Operation(summary = "Set the management status of a notification (RECEIVED/IN_PROGRESS/WAITING/RESOLVED)")
+    @PostMapping("/me/notifications/{id}/status")
+    void setNotificationStatus(@PathVariable UUID id, @RequestParam String value);
 
     @Operation(summary = "List available warehouses")
     @GetMapping("/warehouses")

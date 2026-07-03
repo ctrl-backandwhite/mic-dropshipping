@@ -3,6 +3,8 @@ package com.nexaplatform.dropshipping.api.mapper;
 import com.nexaplatform.dropshipping.api.controller.StorefrontCatalogController.CategoryBreadcrumb;
 import com.nexaplatform.dropshipping.api.controller.StorefrontCatalogController.CategoryView;
 import com.nexaplatform.dropshipping.api.controller.StorefrontCatalogController.SupplierView;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.SupplierSearchService;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.SupplierSearchService.IndexedSupplier;
 import com.nexaplatform.dropshipping.api.controller.StorefrontCatalogController.VariantView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
@@ -38,6 +40,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -54,6 +57,7 @@ public class CatalogStorefrontReadService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final SupplierRepository supplierRepository;
+    private final SupplierSearchService supplierSearchService;
     private final ProductVariantRepository variantRepository;
     private final ProductMapper productMapper;
 
@@ -153,6 +157,16 @@ public class CatalogStorefrontReadService {
 
     @Transactional(readOnly = true)
     public List<SupplierView> suppliers() {
+        // Servido desde OpenSearch (índice `suppliers`, mantenido en sync por SupplierIndexer en cada
+        // alta/edición/baja); el productCount va embebido en el documento. Si el índice está vacío o
+        // OpenSearch no responde, cae a la BD (misma proyección) — igual que categorías/productos.
+        Optional<List<IndexedSupplier>> indexed = supplierSearchService.listFromIndex(null);
+        if (indexed.isPresent()) {
+            return indexed.get().stream()
+                    .map(s -> new SupplierView(s.id(), s.externalId(), s.name(), s.nameZh(), s.country(), s.city(),
+                            s.rating(), s.yearsActive(), s.verified(), s.trustPass(), s.productCount()))
+                    .toList();
+        }
         return supplierRepository.findAll().stream().sorted((a, b) -> a.getName().compareToIgnoreCase(b.getName()))
                 .map(this::supplierView).toList();
     }

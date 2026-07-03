@@ -251,6 +251,7 @@ nexadrop:
     tls-insecure: ${OPENSEARCH_TLS_INSECURE:false}
     products-index: products
     categories-index: categories
+    suppliers-index: suppliers
     operator-actions-index: operator-actions
 
   crawler:

@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.PlatformExtrasApi;
+import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.dto.in.OdmProjectCreateDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.OdmStatusUpdateDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.PodAiGenerateDtoIn;
@@ -197,8 +198,50 @@ public class PlatformExtrasController implements PlatformExtrasApi {
     /* ============================== DROP-11 Notifications ============================== */
 
     @Override
-    public List<PlatformNotificationDtoOut> notifications(Authentication auth) {
-        return notificationMapper.toDtoOutList(notificationUseCase.myNotifications(UUID.fromString(auth.getName())));
+    public List<PlatformNotificationDtoOut> notifications(Authentication auth, String folder) {
+        NotificationUseCase.Folder f;
+        try {
+            f = NotificationUseCase.Folder.valueOf(folder == null ? "INBOX" : folder.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            f = NotificationUseCase.Folder.INBOX;
+        }
+        return notificationMapper.toDtoOutList(notificationUseCase.myNotifications(UUID.fromString(auth.getName()), f));
+    }
+
+    @Override
+    public void archiveNotification(UUID id) {
+        notificationUseCase.archive(id);
+    }
+
+    @Override
+    public void unarchiveNotification(UUID id) {
+        notificationUseCase.unarchive(id);
+    }
+
+    @Override
+    public void trashNotification(UUID id) {
+        notificationUseCase.moveToTrash(id);
+    }
+
+    @Override
+    public void restoreNotification(UUID id) {
+        notificationUseCase.restore(id);
+    }
+
+    @Override
+    public void deleteNotificationPermanently(UUID id) {
+        notificationUseCase.deletePermanently(id);
+    }
+
+    @Override
+    public void setNotificationStatus(UUID id, String value) {
+        NotificationUseCase.Status s;
+        try {
+            s = NotificationUseCase.Status.valueOf(value == null ? "RECEIVED" : value.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException("Estado de notificación no válido: " + value);
+        }
+        notificationUseCase.setStatus(id, s);
     }
 
     @Override

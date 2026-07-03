@@ -34,7 +34,8 @@
       </td></tr>
 
       <!-- bloque de detalle (etiqueta/valor) opcional: resumen del pedido/reembolso -->
-      <tr th:if="${details}"><td style="padding:8px 32px 0;">
+      <!-- 24px de padding inferior: separa la caja de detalle del footer cuando no hay botón CTA debajo. -->
+      <tr th:if="${details}"><td style="padding:8px 32px 24px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
                style="border:1px solid #E7E3F3;border-radius:12px;background:#FAF9FE;">
           <tr th:each="row,it : ${details}">

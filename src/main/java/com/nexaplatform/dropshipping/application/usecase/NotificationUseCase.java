@@ -13,8 +13,32 @@ import java.util.UUID;
  */
 public interface NotificationUseCase {
 
-    /** Lists the user's notifications, newest first. */
-    List<PlatformNotification> myNotifications(UUID userId);
+    /** Carpeta del buzón. INBOX = ni archivada ni en papelera; ARCHIVED = archivada; TRASH = papelera. */
+    enum Folder { INBOX, ARCHIVED, TRASH }
+
+    /** Flujo de gestión tipo ticket: NEW → RECEIVED → IN_PROGRESS ⇄ WAITING → RESOLVED. */
+    enum Status { NEW, RECEIVED, IN_PROGRESS, WAITING, RESOLVED }
+
+    /** Cambia el estado de gestión de una notificación (transición manual del gestor). */
+    void setStatus(UUID id, Status status);
+
+    /** Lists the user's notifications in a folder, newest first. */
+    List<PlatformNotification> myNotifications(UUID userId, Folder folder);
+
+    /** Archiva (saca de Recibidos) una notificación. */
+    void archive(UUID id);
+
+    /** Devuelve una notificación archivada a Recibidos. */
+    void unarchive(UUID id);
+
+    /** Envía una notificación a la papelera (borrado lógico). */
+    void moveToTrash(UUID id);
+
+    /** Restaura una notificación desde la papelera. */
+    void restore(UUID id);
+
+    /** Elimina definitivamente una notificación (solo desde la papelera). */
+    void deletePermanently(UUID id);
 
     /** Returns the user's unread-notification count. */
     UnreadCount unreadCount(UUID userId);
