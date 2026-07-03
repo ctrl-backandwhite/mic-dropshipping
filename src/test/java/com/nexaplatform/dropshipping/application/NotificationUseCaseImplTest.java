@@ -39,10 +39,11 @@ class NotificationUseCaseImplTest {
     @Test
     void markRead_setsReadAtWhenUnread() {
         UUID id = UUID.randomUUID();
-        PlatformNotification model = PlatformNotification.builder().id(id).build();
+        UUID userId = UUID.randomUUID();
+        PlatformNotification model = PlatformNotification.builder().id(id).userId(userId).build();
         when(notificationRepository.getById(id)).thenReturn(model);
 
-        useCase.markRead(id);
+        useCase.markRead(id, userId);
 
         assertThat(model.getReadAt()).isNotNull();
         verify(notificationRepository).update(model);
@@ -51,10 +52,24 @@ class NotificationUseCaseImplTest {
     @Test
     void markRead_isNoOpWhenAlreadyRead() {
         UUID id = UUID.randomUUID();
-        PlatformNotification model = PlatformNotification.builder().id(id).readAt(Instant.now()).build();
+        UUID userId = UUID.randomUUID();
+        // Estado coherente (leída + RECEIVED): markRead no debe cambiar nada.
+        PlatformNotification model = PlatformNotification.builder().id(id).userId(userId)
+                .readAt(Instant.now()).status("RECEIVED").build();
         when(notificationRepository.getById(id)).thenReturn(model);
 
-        useCase.markRead(id);
+        useCase.markRead(id, userId);
+
+        verify(notificationRepository, never()).update(model);
+    }
+
+    @Test
+    void markRead_isNoOpForOtherUsersNotification() {
+        UUID id = UUID.randomUUID();
+        PlatformNotification model = PlatformNotification.builder().id(id).userId(UUID.randomUUID()).build();
+        when(notificationRepository.getById(id)).thenReturn(model);
+
+        useCase.markRead(id, UUID.randomUUID()); // otro usuario → no-op (IDOR)
 
         verify(notificationRepository, never()).update(model);
     }

@@ -13,12 +13,14 @@ import com.nexaplatform.dropshipping.api.mapper.AdminOrderMapper;
 import com.nexaplatform.dropshipping.api.mapper.PartnerOrderDtoMapper;
 import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
 import com.nexaplatform.dropshipping.domain.model.Order;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.OrderIndexer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -42,7 +44,7 @@ public class AdminOrderController implements AdminOrderApi {
     private final OrderUseCase orderUseCase;
     private final AdminOrderMapper adminOrderMapper;
     private final PartnerOrderDtoMapper partnerOrderDtoMapper;
-    private final com.nexaplatform.dropshipping.infrastructure.integration.search.OrderIndexer orderIndexer;
+    private final OrderIndexer orderIndexer;
 
     @Override
     public ResponseEntity<PageResponse<AdminOrderRowDtoOut>> list(String status, String q, int page, int size) {
@@ -53,7 +55,7 @@ public class AdminOrderController implements AdminOrderApi {
     }
 
     /** Reindexa todas las órdenes en OpenSearch (botón "Reindexar" del admin). */
-    @org.springframework.web.bind.annotation.PostMapping("/reindex")
+    @PostMapping("/reindex")
     public ResponseEntity<Map<String, Object>> reindex() {
         return ResponseEntity.ok(Map.of("indexed", orderIndexer.reindexAll()));
     }

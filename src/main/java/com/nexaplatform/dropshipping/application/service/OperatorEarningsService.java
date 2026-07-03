@@ -53,6 +53,18 @@ public class OperatorEarningsService {
         return history(SecurityUtils.currentSubject(), fromDate, toDate, page, size);
     }
 
+    /** Reindexa en OpenSearch todas las acciones de operador (botón admin "Reindexar"). Devuelve el nº indexado. */
+    @Transactional(readOnly = true)
+    public int reindexAll() {
+        int[] n = { 0 };
+        repository.findAll().forEach(a -> {
+            indexer.index(a);
+            n[0]++;
+        });
+        log.info("::> [REINDEX] reindexed {} operator actions", n[0]);
+        return n[0];
+    }
+
     /** Histórico paginado (admin): de un operador concreto o de todos. */
     @Transactional(readOnly = true)
     public OperatorActionPage history(String operatorSubject, String fromDate, String toDate, int page, int size) {

@@ -4,6 +4,7 @@ import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.AffiliateIndexer;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,7 @@ public class AffiliateProgramService {
     private final NotificationJpaRepositoryAdapter notificationRepo;
     private final NotificationsPublisher notificationsPublisher;
     private final WalletUseCase walletUseCase;
+    private final AffiliateIndexer affiliateIndexer;
 
     /* ============================ Notifications (DROP-653) ============================ */
 
@@ -218,6 +220,7 @@ public class AffiliateProgramService {
                     .code(affiliate.getCode() != null ? affiliate.getCode() : generateUniqueCode(user))
                     .label("Primary").active(true).build());
         }
+        affiliateIndexer.indexAffiliate(affiliate); // auto-sync del índice al crear/obtener el afiliado
         return affiliate;
     }
 
@@ -620,6 +623,8 @@ public class AffiliateProgramService {
                 () -> new NotFoundException("Affiliate not found"));
         a.setStatus(s);
         a.setActive("ACTIVE".equals(s));
-        return affiliateRepo.save(a);
+        AffiliateEntity saved = affiliateRepo.save(a);
+        affiliateIndexer.indexAffiliate(saved); // auto-sync del índice al cambiar el estado
+        return saved;
     }
 }

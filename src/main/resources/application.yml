@@ -253,6 +253,8 @@ nexadrop:
     categories-index: categories
     suppliers-index: suppliers
     orders-index: orders
+    wallets-index: wallets
+    affiliates-index: affiliates
     operator-actions-index: operator-actions
 
   crawler:
