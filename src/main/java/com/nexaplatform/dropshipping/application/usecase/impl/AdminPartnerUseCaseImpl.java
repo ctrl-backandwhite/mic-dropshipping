@@ -53,7 +53,12 @@ public class AdminPartnerUseCaseImpl implements AdminPartnerUseCase {
         if (name == null || name.isBlank()) {
             throw new BusinessException("El nombre del cliente es obligatorio");
         }
-        List<String> sc = (scopes == null || scopes.isEmpty()) ? List.of("catalog:read") : scopes;
+        // Scopes con PUNTO (catalog.read, orders.write, shop.sync) — así los exige el ResourceServer del
+        // partner API y así los documentan los docs. Normalizamos ':' → '.' por si llegan con el separador
+        // antiguo, para que el authority concedido (SCOPE_catalog.read) coincida con el requerido.
+        List<String> sc = (scopes == null || scopes.isEmpty())
+                ? List.of("catalog.read")
+                : scopes.stream().map(s -> s.replace(':', '.')).toList();
         String clientId = "partner_" + token(8);
         String clientSecret = "sk_" + token(24);
         RegisteredClient client = RegisteredClient.withId(UUID.randomUUID().toString()).clientId(clientId)
