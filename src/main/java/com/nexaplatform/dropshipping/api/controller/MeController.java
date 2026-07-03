@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.MeApi;
 import com.nexaplatform.dropshipping.api.dto.in.ChangePasswordDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.DeleteAccountConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.UpdateProfileDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.MeDtoOut;
 import com.nexaplatform.dropshipping.application.service.DeviceSessionService;
@@ -60,5 +61,17 @@ public class MeController implements MeApi {
     @Override
     public ResponseEntity<MeDtoOut> updateProfile(Authentication authentication, UpdateProfileDtoIn req) {
         return new ResponseEntity<>(authUseCase.updateProfile(authentication, req), HttpStatus.OK);
+    }
+
+    @Override
+    public ResponseEntity<Void> requestAccountDeletion(Authentication authentication) {
+        authUseCase.requestAccountDeletion(authentication);
+        return new ResponseEntity<>(HttpStatus.ACCEPTED);
+    }
+
+    @Override
+    public ResponseEntity<Void> confirmAccountDeletion(Authentication authentication, DeleteAccountConfirmDtoIn req) {
+        authUseCase.confirmAccountDeletion(authentication, req);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 }

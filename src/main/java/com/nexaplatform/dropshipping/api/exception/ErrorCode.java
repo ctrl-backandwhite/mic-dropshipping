@@ -112,7 +112,15 @@ public enum ErrorCode {
             "Vous avez déjà utilisé votre mois d'essai gratuit. Choisissez un plan payant.",
             "Du hast deinen kostenlosen Probemonat bereits genutzt. Bitte wähle einen kostenpflichtigen Plan.",
             "Hai già utilizzato il tuo mese di prova gratuito. Scegli un piano a pagamento.",
-            "Je hebt je gratis proefmaand al gebruikt. Kies een betaald abonnement.");
+            "Je hebt je gratis proefmaand al gebruikt. Kies een betaald abonnement."),
+    DELETION_CODE_INVALID("El código de eliminación no es válido o ha expirado.",
+            "The deletion code is invalid or has expired.",
+            "O código de eliminação é inválido ou expirou.",
+            "删除验证码无效或已过期。",
+            "Le code de suppression est invalide ou a expiré.",
+            "Der Löschcode ist ungültig oder abgelaufen.",
+            "Il codice di eliminazione non è valido o è scaduto.",
+            "De verwijdercode is ongeldig of verlopen.");
 
     private final String es;
     private final String en;

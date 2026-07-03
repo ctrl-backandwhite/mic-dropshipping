@@ -165,3 +165,5 @@ databaseChangeLog:
       file: db/changelog/schema-v77-outbound-email-reply-to.sql
   - include:
       file: db/changelog/schema-v78-user-free-trial-used.sql
+  - include:
+      file: db/changelog/schema-v79-user-soft-delete.sql

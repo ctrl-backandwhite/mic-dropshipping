@@ -58,6 +58,7 @@ public class UserUseCaseImpl implements UserUseCase {
     public static final int LOCKOUT_MINUTES = 15;
     public static final int ACTIVATION_TTL_HOURS = 24;
     public static final int RESET_TTL_MINUTES = 30;
+    public static final int DELETION_CODE_TTL_MINUTES = 30;
 
     private static final SecureRandom RNG = new SecureRandom();
 
@@ -240,6 +241,47 @@ public class UserUseCaseImpl implements UserUseCase {
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.update(user);
         auditLogger.log("auth.password_change", user.getEmail(), Map.of("userId", user.getId()));
+    }
+
+    /* ============ Account deletion (soft delete) ============ */
+
+    @Override
+    @Transactional
+    public void requestAccountDeletion(UUID userId) {
+        User user = findById(userId);
+        // Código numérico de 6 dígitos, fácil de teclear desde el email. SecureRandom (no Math.random).
+        String code = String.format("%06d", RNG.nextInt(1_000_000));
+        user.setDeletionCode(code);
+        user.setDeletionCodeExpiresAt(Instant.now().plus(DELETION_CODE_TTL_MINUTES, ChronoUnit.MINUTES));
+        userRepository.update(user);
+        emailQueueService.enqueue(user.getEmail(),
+                "Confirma la eliminación de tu cuenta — NX036 Dropshipping", "emails/account-deletion-code",
+                Map.of("title", "Confirma la eliminación de tu cuenta",
+                        "displayName", user.getDisplayName() != null ? user.getDisplayName() : "",
+                        "code", code,
+                        "footerNote", OrderEmailLabel.AUTO_NOTE.of(InvoiceLabel.lang(user.getLanguage()))));
+        auditLogger.log("auth.account.delete.request", user.getEmail(), Map.of("userId", userId));
+    }
+
+    @Override
+    @Transactional
+    public void confirmAccountDeletion(UUID userId, String code) {
+        User user = findById(userId);
+        String provided = code == null ? null : code.trim();
+        if (user.getDeletionCode() == null || provided == null || !user.getDeletionCode().equals(provided)
+                || user.getDeletionCodeExpiresAt() == null
+                || user.getDeletionCodeExpiresAt().isBefore(Instant.now())) {
+            throw new BusinessException("DELETION_CODE_INVALID",
+                    "El código de eliminación no es válido o ha expirado.");
+        }
+        // BORRADO LÓGICO: la fila NO se borra físicamente. Se marca deletedAt, se desactiva (el login ya
+        // bloquea active=false) y se limpia el código de confirmación.
+        user.setDeletedAt(Instant.now());
+        user.setActive(false);
+        user.setDeletionCode(null);
+        user.setDeletionCodeExpiresAt(null);
+        userRepository.update(user);
+        auditLogger.log("auth.account.delete", user.getEmail(), Map.of("userId", userId));
     }
 
     /* ============ Lookups ============ */
