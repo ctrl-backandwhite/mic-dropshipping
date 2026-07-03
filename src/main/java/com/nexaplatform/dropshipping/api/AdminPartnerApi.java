@@ -49,7 +49,8 @@ public interface AdminPartnerApi {
 
     @Operation(summary = "Create an OAuth2 partner client (returns the secret once)")
     @PostMapping("/oauth-clients")
-    ResponseEntity<AdminOAuthClientCreatedDtoOut> createOAuthClient(@Valid @RequestBody AdminOAuthClientCreateDtoIn req);
+    ResponseEntity<AdminOAuthClientCreatedDtoOut> createOAuthClient(@Valid @RequestBody AdminOAuthClientCreateDtoIn req,
+            org.springframework.security.core.Authentication authentication);
 
     @Operation(summary = "Rotate an OAuth2 client's secret (returns the new secret once)")
     @PostMapping("/oauth-clients/{clientId}/rotate-secret")

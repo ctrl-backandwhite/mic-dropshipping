@@ -49,7 +49,7 @@ public class AdminPartnerUseCaseImpl implements AdminPartnerUseCase {
 
     @Override
     @Transactional
-    public AdminOAuthClientCreated createOAuthClient(String name, List<String> scopes) {
+    public AdminOAuthClientCreated createOAuthClient(String name, List<String> scopes, UUID ownerUserId) {
         if (name == null || name.isBlank()) {
             throw new BusinessException("El nombre del cliente es obligatorio");
         }
@@ -61,13 +61,24 @@ public class AdminPartnerUseCaseImpl implements AdminPartnerUseCase {
                 : scopes.stream().map(s -> s.replace(':', '.')).toList();
         String clientId = "partner_" + token(8);
         String clientSecret = "sk_" + token(24);
+        String secretHash = passwordEncoder.encode(clientSecret);
         RegisteredClient client = RegisteredClient.withId(UUID.randomUUID().toString()).clientId(clientId)
-                .clientName(name).clientSecret(passwordEncoder.encode(clientSecret))
+                .clientName(name).clientSecret(secretHash)
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS).scopes(s -> s.addAll(sc))
                 .tokenSettings(TokenSettings.builder().accessTokenTimeToLive(Duration.ofHours(12)).build()).build();
         registeredClientRepository.save(client);
-        log.info("::> [PARTNER] OAuth client created clientId={}", clientId);
+
+        // Enlaza el cliente OAuth con una fila partner_app para que el partner pueda crear órdenes: el
+        // partner API resuelve el partner como UUID determinista nameUUIDFromBytes("partner:"+clientId)
+        // y lo usa como customer_order.partner_app_id (FK). Sin esta fila, POST /partner/orders daba 409
+        // (FK inexistente). El owner es el admin que crea el cliente.
+        UUID partnerAppId = UUID.nameUUIDFromBytes(("partner:" + clientId).getBytes());
+        jdbc.update("INSERT INTO partner_app (id, owner_user_id, name, description, client_id, client_secret_hash, "
+                + "scopes) VALUES (?, ?, ?, ?, ?, ?, ?)", partnerAppId, ownerUserId, name, "OAuth API client",
+                clientId, secretHash, String.join(",", sc));
+
+        log.info("::> [PARTNER] OAuth client + partner_app created clientId={} partnerAppId={}", clientId, partnerAppId);
         return AdminOAuthClientCreated.builder().id(client.getId()).clientId(clientId).clientSecret(clientSecret)
                 .name(name).build();
     }
