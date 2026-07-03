@@ -21,7 +21,7 @@ class PasswordPolicyTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"short1A!", // < 12 chars
+    @ValueSource(strings = {"Ab1!cde", // < 8 chars (política: mínimo 8)
             "alllowercase1!", // no upper
             "ALLUPPERCASE1!", // no lower
             "NoDigitsHere!!", // no digit

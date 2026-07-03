@@ -50,6 +50,14 @@ class CustomerSubscriptionUseCaseImplTest {
     SubscriptionPlanUseCase subscriptionPlanUseCase;
     @Mock
     StripeService stripeService;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository userRepository;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService currencyService;
+    @Mock
+    com.nexaplatform.dropshipping.application.service.CountryTaxService countryTaxService;
+    @Mock
+    com.nexaplatform.dropshipping.application.service.InvoiceService invoiceService;
 
     @InjectMocks
     CustomerSubscriptionUseCaseImpl useCase;
@@ -119,6 +127,8 @@ class CustomerSubscriptionUseCaseImplTest {
         var planEntity = SubscriptionPlanEntity.builder().code("pro").build();
         planEntity.setId(planId);
         when(planRepository.findByCode("pro")).thenReturn(Optional.of(planEntity));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(
+                org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity.class)));
         when(stripeService.isEnabled()).thenReturn(false);
         var saved = CustomerSubscription.builder().id(subId).planId(planId).userId(userId)
                 .status(SubscriptionStatus.ACTIVE).build();
@@ -135,7 +145,8 @@ class CustomerSubscriptionUseCaseImplTest {
     void createSubscription_buildsActiveModelWithResolvedPlanId() {
         UUID userId = UUID.randomUUID();
         UUID planId = UUID.randomUUID();
-        var planEntity = SubscriptionPlanEntity.builder().code("pro").build();
+        // Plan de PAGO (con precio) → no cae en la prueba gratis; honra el periodo YEARLY solicitado.
+        var planEntity = SubscriptionPlanEntity.builder().code("pro").priceMonthlyCents(999).priceYearlyCents(9999).build();
         planEntity.setId(planId);
         when(planRepository.findByCode("pro")).thenReturn(Optional.of(planEntity));
         when(customerSubscriptionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
