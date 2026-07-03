@@ -275,7 +275,12 @@ public class CatalogStorefrontReadService {
         return (min == null || price.compareTo(min) >= 0) && (max == null || price.compareTo(max) <= 0);
     }
 
+    // @Transactional imprescindible: este método delega en productListFull() por self-invocation (misma
+    // clase), y en la self-invocation NO se aplica el proxy @Transactional de productListFull. Sin la
+    // transacción aquí, el mapeo a summary (que carga translations LAZY) falla con LazyInitializationException
+    // "no session" (p.ej. GET /catalog/products/newest daba 500). Con esta anotación la sesión sigue abierta.
     @Cacheable(value = CACHE_PRODUCT_LIST, keyGenerator = "currencyAwareKeyGenerator")
+    @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productList(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String sort) {
         return productListFull(page, size, lang, q, categoryId, supplierId, minPrice, maxPrice, null, null, null, null,

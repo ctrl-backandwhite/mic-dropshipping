@@ -78,6 +78,23 @@ public class JwkKeyService {
                 .orElseThrow(() -> new IllegalStateException("No active JWK key available to sign tokens"));
     }
 
+    /**
+     * {@link JWKSource} de FIRMA: expone SOLO la clave activa (con su privada). Lo usa el encoder del
+     * Authorization Server, cuyo {@code JwtGenerator} no fija el {@code kid} en la cabecera; al haber una
+     * única clave candidata el selector no falla. La validación sigue usando {@link #asJwkSource()} (todas
+     * las claves), así que los tokens firmados con claves ya rotadas se siguen validando.
+     */
+    public JWKSource<SecurityContext> signingJwkSource() {
+        return (jwkSelector, context) -> jwkSelector.select(activeJwkSet());
+    }
+
+    /** JWKSet con únicamente la clave ACTIVA (incluye la privada), para firmar. */
+    public JWKSet activeJwkSet() {
+        JwkKeyEntity active = jwkKeyRepository.findAllByActiveTrueOrderByCreatedAtDesc().stream().findFirst()
+                .orElseThrow(() -> new IllegalStateException("No active JWK key available to sign tokens"));
+        return new JWKSet(toRsaKey(active));
+    }
+
     public JWKSet loadJwkSet() {
         List<RSAKey> keys = jwkKeyRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toRsaKey)
                 .collect(Collectors.toList());

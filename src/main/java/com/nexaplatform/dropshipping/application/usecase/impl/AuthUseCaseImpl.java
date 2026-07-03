@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.application.usecase.impl;
 
 import com.nexaplatform.dropshipping.api.dto.in.ActivateDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.ChangePasswordDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.DeleteAccountConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.LoginDtoIn;
 import com.nexaplatform.dropshipping.application.service.DeviceSessionService;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetConfirmDtoIn;
@@ -197,6 +198,24 @@ public class AuthUseCaseImpl implements AuthUseCase {
             user.setLanguage(req.getLanguage());
         User saved = userUseCase.updateUser(user);
         return mapper.toMeDtoOut(saved, authorities(authentication));
+    }
+
+    @Override
+    @Transactional
+    public void requestAccountDeletion(Authentication authentication) {
+        if (authentication == null) {
+            throw new BusinessException("Not authenticated");
+        }
+        userUseCase.requestAccountDeletion(UUID.fromString(authentication.getName()));
+    }
+
+    @Override
+    @Transactional
+    public void confirmAccountDeletion(Authentication authentication, DeleteAccountConfirmDtoIn req) {
+        if (authentication == null) {
+            throw new BusinessException("Not authenticated");
+        }
+        userUseCase.confirmAccountDeletion(UUID.fromString(authentication.getName()), req.getCode());
     }
 
     private static Set<String> authorities(Authentication authentication) {

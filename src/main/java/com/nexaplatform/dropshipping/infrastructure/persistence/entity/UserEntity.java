@@ -55,6 +55,18 @@ public class UserEntity extends BaseEntity {
     @Column(name = "activation_code_expires_at")
     private Instant activationCodeExpiresAt;
 
+    /** Marca de BORRADO LÓGICO (soft delete): cuando no es null la cuenta está dada de baja. */
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
+    /** Código temporal para confirmar la eliminación de la cuenta (enviado por email). */
+    @Column(name = "deletion_code", length = 64)
+    private String deletionCode;
+
+    /** Instante en que caduca {@link #deletionCode}. */
+    @Column(name = "deletion_code_expires_at")
+    private Instant deletionCodeExpiresAt;
+
     @Column(name = "failed_login_count")
     private int failedLoginCount;
 

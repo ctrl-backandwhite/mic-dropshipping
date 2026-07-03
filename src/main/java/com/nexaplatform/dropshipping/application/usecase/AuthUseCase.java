@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.application.usecase;
 
 import com.nexaplatform.dropshipping.api.dto.in.ActivateDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.ChangePasswordDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.DeleteAccountConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.LoginDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetRequestDtoIn;
@@ -51,4 +52,10 @@ public interface AuthUseCase {
 
     /** Update the authenticated user's profile and return the refreshed view. */
     MeDtoOut updateProfile(Authentication authentication, UpdateProfileDtoIn req);
+
+    /** Generate + email a confirmation code to soft-delete the authenticated user's own account. */
+    void requestAccountDeletion(Authentication authentication);
+
+    /** Confirm the emailed code and soft-delete the authenticated user's own account. */
+    void confirmAccountDeletion(Authentication authentication, DeleteAccountConfirmDtoIn req);
 }

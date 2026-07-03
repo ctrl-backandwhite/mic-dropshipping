@@ -27,8 +27,8 @@ public interface AdminPartnerUseCase {
     /** Lists shop connections. */
     List<AdminShopConnection> listShopConnections();
 
-    /** Creates an OAuth2 client (client_credentials); returns the plaintext secret once. */
-    AdminOAuthClientCreated createOAuthClient(String name, List<String> scopes);
+    /** Creates an OAuth2 client (client_credentials) + su partner_app (owner); returns the plaintext secret once. */
+    AdminOAuthClientCreated createOAuthClient(String name, List<String> scopes, java.util.UUID ownerUserId);
 
     /** Rotates an OAuth2 client's secret; returns the new plaintext secret once. */
     AdminOAuthClientCreated rotateSecret(String clientId);

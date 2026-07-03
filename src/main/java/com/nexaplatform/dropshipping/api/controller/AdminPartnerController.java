@@ -13,6 +13,9 @@ import com.nexaplatform.dropshipping.application.service.PartnerWebhookDispatche
 import com.nexaplatform.dropshipping.application.usecase.AdminPartnerUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -57,8 +60,11 @@ public class AdminPartnerController implements AdminPartnerApi {
     }
 
     @Override
-    public ResponseEntity<AdminOAuthClientCreatedDtoOut> createOAuthClient(AdminOAuthClientCreateDtoIn req) {
-        return new ResponseEntity<>(toCreatedDtoOut(useCase.createOAuthClient(req.getName(), req.getScopes())),
+    public ResponseEntity<AdminOAuthClientCreatedDtoOut> createOAuthClient(AdminOAuthClientCreateDtoIn req,
+            Authentication authentication) {
+        UUID ownerUserId = UUID.fromString(authentication.getName());
+        return new ResponseEntity<>(
+                toCreatedDtoOut(useCase.createOAuthClient(req.getName(), req.getScopes(), ownerUserId)),
                 HttpStatus.CREATED);
     }
 

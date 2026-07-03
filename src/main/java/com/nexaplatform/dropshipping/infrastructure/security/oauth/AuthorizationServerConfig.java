@@ -60,9 +60,16 @@ public class AuthorizationServerConfig {
      * Usa el mismo JWKSource RSA rotado por {@code JwkKeyService}, de modo que el mismo
      * {@link JwtDecoder} valida tanto los tokens de partner como los de usuario.
      */
+    /**
+     * Encoder que firma los JWT (tokens de USUARIO y del flujo OAuth2 client_credentials). Usa una
+     * {@link JWKSource} que expone SOLO la clave activa: así el {@code JwtGenerator} del Authorization
+     * Server —que no fija el {@code kid} en la cabecera— tiene una única clave candidata y no falla con
+     * "multiple keys for the signing algorithm [null]" cuando hay claves rotadas en el {@code JWKSource}
+     * de validación. Los tokens de usuario, que además fijan el {@code kid} activo, siguen funcionando.
+     */
     @Bean
-    public org.springframework.security.oauth2.jwt.JwtEncoder jwtEncoder(JWKSource<SecurityContext> jwkSource) {
-        return new org.springframework.security.oauth2.jwt.NimbusJwtEncoder(jwkSource);
+    public org.springframework.security.oauth2.jwt.JwtEncoder jwtEncoder(JwkKeyService jwkKeyService) {
+        return new org.springframework.security.oauth2.jwt.NimbusJwtEncoder(jwkKeyService.signingJwkSource());
     }
 
     @Bean

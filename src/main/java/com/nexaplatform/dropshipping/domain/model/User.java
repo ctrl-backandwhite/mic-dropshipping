@@ -39,6 +39,13 @@ public class User {
     private String activationCode;
     private Instant activationCodeExpiresAt;
 
+    /** Marca de BORRADO LÓGICO (soft delete): cuando no es null la cuenta se considera dada de baja. */
+    private Instant deletedAt;
+    /** Código temporal para confirmar la eliminación de la cuenta (enviado por email). */
+    private String deletionCode;
+    /** Instante en que caduca {@link #deletionCode}. */
+    private Instant deletionCodeExpiresAt;
+
     private int failedLoginCount;
     private Instant lockedUntil;
     private Instant lastLogin;

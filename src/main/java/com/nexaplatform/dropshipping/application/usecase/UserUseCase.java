@@ -42,6 +42,14 @@ public interface UserUseCase extends BaseUseCase<User, User, UUID> {
     /** Replace a user's password after the caller has verified the current one. */
     void changePassword(User user, String newPassword);
 
+    /* ============ Account deletion (soft delete) ============ */
+
+    /** Generate + email a confirmation code and store it (30 min TTL) for a self-service account deletion. */
+    void requestAccountDeletion(UUID userId);
+
+    /** Validate the emailed code and, if valid, soft-delete the account (marks deletedAt + deactivates). */
+    void confirmAccountDeletion(UUID userId, String code);
+
     /* ============ Lookups ============ */
 
     /** Find a user by email or throw {@code NotFoundException}. */
