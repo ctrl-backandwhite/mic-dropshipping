@@ -143,7 +143,7 @@ public interface PlatformExtrasApi {
 
     @Operation(summary = "Mark a notification as read")
     @PostMapping("/me/notifications/{id}/read")
-    void markRead(@PathVariable UUID id);
+    void markRead(Authentication auth, @PathVariable UUID id);
 
     @Operation(summary = "Mark all of the current user's notifications as read")
     @PostMapping("/me/notifications/read-all")
@@ -151,27 +151,27 @@ public interface PlatformExtrasApi {
 
     @Operation(summary = "Archive a notification (moves it out of the inbox)")
     @PostMapping("/me/notifications/{id}/archive")
-    void archiveNotification(@PathVariable UUID id);
+    void archiveNotification(Authentication auth, @PathVariable UUID id);
 
     @Operation(summary = "Move an archived notification back to the inbox")
     @PostMapping("/me/notifications/{id}/unarchive")
-    void unarchiveNotification(@PathVariable UUID id);
+    void unarchiveNotification(Authentication auth, @PathVariable UUID id);
 
     @Operation(summary = "Move a notification to the trash (soft delete)")
     @DeleteMapping("/me/notifications/{id}")
-    void trashNotification(@PathVariable UUID id);
+    void trashNotification(Authentication auth, @PathVariable UUID id);
 
     @Operation(summary = "Restore a notification from the trash")
     @PostMapping("/me/notifications/{id}/restore")
-    void restoreNotification(@PathVariable UUID id);
+    void restoreNotification(Authentication auth, @PathVariable UUID id);
 
     @Operation(summary = "Permanently delete a notification (only from the trash)")
     @DeleteMapping("/me/notifications/{id}/permanent")
-    void deleteNotificationPermanently(@PathVariable UUID id);
+    void deleteNotificationPermanently(Authentication auth, @PathVariable UUID id);
 
     @Operation(summary = "Set the management status of a notification (RECEIVED/IN_PROGRESS/WAITING/RESOLVED)")
     @PostMapping("/me/notifications/{id}/status")
-    void setNotificationStatus(@PathVariable UUID id, @RequestParam String value);
+    void setNotificationStatus(Authentication auth, @PathVariable UUID id, @RequestParam String value);
 
     @Operation(summary = "List available warehouses")
     @GetMapping("/warehouses")

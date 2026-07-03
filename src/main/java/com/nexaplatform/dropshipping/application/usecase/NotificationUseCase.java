@@ -20,31 +20,34 @@ public interface NotificationUseCase {
     enum Status { NEW, RECEIVED, IN_PROGRESS, WAITING, RESOLVED }
 
     /** Cambia el estado de gestión de una notificación (transición manual del gestor). */
-    void setStatus(UUID id, Status status);
+    void setStatus(UUID id, UUID ownerUserId, Status status);
 
     /** Lists the user's notifications in a folder, newest first. */
     List<PlatformNotification> myNotifications(UUID userId, Folder folder);
 
-    /** Archiva (saca de Recibidos) una notificación. */
-    void archive(UUID id);
+    // Las mutaciones sobre una notificación concreta llevan el {@code ownerUserId} del usuario autenticado:
+    // la implementación rechaza (404) si la notificación no le pertenece — evita IDOR entre buzones.
+
+    /** Archiva (saca de Recibidos) una notificación del usuario. */
+    void archive(UUID id, UUID ownerUserId);
 
     /** Devuelve una notificación archivada a Recibidos. */
-    void unarchive(UUID id);
+    void unarchive(UUID id, UUID ownerUserId);
 
     /** Envía una notificación a la papelera (borrado lógico). */
-    void moveToTrash(UUID id);
+    void moveToTrash(UUID id, UUID ownerUserId);
 
     /** Restaura una notificación desde la papelera. */
-    void restore(UUID id);
+    void restore(UUID id, UUID ownerUserId);
 
     /** Elimina definitivamente una notificación (solo desde la papelera). */
-    void deletePermanently(UUID id);
+    void deletePermanently(UUID id, UUID ownerUserId);
 
     /** Returns the user's unread-notification count. */
     UnreadCount unreadCount(UUID userId);
 
     /** Marks a single notification as read (no-op if already read or missing). */
-    void markRead(UUID id);
+    void markRead(UUID id, UUID ownerUserId);
 
     /** Marks all of the user's notifications as read. */
     void markAllRead(UUID userId);

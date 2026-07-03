@@ -209,39 +209,39 @@ public class PlatformExtrasController implements PlatformExtrasApi {
     }
 
     @Override
-    public void archiveNotification(UUID id) {
-        notificationUseCase.archive(id);
+    public void archiveNotification(Authentication auth, UUID id) {
+        notificationUseCase.archive(id, UUID.fromString(auth.getName()));
     }
 
     @Override
-    public void unarchiveNotification(UUID id) {
-        notificationUseCase.unarchive(id);
+    public void unarchiveNotification(Authentication auth, UUID id) {
+        notificationUseCase.unarchive(id, UUID.fromString(auth.getName()));
     }
 
     @Override
-    public void trashNotification(UUID id) {
-        notificationUseCase.moveToTrash(id);
+    public void trashNotification(Authentication auth, UUID id) {
+        notificationUseCase.moveToTrash(id, UUID.fromString(auth.getName()));
     }
 
     @Override
-    public void restoreNotification(UUID id) {
-        notificationUseCase.restore(id);
+    public void restoreNotification(Authentication auth, UUID id) {
+        notificationUseCase.restore(id, UUID.fromString(auth.getName()));
     }
 
     @Override
-    public void deleteNotificationPermanently(UUID id) {
-        notificationUseCase.deletePermanently(id);
+    public void deleteNotificationPermanently(Authentication auth, UUID id) {
+        notificationUseCase.deletePermanently(id, UUID.fromString(auth.getName()));
     }
 
     @Override
-    public void setNotificationStatus(UUID id, String value) {
+    public void setNotificationStatus(Authentication auth, UUID id, String value) {
         NotificationUseCase.Status s;
         try {
             s = NotificationUseCase.Status.valueOf(value == null ? "RECEIVED" : value.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
             throw new BusinessException("Estado de notificación no válido: " + value);
         }
-        notificationUseCase.setStatus(id, s);
+        notificationUseCase.setStatus(id, UUID.fromString(auth.getName()), s);
     }
 
     @Override
@@ -250,8 +250,8 @@ public class PlatformExtrasController implements PlatformExtrasApi {
     }
 
     @Override
-    public void markRead(UUID id) {
-        notificationUseCase.markRead(id);
+    public void markRead(Authentication auth, UUID id) {
+        notificationUseCase.markRead(id, UUID.fromString(auth.getName()));
     }
 
     @Override

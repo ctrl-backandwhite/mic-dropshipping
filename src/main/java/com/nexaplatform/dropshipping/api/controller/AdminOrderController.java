@@ -42,16 +42,20 @@ public class AdminOrderController implements AdminOrderApi {
     private final OrderUseCase orderUseCase;
     private final AdminOrderMapper adminOrderMapper;
     private final PartnerOrderDtoMapper partnerOrderDtoMapper;
+    private final com.nexaplatform.dropshipping.infrastructure.integration.search.OrderIndexer orderIndexer;
 
     @Override
     public ResponseEntity<PageResponse<AdminOrderRowDtoOut>> list(String status, String q, int page, int size) {
-        List<Order> all = orderUseCase.listAdminOrders(status, q);
-        int total = all.size();
-        int from = Math.min(page * size, total);
-        int to = Math.min(from + size, total);
-        List<AdminOrderRowDtoOut> items = adminOrderMapper.toRows(all.subList(from, to));
-        var pageable = PageRequest.of(page, Math.max(1, size));
-        return ResponseEntity.ok(PageResponse.from(new PageImpl<>(items, pageable, total)));
+        OrderUseCase.OrderPage p = orderUseCase.pageAdminOrders(status, q, page, size);
+        List<AdminOrderRowDtoOut> items = adminOrderMapper.toRows(p.items());
+        var pageable = PageRequest.of(Math.max(0, p.page()), Math.max(1, p.size()));
+        return ResponseEntity.ok(PageResponse.from(new PageImpl<>(items, pageable, p.total())));
+    }
+
+    /** Reindexa todas las órdenes en OpenSearch (botón "Reindexar" del admin). */
+    @org.springframework.web.bind.annotation.PostMapping("/reindex")
+    public ResponseEntity<Map<String, Object>> reindex() {
+        return ResponseEntity.ok(Map.of("indexed", orderIndexer.reindexAll()));
     }
 
     @Override

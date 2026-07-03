@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
+import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.usecase.NotificationUseCase;
 import com.nexaplatform.dropshipping.domain.model.PlatformNotification;
 import com.nexaplatform.dropshipping.domain.model.UnreadCount;
@@ -49,8 +50,8 @@ public class NotificationUseCaseImpl implements NotificationUseCase {
 
     @Override
     @Transactional
-    public void archive(UUID id) {
-        PlatformNotification n = getOrThrow(id);
+    public void archive(UUID id, UUID ownerUserId) {
+        PlatformNotification n = getOwned(id, ownerUserId);
         n.setArchivedAt(Instant.now());
         n.setDeletedAt(null);
         notificationRepository.update(n);
@@ -58,38 +59,44 @@ public class NotificationUseCaseImpl implements NotificationUseCase {
 
     @Override
     @Transactional
-    public void unarchive(UUID id) {
-        PlatformNotification n = getOrThrow(id);
+    public void unarchive(UUID id, UUID ownerUserId) {
+        PlatformNotification n = getOwned(id, ownerUserId);
         n.setArchivedAt(null);
         notificationRepository.update(n);
     }
 
     @Override
     @Transactional
-    public void moveToTrash(UUID id) {
-        PlatformNotification n = getOrThrow(id);
+    public void moveToTrash(UUID id, UUID ownerUserId) {
+        PlatformNotification n = getOwned(id, ownerUserId);
         n.setDeletedAt(Instant.now());
         notificationRepository.update(n);
     }
 
     @Override
     @Transactional
-    public void restore(UUID id) {
-        PlatformNotification n = getOrThrow(id);
+    public void restore(UUID id, UUID ownerUserId) {
+        PlatformNotification n = getOwned(id, ownerUserId);
         n.setDeletedAt(null);
         notificationRepository.update(n);
     }
 
     @Override
     @Transactional
-    public void deletePermanently(UUID id) {
+    public void deletePermanently(UUID id, UUID ownerUserId) {
+        getOwned(id, ownerUserId); // valida propiedad antes de borrar físicamente
         notificationRepository.delete(id);
     }
 
-    private PlatformNotification getOrThrow(UUID id) {
+    /**
+     * Carga una notificación verificando que pertenece a {@code ownerUserId}. Si no existe o es de otro
+     * usuario, lanza NotFound (mismo error para ambos casos → no revela la existencia de notificaciones
+     * ajenas). Blinda las mutaciones por id contra IDOR entre buzones.
+     */
+    private PlatformNotification getOwned(UUID id, UUID ownerUserId) {
         PlatformNotification n = notificationRepository.getById(id);
-        if (Objects.isNull(n)) {
-            throw new BusinessException("Notificación no encontrada");
+        if (Objects.isNull(n) || ownerUserId == null || !ownerUserId.equals(n.getUserId())) {
+            throw new NotFoundException("Notificación no encontrada");
         }
         return n;
     }
@@ -102,10 +109,10 @@ public class NotificationUseCaseImpl implements NotificationUseCase {
 
     @Override
     @Transactional
-    public void markRead(UUID id) {
+    public void markRead(UUID id, UUID ownerUserId) {
         PlatformNotification model = notificationRepository.getById(id);
-        if (Objects.isNull(model)) {
-            return;
+        if (Objects.isNull(model) || ownerUserId == null || !ownerUserId.equals(model.getUserId())) {
+            return; // inexistente o de otro usuario → no-op (sin filtrar existencia)
         }
         boolean changed = false;
         if (model.getReadAt() == null) {
@@ -124,8 +131,8 @@ public class NotificationUseCaseImpl implements NotificationUseCase {
 
     @Override
     @Transactional
-    public void setStatus(UUID id, Status status) {
-        PlatformNotification model = getOrThrow(id);
+    public void setStatus(UUID id, UUID ownerUserId, Status status) {
+        PlatformNotification model = getOwned(id, ownerUserId);
         Status target = status == null ? Status.RECEIVED : status;
         model.setStatus(target.name());
         // Al mover a RECEIVED o más allá, la damos por leída (coherencia con el acuse de recibo).
