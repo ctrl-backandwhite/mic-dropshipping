@@ -35,6 +35,9 @@ public class OutboundEmailEntity {
     @Column(name = "to_address", nullable = false, length = 254)
     private String toAddress;
 
+    @Column(name = "reply_to", length = 254)
+    private String replyTo;
+
     @Column(nullable = false, length = 300)
     private String subject;
 

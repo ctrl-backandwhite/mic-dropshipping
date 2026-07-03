@@ -23,6 +23,6 @@ public class PasswordResetConfirmDtoIn {
 
     @NotBlank
     @Size(min = 8, max = 128)
-    @Schema(description = "New account password (min 12 chars)")
+    @Schema(description = "New account password (min 8 chars)")
     private String newPassword;
 }

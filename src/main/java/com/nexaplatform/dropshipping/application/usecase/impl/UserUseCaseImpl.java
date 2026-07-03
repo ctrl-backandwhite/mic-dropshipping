@@ -98,6 +98,9 @@ public class UserUseCaseImpl implements UserUseCase {
         user.setActivationCode(activationCode);
         user.setActivationCodeExpiresAt(Instant.now().plus(ACTIVATION_TTL_HOURS, ChronoUnit.HOURS));
         user.setLanguage(user.getLanguage() != null ? user.getLanguage() : "es");
+        // El nombre se captura en partes (nombre + primer/segundo apellido). Componemos el displayName
+        // (nombre completo) cuando no venga informado, para que nav/emails/perfil muestren el nombre real.
+        user.setDisplayName(resolveDisplayName(user));
 
         User saved = userRepository.save(user);
 
@@ -112,6 +115,26 @@ public class UserUseCaseImpl implements UserUseCase {
 
         auditLogger.log("auth.register", email, Map.of("userId", saved.getId(), "role", saved.getRole().name()));
         return saved;
+    }
+
+    /**
+     * Resuelve el nombre a mostrar (nombre completo). Si el usuario ya trae un displayName informado lo
+     * respeta; si no, lo compone concatenando nombre + primer apellido + segundo apellido (sin vacíos).
+     */
+    private String resolveDisplayName(User user) {
+        if (user.getDisplayName() != null && !user.getDisplayName().isBlank()) {
+            return user.getDisplayName().trim();
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String part : new String[]{user.getFirstName(), user.getLastName1(), user.getLastName2()}) {
+            if (part != null && !part.isBlank()) {
+                if (sb.length() > 0) {
+                    sb.append(' ');
+                }
+                sb.append(part.trim());
+            }
+        }
+        return sb.length() == 0 ? null : sb.toString();
     }
 
     @Override

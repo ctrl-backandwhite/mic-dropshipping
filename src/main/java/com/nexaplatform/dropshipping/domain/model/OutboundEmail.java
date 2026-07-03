@@ -23,6 +23,7 @@ public class OutboundEmail {
 
     private UUID id;
     private String toAddress;
+    private String replyTo;
     private String subject;
     private String bodyHtml;
     private String template;

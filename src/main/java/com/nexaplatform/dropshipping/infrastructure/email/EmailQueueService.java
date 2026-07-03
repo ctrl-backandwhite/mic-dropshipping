@@ -38,11 +38,17 @@ public class EmailQueueService {
 
     @Transactional
     public OutboundEmailEntity enqueue(String to, String subject, String template, Map<String, Object> vars) {
+        return enqueue(to, null, subject, template, vars);
+    }
+
+    @Transactional
+    public OutboundEmailEntity enqueue(String to, String replyTo, String subject, String template,
+            Map<String, Object> vars) {
         Context ctx = new Context();
         vars.forEach(ctx::setVariable);
         String html = templateEngine.process(template, ctx);
-        OutboundEmailEntity email = OutboundEmailEntity.builder().toAddress(to).subject(subject).bodyHtml(html)
-                .template(template).status("PENDING").build();
+        OutboundEmailEntity email = OutboundEmailEntity.builder().toAddress(to).replyTo(replyTo).subject(subject)
+                .bodyHtml(html).template(template).status("PENDING").build();
         return repo.save(email);
     }
 
@@ -63,7 +69,8 @@ public class EmailQueueService {
                 helper.setText(html, true);
                 // Named From + Reply-To greatly reduces Gmail spam classification.
                 helper.setFrom(new jakarta.mail.internet.InternetAddress(fromAddress, fromName, "UTF-8"));
-                helper.setReplyTo(fromAddress);
+                String replyTo = email.getReplyTo();
+                helper.setReplyTo(replyTo != null && !replyTo.isBlank() ? replyTo : fromAddress);
                 for (String cid : cids) {
                     ClassPathResource icon = new ClassPathResource("email-icons/" + cid + ".png");
                     if (icon.exists()) {

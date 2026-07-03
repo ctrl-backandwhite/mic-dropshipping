@@ -41,6 +41,14 @@ public class UserEntity extends BaseEntity {
     @Builder.Default
     private boolean marketingOptOut = false;
 
+    /**
+     * Whether this account has already consumed its one-time FREE trial (1-month free plan). Set to true
+     * the first time the user subscribes to the free plan; a second free subscription is then rejected.
+     */
+    @Column(name = "free_trial_used", nullable = false)
+    @Builder.Default
+    private boolean freeTrialUsed = false;
+
     @Column(name = "activation_code", length = 64)
     private String activationCode;
 
@@ -58,6 +66,15 @@ public class UserEntity extends BaseEntity {
 
     @Column(name = "display_name", length = 120)
     private String displayName;
+
+    @Column(name = "first_name", length = 80)
+    private String firstName;
+
+    @Column(name = "last_name_1", length = 80)
+    private String lastName1;
+
+    @Column(name = "last_name_2", length = 80)
+    private String lastName2;
 
     @Column(name = "company_name", length = 180)
     private String companyName;

@@ -27,12 +27,24 @@ public class RegisterDtoIn {
 
     @NotBlank
     @Size(min = 8, max = 128)
-    @Schema(description = "Account password (min 12 chars)")
+    @Schema(description = "Account password (min 8 chars, must include upper/lower/digit/symbol)")
     private String password;
 
     @Size(max = 120)
-    @Schema(description = "Display name")
+    @Schema(description = "Display name (nombre completo; se compone de firstName + apellidos si no se envía)")
     private String displayName;
+
+    @Size(max = 80)
+    @Schema(description = "First name / nombre de pila")
+    private String firstName;
+
+    @Size(max = 80)
+    @Schema(description = "First surname / primer apellido")
+    private String lastName1;
+
+    @Size(max = 80)
+    @Schema(description = "Second surname / segundo apellido (optional)")
+    private String lastName2;
 
     @Size(max = 180)
     @Schema(description = "Company name")
@@ -42,7 +54,7 @@ public class RegisterDtoIn {
     @Schema(description = "Country")
     private String country;
 
-    @Pattern(regexp = "^(es|en|pt)$", message = "language must be es|en|pt")
+    @Pattern(regexp = "^(es|en|pt|zh|fr|de|it|nl)$", message = "language must be one of es|en|pt|zh|fr|de|it|nl")
     @Schema(description = "Preferred language", example = "es")
     private String language;
 }
