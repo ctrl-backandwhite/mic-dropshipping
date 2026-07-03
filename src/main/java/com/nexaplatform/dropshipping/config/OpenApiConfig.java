@@ -36,7 +36,7 @@ import java.util.Map;
  *
  * Three groups are exposed at distinct endpoints under /v3/api-docs/{group}:
  *   - partner   → /api/v1/partner/**  (OAuth2 client_credentials, JWT bearer, scopes)
- *   - storefront→ /api/v1/storefront/** (public, anonymous)
+ *   - storefront→ /api/v1/rate-limits,/api/v1/invoices (public, anonymous)
  *   - admin     → /api/admin/** + /api/me/** (session cookie, ADMIN/OPERATOR)
  *
  * Vendor extensions added:
@@ -141,7 +141,7 @@ public class OpenApiConfig {
     /** Public storefront group: no authentication. */
     @Bean
     public GroupedOpenApi storefrontApi() {
-        return GroupedOpenApi.builder().group("storefront").pathsToMatch("/api/v1/storefront/**")
+        return GroupedOpenApi.builder().group("storefront").pathsToMatch("/api/v1/rate-limits/**", "/api/v1/invoices/**")
                 .addOpenApiCustomizer(globalResponses()).build();
     }
 

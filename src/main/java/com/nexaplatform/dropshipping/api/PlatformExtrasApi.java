@@ -47,7 +47,7 @@ import java.util.UUID;
 public interface PlatformExtrasApi {
 
     @Operation(summary = "List POD blank products in the requested language")
-    @GetMapping("/storefront/pod/blank-products")
+    @GetMapping("/pod/blank-products")
     List<PodBlankProductDtoOut> podBlanks(@RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "Create a POD design for the current user")
@@ -149,18 +149,18 @@ public interface PlatformExtrasApi {
     void markAllRead(Authentication auth);
 
     @Operation(summary = "List available warehouses")
-    @GetMapping("/storefront/warehouses")
+    @GetMapping("/warehouses")
     List<WarehouseDtoOut> warehouses();
 
     @Operation(summary = "Get per-warehouse stock for a product")
-    @GetMapping("/storefront/catalog/products/{id}/warehouse-stock")
+    @GetMapping("/catalog/products/{id}/warehouse-stock")
     List<WarehouseStockDtoOut> stockPerWarehouse(@PathVariable UUID id);
 
     @Operation(summary = "Calculate shipping rates")
-    @PostMapping("/storefront/shipping/calculator")
+    @PostMapping("/shipping/calculator")
     List<ShippingRateDtoOut> shippingCalculator(@RequestBody ShippingCalculatorDtoIn req);
 
     @Operation(summary = "Estimate the carbon footprint of a shipment")
-    @PostMapping("/storefront/shipping/carbon-footprint")
+    @PostMapping("/shipping/carbon-footprint")
     CarbonFootprintDtoOut carbonFootprint(@RequestBody ShippingCalculatorDtoIn req);
 }

@@ -16,8 +16,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>Paths reales (verificados contra {@code BffSecurityConfig} y los controllers):
  * <ul>
- *   <li>GET  /api/storefront/catalog/products                         — permitAll</li>
- *   <li>GET  /api/storefront/catalog/products/{id}/margin-estimate    — hasRole ADMIN</li>
+ *   <li>GET  /api/catalog/products                         — permitAll</li>
+ *   <li>GET  /api/catalog/products/{id}/margin-estimate    — hasRole ADMIN</li>
  *   <li>GET  /api/me/orders                                           — authenticated</li>
  *   <li>POST /api/admin/orders/{id}/ship                              — hasAnyRole ADMIN, OPERATOR</li>
  *   <li>GET  /api/admin/operator/earnings                             — hasAnyRole ADMIN, OPERATOR</li>
@@ -26,8 +26,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class BffEndpointAuthorizationIT extends BaseIntegration {
 
-    private static final String CATALOG_PRODUCTS = "/api/storefront/catalog/products";
-    private static final String MARGIN_ESTIMATE = "/api/storefront/catalog/products/%s/margin-estimate";
+    private static final String CATALOG_PRODUCTS = "/api/catalog/products";
+    private static final String MARGIN_ESTIMATE = "/api/catalog/products/%s/margin-estimate";
     private static final String ME_ORDERS = "/api/me/orders";
     private static final String ORDER_SHIP = "/api/admin/orders/%s/ship";
     private static final String OPERATOR_EARNINGS = "/api/admin/operator/earnings";

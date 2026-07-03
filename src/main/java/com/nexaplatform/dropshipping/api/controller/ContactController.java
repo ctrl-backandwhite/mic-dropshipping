@@ -15,7 +15,7 @@ import java.util.Map;
 /** Formulario público "Contáctanos": crea una notificación en la bandeja de los administradores. */
 @Tag(name = "Contact", description = "Formulario de contacto público")
 @RestController
-@RequestMapping("/api/storefront/contact")
+@RequestMapping("/api/contact")
 @RequiredArgsConstructor
 public class ContactController {
 

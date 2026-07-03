@@ -90,7 +90,7 @@ class JwtRevocationFilterTest {
 
     @Test
     void non_partner_path_passes_through_without_checking_revocation() throws Exception {
-        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/storefront/products");
+        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/catalog/products");
         req.addHeader("Authorization", "Bearer " + token("client-3", 3_000L));
 
         filter.doFilter(req, res, chain);

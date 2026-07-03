@@ -24,7 +24,7 @@ import java.util.UUID;
  * maps the use-case results to DtoOut; no business logic, no manual mapping.
  */
 @RestController
-@RequestMapping("/api/storefront/billing")
+@RequestMapping("/api/billing")
 @RequiredArgsConstructor
 public class BillingController implements BillingApi {
 

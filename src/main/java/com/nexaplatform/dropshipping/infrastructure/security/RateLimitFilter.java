@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
  *
  * Three rule scopes:
  *   - PARTNER  /api/v1/partner/**  → bucket keyed by JWT subject (client_id), tier by URI path.
- *   - PUBLIC   /api/v1/storefront/** + inbound → bucket keyed by client IP, low quota.
+ *   - PUBLIC   /api/v1/rate-limits,/api/v1/invoices + inbound → bucket keyed by client IP, low quota.
  *   - AUTH     /api/auth/*, /oauth2/token, /login → bucket keyed by client IP, abuse-prevention quota.
  *
  * Every response carries:
@@ -143,13 +143,18 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (path.startsWith("/api/v1/integrations/shops/"))
             return new RateRule("inbound.shop", Scope.PATH_SEG_3, 240, Duration.ofMinutes(1));
 
-        // Public storefront API (versioned, for developers) — per IP, generous but bounded.
-        if (path.startsWith("/api/v1/storefront/"))
+        // Public versioned API (for developers) — per IP, generous but bounded.
+        if (path.startsWith("/api/v1/rate-limits") || path.startsWith("/api/v1/invoices"))
             return new RateRule("storefront", Scope.IP, 60, Duration.ofMinutes(1));
 
-        // Public storefront API used by the web SPA (catalog browse) — per IP. Anti-clonado: frena el
+        // Public API used by the web SPA (catalog browse + navegación) — per IP. Anti-clonado: frena el
         // volcado masivo del catálogo/fichas sin molestar a un humano (una página son ~3-5 llamadas).
-        if (path.startsWith("/api/storefront/"))
+        if (path.startsWith("/api/catalog/") || path.startsWith("/api/search") || path.startsWith("/api/shipping/")
+                || path.startsWith("/api/currency/") || path.startsWith("/api/languages")
+                || path.startsWith("/api/warehouses") || path.startsWith("/api/academy/")
+                || path.startsWith("/api/mentors") || path.startsWith("/api/pod/")
+                || path.startsWith("/api/billing/") || path.startsWith("/api/contact")
+                || path.startsWith("/api/newsletter/") || path.startsWith("/api/affiliate/"))
             return new RateRule("storefront.web", Scope.IP, 100, Duration.ofMinutes(1));
 
         return null;
@@ -200,7 +205,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Snapshot de políticas para auto-discovery por clientes (GET /api/v1/storefront/rate-limits).
+     * Snapshot de políticas para auto-discovery por clientes (GET /api/v1/rate-limits).
      * Las cuotas partner.* dependen del plan del JWT (`plan` claim).
      */
     public List<Map<String, Object>> policies() {
@@ -208,8 +213,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 planTiered("partner.orders.write", "/api/v1/partner/orders/**", "per client_id (JWT sub)"),
                 planTiered("partner.shop.sync", "/api/v1/partner/shop/**", "per client_id (JWT sub)"),
                 policy("inbound.shop", "/api/v1/integrations/shops/{id}/**", "per shopConnection id", 240, "1m"),
-                policy("storefront", "/api/v1/storefront/**", "per IP", 60, "1m"),
-                policy("storefront.web", "/api/storefront/**", "per IP", 100, "1m"),
+                policy("storefront", "/api/v1/rate-limits, /api/v1/invoices", "per IP", 60, "1m"),
+                policy("storefront.web", "/api/catalog/**, /api/search, ... (navegación pública)", "per IP", 100, "1m"),
                 policy("oauth.token", "/oauth2/token", "per IP", 30, "1m"),
                 policy("auth.login", "/login", "per IP", 20, "1m"),
                 policy("auth.login.api", "/api/auth/login", "per IP", 10, "1m"),

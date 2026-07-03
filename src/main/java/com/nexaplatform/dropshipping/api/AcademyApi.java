@@ -31,12 +31,12 @@ import java.util.UUID;
 public interface AcademyApi {
 
     @Operation(summary = "List published academy courses, optionally filtered by locale and level")
-    @GetMapping("/storefront/academy/courses")
+    @GetMapping("/academy/courses")
     List<CourseDtoOut> courses(@RequestParam(required = false) String locale,
             @RequestParam(required = false) String level);
 
     @Operation(summary = "Get a published academy course by slug")
-    @GetMapping("/storefront/academy/courses/{slug}")
+    @GetMapping("/academy/courses/{slug}")
     CourseDtoOut course(@PathVariable String slug);
 
     @Operation(summary = "Enroll the current user in a course")
@@ -52,11 +52,11 @@ public interface AcademyApi {
     EnrollmentDtoOut updateProgress(@PathVariable UUID id, @RequestBody Map<String, Number> body);
 
     @Operation(summary = "List active mentors")
-    @GetMapping("/storefront/mentors")
+    @GetMapping("/mentors")
     List<MentorDtoOut> mentors();
 
     @Operation(summary = "Get a mentor profile by id")
-    @GetMapping("/storefront/mentors/{id}")
+    @GetMapping("/mentors/{id}")
     MentorDtoOut mentorDetail(@PathVariable UUID id);
 
     @Operation(summary = "Book a session with a mentor")

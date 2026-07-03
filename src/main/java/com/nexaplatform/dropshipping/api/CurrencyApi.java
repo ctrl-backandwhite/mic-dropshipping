@@ -27,7 +27,7 @@ import java.util.Map;
 public interface CurrencyApi {
 
     @Operation(summary = "List active currency rates")
-    @GetMapping({"/api/storefront/currency/rates", "/api/admin/currency/rates"})
+    @GetMapping({"/api/currency/rates", "/api/admin/currency/rates"})
     ResponseEntity<List<CurrencyDtoOut>> listActive();
 
     @Operation(summary = "List ALL currencies (active and inactive) — admin")
@@ -43,7 +43,7 @@ public interface CurrencyApi {
     ResponseEntity<Map<String, Object>> bulkActive(@Valid @RequestBody CurrencyBulkActiveDtoIn req);
 
     @Operation(summary = "Get a single currency by code")
-    @GetMapping("/api/storefront/currency/{code}")
+    @GetMapping("/api/currency/{code}")
     ResponseEntity<CurrencyDtoOut> one(@PathVariable String code);
 
     @Operation(summary = "Override a currency rate and optional active flag")

@@ -72,7 +72,12 @@ public class BffSecurityConfig {
         converter.setJwtGrantedAuthoritiesConverter(authorities);
         NimbusJwtDecoder decoder = userJwtDecoder(jwkSource, revocationService, issuer);
 
-        http.securityMatcher("/api/admin/**", "/api/storefront/**", "/api/me/**", "/api/auth/**", "/api/webhooks/**")
+        http.securityMatcher("/api/admin/**", "/api/me/**", "/api/auth/**", "/api/webhooks/**",
+                // Endpoints públicos del SPA (antes agrupados bajo /api/storefront/**, ahora sin ese segmento).
+                "/api/catalog/**", "/api/billing/**", "/api/contact", "/api/contact/**", "/api/newsletter/**",
+                "/api/affiliate/**", "/api/search", "/api/search/**", "/api/shipping/**", "/api/currency/**",
+                "/api/languages", "/api/languages/**", "/api/warehouses", "/api/warehouses/**", "/api/academy/**",
+                "/api/mentors", "/api/mentors/**", "/api/pod/**")
                 .cors(Customizer.withDefaults()).csrf(csrf -> csrf.disable())
                 .headers(h -> h
                         .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31536000))
@@ -87,22 +92,28 @@ public class BffSecurityConfig {
                                 "/api/auth/refresh", "/api/auth/password-reset/**", "/api/webhooks/**")
                         .permitAll()
                         // El estimado de margen/ganancia es SOLO para ADMIN (ni USER ni OPERATOR/soporte).
-                        // Debe ir ANTES del permitAll general de GET /api/storefront/**.
-                        .requestMatchers(HttpMethod.GET, "/api/storefront/catalog/products/*/margin-estimate")
+                        // Debe ir ANTES del permitAll general de GET del catálogo público.
+                        .requestMatchers(HttpMethod.GET, "/api/catalog/products/*/margin-estimate")
                         .hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/storefront/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/storefront/catalog/shipping/quote").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/storefront/catalog/cart-quote").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/storefront/catalog/products/*/variants/match")
-                        .permitAll().requestMatchers(HttpMethod.POST, "/api/storefront/catalog/products/import-url")
+                        // GET públicos de navegación (antes GET /api/storefront/**), enumerados por base.
+                        .requestMatchers(HttpMethod.GET, "/api/catalog/**", "/api/billing/**", "/api/contact",
+                                "/api/contact/**", "/api/newsletter/**", "/api/affiliate/**", "/api/search",
+                                "/api/search/**", "/api/shipping/**", "/api/currency/**", "/api/languages",
+                                "/api/languages/**", "/api/warehouses", "/api/warehouses/**", "/api/academy/**",
+                                "/api/mentors", "/api/mentors/**", "/api/pod/**")
                         .permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/storefront/catalog/products/search-by-image")
-                        .permitAll().requestMatchers(HttpMethod.POST, "/api/storefront/shipping/calculator").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/storefront/shipping/carbon-footprint").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/storefront/affiliate/track").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/storefront/newsletter/subscribe").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/storefront/newsletter/unsubscribe").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/storefront/contact").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/catalog/shipping/quote").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/catalog/cart-quote").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/catalog/products/*/variants/match")
+                        .permitAll().requestMatchers(HttpMethod.POST, "/api/catalog/products/import-url")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/catalog/products/search-by-image")
+                        .permitAll().requestMatchers(HttpMethod.POST, "/api/shipping/calculator").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/shipping/carbon-footprint").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/affiliate/track").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/newsletter/subscribe").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/newsletter/unsubscribe").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/contact").permitAll()
                         // OPERATOR (soporte) SOLO puede: procesar órdenes y ver sus propias ganancias/historial.
                         // Todo lo demás del admin (pricing/márgenes, dashboard/estadísticas, catálogo, usuarios,
                         // monedas, impuestos, partners, billing, afiliados…) es EXCLUSIVO de ADMIN.

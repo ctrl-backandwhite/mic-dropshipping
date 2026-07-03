@@ -34,7 +34,7 @@ public class DefaultSecurityConfig {
                         // CSRF off for: OAuth2 token, OAuth callbacks, actuator, public storefront API,
                         // inbound webhooks (signed HMAC), Stripe / PayPal payment callbacks.
                         .ignoringRequestMatchers("/oauth2/token", "/login/oauth2/code/**", "/actuator/**",
-                                "/api/v1/storefront/**", "/api/v1/integrations/**", "/api/webhooks/**"))
+                                "/api/v1/rate-limits/**", "/api/v1/invoices/**", "/api/v1/integrations/**", "/api/webhooks/**"))
                 .headers(h -> h
                         .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31536000))
                         .frameOptions(fo -> fo.deny())
@@ -44,7 +44,7 @@ public class DefaultSecurityConfig {
                                 "/password-reset", "/password-reset/**", "/error", "/.well-known/**", "/oauth2/**",
                                 "/userinfo", "/actuator/health", "/actuator/info",
                                 // Public storefront catalog + signed inbound webhooks + payment callbacks.
-                                "/api/v1/storefront/**", "/api/v1/integrations/**", "/api/webhooks/**", "/css/**",
+                                "/api/v1/rate-limits/**", "/api/v1/invoices/**", "/api/v1/integrations/**", "/api/webhooks/**", "/css/**",
                                 "/js/**", "/img/**", "/assets/**", "/favicon.ico")
                         .permitAll()
                         // Swagger UI + OpenAPI JSON quedan tras login y solo accesibles a staff.

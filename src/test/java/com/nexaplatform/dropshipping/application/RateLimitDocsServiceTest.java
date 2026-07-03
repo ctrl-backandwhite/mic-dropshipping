@@ -22,7 +22,7 @@ class RateLimitDocsServiceTest {
 
     @Test
     void listPolicies_mapsSimpleAndTieredPoliciesPreservingKeys() {
-        Map<String, Object> simple = Map.of("name", "storefront", "path", "/api/v1/storefront/**", "scope", "per IP",
+        Map<String, Object> simple = Map.of("name", "storefront", "path", "/api/v1/rate-limits", "scope", "per IP",
                 "capacity", 60, "period", "1m");
         Map<String, Object> tiered = Map.of("name", "partner.catalog.read", "path", "/api/v1/partner/catalog/**",
                 "scope", "per client_id (JWT sub)", "period", "1m", "tiers", Map.of("sandbox", 1, "paid", 5));

@@ -17,7 +17,7 @@ import java.util.UUID;
  * {@code ?ref=CODE}, sending (or receiving) a visitor token it persists as a cookie/localStorage.
  */
 @RestController
-@RequestMapping("/api/storefront/affiliate")
+@RequestMapping("/api/affiliate")
 @RequiredArgsConstructor
 public class AffiliateTrackController {
 

@@ -29,7 +29,7 @@ public class StoreLanguageController {
     private final StoreLanguageRepository repository;
 
     /** Público: idiomas activos, ordenados (los que el comprador puede elegir y en los que hay contenido). */
-    @GetMapping("/api/storefront/languages")
+    @GetMapping("/api/languages")
     @Transactional(readOnly = true)
     public List<StoreLanguageDtoOut> publicLanguages() {
         return repository.findByActiveTrueOrderByPositionAsc().stream().map(this::toDto).toList();

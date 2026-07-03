@@ -33,7 +33,7 @@ import java.util.UUID;
  */
 @Tag(name = "Storefront · Shipping", description = "Cotización de envío Cainiao + desglose de checkout")
 @RestController
-@RequestMapping("/api/storefront/shipping")
+@RequestMapping("/api/shipping")
 @RequiredArgsConstructor
 public class ShippingQuoteController {
 

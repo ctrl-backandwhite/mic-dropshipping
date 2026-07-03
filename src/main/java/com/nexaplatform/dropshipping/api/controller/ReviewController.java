@@ -23,7 +23,7 @@ import java.util.UUID;
  * no business logic, no manual mapping.
  */
 @RestController
-@RequestMapping("/api/storefront/catalog/products/{productId}/reviews")
+@RequestMapping("/api/catalog/products/{productId}/reviews")
 @RequiredArgsConstructor
 public class ReviewController implements ReviewApi {
 

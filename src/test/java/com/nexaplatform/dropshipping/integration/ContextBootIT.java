@@ -12,7 +12,7 @@ class ContextBootIT extends BaseIntegration {
 
     @Test
     void publicPlansEndpointIsReachable() {
-        // /api/storefront/** es permitAll: prueba la cadena BFF de punta a punta sin token.
-        client.get().uri("/api/storefront/billing/plans").exchange().expectStatus().isOk();
+        // /api/** es permitAll: prueba la cadena BFF de punta a punta sin token.
+        client.get().uri("/api/billing/plans").exchange().expectStatus().isOk();
     }
 }

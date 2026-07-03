@@ -8,7 +8,7 @@ import java.util.Map;
 
 /**
  * Machine-readable rate-limit policy entry exposed at
- * {@code GET /api/v1/storefront/rate-limits}. Field names preserve the keys
+ * {@code GET /api/v1/rate-limits}. Field names preserve the keys
  * previously emitted by the controller Map (name, path, scope, capacity,
  * period, tiers) so the public contract is unchanged. Null fields are omitted
  * so simple and plan-tiered policies keep their original JSON shape.
