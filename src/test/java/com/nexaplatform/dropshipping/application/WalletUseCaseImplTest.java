@@ -31,9 +31,14 @@ class WalletUseCaseImplTest {
     AuditLogger auditLogger;
     @Mock
     CurrencyRateService currencyService;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.integration.search.WalletIndexer walletIndexer;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.integration.search.WalletSearchService walletSearchService;
 
     private WalletUseCaseImpl useCase() {
-        return new WalletUseCaseImpl(walletRepository, txRepository, auditLogger, currencyService);
+        return new WalletUseCaseImpl(walletRepository, txRepository, auditLogger, currencyService, walletIndexer,
+                walletSearchService);
     }
 
     @Test

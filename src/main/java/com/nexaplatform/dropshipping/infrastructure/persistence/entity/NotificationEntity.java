@@ -39,4 +39,17 @@ public class NotificationEntity extends BaseEntity {
 
     @Column(name = "read_at")
     private Instant readAt;
+
+    /** Estado del flujo de gestión: NEW, RECEIVED, IN_PROGRESS, WAITING, RESOLVED. */
+    @Column(nullable = false, length = 20)
+    @lombok.Builder.Default
+    private String status = "NEW";
+
+    /** Archivada (fuera de Recibidos, aún no en papelera). */
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
+    /** En la papelera (borrado lógico); el borrado definitivo elimina la fila. */
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
 }

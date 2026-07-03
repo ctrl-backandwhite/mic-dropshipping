@@ -53,6 +53,16 @@ public interface WalletUseCase extends BaseUseCase<Wallet, Wallet, UUID> {
     /** Admin filtered + sorted wallet listing (balance desc); paging is applied here. */
     List<Wallet> adminListWallets(String q, String status, String currency);
 
+    /** A page of admin wallets (newest-first) + the grand total for the filter. */
+    record WalletPage(List<Wallet> items, int page, int size, long total) {
+    }
+
+    /**
+     * Paginated admin wallet listing, most-recent-first. Paginate/sort/filter from the OpenSearch
+     * {@code wallets} index; the page's balances are read fresh from the DB. Falls back to a DB listing.
+     */
+    WalletPage pageAdminWallets(String q, String status, String currency, int page, int size);
+
     /* ============ Mutations (money) ============ */
 
     /** Credit funds (recharge from a payment provider). */

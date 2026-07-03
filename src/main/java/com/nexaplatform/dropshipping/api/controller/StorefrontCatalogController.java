@@ -50,7 +50,7 @@ import java.util.stream.Collectors;
  * home sections, import-url, image-search, history, margin estimate).
  */
 @RestController
-@RequestMapping("/api/storefront/catalog")
+@RequestMapping("/api/catalog")
 @RequiredArgsConstructor
 public class StorefrontCatalogController implements StorefrontCatalogApi {
 

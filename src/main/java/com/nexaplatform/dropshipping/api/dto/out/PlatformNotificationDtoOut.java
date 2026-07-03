@@ -22,5 +22,6 @@ public class PlatformNotificationDtoOut {
     String channel;
     Map<String, Object> payload;
     Instant readAt;
+    String status;
     Instant createdAt;
 }

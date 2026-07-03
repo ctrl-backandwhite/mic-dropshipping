@@ -5,10 +5,8 @@ import com.nexaplatform.dropshipping.infrastructure.integration.payment.PaymentG
 import com.nexaplatform.dropshipping.infrastructure.integration.payment.PaymentGateway.InitiateResult;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PaymentEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
-import com.stripe.model.PaymentIntent;
 import com.stripe.model.Refund;
 import com.stripe.model.checkout.Session;
-import com.stripe.param.PaymentIntentCreateParams;
 import com.stripe.param.RefundCreateParams;
 import com.stripe.param.checkout.SessionCreateParams;
 import org.junit.jupiter.api.BeforeEach;
@@ -88,13 +86,14 @@ class StripeGatewayTest {
 
     @Test
     void initiateMockModeForWalletRecharge() {
+        // La recarga de wallet usa el MISMO Checkout hospedado que los pedidos (mock → cs_mock_ + redirect).
         PaymentEntity p = payment(null, "USD", null, 5_000L);
 
         InitiateResult r = gateway.initiate(p);
 
-        assertThat(r.providerRef()).isEqualTo("pi_mock_" + PAYMENT_ID);
-        assertThat(r.clientSecret()).isEqualTo("pi_mock_" + PAYMENT_ID + "_secret_mock");
-        assertThat(r.approveUrl()).isNull();
+        assertThat(r.providerRef()).isEqualTo("cs_mock_" + PAYMENT_ID);
+        assertThat(r.clientSecret()).isNull();
+        assertThat(r.approveUrl()).contains("/wallet/recharge/return");
     }
 
     // ---------------------------------------------------------------- checkout session (order)
@@ -175,33 +174,31 @@ class StripeGatewayTest {
         }
     }
 
-    // ---------------------------------------------------------------- payment intent (wallet)
+    // ---------------------------------------------------------------- checkout session (wallet recharge)
 
     @Test
-    void initiatePaymentIntentMapsResponse() throws Exception {
+    void initiateCheckoutSessionForWalletRecharge() throws Exception {
+        // La recarga (sin orderId) usa el mismo Checkout hospedado que los pedidos (antes era PaymentIntent).
         enable();
         PaymentEntity p = payment(null, "USD", null, 2_500L);
 
-        PaymentIntent pi = mock(PaymentIntent.class);
-        when(pi.getId()).thenReturn("pi_wallet");
-        when(pi.getStatus()).thenReturn("requires_payment_method");
-        when(pi.getClientSecret()).thenReturn("pi_wallet_secret_xyz");
+        Session session = mock(Session.class);
+        when(session.getId()).thenReturn("cs_wallet");
+        when(session.getUrl()).thenReturn("https://checkout.stripe.com/wallet");
+        when(session.getPaymentIntent()).thenReturn("pi_w");
 
-        try (MockedStatic<PaymentIntent> intents = mockStatic(PaymentIntent.class)) {
-            PaymentIntentCreateParams[] captured = new PaymentIntentCreateParams[1];
-            intents.when(() -> PaymentIntent.create(any(PaymentIntentCreateParams.class))).thenAnswer(inv -> {
+        try (MockedStatic<Session> sessions = mockStatic(Session.class)) {
+            SessionCreateParams[] captured = new SessionCreateParams[1];
+            sessions.when(() -> Session.create(any(SessionCreateParams.class))).thenAnswer(inv -> {
                 captured[0] = inv.getArgument(0);
-                return pi;
+                return session;
             });
 
             InitiateResult r = gateway.initiate(p);
 
-            assertThat(r.providerRef()).isEqualTo("pi_wallet");
-            assertThat(r.clientSecret()).isEqualTo("pi_wallet_secret_xyz");
-            assertThat(r.approveUrl()).isNull();
-            assertThat(r.raw()).containsEntry("status", "requires_payment_method");
-            assertThat(captured[0].getAmount()).isEqualTo(2_500L);
-            assertThat(captured[0].getCurrency()).isEqualTo("usd");
+            assertThat(r.providerRef()).isEqualTo("cs_wallet");
+            assertThat(r.approveUrl()).isEqualTo("https://checkout.stripe.com/wallet");
+            assertThat(r.clientSecret()).isNull();
         }
     }
 

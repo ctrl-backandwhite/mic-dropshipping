@@ -41,6 +41,7 @@ class AffiliateProgramServiceTest {
     @Mock NotificationJpaRepositoryAdapter notificationRepo;
     @Mock NotificationsPublisher notificationsPublisher;
     @Mock WalletUseCase walletUseCase;
+    @Mock com.nexaplatform.dropshipping.infrastructure.integration.search.AffiliateIndexer affiliateIndexer;
 
     AffiliateProgramService service;
 
@@ -52,7 +53,8 @@ class AffiliateProgramServiceTest {
     @BeforeEach
     void setup() {
         service = new AffiliateProgramService(affiliateRepo, codeRepo, attrRepo, conversionRepo, commissionRepo,
-                configRepo, payoutRepo, userRepository, notificationRepo, notificationsPublisher, walletUseCase);
+                configRepo, payoutRepo, userRepository, notificationRepo, notificationsPublisher, walletUseCase,
+                affiliateIndexer);
         AffiliateProgramConfigEntity config = AffiliateProgramConfigEntity.builder()
                 .defaultPercent(new BigDecimal("10.000")).attributionWindowDays(30).returnPeriodDays(14)
                 .minPayoutCents(5000).currency("EUR").attributionModel("LAST_CLICK").build();

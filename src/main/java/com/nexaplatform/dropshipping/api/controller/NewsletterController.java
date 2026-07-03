@@ -11,7 +11,7 @@ import java.util.UUID;
 
 /** Public newsletter subscribe / unsubscribe. */
 @RestController
-@RequestMapping("/api/storefront/newsletter")
+@RequestMapping("/api/newsletter")
 @RequiredArgsConstructor
 public class NewsletterController {
 

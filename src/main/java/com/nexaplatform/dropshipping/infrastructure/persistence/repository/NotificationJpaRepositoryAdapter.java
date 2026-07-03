@@ -11,5 +11,6 @@ public interface NotificationJpaRepositoryAdapter extends JpaRepository<Notifica
 
     List<NotificationEntity> findByUser_IdOrderByCreatedAtDesc(UUID userId);
 
-    long countByUser_IdAndReadAtIsNull(UUID userId);
+    /** No-leídas de la bandeja de entrada: excluye archivadas y las que están en la papelera. */
+    long countByUser_IdAndReadAtIsNullAndArchivedAtIsNullAndDeletedAtIsNull(UUID userId);
 }

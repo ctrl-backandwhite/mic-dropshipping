@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.PlatformExtrasApi;
+import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.dto.in.OdmProjectCreateDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.OdmStatusUpdateDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.PodAiGenerateDtoIn;
@@ -197,8 +198,50 @@ public class PlatformExtrasController implements PlatformExtrasApi {
     /* ============================== DROP-11 Notifications ============================== */
 
     @Override
-    public List<PlatformNotificationDtoOut> notifications(Authentication auth) {
-        return notificationMapper.toDtoOutList(notificationUseCase.myNotifications(UUID.fromString(auth.getName())));
+    public List<PlatformNotificationDtoOut> notifications(Authentication auth, String folder) {
+        NotificationUseCase.Folder f;
+        try {
+            f = NotificationUseCase.Folder.valueOf(folder == null ? "INBOX" : folder.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            f = NotificationUseCase.Folder.INBOX;
+        }
+        return notificationMapper.toDtoOutList(notificationUseCase.myNotifications(UUID.fromString(auth.getName()), f));
+    }
+
+    @Override
+    public void archiveNotification(Authentication auth, UUID id) {
+        notificationUseCase.archive(id, UUID.fromString(auth.getName()));
+    }
+
+    @Override
+    public void unarchiveNotification(Authentication auth, UUID id) {
+        notificationUseCase.unarchive(id, UUID.fromString(auth.getName()));
+    }
+
+    @Override
+    public void trashNotification(Authentication auth, UUID id) {
+        notificationUseCase.moveToTrash(id, UUID.fromString(auth.getName()));
+    }
+
+    @Override
+    public void restoreNotification(Authentication auth, UUID id) {
+        notificationUseCase.restore(id, UUID.fromString(auth.getName()));
+    }
+
+    @Override
+    public void deleteNotificationPermanently(Authentication auth, UUID id) {
+        notificationUseCase.deletePermanently(id, UUID.fromString(auth.getName()));
+    }
+
+    @Override
+    public void setNotificationStatus(Authentication auth, UUID id, String value) {
+        NotificationUseCase.Status s;
+        try {
+            s = NotificationUseCase.Status.valueOf(value == null ? "RECEIVED" : value.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException("Estado de notificación no válido: " + value);
+        }
+        notificationUseCase.setStatus(id, UUID.fromString(auth.getName()), s);
     }
 
     @Override
@@ -207,8 +250,8 @@ public class PlatformExtrasController implements PlatformExtrasApi {
     }
 
     @Override
-    public void markRead(UUID id) {
-        notificationUseCase.markRead(id);
+    public void markRead(Authentication auth, UUID id) {
+        notificationUseCase.markRead(id, UUID.fromString(auth.getName()));
     }
 
     @Override

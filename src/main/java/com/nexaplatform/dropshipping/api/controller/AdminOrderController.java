@@ -13,12 +13,14 @@ import com.nexaplatform.dropshipping.api.mapper.AdminOrderMapper;
 import com.nexaplatform.dropshipping.api.mapper.PartnerOrderDtoMapper;
 import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
 import com.nexaplatform.dropshipping.domain.model.Order;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.OrderIndexer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -42,16 +44,20 @@ public class AdminOrderController implements AdminOrderApi {
     private final OrderUseCase orderUseCase;
     private final AdminOrderMapper adminOrderMapper;
     private final PartnerOrderDtoMapper partnerOrderDtoMapper;
+    private final OrderIndexer orderIndexer;
 
     @Override
     public ResponseEntity<PageResponse<AdminOrderRowDtoOut>> list(String status, String q, int page, int size) {
-        List<Order> all = orderUseCase.listAdminOrders(status, q);
-        int total = all.size();
-        int from = Math.min(page * size, total);
-        int to = Math.min(from + size, total);
-        List<AdminOrderRowDtoOut> items = adminOrderMapper.toRows(all.subList(from, to));
-        var pageable = PageRequest.of(page, Math.max(1, size));
-        return ResponseEntity.ok(PageResponse.from(new PageImpl<>(items, pageable, total)));
+        OrderUseCase.OrderPage p = orderUseCase.pageAdminOrders(status, q, page, size);
+        List<AdminOrderRowDtoOut> items = adminOrderMapper.toRows(p.items());
+        var pageable = PageRequest.of(Math.max(0, p.page()), Math.max(1, p.size()));
+        return ResponseEntity.ok(PageResponse.from(new PageImpl<>(items, pageable, p.total())));
+    }
+
+    /** Reindexa todas las órdenes en OpenSearch (botón "Reindexar" del admin). */
+    @PostMapping("/reindex")
+    public ResponseEntity<Map<String, Object>> reindex() {
+        return ResponseEntity.ok(Map.of("indexed", orderIndexer.reindexAll()));
     }
 
     @Override

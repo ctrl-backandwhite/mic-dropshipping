@@ -47,7 +47,7 @@ import java.util.UUID;
 public interface PlatformExtrasApi {
 
     @Operation(summary = "List POD blank products in the requested language")
-    @GetMapping("/storefront/pod/blank-products")
+    @GetMapping("/pod/blank-products")
     List<PodBlankProductDtoOut> podBlanks(@RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "Create a POD design for the current user")
@@ -132,9 +132,10 @@ public interface PlatformExtrasApi {
     SupportReplyDtoOut adminTicketReply(Authentication auth, @PathVariable UUID id,
             @RequestBody Map<String, String> body);
 
-    @Operation(summary = "List the current user's notifications")
+    @Operation(summary = "List the current user's notifications by folder (inbox/archived/trash), newest first")
     @GetMapping("/me/notifications")
-    List<PlatformNotificationDtoOut> notifications(Authentication auth);
+    List<PlatformNotificationDtoOut> notifications(Authentication auth,
+            @RequestParam(defaultValue = "inbox") String folder);
 
     @Operation(summary = "Get the current user's unread notification count")
     @GetMapping("/me/notifications/unread-count")
@@ -142,25 +143,49 @@ public interface PlatformExtrasApi {
 
     @Operation(summary = "Mark a notification as read")
     @PostMapping("/me/notifications/{id}/read")
-    void markRead(@PathVariable UUID id);
+    void markRead(Authentication auth, @PathVariable UUID id);
 
     @Operation(summary = "Mark all of the current user's notifications as read")
     @PostMapping("/me/notifications/read-all")
     void markAllRead(Authentication auth);
 
+    @Operation(summary = "Archive a notification (moves it out of the inbox)")
+    @PostMapping("/me/notifications/{id}/archive")
+    void archiveNotification(Authentication auth, @PathVariable UUID id);
+
+    @Operation(summary = "Move an archived notification back to the inbox")
+    @PostMapping("/me/notifications/{id}/unarchive")
+    void unarchiveNotification(Authentication auth, @PathVariable UUID id);
+
+    @Operation(summary = "Move a notification to the trash (soft delete)")
+    @DeleteMapping("/me/notifications/{id}")
+    void trashNotification(Authentication auth, @PathVariable UUID id);
+
+    @Operation(summary = "Restore a notification from the trash")
+    @PostMapping("/me/notifications/{id}/restore")
+    void restoreNotification(Authentication auth, @PathVariable UUID id);
+
+    @Operation(summary = "Permanently delete a notification (only from the trash)")
+    @DeleteMapping("/me/notifications/{id}/permanent")
+    void deleteNotificationPermanently(Authentication auth, @PathVariable UUID id);
+
+    @Operation(summary = "Set the management status of a notification (RECEIVED/IN_PROGRESS/WAITING/RESOLVED)")
+    @PostMapping("/me/notifications/{id}/status")
+    void setNotificationStatus(Authentication auth, @PathVariable UUID id, @RequestParam String value);
+
     @Operation(summary = "List available warehouses")
-    @GetMapping("/storefront/warehouses")
+    @GetMapping("/warehouses")
     List<WarehouseDtoOut> warehouses();
 
     @Operation(summary = "Get per-warehouse stock for a product")
-    @GetMapping("/storefront/catalog/products/{id}/warehouse-stock")
+    @GetMapping("/catalog/products/{id}/warehouse-stock")
     List<WarehouseStockDtoOut> stockPerWarehouse(@PathVariable UUID id);
 
     @Operation(summary = "Calculate shipping rates")
-    @PostMapping("/storefront/shipping/calculator")
+    @PostMapping("/shipping/calculator")
     List<ShippingRateDtoOut> shippingCalculator(@RequestBody ShippingCalculatorDtoIn req);
 
     @Operation(summary = "Estimate the carbon footprint of a shipment")
-    @PostMapping("/storefront/shipping/carbon-footprint")
+    @PostMapping("/shipping/carbon-footprint")
     CarbonFootprintDtoOut carbonFootprint(@RequestBody ShippingCalculatorDtoIn req);
 }

@@ -5,10 +5,18 @@ import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.usecase.SupplierUseCase;
 import com.nexaplatform.dropshipping.domain.model.Supplier;
 import com.nexaplatform.dropshipping.domain.repository.SupplierRepository;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.SupplierIndexer;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.SupplierSearchService;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.SupplierSearchService.IndexedSupplier;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.SupplierEntityMapper;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -31,6 +40,12 @@ import java.util.UUID;
 public class SupplierUseCaseImpl implements SupplierUseCase {
 
     private final SupplierRepository supplierRepository;
+    private final SupplierIndexer supplierIndexer;
+    private final SupplierSearchService supplierSearchService;
+    private final SupplierEntityMapper supplierEntityMapper;
+    // Infra JPA repo (FQN: coexiste con el puerto de dominio del mismo nombre simple) — usado SOLO para
+    // el fallback SQL paginado (Pageable) cuando OpenSearch no responde.
+    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierRepository jpaSupplierRepository;
 
     @PersistenceContext
     private EntityManager em;
@@ -39,16 +54,46 @@ public class SupplierUseCaseImpl implements SupplierUseCase {
     @Transactional(readOnly = true)
     public List<Supplier> findAll() {
         Map<UUID, Long> productCount = productCountBySupplier();
-        return supplierRepository.findAll().stream().map(s -> {
-            BigDecimal rating = s.getRating() != null ? s.getRating() : BigDecimal.valueOf(4.0);
-            double r = rating.doubleValue();
-            long onTimePct = Math.round(Math.min(99.5, 60 + r * 8)); // r=4.0 -> 92, r=5.0 -> 99
-            double defectRate = Math.round((5.0 - r) * 80) / 100.0; // r=5.0 -> 0.0, r=4.0 -> 0.8
-            int responseHours = r >= 4.7 ? 4 : (r >= 4.3 ? 12 : 24);
-            int leadTimeDays = r >= 4.7 ? 3 : (r >= 4.3 ? 7 : 14);
-            return s.withProductCount(productCount.getOrDefault(s.getId(), 0L)).withOnTimePct(onTimePct)
-                    .withDefectRate(defectRate).withResponseHours(responseHours).withLeadTimeDays(leadTimeDays);
-        }).toList();
+        return supplierRepository.findAll().stream()
+                .map(s -> enrichKpis(s.withProductCount(productCount.getOrDefault(s.getId(), 0L)))).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SupplierPage pageAdmin(String q, String country, Boolean verified, int page, int size) {
+        // Primario: OpenSearch (índice `suppliers`, orden createdAt desc, productCount embebido).
+        Optional<SupplierSearchService.IndexedPage> idx = supplierSearchService.pageFromIndex(q, country, verified, page,
+                size);
+        if (idx.isPresent()) {
+            List<Supplier> items = idx.get().items().stream().map(this::fromIndex).map(this::enrichKpis).toList();
+            return new SupplierPage(items, page, size, idx.get().total());
+        }
+        // Fallback: consulta SQL paginada (Pageable) ordenada por createdAt desc.
+        Page<SupplierEntity> p = jpaSupplierRepository
+                .findAll(PageRequest.of(Math.max(0, page), size, Sort.by(Sort.Direction.DESC, "createdAt")));
+        Map<UUID, Long> counts = productCountBySupplier();
+        List<Supplier> items = p.getContent().stream().map(supplierEntityMapper::toDomain)
+                .map(s -> enrichKpis(s.withProductCount(counts.getOrDefault(s.getId(), 0L)))).toList();
+        return new SupplierPage(items, page, size, p.getTotalElements());
+    }
+
+    /** Rellena los KPIs derivados de la valoración (mismo cálculo para la lista completa y la paginada). */
+    private Supplier enrichKpis(Supplier s) {
+        BigDecimal rating = s.getRating() != null ? s.getRating() : BigDecimal.valueOf(4.0);
+        double r = rating.doubleValue();
+        long onTimePct = Math.round(Math.min(99.5, 60 + r * 8)); // r=4.0 -> 92, r=5.0 -> 99
+        double defectRate = Math.round((5.0 - r) * 80) / 100.0; // r=5.0 -> 0.0, r=4.0 -> 0.8
+        int responseHours = r >= 4.7 ? 4 : (r >= 4.3 ? 12 : 24);
+        int leadTimeDays = r >= 4.7 ? 3 : (r >= 4.3 ? 7 : 14);
+        return s.withOnTimePct(onTimePct).withDefectRate(defectRate).withResponseHours(responseHours)
+                .withLeadTimeDays(leadTimeDays);
+    }
+
+    /** Reconstruye el modelo de dominio desde una fila del índice OpenSearch (sin tocar la BD). */
+    private Supplier fromIndex(IndexedSupplier i) {
+        return Supplier.builder().id(i.id()).externalId(i.externalId()).name(i.name()).nameZh(i.nameZh())
+                .country(i.country()).city(i.city()).rating(i.rating()).yearsActive(i.yearsActive())
+                .verified(i.verified()).trustPass(i.trustPass()).productCount(i.productCount()).build();
     }
 
     /**
@@ -60,7 +105,9 @@ public class SupplierUseCaseImpl implements SupplierUseCase {
     public Supplier toggleVerified(UUID id) {
         Supplier s = getById(id);
         s.setVerified(!s.isVerified());
-        return supplierRepository.update(s);
+        Supplier updated = supplierRepository.update(s);
+        supplierIndexer.indexSupplier(id);
+        return updated;
     }
 
     @Override
@@ -68,7 +115,9 @@ public class SupplierUseCaseImpl implements SupplierUseCase {
     public Supplier setVerified(UUID id, boolean verified) {
         Supplier s = getById(id);
         s.setVerified(verified);
-        return supplierRepository.update(s);
+        Supplier updated = supplierRepository.update(s);
+        supplierIndexer.indexSupplier(id);
+        return updated;
     }
 
     @Override
@@ -76,7 +125,9 @@ public class SupplierUseCaseImpl implements SupplierUseCase {
     public Supplier toggleTrustPass(UUID id) {
         Supplier s = getById(id);
         s.setTrustPass(!s.isTrustPass());
-        return supplierRepository.update(s);
+        Supplier updated = supplierRepository.update(s);
+        supplierIndexer.indexSupplier(id);
+        return updated;
     }
 
     private Supplier getById(UUID id) {
@@ -113,6 +164,7 @@ public class SupplierUseCaseImpl implements SupplierUseCase {
             model.setCountry("CN");
         }
         Supplier saved = supplierRepository.save(model);
+        supplierIndexer.indexSupplier(saved.getId());
         log.info("::> [SUPPLIER] Created id={}", saved.getId());
         return saved;
     }
@@ -133,7 +185,9 @@ public class SupplierUseCaseImpl implements SupplierUseCase {
         if (model.getProfileUrl() != null) existing.setProfileUrl(model.getProfileUrl());
         existing.setVerified(model.isVerified());
         existing.setTrustPass(model.isTrustPass());
-        return supplierRepository.update(existing);
+        Supplier updated = supplierRepository.update(existing);
+        supplierIndexer.indexSupplier(id);
+        return updated;
     }
 
     @Override
@@ -150,6 +204,7 @@ public class SupplierUseCaseImpl implements SupplierUseCase {
                     "No se puede eliminar: el proveedor tiene " + products + " productos asociados");
         }
         supplierRepository.delete(id);
+        supplierIndexer.deleteFromIndex(id);
         log.info("::> [SUPPLIER] Deleted id={}", id);
     }
 

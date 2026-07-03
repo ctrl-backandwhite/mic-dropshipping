@@ -16,7 +16,7 @@ class UserAgentBlockingFilterTest {
 
     @Test
     void blocks_named_ai_crawler_with_403_and_stops_chain() throws Exception {
-        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/storefront/catalog/products");
+        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/catalog/products");
         req.addHeader("User-Agent", "Mozilla/5.0 (compatible; GPTBot/1.1; +https://openai.com/gptbot)");
         MockHttpServletResponse res = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
@@ -45,7 +45,7 @@ class UserAgentBlockingFilterTest {
 
     @Test
     void allows_normal_browser_user_agent() throws Exception {
-        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/storefront/catalog/products");
+        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/catalog/products");
         req.addHeader("User-Agent",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
                         + "Chrome/120.0 Safari/537.36");
@@ -61,7 +61,7 @@ class UserAgentBlockingFilterTest {
 
     @Test
     void allows_request_without_user_agent_header() throws Exception {
-        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/storefront/catalog/products");
+        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/catalog/products");
         MockHttpServletResponse res = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
 
@@ -73,7 +73,7 @@ class UserAgentBlockingFilterTest {
 
     @Test
     void does_not_block_search_engine_bots_kept_for_seo() throws Exception {
-        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/storefront/catalog/products");
+        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/catalog/products");
         req.addHeader("User-Agent", "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)");
         MockHttpServletResponse res = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);

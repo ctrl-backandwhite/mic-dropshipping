@@ -1,16 +1,22 @@
 package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.*;
+import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.mapper.AffiliateViewMapper;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.AffiliateIndexer;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.AffiliateSearchService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -24,15 +30,43 @@ public class AdminAffiliateController {
 
     private final AffiliateProgramService service;
     private final AffiliateViewMapper mapper;
+    private final AffiliateSearchService affiliateSearch;
+    private final AffiliateIndexer affiliateIndexer;
 
     @GetMapping
-    public ResponseEntity<List<AdminAffiliateRow>> list() {
+    public ResponseEntity<PageResponse<AdminAffiliateRow>> list(@RequestParam(required = false) String q,
+            @RequestParam(required = false) String status, @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
         String currency = service.config().getCurrency();
-        List<AdminAffiliateRow> rows = service.allAffiliates().stream().map(a -> {
-            List<AffiliateCommissionEntity> comms = service.commissionsForAffiliate(a.getId());
-            return mapper.toAdminRow(a, service.listCodes(a.getId()), comms, currency);
-        }).toList();
-        return ResponseEntity.ok(rows);
+        // Primario: OpenSearch (índice `affiliates`) → página de IDs (reciente→antigua) filtrada; solo se
+        // construye la fila (códigos/comisiones) de esa página cargándola de la BD.
+        Optional<AffiliateSearchService.IdPage> idx = affiliateSearch.pageIds(q, status, page, size);
+        if (idx.isPresent()) {
+            Map<UUID, AffiliateEntity> byId = new HashMap<>();
+            service.allAffiliates().forEach(a -> byId.put(a.getId(), a));
+            List<AdminAffiliateRow> rows = idx.get().ids().stream().map(byId::get).filter(Objects::nonNull)
+                    .map(a -> mapper.toAdminRow(a, service.listCodes(a.getId()), service.commissionsForAffiliate(a.getId()),
+                            currency))
+                    .toList();
+            long total = idx.get().total();
+            return ResponseEntity.ok(new PageResponse<>(rows, page, size, total,
+                    (int) Math.ceil((double) total / Math.max(1, size))));
+        }
+        // Fallback (OpenSearch caído): construye todas las filas + página en memoria (dataset acotado).
+        List<AdminAffiliateRow> all = service.allAffiliates().stream()
+                .map(a -> mapper.toAdminRow(a, service.listCodes(a.getId()), service.commissionsForAffiliate(a.getId()),
+                        currency))
+                .toList();
+        int from = Math.min(Math.max(0, page) * size, all.size());
+        int to = Math.min(from + size, all.size());
+        return ResponseEntity.ok(new PageResponse<>(all.subList(from, to), page, size, all.size(),
+                (int) Math.ceil((double) all.size() / Math.max(1, size))));
+    }
+
+    /** Reindexa todos los afiliados en OpenSearch (botón "Reindexar" del admin). */
+    @PostMapping("/reindex")
+    public ResponseEntity<Map<String, Object>> reindex() {
+        return ResponseEntity.ok(Map.of("indexed", affiliateIndexer.reindexAll()));
     }
 
     @GetMapping("/{id}")

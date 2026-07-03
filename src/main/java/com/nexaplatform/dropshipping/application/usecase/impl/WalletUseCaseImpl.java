@@ -7,6 +7,8 @@ import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.domain.model.Wallet;
 import com.nexaplatform.dropshipping.domain.model.WalletTransaction;
 import com.nexaplatform.dropshipping.domain.repository.WalletRepository;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.WalletIndexer;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.WalletSearchService;
 import com.nexaplatform.dropshipping.domain.repository.WalletTransactionRepository;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
@@ -17,8 +19,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -39,6 +44,8 @@ public class WalletUseCaseImpl implements WalletUseCase {
     private final WalletTransactionRepository txRepository;
     private final AuditLogger auditLogger;
     private final CurrencyRateService currencyService;
+    private final WalletIndexer walletIndexer;
+    private final WalletSearchService walletSearchService;
 
     /* ============ Read ============ */
 
@@ -51,7 +58,9 @@ public class WalletUseCaseImpl implements WalletUseCase {
     private Wallet createFor(UUID userId) {
         Wallet w = Wallet.builder().userId(userId).balanceUsdCents(0L).holdUsdCents(0L).currencyDefault("USD")
                 .status("ACTIVE").build();
-        return walletRepository.save(w);
+        Wallet saved = walletRepository.save(w);
+        walletIndexer.indexWallet(saved); // auto-sync del índice al crear la wallet
+        return saved;
     }
 
     @Override
@@ -164,6 +173,24 @@ public class WalletUseCaseImpl implements WalletUseCase {
                         || (w.getUserEmail() != null && w.getUserEmail().toLowerCase().contains(needle))
                         || (w.getUserName() != null && w.getUserName().toLowerCase().contains(needle)))
                 .sorted((a, b) -> Long.compare(b.getBalanceUsdCents(), a.getBalanceUsdCents())).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public WalletPage pageAdminWallets(String q, String status, String currency, int page, int size) {
+        // Primario: OpenSearch (índice `wallets`) → página de IDs ordenada (reciente→antigua) y filtrada;
+        // el saldo se lee fresco de la BD (dinero → consistencia estricta; el índice solo pagina/ordena/filtra).
+        Optional<WalletSearchService.IdPage> idx = walletSearchService.pageIds(q, status, currency, page, size);
+        if (idx.isPresent()) {
+            Map<UUID, Wallet> byId = new HashMap<>();
+            walletRepository.findAll().forEach(w -> byId.put(w.getId(), w));
+            List<Wallet> items = idx.get().ids().stream().map(byId::get).filter(Objects::nonNull).toList();
+            return new WalletPage(items, page, size, idx.get().total());
+        }
+        List<Wallet> all = adminListWallets(q, status, currency);
+        int from = Math.min(Math.max(0, page) * size, all.size());
+        int to = Math.min(from + size, all.size());
+        return new WalletPage(all.subList(from, to), page, size, all.size());
     }
 
     /* ============ Mutations ============ */

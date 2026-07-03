@@ -167,3 +167,9 @@ databaseChangeLog:
       file: db/changelog/schema-v78-user-free-trial-used.sql
   - include:
       file: db/changelog/schema-v79-user-soft-delete.sql
+  - include:
+      file: db/changelog/schema-v80-category-translations.sql
+  - include:
+      file: db/changelog/schema-v81-notification-archive-trash.sql
+  - include:
+      file: db/changelog/schema-v82-notification-status.sql

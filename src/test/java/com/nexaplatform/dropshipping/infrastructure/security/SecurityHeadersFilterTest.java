@@ -16,7 +16,7 @@ class SecurityHeadersFilterTest {
 
     @Test
     void adds_default_security_headers() throws Exception {
-        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/storefront/catalog/products");
+        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/catalog/products");
         MockHttpServletResponse res = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
 
@@ -53,7 +53,7 @@ class SecurityHeadersFilterTest {
 
     @Test
     void emits_hsts_when_request_is_secure() throws Exception {
-        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/storefront/catalog/products");
+        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/catalog/products");
         req.setSecure(true);
         MockHttpServletResponse res = new MockHttpServletResponse();
         filter.doFilter(req, res, mock(FilterChain.class));
@@ -62,7 +62,7 @@ class SecurityHeadersFilterTest {
 
     @Test
     void no_hsts_when_request_is_plain_http() throws Exception {
-        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/storefront/catalog/products");
+        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/catalog/products");
         MockHttpServletResponse res = new MockHttpServletResponse();
         filter.doFilter(req, res, mock(FilterChain.class));
         assertThat(res.getHeader("Strict-Transport-Security")).isNull();

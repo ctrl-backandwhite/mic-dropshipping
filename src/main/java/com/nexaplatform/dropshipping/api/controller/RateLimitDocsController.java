@@ -17,7 +17,7 @@ import java.util.List;
  * y replica lo declarado en la extensión `x-rate-limit` del OpenAPI.
  */
 @RestController
-@RequestMapping("/api/v1/storefront/rate-limits")
+@RequestMapping("/api/v1/rate-limits")
 @RequiredArgsConstructor
 public class RateLimitDocsController implements RateLimitDocsApi {
 

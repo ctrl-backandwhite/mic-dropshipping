@@ -219,7 +219,7 @@ public class InvoiceService {
 
         // QR de verificación: codifica la URL pública de verificación de esta factura.
         String base = verifyBaseUrl != null ? verifyBaseUrl.replaceAll("/+$", "") : "";
-        String verifyUrl = base + "/api/v1/storefront/invoices/" + o.getOrderNumber() + "/verify";
+        String verifyUrl = base + "/api/v1/invoices/" + o.getOrderNumber() + "/verify";
         m.put("verifyUrl", verifyUrl);
         m.put("qr", qrDataUri(verifyUrl));
         m.put("labelVerify", InvoiceLabel.VERIFY.of(lang));

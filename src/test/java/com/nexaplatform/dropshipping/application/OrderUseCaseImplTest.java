@@ -82,6 +82,10 @@ class OrderUseCaseImplTest {
 
     @Mock
     com.nexaplatform.dropshipping.application.service.OperatorCommissionService operatorCommissionService;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.integration.search.OrderIndexer orderIndexer;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.integration.search.OrderSearchService orderSearchService;
 
     OrderUseCaseImpl orderUseCase;
 
@@ -90,7 +94,7 @@ class OrderUseCaseImplTest {
         orderUseCase = new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository, userRepository,
                 shopConnectionRepository, userAddressRepository, webhooks, walletUseCase, notificationsPublisher,
                 pricingService, affiliateProgramService, paymentUseCase, orderEmailService, cainiao, cainiaoTaxService,
-                operatorCommissionService);
+                operatorCommissionService, orderIndexer, orderSearchService);
         // Por defecto, sin envío en los tests de billing (no altera el total = subtotal).
         lenient().when(cainiao.quote(any(), anyInt())).thenReturn(ShippingQuote.unsupported("XX"));
         // Por defecto, sin impuesto (mantiene total = subtotal + envío en los tests existentes).

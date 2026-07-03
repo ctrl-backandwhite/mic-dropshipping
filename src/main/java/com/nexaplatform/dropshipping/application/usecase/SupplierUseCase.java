@@ -12,7 +12,17 @@ import java.util.UUID;
  */
 public interface SupplierUseCase {
 
+    /** A page of admin suppliers: the enriched models for this page + the grand total. */
+    record SupplierPage(List<Supplier> items, int page, int size, long total) {
+    }
+
     List<Supplier> findAll();
+
+    /**
+     * Paginated admin listing ordered most-recent-first. Primary source is the OpenSearch
+     * {@code suppliers} index; falls back to a paginated SQL query when the index is unavailable.
+     */
+    SupplierPage pageAdmin(String q, String country, Boolean verified, int page, int size);
 
     Supplier toggleVerified(UUID id);
 

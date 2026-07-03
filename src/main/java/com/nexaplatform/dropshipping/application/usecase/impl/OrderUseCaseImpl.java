@@ -31,6 +31,8 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEn
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserAddressEntity;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.OrderIndexer;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.OrderSearchService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopConnectionRepository;
@@ -51,6 +53,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Map;
 import java.util.UUID;
 
@@ -87,6 +91,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final CainiaoFulfillmentService cainiao;
     private final CainiaoTaxService cainiaoTaxService;
     private final OperatorCommissionService operatorCommissionService;
+    private final OrderIndexer orderIndexer;
+    private final OrderSearchService orderSearchService;
 
     @Value("${nexadrop.demo.orders-enabled:false}")
     private boolean demoOrdersEnabled;
@@ -186,7 +192,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
         order.setTaxCents(taxCents);
         order.setTotalCents(subtotal + shippingCents + taxCents);
 
-        return orderRepository.save(order);
+        Order saved = orderRepository.save(order);
+        orderIndexer.indexOrder(saved.getId()); // auto-sync del índice al crear la orden
+        return saved;
     }
 
     @Override
@@ -257,6 +265,24 @@ public class OrderUseCaseImpl implements OrderUseCase {
                     Instant bi = b.getPlacedAt() != null ? b.getPlacedAt() : b.getCreatedAt();
                     return bi.compareTo(ai);
                 }).map(this::enrich).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public OrderPage pageAdminOrders(String status, String q, int page, int size) {
+        // Primario: OpenSearch (índice `orders`) → página de IDs ya ordenada (reciente→antigua) y filtrada;
+        // solo enriquecemos esa página cargándola de la BD (mantiene el enriquecido fuera de la tabla completa).
+        Optional<OrderSearchService.IdPage> idx = orderSearchService.pageIds(status, q, page, size);
+        if (idx.isPresent()) {
+            List<Order> items = idx.get().ids().stream().map(id -> orderRepository.findById(id).orElse(null))
+                    .filter(Objects::nonNull).map(this::enrich).toList();
+            return new OrderPage(items, page, size, idx.get().total());
+        }
+        // Fallback (OpenSearch caído): listado BD filtrado/ordenado + página en memoria (dataset acotado).
+        List<Order> all = listAdminOrders(status, q);
+        int from = Math.min(Math.max(0, page) * size, all.size());
+        int to = Math.min(from + size, all.size());
+        return new OrderPage(all.subList(from, to), page, size, all.size());
     }
 
     @Override
@@ -595,6 +621,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private Order publishAndEnrich(Order o, String eventType) {
         Order enriched = enrich(o);
         webhooks.publish(eventType, o.getId().toString(), toWebhookPayload(enriched));
+        // Auto-sync del índice OpenSearch en cada transición de estado (forward/ship/deliver/cancel/refund).
+        orderIndexer.indexOrder(o.getId());
         return enriched;
     }
 

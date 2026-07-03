@@ -70,7 +70,7 @@ class ServerToServerApiFilterTest {
 
     @Test
     void non_v1_paths_pass_through_even_from_browser() throws Exception {
-        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/storefront/catalog/products");
+        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/catalog/products");
         req.addHeader("Origin", "https://example.com");
         req.addHeader("Sec-Fetch-Site", "same-origin");
         MockHttpServletResponse res = new MockHttpServletResponse();

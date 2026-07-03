@@ -19,11 +19,11 @@ import java.util.Optional;
 /**
  * Verificación PÚBLICA de la autenticidad de una factura: la URL que codifica el código QR del PDF.
  * Devuelve si el pedido existe y sus datos no sensibles (número, estado, fecha). Está bajo
- * {@code /api/v1/storefront/**}, que es público (permitAll) — no expone datos personales del cliente.
+ * {@code /api/v1/**}, que es público (permitAll) — no expone datos personales del cliente.
  */
 @Tag(name = "Invoice verification", description = "Verificación pública de facturas (QR)")
 @RestController
-@RequestMapping("/api/v1/storefront/invoices")
+@RequestMapping("/api/v1/invoices")
 @RequiredArgsConstructor
 public class PublicInvoiceVerifyController {
 
