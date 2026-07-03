@@ -23,6 +23,6 @@ public class ChangePasswordDtoIn {
 
     @NotBlank
     @Size(min = 8, max = 128)
-    @Schema(description = "The new password (min 12 chars)")
+    @Schema(description = "The new password (min 8 chars)")
     private String newPassword;
 }

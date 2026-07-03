@@ -25,4 +25,12 @@ public class LoginDtoIn {
     @NotBlank
     @Schema(description = "Account password")
     private String password;
+
+    /**
+     * Si es true, tras autenticar con contraseña se VINCULA el login social a esta cuenta (el usuario
+     * acaba de probar que controla la cuenta local). Lo envía el front cuando el usuario llega desde el
+     * flujo OAuth con {@code ?link=required}. Sustituye al vínculo por sesión (que no viaja cross-origin).
+     */
+    @Schema(description = "Link the pending social identity after a successful password login")
+    private boolean linkSocial;
 }

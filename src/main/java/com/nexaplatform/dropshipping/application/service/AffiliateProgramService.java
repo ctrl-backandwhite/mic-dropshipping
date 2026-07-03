@@ -48,6 +48,15 @@ public class AffiliateProgramService {
 
     /** Writes an in-app notification AND publishes a (marketing) email event via Kafka. */
     private void notify(UUID userId, String eventType, String title, String body) {
+        notify(userId, eventType, title, body, null);
+    }
+
+    /**
+     * Same as {@link #notify(UUID, String, String, String)} but attaches a structured {@code payload}
+     * to the in-app notification (and mirrors it into the email event) so the frontend can render the
+     * data on its own (e.g. the identity of a new affiliate) instead of parsing the body text.
+     */
+    private void notify(UUID userId, String eventType, String title, String body, Map<String, Object> payload) {
         if (userId == null) {
             return;
         }
@@ -57,10 +66,11 @@ public class AffiliateProgramService {
             if (u == null) {
                 return;
             }
+            Map<String, Object> inAppPayload = payload != null ? new HashMap<>(payload) : new HashMap<>();
             notificationRepo.save(
                     NotificationEntity.builder().user(u)
                             .eventType(eventType).title(title).body(body).channel("IN_APP")
-                            .payload(new HashMap<>()).build());
+                            .payload(inAppPayload).build());
             // Email via Kafka (notifications.dispatch → EmailDispatchConsumer). Marketing → opt-out aware.
             Map<String, Object> extra = new HashMap<>();
             extra.put("title", title);
@@ -68,6 +78,9 @@ public class AffiliateProgramService {
             extra.put("marketing", true);
             extra.put("ctaUrl", "/affiliate");
             extra.put("ctaLabel", "Ver mi panel de afiliado");
+            if (payload != null) {
+                extra.putAll(payload);
+            }
             notificationsPublisher.dispatch(eventType, userId, u.getEmail(), extra,
                     u.getLanguage() != null ? u.getLanguage() : "es");
         } catch (RuntimeException e) {
@@ -77,14 +90,85 @@ public class AffiliateProgramService {
 
     /** Alerts staff (admin/operator) — used for payout requests and fraud reviews (DROP-653). */
     private void notifyStaff(String eventType, String title, String body) {
+        notifyStaff(eventType, title, body, null);
+    }
+
+    /** Staff alert carrying a structured {@code payload} (e.g. the full identity of a new affiliate). */
+    private void notifyStaff(String eventType, String title, String body, Map<String, Object> payload) {
         try {
             userRepository.findAll().stream()
                     .filter(u -> u.getRole() != null
                             && ("ADMIN".equals(u.getRole().name()) || "OPERATOR".equals(u.getRole().name())))
-                    .forEach(u -> notify(u.getId(), eventType, title, body));
+                    .forEach(u -> notify(u.getId(), eventType, title, body, payload));
         } catch (RuntimeException e) {
             log.warn("affiliate notifyStaff failed: {}", e.getMessage());
         }
+    }
+
+    /** Composes a human-readable full name: displayName if set, else firstName + apellidos. */
+    private String composeFullName(UserEntity u) {
+        if (u.getDisplayName() != null && !u.getDisplayName().isBlank()) {
+            return u.getDisplayName().trim();
+        }
+        StringBuilder sb = new StringBuilder();
+        appendNamePart(sb, u.getFirstName());
+        appendNamePart(sb, u.getLastName1());
+        appendNamePart(sb, u.getLastName2());
+        return sb.length() > 0 ? sb.toString() : "(sin nombre)";
+    }
+
+    private void appendNamePart(StringBuilder sb, String part) {
+        if (part != null && !part.isBlank()) {
+            if (sb.length() > 0) {
+                sb.append(' ');
+            }
+            sb.append(part.trim());
+        }
+    }
+
+    /**
+     * Alerts staff about a new affiliate, identifying WHO joined (name, email, id, and country/company
+     * when present) both in a human-readable body and as a structured payload for the frontend.
+     */
+    private void notifyStaffAffiliateJoined(UserEntity joiner) {
+        if (joiner == null) {
+            notifyStaff("AFFILIATE_JOIN", "Nuevo afiliado", "Un cliente se ha unido al programa de afiliados.");
+            return;
+        }
+        String fullName = composeFullName(joiner);
+        String email = joiner.getEmail();
+        String country = joiner.getCountry() != null && !joiner.getCountry().isBlank()
+                ? joiner.getCountry().trim() : null;
+        String company = joiner.getCompanyName() != null && !joiner.getCompanyName().isBlank()
+                ? joiner.getCompanyName().trim() : null;
+        String userId = joiner.getId() != null ? joiner.getId().toString() : null;
+
+        StringBuilder body = new StringBuilder("Nuevo afiliado: ").append(fullName);
+        if (email != null && !email.isBlank()) {
+            body.append(" (").append(email).append(')');
+        }
+        body.append('.');
+        if (country != null) {
+            body.append(" País: ").append(country).append('.');
+        }
+        if (company != null) {
+            body.append(" Empresa: ").append(company).append('.');
+        }
+        if (userId != null) {
+            body.append(" ID: ").append(userId).append('.');
+        }
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("name", fullName);
+        payload.put("email", email);
+        payload.put("userId", userId);
+        if (country != null) {
+            payload.put("country", country);
+        }
+        if (company != null) {
+            payload.put("company", company);
+        }
+        notifyStaff("AFFILIATE_JOIN", "Nuevo afiliado", body.toString(), payload);
     }
 
     /* ============================ Config ============================ */
@@ -148,7 +232,7 @@ public class AffiliateProgramService {
             affiliateRepo.save(a);
             notify(userId, "AFFILIATE_JOINED", "Te has unido al programa de afiliados",
                     "Tu cuenta de afiliado está activa. Comparte tu enlace para empezar a ganar comisiones.");
-            notifyStaff("AFFILIATE_JOIN", "Nuevo afiliado", "Un cliente se ha unido al programa de afiliados.");
+            notifyStaffAffiliateJoined(a.getUser());
         }
         return a;
     }

@@ -102,6 +102,7 @@ public class BffSecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/storefront/affiliate/track").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/storefront/newsletter/subscribe").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/storefront/newsletter/unsubscribe").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/storefront/contact").permitAll()
                         // OPERATOR (soporte) SOLO puede: procesar órdenes y ver sus propias ganancias/historial.
                         // Todo lo demás del admin (pricing/márgenes, dashboard/estadísticas, catálogo, usuarios,
                         // monedas, impuestos, partners, billing, afiliados…) es EXCLUSIVO de ADMIN.

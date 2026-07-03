@@ -35,12 +35,16 @@ public interface UserEntityMapper {
     @Mapping(target = "lockedUntil", source = "lockedUntil")
     @Mapping(target = "lastLogin", source = "lastLogin")
     @Mapping(target = "displayName", source = "displayName")
+    @Mapping(target = "firstName", source = "firstName")
+    @Mapping(target = "lastName1", source = "lastName1")
+    @Mapping(target = "lastName2", source = "lastName2")
     @Mapping(target = "companyName", source = "companyName")
     @Mapping(target = "country", source = "country")
     @Mapping(target = "phone", source = "phone")
     @Mapping(target = "avatarUrl", source = "avatarUrl")
     @Mapping(target = "language", source = "language")
     @Mapping(target = "googleLinked", source = "googleLinked")
+    @Mapping(target = "freeTrialUsed", source = "freeTrialUsed")
     @Mapping(target = "totp", ignore = true)
     @Mapping(target = "resetTokens", ignore = true)
     @Mapping(target = "totpEnabled", ignore = true)
@@ -61,12 +65,16 @@ public interface UserEntityMapper {
     @Mapping(target = "lockedUntil", source = "lockedUntil")
     @Mapping(target = "lastLogin", source = "lastLogin")
     @Mapping(target = "displayName", source = "displayName")
+    @Mapping(target = "firstName", source = "firstName")
+    @Mapping(target = "lastName1", source = "lastName1")
+    @Mapping(target = "lastName2", source = "lastName2")
     @Mapping(target = "companyName", source = "companyName")
     @Mapping(target = "country", source = "country")
     @Mapping(target = "phone", source = "phone")
     @Mapping(target = "avatarUrl", source = "avatarUrl")
     @Mapping(target = "language", source = "language")
     @Mapping(target = "googleLinked", source = "googleLinked")
+    @Mapping(target = "freeTrialUsed", source = "freeTrialUsed")
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
@@ -77,14 +85,16 @@ public interface UserEntityMapper {
      * Aplica los campos escalares seguros del modelo sobre una entidad gestionada (ruta de
      * actualización). MapStruct auto-mapea el resto por nombre. Se ignoran: id y auditoría
      * ({@code createdAt}/{@code updatedAt}/{@code createdBy}/{@code updatedBy}), que resuelve
-     * el auditing de JPA; {@code marketingOptOut}, que no tiene contraparte en el modelo y lo
-     * gestiona su propio flujo; y los campos sensibles {@code passwordHash} y {@code role}, con
+     * el auditing de JPA; {@code marketingOptOut} y {@code freeTrialUsed}, banderas que gestiona su
+     * propio flujo (preferencias de email / contratación del plan gratis) y no la edición de perfil;
+     * y los campos sensibles {@code passwordHash} y {@code role}, con
      * manejo especial en el repositorio (no se deben sobreescribir con null en update).
      */
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "passwordHash", ignore = true)
     @Mapping(target = "role", ignore = true)
     @Mapping(target = "marketingOptOut", ignore = true)
+    @Mapping(target = "freeTrialUsed", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)

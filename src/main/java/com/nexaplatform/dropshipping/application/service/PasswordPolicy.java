@@ -10,7 +10,7 @@ import java.util.regex.Pattern;
  * Password policy enforcement. Used by registration, password reset, and admin user creation.
  *
  * Requirements:
- *  - min 12, max 128
+ *  - min 8, max 128
  *  - >= 1 uppercase
  *  - >= 1 lowercase
  *  - >= 1 digit

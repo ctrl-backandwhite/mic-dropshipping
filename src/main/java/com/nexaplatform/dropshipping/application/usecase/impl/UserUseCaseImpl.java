@@ -98,6 +98,9 @@ public class UserUseCaseImpl implements UserUseCase {
         user.setActivationCode(activationCode);
         user.setActivationCodeExpiresAt(Instant.now().plus(ACTIVATION_TTL_HOURS, ChronoUnit.HOURS));
         user.setLanguage(user.getLanguage() != null ? user.getLanguage() : "es");
+        // El nombre se captura en partes (nombre + primer/segundo apellido). Componemos el displayName
+        // (nombre completo) cuando no venga informado, para que nav/emails/perfil muestren el nombre real.
+        user.setDisplayName(resolveDisplayName(user));
 
         User saved = userRepository.save(user);
 
@@ -112,6 +115,26 @@ public class UserUseCaseImpl implements UserUseCase {
 
         auditLogger.log("auth.register", email, Map.of("userId", saved.getId(), "role", saved.getRole().name()));
         return saved;
+    }
+
+    /**
+     * Resuelve el nombre a mostrar (nombre completo). Si el usuario ya trae un displayName informado lo
+     * respeta; si no, lo compone concatenando nombre + primer apellido + segundo apellido (sin vacíos).
+     */
+    private String resolveDisplayName(User user) {
+        if (user.getDisplayName() != null && !user.getDisplayName().isBlank()) {
+            return user.getDisplayName().trim();
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String part : new String[]{user.getFirstName(), user.getLastName1(), user.getLastName2()}) {
+            if (part != null && !part.isBlank()) {
+                if (sb.length() > 0) {
+                    sb.append(' ');
+                }
+                sb.append(part.trim());
+            }
+        }
+        return sb.length() == 0 ? null : sb.toString();
     }
 
     @Override
@@ -378,18 +401,14 @@ public class UserUseCaseImpl implements UserUseCase {
         Optional<User> existing = userRepository.findByEmail(normalized);
         if (existing.isPresent()) {
             User user = existing.get();
-            if (!user.isGoogleLinked()) {
-                // El proveedor social ya VERIFICÓ este email (email_verified), así que el usuario controla
-                // ese correo — lo que por sí solo ya permite tomar la cuenta vía "olvidé mi contraseña".
-                // Por eso vinculamos y entramos directo, sin exigir confirmación con contraseña (que además
-                // no era fiable con auth por token cross-origin: la sesión PENDING_* no viajaba y el vínculo
-                // nunca se completaba, dejando el login social en bucle).
-                user.setGoogleLinked(true);
-                userRepository.save(user);
-                auditLogger.log("auth.social.autolink", normalized, Map.of("userId", user.getId()));
-                log.info("::> [OAUTH2] Existing account auto-linked to social login userId={}", user.getId());
+            if (user.isGoogleLinked()) {
+                return new GoogleLoginOutcome(user, false, normalized);
             }
-            return new GoogleLoginOutcome(user, false, normalized);
+            // Una cuenta local (con contraseña) ya posee este email: NO se inicia sesión vía social sin más.
+            // El usuario debe demostrar que controla la cuenta LOCAL (login con su contraseña) antes de
+            // vincular. El vínculo se completa en ese login por contraseña (flag linkSocial), no por sesión.
+            log.info("::> [OAUTH2] Existing local account, link confirmation required userId={}", user.getId());
+            return new GoogleLoginOutcome(null, true, normalized);
         }
         String display = ((firstName != null ? firstName : "") + " " + (lastName != null ? lastName : "")).trim();
         User user = User.builder()

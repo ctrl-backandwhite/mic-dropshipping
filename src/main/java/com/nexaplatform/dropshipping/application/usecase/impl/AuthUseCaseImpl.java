@@ -74,6 +74,12 @@ public class AuthUseCaseImpl implements AuthUseCase {
         UUID id = UUID.fromString(auth.getName());
         User user = userUseCase.findById(id);
         completePendingGoogleLink(httpRequest, user);
+        // Vínculo social por TOKEN (cross-origin): la sesión PENDING_* no viaja, así que si el usuario
+        // llegó desde el flujo OAuth (?link=required) y ahora prueba su contraseña, vinculamos aquí. El
+        // control se mantiene: solo se vincula tras autenticar con éxito la cuenta local.
+        if (req.isLinkSocial()) {
+            userUseCase.linkGoogleAccount(id);
+        }
         // Registro de dispositivo: auditoría best-effort (la cookie nx_device no viaja
         // cross-site, pero la fila sirve para histórico de IP/agente).
         deviceSessionService.recordLogin(id, httpRequest, httpResponse);
@@ -171,7 +177,17 @@ public class AuthUseCaseImpl implements AuthUseCase {
     public MeDtoOut updateProfile(Authentication authentication, UpdateProfileDtoIn req) {
         UUID id = UUID.fromString(authentication.getName());
         User user = userUseCase.findById(id);
-        if (req.getDisplayName() != null)
+        if (req.getFirstName() != null)
+            user.setFirstName(req.getFirstName().trim());
+        if (req.getLastName1() != null)
+            user.setLastName1(req.getLastName1().trim());
+        if (req.getLastName2() != null)
+            user.setLastName2(req.getLastName2().trim());
+        boolean nameParts = req.getFirstName() != null || req.getLastName1() != null || req.getLastName2() != null;
+        if (nameParts)
+            // El displayName (nombre completo) se recompone a partir de las partes actualizadas.
+            user.setDisplayName(mapper.fullName(user));
+        else if (req.getDisplayName() != null)
             user.setDisplayName(req.getDisplayName().trim());
         if (req.getCompanyName() != null)
             user.setCompanyName(req.getCompanyName().trim());

@@ -23,12 +23,14 @@ import com.stripe.model.Customer;
 import com.stripe.model.PaymentMethod;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
@@ -153,6 +155,12 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     public CustomerSubscription createSubscription(UUID userId, String planCode, String billingPeriod) {
         SubscriptionPlanEntity plan = getPlanEntityByCode(planCode);
         Instant now = Instant.now();
+
+        // Plan GRATIS = PRUEBA de 1 mes, un solo uso por cuenta/correo (rechaza el 2º intento).
+        if (isFreePlan(plan)) {
+            return startFreeTrial(userId, plan, now);
+        }
+
         Instant end = "YEARLY".equalsIgnoreCase(billingPeriod)
                 ? now.plus(365, ChronoUnit.DAYS)
                 : now.plus(30, ChronoUnit.DAYS);
@@ -161,6 +169,62 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
                 .billingPeriod(billingPeriod == null ? "MONTHLY" : billingPeriod.toUpperCase()).currentPeriodStart(now)
                 .currentPeriodEnd(end).build();
         return customerSubscriptionRepository.save(model);
+    }
+
+    /**
+     * Contrata el plan de PRUEBA (gratis): vence en 1 mes y solo puede usarse UNA vez por cuenta/correo. La
+     * fila queda {@code ACTIVE} con {@code currentPeriodEnd = ahora + 1 mes} (el modelo trata FREE como
+     * activo, no como TRIALING — misma convención que {@link #normalizeForAdmin} y schema-v33); el
+     * vencimiento lo aplica el barrido {@link #expireFreeTrials()}. Marca {@code freeTrialUsed=true} en el
+     * usuario para impedir una segunda prueba gratis desde la misma cuenta.
+     */
+    private CustomerSubscription startFreeTrial(UUID userId, SubscriptionPlanEntity plan, Instant now) {
+        UserEntity user = loadUser(userId);
+        if (user.isFreeTrialUsed()) {
+            throw new BusinessException("FREE_TRIAL_ALREADY_USED",
+                    "Ya has utilizado tu mes de prueba gratis. Elige un plan de pago.");
+        }
+        Instant trialEnd = now.atZone(ZoneOffset.UTC).plusMonths(1).toInstant();
+        CustomerSubscription model = CustomerSubscription.builder().userId(userId).planId(plan.getId())
+                .status(SubscriptionStatus.ACTIVE).billingPeriod("MONTHLY").currentPeriodStart(now)
+                .currentPeriodEnd(trialEnd).build();
+        CustomerSubscription saved = customerSubscriptionRepository.save(model);
+        user.setFreeTrialUsed(true);
+        userRepository.save(user);
+        log.info("::> [BILLING] Free trial started user={} plan={} endsAt={}", userId, plan.getCode(), trialEnd);
+        return saved;
+    }
+
+    /** Un plan es "gratis/prueba" si su código es FREE o si no tiene coste ni mensual ni anual. */
+    private boolean isFreePlan(SubscriptionPlanEntity plan) {
+        return "FREE".equalsIgnoreCase(plan.getCode())
+                || (plan.getPriceMonthlyCents() <= 0 && plan.getPriceYearlyCents() <= 0);
+    }
+
+    /**
+     * Vencimiento del plan de PRUEBA (gratis). Cada hora marca como {@code CANCELED} las suscripciones FREE
+     * cuyo mes ya expiró ({@code currentPeriodEnd} en el pasado). El modelo no tiene estado EXPIRED, así que
+     * usamos CANCELED con {@code canceledAt}: deja al usuario SIN plan activo ({@link #currentSubscription}
+     * ignora CANCELED), de modo que debe contratar un plan de pago. Los planes de PAGO NO se tocan (su ciclo
+     * lo gobierna Stripe): se excluyen por precio y por llevar {@code stripeSubscriptionId}.
+     */
+    @Scheduled(fixedDelay = 3_600_000L)
+    @Transactional
+    public void expireFreeTrials() {
+        Instant now = Instant.now();
+        for (CustomerSubscription sub : customerSubscriptionRepository.findAll()) {
+            boolean free = "FREE".equalsIgnoreCase(sub.getPlanCode())
+                    || (sub.getPriceMonthly() <= 0 && sub.getPriceYearly() <= 0);
+            boolean active = sub.getStatus() == SubscriptionStatus.ACTIVE
+                    || sub.getStatus() == SubscriptionStatus.TRIALING;
+            boolean expired = sub.getCurrentPeriodEnd() != null && sub.getCurrentPeriodEnd().isBefore(now);
+            boolean stripeManaged = sub.getStripeSubscriptionId() != null && !sub.getStripeSubscriptionId().isBlank();
+            if (free && active && expired && !stripeManaged) {
+                customerSubscriptionRepository.save(sub.withStatus(SubscriptionStatus.CANCELED).withCanceledAt(now));
+                log.info("::> [BILLING] Free trial expired → canceled subId={} user={}", sub.getId(),
+                        sub.getUserId());
+            }
+        }
     }
 
     @Override

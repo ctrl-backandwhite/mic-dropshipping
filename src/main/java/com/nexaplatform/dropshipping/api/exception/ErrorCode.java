@@ -104,7 +104,15 @@ public enum ErrorCode {
             "Ajoutez une carte dans votre profil avant de souscrire à un plan.",
             "Füge eine Karte in deinem Profil hinzu, bevor du einen Plan abschließt.",
             "Aggiungi una carta nel tuo profilo prima di sottoscrivere un piano.",
-            "Voeg een kaart toe in je profiel voordat je een abonnement afsluit.");
+            "Voeg een kaart toe in je profiel voordat je een abonnement afsluit."),
+    FREE_TRIAL_ALREADY_USED("Ya has utilizado tu mes de prueba gratis. Elige un plan de pago.",
+            "You have already used your free trial month. Please choose a paid plan.",
+            "Já utilizou o seu mês de teste grátis. Escolha um plano pago.",
+            "您已使用过免费试用月。请选择付费套餐。",
+            "Vous avez déjà utilisé votre mois d'essai gratuit. Choisissez un plan payant.",
+            "Du hast deinen kostenlosen Probemonat bereits genutzt. Bitte wähle einen kostenpflichtigen Plan.",
+            "Hai già utilizzato il tuo mese di prova gratuito. Scegli un piano a pagamento.",
+            "Je hebt je gratis proefmaand al gebruikt. Kies een betaald abonnement.");
 
     private final String es;
     private final String en;

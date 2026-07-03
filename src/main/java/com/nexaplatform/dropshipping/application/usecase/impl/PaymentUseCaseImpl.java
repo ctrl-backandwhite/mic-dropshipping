@@ -66,6 +66,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     private final AuditLogger auditLogger;
     private final PartnerPlanSyncService partnerPlanSyncService;
     private final com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase customerSubscriptionUseCase;
+    private final com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService subscriptionNotificationService;
     private final ObjectMapper objectMapper;
     private final OrderEmailService orderEmailService;
     private final CurrencyRateService currencyRateService;
@@ -658,6 +659,13 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 customerSubscriptionUseCase.syncFromStripe(stripeSubId, stripeStatus,
                         asEpoch(data.get("current_period_end")), asEpoch(data.get("cancel_at")));
                 partnerPlanSyncService.onSubscriptionEvent(stripeSubId, stripeStatus, eventType);
+                return "ok";
+            }
+
+            if ("invoice.payment_failed".equals(eventType)) {
+                // Fallo de cobro recurrente de la suscripción: la factura lleva el id de la suscripción de
+                // Stripe. Avisamos al dueño (in-app + email) para que revise/actualice su método de pago.
+                subscriptionNotificationService.planPaymentFailed(String.valueOf(data.get("subscription")));
                 return "ok";
             }
 

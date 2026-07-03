@@ -159,3 +159,9 @@ databaseChangeLog:
       file: db/changelog/schema-v74-region-seed-rest.sql
   - include:
       file: db/changelog/schema-v75-product-favorites.sql
+  - include:
+      file: db/changelog/schema-v76-user-name-parts.sql
+  - include:
+      file: db/changelog/schema-v77-outbound-email-reply-to.sql
+  - include:
+      file: db/changelog/schema-v78-user-free-trial-used.sql
