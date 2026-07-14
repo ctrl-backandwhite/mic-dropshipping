@@ -17,6 +17,7 @@ import com.nexaplatform.dropshipping.infrastructure.integration.currency.Currenc
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.*;
+import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -176,9 +177,11 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     public PageResponse<ProductSummaryView> list(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping,
             Boolean selfPickup, Boolean hasVideo, Integer minRating, Integer inventoryMin, String certification,
-            String sort) {
+            String sort, Boolean verified) {
+        // El filtro de verificación es SOLO para admin: si el que consulta no es admin, se ignora.
+        Boolean verifiedFilter = SecurityUtils.isAdmin() ? verified : null;
         return storefrontRead.productListFull(page, size, lang, q, categoryId, supplierId, minPrice, maxPrice, shipFrom,
-                freeShipping, selfPickup, hasVideo, minRating, inventoryMin, certification, sort);
+                freeShipping, selfPickup, hasVideo, minRating, inventoryMin, certification, sort, verifiedFilter);
     }
 
     @Override

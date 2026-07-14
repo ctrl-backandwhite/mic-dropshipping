@@ -4,6 +4,7 @@ import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueEntity;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductImageRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.VariantValueRepository;
@@ -12,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +25,7 @@ import java.net.http.HttpResponse;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
@@ -49,6 +52,7 @@ public class ImageMirrorService {
     private final ProductVariantRepository variantRepository;
     private final VariantValueRepository variantValueRepository;
     private final ObjectStorageService storage;
+    private final ProductIndexer productIndexer;
 
     @Value("${nexadrop.storage.mirror-enabled:true}")
     private boolean mirrorEnabled;
@@ -151,7 +155,7 @@ public class ImageMirrorService {
     /** Procesa hasta {@code limit} imágenes PENDING en paralelo. Devuelve cuántas se espejaron. */
     public int mirrorPendingBatch(int limit) {
         List<ProductImageEntity> pending = imageRepository
-                .findTop100ByMirrorStatusOrderByCreatedAtAsc(MirrorStatus.PENDING);
+                .findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus.PENDING);
         if (pending.isEmpty()) {
             return 0;
         }
@@ -161,18 +165,86 @@ public class ImageMirrorService {
         List<Future<Boolean>> futures = pending.stream()
                 .map(img -> pool.submit(() -> mirrorOne(img.getId(), img.getSourceUrl()))).toList();
         int ok = 0;
-        for (Future<Boolean> f : futures) {
+        List<UUID> mirroredImageIds = new ArrayList<>();
+        for (int i = 0; i < futures.size(); i++) {
             try {
-                if (Boolean.TRUE.equals(f.get())) {
+                if (Boolean.TRUE.equals(futures.get(i).get())) {
                     ok++;
+                    mirroredImageIds.add(pending.get(i).getId());
                 }
             } catch (Exception ignored) {
                 // el fallo individual ya se marca FAILED dentro de mirrorOne
             }
         }
+        // Reindexar en OpenSearch los productos cuyas imágenes acaban de espejarse: su flag hasImage pasa a
+        // true y así aparecen en el escaparate SIN esperar a un reindexado manual (convención: cada cambio
+        // reindexa). Un producto por id afectado (se deduplican en la query).
+        reindexAffectedProducts(mirroredImageIds);
         log.info("Mirror imágenes: {}/{} subidas a storage (~{} PENDING restantes)", ok, pending.size(),
                 imageRepository.countByMirrorStatus(MirrorStatus.PENDING));
         return ok;
+    }
+
+    /**
+     * Espeja YA (en background) las imágenes PENDING de unos productos recién importados y los reindexa, para
+     * que aparezcan en el escaparate casi al instante sin esperar al ciclo programado. No bloquea el import.
+     */
+    @Async
+    public void mirrorProductsAsync(List<UUID> productIds) {
+        if (!mirrorEnabled || productIds == null || productIds.isEmpty()) {
+            return;
+        }
+        List<ProductImageEntity> imgs = imageRepository.findByProductIdInAndMirrorStatus(productIds,
+                MirrorStatus.PENDING);
+        if (imgs.isEmpty()) {
+            return;
+        }
+        List<Future<Boolean>> futures = imgs.stream()
+                .map(img -> pool.submit(() -> mirrorOne(img.getId(), img.getSourceUrl()))).toList();
+        List<UUID> mirroredImageIds = new ArrayList<>();
+        for (int i = 0; i < futures.size(); i++) {
+            try {
+                if (Boolean.TRUE.equals(futures.get(i).get())) {
+                    mirroredImageIds.add(imgs.get(i).getId());
+                }
+            } catch (Exception ignored) {
+                // el fallo individual ya se marca FAILED dentro de mirrorOne
+            }
+        }
+        reindexAffectedProducts(mirroredImageIds);
+        log.info("Mirror import: {}/{} imágenes de {} producto(s) espejadas al importar", mirroredImageIds.size(),
+                imgs.size(), productIds.size());
+    }
+
+    /**
+     * Pase completo (en background): drena TODAS las imágenes PENDING en lotes hasta agotarlas. Se dispara
+     * al reindexar desde el admin, para que "reindexar" deje también todas las imágenes espejadas y visibles
+     * (cada lote reindexa sus productos vía {@link #reindexAffectedProducts}). Acotado por nº de rondas.
+     */
+    @Async
+    public void mirrorAllPendingAsync() {
+        if (!mirrorEnabled) {
+            return;
+        }
+        int rounds = 0;
+        while (imageRepository.countByMirrorStatus(MirrorStatus.PENDING) > 0 && rounds++ < 500) {
+            mirrorPendingBatch(mirrorBatch);
+        }
+        log.info("Mirror: pase completo tras reindex terminado ({} rondas)", rounds);
+    }
+
+    /** Reindexa los productos afectados por un lote de imágenes recién espejadas (hasImage → true). */
+    private void reindexAffectedProducts(List<UUID> mirroredImageIds) {
+        if (mirroredImageIds.isEmpty()) {
+            return;
+        }
+        for (UUID productId : imageRepository.findProductIdsByImageIds(mirroredImageIds)) {
+            try {
+                productIndexer.indexProduct(productId);
+            } catch (Exception e) {
+                log.debug("Reindex tras espejar falló para producto {}: {}", productId, e.toString());
+            }
+        }
     }
 
     private boolean mirrorOne(UUID id, String src) {
@@ -180,15 +252,32 @@ public class ImageMirrorService {
             imageRepository.markStatus(id, MirrorStatus.FAILED);
             return false;
         }
-        try {
-            Stored s = fetchAndStore(src);
-            imageRepository.markMirrored(id, s.url(), s.bytes(), s.hash(), MirrorStatus.MIRRORED, Instant.now());
-            return true;
-        } catch (Exception e) {
-            log.debug("Mirror falló imagen {} ({}): {}", id, src, e.toString());
-            imageRepository.markStatus(id, MirrorStatus.FAILED);
-            return false;
+        for (String candidate : candidateUrls(src)) {
+            try {
+                Stored s = fetchAndStore(candidate);
+                imageRepository.markMirrored(id, s.url(), s.bytes(), s.hash(), MirrorStatus.MIRRORED, Instant.now());
+                return true;
+            } catch (Exception e) {
+                log.debug("Mirror falló imagen {} ({}): {}", id, candidate, e.toString());
+            }
         }
+        imageRepository.markStatus(id, MirrorStatus.FAILED);
+        return false;
+    }
+
+    /**
+     * URLs candidatas a descargar, en orden. Muchas imágenes de alicdn ibank se guardan SIN el sufijo
+     * canónico {@code -0-cib.jpg} y devuelven 404; la variante con el sufijo sí resuelve (verificado). Se
+     * prueba primero la original (las que ya funcionan siguen igual) y, si aplica, la variante -0-cib.jpg.
+     */
+    private List<String> candidateUrls(String src) {
+        List<String> out = new ArrayList<>(2);
+        out.add(src);
+        if (src.contains("alicdn.com/img/ibank/") && src.endsWith(".jpg") && src.contains("_!!")
+                && !src.endsWith("-0-cib.jpg")) {
+            out.add(src.substring(0, src.length() - ".jpg".length()) + "-0-cib.jpg");
+        }
+        return out;
     }
 
     /** Resultado de subir una imagen al storage: URL pública navegable + metadatos para auditoría/dedup. */

@@ -44,18 +44,44 @@ public class PricingService {
         String sourceCurrency = product.getCurrency() != null ? product.getCurrency() : "CNY";
         BigDecimal costUsd = supplierAmount != null ? currencyService.toUsd(supplierAmount, sourceCurrency) : null;
         var withMargin = marginService.apply(costUsd, product, effective);
-        BigDecimal retailUsd = withMargin.retailUsd();
+        // Base CON margen (el margen SOLO se aplica al precio base). El IVA y el envío se suman DESPUÉS,
+        // sin margen (decisión del usuario). Ambos vienen en CNY (misma moneda que base) y se convierten a USD.
+        BigDecimal retailBaseUsd = withMargin.retailUsd();
+        BigDecimal ivaUsd = product.getIvaCny() != null
+                ? currencyService.toUsd(product.getIvaCny(), sourceCurrency) : BigDecimal.ZERO;
+        BigDecimal shippingUsd = product.getShippingCny() != null
+                ? currencyService.toUsd(product.getShippingCny(), sourceCurrency) : BigDecimal.ZERO;
         String displayCode = CurrencyHolder.get();
-        // El precio MOSTRADO se deriva del USD ya redondeado a 2 decimales (el USD canónico que se cobra),
-        // no del retail crudo, para que el precio en cualquier moneda COINCIDA EXACTAMENTE con lo que se
-        // cobra (catálogo == carrito == cobro). El pedido también redondea retailUsd a 2 dec hacia arriba.
-        BigDecimal retailUsd2 = retailUsd != null ? retailUsd.setScale(2, RoundingMode.UP) : null;
-        BigDecimal displayAmount = currencyService.usdToDisplay(retailUsd2);
+        // Sin precio base (producto sin precio) → todo null (no se puede tarificar); no forzar 0.
+        BigDecimal baseUsd = retailBaseUsd;
+        // Cada componente se convierte con PRECISIÓN COMPLETA en USD y se redondea a 2 decimales SOLO al
+        // pasar a la moneda mostrada (usdToDisplay, HALF_UP). Así un monto exacto de origen sale exacto
+        // (30 CNY → ¥30.00). El TOTAL = suma de los componentes YA redondeados en la moneda mostrada, de
+        // modo que el desglose SIEMPRE cuadra (base+IVA+envío = total) en cualquier divisa.
+        BigDecimal displayBase = currencyService.usdToDisplay(baseUsd);
+        BigDecimal displayIva = currencyService.usdToDisplay(ivaUsd);
+        BigDecimal displayShip = currencyService.usdToDisplay(shippingUsd);
+        BigDecimal displayTotal = displayBase == null ? null
+                : displayBase.add(nz(displayIva)).add(nz(displayShip));
+        // Cobro canónico en USD = suma de los componentes redondeados a céntimo USD (HALF_UP) → en USD el
+        // display == cobro, y para otras divisas el pedido (que cobra en USD) usa exactamente esta cifra.
+        BigDecimal retailUsd = baseUsd == null ? null
+                : baseUsd.setScale(2, RoundingMode.HALF_UP).add(ivaUsd.setScale(2, RoundingMode.HALF_UP))
+                        .add(shippingUsd.setScale(2, RoundingMode.HALF_UP));
         // El string formateado lo produce el BACKEND (locale de la moneda en BD); el frontend solo pinta.
-        String displayFormatted = currencyService.formatDisplay(displayAmount, displayCode);
-        return new PricedAmount(costUsd, retailUsd, displayAmount, displayCode, currencyService.symbolOf(displayCode),
+        String displayFormatted = currencyService.formatDisplay(displayTotal, displayCode);
+        String baseFormatted = currencyService.formatDisplay(displayBase, displayCode);
+        String ivaFormatted = currencyService.formatDisplay(displayIva, displayCode);
+        String shippingFormatted = currencyService.formatDisplay(displayShip, displayCode);
+        return new PricedAmount(costUsd, retailUsd, displayTotal, displayCode, currencyService.symbolOf(displayCode),
                 displayFormatted, withMargin.appliedRule() != null ? withMargin.appliedRule().getId() : null,
-                withMargin.appliedPercentage());
+                withMargin.appliedPercentage(), baseUsd, ivaUsd, shippingUsd, baseFormatted, ivaFormatted,
+                shippingFormatted);
+    }
+
+    /** null → 0 (para sumar componentes de desglose cuando IVA/envío son 0 y la conversión devuelve null). */
+    private static BigDecimal nz(BigDecimal v) {
+        return v == null ? BigDecimal.ZERO : v;
     }
 
     public PricedAmount priceFor(ProductEntity product) {
@@ -100,6 +126,9 @@ public class PricingService {
 
     public record PricedAmount(BigDecimal costUsd, BigDecimal retailUsd, BigDecimal displayAmount,
             String displayCurrency, String displaySymbol, String displayFormatted, java.util.UUID appliedRuleId,
-            BigDecimal appliedMarginPercent) {
+            BigDecimal appliedMarginPercent,
+            // Desglose (solo informativo, para el admin): base con margen + IVA + envío = total.
+            BigDecimal baseRetailUsd, BigDecimal ivaUsd, BigDecimal shippingUsd,
+            String baseFormatted, String ivaFormatted, String shippingFormatted) {
     }
 }

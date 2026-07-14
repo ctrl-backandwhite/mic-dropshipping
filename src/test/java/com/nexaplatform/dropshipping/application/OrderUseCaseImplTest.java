@@ -72,6 +72,8 @@ class OrderUseCaseImplTest {
     @Mock
     AffiliateProgramService affiliateProgramService;
     @Mock
+    com.nexaplatform.dropshipping.application.service.StockService stockService;
+    @Mock
     PaymentUseCase paymentUseCase;
     @Mock
     OrderEmailService orderEmailService;
@@ -93,7 +95,7 @@ class OrderUseCaseImplTest {
     void setup() {
         orderUseCase = new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository, userRepository,
                 shopConnectionRepository, userAddressRepository, webhooks, walletUseCase, notificationsPublisher,
-                pricingService, affiliateProgramService, paymentUseCase, orderEmailService, cainiao, cainiaoTaxService,
+                pricingService, affiliateProgramService, stockService, paymentUseCase, orderEmailService, cainiao, cainiaoTaxService,
                 operatorCommissionService, orderIndexer, orderSearchService);
         // Por defecto, sin envío en los tests de billing (no altera el total = subtotal).
         lenient().when(cainiao.quote(any(), anyInt())).thenReturn(ShippingQuote.unsupported("XX"));
@@ -104,7 +106,8 @@ class OrderUseCaseImplTest {
     /** DROP-637: the checkout now bills the priced amount (retailUsd) from PricingService. */
     private static PricingService.PricedAmount priced(String retail) {
         BigDecimal r = retail == null ? null : new BigDecimal(retail);
-        return new PricingService.PricedAmount(r, r, r, "USD", "$", null, null, BigDecimal.ZERO);
+        return new PricingService.PricedAmount(r, r, r, "USD", "$", null, null, BigDecimal.ZERO,
+                r, BigDecimal.ZERO, BigDecimal.ZERO, null, null, null);
     }
 
     @Test
@@ -177,6 +180,28 @@ class OrderUseCaseImplTest {
 
         Order order = orderUseCase.createOrder(UUID.randomUUID(), null, req);
         assertThat(order.getSubtotalCents()).isEqualTo(3000); // priced retailUsd 15 * 2 * 100
+    }
+
+    @Test
+    void createOrder_whenVariantMissing_throwsCartItemUnavailableWithVariantId() {
+        // Carrito obsoleto: la variante fue re-importada con otro ID y ya no existe. El checkout debe
+        // devolver el código específico CART_ITEM_UNAVAILABLE + el variantId en detail (no un 404 genérico),
+        // para que el front identifique y quite la línea rota.
+        UUID productId = UUID.randomUUID();
+        UUID staleVariantId = UUID.randomUUID();
+        ProductEntity product = ProductEntity.builder().basePrice(new BigDecimal("10")).moq(1).titleZh("p").build();
+        product.setId(productId);
+        when(productRepository.findById(productId)).thenReturn(Optional.of(product));
+        when(variantRepository.findById(staleVariantId)).thenReturn(Optional.empty());
+
+        var req = new CreateOrderRequest("EXT", new AddressInput("X", null, null, "L1", null, "C", null, "00000", "ES"),
+                null, List.of(new OrderItemInput(productId, staleVariantId, 1)), null);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> orderUseCase.createOrder(UUID.randomUUID(), null, req))
+                .isInstanceOfSatisfying(NotFoundException.class, ex -> {
+                    org.assertj.core.api.Assertions.assertThat(ex.getCode()).isEqualTo("CART_ITEM_UNAVAILABLE");
+                    org.assertj.core.api.Assertions.assertThat(ex.getDetail()).containsExactly(staleVariantId.toString());
+                });
     }
 
     @Test

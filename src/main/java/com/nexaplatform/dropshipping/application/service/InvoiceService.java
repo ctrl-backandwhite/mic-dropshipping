@@ -11,7 +11,13 @@ import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
+import com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PaymentJpaRepositoryAdapter;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +52,9 @@ public class InvoiceService {
     private final TemplateEngine templateEngine;
     private final CurrencyRateService currencyRateService;
     private final PaymentJpaRepositoryAdapter paymentRepository;
+    private final ProductRepository productRepository;
+    private final ProductVariantRepository variantRepository;
+    private final ObjectStorageService storage;
 
     /** Importe realmente cobrado (settlement) del pago satisfactorio si coincide con la moneda de la factura. */
     private BigDecimal settlementTotal(java.util.UUID orderId, String ccy) {
@@ -102,6 +111,17 @@ public class InvoiceService {
      * factura con la tasa del día (2 decimales, redondeo arriba).
      */
     public Map<String, Object> model(Order o, String locale, String downloadUrl, String invoiceCurrency) {
+        // Email: imagen por URL pública (funciona en prod/Railway; el cliente de correo la descarga).
+        return model(o, locale, downloadUrl, invoiceCurrency, false);
+    }
+
+    /**
+     * @param embedImages si {@code true} (PDF), incrusta la imagen de cada línea como data-URI base64 —
+     *        openhtmltopdf corre en el servidor y NO puede descargar la URL pública del storage
+     *        ({@code localhost}/host externo). Si {@code false} (email), usa la URL pública.
+     */
+    public Map<String, Object> model(Order o, String locale, String downloadUrl, String invoiceCurrency,
+            boolean embedImages) {
         boolean es = locale == null || locale.toLowerCase(Locale.ROOT).startsWith("es");
         String cur = invoiceCurrency != null && !invoiceCurrency.isBlank() ? invoiceCurrency.toUpperCase() : "USD";
 
@@ -118,8 +138,7 @@ public class InvoiceService {
                 items.add(Map.of("title", it.getTitleSnapshot() != null ? it.getTitleSnapshot() : "—", "sku",
                         it.getSkuSnapshot() != null ? it.getSkuSnapshot() : "", "variant",
                         it.getVariantName() != null ? it.getVariantName() : "", "qty", it.getQuantity(), "unit",
-                        fmt(unit, cur), "lineTotal", fmt(lineDisp, cur), "image",
-                        it.getImageUrlSnapshot() != null ? it.getImageUrlSnapshot() : ""));
+                        fmt(unit, cur), "lineTotal", fmt(lineDisp, cur), "image", lineImage(it, embedImages)));
             }
         }
         BigDecimal shippingDisp = conv(o.getShippingCents(), cur);
@@ -245,6 +264,61 @@ public class InvoiceService {
     }
 
     /** Renderiza la factura PDF en la moneda del pedido. */
+    /**
+     * Imagen de una línea de la factura. Usa SIEMPRE la imagen VIVA del producto/variante: el
+     * {@code imageUrlSnapshot} congelado en la orden puede apuntar a una clave de storage ya eliminada
+     * (al re-mirrorar el catálogo la imagen se vuelve a subir con otra clave). Para el PDF ({@code embed})
+     * la incrusta en base64; para el email devuelve la URL pública (válida en prod/Railway).
+     */
+    private String lineImage(OrderItem it, boolean embed) {
+        String url = liveImageUrl(it);
+        if (url == null || url.isBlank()) {
+            return "";
+        }
+        if (!embed) {
+            return url;
+        }
+        byte[] bytes = storage.bytesFromPublicUrl(url);
+        if (bytes == null || bytes.length == 0) {
+            return url; // no se pudo incrustar (URL externa o no encontrada): mejor la URL que nada
+        }
+        return "data:" + guessMime(bytes) + ";base64," + Base64.getEncoder().encodeToString(bytes);
+    }
+
+    /** URL viva (cdn preferido) de la imagen del producto/variante comprado; cae al snapshot como último recurso. */
+    private String liveImageUrl(OrderItem it) {
+        if (it.getVariantId() != null) {
+            ProductVariantEntity v = variantRepository.findById(it.getVariantId()).orElse(null);
+            if (v != null) {
+                if (notBlank(v.getImageCdnUrl())) return v.getImageCdnUrl();
+                if (notBlank(v.getImageSourceUrl())) return v.getImageSourceUrl();
+            }
+        }
+        if (it.getProductId() != null) {
+            ProductEntity p = productRepository.findById(it.getProductId()).orElse(null);
+            if (p != null && p.getImages() != null && !p.getImages().isEmpty()) {
+                ProductImageEntity img = p.getImages().get(0);
+                if (notBlank(img.getCdnUrl())) return img.getCdnUrl();
+                if (notBlank(img.getSourceUrl())) return img.getSourceUrl();
+            }
+        }
+        return it.getImageUrlSnapshot();
+    }
+
+    private static boolean notBlank(String s) {
+        return s != null && !s.isBlank();
+    }
+
+    /** MIME por magic bytes. openhtmltopdf renderiza JPEG/PNG/GIF (WEBP no, sin plugin). */
+    private static String guessMime(byte[] b) {
+        if (b.length >= 3 && (b[0] & 0xFF) == 0xFF && (b[1] & 0xFF) == 0xD8 && (b[2] & 0xFF) == 0xFF) return "image/jpeg";
+        if (b.length >= 4 && (b[0] & 0xFF) == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G') return "image/png";
+        if (b.length >= 6 && b[0] == 'G' && b[1] == 'I' && b[2] == 'F') return "image/gif";
+        if (b.length >= 12 && b[0] == 'R' && b[1] == 'I' && b[2] == 'F' && b[3] == 'F'
+                && b[8] == 'W' && b[9] == 'E' && b[10] == 'B' && b[11] == 'P') return "image/webp";
+        return "image/jpeg";
+    }
+
     public byte[] renderPdf(Order o, String locale) {
         return renderPdf(o, locale, o.getCurrency() != null ? o.getCurrency() : "USD");
     }
@@ -252,7 +326,8 @@ public class InvoiceService {
     /** Renderiza la factura PDF en la moneda indicada (la de pago: EUR si se pagó en EUR, USD en otro caso). */
     public byte[] renderPdf(Order o, String locale, String currency) {
         // El PDF es un documento descargable → lienzo BLANCO (no el lavanda del email). Sin CTA.
-        Map<String, Object> m = model(o, locale, null, currency);
+        // embedImages=true: incrusta cada imagen en base64 (openhtmltopdf no puede descargarla del storage).
+        Map<String, Object> m = model(o, locale, null, currency, true);
         m.put("bodyBg", "#ffffff");
         m.put("pdf", true); // documento de factura: sin saludo de email ni CTA
         // El nombre del producto se muestra COMPLETO (la celda hace wrap); antes se truncaba a 40

@@ -83,6 +83,8 @@ class CatalogUseCaseImplTest {
     JdbcTemplate jdbcTemplate;
     @Mock
     ProductBulkExportMapper bulkExportMapper;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.integration.storage.ImageMirrorService imageMirrorService;
 
     CatalogUseCaseImpl useCase;
 
@@ -91,7 +93,7 @@ class CatalogUseCaseImplTest {
         useCase = new CatalogUseCaseImpl(productRepository, supplierRepository, categoryRepository, priceTierRepository,
                 imageRepository, objectStorage, productJpaRepository, productMapper, catalogStorefrontMapper, kafkaTemplate,
                 variantRepository, productIndexer, categoryIndexer, productAttributeRepository,
-                productSpecificationRepository, variantValueRepository, jdbcTemplate, bulkExportMapper);
+                productSpecificationRepository, variantValueRepository, jdbcTemplate, bulkExportMapper, imageMirrorService);
     }
 
     @Test

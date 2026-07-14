@@ -102,7 +102,8 @@ public interface StorefrontCatalogApi {
             @RequestParam(required = false) Boolean freeShipping, @RequestParam(required = false) Boolean selfPickup,
             @RequestParam(required = false) Boolean hasVideo, @RequestParam(required = false) Integer minRating,
             @RequestParam(required = false) Integer inventoryMin, @RequestParam(required = false) String certification,
-            @RequestParam(required = false, defaultValue = "best_match") String sort);
+            @RequestParam(required = false, defaultValue = "best_match") String sort,
+            @RequestParam(required = false) Boolean verified);
 
     @Operation(summary = "Get a product detail by slug")
     @GetMapping("/products/{slug}")

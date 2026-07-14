@@ -74,6 +74,11 @@ public class HttpCacheFilter extends OncePerRequestFilter {
         if (path.contains("/products/") || path.endsWith("/products")) {
             return "no-cache, must-revalidate";
         }
+        // Home (secciones/trending/novedades): al cargar catálogo el admin espera verlo casi al instante.
+        // TTL muy corto + ETag → el cambio aparece en ≤5s sin recomputar la home en cada request.
+        if (path.contains("/home")) {
+            return "public, max-age=5, stale-while-revalidate=30";
+        }
         return "public, max-age=30, stale-while-revalidate=120";
     }
 }

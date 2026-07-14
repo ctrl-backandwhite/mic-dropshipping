@@ -80,7 +80,7 @@ class ImageMirrorServiceTest {
 
     @Test
     void pendingBatch_returnsZero_whenNothingPending() {
-        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtAsc(MirrorStatus.PENDING))
+        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus.PENDING))
                 .thenReturn(List.of());
 
         int mirrored = service.mirrorPendingBatch(50);
@@ -93,7 +93,7 @@ class ImageMirrorServiceTest {
     @Test
     void pendingBatch_marksFailed_whenSourceUrlIsBlank() {
         UUID id = UUID.randomUUID();
-        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtAsc(MirrorStatus.PENDING))
+        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus.PENDING))
                 .thenReturn(List.of(image(id, "   ")));
         lenient().when(imageRepository.countByMirrorStatus(MirrorStatus.PENDING)).thenReturn(0L);
 
@@ -108,7 +108,7 @@ class ImageMirrorServiceTest {
     @Test
     void pendingBatch_marksFailed_whenSourceUrlIsNull() {
         UUID id = UUID.randomUUID();
-        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtAsc(MirrorStatus.PENDING))
+        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus.PENDING))
                 .thenReturn(List.of(image(id, null)));
         lenient().when(imageRepository.countByMirrorStatus(MirrorStatus.PENDING)).thenReturn(0L);
 
@@ -123,7 +123,7 @@ class ImageMirrorServiceTest {
         UUID id1 = UUID.randomUUID();
         UUID id2 = UUID.randomUUID();
         UUID id3 = UUID.randomUUID();
-        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtAsc(MirrorStatus.PENDING))
+        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus.PENDING))
                 .thenReturn(List.of(image(id1, null), image(id2, null), image(id3, null)));
         lenient().when(imageRepository.countByMirrorStatus(MirrorStatus.PENDING)).thenReturn(3L);
 
@@ -162,7 +162,7 @@ class ImageMirrorServiceTest {
                 .thenReturn(List.of(kept, gone));
 
         // No hay PENDING tras el heal: el resto del lote es no-op controlable.
-        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtAsc(MirrorStatus.PENDING))
+        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus.PENDING))
                 .thenReturn(List.of());
         // El barrido de variantes/valores no aporta nada (listas vacías).
         when(variantRepository.findNeedingImageMirror(any(), any())).thenReturn(List.of());
@@ -185,7 +185,7 @@ class ImageMirrorServiceTest {
         when(storage.publicUrl()).thenReturn("https://cdn.example.com");
         when(imageRepository.requeueNotMirrored(any())).thenReturn(0);
         when(storage.listKeys()).thenReturn(Set.of()); // vacío → se salta la verificación de objetos
-        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtAsc(MirrorStatus.PENDING))
+        when(imageRepository.findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus.PENDING))
                 .thenReturn(List.of());
         when(variantRepository.findNeedingImageMirror(any(), any())).thenReturn(List.of());
         when(variantValueRepository.findNeedingImageMirror(any(), any())).thenReturn(List.of());

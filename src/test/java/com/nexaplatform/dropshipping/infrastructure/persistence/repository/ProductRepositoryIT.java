@@ -37,6 +37,10 @@ class ProductRepositoryIT extends PersistenceITBase {
     @Autowired
     ProductJpaRepositoryAdapter repo;
 
+    /** The interface the admin use-case actually depends on; carries {@link ProductRepository#searchAdmin}. */
+    @Autowired
+    ProductRepository adminRepo;
+
     @Autowired
     TestEntityManager em;
 
@@ -418,5 +422,63 @@ class ProductRepositoryIT extends PersistenceITBase {
         assertThat(page.getTotalPages()).isEqualTo(3);
         List<String> slugs = page.getContent().stream().map(ProductEntity::getSlug).toList();
         assertThat(slugs).containsExactly("page-0", "page-1"); // dos más baratos, en orden
+    }
+
+    // ── searchAdmin (whole catalogue, all languages, status-agnostic, image-agnostic) ─────
+
+    /**
+     * The admin search must find a product by its Spanish translation title even when it has NO mirrored
+     * image and is NOT ACTIVE — the exact case that the old client-side, single-page, single-language filter
+     * missed. It must also match other languages (Chinese title) and honour the optional status filter.
+     */
+    @Test
+    void searchAdmin_matchesAllLanguages_ignoringStatusAndImage() {
+        // Spanish-only match, PAUSED and WITHOUT image → storefront would hide it, admin must find it.
+        ProductEntity spanish = baseProduct("sandalias-tacon-alto", "SND-ES")
+                .status(ProductStatus.PAUSED)
+                .titleZh("默认标题")
+                .build();
+        ProductTranslationEntity es = ProductTranslationEntity.builder()
+                .product(spanish)
+                .language("es") // NOT NULL
+                .title("Sandalias de tacón alto transparente para mujer, punta cuadrada, tacón grueso")
+                .build();
+        spanish.getTranslations().add(es);
+        repo.save(spanish);
+
+        // Chinese-title match (multilingual), ARCHIVED and without image.
+        ProductEntity chinese = baseProduct("producto-chino", "SND-ZH")
+                .status(ProductStatus.ARCHIVED)
+                .titleZh("透明高跟凉鞋")
+                .build();
+        repo.save(chinese);
+
+        // Unrelated product → must never match the needle.
+        repo.save(baseProduct("pantalon-vaquero", "UNREL").build());
+
+        em.flush();
+        em.clear();
+
+        Pageable firstPage = PageRequest.of(0, 20);
+
+        // Spanish full-ish title finds the PAUSED, image-less product across the whole catalogue.
+        assertThat(adminRepo.searchAdmin(null, null, "sandalias de tacón", null, firstPage).getContent())
+                .extracting(ProductEntity::getSlug)
+                .containsExactly("sandalias-tacon-alto");
+
+        // Chinese needle finds the ARCHIVED product → multilingual.
+        assertThat(adminRepo.searchAdmin(null, null, "透明", null, firstPage).getContent())
+                .extracting(ProductEntity::getSlug)
+                .containsExactly("producto-chino");
+
+        // Optional status filter still narrows results.
+        assertThat(adminRepo.searchAdmin(ProductStatus.PAUSED, null, "sandalias", null, firstPage).getContent())
+                .extracting(ProductEntity::getSlug)
+                .containsExactly("sandalias-tacon-alto");
+        assertThat(adminRepo.searchAdmin(ProductStatus.ACTIVE, null, "sandalias", null, firstPage).getContent())
+                .isEmpty();
+
+        // A needle that matches nothing returns an empty page.
+        assertThat(adminRepo.searchAdmin(null, null, "zzz-no-match", null, firstPage).getContent()).isEmpty();
     }
 }

@@ -173,3 +173,7 @@ databaseChangeLog:
       file: db/changelog/schema-v81-notification-archive-trash.sql
   - include:
       file: db/changelog/schema-v82-notification-status.sql
+  - include:
+      file: db/changelog/schema-v83-product-shipping-iva.sql
+  - include:
+      file: db/changelog/schema-v84-product-verified.sql

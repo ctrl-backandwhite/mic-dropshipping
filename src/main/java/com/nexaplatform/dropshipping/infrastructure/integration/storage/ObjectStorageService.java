@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.storage;
 
 import io.minio.BucketExistsArgs;
+import io.minio.GetObjectArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
@@ -94,6 +95,36 @@ public class ObjectStorageService {
                 .contentType(contentType != null && !contentType.isBlank() ? contentType : "application/octet-stream")
                 .build());
         return publicUrl.replaceAll("/+$", "") + "/" + key;
+    }
+
+    /** Descarga los bytes de un objeto por su clave (usa el endpoint INTERNO, alcanzable por el backend). */
+    public byte[] download(String key) throws Exception {
+        try (var is = client.getObject(GetObjectArgs.builder().bucket(bucket).object(key).build())) {
+            return is.readAllBytes();
+        }
+    }
+
+    /**
+     * Bytes de un objeto a partir de su URL pública (la que se guarda en snapshots/cdn). Deriva la clave
+     * quitando el prefijo {@code public-url} y descarga por el endpoint interno. Devuelve {@code null} si el
+     * storage no está listo, la URL no es de este bucket, o el objeto no existe. Agnóstico del entorno:
+     * en local usa {@code minio:9000}; en Railway, el {@code STORAGE_ENDPOINT} configurado.
+     */
+    public byte[] bytesFromPublicUrl(String url) {
+        if (client == null || url == null || url.isBlank() || publicUrl == null || publicUrl.isBlank()) {
+            return null;
+        }
+        String base = publicUrl.replaceAll("/+$", "") + "/";
+        if (!url.startsWith(base)) {
+            return null; // URL externa (p.ej. alicdn) o de otro host: no está en nuestro bucket
+        }
+        String key = url.substring(base.length());
+        try {
+            return download(key);
+        } catch (Exception e) {
+            log.debug("No se pudieron leer los bytes de {}: {}", url, e.getMessage());
+            return null;
+        }
     }
 
     /** Política de bucket: lectura anónima (GET) de los objetos, para servir las imágenes directo al navegador. */

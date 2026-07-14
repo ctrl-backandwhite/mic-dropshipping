@@ -81,12 +81,22 @@ class CurrencyRateServiceTest {
     /* ============ usdTo / toUsd ============ */
 
     @Test
-    void usdTo_usd_keeps_amount_with_two_decimals_rounded_up() {
-        assertThat(service.usdTo(new BigDecimal("10.001"), "USD")).isEqualByComparingTo("10.01");
+    void usdTo_usd_rounds_two_decimals_half_up() {
+        // HALF_UP al céntimo más cercano (no UP): 10.004 -> 10.00, 10.005 -> 10.01, 10.006 -> 10.01.
+        assertThat(service.usdTo(new BigDecimal("10.004"), "USD")).isEqualByComparingTo("10.00");
+        assertThat(service.usdTo(new BigDecimal("10.005"), "USD")).isEqualByComparingTo("10.01");
+        assertThat(service.usdTo(new BigDecimal("10.006"), "USD")).isEqualByComparingTo("10.01");
     }
 
     @Test
-    void usdTo_other_currency_multiplies_by_rate_and_rounds_up() {
+    void usdTo_exact_amount_stays_exact_no_extra_cents() {
+        // Un monto ya "cerrado" no debe ganar céntimos.
+        assertThat(service.usdTo(new BigDecimal("30.00"), "USD")).isEqualByComparingTo("30.00");
+        assertThat(service.usdTo(new BigDecimal("10"), "USD")).isEqualByComparingTo("10.00");
+    }
+
+    @Test
+    void usdTo_other_currency_multiplies_by_rate_half_up() {
         // 100 USD * 0.90 = 90.00 EUR
         assertThat(service.usdTo(new BigDecimal("100"), "EUR")).isEqualByComparingTo("90.00");
         // 10 USD * 7.20 = 72.00 CNY
@@ -128,6 +138,48 @@ class CurrencyRateServiceTest {
     @Test
     void toUsd_null_amount_returns_null() {
         assertThat(service.toUsd(null, "EUR")).isNull();
+    }
+
+    /* ============ round-trip / coherencia (origen exacto -> exacto) ============ */
+
+    /**
+     * Requisito del usuario: un monto EXACTO en la moneda de origen debe volver EXACTO tras el round-trip
+     * moneda -> USD -> moneda, sin céntimos de más ni de menos. Se prueban montos "cerrados" típicos de carga
+     * (precio base, envío 10, IVA) en varias monedas contra el dólar.
+     */
+    @Test
+    void roundTrip_exact_amounts_return_exact_for_every_currency() {
+        for (String code : List.of("USD", "EUR", "CNY")) {
+            for (String amt : List.of("30", "10", "3.90", "60", "0.83", "1240.74")) {
+                BigDecimal original = new BigDecimal(amt);
+                BigDecimal usd = service.toUsd(original, code);
+                BigDecimal back = service.usdTo(usd, code);
+                assertThat(back)
+                        .as("round-trip %s %s -> USD %s -> %s", amt, code, usd, back)
+                        .isEqualByComparingTo(original.setScale(2));
+            }
+        }
+    }
+
+    @Test
+    void roundTrip_shipping_and_iva_stay_exact_in_cny() {
+        // 10 CNY (envío) y 3.90 CNY (IVA) deben mostrarse exactos tras convertir a USD y volver.
+        assertThat(service.usdTo(service.toUsd(new BigDecimal("10"), "CNY"), "CNY")).isEqualByComparingTo("10.00");
+        assertThat(service.usdTo(service.toUsd(new BigDecimal("3.90"), "CNY"), "CNY")).isEqualByComparingTo("3.90");
+    }
+
+    @Test
+    void sameCurrency_usd_is_identity() {
+        // USD -> USD no debe alterar el valor (misma moneda, tasa 1).
+        BigDecimal usd = service.toUsd(new BigDecimal("57.92"), "USD");
+        assertThat(service.usdTo(usd, "USD")).isEqualByComparingTo("57.92");
+    }
+
+    @Test
+    void conversion_rate_is_symmetric_between_two_currencies() {
+        // EUR -> USD -> EUR y CNY -> USD -> CNY conservan el valor exacto (tasas inversas coherentes).
+        assertThat(service.usdTo(service.toUsd(new BigDecimal("90"), "EUR"), "EUR")).isEqualByComparingTo("90.00");
+        assertThat(service.usdTo(service.toUsd(new BigDecimal("72"), "CNY"), "CNY")).isEqualByComparingTo("72.00");
     }
 
     /* ============ symbol / locale ============ */

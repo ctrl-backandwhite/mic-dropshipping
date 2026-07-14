@@ -80,7 +80,9 @@ public final class CatalogDtos {
     }
 
     public record VariantView(UUID id, String sku, String title, BigDecimal price, String priceFormatted, int stock,
-            String imageUrl, Map<String, String> options, boolean active) {
+            String imageUrl, Map<String, String> options, boolean active,
+            // Báscula de peso por variante (peso en gramos, dimensiones en mm). El volumen se calcula en el front.
+            Integer weightGrams, Integer lengthMm, Integer widthMm, Integer heightMm) {
     }
 
     public record PriceTierView(int minQty, Integer maxQty, BigDecimal unitPrice, String currency,
@@ -97,7 +99,9 @@ public final class CatalogDtos {
             String displayFormatted, // string ya formateado por el backend ("28,26 €") — el front solo lo pinta
             // stock: inventoryCount es el rollup del proveedor; availableUnits es
             // la suma del stock por variantes activas (más fiel para fulfillment).
-            Integer inventoryCount, Integer availableUnits) {
+            Integer inventoryCount, Integer availableUnits,
+            // verificación manual del admin (false = pendiente/con error, true = revisado OK)
+            boolean verified) {
     }
 
     public record ProductDetailView(UUID id, String slug, String source, String externalId, SupplierView supplier,
@@ -110,8 +114,13 @@ public final class CatalogDtos {
             // pricing
             BigDecimal costUsd, BigDecimal retailUsd, BigDecimal displayPrice, String displayCurrency,
             String displaySymbol, String displayFormatted, BigDecimal appliedMarginPercent,
+            // Desglose del total (base×margen + IVA + envío). SOLO ADMIN (null para usuario final); el
+            // displayFormatted ya es el TOTAL que ve todo el mundo.
+            String baseFormatted, String ivaFormatted, String shippingFormatted,
             // DROP-679: SEO por idioma (generado al publicar a partir del contenido real)
-            String metaTitle, String metaDescription) {
+            String metaTitle, String metaDescription,
+            // verificación manual del admin (false = pendiente/con error, true = revisado OK)
+            boolean verified) {
     }
 
     public record BestsellerView(UUID productId, String slug, String title, String mainImage, int rank, String listCode,

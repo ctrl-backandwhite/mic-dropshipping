@@ -53,8 +53,8 @@ public interface CatalogUseCase {
 
     Page<ProductSummaryView> listProducts(ProductStatus status, Pageable pageable, String language);
 
-    Page<ProductSummaryView> listProductsForAdmin(String status, UUID categoryId, int page, int size, String language,
-            String sort);
+    Page<ProductSummaryView> listProductsForAdmin(String status, UUID categoryId, String query, int page, int size,
+            String language, String sort, Boolean verified);
 
     /** Reindexes every product into OpenSearch; returns the number indexed. */
     int reindexAllProducts();
@@ -97,6 +97,9 @@ public interface CatalogUseCase {
     /** Renombra la etiqueta visible de un valor de variación (p.ej. un color) y reindexa el producto. */
     void renameVariantValue(UUID valueId, String label);
 
+    /** Elimina un valor de variación (color/estampado) y las combinaciones (variantes) que lo usan. */
+    void deleteVariantValue(UUID valueId);
+
     /** DROP-674: fija la imagen real de un valor de variación (p.ej. la foto de un color). Vacío la elimina. */
     void setVariantValueImage(UUID valueId, String imageUrl);
 
@@ -123,6 +126,9 @@ public interface CatalogUseCase {
      * admin export the catalog in fixed segments (1-1000, 1001-2000, …).
      */
     List<BulkProductDtoIn> exportProducts(int from, int to);
+
+    /** Exporta UN producto al formato de carga masiva (para editarlo como JSON y reimportar con upsert). */
+    BulkProductDtoIn exportProduct(UUID id);
 
     /** Total number of products (used to compute the export segments). */
     long countProducts();
@@ -162,6 +168,9 @@ public interface CatalogUseCase {
     void updateStatus(UUID id, ProductStatus status);
 
     ProductDetailView quickEdit(UUID id, AdminProductQuickEditDtoIn req, String lang);
+
+    /** Elimina un tramo de precio (price break) de un producto, identificado por su cantidad mínima. */
+    void deletePriceTier(UUID productId, int minQty);
 
     ProductDetailView duplicateProduct(UUID id, String lang);
 }

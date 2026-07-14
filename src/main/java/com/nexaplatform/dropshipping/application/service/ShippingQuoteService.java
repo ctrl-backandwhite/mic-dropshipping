@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.application.service;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.CainiaoFulfillmentService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,8 +22,8 @@ public class ShippingQuoteService {
     private final ProductRepository productRepository;
     private final CainiaoFulfillmentService cainiao;
 
-    /** Una línea del carrito a cotizar. */
-    public record Line(UUID productId, int quantity) {
+    /** Una línea del carrito a cotizar. {@code variantId} puede ser null (producto sin variantes). */
+    public record Line(UUID productId, UUID variantId, int quantity) {
     }
 
     /** Países a los que Cainiao envía (para el banner de cobertura de la home). */
@@ -35,14 +36,32 @@ public class ShippingQuoteService {
         int weightGrams = 0;
         if (lines != null) {
             for (Line line : lines) {
-                int unit = productRepository.findById(line.productId()).map(this::packageWeight).orElse(500);
+                int unit = productRepository.findById(line.productId())
+                        .map(p -> packageWeight(p, line.variantId()))
+                        .orElse(500);
                 weightGrams += unit * Math.max(1, line.quantity());
             }
         }
         return cainiao.quote(country, Math.max(1, weightGrams));
     }
 
-    private int packageWeight(ProductEntity p) {
+    /**
+     * Peso del paquete a facturar por unidad: prioriza el peso REAL de la variante SELECCIONADA
+     * (báscula 1688: package&gt;neto), luego el peso a nivel producto y, en último caso, 500 g.
+     */
+    private int packageWeight(ProductEntity p, UUID variantId) {
+        if (variantId != null && p.getVariants() != null) {
+            ProductVariantEntity v = p.getVariants().stream()
+                    .filter(x -> variantId.equals(x.getId())).findFirst().orElse(null);
+            if (v != null) {
+                if (v.getPackageWeightGrams() != null && v.getPackageWeightGrams() > 0) {
+                    return v.getPackageWeightGrams();
+                }
+                if (v.getWeightGrams() != null && v.getWeightGrams() > 0) {
+                    return v.getWeightGrams();
+                }
+            }
+        }
         if (p.getPackageWeightGrams() != null && p.getPackageWeightGrams() > 0) {
             return p.getPackageWeightGrams();
         }

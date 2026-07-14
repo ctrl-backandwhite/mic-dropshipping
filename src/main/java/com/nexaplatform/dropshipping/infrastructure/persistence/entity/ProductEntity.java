@@ -68,6 +68,14 @@ public class ProductEntity extends BaseEntity {
     @Column(name = "base_price", precision = 12, scale = 4)
     private BigDecimal basePrice;
 
+    /** Flete de envío en CNY (misma moneda que base_price). Se suma al total SIN margen. */
+    @Column(name = "shipping_cny", precision = 12, scale = 4)
+    private BigDecimal shippingCny;
+
+    /** IVA en CNY (valor fijo de carga, misma moneda que base_price). Se suma al total SIN margen. */
+    @Column(name = "iva_cny", precision = 12, scale = 4)
+    private BigDecimal ivaCny;
+
     @Column(length = 8)
     private String currency;
 
@@ -154,6 +162,11 @@ public class ProductEntity extends BaseEntity {
 
     @Column(name = "ready_to_ship")
     private Boolean readyToShip;
+
+    // Verificación manual del admin: false = pendiente/con error (reimportar), true = revisado y correcto.
+    @Builder.Default
+    @Column(name = "verified", nullable = false)
+    private Boolean verified = false;
 
     @Column(name = "ar_model_url", length = 800)
     private String arModelUrl;

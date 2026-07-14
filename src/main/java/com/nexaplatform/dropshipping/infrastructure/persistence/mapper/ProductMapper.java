@@ -55,7 +55,7 @@ public class ProductMapper {
                 p.getRating(), p.getMonthlySales(), p.getTrendScore(),
                 p.getStatus() != null ? p.getStatus().name() : null, priced.retailUsd(), priced.displayAmount(),
                 priced.displayCurrency(), priced.displaySymbol(), priced.displayFormatted(), p.getInventoryCount(),
-                availableUnits);
+                availableUnits, Boolean.TRUE.equals(p.getVerified()));
     }
 
     public ProductDetailView toDetail(ProductEntity p, String language, List<ProductPriceTierEntity> tiers) {
@@ -67,6 +67,10 @@ public class ProductMapper {
         BigDecimal costUsd = admin ? priced.costUsd() : null;
         BigDecimal retailUsd = admin ? priced.retailUsd() : null;
         BigDecimal appliedMarginPercent = admin ? priced.appliedMarginPercent() : null;
+        // Desglose base/IVA/envío: SOLO admin (el usuario final ve únicamente el total = displayFormatted).
+        String baseFormatted = admin ? priced.baseFormatted() : null;
+        String ivaFormatted = admin ? priced.ivaFormatted() : null;
+        String shippingFormatted = admin ? priced.shippingFormatted() : null;
         return new ProductDetailView(p.getId(), p.getSlug(), p.getSource(), p.getExternalId(),
                 p.getSupplier() != null ? supplierMapper.toView(p.getSupplier()) : null,
                 p.getCategory() != null ? p.getCategory().getId() : null, tr != null ? tr.getTitle() : p.getTitleZh(),
@@ -81,7 +85,9 @@ public class ProductMapper {
                 tiers == null ? Collections.emptyList() : tiers.stream().map(this::toPriceTierView).toList(),
                 costUsd, retailUsd, priced.displayAmount(), priced.displayCurrency(),
                 priced.displaySymbol(), priced.displayFormatted(), appliedMarginPercent,
-                tr != null ? tr.getMetaTitle() : null, tr != null ? tr.getMetaDescription() : null);
+                baseFormatted, ivaFormatted, shippingFormatted,
+                tr != null ? tr.getMetaTitle() : null, tr != null ? tr.getMetaDescription() : null,
+                Boolean.TRUE.equals(p.getVerified()));
     }
 
     public ProductImageView toImageView(ProductImageEntity img) {
@@ -91,14 +97,21 @@ public class ProductMapper {
     public VariantView toVariantView(ProductEntity product, ProductVariantEntity v) {
         // Display variant price converted via PricingService too
         PricedAmount priced = pricingService.priceFor(product, v);
+        // Peso por variante: usa el del paquete (bruto) si existe, si no el neto. Dimensiones tal cual (mm).
+        Integer weight = (v.getPackageWeightGrams() != null && v.getPackageWeightGrams() > 0)
+                ? v.getPackageWeightGrams() : v.getWeightGrams();
         return new VariantView(v.getId(), v.getSku(), v.getTitle(), priced.displayAmount(), // shown in user currency
-                priced.displayFormatted(), v.getStock(), pickVariantImage(v), v.getOptions(), v.isActive());
+                priced.displayFormatted(), v.getStock(), pickVariantImage(v), v.getOptions(), v.isActive(),
+                weight, v.getLengthMm(), v.getWidthMm(), v.getHeightMm());
     }
 
     /** Back-compat overload (without product); used by ProductMapperTest. */
     public VariantView toVariantView(ProductVariantEntity v) {
+        Integer weight = (v.getPackageWeightGrams() != null && v.getPackageWeightGrams() > 0)
+                ? v.getPackageWeightGrams() : v.getWeightGrams();
         return new VariantView(v.getId(), v.getSku(), v.getTitle(), v.getPrice(), null, v.getStock(),
-                pickVariantImage(v), v.getOptions(), v.isActive());
+                pickVariantImage(v), v.getOptions(), v.isActive(),
+                weight, v.getLengthMm(), v.getWidthMm(), v.getHeightMm());
     }
 
     /** Back-compat: opción sin idioma (no resuelve traducción) — usado por tests/llamadas heredadas. */
