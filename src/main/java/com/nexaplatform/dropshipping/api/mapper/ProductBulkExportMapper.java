@@ -69,6 +69,8 @@ public class ProductBulkExportMapper {
         d.setDescriptionPt(desc(byLang, "pt"));
 
         d.setPrice(p.getBasePrice());
+        d.setShippingCny(p.getShippingCny());
+        d.setIvaCny(p.getIvaCny());
         d.setMoq(p.getMoq());
         d.setMonthlySales(p.getMonthlySales());
         d.setRating(p.getRating());

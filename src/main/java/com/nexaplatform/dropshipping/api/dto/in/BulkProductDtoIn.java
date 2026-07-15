@@ -49,6 +49,18 @@ public class BulkProductDtoIn {
 
     private BigDecimal price;
 
+    /**
+     * OBLIGATORIO. Flete de envío en CNY (misma moneda que {@code price}). Se suma al total SIN margen.
+     * Regla de carga: {@code envío = max(10, flete_1688)}.
+     */
+    private BigDecimal shippingCny;
+
+    /**
+     * OBLIGATORIO. Importe de IVA en CNY (misma moneda que {@code price}). Valor fijo que se ingresa en la
+     * carga (la plataforma NO lo recalcula). Se suma al total SIN margen.
+     */
+    private BigDecimal ivaCny;
+
     private Integer moq;
 
     private Integer monthlySales;

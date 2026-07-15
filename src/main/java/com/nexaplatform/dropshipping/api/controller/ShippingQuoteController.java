@@ -70,7 +70,7 @@ public class ShippingQuoteController {
     public ResponseEntity<QuoteResponse> quote(@RequestBody QuoteRequest req) {
         List<QuoteItem> items = req.items() == null ? List.of() : req.items();
         List<ShippingQuoteService.Line> lines = items.stream()
-                .map(i -> new ShippingQuoteService.Line(i.productId(), i.quantity())).toList();
+                .map(i -> new ShippingQuoteService.Line(i.productId(), i.variantId(), i.quantity())).toList();
         ShippingQuote q = shippingQuoteService.quote(req.country(), lines);
 
         String code = pricingService.displayCurrencyCode();

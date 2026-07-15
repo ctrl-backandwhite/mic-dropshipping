@@ -33,6 +33,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryE
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductAttributeEntity;
+import com.nexaplatform.dropshipping.infrastructure.integration.storage.ImageMirrorService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductSpecificationEntity;
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
@@ -91,6 +92,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -144,6 +147,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private final VariantValueRepository variantValueRepository;
     private final JdbcTemplate jdbcTemplate;
     private final ProductBulkExportMapper bulkExportMapper;
+    private final ImageMirrorService imageMirrorService;
 
     @PersistenceContext
     private EntityManager em;
@@ -344,10 +348,20 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ProductSummaryView> listProductsForAdmin(String status, UUID categoryId, int page, int size,
-            String language, String sort) {
+    public Page<ProductSummaryView> listProductsForAdmin(String status, UUID categoryId, String query, int page,
+            int size, String language, String sort, Boolean verified) {
         Pageable pageable = PageRequest.of(page, Math.min(size, 200), adminSort(sort));
         ProductStatus st = parseStatusTolerant(status);
+        // Free-text search runs server-side across the WHOLE catalogue and ALL languages (same rules as the
+        // storefront), so the admin box finds products in any page and in any language — not just a client-side
+        // substring over the current page.
+        // needle "" (no nulo) evita el error de tipo de Postgres al bindear null en el LIKE; la query usa
+        // (:needle = '' OR ...). searchAdmin también sirve como ruta del filtro `verified` (con o sin texto/categoría).
+        String needle = (query == null || query.isBlank()) ? "" : query.trim().toLowerCase();
+        if (!needle.isEmpty() || verified != null) {
+            return productJpaRepository.searchAdmin(st, categoryId, needle, verified, pageable)
+                    .map(p -> productMapper.toSummary(p, language));
+        }
         if (categoryId == null) {
             return listProducts(st, pageable, language);
         }
@@ -550,6 +564,20 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
+    public void deletePriceTier(UUID productId, int minQty) {
+        if (!productJpaRepository.existsById(productId))
+            throw new NotFoundException("Product not found: " + productId);
+        long removed = priceTierRepository.deleteByProductIdAndMinQty(productId, minQty);
+        if (removed == 0)
+            throw new NotFoundException("Price tier not found: product " + productId + ", minQty " + minQty);
+        productIndexer.indexProduct(productId);
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public ProductDetailView quickEdit(UUID id, AdminProductQuickEditDtoIn req, String lang) {
         ProductEntity p = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Product not found: " + id));
@@ -561,6 +589,15 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             p.setCurrency(req.getCurrency());
         if (req.getMoq() != null)
             p.setMoq(req.getMoq());
+        // Verificación manual del admin (checkbox del listado): true = revisado OK, false = pendiente/reimportar.
+        if (req.getVerified() != null)
+            p.setVerified(req.getVerified());
+        // Reasignar categoría desde el admin (selector de la ficha). Se resuelve por id y se valida que exista.
+        if (req.getCategoryId() != null) {
+            CategoryEntity cat = categoryRepository.findById(req.getCategoryId())
+                    .orElseThrow(() -> new NotFoundException("Category not found: " + req.getCategoryId()));
+            p.setCategory(cat);
+        }
         // DROP-673: edición del vídeo real del producto desde el admin (cadena vacía lo elimina).
         if (req.getVideoUrl() != null) {
             String vu = req.getVideoUrl().trim();
@@ -670,7 +707,11 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     public int reindexAllProducts() {
-        return productIndexer.reindexAll();
+        int n = productIndexer.reindexAll();
+        // Reindexar también arrastra el espejado: drena las imágenes PENDING (cada lote reindexa) para que
+        // "reindexar" deje todo el catálogo visible en el escaparate, no solo actualice el índice.
+        imageMirrorService.mirrorAllPendingAsync();
+        return n;
     }
 
     @Override
@@ -832,6 +873,29 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
+    public void deleteVariantValue(UUID valueId) {
+        var v = variantValueRepository.findById(valueId).orElseThrow(() -> new NotFoundException("Variant value"));
+        var opt = v.getOption();
+        UUID productId = (opt != null && opt.getProduct() != null) ? opt.getProduct().getId() : null;
+        if (productId != null) {
+            // Nombre del eje tal como se guarda en product_variant.options_json ("Color"/"Talla"/…).
+            String optName = (opt.getName() != null && !opt.getName().isBlank()) ? opt.getName() : opt.getNameZh();
+            // Borra las combinaciones (product_variant) que usan este valor en ese eje (por etiqueta o canónico).
+            jdbcTemplate.update(
+                    "DELETE FROM product_variant WHERE product_id = ? AND (options_json->>? = ? OR options_json->>? = ?)",
+                    productId, optName, v.getValueZh(), optName, v.getValue());
+        }
+        variantValueRepository.delete(v);
+        if (productId != null) {
+            productIndexer.indexProduct(productId);
+        }
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void setVariantValueImage(UUID valueId, String imageUrl) {
         var v = variantValueRepository.findById(valueId).orElseThrow(() -> new NotFoundException("Variant value"));
         // DROP-674: imagen real por color. Una cadena vacía la elimina (volverá a usar la principal).
@@ -914,6 +978,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 .mirrorStatus(alreadyOurs ? MirrorStatus.MIRRORED : MirrorStatus.PENDING).build();
         ProductImageEntity saved = imageRepository.save(img);
         productIndexer.indexProduct(productId);
+        // Edición: si la imagen añadida es externa (PENDING), espejarla YA para que se vea al instante.
+        if (!alreadyOurs) {
+            mirrorNewImagesAfterCommit(List.of(productId));
+        }
         return productMapper.toImageView(saved);
     }
 
@@ -992,23 +1060,31 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     /* ============ Bulk import (admin) ============ */
 
     @Override
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public BulkResultDtoOut bulkCreateProducts(
             List<BulkProductDtoIn> rows) {
         int created = 0, failed = 0;
         List<String> errors = new ArrayList<>();
+        List<UUID> createdIds = new ArrayList<>();
         List<SupplierEntity> suppliers = supplierRepository.findAll();
         for (int i = 0; i < rows.size(); i++) {
             var r = rows.get(i);
             try {
-                buildAndWriteProduct(r, suppliers);
+                createdIds.add(buildAndWriteProduct(r, suppliers));
                 created++;
             } catch (Exception e) {
                 failed++;
                 errors.add("Fila " + (i + 1) + ": " + ErrorMessages.humanize(e));
             }
         }
-        if (created > 0)
-            productIndexer.reindexAll();
+        // Reindexar SOLO lo recién creado (no los ~1000 existentes) y espejar sus imágenes YA en background:
+        // el mirror pone hasImage=true y reindexa → el producto aparece en el escaparate casi al instante.
+        for (UUID id : createdIds) {
+            productIndexer.indexProduct(id);
+        }
+        mirrorNewImagesAfterCommit(createdIds);
         return new BulkResultDtoOut(created, failed, errors);
     }
 
@@ -1043,6 +1119,26 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
+    public BulkProductDtoIn exportProduct(UUID id) {
+        ProductEntity p = productJpaRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Product not found: " + id));
+        List<ProductAttributeEntity> attributes = em.createQuery(
+                "SELECT a FROM ProductAttributeEntity a WHERE a.product.id = :id", ProductAttributeEntity.class)
+                .setParameter("id", id).getResultList();
+        List<ProductSpecificationEntity> specs = em.createQuery(
+                "SELECT s FROM ProductSpecificationEntity s WHERE s.product.id = :id ORDER BY s.position",
+                ProductSpecificationEntity.class).setParameter("id", id).getResultList();
+        List<ProductPriceTierEntity> tiers = em.createQuery(
+                "SELECT t FROM ProductPriceTierEntity t WHERE t.product.id = :id ORDER BY t.minQty",
+                ProductPriceTierEntity.class).setParameter("id", id).getResultList();
+        List<ProductReviewEntity> reviews = em.createQuery(
+                "SELECT r FROM ProductReviewEntity r WHERE r.product.id = :id ORDER BY r.createdAt",
+                ProductReviewEntity.class).setParameter("id", id).getResultList();
+        return bulkExportMapper.toBulk(p, attributes, specs, tiers, reviews);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public long countProducts() {
         return em.createQuery("SELECT COUNT(p) FROM ProductEntity p", Long.class).getSingleResult();
     }
@@ -1054,7 +1150,32 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     public UUID createProductManual(BulkProductDtoIn req) {
         UUID id = buildAndWriteProduct(req, supplierRepository.findAll());
         productIndexer.indexProduct(id);
+        mirrorNewImagesAfterCommit(List.of(id));
         return id;
+    }
+
+    /**
+     * Espeja YA (en background, tras el commit) las imágenes PENDING de los productos indicados, y reindexa.
+     * Se llama en TODA operación que introduce imágenes de producto —alta individual, alta masiva y edición
+     * (añadir imagen)— para que el producto aparezca en el escaparate casi al instante. Si hay transacción
+     * activa, se difiere a {@code afterCommit} (si no, el hilo async no vería las filas aún sin commitear);
+     * si no la hay, se dispara directo.
+     */
+    private void mirrorNewImagesAfterCommit(List<UUID> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return;
+        }
+        List<UUID> ids = List.copyOf(productIds);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    imageMirrorService.mirrorProductsAsync(ids);
+                }
+            });
+        } else {
+            imageMirrorService.mirrorProductsAsync(ids);
+        }
     }
 
     private static final List<String> PRODUCT_CHILD_TABLES = List.of("product_price_tier", "product_tag_link",
@@ -1176,6 +1297,14 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (price == null) {
             throw new BusinessException("Falta el precio real del producto (price o tieredPricing): " + esTitle);
         }
+        // Envío e IVA (CNY) son OBLIGATORIOS en la carga (decisión del usuario). Sin ellos no se calcula
+        // el total (base×margen + iva + envío), así que se rechaza la fila con un mensaje claro.
+        if (r.getShippingCny() == null) {
+            throw new BusinessException("Falta el envío (shippingCny) del producto: " + esTitle);
+        }
+        if (r.getIvaCny() == null) {
+            throw new BusinessException("Falta el IVA (ivaCny) del producto: " + esTitle);
+        }
         // external_id es varchar(120): con títulos largos el slug autogenerado lo desbordaba. Se capa
         // el slug para que "BULK-<slug>-<nanoTime>" (y cualquier externalId provisto) quepa en 120.
         String externalId;
@@ -1190,6 +1319,19 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         }
         if (externalId.length() > 120) {
             externalId = externalId.substring(0, 120);
+        }
+        // UPSERT idempotente por externalId: el producto se ACTUALIZA EN SITIO (mismo id, se preservan
+        // enlaces/favoritos/pedidos). El producto y sus traducciones ya los upserta upsertProduct/writer;
+        // aquí solo limpiamos las COLECCIONES HIJAS que se reconstruyen (variantes/opciones/imágenes/
+        // atributos/specs/tiers) por product_id ANTES de recrearlas, para no duplicar al reimportar. NO se
+        // borra el producto padre, así que su id no cambia (a diferencia de un delete+create).
+        if (r.getExternalId() != null && !r.getExternalId().isBlank()) {
+            productJpaRepository.findFirstByExternalId(externalId).ifPresent(existing -> {
+                UUID exId = existing.getId();
+                for (String table : PRODUCT_CHILD_TABLES) {
+                    jdbcTemplate.update("DELETE FROM " + table + " WHERE product_id = ?", exId);
+                }
+            });
         }
         // Imágenes del producto. Se aceptan varias claves (imageUrls/images/photos/... vía @JsonAlias)
         // y el atajo `imageUrl` (string suelto). Si no hay NINGUNA a nivel de producto, se usan como
@@ -1374,6 +1516,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     /** Fija los campos de logística/aduana sobre la entidad gestionada (dentro de la transacción del writer). */
     private void applyLogistics(ProductEntity p, BulkProductDtoIn r) {
+        // Envío e IVA (CNY): obligatorios en la carga; se suman al total SIN margen (ver PricingService).
+        p.setShippingCny(r.getShippingCny());
+        p.setIvaCny(r.getIvaCny());
         if (r.getPackageWeightGrams() != null) {
             p.setPackageWeightGrams(r.getPackageWeightGrams());
         }

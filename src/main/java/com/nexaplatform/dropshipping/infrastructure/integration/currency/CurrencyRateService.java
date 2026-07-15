@@ -77,13 +77,15 @@ public class CurrencyRateService {
     public BigDecimal usdTo(BigDecimal amountUsd, String targetCode) {
         if (amountUsd == null)
             return null;
-        // Precio final al cliente: 2 decimales SIEMPRE redondeado hacia arriba (RoundingMode.UP) para no
-        // perder fracciones de céntimo en la conversión. Aplica a la moneda mostrada y a la de cobro.
+        // Precio final al cliente: 2 decimales al céntimo MÁS CERCANO (HALF_UP). Antes se redondeaba
+        // siempre hacia arriba (UP), lo que inflaba montos exactos en el round-trip de moneda (30 CNY →
+        // USD → 30.01 CNY). Con HALF_UP un monto exacto de origen se muestra exacto. Aplica a la moneda
+        // mostrada y a la de cobro (mismo cálculo → catálogo == carrito == cobro).
         if ("USD".equalsIgnoreCase(targetCode)) {
-            return amountUsd.setScale(2, RoundingMode.UP);
+            return amountUsd.setScale(2, RoundingMode.HALF_UP);
         }
-        return find(targetCode).map(r -> amountUsd.multiply(r.getRateVsUsd()).setScale(2, RoundingMode.UP))
-                .orElse(amountUsd.setScale(2, RoundingMode.UP));
+        return find(targetCode).map(r -> amountUsd.multiply(r.getRateVsUsd()).setScale(2, RoundingMode.HALF_UP))
+                .orElse(amountUsd.setScale(2, RoundingMode.HALF_UP));
     }
 
     /** Convert an amount in any source currency to USD (used at order creation to fix USD canonical). */

@@ -52,12 +52,13 @@ public interface AdminCatalogApi {
     @PostMapping("/products")
     ResponseEntity<UUID> upsertProduct(@Valid @RequestBody IngestProductRequest req);
 
-    @Operation(summary = "List products with paging and optional status/category filter + sort")
+    @Operation(summary = "List products with paging and optional free-text (q) / status / category filter + sort")
     @GetMapping("/products")
     PageResponse<ProductSummaryView> list(@RequestParam(required = false) String status,
-            @RequestParam(required = false) UUID categoryId, @RequestParam(defaultValue = "0") int page,
+            @RequestParam(required = false) UUID categoryId, @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "30") int size, @RequestParam(defaultValue = "es") String lang,
-            @RequestParam(required = false) String sort);
+            @RequestParam(required = false) String sort, @RequestParam(required = false) Boolean verified);
 
     @Operation(summary = "Get product detail by id")
     @GetMapping("/products/{id}")
@@ -124,6 +125,10 @@ public interface AdminCatalogApi {
     @DeleteMapping("/products/{id}")
     ResponseEntity<Void> deleteProduct(@PathVariable UUID id);
 
+    @Operation(summary = "Delete a single price tier of a product (by its min quantity)")
+    @DeleteMapping("/products/{id}/price-tiers/{minQty}")
+    ResponseEntity<Void> deletePriceTier(@PathVariable UUID id, @PathVariable int minQty);
+
     @Operation(summary = "Bulk-delete products by id (per-id error reporting; each refused if it has orders)")
     @PostMapping("/products/bulk-delete")
     ResponseEntity<Map<String, Object>> bulkDeleteProducts(@RequestBody List<UUID> ids);
@@ -140,6 +145,10 @@ public interface AdminCatalogApi {
     @Operation(summary = "Total product count (to compute export segments)")
     @GetMapping("/products/export/count")
     ResponseEntity<Map<String, Long>> exportCount();
+
+    @Operation(summary = "Export ONE product as the bulk JSON shape (to edit as JSON and re-import with upsert)")
+    @GetMapping("/products/{id}/export")
+    ResponseEntity<BulkProductDtoIn> exportProduct(@PathVariable UUID id);
 
     @Operation(summary = "Bulk-create categories from a JSON array")
     @PostMapping("/categories/bulk")

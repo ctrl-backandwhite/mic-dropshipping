@@ -123,4 +123,32 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             @Param("shipFrom") String shipFrom, @Param("freeShipping") Boolean freeShipping,
             @Param("selfPickup") Boolean selfPickup, @Param("hasVideo") Boolean hasVideo,
             @Param("minRating") java.math.BigDecimal minRating, @Param("minInv") Integer minInv, Pageable pageable);
+
+    /**
+     * Admin free-text search across the WHOLE catalogue and ALL languages, mirroring the storefront
+     * {@link #searchStorefront} matching rules but WITHOUT the {@code ACTIVE}-only / has-image constraints
+     * (the admin list must surface every product, in any status, with or without an image). Matches the
+     * needle against the Chinese title, the supplier external id, the slug and every translation
+     * ({@link com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity}:
+     * title / short description / description — i.e. ES/EN/PT/…). Optional {@code status}/{@code categoryId}
+     * filters still apply. The {@code needle} is expected already lower-cased and non-null (callers only use
+     * this method when the free-text box has content).
+     */
+    @Query("""
+            SELECT p FROM ProductEntity p
+            WHERE (:status IS NULL OR p.status = :status)
+              AND (:categoryId IS NULL OR p.category.id = :categoryId)
+              AND (:verified IS NULL OR p.verified = :verified)
+              AND (:needle = ''
+                   OR LOWER(p.titleZh) LIKE CONCAT('%', :needle, '%')
+                   OR LOWER(p.externalId) LIKE CONCAT('%', :needle, '%')
+                   OR LOWER(p.slug) LIKE CONCAT('%', :needle, '%')
+                   OR EXISTS (SELECT 1 FROM ProductTranslationEntity t
+                              WHERE t.product = p
+                                AND (LOWER(t.title) LIKE CONCAT('%', :needle, '%')
+                                     OR LOWER(t.shortDescription) LIKE CONCAT('%', :needle, '%')
+                                     OR LOWER(t.description) LIKE CONCAT('%', :needle, '%'))))
+            """)
+    Page<ProductEntity> searchAdmin(@Param("status") ProductStatus status, @Param("categoryId") UUID categoryId,
+            @Param("needle") String needle, @Param("verified") Boolean verified, Pageable pageable);
 }

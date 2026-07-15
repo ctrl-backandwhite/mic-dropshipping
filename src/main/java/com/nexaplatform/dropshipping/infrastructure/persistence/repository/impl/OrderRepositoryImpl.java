@@ -164,8 +164,11 @@ public class OrderRepositoryImpl implements OrderRepository {
                 .orElseThrow(() -> new NotFoundException("Product not found: " + itemModel.getProductId()));
         ProductVariantEntity variant = itemModel.getVariantId() == null
                 ? null
+                // Carrito obsoleto (variante re-importada con otro ID): código específico + variantId en
+                // detail para que el checkout identifique y quite la línea rota, no un 404 genérico.
                 : variantRepository.findById(itemModel.getVariantId())
-                        .orElseThrow(() -> new NotFoundException("Variant not found: " + itemModel.getVariantId()));
+                        .orElseThrow(() -> new NotFoundException("CART_ITEM_UNAVAILABLE",
+                                List.of(itemModel.getVariantId().toString())));
         return OrderItemEntity.builder().order(order).product(product).variant(variant)
                 .titleSnapshot(itemModel.getTitleSnapshot()).imageUrlSnapshot(itemModel.getImageUrlSnapshot())
                 .skuSnapshot(itemModel.getSkuSnapshot()).unitPriceCents(itemModel.getUnitPriceCents())

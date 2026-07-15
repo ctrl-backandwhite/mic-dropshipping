@@ -8,4 +8,7 @@ import java.util.UUID;
 
 public interface ProductPriceTierRepository extends JpaRepository<ProductPriceTierEntity, UUID> {
     List<ProductPriceTierEntity> findByProductIdOrderByMinQtyAsc(UUID productId);
+
+    // Borra el tramo de precio de un producto identificado por su cantidad mínima (única por producto).
+    long deleteByProductIdAndMinQty(UUID productId, int minQty);
 }

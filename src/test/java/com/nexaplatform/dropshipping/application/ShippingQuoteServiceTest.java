@@ -54,7 +54,7 @@ class ShippingQuoteServiceTest {
         when(productRepository.findById(id)).thenReturn(Optional.of(product(300, 100)));
         when(cainiao.quote(eq("ES"), weightCaptor.capture())).thenReturn(okQuote());
 
-        ShippingQuote result = service.quote("ES", List.of(new ShippingQuoteService.Line(id, 2)));
+        ShippingQuote result = service.quote("ES", List.of(new ShippingQuoteService.Line(id, null, 2)));
 
         // packageWeightGrams (300) tiene prioridad sobre weightGrams; 300 * 2 = 600.
         assertThat(weightCaptor.getValue()).isEqualTo(600);
@@ -67,7 +67,7 @@ class ShippingQuoteServiceTest {
         when(productRepository.findById(id)).thenReturn(Optional.of(product(null, 250)));
         when(cainiao.quote(eq("ES"), weightCaptor.capture())).thenReturn(okQuote());
 
-        service.quote("ES", List.of(new ShippingQuoteService.Line(id, 1)));
+        service.quote("ES", List.of(new ShippingQuoteService.Line(id, null, 1)));
 
         assertThat(weightCaptor.getValue()).isEqualTo(250);
     }
@@ -78,7 +78,7 @@ class ShippingQuoteServiceTest {
         when(productRepository.findById(id)).thenReturn(Optional.of(product(null, 0)));
         when(cainiao.quote(eq("ES"), weightCaptor.capture())).thenReturn(okQuote());
 
-        service.quote("ES", List.of(new ShippingQuoteService.Line(id, 1)));
+        service.quote("ES", List.of(new ShippingQuoteService.Line(id, null, 1)));
 
         assertThat(weightCaptor.getValue()).isEqualTo(500);
     }
@@ -89,7 +89,7 @@ class ShippingQuoteServiceTest {
         when(productRepository.findById(id)).thenReturn(Optional.empty());
         when(cainiao.quote(eq("ES"), weightCaptor.capture())).thenReturn(okQuote());
 
-        service.quote("ES", List.of(new ShippingQuoteService.Line(id, 1)));
+        service.quote("ES", List.of(new ShippingQuoteService.Line(id, null, 1)));
 
         assertThat(weightCaptor.getValue()).isEqualTo(500);
     }
@@ -100,7 +100,7 @@ class ShippingQuoteServiceTest {
         when(productRepository.findById(id)).thenReturn(Optional.of(product(200, null)));
         when(cainiao.quote(eq("ES"), weightCaptor.capture())).thenReturn(okQuote());
 
-        service.quote("ES", List.of(new ShippingQuoteService.Line(id, 0)));
+        service.quote("ES", List.of(new ShippingQuoteService.Line(id, null, 0)));
 
         // Math.max(1, quantity) => 200 * 1.
         assertThat(weightCaptor.getValue()).isEqualTo(200);
@@ -114,7 +114,7 @@ class ShippingQuoteServiceTest {
         when(productRepository.findById(b)).thenReturn(Optional.of(product(400, null)));
         when(cainiao.quote(eq("ES"), weightCaptor.capture())).thenReturn(okQuote());
 
-        service.quote("ES", List.of(new ShippingQuoteService.Line(a, 3), new ShippingQuoteService.Line(b, 1)));
+        service.quote("ES", List.of(new ShippingQuoteService.Line(a, null, 3), new ShippingQuoteService.Line(b, null, 1)));
 
         // 100*3 + 400*1 = 700.
         assertThat(weightCaptor.getValue()).isEqualTo(700);

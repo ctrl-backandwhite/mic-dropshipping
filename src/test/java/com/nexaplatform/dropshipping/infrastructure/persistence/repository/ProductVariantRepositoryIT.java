@@ -1,7 +1,10 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository;
 
+import com.nexaplatform.dropshipping.application.service.StockService;
 import com.nexaplatform.dropshipping.config.PersistenceITBase;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
+import com.nexaplatform.dropshipping.domain.model.Order;
+import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import org.junit.jupiter.api.BeforeEach;
@@ -118,6 +121,104 @@ class ProductVariantRepositoryIT extends PersistenceITBase {
         assertThat(variants.findByProductId(product.getId())).hasSize(1);
         assertThat(variants.findBySku("SKU-123")).isPresent();
         assertThat(variants.findByProductIdAndExternalId(product.getId(), "EXT-9")).isPresent();
+    }
+
+    /* ============================ Stock: descuento en venta / reintegro en cancelación ============================ */
+
+    @Test
+    void deductStock_subtractsWhenEnough_andBlocksOversell() {
+        ProductVariantEntity v = variants.save(variantWithStock("v-deduct", 10));
+        UUID id = v.getId();
+        em.flush();
+
+        // Hay stock suficiente → descuenta y afecta 1 fila.
+        int ok = variants.deductStock(id, 3);
+        assertThat(ok).isEqualTo(1);
+        em.flush();
+        em.clear();
+        assertThat(variants.findById(id).orElseThrow().getStock()).isEqualTo(7);
+
+        // Pide más de lo que hay → 0 filas, stock intacto (control de sobreventa: nunca negativo).
+        int blocked = variants.deductStock(id, 999);
+        assertThat(blocked).isZero();
+        em.flush();
+        em.clear();
+        assertThat(variants.findById(id).orElseThrow().getStock()).isEqualTo(7);
+    }
+
+    @Test
+    void restoreStock_addsBack_andZeroStock_forcesZero() {
+        ProductVariantEntity v = variants.save(variantWithStock("v-restore", 5));
+        UUID id = v.getId();
+        em.flush();
+
+        assertThat(variants.restoreStock(id, 4)).isEqualTo(1);
+        em.flush();
+        em.clear();
+        assertThat(variants.findById(id).orElseThrow().getStock()).isEqualTo(9);
+
+        assertThat(variants.zeroStock(id)).isEqualTo(1);
+        em.flush();
+        em.clear();
+        assertThat(variants.findById(id).orElseThrow().getStock()).isZero();
+    }
+
+    /**
+     * Flujo pago→cancelar a nivel de servicio + Postgres real: {@code deductForOrder} (lo que hace el pago
+     * al pasar a PAID) descuenta cada variante; {@code restoreForOrder} (lo que hace cancelar/reembolsar)
+     * lo devuelve. Se cubren: ítem con variante, ítem sin variante (no toca stock) y sobreventa (fuerza a 0).
+     */
+    @Test
+    void stockService_deductOnPayThenRestoreOnCancel_roundTrips() {
+        StockService stockService = new StockService(variants);
+        ProductVariantEntity a = variants.save(variantWithStock("v-a", 10));
+        ProductVariantEntity b = variants.save(variantWithStock("v-b", 8));
+        em.flush();
+
+        Order order = Order.builder().orderNumber("ORD-IT-1").items(List.of(
+                OrderItem.builder().variantId(a.getId()).quantity(3).build(),
+                OrderItem.builder().variantId(b.getId()).quantity(2).build(),
+                OrderItem.builder().variantId(null).quantity(5).build())) // sin variante → no afecta stock
+                .build();
+
+        // Pago confirmado → descuento.
+        stockService.deductForOrder(order);
+        em.flush();
+        em.clear();
+        assertThat(variants.findById(a.getId()).orElseThrow().getStock()).isEqualTo(7);
+        assertThat(variants.findById(b.getId()).orElseThrow().getStock()).isEqualTo(6);
+
+        // Cancelación/reembolso → reintegro (la venta no se concretó).
+        stockService.restoreForOrder(order);
+        em.flush();
+        em.clear();
+        assertThat(variants.findById(a.getId()).orElseThrow().getStock()).isEqualTo(10);
+        assertThat(variants.findById(b.getId()).orElseThrow().getStock()).isEqualTo(8);
+    }
+
+    @Test
+    void stockService_deduct_onOversell_forcesZeroWithoutFailing() {
+        StockService stockService = new StockService(variants);
+        ProductVariantEntity v = variants.save(variantWithStock("v-oversell", 2));
+        em.flush();
+
+        // El dinero ya se capturó (no se puede rechazar): pedir 5 con stock 2 → se fuerza a 0, nunca negativo.
+        Order order = Order.builder().orderNumber("ORD-IT-2").items(List.of(
+                OrderItem.builder().variantId(v.getId()).quantity(5).build())).build();
+
+        stockService.deductForOrder(order);
+        em.flush();
+        em.clear();
+        assertThat(variants.findById(v.getId()).orElseThrow().getStock()).isZero();
+    }
+
+    private ProductVariantEntity variantWithStock(String tag, int stock) {
+        return ProductVariantEntity.builder()
+                .product(product)
+                .title("variant-" + tag)
+                .stock(stock)
+                .active(true)
+                .build();
     }
 
     private ProductVariantEntity variant(String tag, String imageSourceUrl, String imageCdnUrl, Instant failedAt) {

@@ -70,6 +70,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     private final ObjectMapper objectMapper;
     private final OrderEmailService orderEmailService;
     private final CurrencyRateService currencyRateService;
+    private final com.nexaplatform.dropshipping.application.service.StockService stockService;
 
     @Override
     @Transactional
@@ -236,6 +237,9 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                     || order.getStatus() == OrderStatus.AWAITING_PAYMENT)) {
                 order.setStatus(OrderStatus.PAID);
                 order = orderRepository.save(order);
+                // Venta concretada: descontamos el stock de las variantes compradas (opción 2). Se hace
+                // solo en esta transición (idempotente: una 2ª confirmación encuentra la orden ya PAID).
+                stockService.deductForOrder(order);
             }
             auditLogger.log("order_payment.succeeded", p.getUserEmail(), Map.of("paymentId", p.getId(), "orderId",
                     p.getOrderId(), "method", p.getMethod(), "amount_usd_cents", p.getAmountUsdCents()));

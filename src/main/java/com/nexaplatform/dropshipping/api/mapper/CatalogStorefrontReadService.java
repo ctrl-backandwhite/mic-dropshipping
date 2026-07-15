@@ -216,7 +216,7 @@ public class CatalogStorefrontReadService {
     public PageResponse<ProductSummaryView> productListFull(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping,
             Boolean selfPickup, Boolean hasVideo, Integer minRating, Integer inventoryMin, String certification,
-            String sort) {
+            String sort, Boolean verified) {
 
         int safeSize = Math.min(size, 100);
         Sort sortSpec = sortFor(sort);
@@ -227,6 +227,8 @@ public class CatalogStorefrontReadService {
         BigDecimal minRatingBd = minRating == null ? null : BigDecimal.valueOf(minRating);
         boolean certFilter = certification != null && !certification.isBlank();
         boolean priceFilter = minPrice != null || maxPrice != null;
+        // Filtro de verificación manual (solo lo envía el admin desde /admin/browse). Se aplica en memoria.
+        boolean verifiedFilter = verified != null;
 
         // El filtro de precio y el de certificación se aplican en la capa de aplicación, NO en el SQL.
         // Motivo del precio: el número que ve el usuario (displayPrice) se obtiene de la variante
@@ -235,7 +237,7 @@ public class CatalogStorefrontReadService {
         // Por eso aquí filtramos sobre displayPrice, que está en la MISMA moneda que el usuario seleccionó
         // → el filtro de precio funciona para cualquier moneda. Se pagina en memoria para que el total y
         // las páginas sean correctos (el catálogo está acotado por el resto de filtros).
-        if (priceFilter || certFilter) {
+        if (priceFilter || certFilter || verifiedFilter) {
             String certUp = certFilter ? certification.toUpperCase() : null;
             Pageable scan = PageRequest.of(0, 5000, sortSpec);
             Page<ProductEntity> raw = productRepository.searchStorefront(ProductStatus.ACTIVE, needle, categoryId,
@@ -243,6 +245,7 @@ public class CatalogStorefrontReadService {
             List<ProductSummaryView> all = raw.getContent().stream()
                     .filter(p -> certUp == null || (p.getCertifications() != null && p.getCertifications().stream()
                             .anyMatch(c -> c != null && c.toUpperCase().contains(certUp))))
+                    .filter(p -> !verifiedFilter || verified.equals(Boolean.TRUE.equals(p.getVerified())))
                     .map(p -> productMapper.toSummary(p, lang))
                     .filter(v -> withinPrice(v.displayPrice(), minPrice, maxPrice)).toList();
             int total = all.size();
@@ -298,7 +301,7 @@ public class CatalogStorefrontReadService {
     public PageResponse<ProductSummaryView> productList(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String sort) {
         return productListFull(page, size, lang, q, categoryId, supplierId, minPrice, maxPrice, null, null, null, null,
-                null, null, null, sort);
+                null, null, null, sort, null);
     }
 
     /* ============================ helpers ============================ */

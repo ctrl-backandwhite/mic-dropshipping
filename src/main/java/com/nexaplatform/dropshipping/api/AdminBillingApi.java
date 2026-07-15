@@ -17,11 +17,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
 
-/**
- * API contract + OpenAPI documentation for the Admin Billing resource.
- * The controller only implements these methods; all routing and Swagger
- * documentation live here (springdoc "API interface" pattern).
- */
 @Tag(name = "Admin Billing")
 public interface AdminBillingApi {
 

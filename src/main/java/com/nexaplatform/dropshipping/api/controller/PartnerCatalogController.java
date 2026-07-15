@@ -46,7 +46,7 @@ public class PartnerCatalogController implements PartnerCatalogApi {
             Boolean selfPickup, Boolean hasVideo, Integer minRating, Integer inventoryMin, String certification,
             String sort) {
         return storefrontRead.productListFull(page, size, lang, q, categoryId, supplierId, minPrice, maxPrice, shipFrom,
-                freeShipping, selfPickup, hasVideo, minRating, inventoryMin, certification, sort);
+                freeShipping, selfPickup, hasVideo, minRating, inventoryMin, certification, sort, null);
     }
 
     @Override

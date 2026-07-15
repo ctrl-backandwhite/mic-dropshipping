@@ -68,9 +68,10 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
-    public PageResponse<ProductSummaryView> list(String status, UUID categoryId, int page, int size, String lang,
-            String sort) {
-        return PageResponse.from(catalogUseCase.listProductsForAdmin(status, categoryId, page, size, lang, sort));
+    public PageResponse<ProductSummaryView> list(String status, UUID categoryId, String q, int page, int size,
+            String lang, String sort, Boolean verified) {
+        return PageResponse
+                .from(catalogUseCase.listProductsForAdmin(status, categoryId, q, page, size, lang, sort, verified));
     }
 
     @Override
@@ -135,6 +136,13 @@ public class AdminCatalogController implements AdminCatalogApi {
         return ResponseEntity.noContent().build();
     }
 
+    /** Elimina un valor de variación (p.ej. un color/estampado) y todas las combinaciones que lo usan. */
+    @DeleteMapping("/variant-values/{id}")
+    public ResponseEntity<Void> deleteVariantValue(@PathVariable UUID id) {
+        catalogUseCase.deleteVariantValue(id);
+        return ResponseEntity.noContent().build();
+    }
+
     /** Traducción por idioma de un valor de variación (color/talla) — valor vacío la elimina. */
     @PutMapping("/variant-values/{id}/translation")
     public ResponseEntity<Void> setVariantValueTranslation(@PathVariable UUID id,
@@ -170,6 +178,12 @@ public class AdminCatalogController implements AdminCatalogApi {
     @Override
     public ResponseEntity<Void> deleteProduct(UUID id) {
         catalogUseCase.deleteProduct(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    public ResponseEntity<Void> deletePriceTier(UUID id, int minQty) {
+        catalogUseCase.deletePriceTier(id, minQty);
         return ResponseEntity.noContent().build();
     }
 
@@ -220,6 +234,11 @@ public class AdminCatalogController implements AdminCatalogApi {
     @Override
     public ResponseEntity<Map<String, Long>> exportCount() {
         return ResponseEntity.ok(Map.of("count", catalogUseCase.countProducts()));
+    }
+
+    @Override
+    public ResponseEntity<BulkProductDtoIn> exportProduct(UUID id) {
+        return ResponseEntity.ok(catalogUseCase.exportProduct(id));
     }
 
     @Override

@@ -86,6 +86,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final NotificationsPublisher notificationsPublisher;
     private final PricingService pricingService;
     private final AffiliateProgramService affiliateProgramService;
+    private final com.nexaplatform.dropshipping.application.service.StockService stockService;
     private final PaymentUseCase paymentUseCase;
     private final OrderEmailService orderEmailService;
     private final CainiaoFulfillmentService cainiao;
@@ -133,7 +134,19 @@ public class OrderUseCaseImpl implements OrderUseCase {
             ProductVariantEntity variant = itemReq.variantId() == null
                     ? null
                     : variantRepository.findById(itemReq.variantId())
-                            .orElseThrow(() -> new NotFoundException("Variant not found: " + itemReq.variantId()));
+                            // Variante inexistente (carrito obsoleto: el catálogo se re-importó y la variante
+                            // cambió de ID). Código específico + variantId en detail para que el checkout
+                            // identifique y quite del carrito la línea rota, en vez de un 404 genérico.
+                            .orElseThrow(() -> new NotFoundException("CART_ITEM_UNAVAILABLE",
+                                    List.of(itemReq.variantId().toString())));
+
+            // Control de sobreventa (fail-fast): rechazamos ANTES de cobrar si la variante no tiene stock
+            // suficiente. El descuento efectivo ocurre al confirmar el pago (StockService.deductForOrder);
+            // aquí solo evitamos aceptar un pedido que no se podrá servir. El front localiza por el CODE.
+            if (variant != null && variant.getStock() < itemReq.quantity()) {
+                throw new BusinessException("INSUFFICIENT_STOCK",
+                        "Not enough stock for variant " + variant.getId());
+            }
 
             // DROP-637: charge the PRICED amount (raw supplier price → USD → margin), not the raw
             // CNY value. The order currency is USD, so we bill retailUsd — the same figure the
@@ -143,10 +156,10 @@ public class OrderUseCaseImpl implements OrderUseCase {
             if (unitPrice == null) {
                 throw new BusinessException("Product " + product.getSlug() + " has no price");
             }
-            // El precio de línea debe COINCIDIR con el precio que ve el usuario en el catálogo/carrito, que
-            // se redondea a 2 decimales HACIA ARRIBA (RoundingMode.UP). Antes usaba HALF_UP y cobraba 1 cént.
-            // menos (p.ej. mostraba 1.90 y cobraba 1.89). Redondeamos el retail a 2 decimales arriba y a céntimos.
-            int unitCents = unitPrice.setScale(2, RoundingMode.UP).movePointRight(2).intValueExact();
+            // El precio de línea debe COINCIDIR con el precio que ve el usuario en el catálogo/carrito. El
+            // catálogo redondea a 2 decimales al céntimo MÁS CERCANO (HALF_UP, ver CurrencyRateService), así
+            // que el cobro usa el MISMO redondeo → catálogo == carrito == cobro, sin céntimos de más ni de menos.
+            int unitCents = unitPrice.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
             int costCents = priced.costUsd() != null
                     ? priced.costUsd().multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).intValue()
                     : unitCents;
@@ -390,6 +403,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 || o.getStatus() == OrderStatus.SHIPPED || o.getStatus() == OrderStatus.DELIVERED;
         if (wasPaid) {
             issueRefund(o, "cancel-", false); // admin: reembolso al método original del cliente
+            stockService.restoreForOrder(o); // la venta no se concretó → devolvemos el stock descontado
         }
         o.setStatus(OrderStatus.CANCELLED);
         o.setCancelledAt(Instant.now());
@@ -412,6 +426,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
             throw new BusinessException("Cannot refund a cancelled order");
         }
         issueRefund(o, "refund-", false); // admin: reembolso al método original del cliente
+        stockService.restoreForOrder(o); // la venta no se concretó → devolvemos el stock descontado
         o.setStatus(OrderStatus.REFUNDED);
         o = orderRepository.save(o);
         affiliateProgramService.rejectForOrder(o.getId()); // DROP-646: void any affiliate commission
@@ -442,6 +457,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         }
         // El cliente elige: wallet (inmediato) o su método original (tarjeta/PayPal, con sus tiempos).
         issueRefund(o, "cancel-", refundToWallet);
+        stockService.restoreForOrder(o); // estaba PAID (stock ya descontado) → lo devolvemos al no concretarse
         o.setStatus(OrderStatus.CANCELLED);
         o.setCancelledAt(Instant.now());
         o = orderRepository.save(o);

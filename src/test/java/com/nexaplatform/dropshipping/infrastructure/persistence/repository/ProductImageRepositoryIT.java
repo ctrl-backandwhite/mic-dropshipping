@@ -59,7 +59,7 @@ class ProductImageRepositoryIT extends PersistenceITBase {
         images.save(image(2, "https://src/m.jpg", MirrorStatus.MIRRORED, "https://cdn.nexa.local/m.jpg"));
         images.save(image(3, "https://src/f.jpg", MirrorStatus.FAILED, null));
 
-        assertThat(images.findTop100ByMirrorStatusOrderByCreatedAtAsc(MirrorStatus.PENDING)).hasSize(2);
+        assertThat(images.findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus.PENDING)).hasSize(2);
         assertThat(images.countByMirrorStatus(MirrorStatus.PENDING)).isEqualTo(2);
         assertThat(images.countByMirrorStatus(MirrorStatus.MIRRORED)).isEqualTo(1);
         assertThat(images.countByMirrorStatus(MirrorStatus.FAILED)).isEqualTo(1);

@@ -40,4 +40,24 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariantEn
     @Transactional
     @Query("UPDATE ProductVariantEntity v SET v.imageMirrorFailedAt = :at WHERE v.id = :id")
     void markImageFailed(@Param("id") UUID id, @Param("at") java.time.Instant at);
+
+    /**
+     * Descuento ATÓMICO de stock al concretarse la venta (pago confirmado). La condición
+     * {@code stock >= qty} es el control de sobreventa: si no hay suficiente devuelve 0 filas
+     * (no descuenta) y el llamador decide (nunca deja stock negativo). Se une a la transacción
+     * del cambio de estado de la orden, por lo que descontar y marcar PAID son atómicos.
+     */
+    @Modifying
+    @Query("UPDATE ProductVariantEntity v SET v.stock = v.stock - :qty WHERE v.id = :id AND v.stock >= :qty")
+    int deductStock(@Param("id") UUID id, @Param("qty") int qty);
+
+    /** Reintegra stock al cancelar/reembolsar (la venta no se concretó). */
+    @Modifying
+    @Query("UPDATE ProductVariantEntity v SET v.stock = v.stock + :qty WHERE v.id = :id")
+    int restoreStock(@Param("id") UUID id, @Param("qty") int qty);
+
+    /** Fija el stock a 0 (salvaguarda anti-sobreventa cuando el dinero ya se capturó y no se puede rechazar). */
+    @Modifying
+    @Query("UPDATE ProductVariantEntity v SET v.stock = 0 WHERE v.id = :id")
+    int zeroStock(@Param("id") UUID id);
 }
