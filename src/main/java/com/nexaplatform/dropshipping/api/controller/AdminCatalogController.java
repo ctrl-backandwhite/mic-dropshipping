@@ -11,6 +11,7 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.UpdateProductStatusRequ
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AddProductImageDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.ReorderProductImagesDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn;
@@ -167,6 +168,12 @@ public class AdminCatalogController implements AdminCatalogApi {
     @Override
     public ResponseEntity<Void> deleteProductImage(UUID imageId) {
         catalogUseCase.deleteProductImage(imageId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    public ResponseEntity<Void> reorderProductImages(UUID productId, ReorderProductImagesDtoIn req) {
+        catalogUseCase.reorderProductImages(productId, req.getImageIds());
         return ResponseEntity.noContent().build();
     }
 

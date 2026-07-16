@@ -1011,6 +1011,37 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         }
     }
 
+    @Override
+    @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
+    public void reorderProductImages(UUID productId, List<UUID> imageIds) {
+        ProductEntity product = productJpaRepository.findById(productId)
+                .orElseThrow(() -> new NotFoundException("Product not found"));
+        if (imageIds == null || imageIds.isEmpty()) {
+            return;
+        }
+        // Reasigna position según el orden recibido; la primera pasa a MAIN y el resto a GALLERY.
+        // Las imágenes no incluidas en la lista se colocan al final preservando su orden previo.
+        Map<UUID, Integer> order = new HashMap<>();
+        for (int i = 0; i < imageIds.size(); i++) {
+            order.put(imageIds.get(i), i);
+        }
+        int tail = imageIds.size();
+        for (ProductImageEntity img : product.getImages()) {
+            Integer pos = order.get(img.getId());
+            if (pos == null) {
+                img.setPosition(tail++);
+            } else {
+                img.setPosition(pos);
+                img.setRole(pos == 0 ? "MAIN" : "GALLERY");
+            }
+        }
+        imageRepository.flush();
+        productIndexer.indexProduct(productId);
+    }
+
     private void applyVariant(ProductVariantEntity v, AdminVariantUpsertDtoIn req) {
         v.setSku(req.getSku());
         v.setTitle(req.getTitle() != null && !req.getTitle().isBlank() ? req.getTitle() : req.getSku());

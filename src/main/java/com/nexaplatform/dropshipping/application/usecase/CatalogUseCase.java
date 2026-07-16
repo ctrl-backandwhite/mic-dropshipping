@@ -116,6 +116,9 @@ public interface CatalogUseCase {
     /** Removes a product image and reindexes its product. */
     void deleteProductImage(UUID imageId);
 
+    /** Reorders a product's gallery images to match the given id order (first becomes MAIN). */
+    void reorderProductImages(UUID productId, List<UUID> imageIds);
+
     /** Bulk-creates products from friendly JSON rows; returns created/failed counts and errors. */
     BulkResultDtoOut bulkCreateProducts(
             List<BulkProductDtoIn> rows);

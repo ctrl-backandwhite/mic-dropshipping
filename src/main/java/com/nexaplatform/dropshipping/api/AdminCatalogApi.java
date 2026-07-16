@@ -14,6 +14,7 @@ import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.ReorderProductImagesDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.ReindexResultDtoOut;
 import io.swagger.v3.oas.annotations.Operation;
@@ -114,6 +115,12 @@ public interface AdminCatalogApi {
     @Operation(summary = "Delete a product image")
     @DeleteMapping("/products/images/{imageId}")
     ResponseEntity<Void> deleteProductImage(@PathVariable UUID imageId);
+
+    @Operation(summary = "Reorder a product's gallery images (first becomes the main image)")
+    @PutMapping("/products/{productId}/images/order")
+    ResponseEntity<Void> reorderProductImages(
+            @PathVariable UUID productId,
+            @Valid @RequestBody ReorderProductImagesDtoIn req);
 
     /* ============================ Bulk import ============================ */
 
