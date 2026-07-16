@@ -9,10 +9,10 @@ import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.User;
 import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
 import com.nexaplatform.dropshipping.domain.repository.UserRepository;
-import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.CainiaoFulfillmentService;
-import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.CainiaoFulfillmentService.FulfillmentResult;
-import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.CainiaoFulfillmentService.TrackingSnapshot;
-import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.CainiaoFulfillmentService.TrackingStep;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.FulfillmentResult;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.TrackingSnapshot;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.TrackingStep;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderTrackingEventEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderTrackingEventRepository;
 import lombok.RequiredArgsConstructor;
@@ -41,7 +41,7 @@ public class FulfillmentService {
 
     private final OrderRepository orderRepository;
     private final OrderTrackingEventRepository trackingRepository;
-    private final CainiaoFulfillmentService cainiao;
+    private final FulfillmentProvider fulfillment;
     private final UserRepository userRepository;
     private final OrderEmailService orderEmailService;
     private final ObjectMapper objectMapper;
@@ -65,7 +65,7 @@ public class FulfillmentService {
         if (o == null || o.getTrackingNumber() != null || o.getStatus() != OrderStatus.FORWARDED) {
             return; // sin pedido, ya tiene envío, o aún no despachado
         }
-        FulfillmentResult r = cainiao.createShipment(o);
+        FulfillmentResult r = fulfillment.createShipment(o);
         o.setCarrier(r.carrier());
         o.setTrackingNumber(r.trackingNumber());
         o.setFulfillmentRef(r.fulfillmentRef());
@@ -92,7 +92,7 @@ public class FulfillmentService {
         if (o.getTrackingNumber() == null) {
             return new TrackingProgress(o.getStatus(), o.getStatus());
         }
-        TrackingSnapshot snap = cainiao.track(o.getTrackingNumber(), o.getForwardedAt(), o.getShippingCountry());
+        TrackingSnapshot snap = fulfillment.track(o.getTrackingNumber(), o.getForwardedAt(), o.getShippingCountry());
         List<OrderTrackingEventEntity> existing = trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId());
         Set<String> seen = new HashSet<>();
         for (OrderTrackingEventEntity e : existing) {
