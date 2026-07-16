@@ -138,7 +138,7 @@ public class ProductMapper {
             localized = v.getValue();
         }
         return new VariantValueView(v.getId(), v.getValueZh(), v.getValue(), localized, pickValueImage(v),
-                v.getPosition(), tr);
+                v.getImageSourceUrl(), v.getPosition(), tr);
     }
 
     public PriceTierView toPriceTierView(ProductPriceTierEntity t) {
