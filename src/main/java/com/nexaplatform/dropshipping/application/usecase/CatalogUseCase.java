@@ -116,6 +116,9 @@ public interface CatalogUseCase {
     /** Removes a product image and reindexes its product. */
     void deleteProductImage(UUID imageId);
 
+    /** Clears the explanation video of a product (video_url, has_video, video_urls) — admin only. */
+    void deleteProductVideo(UUID id);
+
     /** Reorders a product's gallery images to match the given id order (first becomes MAIN). */
     void reorderProductImages(UUID productId, List<UUID> imageIds);
 
