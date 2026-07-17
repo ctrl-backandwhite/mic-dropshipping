@@ -177,3 +177,5 @@ databaseChangeLog:
       file: db/changelog/schema-v83-product-shipping-iva.sql
   - include:
       file: db/changelog/schema-v84-product-verified.sql
+  - include:
+      file: db/changelog/schema-v85-yunexpress-shipping-coverage.sql

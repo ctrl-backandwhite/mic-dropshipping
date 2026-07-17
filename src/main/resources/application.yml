@@ -6,6 +6,12 @@ spring:
   threads:
     virtual:
       enabled: true
+  mvc:
+    async:
+      # No timeout for async/streaming responses (StreamingResponseBody). The NDJSON export streams the
+      # whole catalogue in batches and can take much longer than the default 30s; without this the async
+      # request is aborted mid-stream and the download is truncated.
+      request-timeout: -1
 
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5532}/${DB_NAME:nexadrop}
@@ -325,6 +331,21 @@ nexadrop:
     mock-stage-minutes: ${CAINIAO_MOCK_STAGE_MINUTES:2}
     # Cadencia del job que sincroniza el tracking y avanza el estado semiautomáticamente.
     sync-enabled: ${CAINIAO_SYNC_ENABLED:true}
+
+  # Fulfillment con YunExpress (云途) — proveedor alternativo a Cainiao (open.yunexpress.cn). Estructura
+  # preparada; INACTIVO por defecto hasta tener credenciales de sandbox y el algoritmo de firma real.
+  # Auth REST/JSON con appKey + appSecret (firma en cabecera). Ver YunExpressClient / YunExpressFulfillmentService.
+  yunexpress:
+    enabled: ${YUNEXPRESS_ENABLED:false}
+    app-key: ${YUNEXPRESS_APP_KEY:}
+    app-secret: ${YUNEXPRESS_APP_SECRET:}
+    # Sandbox por defecto; en producción apuntar al host formal que indique la doc de YunExpress.
+    base-url: ${YUNEXPRESS_BASE_URL:https://oms.api.yunexpress.cn}
+    # Modo de despacho fiscal por defecto del canal: DDP (impuestos incluidos, los paga el comercio) o
+    # DDU (los paga el destinatario). Se puede sobreescribir por país en yunexpress_channel (futuro).
+    default-tax-mode: ${YUNEXPRESS_TAX_MODE:DDP}
+    # Número IOSS del comercio para despacho de IVA en la UE (pedidos <=150 EUR). Vacío = sin IOSS.
+    ioss-number: ${YUNEXPRESS_IOSS:}
 
   # Almacenamiento de objetos (MinIO/S3) para el mirror de imágenes de producto. El backend descarga
   # la imagen de origen (1688/alicdn, sin Referer) y la sube al bucket; el `public-url` es la base con

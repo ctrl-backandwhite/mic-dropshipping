@@ -6,7 +6,7 @@ import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.ShippingQuoteService;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
-import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.CainiaoFulfillmentService.SupportedCountry;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.SupportedCountry;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;

@@ -18,7 +18,7 @@ import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
-import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.CainiaoFulfillmentService;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
@@ -78,7 +78,7 @@ class OrderUseCaseImplTest {
     @Mock
     OrderEmailService orderEmailService;
     @Mock
-    CainiaoFulfillmentService cainiao;
+    FulfillmentProvider cainiao;
     @Mock
     CainiaoTaxService cainiaoTaxService;
 

@@ -15,7 +15,7 @@ import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
-import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.CainiaoFulfillmentService;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
 import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
@@ -89,7 +89,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final com.nexaplatform.dropshipping.application.service.StockService stockService;
     private final PaymentUseCase paymentUseCase;
     private final OrderEmailService orderEmailService;
-    private final CainiaoFulfillmentService cainiao;
+    private final FulfillmentProvider fulfillment;
     private final CainiaoTaxService cainiaoTaxService;
     private final OperatorCommissionService operatorCommissionService;
     private final OrderIndexer orderIndexer;
@@ -190,7 +190,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
 
         // Envío con Cainiao: tarifa por destino. Si el país no está cubierto por Cainiao, el envío
         // queda en 0 aquí (el checkout del storefront bloquea antes el destino no soportado).
-        ShippingQuote quote = cainiao.quote(order.getShippingCountry(), Math.max(1, totalWeightGrams));
+        ShippingQuote quote = fulfillment.quote(order.getShippingCountry(), Math.max(1, totalWeightGrams));
         int shippingCents = quote.supported() ? quote.amountUsdCents() : 0;
 
         // Impuesto (IVA/sales tax) por país de envío, si está configurado. Base imponible = subtotal + envío.
@@ -541,7 +541,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         if (addr == null)
             throw new BusinessException("SHIPPING_ADDRESS_REQUIRED", "Shipping address is required");
         // Cainiao solo envía a países cubiertos: bloqueamos el destino no soportado antes de cobrar.
-        if (!cainiao.isSupported(addr.country())) {
+        if (!fulfillment.isSupported(addr.country())) {
             throw new BusinessException(
                     "No realizamos envíos a este destino (" + addr.country() + "). Elige un país soportado.");
         }

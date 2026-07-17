@@ -1,7 +1,7 @@
 package com.nexaplatform.dropshipping.application.service;
 
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
-import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.CainiaoFulfillmentService;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
@@ -20,15 +20,15 @@ import java.util.UUID;
 public class ShippingQuoteService {
 
     private final ProductRepository productRepository;
-    private final CainiaoFulfillmentService cainiao;
+    private final FulfillmentProvider fulfillment;
 
     /** Una línea del carrito a cotizar. {@code variantId} puede ser null (producto sin variantes). */
     public record Line(UUID productId, UUID variantId, int quantity) {
     }
 
     /** Países a los que Cainiao envía (para el banner de cobertura de la home). */
-    public List<CainiaoFulfillmentService.SupportedCountry> supportedCountries() {
-        return cainiao.supportedCountries();
+    public List<FulfillmentProvider.SupportedCountry> supportedCountries() {
+        return fulfillment.supportedCountries();
     }
 
     /** Cotiza el envío a {@code country} para las líneas dadas (suma el peso real de cada producto). */
@@ -42,7 +42,7 @@ public class ShippingQuoteService {
                 weightGrams += unit * Math.max(1, line.quantity());
             }
         }
-        return cainiao.quote(country, Math.max(1, weightGrams));
+        return fulfillment.quote(country, Math.max(1, weightGrams));
     }
 
     /**

@@ -2,7 +2,7 @@ package com.nexaplatform.dropshipping.application;
 
 import com.nexaplatform.dropshipping.application.service.ShippingQuoteService;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
-import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.CainiaoFulfillmentService;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import org.junit.jupiter.api.Test;
@@ -33,7 +33,7 @@ class ShippingQuoteServiceTest {
     @Mock
     ProductRepository productRepository;
     @Mock
-    CainiaoFulfillmentService cainiao;
+    FulfillmentProvider cainiao;
     @InjectMocks
     ShippingQuoteService service;
 
@@ -153,11 +153,11 @@ class ShippingQuoteServiceTest {
 
     @Test
     void supportedCountries_delegatesToCainiao() {
-        CainiaoFulfillmentService.SupportedCountry es =
-                new CainiaoFulfillmentService.SupportedCountry("ES", "Spain");
+        FulfillmentProvider.SupportedCountry es =
+                new FulfillmentProvider.SupportedCountry("ES", "Spain");
         when(cainiao.supportedCountries()).thenReturn(List.of(es));
 
-        List<CainiaoFulfillmentService.SupportedCountry> result = service.supportedCountries();
+        List<FulfillmentProvider.SupportedCountry> result = service.supportedCountries();
 
         assertThat(result).containsExactly(es);
     }
