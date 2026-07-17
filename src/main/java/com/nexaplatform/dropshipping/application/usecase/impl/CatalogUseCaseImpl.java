@@ -96,6 +96,8 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
+import java.util.stream.Collectors;
 import jakarta.persistence.PersistenceContext;
 
 import java.time.Instant;
@@ -1146,6 +1148,51 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             out.add(bulkExportMapper.toBulk(p, attributes, specs, tiers, reviews));
         }
         return out;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProductExportBatch exportBatchAfter(UUID afterId, int limit) {
+        int safeLimit = Math.min(Math.max(limit, 1), 1000);
+        // Keyset pagination by id. A native query with an explicit uuid cast is used because Hibernate does
+        // not reliably translate the JPQL "p.id > :afterId" comparison on a UUID column (it silently returns
+        // no rows past a point), which truncated the stream. Native SQL uses Postgres' native uuid ordering.
+        @SuppressWarnings("unchecked")
+        List<ProductEntity> products = em.createNativeQuery(
+                "SELECT * FROM product WHERE (CAST(:afterId AS uuid) IS NULL OR id > CAST(:afterId AS uuid)) "
+                        + "ORDER BY id ASC LIMIT :lim", ProductEntity.class)
+                .setParameter("afterId", afterId != null ? afterId.toString() : null)
+                .setParameter("lim", safeLimit)
+                .getResultList();
+        if (products.isEmpty()) {
+            return new ProductExportBatch(List.of(), null);
+        }
+        List<UUID> ids = products.stream().map(ProductEntity::getId).toList();
+        Map<UUID, List<ProductAttributeEntity>> attributesByProduct = em.createQuery(
+                "SELECT a FROM ProductAttributeEntity a WHERE a.product.id IN :ids", ProductAttributeEntity.class)
+                .setParameter("ids", ids).getResultList().stream()
+                .collect(Collectors.groupingBy(a -> a.getProduct().getId()));
+        Map<UUID, List<ProductSpecificationEntity>> specsByProduct = em.createQuery(
+                "SELECT s FROM ProductSpecificationEntity s WHERE s.product.id IN :ids ORDER BY s.position",
+                ProductSpecificationEntity.class).setParameter("ids", ids).getResultList().stream()
+                .collect(Collectors.groupingBy(s -> s.getProduct().getId()));
+        Map<UUID, List<ProductPriceTierEntity>> tiersByProduct = em.createQuery(
+                "SELECT t FROM ProductPriceTierEntity t WHERE t.product.id IN :ids ORDER BY t.minQty",
+                ProductPriceTierEntity.class).setParameter("ids", ids).getResultList().stream()
+                .collect(Collectors.groupingBy(t -> t.getProduct().getId()));
+        Map<UUID, List<ProductReviewEntity>> reviewsByProduct = em.createQuery(
+                "SELECT r FROM ProductReviewEntity r WHERE r.product.id IN :ids ORDER BY r.createdAt",
+                ProductReviewEntity.class).setParameter("ids", ids).getResultList().stream()
+                .collect(Collectors.groupingBy(r -> r.getProduct().getId()));
+        List<BulkProductDtoIn> out = new ArrayList<>(products.size());
+        for (ProductEntity p : products) {
+            out.add(bulkExportMapper.toBulk(p,
+                    attributesByProduct.getOrDefault(p.getId(), List.of()),
+                    specsByProduct.getOrDefault(p.getId(), List.of()),
+                    tiersByProduct.getOrDefault(p.getId(), List.of()),
+                    reviewsByProduct.getOrDefault(p.getId(), List.of())));
+        }
+        return new ProductExportBatch(out, products.get(products.size() - 1).getId());
     }
 
     @Override

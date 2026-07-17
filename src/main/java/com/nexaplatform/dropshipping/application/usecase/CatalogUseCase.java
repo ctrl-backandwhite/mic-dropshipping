@@ -130,6 +130,16 @@ public interface CatalogUseCase {
      */
     List<BulkProductDtoIn> exportProducts(int from, int to);
 
+    /** One page of a keyset-paginated export: the mapped rows and the id of the last row (for the next page). */
+    record ProductExportBatch(List<BulkProductDtoIn> items, UUID lastId) {}
+
+    /**
+     * Keyset-paginated export batch: returns up to {@code limit} products with id greater than {@code afterId}
+     * (or the first ones when {@code afterId} is null), ordered by id. Child collections are batch-fetched by
+     * the page's ids (no N+1). Used to stream millions of products with bounded memory (one page at a time).
+     */
+    ProductExportBatch exportBatchAfter(UUID afterId, int limit);
+
     /** Exporta UN producto al formato de carga masiva (para editarlo como JSON y reimportar con upsert). */
     BulkProductDtoIn exportProduct(UUID id);
 

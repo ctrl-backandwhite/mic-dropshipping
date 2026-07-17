@@ -6,6 +6,12 @@ spring:
   threads:
     virtual:
       enabled: true
+  mvc:
+    async:
+      # No timeout for async/streaming responses (StreamingResponseBody). The NDJSON export streams the
+      # whole catalogue in batches and can take much longer than the default 30s; without this the async
+      # request is aborted mid-stream and the download is truncated.
+      request-timeout: -1
 
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5532}/${DB_NAME:nexadrop}
