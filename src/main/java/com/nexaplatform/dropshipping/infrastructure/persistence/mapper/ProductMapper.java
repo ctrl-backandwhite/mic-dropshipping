@@ -87,7 +87,8 @@ public class ProductMapper {
                 priced.displaySymbol(), priced.displayFormatted(), appliedMarginPercent,
                 baseFormatted, ivaFormatted, shippingFormatted,
                 tr != null ? tr.getMetaTitle() : null, tr != null ? tr.getMetaDescription() : null,
-                Boolean.TRUE.equals(p.getVerified()));
+                Boolean.TRUE.equals(p.getVerified()),
+                p.getVideoUrl(), Boolean.TRUE.equals(p.getHasVideo()));
     }
 
     public ProductImageView toImageView(ProductImageEntity img) {

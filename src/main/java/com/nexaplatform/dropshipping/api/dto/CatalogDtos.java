@@ -120,7 +120,9 @@ public final class CatalogDtos {
             // DROP-679: SEO por idioma (generado al publicar a partir del contenido real)
             String metaTitle, String metaDescription,
             // verificación manual del admin (false = pendiente/con error, true = revisado OK)
-            boolean verified) {
+            boolean verified,
+            // Vídeo de explicación del producto (columna product.video_url). El front lo muestra en la galería.
+            String videoUrl, boolean hasVideo) {
     }
 
     public record BestsellerView(UUID productId, String slug, String title, String mainImage, int rank, String listCode,
