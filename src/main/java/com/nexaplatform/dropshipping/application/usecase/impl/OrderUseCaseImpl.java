@@ -140,13 +140,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
                             .orElseThrow(() -> new NotFoundException("CART_ITEM_UNAVAILABLE",
                                     List.of(itemReq.variantId().toString())));
 
-            // Control de sobreventa (fail-fast): rechazamos ANTES de cobrar si la variante no tiene stock
-            // suficiente. El descuento efectivo ocurre al confirmar el pago (StockService.deductForOrder);
-            // aquí solo evitamos aceptar un pedido que no se podrá servir. El front localiza por el CODE.
-            if (variant != null && variant.getStock() < itemReq.quantity()) {
-                throw new BusinessException("INSUFFICIENT_STOCK",
-                        "Not enough stock for variant " + variant.getId());
-            }
+            // Dropshipping: NO rechazamos por stock. La plataforma no mantiene inventario propio; el
+            // proveedor abastece bajo demanda (stock efectivamente ilimitado), así que un pedido siempre
+            // se puede aceptar y el stock mostrado no se agota. El número de stock es solo informativo.
 
             // DROP-637: charge the PRICED amount (raw supplier price → USD → margin), not the raw
             // CNY value. The order currency is USD, so we bill retailUsd — the same figure the

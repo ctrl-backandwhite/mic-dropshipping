@@ -164,13 +164,13 @@ class ProductVariantRepositoryIT extends PersistenceITBase {
     }
 
     /**
-     * Flujo pago→cancelar a nivel de servicio + Postgres real: {@code deductForOrder} (lo que hace el pago
-     * al pasar a PAID) descuenta cada variante; {@code restoreForOrder} (lo que hace cancelar/reembolsar)
-     * lo devuelve. Se cubren: ítem con variante, ítem sin variante (no toca stock) y sobreventa (fuerza a 0).
+     * Modelo de DROPSHIPPING a nivel de servicio + Postgres real: la plataforma no mantiene inventario, así
+     * que ni el pago ({@code deductForOrder}) descuenta stock ni la cancelación ({@code restoreForOrder}) lo
+     * reintegra. El stock guardado (informativo) permanece intacto tras el ciclo completo pago→cancelar.
      */
     @Test
-    void stockService_deductOnPayThenRestoreOnCancel_roundTrips() {
-        StockService stockService = new StockService(variants);
+    void stockService_dropshipping_neverChangesStock() {
+        StockService stockService = new StockService();
         ProductVariantEntity a = variants.save(variantWithStock("v-a", 10));
         ProductVariantEntity b = variants.save(variantWithStock("v-b", 8));
         em.flush();
@@ -178,17 +178,17 @@ class ProductVariantRepositoryIT extends PersistenceITBase {
         Order order = Order.builder().orderNumber("ORD-IT-1").items(List.of(
                 OrderItem.builder().variantId(a.getId()).quantity(3).build(),
                 OrderItem.builder().variantId(b.getId()).quantity(2).build(),
-                OrderItem.builder().variantId(null).quantity(5).build())) // sin variante → no afecta stock
+                OrderItem.builder().variantId(null).quantity(5).build()))
                 .build();
 
-        // Pago confirmado → descuento.
+        // Pago confirmado → NO descuenta (dropshipping: el stock no se agota).
         stockService.deductForOrder(order);
         em.flush();
         em.clear();
-        assertThat(variants.findById(a.getId()).orElseThrow().getStock()).isEqualTo(7);
-        assertThat(variants.findById(b.getId()).orElseThrow().getStock()).isEqualTo(6);
+        assertThat(variants.findById(a.getId()).orElseThrow().getStock()).isEqualTo(10);
+        assertThat(variants.findById(b.getId()).orElseThrow().getStock()).isEqualTo(8);
 
-        // Cancelación/reembolso → reintegro (la venta no se concretó).
+        // Cancelación/reembolso → NO reintegra (nunca se descontó).
         stockService.restoreForOrder(order);
         em.flush();
         em.clear();
@@ -197,19 +197,19 @@ class ProductVariantRepositoryIT extends PersistenceITBase {
     }
 
     @Test
-    void stockService_deduct_onOversell_forcesZeroWithoutFailing() {
-        StockService stockService = new StockService(variants);
+    void stockService_dropshipping_oversellQuantityDoesNotDepleteStock() {
+        StockService stockService = new StockService();
         ProductVariantEntity v = variants.save(variantWithStock("v-oversell", 2));
         em.flush();
 
-        // El dinero ya se capturó (no se puede rechazar): pedir 5 con stock 2 → se fuerza a 0, nunca negativo.
+        // Pedir 5 con stock 2: en dropshipping el pedido se sirve igual y el stock mostrado no cambia.
         Order order = Order.builder().orderNumber("ORD-IT-2").items(List.of(
                 OrderItem.builder().variantId(v.getId()).quantity(5).build())).build();
 
         stockService.deductForOrder(order);
         em.flush();
         em.clear();
-        assertThat(variants.findById(v.getId()).orElseThrow().getStock()).isZero();
+        assertThat(variants.findById(v.getId()).orElseThrow().getStock()).isEqualTo(2);
     }
 
     private ProductVariantEntity variantWithStock(String tag, int stock) {
