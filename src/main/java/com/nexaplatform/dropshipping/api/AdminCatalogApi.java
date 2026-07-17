@@ -118,6 +118,10 @@ public interface AdminCatalogApi {
     @DeleteMapping("/products/images/{imageId}")
     ResponseEntity<Void> deleteProductImage(@PathVariable UUID imageId);
 
+    @Operation(summary = "Delete the explanation video of a product (clears video_url/has_video)")
+    @DeleteMapping("/products/{id}/video")
+    ResponseEntity<Void> deleteProductVideo(@PathVariable UUID id);
+
     @Operation(summary = "Reorder a product's gallery images (first becomes the main image)")
     @PutMapping("/products/{productId}/images/order")
     ResponseEntity<Void> reorderProductImages(

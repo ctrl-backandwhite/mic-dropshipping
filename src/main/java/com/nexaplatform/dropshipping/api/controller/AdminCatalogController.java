@@ -183,6 +183,12 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
+    public ResponseEntity<Void> deleteProductVideo(UUID id) {
+        catalogUseCase.deleteProductVideo(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override
     public ResponseEntity<Void> reorderProductImages(UUID productId, ReorderProductImagesDtoIn req) {
         catalogUseCase.reorderProductImages(productId, req.getImageIds());
         return ResponseEntity.noContent().build();

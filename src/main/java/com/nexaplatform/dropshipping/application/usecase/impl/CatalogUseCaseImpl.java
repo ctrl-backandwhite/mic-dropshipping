@@ -992,6 +992,20 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
+    public void deleteProductVideo(UUID id) {
+        ProductEntity product = productJpaRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Product not found: " + id));
+        product.setVideoUrl(null);
+        product.setHasVideo(false);
+        product.setVideoUrls(null);
+        productJpaRepository.save(product);
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void deleteProductImage(UUID imageId) {
         ProductImageEntity img = imageRepository.findById(imageId)
                 .orElseThrow(() -> new NotFoundException("Image not found"));
