@@ -465,8 +465,9 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         var newest = storefrontRead.productList(0, perSection, lang, null, null, null, null, null, "newest").items();
         var topSales = storefrontRead.productList(0, perSection, lang, null, null, null, null, null, "sales").items();
         // Filtrado en BD por hasVideo=true (antes traía 500 y filtraba en memoria: con el catálogo repoblado
-        // los productos con vídeo caían fuera del lote y la sección salía vacía).
-        var video = productRepository.findVisibleWithVideo(ProductStatus.ACTIVE, PageRequest.of(0, perSection))
+        // los productos con vídeo caían fuera del lote y la sección salía vacía). Reutiliza el pageable ya
+        // acotado (perSection topado a 24) para no dejar el tamaño de página a merced del cliente.
+        var video = productRepository.findVisibleWithVideo(ProductStatus.ACTIVE, p)
                 .getContent().stream().map(x -> productMapper.toSummary(x, lang)).toList();
 
         List<HomeSection> sections = new ArrayList<>();
