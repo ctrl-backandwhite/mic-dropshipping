@@ -49,6 +49,21 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             """)
     Page<ProductEntity> findVisibleByStatus(@Param("status") ProductStatus status, Pageable pageable);
 
+    /**
+     * Escaparate — productos VISIBLES que tienen vídeo de explicación ({@code hasVideo = true}). Filtra en
+     * BD (no trae un lote y filtra en memoria), así la sección "Productos con vídeo" del home los encuentra
+     * aunque estén lejos en el catálogo. Misma visibilidad que {@link #findVisibleByStatus} (activo + imagen
+     * espejada). Orden por trendScore para mostrar primero los más relevantes.
+     */
+    @Query("""
+            SELECT p FROM ProductEntity p
+            WHERE p.status = :status
+              AND p.hasVideo = TRUE
+              AND EXISTS (SELECT 1 FROM ProductImageEntity i WHERE i.product = p AND i.cdnUrl IS NOT NULL)
+            ORDER BY p.trendScore DESC NULLS LAST
+            """)
+    Page<ProductEntity> findVisibleWithVideo(@Param("status") ProductStatus status, Pageable pageable);
+
     /** Admin product list filtered by category (any status). */
     Page<ProductEntity> findByCategoryId(UUID categoryId, Pageable pageable);
 

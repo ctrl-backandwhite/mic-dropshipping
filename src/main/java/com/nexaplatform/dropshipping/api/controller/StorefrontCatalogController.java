@@ -464,9 +464,10 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         var trending = catalogUseCase.listBestsellers(null, p, lang).getContent();
         var newest = storefrontRead.productList(0, perSection, lang, null, null, null, null, null, "newest").items();
         var topSales = storefrontRead.productList(0, perSection, lang, null, null, null, null, null, "sales").items();
-        var video = productRepository.findVisibleByStatus(ProductStatus.ACTIVE, PageRequest.of(0, 500)).getContent().stream()
-                .filter(x -> Boolean.TRUE.equals(x.getHasVideo())).limit(perSection)
-                .map(x -> productMapper.toSummary(x, lang)).toList();
+        // Filtrado en BD por hasVideo=true (antes traía 500 y filtraba en memoria: con el catálogo repoblado
+        // los productos con vídeo caían fuera del lote y la sección salía vacía).
+        var video = productRepository.findVisibleWithVideo(ProductStatus.ACTIVE, PageRequest.of(0, perSection))
+                .getContent().stream().map(x -> productMapper.toSummary(x, lang)).toList();
 
         List<HomeSection> sections = new ArrayList<>();
         sections.add(new HomeSection("trending", "Trending Now", trending));
