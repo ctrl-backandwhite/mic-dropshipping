@@ -122,29 +122,24 @@
 
       <!-- totals -->
       <tr><td style="padding:18px 32px 0;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;">
+        <!-- align="right" en la propia tabla la fija a la derecha de forma fiable también en Gmail móvil
+             (una celda espaciadora vacía se colapsa en móvil y dejaba el bloque a la izquierda). -->
+        <table role="presentation" align="right" width="240" cellpadding="0" cellspacing="0" border="0" style="width:240px;font-size:13px;">
           <tr>
-            <td></td>
-            <td width="240">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td align="left"  style="padding:5px 0;color:#6B6780;" th:text="${labelSubtotal}">Subtotal</td>
-                  <td align="right" style="padding:5px 0;color:#1F1B2E;font-variant-numeric:tabular-nums;" th:text="${subtotal}">$0.00</td>
-                </tr>
-                <tr>
-                  <td align="left"  style="padding:5px 0;color:#6B6780;" th:text="${labelShipping}">Envío</td>
-                  <td align="right" style="padding:5px 0;color:#1F1B2E;font-variant-numeric:tabular-nums;" th:text="${shipping}">$0.00</td>
-                </tr>
-                <tr>
-                  <td align="left"  style="padding:5px 0;color:#6B6780;" th:text="${labelTax}">IVA</td>
-                  <td align="right" style="padding:5px 0;color:#1F1B2E;font-variant-numeric:tabular-nums;" th:text="${tax}">$0.00</td>
-                </tr>
-                <tr>
-                  <td align="left"  style="padding:12px 0 4px;font-weight:700;font-size:15px;color:#1F1B2E;border-top:2px solid #E7E3F3;" th:text="${labelTotal}">Total</td>
-                  <td align="right" style="padding:12px 0 4px;font-weight:700;font-size:17px;color:#7C6CD0;border-top:2px solid #E7E3F3;font-variant-numeric:tabular-nums;" th:text="${total}">$0.00</td>
-                </tr>
-              </table>
-            </td>
+            <td align="left"  style="padding:5px 0;color:#6B6780;" th:text="${labelSubtotal}">Subtotal</td>
+            <td align="right" style="padding:5px 0;color:#1F1B2E;font-variant-numeric:tabular-nums;white-space:nowrap;" th:text="${subtotal}">$0.00</td>
+          </tr>
+          <tr>
+            <td align="left"  style="padding:5px 0;color:#6B6780;" th:text="${labelShipping}">Envío</td>
+            <td align="right" style="padding:5px 0;color:#1F1B2E;font-variant-numeric:tabular-nums;white-space:nowrap;" th:text="${shipping}">$0.00</td>
+          </tr>
+          <tr>
+            <td align="left"  style="padding:5px 0;color:#6B6780;" th:text="${labelTax}">IVA</td>
+            <td align="right" style="padding:5px 0;color:#1F1B2E;font-variant-numeric:tabular-nums;white-space:nowrap;" th:text="${tax}">$0.00</td>
+          </tr>
+          <tr>
+            <td align="left"  style="padding:12px 0 4px;font-weight:700;font-size:15px;color:#1F1B2E;border-top:2px solid #E7E3F3;" th:text="${labelTotal}">Total</td>
+            <td align="right" style="padding:12px 0 4px;font-weight:700;font-size:17px;color:#7C6CD0;border-top:2px solid #E7E3F3;font-variant-numeric:tabular-nums;white-space:nowrap;" th:text="${total}">$0.00</td>
           </tr>
         </table>
       </td></tr>
