@@ -19,8 +19,11 @@ public class LoginAuditListener {
 
     @EventListener
     public void onSuccess(AuthenticationSuccessEvent event) {
+        // Este evento se dispara también por cada request autenticado por JWT, donde el "name" es el
+        // UUID del subject (no un email). Solo procesamos cuando el principal es un email real, para no
+        // generar ruido de auditoría por petición ni buscar por un identificador que no es email.
         String name = event.getAuthentication().getName();
-        if (name != null) {
+        if (name != null && name.contains("@")) {
             userUseCase.recordSuccessfulLogin(name);
         }
     }
@@ -42,6 +45,7 @@ public class LoginAuditListener {
             email = auth.getName();
         }
         if (email != null && email.contains("@")) {
+            userUseCase.recordSuccessfulLogin(email);
             userUseCase.notifyLoginDetected(email);
         }
     }

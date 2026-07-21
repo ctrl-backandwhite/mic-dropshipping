@@ -84,6 +84,9 @@ public class AuthUseCaseImpl implements AuthUseCase {
         // Registro de dispositivo: auditoría best-effort (la cookie nx_device no viaja
         // cross-site, pero la fila sirve para histórico de IP/agente).
         deviceSessionService.recordLogin(id, httpRequest, httpResponse);
+        // Registro del login con el EMAIL real (el evento AuthenticationSuccessEvent solo trae el UUID
+        // del JWT y se dispara por request, por eso allí no se actualiza last_login).
+        userUseCase.recordSuccessfulLogin(user.getEmail());
         // Aviso de seguridad "inicio de sesión detectado" (login por email/contraseña). El login por
         // OAuth lo cubre LoginAuditListener vía InteractiveAuthenticationSuccessEvent. Nunca debe
         // bloquear el login, por eso va protegido.
