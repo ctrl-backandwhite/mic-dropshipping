@@ -220,8 +220,10 @@ nexadrop:
       registry: ${INVOICE_ISSUER_REGISTRY:}         # Reg. Mercantil / datos registrales (opcional)
     legal-note: ${INVOICE_LEGAL_NOTE:}              # Nota legal al pie (opcional)
   email:
-    from: ${EMAIL_FROM:noreply@nexadrop.local}  # Gmail: set to your Gmail address
+    from: ${EMAIL_FROM:noreply@nexadrop.local}          # Remitente por defecto (transaccional/auth): no-reply@
     from-name: ${EMAIL_FROM_NAME:NX036 Dropshipping}
+    from-billing: ${EMAIL_FROM_BILLING:${EMAIL_FROM:noreply@nexadrop.local}}  # Facturas/recibos: billing@
+    from-support: ${EMAIL_FROM_SUPPORT:${EMAIL_FROM:noreply@nexadrop.local}}  # Acuse de contacto: support@
   oauth:
     # Identidad del authorization server y emisor de los JWT de usuario (login por token).
     issuer: ${OAUTH_ISSUER:http://localhost:18082}
