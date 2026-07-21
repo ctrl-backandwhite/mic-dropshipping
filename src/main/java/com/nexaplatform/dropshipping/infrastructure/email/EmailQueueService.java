@@ -35,6 +35,23 @@ public class EmailQueueService {
     private String fromAddress;
     @org.springframework.beans.factory.annotation.Value("${nexadrop.email.from-name:NX036 Dropshipping}")
     private String fromName;
+    // Remitentes por tipo de correo (alias del dominio). Si no se definen, caen al 'from' por defecto.
+    @org.springframework.beans.factory.annotation.Value("${nexadrop.email.from-billing:${nexadrop.email.from:noreply@nexadrop.local}}")
+    private String fromBilling;
+    @org.springframework.beans.factory.annotation.Value("${nexadrop.email.from-support:${nexadrop.email.from:noreply@nexadrop.local}}")
+    private String fromSupport;
+
+    /**
+     * Elige el remitente (alias del dominio) según el tipo de correo, identificado por el template:
+     * facturas/recibos → billing@; acuse de contacto → support@; el resto (auth, notificaciones) → no-reply@.
+     */
+    private String resolveFrom(String template) {
+        if (template != null) {
+            if (template.contains("invoice")) return fromBilling;
+            if (template.contains("contact-ack")) return fromSupport;
+        }
+        return fromAddress;
+    }
 
     @Transactional
     public OutboundEmailEntity enqueue(String to, String subject, String template, Map<String, Object> vars) {
@@ -67,10 +84,11 @@ public class EmailQueueService {
                 helper.setTo(email.getToAddress());
                 helper.setSubject(email.getSubject());
                 helper.setText(html, true);
-                // Named From + Reply-To greatly reduces Gmail spam classification.
-                helper.setFrom(new jakarta.mail.internet.InternetAddress(fromAddress, fromName, "UTF-8"));
+                // From por tipo (alias del dominio) + Reply-To — reduce mucho la clasificación como spam en Gmail.
+                String from = resolveFrom(email.getTemplate());
+                helper.setFrom(new jakarta.mail.internet.InternetAddress(from, fromName, "UTF-8"));
                 String replyTo = email.getReplyTo();
-                helper.setReplyTo(replyTo != null && !replyTo.isBlank() ? replyTo : fromAddress);
+                helper.setReplyTo(replyTo != null && !replyTo.isBlank() ? replyTo : from);
                 for (String cid : cids) {
                     ClassPathResource icon = new ClassPathResource("email-icons/" + cid + ".png");
                     if (icon.exists()) {
