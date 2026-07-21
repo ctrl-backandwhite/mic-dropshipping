@@ -1,6 +1,6 @@
 # =====================================================================================
 # Perfil PRE (preproducción, despliegue remoto Railway, entorno pre-produccion)
-#   Frontend: https://front-dropshipping-pre.up.railway.app
+#   Frontend: https://nx036.com
 #   Backend : https://mic-dropshipping-pre.up.railway.app  (servidor de autorización)
 #
 # Réplica de application-dev.yml pero con las URLs públicas de PRE: issuer del authorization
@@ -44,13 +44,13 @@ server:
 
 nexadrop:
   storefront:
-    base-url: https://front-dropshipping-pre.up.railway.app   # CTA / unsubscribe de los emails + redirect post-login Google
+    base-url: https://nx036.com   # CTA / unsubscribe de los emails + redirect post-login Google
   oauth:
     # Identidad del authorization server y emisor de los JWT de usuario (este backend).
     issuer: https://mic-dropshipping-pre.up.railway.app
   cors:
     # Dominios de confianza desde los que se accede a la API (frontend + el propio backend).
-    allowed-origins: https://front-dropshipping-pre.up.railway.app,https://mic-dropshipping-pre.up.railway.app
+    allowed-origins: https://nx036.com,https://mic-dropshipping-pre.up.railway.app
   cainiao:
     # En PRE la integración real (sandbox de Cainiao Link) está disponible; se controla por env
     # CAINIAO_ENABLED en Railway (déjala en false hasta que la app esté aprobada y mapeada).
