@@ -84,6 +84,14 @@ public class AuthUseCaseImpl implements AuthUseCase {
         // Registro de dispositivo: auditoría best-effort (la cookie nx_device no viaja
         // cross-site, pero la fila sirve para histórico de IP/agente).
         deviceSessionService.recordLogin(id, httpRequest, httpResponse);
+        // Aviso de seguridad "inicio de sesión detectado" (login por email/contraseña). El login por
+        // OAuth lo cubre LoginAuditListener vía InteractiveAuthenticationSuccessEvent. Nunca debe
+        // bloquear el login, por eso va protegido.
+        try {
+            userUseCase.notifyLoginDetected(user.getEmail());
+        } catch (RuntimeException ignored) {
+            // notificación best-effort
+        }
         return buildLogin(user, authorities(auth));
     }
 
