@@ -26,6 +26,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Comparator;
@@ -183,6 +185,27 @@ public class UserUseCaseImpl implements UserUseCase {
             userRepository.update(u);
         });
         auditLogger.log("auth.login_ok", normalized, Map.of());
+    }
+
+    private static final DateTimeFormatter LOGIN_DATE_FMT =
+            DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm 'UTC'").withZone(ZoneOffset.UTC);
+
+    @Override
+    public void notifyLoginDetected(String email) {
+        String normalized = normalizeEmail(email);
+        userRepository.findByEmail(normalized).ifPresent(u -> {
+            String lang = InvoiceLabel.lang(u.getLanguage());
+            String when = LOGIN_DATE_FMT.format(Instant.now());
+            String body = AuthEmailLabel.LOGIN_BODY.of(lang, u.getDisplayName()).replace("{date}", when);
+            emailQueueService.enqueue(normalized, AuthEmailLabel.LOGIN_SUBJECT.of(lang), "emails/welcome",
+                    Map.of("title", AuthEmailLabel.LOGIN_TITLE.of(lang),
+                            "bodyHtml", body,
+                            "ctaLabel", AuthEmailLabel.LOGIN_CTA.of(lang),
+                            "ctaUrl", storefrontBaseUrl + "/password-reset",
+                            "icon", "circle-check",
+                            "footerNote", OrderEmailLabel.AUTO_NOTE.of(lang)));
+        });
+        auditLogger.log("auth.login_notify", normalized, Map.of());
     }
 
     /* ============ Password reset / change ============ */

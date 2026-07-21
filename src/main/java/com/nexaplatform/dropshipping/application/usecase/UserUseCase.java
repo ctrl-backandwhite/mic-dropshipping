@@ -31,6 +31,9 @@ public interface UserUseCase extends BaseUseCase<User, User, UUID> {
     /** Reset the failed-login counter and stamp the last successful login. */
     void recordSuccessfulLogin(String email);
 
+    /** Envía al usuario un aviso de seguridad de "inicio de sesión detectado" (solo en logins interactivos). */
+    void notifyLoginDetected(String email);
+
     /* ============ Password reset / change ============ */
 
     /** Issue a password-reset token + email (no-op response shape for unknown emails). */

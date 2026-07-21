@@ -58,7 +58,25 @@ public enum AuthEmailLabel {
             "Sei stato invitato su NX036 Dropshipping. Attiva il tuo account per iniziare.",
             "Je bent uitgenodigd voor NX036 Dropshipping. Activeer je account om te beginnen."),
     INVITE_CTA("Activar cuenta", "Activate account", "Ativar conta", "激活账户", "Activer le compte",
-            "Konto aktivieren", "Attiva account", "Account activeren");
+            "Konto aktivieren", "Attiva account", "Account activeren"),
+
+    LOGIN_SUBJECT("Nuevo inicio de sesión en tu cuenta · NX036", "New sign-in to your account · NX036",
+            "Novo início de sessão na sua conta · NX036", "您的账户有新的登录 · NX036",
+            "Nouvelle connexion à votre compte · NX036", "Neue Anmeldung bei deinem Konto · NX036",
+            "Nuovo accesso al tuo account · NX036", "Nieuwe aanmelding bij je account · NX036"),
+    LOGIN_TITLE("Inicio de sesión detectado", "Sign-in detected", "Início de sessão detetado", "检测到登录",
+            "Connexion détectée", "Anmeldung erkannt", "Accesso rilevato", "Aanmelding gedetecteerd"),
+    LOGIN_BODY(
+            "Hola {name}, hemos detectado un inicio de sesión en tu cuenta de NX036 el {date}. Si fuiste tú, no tienes que hacer nada. Si no reconoces esta actividad, protege tu cuenta cambiando la contraseña cuanto antes.",
+            "Hi {name}, we detected a sign-in to your NX036 account on {date}. If this was you, no action is needed. If you don't recognize this activity, secure your account by changing your password right away.",
+            "Olá {name}, detetámos um início de sessão na sua conta NX036 em {date}. Se foi você, não precisa de fazer nada. Se não reconhece esta atividade, proteja a sua conta alterando a palavra-passe o quanto antes.",
+            "您好 {name},我们检测到您的 NX036 账户于 {date} 登录。如果是您本人操作,无需处理。如果您不认识此活动,请立即修改密码以保护您的账户。",
+            "Bonjour {name}, nous avons détecté une connexion à votre compte NX036 le {date}. Si c'était vous, aucune action n'est requise. Si vous ne reconnaissez pas cette activité, sécurisez votre compte en changeant votre mot de passe au plus vite.",
+            "Hallo {name}, wir haben eine Anmeldung bei deinem NX036-Konto am {date} festgestellt. Warst du das, ist nichts zu tun. Erkennst du diese Aktivität nicht, sichere dein Konto, indem du umgehend dein Passwort änderst.",
+            "Ciao {name}, abbiamo rilevato un accesso al tuo account NX036 il {date}. Se sei stato tu, non devi fare nulla. Se non riconosci questa attività, proteggi il tuo account cambiando subito la password.",
+            "Hallo {name}, we hebben een aanmelding bij je NX036-account gedetecteerd op {date}. Was jij dit, dan hoef je niets te doen. Herken je deze activiteit niet, beveilig dan je account door direct je wachtwoord te wijzigen."),
+    LOGIN_CTA("Proteger mi cuenta", "Secure my account", "Proteger a minha conta", "保护我的账户",
+            "Sécuriser mon compte", "Konto sichern", "Proteggi il mio account", "Mijn account beveiligen");
 
     private final String es;
     private final String en;
