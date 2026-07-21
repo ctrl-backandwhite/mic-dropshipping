@@ -230,11 +230,6 @@ nexadrop:
     partner-api:
       default-secret: ${PARTNER_DEFAULT_SECRET:dev-partner-secret-change-me}
 
-  # Admin inicial. La contraseña NUNCA está en el código: dev/pro la exigen por entorno.
-  bootstrap:
-    admin-email: ${NEXADROP_BOOTSTRAP_ADMIN_EMAIL:admin@nx036.local}
-    admin-password: ${NEXADROP_BOOTSTRAP_ADMIN_PASSWORD:}
-
   # Seguridad: nº de proxies de confianza por delante (para resolver la IP real en el rate limit).
   security:
     trusted-proxy-count: ${TRUSTED_PROXY_COUNT:1}
