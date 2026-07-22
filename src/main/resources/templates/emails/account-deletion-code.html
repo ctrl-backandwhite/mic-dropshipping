@@ -10,27 +10,27 @@
         a { text-decoration: none; }
     </style>
 </head>
-<body style="margin:0;padding:0;background:#F4F1FB;font-family:Arial,Helvetica,sans-serif;color:#1F1B2E;">
+<body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;color:#14212e;">
 <!-- preheader oculto -->
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">Tu código para confirmar la eliminación de la cuenta caduca en 30 minutos.</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F1FB;padding:28px 12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6f9;padding:28px 12px;">
   <tr><td align="center">
-    <table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #E7E3F3;box-shadow:0 10px 32px rgba(124,108,208,0.22);-fs-box-shadow:0 10px 32px 0 rgba(124,108,208,0.22);">
+    <table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e3e8ef;box-shadow:0 10px 32px rgba(12,74,151,0.22);-fs-box-shadow:0 10px 32px 0 rgba(12,74,151,0.22);">
 
       <!-- header: wordmark -->
-      <tr><td style="background:#F4F1FB;border-bottom:1px solid #E7E3F3;padding:24px 32px;">
-        <span style="color:#7C6CD0;font-size:19px;font-weight:700;letter-spacing:.3px;">NX036</span>
-        <span style="color:#6B6780;font-size:14px;font-weight:400;"> &#183; Dropshipping</span>
+      <tr><td style="background:#f4f6f9;border-bottom:1px solid #e3e8ef;padding:24px 32px;">
+        <span style="color:#0c4a97;font-size:19px;font-weight:700;letter-spacing:.3px;">NX036</span>
+        <span style="color:#5c6e7c;font-size:14px;font-weight:400;"> &#183; Dropshipping</span>
       </td></tr>
 
       <!-- body -->
       <tr><td style="padding:32px 32px 8px;">
-        <h1 style="margin:0 0 12px;font-size:21px;font-weight:700;color:#1F1B2E;" th:text="${title}">Confirma la eliminación de tu cuenta</h1>
-        <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#6B6780;">
+        <h1 style="margin:0 0 12px;font-size:21px;font-weight:700;color:#14212e;" th:text="${title}">Confirma la eliminación de tu cuenta</h1>
+        <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#5c6e7c;">
           <span th:if="${displayName != null and !displayName.isEmpty()}" th:text="'Hola ' + ${displayName} + ','">Hola,</span>
           <span th:unless="${displayName != null and !displayName.isEmpty()}">Hola,</span>
         </p>
-        <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#6B6780;">
+        <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#5c6e7c;">
           Has solicitado <strong>eliminar tu cuenta</strong> en NX036 Dropshipping. Para confirmarlo,
           introduce el siguiente código de verificación:
         </p>
@@ -39,27 +39,27 @@
       <!-- código destacado -->
       <tr><td align="center" style="padding:8px 32px 4px;">
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
-          <tr><td align="center" style="border:1px solid #E7E3F3;border-radius:12px;background:#FAF9FE;padding:18px 40px;">
-            <span style="font-size:34px;font-weight:700;letter-spacing:10px;color:#7C6CD0;font-family:Arial,Helvetica,sans-serif;" th:text="${code}">000000</span>
+          <tr><td align="center" style="border:1px solid #e3e8ef;border-radius:12px;background:#fcfdfe;padding:18px 40px;">
+            <span style="font-size:34px;font-weight:700;letter-spacing:10px;color:#0c4a97;font-family:Arial,Helvetica,sans-serif;" th:text="${code}">000000</span>
           </td></tr>
         </table>
       </td></tr>
 
       <tr><td style="padding:16px 32px 8px;">
-        <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#6B6780;">
+        <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#5c6e7c;">
           Este código <strong>caduca en 30 minutos</strong>. Una vez confirmada, tu cuenta quedará
           desactivada y no podrás volver a iniciar sesión.
         </p>
-        <p style="margin:0;font-size:13px;line-height:1.6;color:#6B6780;">
+        <p style="margin:0;font-size:13px;line-height:1.6;color:#5c6e7c;">
           Si <strong>no</strong> has solicitado eliminar tu cuenta, ignora este correo: tu cuenta
           permanecerá activa y no se realizará ningún cambio.
         </p>
       </td></tr>
 
       <!-- footer -->
-      <tr><td style="padding:24px 32px;border-top:1px solid #E7E3F3;background:#F4F1FB;">
-        <p style="margin:0;color:#6B6780;font-size:12px;line-height:1.6;">NX036 Dropshipping · &#169; 2026</p>
-        <p style="margin:8px 0 0;color:#A99FE0;font-size:11px;line-height:1.5;" th:text="${footerNote}">Mensaje automático.</p>
+      <tr><td style="padding:24px 32px;border-top:1px solid #e3e8ef;background:#f4f6f9;">
+        <p style="margin:0;color:#5c6e7c;font-size:12px;line-height:1.6;">NX036 Dropshipping · &#169; 2026</p>
+        <p style="margin:8px 0 0;color:#9aa4b2;font-size:11px;line-height:1.5;" th:text="${footerNote}">Mensaje automático.</p>
       </td></tr>
 
     </table>
