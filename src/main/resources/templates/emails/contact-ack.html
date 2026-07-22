@@ -10,32 +10,32 @@
         a { text-decoration: none; }
     </style>
 </head>
-<body style="margin:0;padding:0;background:#F4F1FB;font-family:Arial,Helvetica,sans-serif;color:#1F1B2E;">
+<body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;color:#14212e;">
 <!-- preheader oculto -->
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">Hemos recibido tu mensaje. Nuestro equipo te responderá en un plazo de 24 a 48 horas.</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F1FB;padding:28px 12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6f9;padding:28px 12px;">
   <tr><td align="center">
-    <table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #E7E3F3;box-shadow:0 10px 32px rgba(124,108,208,0.22);-fs-box-shadow:0 10px 32px 0 rgba(124,108,208,0.22);">
+    <table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e3e8ef;box-shadow:0 10px 32px rgba(12,74,151,0.22);-fs-box-shadow:0 10px 32px 0 rgba(12,74,151,0.22);">
 
       <!-- header: wordmark -->
-      <tr><td style="background:#F4F1FB;border-bottom:1px solid #E7E3F3;padding:24px 32px;">
-        <span style="color:#7C6CD0;font-size:19px;font-weight:700;letter-spacing:.3px;">NX036</span>
-        <span style="color:#6B6780;font-size:14px;font-weight:400;"> &#183; Dropshipping</span>
+      <tr><td style="background:#f4f6f9;border-bottom:1px solid #e3e8ef;padding:24px 32px;">
+        <span style="color:#0c4a97;font-size:19px;font-weight:700;letter-spacing:.3px;">NX036</span>
+        <span style="color:#5c6e7c;font-size:14px;font-weight:400;"> &#183; Dropshipping</span>
       </td></tr>
 
       <!-- body -->
       <tr><td style="padding:32px 32px 8px;">
-        <h1 style="margin:0 0 12px;font-size:21px;font-weight:700;color:#1F1B2E;">Hemos recibido tu mensaje</h1>
-        <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#6B6780;">
+        <h1 style="margin:0 0 12px;font-size:21px;font-weight:700;color:#14212e;">Hemos recibido tu mensaje</h1>
+        <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#5c6e7c;">
           Hola<span th:if="${name != null and !name.isEmpty()}" th:text="' ' + ${name}"></span>:
         </p>
-        <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#6B6780;">
+        <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#5c6e7c;">
           Gracias por ponerte en contacto con nosotros. Confirmamos que hemos recibido tu consulta
           correctamente y que ya ha sido registrada por nuestro equipo de atención.
         </p>
-        <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#6B6780;">
+        <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#5c6e7c;">
           Un miembro del equipo revisará tu solicitud y te responderá en un plazo estimado de
-          <strong style="color:#1F1B2E;">24 a 48 horas</strong> hábiles. No es necesario que
+          <strong style="color:#14212e;">24 a 48 horas</strong> hábiles. No es necesario que
           vuelvas a escribirnos: gestionaremos tu incidencia lo antes posible.
         </p>
       </td></tr>
@@ -43,24 +43,24 @@
       <!-- resumen de la consulta -->
       <tr th:if="${subject != null and !subject.isEmpty()}"><td style="padding:8px 32px 0;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
-               style="border:1px solid #E7E3F3;border-radius:12px;background:#FAF9FE;">
+               style="border:1px solid #e3e8ef;border-radius:12px;background:#fcfdfe;">
           <tr>
-            <td style="padding:12px 16px;font-size:13px;color:#6B6780;">Asunto</td>
-            <td align="right" style="padding:12px 16px;font-size:13px;font-weight:700;color:#1F1B2E;" th:text="${subject}">Asunto</td>
+            <td style="padding:12px 16px;font-size:13px;color:#5c6e7c;">Asunto</td>
+            <td align="right" style="padding:12px 16px;font-size:13px;font-weight:700;color:#14212e;" th:text="${subject}">Asunto</td>
           </tr>
         </table>
       </td></tr>
 
       <!-- despedida -->
       <tr><td style="padding:24px 32px 8px;">
-        <p style="margin:0 0 4px;font-size:14px;line-height:1.6;color:#6B6780;">Un cordial saludo,</p>
-        <p style="margin:0;font-size:14px;line-height:1.6;font-weight:700;color:#1F1B2E;">Equipo de NX036 Dropshipping</p>
+        <p style="margin:0 0 4px;font-size:14px;line-height:1.6;color:#5c6e7c;">Un cordial saludo,</p>
+        <p style="margin:0;font-size:14px;line-height:1.6;font-weight:700;color:#14212e;">Equipo de NX036 Dropshipping</p>
       </td></tr>
 
       <!-- footer -->
-      <tr><td style="padding:24px 32px;border-top:1px solid #E7E3F3;background:#F4F1FB;">
-        <p style="margin:0;color:#6B6780;font-size:12px;line-height:1.6;">NX036 Dropshipping</p>
-        <p style="margin:8px 0 0;color:#A99FE0;font-size:11px;line-height:1.5;">Este es un mensaje automático de acuse de recibo. Responderemos a tu consulta desde nuestro equipo de soporte.</p>
+      <tr><td style="padding:24px 32px;border-top:1px solid #e3e8ef;background:#f4f6f9;">
+        <p style="margin:0;color:#5c6e7c;font-size:12px;line-height:1.6;">NX036 Dropshipping</p>
+        <p style="margin:8px 0 0;color:#9aa4b2;font-size:11px;line-height:1.5;">Este es un mensaje automático de acuse de recibo. Responderemos a tu consulta desde nuestro equipo de soporte.</p>
       </td></tr>
 
     </table>

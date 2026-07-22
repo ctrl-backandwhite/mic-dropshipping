@@ -10,38 +10,38 @@
         a { text-decoration: none; }
     </style>
 </head>
-<body style="margin:0;padding:0;background:#F4F1FB;font-family:Arial,Helvetica,sans-serif;color:#1F1B2E;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F4F1FB;padding:28px 12px;">
+<body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;color:#14212e;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6f9;padding:28px 12px;">
   <tr><td align="center">
-    <table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #E7E3F3;box-shadow:0 10px 32px rgba(124,108,208,0.22);-fs-box-shadow:0 10px 32px 0 rgba(124,108,208,0.22);">
+    <table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e3e8ef;box-shadow:0 10px 32px rgba(12,74,151,0.22);-fs-box-shadow:0 10px 32px 0 rgba(12,74,151,0.22);">
 
       <!-- header: wordmark -->
-      <tr><td style="background:#F4F1FB;border-bottom:1px solid #E7E3F3;padding:24px 32px;">
-        <span style="color:#7C6CD0;font-size:19px;font-weight:700;letter-spacing:.3px;">NX036</span>
-        <span style="color:#6B6780;font-size:14px;font-weight:400;"> &#183; Dropshipping</span>
+      <tr><td style="background:#f4f6f9;border-bottom:1px solid #e3e8ef;padding:24px 32px;">
+        <span style="color:#0c4a97;font-size:19px;font-weight:700;letter-spacing:.3px;">NX036</span>
+        <span style="color:#5c6e7c;font-size:14px;font-weight:400;"> &#183; Dropshipping</span>
       </td></tr>
 
       <!-- body (texto en el idioma del usuario, pasado por variables) -->
       <tr><td style="padding:32px 32px 8px;">
-        <h1 style="margin:0 0 12px;font-size:21px;font-weight:700;color:#1F1B2E;">
+        <h1 style="margin:0 0 12px;font-size:21px;font-weight:700;color:#14212e;">
           <img th:if="${icon}" th:src="'cid:' + ${icon}" width="24" height="24" alt=""
                style="width:24px;height:24px;vertical-align:middle;margin-right:9px;" />
           <span th:text="${title}">NX036</span>
         </h1>
-        <div style="margin:0;font-size:14px;line-height:1.6;color:#6B6780;" th:utext="${bodyHtml}">Mensaje.</div>
+        <div style="margin:0;font-size:14px;line-height:1.6;color:#5c6e7c;" th:utext="${bodyHtml}">Mensaje.</div>
       </td></tr>
 
       <!-- CTA (bulletproof button) -->
       <tr th:if="${ctaUrl}"><td align="center" style="padding:24px 32px 8px;">
         <!--[if mso]>
-        <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" th:attr="href=${ctaUrl}" style="height:46px;v-text-anchor:middle;width:240px;" arcsize="22%" stroke="f" fillcolor="#7C6CD0">
+        <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" th:attr="href=${ctaUrl}" style="height:46px;v-text-anchor:middle;width:240px;" arcsize="22%" stroke="f" fillcolor="#0c4a97">
           <w:anchorlock/>
           <center style="color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;" th:text="${ctaLabel}">Continuar</center>
         </v:roundrect>
         <![endif]-->
         <!--[if !mso]><!-->
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
-          <tr><td align="center" style="border-radius:10px;background:#7C6CD0;">
+          <tr><td align="center" style="border-radius:10px;background:#0c4a97;">
             <a th:href="${ctaUrl}" th:text="${ctaLabel}" style="display:inline-block;padding:13px 32px;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;border-radius:10px;font-family:Arial,Helvetica,sans-serif;">Continuar</a>
           </td></tr>
         </table>
@@ -49,9 +49,9 @@
       </td></tr>
 
       <!-- footer -->
-      <tr><td style="padding:24px 32px;border-top:1px solid #E7E3F3;background:#F4F1FB;">
-        <p style="margin:0;color:#6B6780;font-size:12px;line-height:1.6;">NX036 Dropshipping · &#169; 2026</p>
-        <p style="margin:8px 0 0;color:#A99FE0;font-size:11px;line-height:1.5;" th:text="${footerNote}"></p>
+      <tr><td style="padding:24px 32px;border-top:1px solid #e3e8ef;background:#f4f6f9;">
+        <p style="margin:0;color:#5c6e7c;font-size:12px;line-height:1.6;">NX036 Dropshipping · &#169; 2026</p>
+        <p style="margin:8px 0 0;color:#9aa4b2;font-size:11px;line-height:1.5;" th:text="${footerNote}"></p>
       </td></tr>
 
     </table>
