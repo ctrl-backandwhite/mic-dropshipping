@@ -77,7 +77,7 @@ public class BffSecurityConfig {
                 "/api/catalog/**", "/api/billing/**", "/api/contact", "/api/contact/**", "/api/newsletter/**",
                 "/api/affiliate/**", "/api/search", "/api/search/**", "/api/shipping/**", "/api/currency/**",
                 "/api/languages", "/api/languages/**", "/api/warehouses", "/api/warehouses/**", "/api/academy/**",
-                "/api/mentors", "/api/mentors/**", "/api/pod/**")
+                "/api/mentors", "/api/mentors/**", "/api/pod/**", "/api/campaigns/**")
                 .cors(Customizer.withDefaults()).csrf(csrf -> csrf.disable())
                 .headers(h -> h
                         .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31536000))
@@ -113,6 +113,9 @@ public class BffSecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/affiliate/track").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/newsletter/subscribe").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/newsletter/unsubscribe").permitAll()
+                        // Baja/alta de correos de campaña por enlace de un clic (token HMAC, sin login).
+                        .requestMatchers(HttpMethod.GET, "/api/campaigns/unsubscribe", "/api/campaigns/resubscribe")
+                        .permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/contact").permitAll()
                         // OPERATOR (soporte) SOLO puede: procesar órdenes y ver sus propias ganancias/historial.
                         // Todo lo demás del admin (pricing/márgenes, dashboard/estadísticas, catálogo, usuarios,

@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -166,4 +168,12 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             """)
     Page<ProductEntity> searchAdmin(@Param("status") ProductStatus status, @Param("categoryId") UUID categoryId,
             @Param("needle") String needle, @Param("verified") Boolean verified, Pageable pageable);
+
+    /** IDs (distintos) de categorías con productos del estado dado ingeridos desde {@code since} — campaña de novedades. */
+    @Query("""
+            SELECT DISTINCT p.category.id FROM ProductEntity p
+             WHERE p.status = :status AND p.category IS NOT NULL AND p.ingestedAt >= :since
+            """)
+    List<UUID> findCategoryIdsWithProductsIngestedSince(@Param("status") ProductStatus status,
+            @Param("since") Instant since);
 }
