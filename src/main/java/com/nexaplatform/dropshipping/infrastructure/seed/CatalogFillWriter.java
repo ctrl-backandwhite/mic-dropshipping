@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.seed;
 
+import com.github.slugify.Slugify;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
@@ -23,6 +24,8 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 public class CatalogFillWriter {
+
+    private static final Slugify SLUG = Slugify.builder().build();
 
     private final CatalogUseCase catalogService;
     private final ProductRepository productRepository;
@@ -60,6 +63,23 @@ public class CatalogFillWriter {
 
         if (enrich != null) {
             enrich.accept(managed);
+        }
+
+        // upsertProduct construye el slug con el título ZH y Slugify descarta los caracteres CJK: con un
+        // título chino REAL el slug quedaba en "-<externalId>". Aquí sí tenemos el título ES, así que se
+        // reconstruye para que la URL sea legible. Solo se toca el degradado, nunca un slug ya válido
+        // (así la reimportación de un producto existente no le cambia la URL).
+        String slug = managed.getSlug();
+        if (slug == null || slug.isBlank() || slug.startsWith("-")) {
+            String base = SLUG.slugify(esTitle);
+            if (!base.isBlank()) {
+                if (base.length() > 100) {
+                    base = base.substring(0, 100);
+                }
+                // externalId es único, así que base-externalId no puede colisionar.
+                String full = base + "-" + req.externalId().toLowerCase();
+                managed.setSlug(full.length() > 220 ? full.substring(0, 220) : full);
+            }
         }
 
         // Publish straight away (mirrors DemoCatalogSeedRunner.publishAll trend formula).
