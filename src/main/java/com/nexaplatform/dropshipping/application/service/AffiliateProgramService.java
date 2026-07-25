@@ -4,11 +4,15 @@ import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
+import com.nexaplatform.dropshipping.domain.model.WalletTransaction;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.AffiliateIndexer;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.*;
+import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.PayoutProfileUpdateRequest;
+import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.PayoutProfileView;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +45,7 @@ public class AffiliateProgramService {
     private final AffiliateProgramConfigRepository configRepo;
     private final AffiliatePayoutRepository payoutRepo;
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
     private final NotificationJpaRepositoryAdapter notificationRepo;
     private final NotificationsPublisher notificationsPublisher;
     private final WalletUseCase walletUseCase;
@@ -525,34 +530,71 @@ public class AffiliateProgramService {
     /** Affiliate requests a payout of their APPROVED commissions (must meet the minimum). */
     @Transactional
     public AffiliatePayoutEntity requestPayout(UUID userId) {
+        return requestPayout(userId, "WALLET");
+    }
+
+    /**
+     * Affiliate requests a payout of their APPROVED commissions via the given {@code method}
+     * (WALLET/BANK/PAYPAL), validating that the corresponding payout details are configured and
+     * snapshotting the destination onto the created {@link AffiliatePayoutEntity}.
+     */
+    @Transactional
+    public AffiliatePayoutEntity requestPayout(UUID userId, String method) {
+        String m = method == null ? "WALLET" : method.toUpperCase();
+        if (!m.matches("WALLET|BANK|PAYPAL")) {
+            throw new BusinessException("INVALID_PAYOUT_METHOD", "Método de cobro no válido");
+        }
         AffiliateEntity affiliate = affiliateRepo.findByUser_Id(userId).orElseThrow(
                 () -> new NotFoundException("Affiliate not found"));
+        if ("BANK".equals(m) && (affiliate.getBankIban() == null || affiliate.getBankHolder() == null)) {
+            throw new BusinessException("PAYOUT_DETAILS_MISSING", "Configura tus datos bancarios primero");
+        }
+        if ("PAYPAL".equals(m) && (affiliate.getPaypalEmail() == null || affiliate.getPaypalEmail().isBlank())) {
+            throw new BusinessException("PAYOUT_DETAILS_MISSING", "Configura tu PayPal primero");
+        }
         if (payoutRepo.existsByAffiliateIdAndStatus(affiliate.getId(), "REQUESTED")) {
             throw new BusinessException(
                     "Ya tienes una solicitud de pago pendiente");
         }
         List<AffiliateCommissionEntity> approved = commissionRepo.findByAffiliateIdAndStatus(affiliate.getId(), "APPROVED");
         long total = approved.stream().mapToLong(AffiliateCommissionEntity::getAmountCents).sum();
-        var cfg = config();
+        AffiliateProgramConfigEntity cfg = config();
         if (total < cfg.getMinPayoutCents()) {
             throw new BusinessException(
                     "Saldo aprobado por debajo del pago mínimo");
         }
         AffiliatePayoutEntity payout = payoutRepo.save(AffiliatePayoutEntity.builder().affiliateId(affiliate.getId())
-                .amountCents(total).currency(cfg.getCurrency()).status("REQUESTED").method("WALLET")
-                .commissionCount(approved.size()).requestedAt(Instant.now())
-                .note("Solicitud del afiliado").build());
+                .amountCents(total).currency(cfg.getCurrency()).status("REQUESTED").method(m)
+                .commissionCount(approved.size()).requestedAt(Instant.now()).note("Solicitud del afiliado")
+                .destHolder("BANK".equals(m) ? affiliate.getBankHolder() : null)
+                .destIban("BANK".equals(m) ? affiliate.getBankIban() : null)
+                .destBic("BANK".equals(m) ? affiliate.getBankBic() : null)
+                .destPaypalEmail("PAYPAL".equals(m) ? affiliate.getPaypalEmail() : null)
+                .build());
         notifyStaff("AFFILIATE_PAYOUT_REQUEST", "Solicitud de pago de afiliado",
-                "Un afiliado ha solicitado el pago de sus comisiones aprobadas.");
+                "Un afiliado ha solicitado el pago de sus comisiones aprobadas (" + m + ").");
         return payout;
     }
 
     /**
-     * Operator approves & executes a payout: credits the affiliate's wallet and marks the APPROVED
-     * commissions as PAID. No automatic payment happens without this explicit approval (DROP-651).
+     * Operator approves & executes a WALLET payout: credits the affiliate's wallet and marks the
+     * APPROVED commissions as PAID. No automatic payment happens without this explicit approval
+     * (DROP-651). Delegates to {@link #approvePayout(UUID, UUID, String)} with no admin/reference.
      */
     @Transactional
     public AffiliatePayoutEntity approvePayout(UUID payoutId) {
+        return approvePayout(payoutId, null, null);
+    }
+
+    /**
+     * Operator approves & executes a payout. For {@code WALLET} method, credits the affiliate's
+     * wallet (as before). For an external method ({@code BANK}/{@code PAYPAL}) the payment was
+     * already executed by the admin OUTSIDE the app (bank transfer / PayPal payout) — this only
+     * records it: marks the payout PAID with the given {@code reference} and {@code adminUserId},
+     * WITHOUT touching the wallet. Either way the APPROVED commissions move to PAID (Task 7).
+     */
+    @Transactional
+    public AffiliatePayoutEntity approvePayout(UUID payoutId, UUID adminUserId, String reference) {
         AffiliatePayoutEntity payout = payoutRepo.findById(payoutId).orElseThrow(
                 () -> new NotFoundException("Payout not found"));
         if ("PAID".equals(payout.getStatus())) {
@@ -571,9 +613,17 @@ public class AffiliateProgramService {
             return payoutRepo.save(payout);
         }
         UUID userId = affiliate.getUser().getId();
-        var tx = walletUseCase.adminTopup(userId, total, "Affiliate commission payout",
-                "affiliate-payout-" + payout.getId());
-        UUID txId = tx != null ? tx.getId() : null;
+        UUID txId = null;
+        if ("WALLET".equals(payout.getMethod())) {
+            WalletTransaction tx = walletUseCase.adminTopup(userId, total, "Affiliate commission payout",
+                    "affiliate-payout-" + payout.getId());
+            txId = tx != null ? tx.getId() : null;
+            payout.setWalletTxId(txId);
+        } else {
+            // Pago EXTERNO ya ejecutado por el ADMIN fuera de la app: solo se registra.
+            payout.setPaidReference(reference);
+            payout.setPaidBy(adminUserId);
+        }
         Instant now = Instant.now();
         for (AffiliateCommissionEntity comm : approved) {
             comm.setStatus("PAID");
@@ -586,14 +636,14 @@ public class AffiliateProgramService {
         affiliateRepo.save(affiliate);
         payout.setStatus("PAID");
         payout.setAmountCents(total);
-        payout.setWalletTxId(txId);
         payout.setProcessedAt(now);
         payout.setCommissionCount(approved.size());
         payoutRepo.save(payout);
         notify(userId, "AFFILIATE_PAYOUT_PAID", "Pago de comisiones realizado",
-                "Tus comisiones se han abonado a tu wallet.");
-        log.info("::> [AFFILIATE] Payout {} paid {} cents to affiliate {} (wallet tx {})", payout.getId(), total,
-                affiliate.getId(), txId);
+                "WALLET".equals(payout.getMethod()) ? "Tus comisiones se han abonado a tu wallet."
+                        : "Tus comisiones han sido pagadas.");
+        log.info("::> [AFFILIATE] Payout {} paid {} cents to affiliate {} (method {}, wallet tx {})", payout.getId(),
+                total, affiliate.getId(), payout.getMethod(), txId);
         return payout;
     }
 
@@ -638,6 +688,64 @@ public class AffiliateProgramService {
     @Transactional(readOnly = true)
     public List<AffiliatePayoutEntity> pendingPayouts() {
         return payoutRepo.findByStatusOrderByCreatedAtDesc("REQUESTED");
+    }
+
+    /* ============================ Payout profile (Task 5) ============================ */
+
+    /** Returns the affiliate's payout profile with the IBAN masked (last 4 digits only). */
+    @Transactional(readOnly = true)
+    public PayoutProfileView getPayoutProfile(UUID userId) {
+        AffiliateEntity a = affiliateRepo.findByUser_Id(userId).orElseThrow(
+                () -> new NotFoundException("Affiliate not found"));
+        return new PayoutProfileView(a.getPayoutMethod(), a.getBankHolder(), maskIban(a.getBankIban()),
+                a.getBankBic(), a.getPaypalEmail(),
+                a.getBankHolder() != null && a.getBankIban() != null,
+                a.getPaypalEmail() != null && !a.getPaypalEmail().isBlank());
+    }
+
+    /** Updates the affiliate's payout profile; requires the caller's current password to confirm. */
+    @Transactional
+    public void updatePayoutProfile(UUID userId, PayoutProfileUpdateRequest req) {
+        UserEntity user = userRepository.findById(userId).orElseThrow(
+                () -> new NotFoundException("User not found"));
+        if (req.password() == null || !passwordEncoder.matches(req.password(), user.getPasswordHash())) {
+            throw new BusinessException("INVALID_PASSWORD", "Contraseña incorrecta");
+        }
+        AffiliateEntity a = affiliateRepo.findByUser_Id(userId).orElseThrow(
+                () -> new NotFoundException("Affiliate not found"));
+        String iban = req.iban() == null ? null : req.iban().replaceAll("\\s", "").toUpperCase();
+        if (iban != null && !iban.isBlank() && !IbanValidator.isValid(iban)) {
+            throw new BusinessException("INVALID_IBAN", "IBAN no válido");
+        }
+        String email = req.paypalEmail() == null ? null : req.paypalEmail().trim();
+        if (email != null && !email.isBlank() && !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+            throw new BusinessException("INVALID_EMAIL", "Email de PayPal no válido");
+        }
+        // Semántica de MERGE (no reemplazo total): solo se actualiza el campo que llega con valor. Así, si el
+        // afiliado reguarda su perfil sin reteclear el IBAN (que se relee enmascarado), su IBAN NO se borra.
+        if (req.bankHolder() != null && !req.bankHolder().isBlank()) {
+            a.setBankHolder(req.bankHolder().trim());
+        }
+        if (iban != null && !iban.isBlank()) {
+            a.setBankIban(iban);
+        }
+        if (req.bic() != null && !req.bic().isBlank()) {
+            a.setBankBic(req.bic().trim());
+        }
+        if (email != null && !email.isBlank()) {
+            a.setPaypalEmail(email);
+        }
+        if (req.preferredMethod() != null && req.preferredMethod().matches("WALLET|BANK|PAYPAL")) {
+            a.setPayoutMethod(req.preferredMethod());
+        }
+        affiliateRepo.save(a);
+    }
+
+    private static String maskIban(String iban) {
+        if (iban == null || iban.length() < 4) {
+            return iban;
+        }
+        return "****" + iban.substring(iban.length() - 4);
     }
 
     /* ============================ Queries ============================ */

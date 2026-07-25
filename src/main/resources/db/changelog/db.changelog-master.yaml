@@ -181,3 +181,5 @@ databaseChangeLog:
       file: db/changelog/schema-v85-yunexpress-shipping-coverage.sql
   - include:
       file: db/changelog/schema-v86-order-referral-discount.sql
+  - include:
+      file: db/changelog/schema-v87-affiliate-payout-methods.sql

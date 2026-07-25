@@ -15,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -38,6 +39,7 @@ class AffiliateProgramServiceTest {
     @Mock AffiliateProgramConfigRepository configRepo;
     @Mock AffiliatePayoutRepository payoutRepo;
     @Mock UserRepository userRepository;
+    @Mock PasswordEncoder passwordEncoder;
     @Mock NotificationJpaRepositoryAdapter notificationRepo;
     @Mock NotificationsPublisher notificationsPublisher;
     @Mock WalletUseCase walletUseCase;
@@ -53,8 +55,8 @@ class AffiliateProgramServiceTest {
     @BeforeEach
     void setup() {
         service = new AffiliateProgramService(affiliateRepo, codeRepo, attrRepo, conversionRepo, commissionRepo,
-                configRepo, payoutRepo, userRepository, notificationRepo, notificationsPublisher, walletUseCase,
-                affiliateIndexer);
+                configRepo, payoutRepo, userRepository, passwordEncoder, notificationRepo, notificationsPublisher,
+                walletUseCase, affiliateIndexer);
         AffiliateProgramConfigEntity config = AffiliateProgramConfigEntity.builder()
                 .defaultPercent(new BigDecimal("10.000")).attributionWindowDays(30).returnPeriodDays(14)
                 .minPayoutCents(5000).currency("EUR").attributionModel("LAST_CLICK").build();

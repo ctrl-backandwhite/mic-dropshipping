@@ -5,13 +5,16 @@ import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.mapper.AffiliateViewMapper;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.AffiliateIndexer;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.AffiliateSearchService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +35,7 @@ public class AdminAffiliateController {
     private final AffiliateViewMapper mapper;
     private final AffiliateSearchService affiliateSearch;
     private final AffiliateIndexer affiliateIndexer;
+    private final CurrencyRateService currencyRateService;
 
     @GetMapping
     public ResponseEntity<PageResponse<AdminAffiliateRow>> list(@RequestParam(required = false) String q,
@@ -104,14 +108,35 @@ public class AdminAffiliateController {
     /* ---- DROP-651: payout requests (operator approval required) ---- */
 
     @GetMapping("/payouts/pending")
-    public ResponseEntity<List<AffiliatePayoutEntity>> pendingPayouts() {
-        return ResponseEntity.ok(service.pendingPayouts());
+    public ResponseEntity<List<PendingPayoutView>> pendingPayouts() {
+        Map<UUID, String> nameByAffiliateId = new HashMap<>();
+        service.allAffiliates().forEach(a -> {
+            UserEntity user = a.getUser();
+            String name = user != null && user.getDisplayName() != null && !user.getDisplayName().isBlank()
+                    ? user.getDisplayName()
+                    : user != null ? user.getEmail() : null;
+            nameByAffiliateId.put(a.getId(), name);
+        });
+        List<PendingPayoutView> views = service.pendingPayouts().stream()
+                .map(payout -> new PendingPayoutView(payout.getId(), payout.getAffiliateId(),
+                        nameByAffiliateId.get(payout.getAffiliateId()), payout.getAmountCents(),
+                        currencyRateService.formatDisplay(BigDecimal.valueOf(payout.getAmountCents()).movePointLeft(2),
+                                payout.getCurrency()),
+                        payout.getCurrency(), payout.getMethod(), payout.getDestHolder(), payout.getDestIban(),
+                        payout.getDestBic(), payout.getDestPaypalEmail(), payout.getCommissionCount(),
+                        payout.getRequestedAt() != null ? payout.getRequestedAt().toString() : null))
+                .toList();
+        return ResponseEntity.ok(views);
     }
 
     @PostMapping("/payouts/{payoutId}/approve")
-    public ResponseEntity<Map<String, Object>> approvePayout(@PathVariable UUID payoutId) {
-        var p = service.approvePayout(payoutId);
-        return ResponseEntity.ok(Map.of("status", p.getStatus(), "amountCents", p.getAmountCents()));
+    public ResponseEntity<Map<String, Object>> approvePayout(Authentication auth, @PathVariable UUID payoutId,
+            @RequestBody(required = false) ApprovePayoutRequest req) {
+        UUID adminId = UUID.fromString(auth.getName());
+        String reference = req != null ? req.reference() : null;
+        AffiliatePayoutEntity p = service.approvePayout(payoutId, adminId, reference);
+        return ResponseEntity.ok(Map.of("status", p.getStatus(), "reference",
+                p.getPaidReference() != null ? p.getPaidReference() : ""));
     }
 
     @PostMapping("/payouts/{payoutId}/reject")

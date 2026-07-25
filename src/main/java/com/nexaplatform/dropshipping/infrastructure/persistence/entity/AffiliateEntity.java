@@ -45,4 +45,16 @@ public class AffiliateEntity extends BaseEntity {
     /** When the customer explicitly accepted the program terms (DROP-650). */
     @Column(name = "accepted_terms_at")
     private Instant acceptedTermsAt;
+
+    @Builder.Default
+    @Column(name = "payout_method", nullable = false, length = 20)
+    private String payoutMethod = "WALLET";
+    @Column(name = "bank_holder", length = 160)
+    private String bankHolder;
+    @Column(name = "bank_iban", length = 40)
+    private String bankIban;
+    @Column(name = "bank_bic", length = 16)
+    private String bankBic;
+    @Column(name = "paypal_email", length = 200)
+    private String paypalEmail;
 }
