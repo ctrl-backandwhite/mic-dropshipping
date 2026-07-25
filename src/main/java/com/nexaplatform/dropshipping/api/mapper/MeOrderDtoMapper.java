@@ -70,12 +70,16 @@ public class MeOrderDtoMapper {
         BigDecimal shipping = currencyRateService.usdTo(BigDecimal.valueOf(model.getShippingCents()).movePointLeft(2),
                 ccy);
         BigDecimal tax = currencyRateService.usdTo(BigDecimal.valueOf(model.getTaxCents()).movePointLeft(2), ccy);
-        // Total = suma de los componentes YA redondeados a 2 decimales, para que el desglose mostrado
-        // cuadre exactamente (subtotal + envío + IVA = total) y coincida con el resumen del checkout.
+        BigDecimal discount = currencyRateService.usdTo(BigDecimal.valueOf(model.getDiscountCents()).movePointLeft(2),
+                ccy);
+        // Total = subtotal − DESCUENTO + envío + IVA, con los componentes YA redondeados a 2 decimales,
+        // para que el desglose mostrado cuadre exactamente y coincida con el resumen del checkout y con
+        // lo COBRADO (total_cents del pedido ya resta el descuento).
         subtotal = subtotal.setScale(2, RoundingMode.HALF_UP);
         shipping = shipping.setScale(2, RoundingMode.HALF_UP);
         tax = tax.setScale(2, RoundingMode.HALF_UP);
-        BigDecimal total = subtotal.add(shipping).add(tax);
+        discount = discount.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal total = subtotal.subtract(discount).add(shipping).add(tax);
         // Pedido ya pagado: mostramos EXACTAMENTE lo cobrado (settlement), no la re-conversión a la tasa
         // actual. Escalamos el desglose por settlement/total (la conversión es lineal) para que cuadre.
         BigDecimal settle = settlementTotal(model.getId(), ccy);
@@ -83,18 +87,20 @@ public class MeOrderDtoMapper {
             BigDecimal f = settle.divide(total, 10, RoundingMode.HALF_UP);
             subtotal = subtotal.multiply(f).setScale(2, RoundingMode.HALF_UP);
             shipping = shipping.multiply(f).setScale(2, RoundingMode.HALF_UP);
+            discount = discount.multiply(f).setScale(2, RoundingMode.HALF_UP);
             total = settle.setScale(2, RoundingMode.HALF_UP);
-            tax = total.subtract(subtotal).subtract(shipping);
+            tax = total.subtract(subtotal).add(discount).subtract(shipping);
         }
 
         return MeOrderDetailDtoOut.builder().id(model.getId()).orderNumber(model.getOrderNumber())
                 .externalOrderId(model.getExternalOrderId())
                 .status(model.getStatus() != null ? model.getStatus().name() : null)
-                .subtotal(subtotal).shipping(shipping).tax(tax).total(total).currency(ccy)
+                .subtotal(subtotal).shipping(shipping).tax(tax).total(total).discount(discount).currency(ccy)
                 .subtotalFormatted(currencyRateService.formatDisplay(subtotal, ccy))
                 .shippingFormatted(currencyRateService.formatDisplay(shipping, ccy))
                 .taxFormatted(currencyRateService.formatDisplay(tax, ccy))
                 .totalFormatted(currencyRateService.formatDisplay(total, ccy))
+                .discountFormatted(currencyRateService.formatDisplay(discount, ccy))
                 .shippingAddress(shippingAddress(model)).billingAddress(billingAddress(model)).notes(model.getNotes())
                 .trackingCarrier(null).trackingNumber(null).placedAt(model.getPlacedAt()).shippedAt(model.getShippedAt())
                 .deliveredAt(model.getDeliveredAt()).cancelledAt(model.getCancelledAt()).items(items).build();
@@ -120,7 +126,9 @@ public class MeOrderDtoMapper {
         }
         BigDecimal shipping = currencyRateService.usdTo(BigDecimal.valueOf(o.getShippingCents()).movePointLeft(2), ccy);
         BigDecimal tax = currencyRateService.usdTo(BigDecimal.valueOf(o.getTaxCents()).movePointLeft(2), ccy);
+        BigDecimal discount = currencyRateService.usdTo(BigDecimal.valueOf(o.getDiscountCents()).movePointLeft(2), ccy);
         BigDecimal total = subtotal.setScale(2, RoundingMode.HALF_UP)
+                .subtract(discount.setScale(2, RoundingMode.HALF_UP))
                 .add(shipping.setScale(2, RoundingMode.HALF_UP))
                 .add(tax.setScale(2, RoundingMode.HALF_UP));
         // Pedido pagado: el total de la lista es EXACTAMENTE lo cobrado (settlement), igual que el detalle.

@@ -83,6 +83,6 @@ public class MeAffiliateController {
         boolean canRequestPayout = !payoutRequested && stats.approvedCents() >= config.getMinPayoutCents();
         return new AffiliateDashboardView(a.getId(), a.getStatus(), pct, joined, canRequestPayout,
                 config.getMinPayoutCents(), payoutRequested, codes.stream().map(mapper::toCodeView).toList(), stats,
-                comms.stream().limit(20).map(c -> mapper.toCommissionView(c, convById)).toList());
+                comms.stream().limit(20).map(c -> mapper.toCommissionView(c, convById, config.getReturnPeriodDays())).toList());
     }
 }

@@ -189,17 +189,25 @@ public class OrderUseCaseImpl implements OrderUseCase {
         ShippingQuote quote = fulfillment.quote(order.getShippingCountry(), Math.max(1, totalWeightGrams));
         int shippingCents = quote.supported() ? quote.amountUsdCents() : 0;
 
-        // Impuesto (IVA/sales tax) por país de envío, si está configurado. Base imponible = subtotal + envío.
-        // Se incluye en el total y, por tanto, en el cobro y la factura.
+        // Descuento de referido para el COMPRADOR: 10% del subtotal de producto si tiene una atribución
+        // de afiliado viva (y no es su propio código). Idéntico cálculo que la vista previa del checkout
+        // (ShippingQuoteController) para que lo mostrado coincida al céntimo con lo cobrado. El envío y el
+        // IVA se calculan sobre (subtotal − descuento).
+        int discount = (int) affiliateProgramService.referralDiscountCents(userId, subtotal);
+        int discountedSubtotal = subtotal - discount;
+
+        // Impuesto (IVA/sales tax) por país de envío, si está configurado. Base imponible = (subtotal −
+        // descuento) + envío. Se incluye en el total y, por tanto, en el cobro y la factura.
         // IVA por estado/provincia (US/CA/BR) si la dirección lo indica; si no, tasa nacional.
         // Fuente del impuesto conmutable por entorno (local: tabla country_tax_rate; pre: Cainiao con
         // fallback a la tabla). Mismo cálculo que la cotización del checkout.
         int taxCents = cainiaoTaxService.taxCentsFor(order.getShippingCountry(), order.getShippingState(),
-                subtotal + shippingCents);
+                discountedSubtotal + shippingCents);
         order.setSubtotalCents(subtotal);
+        order.setDiscountCents(discount);
         order.setShippingCents(shippingCents);
         order.setTaxCents(taxCents);
-        order.setTotalCents(subtotal + shippingCents + taxCents);
+        order.setTotalCents(discountedSubtotal + shippingCents + taxCents);
 
         Order saved = orderRepository.save(order);
         orderIndexer.indexOrder(saved.getId()); // auto-sync del índice al crear la orden
@@ -591,8 +599,11 @@ public class OrderUseCaseImpl implements OrderUseCase {
 
         // DROP-645/646: capture an affiliate conversion + commission for this confirmed order
         // (no-op if the customer has no live referral attribution). Solo la 1ª vez (no en reuso).
+        // La comisión del afiliado se calcula sobre el importe de PRODUCTO que paga el cliente = subtotal
+        // − descuento de referido (lo realmente cobrado por el producto, sin envío ni IVA).
         if (!reused) {
-            affiliateProgramService.onOrderPlaced(o.getId(), userId, o.getSubtotalCents(), o.getCurrency());
+            long commissionBase = o.getSubtotalCents() - o.getDiscountCents();
+            affiliateProgramService.onOrderPlaced(o.getId(), userId, commissionBase, o.getCurrency());
         }
 
         // Plan 300k: publish to the notifications outbox in the same tx as the order

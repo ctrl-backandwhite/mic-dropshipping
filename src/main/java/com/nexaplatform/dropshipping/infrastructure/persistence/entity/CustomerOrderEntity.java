@@ -77,6 +77,10 @@ public class CustomerOrderEntity extends BaseEntity {
     @Column(name = "total_cents", nullable = false)
     private int totalCents;
 
+    // Descuento de referido aplicado al comprador (céntimos USD). total_cents ya lo resta.
+    @Column(name = "discount_cents", nullable = false)
+    private int discountCents;
+
     @Column(length = 8)
     private String currency;
 

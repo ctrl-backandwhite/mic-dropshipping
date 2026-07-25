@@ -36,6 +36,7 @@ public enum InvoiceLabel {
     SUBTOTAL("Subtotal", "Subtotal", "Subtotal", "小计", "Sous-total", "Zwischensumme", "Subtotale",
             "Subtotaal"),
     SHIPPING("Envío", "Shipping", "Envio", "运费", "Livraison", "Versand", "Spedizione", "Verzending"),
+    DISCOUNT("Descuento", "Discount", "Desconto", "折扣", "Remise", "Rabatt", "Sconto", "Korting"),
     VAT("IVA", "VAT", "IVA", "增值税", "TVA", "MwSt.", "IVA", "btw"),
     TOTAL("Total", "Total", "Total", "总计", "Total", "Gesamt", "Totale", "Totaal"),
     TAX_ID("NIF/CIF", "Tax ID", "NIF", "税号", "N° fiscal", "USt-IdNr.", "P. IVA", "Btw-nr."),

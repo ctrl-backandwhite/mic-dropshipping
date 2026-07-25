@@ -333,11 +333,56 @@ public class AffiliateProgramService {
                 .map(a -> a.getUser() != null && userId.equals(a.getUser().getId())).orElse(false);
     }
 
+    /* ============================ Buyer referral discount ============================ */
+
+    /** Porcentaje de descuento que obtiene el COMPRADOR por usar un código de afiliado. */
+    public static final BigDecimal REFERRAL_DISCOUNT_PERCENT = new BigDecimal("10");
+
+    public int referralDiscountPercent() {
+        return REFERRAL_DISCOUNT_PERCENT.intValueExact();
+    }
+
+    /**
+     * Descuento (en céntimos, misma divisa que {@code subtotalCents}) que aplica al comprador con una
+     * atribución de referido viva. Reglas:
+     * <ul>
+     *   <li>Sin atribución viva → 0.</li>
+     *   <li>Auto-referido (su propio código) → 0: el descuento solo funciona con el código de OTRO.</li>
+     *   <li>Afiliado inactivo → 0.</li>
+     * </ul>
+     * Se calcula sobre el subtotal de PRODUCTO (sin envío ni IVA), redondeo HALF_UP al céntimo — el
+     * mismo cálculo se usa en la vista previa del checkout y al crear el pedido, para que lo mostrado
+     * coincida exactamente con lo cobrado.
+     */
+    public long referralDiscountCents(UUID userId, long subtotalCents) {
+        if (userId == null || subtotalCents <= 0) {
+            return 0L;
+        }
+        Optional<AffiliateAttributionEntity> attrOpt = attrRepo
+                .findTopByReferredUserIdAndExpiresAtAfterOrderByClickedAtDesc(userId, Instant.now());
+        if (attrOpt.isEmpty()) {
+            return 0L;
+        }
+        AffiliateAttributionEntity attr = attrOpt.get();
+        if (isSelf(attr.getAffiliateId(), userId)) {
+            return 0L; // no hay descuento con tu propio código de afiliado
+        }
+        AffiliateEntity affiliate = affiliateRepo.findById(attr.getAffiliateId()).orElse(null);
+        if (affiliate == null || !"ACTIVE".equals(affiliate.getStatus())) {
+            return 0L;
+        }
+        return BigDecimal.valueOf(subtotalCents).multiply(REFERRAL_DISCOUNT_PERCENT)
+                .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP).longValue();
+    }
+
     /* ============================ Conversion + commission (DROP-646) ============================ */
 
     /**
      * Captures a conversion + PENDING commission when a customer with a live attribution places a
      * valid order. Idempotent per order; ignores self-referrals and orders without attribution.
+     *
+     * <p>The commission is a % of {@code subtotalCents} — the product sale amount actually charged
+     * to the customer (already net of the referral discount, if any).
      */
     @Transactional
     public void onOrderPlaced(UUID orderId, UUID userId, long subtotalCents, String currency) {
