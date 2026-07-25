@@ -31,7 +31,8 @@ spring:
           google:
             # Auth por token (sin proxy nginx): Google redirige al BACKEND; su success handler
             # emite el token y redirige al front (<front>/auth/callback#token=…).
-            redirect-uri: "https://mic-dropshipping-pre.up.railway.app/login/oauth2/code/google"
+            # Callback en el dominio público nx036.com (registrado en Google Cloud Console).
+            redirect-uri: "${GOOGLE_REDIRECT_URI:https://nx036.com/login/oauth2/code/google}"
           github:
             redirect-uri: "https://mic-dropshipping-pre.up.railway.app/login/oauth2/code/github"
 
