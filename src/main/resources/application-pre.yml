@@ -29,10 +29,13 @@ spring:
       client:
         registration:
           google:
-            # Auth por token (sin proxy nginx): Google redirige al BACKEND; su success handler
-            # emite el token y redirige al front (<front>/auth/callback#token=…).
-            # Callback en el dominio público nx036.com (registrado en Google Cloud Console).
-            redirect-uri: "${GOOGLE_REDIRECT_URI:https://nx036.com/login/oauth2/code/google}"
+            # Auth por token (sin proxy nginx): Google redirige al BACKEND directamente (mismo dominio
+            # donde el SPA inicia el OAuth, para que la sesión/state del callback cuadre); su success
+            # handler emite el token y redirige al front (nx036.com/auth/callback#token=…).
+            # El front es estático (Railpack) y NO puede proxiar /login/oauth2/**, por eso el callback
+            # NO puede ir a nx036.com. Override-able por GOOGLE_REDIRECT_URI (p. ej. api.nx036.com si se
+            # da al backend un subdominio propio).
+            redirect-uri: "${GOOGLE_REDIRECT_URI:https://mic-dropshipping-pre.up.railway.app/login/oauth2/code/google}"
           github:
             redirect-uri: "https://mic-dropshipping-pre.up.railway.app/login/oauth2/code/github"
 
