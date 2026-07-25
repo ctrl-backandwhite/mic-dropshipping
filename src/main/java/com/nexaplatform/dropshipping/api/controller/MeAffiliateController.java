@@ -38,13 +38,28 @@ public class MeAffiliateController {
         return ResponseEntity.ok(buildDashboard(userId));
     }
 
-    /** DROP-651: the affiliate requests a payout of their approved commissions. */
+    /** DROP-651: the affiliate requests a payout of their approved commissions via the given method. */
     @PostMapping("/payout-request")
-    public ResponseEntity<Map<String, Object>> requestPayout(Authentication auth) {
+    public ResponseEntity<Map<String, Object>> requestPayout(Authentication auth,
+            @RequestBody(required = false) PayoutRequest req) {
+        String method = req != null && req.method() != null ? req.method() : "WALLET";
+        AffiliatePayoutEntity p = service.requestPayout(UUID.fromString(auth.getName()), method);
+        return ResponseEntity.ok(Map.of("payoutId", p.getId(), "status", p.getStatus(), "method", p.getMethod()));
+    }
+
+    /** Task 5: the affiliate's payout profile (IBAN masked). */
+    @GetMapping("/payout-profile")
+    public ResponseEntity<PayoutProfileView> payoutProfile(Authentication auth) {
+        return ResponseEntity.ok(service.getPayoutProfile(UUID.fromString(auth.getName())));
+    }
+
+    /** Task 5: updates the affiliate's payout profile (requires the account password). */
+    @PutMapping("/payout-profile")
+    public ResponseEntity<PayoutProfileView> updatePayoutProfile(Authentication auth,
+            @RequestBody PayoutProfileUpdateRequest req) {
         UUID userId = UUID.fromString(auth.getName());
-        var p = service.requestPayout(userId);
-        return ResponseEntity.ok(Map.of("id", p.getId(), "amountCents", p.getAmountCents(), "status",
-                p.getStatus()));
+        service.updatePayoutProfile(userId, req);
+        return ResponseEntity.ok(service.getPayoutProfile(userId));
     }
 
     @PostMapping("/codes")
