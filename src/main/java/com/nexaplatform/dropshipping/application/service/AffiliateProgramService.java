@@ -721,18 +721,24 @@ public class AffiliateProgramService {
         if (email != null && !email.isBlank() && !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
             throw new BusinessException("INVALID_EMAIL", "Email de PayPal no válido");
         }
-        a.setBankHolder(emptyToNull(req.bankHolder()));
-        a.setBankIban(emptyToNull(iban));
-        a.setBankBic(emptyToNull(req.bic()));
-        a.setPaypalEmail(emptyToNull(email));
+        // Semántica de MERGE (no reemplazo total): solo se actualiza el campo que llega con valor. Así, si el
+        // afiliado reguarda su perfil sin reteclear el IBAN (que se relee enmascarado), su IBAN NO se borra.
+        if (req.bankHolder() != null && !req.bankHolder().isBlank()) {
+            a.setBankHolder(req.bankHolder().trim());
+        }
+        if (iban != null && !iban.isBlank()) {
+            a.setBankIban(iban);
+        }
+        if (req.bic() != null && !req.bic().isBlank()) {
+            a.setBankBic(req.bic().trim());
+        }
+        if (email != null && !email.isBlank()) {
+            a.setPaypalEmail(email);
+        }
         if (req.preferredMethod() != null && req.preferredMethod().matches("WALLET|BANK|PAYPAL")) {
             a.setPayoutMethod(req.preferredMethod());
         }
         affiliateRepo.save(a);
-    }
-
-    private static String emptyToNull(String s) {
-        return s == null || s.isBlank() ? null : s.trim();
     }
 
     private static String maskIban(String iban) {
