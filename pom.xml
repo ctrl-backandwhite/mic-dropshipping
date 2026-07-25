@@ -327,6 +327,25 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <!-- Seguridad: openhtmltopdf-pdfbox 1.0.10 arrastra PDFBox 2.0.24 (2021), con CVEs conocidos
+                 en 2.0.x antiguas. Solo GENERAMOS PDFs desde nuestras plantillas (no parseamos PDF externo),
+                 así que el riesgo es bajo, pero forzamos la última 2.0.x (API compatible) para incorporar
+                 los parches. -->
+            <dependency>
+                <groupId>org.apache.pdfbox</groupId>
+                <artifactId>pdfbox</artifactId>
+                <version>2.0.35</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.pdfbox</groupId>
+                <artifactId>fontbox</artifactId>
+                <version>2.0.35</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.pdfbox</groupId>
+                <artifactId>xmpbox</artifactId>
+                <version>2.0.35</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
