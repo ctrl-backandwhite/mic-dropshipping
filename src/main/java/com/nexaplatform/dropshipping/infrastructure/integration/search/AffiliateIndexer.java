@@ -18,6 +18,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -54,7 +55,7 @@ public class AffiliateIndexer {
                             .properties("email", Property.of(p -> p.text(t -> t.analyzer("standard"))))
                             .properties("code", Property.of(p -> p.text(t -> t.analyzer("standard"))))))));
             log.info("Created OpenSearch index '{}'", index);
-        } catch (OpenSearchException | java.io.IOException e) {
+        } catch (OpenSearchException | IOException e) {
             log.error("Failed to ensure OpenSearch affiliate index: {}", e.getMessage());
         }
     }

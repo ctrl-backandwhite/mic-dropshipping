@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
@@ -164,7 +165,7 @@ public class ShippingQuoteController {
     @Operation(summary = "Regiones (estado/provincia) de un país para el dropdown del checkout")
     @GetMapping("/regions")
     public ResponseEntity<List<RegionOut>> regions(
-            @org.springframework.web.bind.annotation.RequestParam String country) {
+            @RequestParam String country) {
         List<RegionOut> out = countryTaxService.regionsFor(country).stream()
                 .map(r -> new RegionOut(r.getRegionCode(), r.getRegionName())).toList();
         return ResponseEntity.ok(out);

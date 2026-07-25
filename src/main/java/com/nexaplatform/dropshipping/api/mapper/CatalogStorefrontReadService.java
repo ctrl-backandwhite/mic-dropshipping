@@ -40,8 +40,10 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Shared storefront catalog read-projection helper. Holds the category/supplier/
@@ -271,10 +273,10 @@ public class CatalogStorefrontReadService {
         if (productIds == null || productIds.isEmpty()) {
             return PageResponse.from(new PageImpl<>(List.of(), pageable, 0));
         }
-        java.util.Map<UUID, ProductEntity> byId = productRepository.findAllById(productIds).stream()
+        Map<UUID, ProductEntity> byId = productRepository.findAllById(productIds).stream()
                 .filter(p -> p.getStatus() == ProductStatus.ACTIVE)
-                .collect(java.util.stream.Collectors.toMap(ProductEntity::getId, p -> p, (a, b) -> a));
-        List<ProductSummaryView> all = productIds.stream().map(byId::get).filter(java.util.Objects::nonNull)
+                .collect(Collectors.toMap(ProductEntity::getId, p -> p, (a, b) -> a));
+        List<ProductSummaryView> all = productIds.stream().map(byId::get).filter(Objects::nonNull)
                 .map(p -> productMapper.toSummary(p, lang)).toList();
         int from = Math.min(page * safe, all.size());
         int to = Math.min(from + safe, all.size());

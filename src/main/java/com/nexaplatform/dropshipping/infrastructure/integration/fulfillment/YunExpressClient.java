@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -72,7 +73,7 @@ public class YunExpressClient {
                 throw new IllegalStateException("YunExpress HTTP " + resp.statusCode() + ": " + resp.body());
             }
             return resp.body();
-        } catch (java.io.IOException | InterruptedException e) {
+        } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }

@@ -10,6 +10,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -77,7 +79,7 @@ public class PartnerPlanSyncService {
                 .queryForList("SELECT id, client_id, client_settings FROM oauth2_registered_client "
                         + "WHERE client_settings::jsonb->>'nexadrop.owner_user_id' = ?", userId.toString());
         int count = 0;
-        List<String> clientIds = new java.util.ArrayList<>();
+        List<String> clientIds = new ArrayList<>();
         for (Map<String, Object> r : rows) {
             try {
                 String settingsJson = (String) r.get("client_settings");
@@ -85,7 +87,7 @@ public class PartnerPlanSyncService {
                 settings.put("nexadrop.plan", tier);
                 if (planCode != null)
                     settings.put("nexadrop.plan_code", planCode);
-                settings.put("nexadrop.plan_synced_at", java.time.Instant.now().toString());
+                settings.put("nexadrop.plan_synced_at", Instant.now().toString());
                 jdbc.update("UPDATE oauth2_registered_client SET client_settings = ?::jsonb WHERE id = ?",
                         mapper.writeValueAsString(settings), r.get("id"));
                 clientIds.add((String) r.get("client_id"));

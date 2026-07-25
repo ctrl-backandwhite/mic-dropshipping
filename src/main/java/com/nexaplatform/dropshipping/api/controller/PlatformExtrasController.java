@@ -35,6 +35,7 @@ import com.nexaplatform.dropshipping.application.usecase.ShippingUseCase;
 import com.nexaplatform.dropshipping.application.usecase.SupportTicketUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WarehouseUseCase;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -101,9 +102,9 @@ public class PlatformExtrasController implements PlatformExtrasApi {
     }
 
     @Override
-    public org.springframework.http.ResponseEntity<Void> deleteDesign(Authentication auth, UUID id) {
+    public ResponseEntity<Void> deleteDesign(Authentication auth, UUID id) {
         podUseCase.deleteDesign(UUID.fromString(auth.getName()), id);
-        return org.springframework.http.ResponseEntity.noContent().build();
+        return ResponseEntity.noContent().build();
     }
 
     /* ============================== DROP-7 ODM/OEM ============================== */
@@ -139,9 +140,9 @@ public class PlatformExtrasController implements PlatformExtrasApi {
     }
 
     @Override
-    public org.springframework.http.ResponseEntity<Void> deleteOdm(Authentication auth, UUID id) {
+    public ResponseEntity<Void> deleteOdm(Authentication auth, UUID id) {
         odmUseCase.delete(UUID.fromString(auth.getName()), id);
-        return org.springframework.http.ResponseEntity.noContent().build();
+        return ResponseEntity.noContent().build();
     }
 
     /* ============================== DROP-11 Tickets ============================== */

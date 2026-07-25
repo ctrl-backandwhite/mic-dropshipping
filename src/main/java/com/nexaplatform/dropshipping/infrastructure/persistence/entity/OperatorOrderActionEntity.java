@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -60,7 +61,7 @@ public class OperatorOrderActionEntity extends BaseEntity {
 
     /** % de comisión aplicado (10 propias, 5 integradas), para trazabilidad. */
     @Column(name = "commission_pct", precision = 5, scale = 2)
-    private java.math.BigDecimal commissionPct;
+    private BigDecimal commissionPct;
 
     @Column(name = "processed_at", nullable = false)
     private Instant processedAt;

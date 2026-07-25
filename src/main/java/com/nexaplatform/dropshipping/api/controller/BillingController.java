@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.UUID;
 
@@ -46,8 +47,8 @@ public class BillingController implements BillingApi {
                     currencyService.toUsd(BigDecimal.valueOf(p.getPriceYearlyCents()).movePointLeft(2), src));
             // Precio de plan REDONDEADO a entero (HALF_UP) — se muestra "25 €", no "25,28 €".
             p.setDisplayCurrency(displayCode);
-            p.setDisplayMonthly(monthly.setScale(0, java.math.RoundingMode.HALF_UP));
-            p.setDisplayYearly(yearly.setScale(0, java.math.RoundingMode.HALF_UP));
+            p.setDisplayMonthly(monthly.setScale(0, RoundingMode.HALF_UP));
+            p.setDisplayYearly(yearly.setScale(0, RoundingMode.HALF_UP));
             p.setDisplayMonthlyFormatted(currencyService.formatDisplayRounded(monthly, displayCode));
             p.setDisplayYearlyFormatted(currencyService.formatDisplayRounded(yearly, displayCode));
         }

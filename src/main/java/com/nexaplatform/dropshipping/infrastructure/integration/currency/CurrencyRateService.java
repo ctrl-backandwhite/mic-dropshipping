@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Currency;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -129,7 +130,7 @@ public class CurrencyRateService {
         Locale locale = Locale.forLanguageTag(localeTag != null && !localeTag.isBlank() ? localeTag : localeOf(code));
         try {
             java.text.NumberFormat nf = java.text.NumberFormat.getCurrencyInstance(locale);
-            nf.setCurrency(java.util.Currency.getInstance(code.toUpperCase(Locale.ROOT)));
+            nf.setCurrency(Currency.getInstance(code.toUpperCase(Locale.ROOT)));
             return nf.format(amount);
         } catch (RuntimeException nonIsoOrUnknown) {
             return symbolOf(code) + " " + amount.toPlainString();
@@ -148,11 +149,11 @@ public class CurrencyRateService {
         if (amountDisplay == null || code == null) {
             return null;
         }
-        BigDecimal amount = wholeNumber ? amountDisplay.setScale(0, java.math.RoundingMode.HALF_UP) : amountDisplay;
+        BigDecimal amount = wholeNumber ? amountDisplay.setScale(0, RoundingMode.HALF_UP) : amountDisplay;
         Locale locale = Locale.forLanguageTag(localeOf(code));
         try {
             java.text.NumberFormat nf = java.text.NumberFormat.getCurrencyInstance(locale);
-            nf.setCurrency(java.util.Currency.getInstance(code.toUpperCase(Locale.ROOT)));
+            nf.setCurrency(Currency.getInstance(code.toUpperCase(Locale.ROOT)));
             if (wholeNumber) {
                 nf.setMaximumFractionDigits(0);
                 nf.setMinimumFractionDigits(0);

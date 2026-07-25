@@ -19,6 +19,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,7 +67,7 @@ public class SupplierIndexer {
                             .properties("name", Property.of(p -> p.text(t -> t.analyzer("standard"))))
                             .properties("nameZh", Property.of(p -> p.text(t -> t.analyzer("standard"))))))));
             log.info("Created OpenSearch index '{}'", index);
-        } catch (OpenSearchException | java.io.IOException e) {
+        } catch (OpenSearchException | IOException e) {
             log.error("Failed to ensure OpenSearch supplier index: {}", e.getMessage());
         }
     }

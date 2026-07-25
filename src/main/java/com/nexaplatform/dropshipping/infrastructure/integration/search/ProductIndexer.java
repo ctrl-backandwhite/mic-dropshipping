@@ -19,6 +19,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -56,7 +57,7 @@ public class ProductIndexer {
                             .properties("rating", Property.of(p -> p.float_(f -> f)))
                             .properties("supplierId", Property.of(p -> p.keyword(k -> k)))))));
             log.info("Created OpenSearch index '{}'", index);
-        } catch (OpenSearchException | java.io.IOException e) {
+        } catch (OpenSearchException | IOException e) {
             log.error("Failed to ensure OpenSearch index: {}", e.getMessage());
         }
     }
@@ -100,7 +101,7 @@ public class ProductIndexer {
         try {
             client.deleteByQuery(d -> d.index(index).query(q -> q.matchAll(m -> m)).refresh(true));
             log.info("::> [REINDEX] purged stale documents from '{}'", index);
-        } catch (OpenSearchException | java.io.IOException e) {
+        } catch (OpenSearchException | IOException e) {
             log.warn("Index purge failed for '{}': {} (se continúa con el upsert)", index, e.getMessage());
         }
     }

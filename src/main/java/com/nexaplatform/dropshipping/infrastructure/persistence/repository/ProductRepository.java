@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -136,10 +137,10 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             """)
     Page<ProductEntity> searchStorefront(@Param("status") ProductStatus status, @Param("needle") String needle,
             @Param("categoryId") UUID categoryId, @Param("supplierId") UUID supplierId,
-            @Param("minPrice") java.math.BigDecimal minPrice, @Param("maxPrice") java.math.BigDecimal maxPrice,
+            @Param("minPrice") BigDecimal minPrice, @Param("maxPrice") BigDecimal maxPrice,
             @Param("shipFrom") String shipFrom, @Param("freeShipping") Boolean freeShipping,
             @Param("selfPickup") Boolean selfPickup, @Param("hasVideo") Boolean hasVideo,
-            @Param("minRating") java.math.BigDecimal minRating, @Param("minInv") Integer minInv, Pageable pageable);
+            @Param("minRating") BigDecimal minRating, @Param("minInv") Integer minInv, Pageable pageable);
 
     /**
      * Admin free-text search across the WHOLE catalogue and ALL languages, mirroring the storefront

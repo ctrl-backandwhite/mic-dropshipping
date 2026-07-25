@@ -20,6 +20,7 @@ import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontMapper;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
@@ -136,7 +137,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private final CategoryRepository categoryRepository;
     private final ProductPriceTierRepository priceTierRepository;
     private final ProductImageRepository imageRepository;
-    private final com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService objectStorage;
+    private final ObjectStorageService objectStorage;
     private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository productJpaRepository;
     private final ProductMapper productMapper;
     private final CatalogStorefrontMapper catalogStorefrontMapper;

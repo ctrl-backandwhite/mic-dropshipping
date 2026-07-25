@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.fulfillment;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
@@ -178,7 +179,7 @@ public class CainiaoFulfillmentService {
             log.info("Cainiao: envío real creado para pedido {} (tracking={})", order.getOrderNumber(), tracking);
             return new FulfillmentResult(carrier != null ? carrier : "Standard Shipping", tracking,
                     ref != null ? ref : tracking, etaMax);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (JsonProcessingException e) {
             throw new IllegalStateException("Cainiao createShipment: error de JSON", e);
         }
     }
@@ -273,7 +274,7 @@ public class CainiaoFulfillmentService {
             }
             OrderStatus current = steps.get(steps.size() - 1).status();
             return new TrackingSnapshot(current, steps);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (JsonProcessingException e) {
             throw new IllegalStateException("Cainiao track: error de JSON", e);
         }
     }

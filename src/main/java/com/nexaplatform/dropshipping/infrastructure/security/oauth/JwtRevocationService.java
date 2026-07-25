@@ -7,8 +7,10 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -65,7 +67,7 @@ public class JwtRevocationService {
     }
 
     /** Atajo cuando varios clients pertenecen al mismo user. */
-    public void revokeAllForClients(java.util.Collection<String> clientIds) {
+    public void revokeAllForClients(Collection<String> clientIds) {
         for (String c : clientIds)
             revokeAllForClient(c);
     }
@@ -109,7 +111,7 @@ public class JwtRevocationService {
     public Map<String, Long> snapshot() {
         if (redis != null) {
             Map<String, Long> out = new HashMap<>();
-            java.util.Set<String> keys = redis.keys(PREFIX + "*");
+            Set<String> keys = redis.keys(PREFIX + "*");
             if (keys != null) {
                 for (Object k : keys) {
                     String key = String.valueOf(k);

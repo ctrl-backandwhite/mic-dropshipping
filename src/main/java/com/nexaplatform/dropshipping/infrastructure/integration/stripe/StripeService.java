@@ -191,7 +191,7 @@ public class StripeService {
         String cur = (chargeCurrency == null || chargeCurrency.isBlank()) ? "usd" : chargeCurrency.toLowerCase();
         String key = ("nx_" + planCode + "_" + period + "_" + amountCents + "_" + cur).toLowerCase()
                 .replaceAll("[^a-z0-9_]", "");
-        java.util.List<Price> found = Price.list(PriceListParams.builder().addLookupKey(key).build()).getData();
+        List<Price> found = Price.list(PriceListParams.builder().addLookupKey(key).build()).getData();
         if (!found.isEmpty()) {
             return found.get(0).getId();
         }

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -34,5 +35,5 @@ public interface VariantValueRepository extends JpaRepository<VariantValueEntity
     @Modifying
     @Transactional
     @Query("UPDATE VariantValueEntity v SET v.imageMirrorFailedAt = :at WHERE v.id = :id")
-    void markImageFailed(@Param("id") UUID id, @Param("at") java.time.Instant at);
+    void markImageFailed(@Param("id") UUID id, @Param("at") Instant at);
 }

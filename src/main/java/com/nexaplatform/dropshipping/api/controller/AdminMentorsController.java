@@ -18,9 +18,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * DROP-692: gestión admin (CRUD) de mentores. Un mentor está asociado a un usuario (FK); en el alta se
@@ -94,11 +96,11 @@ public class AdminMentorsController {
         }
         if (b.get("expertise") instanceof List<?> l) {
             e.setExpertise(l.stream().map(Object::toString).map(String::trim).filter(s -> !s.isEmpty())
-                    .collect(java.util.stream.Collectors.toCollection(ArrayList::new)));
+                    .collect(Collectors.toCollection(ArrayList::new)));
         }
         if (b.get("languages") instanceof List<?> l) {
             e.setLanguages(l.stream().map(Object::toString).map(String::trim).filter(s -> !s.isEmpty())
-                    .collect(java.util.stream.Collectors.toCollection(ArrayList::new)));
+                    .collect(Collectors.toCollection(ArrayList::new)));
         }
         if (b.get("active") != null) {
             e.setActive(Boolean.parseBoolean(b.get("active").toString()));
@@ -107,7 +109,7 @@ public class AdminMentorsController {
 
     private Map<String, Object> toMap(MentorProfileEntity e) {
         var u = e.getUser();
-        Map<String, Object> m = new java.util.HashMap<>();
+        Map<String, Object> m = new HashMap<>();
         m.put("id", e.getId());
         m.put("userEmail", u != null ? u.getEmail() : null);
         m.put("name", u != null && u.getDisplayName() != null ? u.getDisplayName() : (u != null ? u.getEmail() : ""));

@@ -25,7 +25,9 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Component
@@ -128,7 +130,7 @@ public class ProductMapper {
     public VariantValueView toValueView(VariantValueEntity v, String language) {
         // Traducciones por idioma + override neutral (value). valueLocalized = traducción del idioma
         // pedido, si no el override neutral; el frontend cae a translateVariantCN(valueZh) si ambos faltan.
-        java.util.Map<String, String> tr = new java.util.LinkedHashMap<>();
+        Map<String, String> tr = new LinkedHashMap<>();
         for (var t : v.getTranslations()) {
             if (t.getLanguage() != null && t.getValue() != null) {
                 tr.put(t.getLanguage().toLowerCase(), t.getValue());

@@ -21,6 +21,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -176,17 +177,17 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private record JwtInfo(String sub, String plan) {
     }
 
-    private java.util.Optional<JwtInfo> bearerInfo(HttpServletRequest req) {
+    private Optional<JwtInfo> bearerInfo(HttpServletRequest req) {
         String auth = req.getHeader("Authorization");
         if (auth == null || !auth.startsWith("Bearer "))
-            return java.util.Optional.empty();
+            return Optional.empty();
         try {
             var claims = JWTParser.parse(auth.substring(7)).getJWTClaimsSet();
             String sub = claims.getSubject();
             String plan = claims.getStringClaim("plan");
-            return java.util.Optional.of(new JwtInfo(sub, plan != null ? plan : "sandbox"));
+            return Optional.of(new JwtInfo(sub, plan != null ? plan : "sandbox"));
         } catch (Exception e) {
-            return java.util.Optional.empty();
+            return Optional.empty();
         }
     }
 

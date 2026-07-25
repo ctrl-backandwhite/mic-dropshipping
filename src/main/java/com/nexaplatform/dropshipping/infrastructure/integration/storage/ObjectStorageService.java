@@ -12,6 +12,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Almacenamiento de objetos (MinIO en local/dev, S3-compatible en prod) para el multimedia de producto.
@@ -72,8 +74,8 @@ public class ObjectStorageService {
     }
 
     /** Lista TODAS las claves de objeto del bucket (para verificar qué imágenes existen realmente). */
-    public java.util.Set<String> listKeys() {
-        java.util.Set<String> keys = new java.util.HashSet<>();
+    public Set<String> listKeys() {
+        Set<String> keys = new HashSet<>();
         if (client == null) {
             return keys;
         }

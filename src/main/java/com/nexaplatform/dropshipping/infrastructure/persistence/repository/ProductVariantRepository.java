@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -39,7 +40,7 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariantEn
     @Modifying
     @Transactional
     @Query("UPDATE ProductVariantEntity v SET v.imageMirrorFailedAt = :at WHERE v.id = :id")
-    void markImageFailed(@Param("id") UUID id, @Param("at") java.time.Instant at);
+    void markImageFailed(@Param("id") UUID id, @Param("at") Instant at);
 
     /**
      * Descuento ATÓMICO de stock al concretarse la venta (pago confirmado). La condición

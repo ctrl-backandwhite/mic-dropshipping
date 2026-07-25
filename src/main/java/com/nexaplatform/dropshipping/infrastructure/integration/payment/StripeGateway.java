@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -205,7 +206,7 @@ public class StripeGateway implements PaymentGateway {
     /** Monto a cobrar en céntimos de la moneda de liquidación (settlementAmount); fallback al USD canónico. */
     private long chargeCents(PaymentEntity p) {
         if (p.getSettlementAmount() != null) {
-            return p.getSettlementAmount().movePointRight(2).setScale(0, java.math.RoundingMode.HALF_UP).longValueExact();
+            return p.getSettlementAmount().movePointRight(2).setScale(0, RoundingMode.HALF_UP).longValueExact();
         }
         return p.getAmountUsdCents();
     }

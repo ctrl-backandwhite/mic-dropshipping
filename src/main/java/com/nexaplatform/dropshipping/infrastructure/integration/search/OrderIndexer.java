@@ -17,6 +17,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
@@ -54,7 +55,7 @@ public class OrderIndexer {
                             .properties("externalOrderId", Property.of(p -> p.text(t -> t.analyzer("standard"))))
                             .properties("shippingName", Property.of(p -> p.text(t -> t.analyzer("standard"))))))));
             log.info("Created OpenSearch index '{}'", index);
-        } catch (OpenSearchException | java.io.IOException e) {
+        } catch (OpenSearchException | IOException e) {
             log.error("Failed to ensure OpenSearch order index: {}", e.getMessage());
         }
     }

@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.infrastructure.messaging.outbox;
 
 import jakarta.persistence.LockModeType;
+import jakarta.persistence.QueryHint;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -21,8 +22,8 @@ public interface EventOutboxRepository extends JpaRepository<EventOutboxEntity, 
      * outbox en paralelo sin pisarse.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @QueryHints({@jakarta.persistence.QueryHint(name = "jakarta.persistence.lock.timeout", value = "0"),
-            @jakarta.persistence.QueryHint(name = "org.hibernate.lockOptions.skipLocked", value = "true")})
+    @QueryHints({@QueryHint(name = "jakarta.persistence.lock.timeout", value = "0"),
+            @QueryHint(name = "org.hibernate.lockOptions.skipLocked", value = "true")})
     @Query("""
             SELECT e FROM EventOutboxEntity e
             WHERE e.status = 'PENDING' AND e.nextAttemptAt <= :now

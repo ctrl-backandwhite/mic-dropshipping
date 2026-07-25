@@ -4,6 +4,8 @@ import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.*;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -22,8 +24,8 @@ public class AffiliateViewMapper {
             int returnPeriodDays) {
         AffiliateConversionEntity conv = convById.get(comm.getConversionId());
         // Solo las PENDIENTES tienen fecha de aprobación futura: creación + periodo de devolución.
-        java.time.Instant approvesAt = "PENDING".equals(comm.getStatus()) && comm.getCreatedAt() != null
-                ? comm.getCreatedAt().plus(java.time.Duration.ofDays(Math.max(0, returnPeriodDays)))
+        Instant approvesAt = "PENDING".equals(comm.getStatus()) && comm.getCreatedAt() != null
+                ? comm.getCreatedAt().plus(Duration.ofDays(Math.max(0, returnPeriodDays)))
                 : null;
         return new CommissionView(comm.getId(), comm.getAmountCents(), comm.getCurrency(), comm.getPercentage(),
                 comm.getStatus(), comm.getCreatedAt(), comm.getApprovedAt(), comm.getPaidAt(),

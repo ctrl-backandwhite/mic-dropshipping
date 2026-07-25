@@ -20,6 +20,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Lectura del histórico/ganancias de operadores. El histórico se indexa en OpenSearch y la fuente de
@@ -75,7 +76,7 @@ public class OperatorEarningsService {
         try {
             var res = indexer.search(operatorSubject, from, to, page, pageSize);
             @SuppressWarnings("unchecked")
-            List<java.util.Map<String, Object>> hits = (List<java.util.Map<String, Object>>) res.get("items");
+            List<Map<String, Object>> hits = (List<Map<String, Object>>) res.get("items");
             if (hits != null) {
                 List<OperatorAction> items = new ArrayList<>();
                 for (var m : hits) {
@@ -132,12 +133,12 @@ public class OperatorEarningsService {
         return Instant.now();
     }
 
-    private static String str(java.util.Map<String, Object> m, String k) {
+    private static String str(Map<String, Object> m, String k) {
         Object v = m.get(k);
         return v == null ? null : v.toString();
     }
 
-    private static long lng(java.util.Map<String, Object> m, String k) {
+    private static long lng(Map<String, Object> m, String k) {
         Object v = m.get(k);
         return v instanceof Number n ? n.longValue() : 0L;
     }

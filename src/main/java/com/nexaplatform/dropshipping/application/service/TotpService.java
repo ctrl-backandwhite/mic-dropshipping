@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Instant;
@@ -263,7 +264,7 @@ public class TotpService {
 
     private static byte[] base32Decode(String s) {
         s = s.toUpperCase().replaceAll("[^A-Z2-7]", "");
-        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
         int bits = 0, value = 0;
         for (char c : s.toCharArray()) {
             int idx = BASE32.indexOf(c);

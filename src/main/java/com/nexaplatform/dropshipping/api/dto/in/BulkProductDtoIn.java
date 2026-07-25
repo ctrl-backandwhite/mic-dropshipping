@@ -1,11 +1,13 @@
 package com.nexaplatform.dropshipping.api.dto.in;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 /**
  * One product row of a bulk JSON import. Friendly, flat shape (the heavy
@@ -81,14 +83,14 @@ public class BulkProductDtoIn {
      * {@code photos}, {@code pictures}, {@code mainImage}) para que un JSON razonable no se rechace
      * por el nombre del campo. Para una sola imagen como string, usar {@link #imageUrl}.
      */
-    @com.fasterxml.jackson.annotation.JsonAlias({"images", "photos", "pictures", "mainImage", "imageURLs"})
+    @JsonAlias({"images", "photos", "pictures", "mainImage", "imageURLs"})
     private List<String> imageUrls;
 
     /**
      * Atajo para una sola imagen como string ({@code "imageUrl": "https://..."}). Se pliega sobre
      * {@link #imageUrls} en el caso de uso. Acepta también las claves {@code image} y {@code photo}.
      */
-    @com.fasterxml.jackson.annotation.JsonAlias({"image", "photo"})
+    @JsonAlias({"image", "photo"})
     private String imageUrl;
 
     /** ACTIVE (default) or DRAFT. */
@@ -131,9 +133,9 @@ public class BulkProductDtoIn {
     /** Regiones de venta sugeridas/autorizadas (ej. ["EU","LATAM"]). */
     private List<String> salesRegions;
     /** Desglose de reseñas por estrellas: {"5":120,"4":30,...}. */
-    private java.util.Map<String, Integer> ratingBreakdown;
+    private Map<String, Integer> ratingBreakdown;
     /** Soporte transfronterizo: {labeling, foreignManual, foreignPackaging, boxMark}. */
-    private java.util.Map<String, Object> crossBorderSupport;
+    private Map<String, Object> crossBorderSupport;
     /** Unidades despachadas en 30 días (fiabilidad del proveedor). */
     private Integer dropshipShipped30d;
     /** Tasa de recolección en 48 h (0-100). */
@@ -158,7 +160,7 @@ public class BulkProductDtoIn {
      * Contenido por idioma en CUALQUIER idioma (ilimitado): {"fr": {"title":"…","description":"…"}, "ja": {…}}.
      * Complementa/override a titleEs/En/Pt/Zh; permite cargar manualmente todos los idiomas que se deseen.
      */
-    private java.util.Map<String, BulkTranslation> translations;
+    private Map<String, BulkTranslation> translations;
 
     /** Reseñas reales del producto (cada una con su idioma). */
     private List<BulkReview> reviews;
@@ -210,9 +212,9 @@ public class BulkProductDtoIn {
     public static class BulkAxis {
         private String name;
         private List<String> values;
-        private java.util.Map<String, String> valueImages;
+        private Map<String, String> valueImages;
         /** Traducciones por valor: {"白色1": {"es":"Blanco","en":"White"}}. */
-        private java.util.Map<String, java.util.Map<String, String>> valueTranslations;
+        private Map<String, Map<String, String>> valueTranslations;
     }
 
     /** Una variante/SKU: {"sku":"...","optionValues":{"Color":"Blanco","Talla":"42"},"price":..,"stock":..}. */
@@ -221,7 +223,7 @@ public class BulkProductDtoIn {
     @AllArgsConstructor
     public static class BulkVariant {
         private String sku;
-        private java.util.Map<String, String> optionValues;
+        private Map<String, String> optionValues;
         private BigDecimal price;
         private Integer stock;
         private String imageUrl;
