@@ -529,25 +529,49 @@ public class AffiliateProgramService {
     /** Affiliate requests a payout of their APPROVED commissions (must meet the minimum). */
     @Transactional
     public AffiliatePayoutEntity requestPayout(UUID userId) {
+        return requestPayout(userId, "WALLET");
+    }
+
+    /**
+     * Affiliate requests a payout of their APPROVED commissions via the given {@code method}
+     * (WALLET/BANK/PAYPAL), validating that the corresponding payout details are configured and
+     * snapshotting the destination onto the created {@link AffiliatePayoutEntity}.
+     */
+    @Transactional
+    public AffiliatePayoutEntity requestPayout(UUID userId, String method) {
+        String m = method == null ? "WALLET" : method.toUpperCase();
+        if (!m.matches("WALLET|BANK|PAYPAL")) {
+            throw new BusinessException("INVALID_PAYOUT_METHOD", "Método de cobro no válido");
+        }
         AffiliateEntity affiliate = affiliateRepo.findByUser_Id(userId).orElseThrow(
                 () -> new NotFoundException("Affiliate not found"));
+        if ("BANK".equals(m) && (affiliate.getBankIban() == null || affiliate.getBankHolder() == null)) {
+            throw new BusinessException("PAYOUT_DETAILS_MISSING", "Configura tus datos bancarios primero");
+        }
+        if ("PAYPAL".equals(m) && (affiliate.getPaypalEmail() == null || affiliate.getPaypalEmail().isBlank())) {
+            throw new BusinessException("PAYOUT_DETAILS_MISSING", "Configura tu PayPal primero");
+        }
         if (payoutRepo.existsByAffiliateIdAndStatus(affiliate.getId(), "REQUESTED")) {
             throw new BusinessException(
                     "Ya tienes una solicitud de pago pendiente");
         }
         List<AffiliateCommissionEntity> approved = commissionRepo.findByAffiliateIdAndStatus(affiliate.getId(), "APPROVED");
         long total = approved.stream().mapToLong(AffiliateCommissionEntity::getAmountCents).sum();
-        var cfg = config();
+        AffiliateProgramConfigEntity cfg = config();
         if (total < cfg.getMinPayoutCents()) {
             throw new BusinessException(
                     "Saldo aprobado por debajo del pago mínimo");
         }
         AffiliatePayoutEntity payout = payoutRepo.save(AffiliatePayoutEntity.builder().affiliateId(affiliate.getId())
-                .amountCents(total).currency(cfg.getCurrency()).status("REQUESTED").method("WALLET")
-                .commissionCount(approved.size()).requestedAt(Instant.now())
-                .note("Solicitud del afiliado").build());
+                .amountCents(total).currency(cfg.getCurrency()).status("REQUESTED").method(m)
+                .commissionCount(approved.size()).requestedAt(Instant.now()).note("Solicitud del afiliado")
+                .destHolder("BANK".equals(m) ? affiliate.getBankHolder() : null)
+                .destIban("BANK".equals(m) ? affiliate.getBankIban() : null)
+                .destBic("BANK".equals(m) ? affiliate.getBankBic() : null)
+                .destPaypalEmail("PAYPAL".equals(m) ? affiliate.getPaypalEmail() : null)
+                .build());
         notifyStaff("AFFILIATE_PAYOUT_REQUEST", "Solicitud de pago de afiliado",
-                "Un afiliado ha solicitado el pago de sus comisiones aprobadas.");
+                "Un afiliado ha solicitado el pago de sus comisiones aprobadas (" + m + ").");
         return payout;
     }
 
