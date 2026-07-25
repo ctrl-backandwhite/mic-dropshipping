@@ -4,6 +4,7 @@ import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
+import com.nexaplatform.dropshipping.domain.model.WalletTransaction;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.AffiliateIndexer;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.*;
@@ -576,11 +577,24 @@ public class AffiliateProgramService {
     }
 
     /**
-     * Operator approves & executes a payout: credits the affiliate's wallet and marks the APPROVED
-     * commissions as PAID. No automatic payment happens without this explicit approval (DROP-651).
+     * Operator approves & executes a WALLET payout: credits the affiliate's wallet and marks the
+     * APPROVED commissions as PAID. No automatic payment happens without this explicit approval
+     * (DROP-651). Delegates to {@link #approvePayout(UUID, UUID, String)} with no admin/reference.
      */
     @Transactional
     public AffiliatePayoutEntity approvePayout(UUID payoutId) {
+        return approvePayout(payoutId, null, null);
+    }
+
+    /**
+     * Operator approves & executes a payout. For {@code WALLET} method, credits the affiliate's
+     * wallet (as before). For an external method ({@code BANK}/{@code PAYPAL}) the payment was
+     * already executed by the admin OUTSIDE the app (bank transfer / PayPal payout) — this only
+     * records it: marks the payout PAID with the given {@code reference} and {@code adminUserId},
+     * WITHOUT touching the wallet. Either way the APPROVED commissions move to PAID (Task 7).
+     */
+    @Transactional
+    public AffiliatePayoutEntity approvePayout(UUID payoutId, UUID adminUserId, String reference) {
         AffiliatePayoutEntity payout = payoutRepo.findById(payoutId).orElseThrow(
                 () -> new NotFoundException("Payout not found"));
         if ("PAID".equals(payout.getStatus())) {
@@ -599,9 +613,17 @@ public class AffiliateProgramService {
             return payoutRepo.save(payout);
         }
         UUID userId = affiliate.getUser().getId();
-        var tx = walletUseCase.adminTopup(userId, total, "Affiliate commission payout",
-                "affiliate-payout-" + payout.getId());
-        UUID txId = tx != null ? tx.getId() : null;
+        UUID txId = null;
+        if ("WALLET".equals(payout.getMethod())) {
+            WalletTransaction tx = walletUseCase.adminTopup(userId, total, "Affiliate commission payout",
+                    "affiliate-payout-" + payout.getId());
+            txId = tx != null ? tx.getId() : null;
+            payout.setWalletTxId(txId);
+        } else {
+            // Pago EXTERNO ya ejecutado por el ADMIN fuera de la app: solo se registra.
+            payout.setPaidReference(reference);
+            payout.setPaidBy(adminUserId);
+        }
         Instant now = Instant.now();
         for (AffiliateCommissionEntity comm : approved) {
             comm.setStatus("PAID");
@@ -614,14 +636,14 @@ public class AffiliateProgramService {
         affiliateRepo.save(affiliate);
         payout.setStatus("PAID");
         payout.setAmountCents(total);
-        payout.setWalletTxId(txId);
         payout.setProcessedAt(now);
         payout.setCommissionCount(approved.size());
         payoutRepo.save(payout);
         notify(userId, "AFFILIATE_PAYOUT_PAID", "Pago de comisiones realizado",
-                "Tus comisiones se han abonado a tu wallet.");
-        log.info("::> [AFFILIATE] Payout {} paid {} cents to affiliate {} (wallet tx {})", payout.getId(), total,
-                affiliate.getId(), txId);
+                "WALLET".equals(payout.getMethod()) ? "Tus comisiones se han abonado a tu wallet."
+                        : "Tus comisiones han sido pagadas.");
+        log.info("::> [AFFILIATE] Payout {} paid {} cents to affiliate {} (method {}, wallet tx {})", payout.getId(),
+                total, affiliate.getId(), payout.getMethod(), txId);
         return payout;
     }
 
