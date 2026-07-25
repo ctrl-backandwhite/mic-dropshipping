@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.api.dto;
 import org.springframework.data.domain.Page;
 
 import java.util.List;
+import java.util.function.Function;
 
 public record PageResponse<T>(List<T> items, int page, int size, long totalElements, int totalPages) {
     public static <T> PageResponse<T> from(Page<T> page) {
@@ -10,7 +11,7 @@ public record PageResponse<T>(List<T> items, int page, int size, long totalEleme
                 page.getTotalPages());
     }
 
-    public static <S, T> PageResponse<T> map(Page<S> page, java.util.function.Function<S, T> mapper) {
+    public static <S, T> PageResponse<T> map(Page<S> page, Function<S, T> mapper) {
         return new PageResponse<>(page.getContent().stream().map(mapper).toList(), page.getNumber(), page.getSize(),
                 page.getTotalElements(), page.getTotalPages());
     }

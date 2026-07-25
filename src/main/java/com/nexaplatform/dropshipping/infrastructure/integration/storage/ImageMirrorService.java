@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -90,7 +91,7 @@ public class ImageMirrorService {
                 }
                 // (b) cdn_url con nuestro dominio pero cuyo OBJETO ya no existe (p.ej. MinIO reseteado):
                 //     listamos las claves reales del bucket y reencolamos las que falten.
-                java.util.Set<String> keys = storage.listKeys();
+                Set<String> keys = storage.listKeys();
                 if (!keys.isEmpty()) {
                     String base = storage.publicUrl().replaceAll("/+$", "") + "/";
                     int missing = 0;

@@ -9,9 +9,11 @@ import com.nexaplatform.dropshipping.api.dto.out.MeWalletRechargeDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MeWalletTxDtoOut;
 import com.nexaplatform.dropshipping.api.mapper.MeWalletDtoMapper;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
+import com.nexaplatform.dropshipping.application.usecase.RechargeOptions;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
 import com.nexaplatform.dropshipping.domain.model.Payment;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -35,7 +37,7 @@ public class MeWalletController implements MeWalletApi {
     private final WalletUseCase walletUseCase;
     private final PaymentUseCase paymentUseCase;
     private final MeWalletDtoMapper meWalletDtoMapper;
-    private final com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService currencyRateService;
+    private final CurrencyRateService currencyRateService;
 
     @Override
     public ResponseEntity<MeWalletDtoOut> wallet(Authentication auth) {
@@ -70,7 +72,7 @@ public class MeWalletController implements MeWalletApi {
     }
 
     @Override
-    public ResponseEntity<com.nexaplatform.dropshipping.application.usecase.RechargeOptions> rechargeOptions(
+    public ResponseEntity<RechargeOptions> rechargeOptions(
             String currency) {
         return ResponseEntity.ok(paymentUseCase.rechargeOptions(currency));
     }

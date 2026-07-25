@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.infrastructure.cache;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cache.CacheManager;
@@ -58,7 +59,7 @@ public class CacheConfig {
         // Incluye moneda Y canal (STOREFRONT 150% vs INTEGRATION 75%): el precio depende de ambos, así
         // que el storefront y las apps conectadas (Shopify/WooCommerce) NO deben compartir entrada de caché.
         return (target, method, params) -> method.getName() + ':' + CurrencyHolder.get() + ':'
-                + com.nexaplatform.dropshipping.application.service.PricingChannelHolder.get() + ':'
+                + PricingChannelHolder.get() + ':'
                 + Arrays.deepToString(params);
     }
 

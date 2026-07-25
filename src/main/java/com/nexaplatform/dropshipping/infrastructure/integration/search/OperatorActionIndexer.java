@@ -17,6 +17,7 @@ import org.opensearch.client.opensearch.indices.CreateIndexRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -55,7 +56,7 @@ public class OperatorActionIndexer {
                     .properties("itemCount", Property.of(p -> p.integer(i -> i)))
                     .properties("processedAt", Property.of(p -> p.date(d -> d)))))));
             log.info("Created OpenSearch index '{}'", index);
-        } catch (OpenSearchException | java.io.IOException e) {
+        } catch (OpenSearchException | IOException e) {
             log.error("Failed to ensure OpenSearch index '{}': {}", index, e.getMessage());
         }
     }
@@ -84,7 +85,7 @@ public class OperatorActionIndexer {
      * {items, total, page, size}. Lanza si OpenSearch no responde (el caller decide el fallback).
      */
     public Map<String, Object> search(String operatorSubject, Instant from, Instant to, int page, int size)
-            throws java.io.IOException {
+            throws IOException {
         String fromS = from.toString();
         String toS = to.toString();
         Query range = Query.of(q -> q.range(r -> r.field("processedAt").gte(jsonData(fromS)).lte(jsonData(toS))));

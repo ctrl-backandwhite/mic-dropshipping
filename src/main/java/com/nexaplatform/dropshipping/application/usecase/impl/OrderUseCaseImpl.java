@@ -11,6 +11,7 @@ import com.nexaplatform.dropshipping.application.service.AffiliateProgramService
 import com.nexaplatform.dropshipping.application.service.CainiaoTaxService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
 import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
+import com.nexaplatform.dropshipping.application.service.StockService;
 import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
@@ -41,6 +42,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserR
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,6 +54,7 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -95,7 +98,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final NotificationsPublisher notificationsPublisher;
     private final PricingService pricingService;
     private final AffiliateProgramService affiliateProgramService;
-    private final com.nexaplatform.dropshipping.application.service.StockService stockService;
+    private final StockService stockService;
     private final PaymentUseCase paymentUseCase;
     private final OrderEmailService orderEmailService;
     private final FulfillmentProvider fulfillment;
@@ -342,7 +345,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         if (o.getItems() == null || o.getItems().size() < 2) {
             return;
         }
-        java.util.LinkedHashMap<String, OrderItem> merged = new java.util.LinkedHashMap<>();
+        LinkedHashMap<String, OrderItem> merged = new LinkedHashMap<>();
         for (OrderItem it : o.getItems()) {
             String key = (it.getProductId() != null ? it.getProductId() : it.getId()) + "|" + it.getUnitPriceCents();
             OrderItem prev = merged.get(key);
@@ -363,7 +366,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
             }
         }
         if (merged.size() != o.getItems().size()) {
-            o.setItems(new java.util.ArrayList<>(merged.values()));
+            o.setItems(new ArrayList<>(merged.values()));
         }
     }
 
@@ -522,7 +525,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Transactional
     public Order createDemoOrder() {
         if (!demoOrdersEnabled) {
-            throw new ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN,
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Demo order creation is disabled in this environment.");
         }
         ProductEntity p = productRepository.findAll().stream()

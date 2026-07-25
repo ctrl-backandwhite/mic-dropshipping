@@ -8,6 +8,7 @@ import com.nexaplatform.dropshipping.api.mapper.AdminOrderMapper;
 import com.nexaplatform.dropshipping.api.mapper.MeOrderDtoMapper;
 import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
 import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
+import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PaymentJpaRepositoryAdapter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -16,6 +17,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -43,13 +45,13 @@ public class MeOrderController implements MeOrderApi {
     @Override
     public ResponseEntity<List<MeOrderRowDtoOut>> list(Authentication auth) {
         UUID userId = UUID.fromString(auth.getName());
-        List<com.nexaplatform.dropshipping.domain.model.Order> orders = orderUseCase.listMyOrders(userId);
+        List<Order> orders = orderUseCase.listMyOrders(userId);
         List<MeOrderRowDtoOut> rows = adminOrderMapper.toMeRows(orders);
         // El total de la fila se formatea en la moneda activa EXACTAMENTE como en el detalle (mismo
         // método del mapper), para que lista y detalle muestren el mismo importe. toMeRows preserva el orden.
-        List<MeOrderRowDtoOut> out = new java.util.ArrayList<>(rows.size());
+        List<MeOrderRowDtoOut> out = new ArrayList<>(rows.size());
         for (int i = 0; i < rows.size(); i++) {
-            com.nexaplatform.dropshipping.domain.model.Order order = orders.get(i);
+            Order order = orders.get(i);
             out.add(rows.get(i).toBuilder()
                     .totalFormatted(meOrderDtoMapper.formatOrderTotal(order))
                     .paymentMethod(resolvePaymentMethod(order.getId())) // para el botón de cancelar de la lista

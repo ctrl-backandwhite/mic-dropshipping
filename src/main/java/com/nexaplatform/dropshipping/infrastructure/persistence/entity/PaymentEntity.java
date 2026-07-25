@@ -21,6 +21,7 @@ import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 
 @Entity
 @Table(name = "payment")
@@ -42,7 +43,7 @@ public class PaymentEntity extends BaseEntity {
     // Cuando purpose=ORDER_PAYMENT, esta columna referencia el customer_order pagado.
     // Si es WALLET_RECHARGE, queda null (recarga genérica de wallet).
     @Column(name = "order_id")
-    private java.util.UUID orderId;
+    private UUID orderId;
 
     @Column(name = "purpose", length = 20, nullable = false)
     @Builder.Default

@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -65,7 +66,7 @@ public class PodDesignUseCaseImpl implements PodDesignUseCase {
             "https://images.unsplash.com/photo-1503341960582-b45751874cf0?w=600" };
 
     private static String mockupFor(Object key) {
-        return MOCKUPS[Math.floorMod(java.util.Objects.hashCode(key), MOCKUPS.length)];
+        return MOCKUPS[Math.floorMod(Objects.hashCode(key), MOCKUPS.length)];
     }
 
     @Override

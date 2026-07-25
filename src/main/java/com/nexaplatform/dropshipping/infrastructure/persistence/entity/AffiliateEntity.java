@@ -2,6 +2,8 @@ package com.nexaplatform.dropshipping.infrastructure.persistence.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import java.math.BigDecimal;
+import java.time.Instant;
 
 @Entity
 @Table(name = "affiliate")
@@ -38,9 +40,9 @@ public class AffiliateEntity extends BaseEntity {
 
     /** Per-affiliate commission override (percent); null → use the program default. */
     @Column(name = "commission_percent_override", precision = 6, scale = 3)
-    private java.math.BigDecimal commissionPercentOverride;
+    private BigDecimal commissionPercentOverride;
 
     /** When the customer explicitly accepted the program terms (DROP-650). */
     @Column(name = "accepted_terms_at")
-    private java.time.Instant acceptedTermsAt;
+    private Instant acceptedTermsAt;
 }

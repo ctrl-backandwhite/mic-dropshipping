@@ -19,6 +19,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -49,11 +50,11 @@ public class MarginService {
      * narrowest cost range first, then lowest admin position, then most recently created,
      * then id — a total order so the winner never depends on stream/DB iteration order.
      */
-    private static final java.util.Comparator<PriceRuleEntity> MOST_SPECIFIC = java.util.Comparator
+    private static final Comparator<PriceRuleEntity> MOST_SPECIFIC = Comparator
             .comparing(MarginService::rangeWidth)
             .thenComparingInt(PriceRuleEntity::getPosition)
             .thenComparing(r -> r.getCreatedAt() != null ? r.getCreatedAt() : Instant.EPOCH,
-                    java.util.Comparator.reverseOrder())
+                    Comparator.reverseOrder())
             .thenComparing(r -> r.getId() != null ? r.getId().toString() : "");
 
     private static BigDecimal rangeWidth(PriceRuleEntity r) {

@@ -14,6 +14,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -58,7 +59,7 @@ public class ShopifyConnector implements ShopConnector {
                     "body_html", product.getDescriptionZh() != null ? product.getDescriptionZh() : "",
                     "vendor", product.getBrand() != null ? product.getBrand() : "",
                     "status", "active",
-                    "variants", java.util.List.of(Map.of("price", price.toPlainString()))));
+                    "variants", List.of(Map.of("price", price.toPlainString()))));
             String json = objectMapper.writeValueAsString(body);
             URI uri = URI.create("https://" + host + "/admin/api/" + API_VERSION + "/products.json");
             HttpRequest req = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(15))

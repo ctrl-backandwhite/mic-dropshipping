@@ -29,6 +29,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -671,7 +672,7 @@ public class DemoCatalogSeedRunner {
 
     /* ----- tiny DSL helpers ----- */
     private static List<IngestImage> imgs(String... urls) {
-        java.util.List<IngestImage> out = new java.util.ArrayList<>();
+        List<IngestImage> out = new ArrayList<>();
         for (int i = 0; i < urls.length; i++)
             out.add(new IngestImage(urls[i], i, i == 0 ? "MAIN" : "GALLERY"));
         return out;

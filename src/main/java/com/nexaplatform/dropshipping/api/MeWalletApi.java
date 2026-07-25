@@ -14,6 +14,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -55,7 +56,7 @@ public interface MeWalletApi {
     @ApiResponse(responseCode = "200", description = "Recharge confirmed and credited")
     @PostMapping("/recharge/{paymentId}/confirm")
     ResponseEntity<MeWalletPaymentStatusDtoOut> confirmRecharge(Authentication auth,
-            @org.springframework.web.bind.annotation.PathVariable("paymentId") UUID paymentId);
+            @PathVariable("paymentId") UUID paymentId);
 
     @Operation(summary = "Capture a PayPal wallet recharge result")
     @ApiResponse(responseCode = "200", description = "PayPal capture processed")

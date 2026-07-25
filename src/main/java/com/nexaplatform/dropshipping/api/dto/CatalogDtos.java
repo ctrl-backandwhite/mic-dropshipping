@@ -73,7 +73,7 @@ public final class CatalogDtos {
     // value = override neutral (compat); valueLocalized = etiqueta del idioma activo (traducción ?? value);
     // translations = todas las traducciones por idioma (para el editor del admin).
     public record VariantValueView(UUID id, String valueZh, String value, String valueLocalized, String imageUrl,
-            String imageSourceUrl, int position, java.util.Map<String, String> translations) {
+            String imageSourceUrl, int position, Map<String, String> translations) {
     }
 
     public record VariantOptionView(UUID id, String nameZh, String name, int position, List<VariantValueView> values) {

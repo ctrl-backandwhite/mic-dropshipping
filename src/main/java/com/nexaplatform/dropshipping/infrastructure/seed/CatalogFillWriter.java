@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * Persists a single generated demo product in its own transaction: ingests it via
@@ -46,7 +47,7 @@ public class CatalogFillWriter {
     @Transactional
     public UUID write(IngestProductRequest req, String esTitle, String enTitle, String ptTitle, String zhTitle,
             String descEs, String descEn, String descPt, String descZh,
-            java.util.function.Consumer<ProductEntity> enrich) {
+            Consumer<ProductEntity> enrich) {
         ProductEntity saved = catalogService.upsertProduct(req);
         ProductEntity managed = productRepository.findById(saved.getId()).orElse(null);
         if (managed == null)

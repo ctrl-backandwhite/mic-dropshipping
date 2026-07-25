@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.domain.model.CurrencyRate;
 import com.nexaplatform.dropshipping.domain.model.CurrencySyncResult;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -15,16 +16,16 @@ import java.util.UUID;
 public interface CurrencyRateUseCase extends BaseUseCase<CurrencyRate, CurrencyRate, UUID> {
 
     /** Lists active currency rates ordered by code. */
-    java.util.List<CurrencyRate> listActive();
+    List<CurrencyRate> listActive();
 
     /** Lists ALL currencies (active and inactive) ordered by code — for the admin screen. */
-    java.util.List<CurrencyRate> listAll();
+    List<CurrencyRate> listAll();
 
     /** Toggles the active flag of a currency without touching its rate. */
     CurrencyRate setActive(String code, boolean active);
 
     /** Activates/deactivates several currencies at once; returns how many changed. */
-    int bulkSetActive(java.util.List<String> codes, boolean active);
+    int bulkSetActive(List<String> codes, boolean active);
 
     /** Gets a single currency by its ISO code (throws if unknown). */
     CurrencyRate one(String code);

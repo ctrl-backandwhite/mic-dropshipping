@@ -10,6 +10,7 @@ import com.nexaplatform.dropshipping.api.mapper.AdminSupplierMapper;
 import com.nexaplatform.dropshipping.application.usecase.SupplierUseCase;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.SupplierIndexer;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -68,7 +69,7 @@ public class AdminSupplierController implements AdminSupplierApi {
     @Override
     public ResponseEntity<AdminSupplierDtoOut> create(AdminSupplierUpsertDtoIn req) {
         return new ResponseEntity<>(mapper.toDtoOut(useCase.create(mapper.toDomain(req))),
-                org.springframework.http.HttpStatus.CREATED);
+                HttpStatus.CREATED);
     }
 
     @Override

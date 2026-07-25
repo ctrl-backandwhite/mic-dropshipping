@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Comparator;
+import java.util.UUID;
 
 /**
  * Canonical pricing pipeline:
@@ -105,7 +107,7 @@ public class PricingService {
             }
             return variants.stream()
                     .filter(v -> v != null && v.isActive() && v.getPrice() != null && v.getPrice().signum() > 0)
-                    .min(java.util.Comparator.comparing(ProductVariantEntity::getPrice))
+                    .min(Comparator.comparing(ProductVariantEntity::getPrice))
                     .orElse(null);
         } catch (RuntimeException lazyOutsideTx) {
             return null;
@@ -125,7 +127,7 @@ public class PricingService {
     }
 
     public record PricedAmount(BigDecimal costUsd, BigDecimal retailUsd, BigDecimal displayAmount,
-            String displayCurrency, String displaySymbol, String displayFormatted, java.util.UUID appliedRuleId,
+            String displayCurrency, String displaySymbol, String displayFormatted, UUID appliedRuleId,
             BigDecimal appliedMarginPercent,
             // Desglose (solo informativo, para el admin): base con margen + IVA + envío = total.
             BigDecimal baseRetailUsd, BigDecimal ivaUsd, BigDecimal shippingUsd,

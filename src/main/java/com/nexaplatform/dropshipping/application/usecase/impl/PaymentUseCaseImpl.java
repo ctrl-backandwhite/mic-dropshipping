@@ -6,6 +6,9 @@ import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
+import com.nexaplatform.dropshipping.application.service.StockService;
+import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
+import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.nexaplatform.dropshipping.application.usecase.RechargeOptions;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
@@ -33,10 +36,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -65,12 +71,12 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     private final WalletUseCase walletUseCase;
     private final AuditLogger auditLogger;
     private final PartnerPlanSyncService partnerPlanSyncService;
-    private final com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase customerSubscriptionUseCase;
-    private final com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService subscriptionNotificationService;
+    private final CustomerSubscriptionUseCase customerSubscriptionUseCase;
+    private final SubscriptionNotificationService subscriptionNotificationService;
     private final ObjectMapper objectMapper;
     private final OrderEmailService orderEmailService;
     private final CurrencyRateService currencyRateService;
-    private final com.nexaplatform.dropshipping.application.service.StockService stockService;
+    private final StockService stockService;
 
     @Override
     @Transactional
@@ -179,7 +185,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         if (amountDisplay != null && amountDisplay.signum() > 0) {
             String ccy = currencyDisplay != null && !currencyDisplay.isBlank() ? currencyDisplay : "USD";
             return currencyRateService.toUsd(amountDisplay, ccy).movePointRight(2)
-                    .setScale(0, java.math.RoundingMode.HALF_UP).longValueExact();
+                    .setScale(0, RoundingMode.HALF_UP).longValueExact();
         }
         if (amountUsdCents != null && amountUsdCents > 0) {
             return amountUsdCents;
@@ -189,11 +195,11 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
     @Override
     public RechargeOptions rechargeOptions(String currency) {
-        String ccy = currency != null && !currency.isBlank() ? currency.toUpperCase(java.util.Locale.ROOT) : "USD";
+        String ccy = currency != null && !currency.isBlank() ? currency.toUpperCase(Locale.ROOT) : "USD";
         // EUR/USD conservan los importes estándar (10/25/50/…); el resto se convierten y se REDONDEAN a un
         // número "bonito" (2 cifras significativas) para no mostrar cantidades como 41 234 o 353 217.
         boolean standard = "USD".equals(ccy) || "EUR".equals(ccy);
-        List<RechargeOptions.Preset> presets = new java.util.ArrayList<>(RECHARGE_PRESETS_USD.length);
+        List<RechargeOptions.Preset> presets = new ArrayList<>(RECHARGE_PRESETS_USD.length);
         for (int base : RECHARGE_PRESETS_USD) {
             BigDecimal amount = standard ? BigDecimal.valueOf(base)
                     : niceRound(currencyRateService.usdTo(BigDecimal.valueOf(base), ccy));
@@ -210,7 +216,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         double d = value.doubleValue();
         int magnitude = (int) Math.floor(Math.log10(d)); // p.ej. 41234 → 4
         BigDecimal step = BigDecimal.TEN.pow(Math.max(0, magnitude - 1)); // 2 cifras significativas
-        return value.divide(step, 0, java.math.RoundingMode.HALF_UP).multiply(step);
+        return value.divide(step, 0, RoundingMode.HALF_UP).multiply(step);
     }
 
     @Override

@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -156,7 +157,7 @@ public class OrderEmailService {
 
     /** Fecha del reembolso (cancelledAt, o ahora) formateada según la factura. */
     private String refundDate(Order o, String locale) {
-        java.time.Instant when = o.getCancelledAt() != null ? o.getCancelledAt() : java.time.Instant.now();
+        Instant when = o.getCancelledAt() != null ? o.getCancelledAt() : Instant.now();
         return invoiceService.formatDate(when);
     }
 

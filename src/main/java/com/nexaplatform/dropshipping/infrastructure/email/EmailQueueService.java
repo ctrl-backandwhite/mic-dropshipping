@@ -2,9 +2,11 @@ package com.nexaplatform.dropshipping.infrastructure.email;
 
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OutboundEmailEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OutboundEmailRepository;
+import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -31,14 +33,14 @@ public class EmailQueueService {
     private final JavaMailSender mailSender;
     private final TemplateEngine templateEngine;
 
-    @org.springframework.beans.factory.annotation.Value("${nexadrop.email.from:noreply@nexadrop.local}")
+    @Value("${nexadrop.email.from:noreply@nexadrop.local}")
     private String fromAddress;
-    @org.springframework.beans.factory.annotation.Value("${nexadrop.email.from-name:NX036 Dropshipping}")
+    @Value("${nexadrop.email.from-name:NX036 Dropshipping}")
     private String fromName;
     // Remitentes por tipo de correo (alias del dominio). Si no se definen, caen al 'from' por defecto.
-    @org.springframework.beans.factory.annotation.Value("${nexadrop.email.from-billing:${nexadrop.email.from:noreply@nexadrop.local}}")
+    @Value("${nexadrop.email.from-billing:${nexadrop.email.from:noreply@nexadrop.local}}")
     private String fromBilling;
-    @org.springframework.beans.factory.annotation.Value("${nexadrop.email.from-support:${nexadrop.email.from:noreply@nexadrop.local}}")
+    @Value("${nexadrop.email.from-support:${nexadrop.email.from:noreply@nexadrop.local}}")
     private String fromSupport;
 
     /**
@@ -86,7 +88,7 @@ public class EmailQueueService {
                 helper.setText(html, true);
                 // From por tipo (alias del dominio) + Reply-To — reduce mucho la clasificación como spam en Gmail.
                 String from = resolveFrom(email.getTemplate());
-                helper.setFrom(new jakarta.mail.internet.InternetAddress(from, fromName, "UTF-8"));
+                helper.setFrom(new InternetAddress(from, fromName, "UTF-8"));
                 String replyTo = email.getReplyTo();
                 helper.setReplyTo(replyTo != null && !replyTo.isBlank() ? replyTo : from);
                 for (String cid : cids) {

@@ -35,9 +35,11 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Genera la factura de un pedido: un modelo de plantilla (i18n) que se renderiza como HTML (para el
@@ -57,7 +59,7 @@ public class InvoiceService {
     private final ObjectStorageService storage;
 
     /** Importe realmente cobrado (settlement) del pago satisfactorio si coincide con la moneda de la factura. */
-    private BigDecimal settlementTotal(java.util.UUID orderId, String ccy) {
+    private BigDecimal settlementTotal(UUID orderId, String ccy) {
         if (orderId == null || ccy == null) {
             return null;
         }
@@ -96,7 +98,7 @@ public class InvoiceService {
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     /** Fecha formateada con el mismo patrón que la factura (para reutilizar en emails). */
-    public String formatDate(java.time.Instant when) {
+    public String formatDate(Instant when) {
         return when != null ? DATE.format(when.atZone(ZoneId.systemDefault())) : "";
     }
 
@@ -168,7 +170,7 @@ public class InvoiceService {
         Instant when = o.getPlacedAt() != null ? o.getPlacedAt() : o.getCreatedAt();
 
         String lang = InvoiceLabel.lang(locale); // idioma de navegación → la factura se emite en él
-        Map<String, Object> m = new java.util.HashMap<>();
+        Map<String, Object> m = new HashMap<>();
         // Por defecto el modelo es para el EMAIL (lleva saludo/CTA). renderPdf lo pone a true para
         // ocultar lo propio del email y dejar un documento de factura limpio y profesional.
         m.put("pdf", false);
@@ -406,7 +408,7 @@ public class InvoiceService {
 
         Instant when = d.created() != null ? Instant.ofEpochSecond(d.created()) : Instant.now();
 
-        Map<String, Object> m = new java.util.HashMap<>();
+        Map<String, Object> m = new HashMap<>();
         m.put("pdf", true);
         m.put("bodyBg", "#ffffff");
         m.put("subject", InvoiceLabel.INVOICE.of(lang) + " " + nz(d.number()));
@@ -494,7 +496,7 @@ public class InvoiceService {
         BigDecimal usd = BigDecimal.valueOf(usdCents).movePointLeft(2);
         // HALF_UP también en USD (antes UP): el catálogo, el carrito, el pedido y el cobro usan HALF_UP,
         // así que la factura debe usar el MISMO redondeo o mostraría 1 céntimo de más por línea en USD.
-        return "USD".equalsIgnoreCase(currency) ? usd.setScale(2, java.math.RoundingMode.HALF_UP)
+        return "USD".equalsIgnoreCase(currency) ? usd.setScale(2, RoundingMode.HALF_UP)
                 : currencyRateService.usdTo(usd, currency);
     }
 

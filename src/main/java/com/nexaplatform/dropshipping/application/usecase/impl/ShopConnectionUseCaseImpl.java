@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.application.service.PlanLimitService;
 import com.nexaplatform.dropshipping.application.usecase.ShopConnectionUseCase;
 import com.nexaplatform.dropshipping.domain.model.ShopConnection;
 import com.nexaplatform.dropshipping.domain.model.ShopInboundSecret;
@@ -44,7 +45,7 @@ public class ShopConnectionUseCaseImpl implements ShopConnectionUseCase {
     private final TokenCryptoService tokenCrypto;
     private final ShopConnectorRegistry connectorRegistry;
     private final ProductRepository productRepository;
-    private final com.nexaplatform.dropshipping.application.service.PlanLimitService planLimitService;
+    private final PlanLimitService planLimitService;
 
     @Override
     @Transactional(readOnly = true)

@@ -22,10 +22,12 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantVa
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Inverse of the bulk import: maps a persisted {@link ProductEntity} (with its sub-entities) back to a
@@ -82,7 +84,7 @@ public class ProductBulkExportMapper {
                 .sorted(Comparator.comparingInt(ProductImageEntity::getPosition))
                 .map(img -> img.getSourceUrl() != null && !img.getSourceUrl().isBlank()
                         ? img.getSourceUrl() : img.getCdnUrl())
-                .filter(java.util.Objects::nonNull).toList());
+                .filter(Objects::nonNull).toList());
 
         // Logistics / customs (direct columns).
         d.setWeightGrams(p.getWeightGrams());
@@ -174,7 +176,7 @@ public class ProductBulkExportMapper {
     private BulkReview review(ProductReviewEntity r) {
         List<String> tags = (r.getTags() == null || r.getTags().isBlank())
                 ? null
-                : java.util.Arrays.stream(r.getTags().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
+                : Arrays.stream(r.getTags().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
         return new BulkReview(r.getAuthorName(), r.getAuthorCountry(), (int) r.getRating(), r.getTitle(), r.getBody(),
                 r.getLanguage(), r.isVerifiedPurchase(), tags);
     }

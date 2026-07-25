@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Entity
 @Table(name = "product", uniqueConstraints = @UniqueConstraint(columnNames = {"source", "external_id"}))
@@ -111,7 +112,7 @@ public class ProductEntity extends BaseEntity {
 
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
-    private java.util.List<String> certifications;
+    private List<String> certifications;
 
     @Column(name = "ship_from", length = 120)
     private String shipFrom;
@@ -131,25 +132,25 @@ public class ProductEntity extends BaseEntity {
     // ── v44: campos internacionales/1688 que faltaban ──
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(name = "video_urls", columnDefinition = "jsonb")
-    private java.util.List<String> videoUrls;
+    private List<String> videoUrls;
 
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(name = "sales_regions", columnDefinition = "jsonb")
-    private java.util.List<String> salesRegions;
+    private List<String> salesRegions;
 
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(name = "rating_breakdown", columnDefinition = "jsonb")
-    private java.util.Map<String, Integer> ratingBreakdown;
+    private Map<String, Integer> ratingBreakdown;
 
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(name = "cross_border_support", columnDefinition = "jsonb")
-    private java.util.Map<String, Object> crossBorderSupport;
+    private Map<String, Object> crossBorderSupport;
 
     @Column(name = "dropship_shipped_30d")
     private Integer dropshipShipped30d;
 
     @Column(name = "dropship_pickup_rate_48h", precision = 5, scale = 2)
-    private java.math.BigDecimal dropshipPickupRate48h;
+    private BigDecimal dropshipPickupRate48h;
 
     @Column(name = "inventory_count")
     private Integer inventoryCount;
@@ -175,7 +176,7 @@ public class ProductEntity extends BaseEntity {
     private String reviewsSummary;
 
     @Column(name = "reviews_sentiment", precision = 3, scale = 2)
-    private java.math.BigDecimal reviewsSentiment;
+    private BigDecimal reviewsSentiment;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

@@ -19,6 +19,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -56,7 +57,7 @@ public class ProductIndexer {
                             .properties("rating", Property.of(p -> p.float_(f -> f)))
                             .properties("supplierId", Property.of(p -> p.keyword(k -> k)))))));
             log.info("Created OpenSearch index '{}'", index);
-        } catch (OpenSearchException | java.io.IOException e) {
+        } catch (OpenSearchException | IOException e) {
             log.error("Failed to ensure OpenSearch index: {}", e.getMessage());
         }
     }
@@ -82,13 +83,27 @@ public class ProductIndexer {
      */
     @Transactional(readOnly = true)
     public int reindexAll() {
+        // PURGA primero: borra los documentos obsoletos (productos ya eliminados de la BD) para que el
+        // índice quede EXACTAMENTE igual que la BD. Sin esto, un producto borrado seguía apareciendo en
+        // la búsqueda (documento huérfano con un UUID que ya no existe) porque el reindex solo hacía upsert.
+        purgeIndex();
         int[] n = { 0 };
         productRepository.findAll().forEach(p -> {
             indexProduct(p.getId());
             n[0]++;
         });
-        log.info("::> [REINDEX] reindexed {} products into '{}'", n[0], index);
+        log.info("::> [REINDEX] reindexed {} products into '{}' (índice purgado antes de reconstruir)", n[0], index);
         return n[0];
+    }
+
+    /** Elimina TODOS los documentos del índice de productos (match_all), conservando el índice y su mapping. */
+    private void purgeIndex() {
+        try {
+            client.deleteByQuery(d -> d.index(index).query(q -> q.matchAll(m -> m)).refresh(true));
+            log.info("::> [REINDEX] purged stale documents from '{}'", index);
+        } catch (OpenSearchException | IOException e) {
+            log.warn("Index purge failed for '{}': {} (se continúa con el upsert)", index, e.getMessage());
+        }
     }
 
     @Transactional(readOnly = true)

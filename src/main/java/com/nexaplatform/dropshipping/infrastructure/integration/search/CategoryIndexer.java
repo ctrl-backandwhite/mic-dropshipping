@@ -18,8 +18,11 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -58,7 +61,7 @@ public class CategoryIndexer {
                             .properties("namePt", Property.of(p -> p.text(t -> t.analyzer("standard"))))
                             .properties("nameZh", Property.of(p -> p.text(t -> t.analyzer("standard"))))))));
             log.info("Created OpenSearch index '{}'", index);
-        } catch (OpenSearchException | java.io.IOException e) {
+        } catch (OpenSearchException | IOException e) {
             log.error("Failed to ensure OpenSearch category index: {}", e.getMessage());
         }
     }
@@ -123,7 +126,7 @@ public class CategoryIndexer {
         // Level = depth in the tree (0 = root). Walk the lazy parent chain (guarded against cycles).
         int level = 0;
         CategoryEntity cur = c.getParent();
-        java.util.Set<UUID> guard = new java.util.HashSet<>();
+        Set<UUID> guard = new HashSet<>();
         guard.add(c.getId());
         while (cur != null && guard.add(cur.getId())) {
             level++;

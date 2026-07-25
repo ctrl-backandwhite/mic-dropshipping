@@ -9,13 +9,17 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
 import org.springframework.security.config.annotation.web.configurers.oauth2.server.authorization.OAuth2AuthorizationServerConfigurer;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
@@ -68,8 +72,8 @@ public class AuthorizationServerConfig {
      * de validación. Los tokens de usuario, que además fijan el {@code kid} activo, siguen funcionando.
      */
     @Bean
-    public org.springframework.security.oauth2.jwt.JwtEncoder jwtEncoder(JwkKeyService jwkKeyService) {
-        return new org.springframework.security.oauth2.jwt.NimbusJwtEncoder(jwkKeyService.signingJwkSource());
+    public JwtEncoder jwtEncoder(JwkKeyService jwkKeyService) {
+        return new NimbusJwtEncoder(jwkKeyService.signingJwkSource());
     }
 
     @Bean
@@ -78,8 +82,8 @@ public class AuthorizationServerConfig {
     }
 
     @Bean
-    public org.springframework.security.authentication.AuthenticationManager authenticationManager(
-            org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration cfg)
+    public AuthenticationManager authenticationManager(
+            AuthenticationConfiguration cfg)
             throws Exception {
         return cfg.getAuthenticationManager();
     }
