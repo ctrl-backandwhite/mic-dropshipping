@@ -35,7 +35,7 @@ spring:
             # El front es estático (Railpack) y NO puede proxiar /login/oauth2/**, por eso el callback
             # NO puede ir a nx036.com. Override-able por GOOGLE_REDIRECT_URI (p. ej. api.nx036.com si se
             # da al backend un subdominio propio).
-            redirect-uri: "${GOOGLE_REDIRECT_URI:https://mic-dropshipping-pre.up.railway.app/login/oauth2/code/google}"
+            redirect-uri: "${GOOGLE_REDIRECT_URI:https://api.nx036.com/login/oauth2/code/google}"
           github:
             redirect-uri: "https://mic-dropshipping-pre.up.railway.app/login/oauth2/code/github"
 
