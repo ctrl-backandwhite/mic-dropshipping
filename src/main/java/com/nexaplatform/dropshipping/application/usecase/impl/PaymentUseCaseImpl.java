@@ -382,7 +382,23 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Override
     @Transactional
     public Payment confirmMockRecharge(UUID userId, UUID paymentId) {
-        return confirmSucceeded(paymentId, Map.of("mock_confirm", true));
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException("Payment"));
+        // Propietario: no permitir confirmar el pago de otro usuario (no filtramos pagos ajenos → 404).
+        if (p.getUserId() == null || !p.getUserId().equals(userId)) {
+            throw new NotFoundException("Payment");
+        }
+        // SEGURIDAD: esta vía "mock" acredita el saldo SIN pasar por la pasarela real. Debe aceptar EXCLUSIVAMENTE
+        // pagos sintéticos de mock-mode (providerRef con prefijo *_mock_). Un checkout REAL de Stripe/PayPal
+        // (cs_test_/cs_live_/pi_...) que aún no se ha cobrado NUNCA se acredita aquí; de lo contrario cualquier
+        // usuario iniciaría una recarga y la "confirmaría" gratis (dinero libre en producción). El pago real se
+        // confirma solo con confirmRecharge, que verifica el estado en la pasarela.
+        String ref = p.getProviderRef() != null ? p.getProviderRef() : "";
+        boolean mock = ref.startsWith("cs_mock_") || ref.startsWith("paypal_mock_") || ref.startsWith("pi_mock_");
+        if (!mock) {
+            throw new BusinessException("PAYMENT_REQUIRES_REAL_CONFIRMATION",
+                    "Esta recarga debe completarse en la pasarela de pago real");
+        }
+        return confirmSucceeded(p.getId(), Map.of("mock_confirm", true));
     }
 
     @Override
@@ -631,7 +647,22 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Override
     @Transactional
     public Payment confirmMockOrderPayment(UUID orderId, UUID paymentId) {
-        return confirmSucceeded(paymentId, Map.of("mock_confirm", true, "orderId", orderId.toString()));
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException("Payment"));
+        // El pago debe corresponder a la orden indicada (evita confirmar un pago de otra orden).
+        if (p.getOrderId() == null || !p.getOrderId().equals(orderId)) {
+            throw new NotFoundException("Payment");
+        }
+        // SEGURIDAD (idéntico a confirmMockRecharge): esta vía marca la orden como PAGADA SIN pasar por la
+        // pasarela real. Solo se admite para pagos sintéticos de mock-mode (providerRef *_mock_). Un checkout
+        // REAL de Stripe/PayPal (cs_test_/cs_live_/pi_...) no cobrado NUNCA se confirma aquí; de lo contrario
+        // cualquiera crearía una orden con tarjeta y la marcaría PAGADA gratis (y se enviaría la mercancía).
+        String ref = p.getProviderRef() != null ? p.getProviderRef() : "";
+        boolean mock = ref.startsWith("cs_mock_") || ref.startsWith("paypal_mock_") || ref.startsWith("pi_mock_");
+        if (!mock) {
+            throw new BusinessException("PAYMENT_REQUIRES_REAL_CONFIRMATION",
+                    "Este pago debe completarse en la pasarela de pago real");
+        }
+        return confirmSucceeded(p.getId(), Map.of("mock_confirm", true, "orderId", orderId.toString()));
     }
 
     /* ============================================================

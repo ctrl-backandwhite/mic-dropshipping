@@ -72,6 +72,15 @@ public class OrderUseCaseImpl implements OrderUseCase {
 
     private static final SecureRandom RNG = new SecureRandom();
 
+    /**
+     * Cota superior por línea de pedido. Blinda el cálculo del importe frente al desbordamiento de
+     * enteros (todo el pipeline de céntimos es {@code int}): sin esta cota, una cantidad enorme hacía
+     * que {@code unitCents * quantity} desbordara a un positivo pequeño y la orden se cobraba por una
+     * fracción de su valor real. Se valida a nivel de dominio (cubre checkout, admin y partner) además
+     * de en el DTO. 100.000 uds/línea es holgado para cualquier pedido legítimo.
+     */
+    private static final int MAX_LINE_QUANTITY = 100_000;
+
     private final OrderRepository orderRepository;
     // Repo JPA de la entidad (mismo nombre simple que el puerto de dominio → FQN): se usa
     // solo para la idempotencia a nivel de orden (buscar reutilizable + sellar el idem).
@@ -129,6 +138,12 @@ public class OrderUseCaseImpl implements OrderUseCase {
         int subtotal = 0;
         int totalWeightGrams = 0;
         for (var itemReq : req.items()) {
+            // Cantidad dentro de un rango sano ANTES de calcular importes. Cierra el desbordamiento de
+            // enteros del cobro (unitCents * quantity) y rechaza cantidades ≤ 0 aunque el DTO no valide.
+            if (itemReq.quantity() <= 0 || itemReq.quantity() > MAX_LINE_QUANTITY) {
+                throw new BusinessException("INVALID_QUANTITY",
+                        "La cantidad por línea debe estar entre 1 y " + MAX_LINE_QUANTITY);
+            }
             ProductEntity product = productRepository.findById(itemReq.productId())
                     .orElseThrow(() -> new NotFoundException("Product not found: " + itemReq.productId()));
             ProductVariantEntity variant = itemReq.variantId() == null
@@ -166,7 +181,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
             long costCnyCents = cnyUnit != null
                     ? cnyUnit.multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).longValueExact()
                     : 0L;
-            int lineTotal = unitCents * itemReq.quantity();
+            // multiplyExact: si el producto se saliera de rango (int), lanza en vez de envolver a un
+            // valor pequeño (que se cobraría de menos). Con MAX_LINE_QUANTITY nunca ocurre en la práctica.
+            int lineTotal = Math.multiplyExact(unitCents, itemReq.quantity());
 
             order.getItems().add(OrderItem.builder().productId(product.getId())
                     .variantId(variant != null ? variant.getId() : null).titleSnapshot(orderTitle(product, orderLang))
@@ -180,8 +197,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
                     .costCents(costCents).costCnyCents(costCnyCents).quantity(itemReq.quantity())
                     .lineTotalCents(lineTotal).build());
 
-            subtotal += lineTotal;
-            totalWeightGrams += packageWeightGrams(product, variant) * itemReq.quantity();
+            subtotal = Math.addExact(subtotal, lineTotal);
+            totalWeightGrams = Math.addExact(totalWeightGrams,
+                    Math.multiplyExact(packageWeightGrams(product, variant), itemReq.quantity()));
         }
 
         // Envío con Cainiao: tarifa por destino. Si el país no está cubierto por Cainiao, el envío
@@ -207,7 +225,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         order.setDiscountCents(discount);
         order.setShippingCents(shippingCents);
         order.setTaxCents(taxCents);
-        order.setTotalCents(discountedSubtotal + shippingCents + taxCents);
+        order.setTotalCents(Math.addExact(Math.addExact(discountedSubtotal, shippingCents), taxCents));
 
         Order saved = orderRepository.save(order);
         orderIndexer.indexOrder(saved.getId()); // auto-sync del índice al crear la orden

@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.api.dto;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -36,7 +37,8 @@ public final class PartnerDtos {
             String line2, @NotBlank String city, String state, String postalCode, @NotBlank String country) {
     }
 
-    public record OrderItemInput(@NotNull UUID productId, UUID variantId, @Positive int quantity) {
+    public record OrderItemInput(@NotNull UUID productId, UUID variantId,
+            @Positive @Max(value = 100_000, message = "Cantidad por línea demasiado alta") int quantity) {
     }
 
     public record CreateOrderRequest(String externalOrderId, @Valid @NotNull AddressInput shippingAddress,
