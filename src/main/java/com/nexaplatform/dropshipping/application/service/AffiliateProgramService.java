@@ -7,8 +7,11 @@ import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.AffiliateIndexer;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.*;
+import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.PayoutProfileUpdateRequest;
+import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.PayoutProfileView;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +44,7 @@ public class AffiliateProgramService {
     private final AffiliateProgramConfigRepository configRepo;
     private final AffiliatePayoutRepository payoutRepo;
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
     private final NotificationJpaRepositoryAdapter notificationRepo;
     private final NotificationsPublisher notificationsPublisher;
     private final WalletUseCase walletUseCase;
@@ -638,6 +642,58 @@ public class AffiliateProgramService {
     @Transactional(readOnly = true)
     public List<AffiliatePayoutEntity> pendingPayouts() {
         return payoutRepo.findByStatusOrderByCreatedAtDesc("REQUESTED");
+    }
+
+    /* ============================ Payout profile (Task 5) ============================ */
+
+    /** Returns the affiliate's payout profile with the IBAN masked (last 4 digits only). */
+    @Transactional(readOnly = true)
+    public PayoutProfileView getPayoutProfile(UUID userId) {
+        AffiliateEntity a = affiliateRepo.findByUser_Id(userId).orElseThrow(
+                () -> new NotFoundException("Affiliate not found"));
+        return new PayoutProfileView(a.getPayoutMethod(), a.getBankHolder(), maskIban(a.getBankIban()),
+                a.getBankBic(), a.getPaypalEmail(),
+                a.getBankHolder() != null && a.getBankIban() != null,
+                a.getPaypalEmail() != null && !a.getPaypalEmail().isBlank());
+    }
+
+    /** Updates the affiliate's payout profile; requires the caller's current password to confirm. */
+    @Transactional
+    public void updatePayoutProfile(UUID userId, PayoutProfileUpdateRequest req) {
+        UserEntity user = userRepository.findById(userId).orElseThrow(
+                () -> new NotFoundException("User not found"));
+        if (req.password() == null || !passwordEncoder.matches(req.password(), user.getPasswordHash())) {
+            throw new BusinessException("INVALID_PASSWORD", "Contraseña incorrecta");
+        }
+        AffiliateEntity a = affiliateRepo.findByUser_Id(userId).orElseThrow(
+                () -> new NotFoundException("Affiliate not found"));
+        String iban = req.iban() == null ? null : req.iban().replaceAll("\\s", "").toUpperCase();
+        if (iban != null && !iban.isBlank() && !IbanValidator.isValid(iban)) {
+            throw new BusinessException("INVALID_IBAN", "IBAN no válido");
+        }
+        String email = req.paypalEmail() == null ? null : req.paypalEmail().trim();
+        if (email != null && !email.isBlank() && !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+            throw new BusinessException("INVALID_EMAIL", "Email de PayPal no válido");
+        }
+        a.setBankHolder(emptyToNull(req.bankHolder()));
+        a.setBankIban(emptyToNull(iban));
+        a.setBankBic(emptyToNull(req.bic()));
+        a.setPaypalEmail(emptyToNull(email));
+        if (req.preferredMethod() != null && req.preferredMethod().matches("WALLET|BANK|PAYPAL")) {
+            a.setPayoutMethod(req.preferredMethod());
+        }
+        affiliateRepo.save(a);
+    }
+
+    private static String emptyToNull(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
+    }
+
+    private static String maskIban(String iban) {
+        if (iban == null || iban.length() < 4) {
+            return iban;
+        }
+        return "****" + iban.substring(iban.length() - 4);
     }
 
     /* ============================ Queries ============================ */
