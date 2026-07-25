@@ -46,6 +46,7 @@ public class AffiliateEntity extends BaseEntity {
     @Column(name = "accepted_terms_at")
     private Instant acceptedTermsAt;
 
+    @Builder.Default
     @Column(name = "payout_method", nullable = false, length = 20)
     private String payoutMethod = "WALLET";
     @Column(name = "bank_holder", length = 160)
