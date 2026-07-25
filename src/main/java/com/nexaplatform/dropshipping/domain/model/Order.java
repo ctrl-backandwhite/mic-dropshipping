@@ -39,6 +39,8 @@ public class Order {
     private int shippingCents;
     private int taxCents;
     private int totalCents;
+    // Descuento de referido aplicado al comprador (céntimos USD). totalCents ya lo resta.
+    private int discountCents;
     private String currency;
     private String notes;
     private Instant placedAt;

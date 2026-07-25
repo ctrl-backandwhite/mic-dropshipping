@@ -14,8 +14,12 @@ public final class AffiliateDtos {
     public record ReferralCodeView(UUID id, String code, String label, boolean active, int clicks, String url) {
     }
 
+    // approvesAt = fecha ESTIMADA en que una comisión PENDIENTE pasará a APROBADA (creación +
+    // periodo de devolución). Permite al front pintar la cuenta atrás en la wallet. Null si la
+    // comisión ya no está PENDIENTE.
     public record CommissionView(UUID id, long amountCents, String currency, BigDecimal percentage, String status,
-            Instant createdAt, Instant approvedAt, Instant paidAt, UUID orderId, long baseAmountCents) {
+            Instant createdAt, Instant approvedAt, Instant paidAt, UUID orderId, long baseAmountCents,
+            Instant approvesAt) {
     }
 
     public record AffiliateStats(int clicks, int conversions, long pendingCents, long approvedCents, long paidCents,

@@ -129,6 +129,10 @@
             <td align="left"  style="padding:5px 0;color:#5c6e7c;" th:text="${labelSubtotal}">Subtotal</td>
             <td align="right" style="padding:5px 0;color:#14212e;font-variant-numeric:tabular-nums;white-space:nowrap;" th:text="${subtotal}">$0.00</td>
           </tr>
+          <tr th:if="${hasDiscount}">
+            <td align="left"  style="padding:5px 0;color:#1e6b52;" th:text="${labelDiscount}">Descuento</td>
+            <td align="right" style="padding:5px 0;color:#1e6b52;font-variant-numeric:tabular-nums;white-space:nowrap;">−<span th:text="${discount}">$0.00</span></td>
+          </tr>
           <tr>
             <td align="left"  style="padding:5px 0;color:#5c6e7c;" th:text="${labelShipping}">Envío</td>
             <td align="right" style="padding:5px 0;color:#14212e;font-variant-numeric:tabular-nums;white-space:nowrap;" th:text="${shipping}">$0.00</td>

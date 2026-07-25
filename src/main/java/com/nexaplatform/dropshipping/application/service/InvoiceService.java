@@ -143,7 +143,10 @@ public class InvoiceService {
         }
         BigDecimal shippingDisp = conv(o.getShippingCents(), cur);
         BigDecimal taxDisp = conv(o.getTaxCents(), cur);
-        BigDecimal totalDisp = subtotalDisp.add(shippingDisp).add(taxDisp);
+        BigDecimal discountDisp = conv(o.getDiscountCents(), cur);
+        // Total = subtotal − DESCUENTO de referido + envío + IVA. total_cents del pedido ya resta el
+        // descuento, así que esto coincide con lo cobrado.
+        BigDecimal totalDisp = subtotalDisp.subtract(discountDisp).add(shippingDisp).add(taxDisp);
         // Pedido ya pagado: la factura muestra EXACTAMENTE lo cobrado (settlement), no la re-conversión a la
         // tasa actual (que deriva con el tiempo). Escalamos el desglose (conversión lineal) para que cuadre.
         BigDecimal settle = settlementTotal(o.getId(), cur);
@@ -151,12 +154,13 @@ public class InvoiceService {
             BigDecimal f = settle.divide(totalDisp, 10, RoundingMode.HALF_UP);
             subtotalDisp = subtotalDisp.multiply(f).setScale(2, RoundingMode.HALF_UP);
             shippingDisp = shippingDisp.multiply(f).setScale(2, RoundingMode.HALF_UP);
+            discountDisp = discountDisp.multiply(f).setScale(2, RoundingMode.HALF_UP);
             totalDisp = settle.setScale(2, RoundingMode.HALF_UP);
-            taxDisp = totalDisp.subtract(subtotalDisp).subtract(shippingDisp);
+            taxDisp = totalDisp.subtract(subtotalDisp).add(discountDisp).subtract(shippingDisp);
         }
-        // Base imponible = subtotal + envío (lo gravado por el IVA). Tipo efectivo derivado de los
-        // importes para mostrar "IVA (X%)" sin depender de un campo de tipo separado.
-        BigDecimal baseDisp = subtotalDisp.add(shippingDisp);
+        // Base imponible = (subtotal − descuento) + envío (lo gravado por el IVA). Tipo efectivo derivado
+        // de los importes para mostrar "IVA (X%)" sin depender de un campo de tipo separado.
+        BigDecimal baseDisp = subtotalDisp.subtract(discountDisp).add(shippingDisp);
         int vatRate = baseDisp.signum() > 0
                 ? taxDisp.multiply(BigDecimal.valueOf(100)).divide(baseDisp, 0, RoundingMode.HALF_UP).intValue()
                 : 0;
@@ -200,10 +204,14 @@ public class InvoiceService {
         m.put("items", items);
         m.put("labelSubtotal", InvoiceLabel.SUBTOTAL.of(lang));
         m.put("labelShipping", InvoiceLabel.SHIPPING.of(lang));
+        m.put("labelDiscount", InvoiceLabel.DISCOUNT.of(lang));
         m.put("labelTax", InvoiceLabel.VAT.of(lang) + " (" + vatRate + "%)");
         m.put("labelTotal", InvoiceLabel.TOTAL.of(lang));
         m.put("subtotal", fmt(subtotalDisp, cur));
         m.put("shipping", fmt(shippingDisp, cur));
+        // Descuento de referido: solo se muestra en la factura si aplica (> 0).
+        m.put("hasDiscount", discountDisp.signum() > 0);
+        m.put("discount", fmt(discountDisp, cur));
         m.put("tax", fmt(taxDisp, cur));
         m.put("total", fmt(totalDisp, cur));
 
@@ -285,21 +293,17 @@ public class InvoiceService {
         return "data:" + guessMime(bytes) + ";base64," + Base64.getEncoder().encodeToString(bytes);
     }
 
-    /** URL viva (cdn preferido) de la imagen del producto/variante comprado; cae al snapshot como último recurso. */
+    /** URL de la imagen del producto/variante comprado para la factura. La imagen de VARIANTE se resuelve
+     * en vivo (findById → columnas directas, sin colecciones perezosas). Para la imagen a nivel producto se
+     * usa el SNAPSHOT congelado en el pedido: es lo correcto en una factura (refleja lo comprado) y evita la
+     * LazyInitializationException que provocaba tocar {@code product.images} (perezosa) fuera de sesión al
+     * renderizar el PDF/email. */
     private String liveImageUrl(OrderItem it) {
         if (it.getVariantId() != null) {
             ProductVariantEntity v = variantRepository.findById(it.getVariantId()).orElse(null);
             if (v != null) {
                 if (notBlank(v.getImageCdnUrl())) return v.getImageCdnUrl();
                 if (notBlank(v.getImageSourceUrl())) return v.getImageSourceUrl();
-            }
-        }
-        if (it.getProductId() != null) {
-            ProductEntity p = productRepository.findById(it.getProductId()).orElse(null);
-            if (p != null && p.getImages() != null && !p.getImages().isEmpty()) {
-                ProductImageEntity img = p.getImages().get(0);
-                if (notBlank(img.getCdnUrl())) return img.getCdnUrl();
-                if (notBlank(img.getSourceUrl())) return img.getSourceUrl();
             }
         }
         return it.getImageUrlSnapshot();
@@ -488,7 +492,9 @@ public class InvoiceService {
     /** Convierte céntimos USD canónicos a {@code currency} (2 decimales hacia arriba). */
     private BigDecimal conv(int usdCents, String currency) {
         BigDecimal usd = BigDecimal.valueOf(usdCents).movePointLeft(2);
-        return "USD".equalsIgnoreCase(currency) ? usd.setScale(2, java.math.RoundingMode.UP)
+        // HALF_UP también en USD (antes UP): el catálogo, el carrito, el pedido y el cobro usan HALF_UP,
+        // así que la factura debe usar el MISMO redondeo o mostraría 1 céntimo de más por línea en USD.
+        return "USD".equalsIgnoreCase(currency) ? usd.setScale(2, java.math.RoundingMode.HALF_UP)
                 : currencyRateService.usdTo(usd, currency);
     }
 

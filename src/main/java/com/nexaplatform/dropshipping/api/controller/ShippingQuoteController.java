@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.controller;
 
+import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.application.service.CainiaoTaxService;
 import com.nexaplatform.dropshipping.application.service.CountryTaxService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -43,6 +45,16 @@ public class ShippingQuoteController {
     private final PricingService pricingService;
     private final CurrencyRateService currencyService;
     private final ProductRepository productRepository;
+    private final AffiliateProgramService affiliateProgramService;
+
+    /** UUID del usuario autenticado, o null si el nombre no es un UUID (p. ej. tokens de sistema). */
+    private static UUID parseUserId(String name) {
+        try {
+            return name == null ? null : UUID.fromString(name);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
 
     public record QuoteItem(UUID productId, UUID variantId, int quantity) {
     }
@@ -61,13 +73,14 @@ public class ShippingQuoteController {
      */
     public record QuoteResponse(boolean supported, String countryCode, int amountUsdCents, String carrier,
             String serviceName, int etaMinDays, int etaMaxDays, String zone, int taxRateBps,
-            String shippingFormatted, String taxFormatted, String totalFormatted) {
+            String shippingFormatted, String taxFormatted, String totalFormatted,
+            int discountCents, String discountFormatted) {
     }
 
     @Operation(summary = "Cotizar envío + IVA + total del carrito para un país")
     @PostMapping("/quote")
     @Transactional(readOnly = true)
-    public ResponseEntity<QuoteResponse> quote(@RequestBody QuoteRequest req) {
+    public ResponseEntity<QuoteResponse> quote(@RequestBody QuoteRequest req, Authentication auth) {
         List<QuoteItem> items = req.items() == null ? List.of() : req.items();
         List<ShippingQuoteService.Line> lines = items.stream()
                 .map(i -> new ShippingQuoteService.Line(i.productId(), i.variantId(), i.quantity())).toList();
@@ -75,10 +88,13 @@ public class ShippingQuoteController {
 
         String code = pricingService.displayCurrencyCode();
 
-        // Subtotal en CÉNTIMOS USD, EXACTAMENTE como el pedido (retail redondeado a 2 dec. HACIA ARRIBA
-        // × cantidad), para que el desglose del checkout CUADRE al céntimo con lo que se cobra/factura.
-        // (Antes se calculaba en EUR y el IVA podía diferir 1 cént. del pedido por redondeo de divisa.)
+        // Subtotal en CÉNTIMOS USD (canónico, para el descuento y la base del IVA), y subtotal en la
+        // MONEDA MOSTRADA calculado POR LÍNEA (unidad convertida y redondeada a 2 dec. × cantidad, sumado),
+        // EXACTAMENTE igual que el carrito (/cart-quote), el detalle del pedido, la lista y la factura. Así
+        // el desglose cuadra al céntimo en TODAS las vistas (antes el preview convertía el subtotal de una
+        // sola vez → "round(total)" ≠ "round(unidad)×qty" del resto, y salía 1 cént. de diferencia).
         int subtotalUsdCents = 0;
+        BigDecimal subDispAcc = BigDecimal.ZERO;
         for (QuoteItem it : items) {
             if (it == null || it.productId() == null) {
                 continue;
@@ -93,30 +109,49 @@ public class ShippingQuoteController {
             if (retail == null) {
                 continue;
             }
-            int unitCents = retail.setScale(2, RoundingMode.UP).movePointRight(2).intValueExact();
-            subtotalUsdCents += unitCents * Math.max(1, it.quantity());
+            // HALF_UP (céntimo más cercano) — el MISMO redondeo que el catálogo y que el pedido
+            // (OrderUseCaseImpl), para que catálogo == carrito == preview == cobro, sin descuadre de 1 cént.
+            int unitCents = retail.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
+            // Cantidad acotada al MISMO máximo que el checkout (OrderUseCaseImpl.MAX_LINE_QUANTITY = 100.000)
+            // y aritmética con desbordamiento controlado: sin esto, una cantidad enorme desbordaba el int y
+            // la base del IVA salía negativa → IVA 0 en el preview (incoherente con el cobro real).
+            int qty = Math.min(Math.max(1, it.quantity()), 100_000);
+            subtotalUsdCents = Math.addExact(subtotalUsdCents, Math.multiplyExact(unitCents, qty));
+            // Unidad en la moneda mostrada, redondeada a 2 dec., × cantidad (misma unidad que carrito/detalle).
+            subDispAcc = subDispAcc.add(currencyService.usdToDisplay(usd(unitCents)).multiply(BigDecimal.valueOf(qty)));
         }
+
+        // Descuento de referido del COMPRADOR (10% del subtotal de producto) si tiene atribución de
+        // afiliado viva y NO es su propio código. Mismo cálculo que el pedido (AffiliateProgramService),
+        // para que el total mostrado coincida al céntimo con lo que se cobra. Anónimo → sin descuento.
+        UUID userId = auth != null ? parseUserId(auth.getName()) : null;
+        int discountUsdCents = (int) affiliateProgramService.referralDiscountCents(userId, subtotalUsdCents);
+        int discountedSubtotalUsdCents = subtotalUsdCents - discountUsdCents;
 
         int shippingUsdCents = q.supported() ? q.amountUsdCents() : 0;
         // IVA resuelto por REGIÓN (estado/provincia con tasa propia → esa; si no, la nacional), sobre la
-        // base imponible en céntimos USD = subtotal + envío. Idéntico al cálculo del pedido.
+        // base imponible en céntimos USD = (subtotal − descuento) + envío. Idéntico al cálculo del pedido.
         // Fuente del impuesto conmutable por entorno (local: tabla; pre: Cainiao con fallback a tabla).
-        int taxBase = subtotalUsdCents + shippingUsdCents;
+        int taxBase = discountedSubtotalUsdCents + shippingUsdCents;
         int taxRateBps = cainiaoTaxService.rateBpsFor(req.country(), req.region(), taxBase);
         int taxUsdCents = cainiaoTaxService.taxCentsFor(req.country(), req.region(), taxBase);
         // Importes en la moneda activa: cada componente convertido y REDONDEADO a 2 decimales; el total
         // es la SUMA de esos componentes redondeados (igual que el detalle del pedido), para que el
-        // desglose cuadre exactamente en pantalla (subtotal + envío + IVA = total) y coincida con el pedido.
-        BigDecimal subDisp = currencyService.usdToDisplay(usd(subtotalUsdCents)).setScale(2, RoundingMode.HALF_UP);
+        // desglose cuadre exactamente en pantalla (subtotal − descuento + envío + IVA = total) y coincida
+        // con el pedido.
+        BigDecimal subDisp = subDispAcc.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal discDisp = currencyService.usdToDisplay(usd(discountUsdCents)).setScale(2, RoundingMode.HALF_UP);
         BigDecimal shipDisp = currencyService.usdToDisplay(usd(shippingUsdCents)).setScale(2, RoundingMode.HALF_UP);
         BigDecimal taxDisp = currencyService.usdToDisplay(usd(taxUsdCents)).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal totalDisp = subDisp.add(shipDisp).add(taxDisp);
+        BigDecimal totalDisp = subDisp.subtract(discDisp).add(shipDisp).add(taxDisp);
 
         QuoteResponse body = new QuoteResponse(q.supported(), q.countryCode(), q.amountUsdCents(), q.carrier(),
                 q.serviceName(), q.etaMinDays(), q.etaMaxDays(), q.zone(), taxRateBps,
                 currencyService.formatDisplay(shipDisp, code),
                 currencyService.formatDisplay(taxDisp, code),
-                currencyService.formatDisplay(totalDisp, code));
+                currencyService.formatDisplay(totalDisp, code),
+                discountUsdCents,
+                currencyService.formatDisplay(discDisp, code));
         return ResponseEntity.ok(body);
     }
 

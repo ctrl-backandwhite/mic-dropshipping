@@ -72,6 +72,15 @@ public class OrderUseCaseImpl implements OrderUseCase {
 
     private static final SecureRandom RNG = new SecureRandom();
 
+    /**
+     * Cota superior por línea de pedido. Blinda el cálculo del importe frente al desbordamiento de
+     * enteros (todo el pipeline de céntimos es {@code int}): sin esta cota, una cantidad enorme hacía
+     * que {@code unitCents * quantity} desbordara a un positivo pequeño y la orden se cobraba por una
+     * fracción de su valor real. Se valida a nivel de dominio (cubre checkout, admin y partner) además
+     * de en el DTO. 100.000 uds/línea es holgado para cualquier pedido legítimo.
+     */
+    private static final int MAX_LINE_QUANTITY = 100_000;
+
     private final OrderRepository orderRepository;
     // Repo JPA de la entidad (mismo nombre simple que el puerto de dominio → FQN): se usa
     // solo para la idempotencia a nivel de orden (buscar reutilizable + sellar el idem).
@@ -129,6 +138,12 @@ public class OrderUseCaseImpl implements OrderUseCase {
         int subtotal = 0;
         int totalWeightGrams = 0;
         for (var itemReq : req.items()) {
+            // Cantidad dentro de un rango sano ANTES de calcular importes. Cierra el desbordamiento de
+            // enteros del cobro (unitCents * quantity) y rechaza cantidades ≤ 0 aunque el DTO no valide.
+            if (itemReq.quantity() <= 0 || itemReq.quantity() > MAX_LINE_QUANTITY) {
+                throw new BusinessException("INVALID_QUANTITY",
+                        "La cantidad por línea debe estar entre 1 y " + MAX_LINE_QUANTITY);
+            }
             ProductEntity product = productRepository.findById(itemReq.productId())
                     .orElseThrow(() -> new NotFoundException("Product not found: " + itemReq.productId()));
             ProductVariantEntity variant = itemReq.variantId() == null
@@ -166,7 +181,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
             long costCnyCents = cnyUnit != null
                     ? cnyUnit.multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).longValueExact()
                     : 0L;
-            int lineTotal = unitCents * itemReq.quantity();
+            // multiplyExact: si el producto se saliera de rango (int), lanza en vez de envolver a un
+            // valor pequeño (que se cobraría de menos). Con MAX_LINE_QUANTITY nunca ocurre en la práctica.
+            int lineTotal = Math.multiplyExact(unitCents, itemReq.quantity());
 
             order.getItems().add(OrderItem.builder().productId(product.getId())
                     .variantId(variant != null ? variant.getId() : null).titleSnapshot(orderTitle(product, orderLang))
@@ -180,8 +197,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
                     .costCents(costCents).costCnyCents(costCnyCents).quantity(itemReq.quantity())
                     .lineTotalCents(lineTotal).build());
 
-            subtotal += lineTotal;
-            totalWeightGrams += packageWeightGrams(product, variant) * itemReq.quantity();
+            subtotal = Math.addExact(subtotal, lineTotal);
+            totalWeightGrams = Math.addExact(totalWeightGrams,
+                    Math.multiplyExact(packageWeightGrams(product, variant), itemReq.quantity()));
         }
 
         // Envío con Cainiao: tarifa por destino. Si el país no está cubierto por Cainiao, el envío
@@ -189,17 +207,25 @@ public class OrderUseCaseImpl implements OrderUseCase {
         ShippingQuote quote = fulfillment.quote(order.getShippingCountry(), Math.max(1, totalWeightGrams));
         int shippingCents = quote.supported() ? quote.amountUsdCents() : 0;
 
-        // Impuesto (IVA/sales tax) por país de envío, si está configurado. Base imponible = subtotal + envío.
-        // Se incluye en el total y, por tanto, en el cobro y la factura.
+        // Descuento de referido para el COMPRADOR: 10% del subtotal de producto si tiene una atribución
+        // de afiliado viva (y no es su propio código). Idéntico cálculo que la vista previa del checkout
+        // (ShippingQuoteController) para que lo mostrado coincida al céntimo con lo cobrado. El envío y el
+        // IVA se calculan sobre (subtotal − descuento).
+        int discount = (int) affiliateProgramService.referralDiscountCents(userId, subtotal);
+        int discountedSubtotal = subtotal - discount;
+
+        // Impuesto (IVA/sales tax) por país de envío, si está configurado. Base imponible = (subtotal −
+        // descuento) + envío. Se incluye en el total y, por tanto, en el cobro y la factura.
         // IVA por estado/provincia (US/CA/BR) si la dirección lo indica; si no, tasa nacional.
         // Fuente del impuesto conmutable por entorno (local: tabla country_tax_rate; pre: Cainiao con
         // fallback a la tabla). Mismo cálculo que la cotización del checkout.
         int taxCents = cainiaoTaxService.taxCentsFor(order.getShippingCountry(), order.getShippingState(),
-                subtotal + shippingCents);
+                discountedSubtotal + shippingCents);
         order.setSubtotalCents(subtotal);
+        order.setDiscountCents(discount);
         order.setShippingCents(shippingCents);
         order.setTaxCents(taxCents);
-        order.setTotalCents(subtotal + shippingCents + taxCents);
+        order.setTotalCents(Math.addExact(Math.addExact(discountedSubtotal, shippingCents), taxCents));
 
         Order saved = orderRepository.save(order);
         orderIndexer.indexOrder(saved.getId()); // auto-sync del índice al crear la orden
@@ -591,8 +617,11 @@ public class OrderUseCaseImpl implements OrderUseCase {
 
         // DROP-645/646: capture an affiliate conversion + commission for this confirmed order
         // (no-op if the customer has no live referral attribution). Solo la 1ª vez (no en reuso).
+        // La comisión del afiliado se calcula sobre el importe de PRODUCTO que paga el cliente = subtotal
+        // − descuento de referido (lo realmente cobrado por el producto, sin envío ni IVA).
         if (!reused) {
-            affiliateProgramService.onOrderPlaced(o.getId(), userId, o.getSubtotalCents(), o.getCurrency());
+            long commissionBase = o.getSubtotalCents() - o.getDiscountCents();
+            affiliateProgramService.onOrderPlaced(o.getId(), userId, commissionBase, o.getCurrency());
         }
 
         // Plan 300k: publish to the notifications outbox in the same tx as the order

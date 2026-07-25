@@ -28,12 +28,15 @@ public class MeOrderDetailDtoOut {
     BigDecimal shipping;
     BigDecimal tax;
     BigDecimal total;
+    // Descuento de referido del comprador (0 si no aplica). total ya lo resta.
+    BigDecimal discount;
     String currency;
     // DROP-637: importes ya FORMATEADOS por el backend en la moneda mostrada (el front solo pinta).
     String subtotalFormatted;
     String shippingFormatted;
     String taxFormatted;
     String totalFormatted;
+    String discountFormatted;
     MeOrderAddressDtoOut shippingAddress;
     MeOrderAddressDtoOut billingAddress;
     String notes;
@@ -53,7 +56,7 @@ public class MeOrderDetailDtoOut {
         return MeOrderDetailDtoOut.builder().id(o.getId()).orderNumber(o.getOrderNumber())
                 .externalOrderId(o.getExternalOrderId()).status(o.getStatus().name())
                 .subtotal(cents(o.getSubtotalCents())).shipping(cents(o.getShippingCents())).tax(cents(o.getTaxCents()))
-                .total(cents(o.getTotalCents())).currency(o.getCurrency())
+                .total(cents(o.getTotalCents())).discount(cents(o.getDiscountCents())).currency(o.getCurrency())
                 .shippingAddress(MeOrderAddressDtoOut.from(o.getShippingAddress()))
                 .billingAddress(MeOrderAddressDtoOut.from(o.getBillingAddress())).notes(o.getNotes())
                 .trackingCarrier(null).trackingNumber(null).placedAt(o.getPlacedAt()).shippedAt(o.getShippedAt())

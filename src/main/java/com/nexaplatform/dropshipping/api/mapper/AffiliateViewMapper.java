@@ -18,11 +18,16 @@ public class AffiliateViewMapper {
                 "/?ref=" + c.getCode());
     }
 
-    public CommissionView toCommissionView(AffiliateCommissionEntity comm, Map<UUID, AffiliateConversionEntity> convById) {
+    public CommissionView toCommissionView(AffiliateCommissionEntity comm, Map<UUID, AffiliateConversionEntity> convById,
+            int returnPeriodDays) {
         AffiliateConversionEntity conv = convById.get(comm.getConversionId());
+        // Solo las PENDIENTES tienen fecha de aprobación futura: creación + periodo de devolución.
+        java.time.Instant approvesAt = "PENDING".equals(comm.getStatus()) && comm.getCreatedAt() != null
+                ? comm.getCreatedAt().plus(java.time.Duration.ofDays(Math.max(0, returnPeriodDays)))
+                : null;
         return new CommissionView(comm.getId(), comm.getAmountCents(), comm.getCurrency(), comm.getPercentage(),
                 comm.getStatus(), comm.getCreatedAt(), comm.getApprovedAt(), comm.getPaidAt(),
-                conv != null ? conv.getOrderId() : null, conv != null ? conv.getBaseAmountCents() : 0L);
+                conv != null ? conv.getOrderId() : null, conv != null ? conv.getBaseAmountCents() : 0L, approvesAt);
     }
 
     public AffiliateStats stats(List<AffiliateReferralCodeEntity> codes, List<AffiliateConversionEntity> conversions,

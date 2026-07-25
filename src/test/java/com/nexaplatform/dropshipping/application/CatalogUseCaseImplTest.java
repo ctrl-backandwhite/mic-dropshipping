@@ -136,6 +136,37 @@ class CatalogUseCaseImplTest {
     }
 
     @Test
+    void upsertProduct_cjkTitle_doesNotProduceSlugStartingWithDash() {
+        // Slugify descarta lo que no sea ASCII: con un título íntegramente en chino devolvía "" y el slug
+        // quedaba en "-<externalId>", una URL sin ninguna palabra. Debe caer en el prefijo neutro.
+        when(productJpaRepository.findBySourceAndExternalId("1688", "OFFER-CJK")).thenReturn(Optional.empty());
+        when(productJpaRepository.save(any(ProductEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        IngestProductRequest req = new IngestProductRequest("1688", "OFFER-CJK", "真皮复古经典德训鞋女款", null, null,
+                null, 1, new BigDecimal("42.90"), "CNY", 500, 100, null, new BigDecimal("4.8"), 30,
+                "https://detail.1688.com/offer/OFFER-CJK.html", null, null, List.of(), null, null, null);
+
+        ProductEntity saved = useCase.upsertProduct(req);
+
+        assertThat(saved.getSlug()).doesNotStartWith("-");
+        assertThat(saved.getSlug()).isEqualTo("product-offer-cjk");
+    }
+
+    @Test
+    void upsertProduct_latinTitle_keepsReadableSlug() {
+        when(productJpaRepository.findBySourceAndExternalId("1688", "OFFER-ES")).thenReturn(Optional.empty());
+        when(productJpaRepository.save(any(ProductEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        IngestProductRequest req = new IngestProductRequest("1688", "OFFER-ES", "Bailarinas planas de mujer", null,
+                null, null, 1, new BigDecimal("19.90"), "CNY", 500, 100, null, new BigDecimal("4.8"), 30,
+                "https://detail.1688.com/offer/OFFER-ES.html", null, null, List.of(), null, null, null);
+
+        ProductEntity saved = useCase.upsertProduct(req);
+
+        assertThat(saved.getSlug()).isEqualTo("bailarinas-planas-de-mujer-offer-es");
+    }
+
+    @Test
     void listProductImages_delegatesToRepositoryAndMapper() {
         UUID id = UUID.randomUUID();
         when(imageRepository.findByProductIdOrderByPositionAsc(id)).thenReturn(List.of());

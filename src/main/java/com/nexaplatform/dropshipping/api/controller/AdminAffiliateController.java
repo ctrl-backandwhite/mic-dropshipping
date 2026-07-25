@@ -71,7 +71,8 @@ public class AdminAffiliateController {
 
     @GetMapping("/{id}")
     public ResponseEntity<AdminAffiliateDetail> detail(@PathVariable UUID id) {
-        String currency = service.config().getCurrency();
+        var cfg = service.config();
+        String currency = cfg.getCurrency();
         AffiliateEntity a = service.allAffiliates().stream().filter(x -> x.getId().equals(id)).findFirst()
                 .orElseThrow(() -> new NotFoundException("Affiliate not found"));
         List<AffiliateReferralCodeEntity> codes = service.listCodes(id);
@@ -80,7 +81,7 @@ public class AdminAffiliateController {
         Map<UUID, AffiliateConversionEntity> convById = mapper.indexByConversionId(convs);
         var row = mapper.toAdminRow(a, codes, comms, currency);
         return ResponseEntity.ok(new AdminAffiliateDetail(row, codes.stream().map(mapper::toCodeView).toList(),
-                comms.stream().map(c -> mapper.toCommissionView(c, convById)).toList()));
+                comms.stream().map(c -> mapper.toCommissionView(c, convById, cfg.getReturnPeriodDays())).toList()));
     }
 
     @PostMapping("/{id}/status")

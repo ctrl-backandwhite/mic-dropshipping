@@ -698,6 +698,12 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private String buildSlug(String title, String externalId) {
         String base = title == null ? "product" : title;
         String slug = SLUG.slugify(base);
+        // Slugify descarta lo que no sea ASCII: con un título íntegramente en chino (o en cualquier otra
+        // escritura no latina) devuelve "" y el slug quedaba en "-<externalId>". Se usa un prefijo neutro
+        // para que nunca empiece por guion; quien tenga el título en escritura latina (el importador
+        // masivo, ver CatalogFillWriter) lo reescribe después con algo legible.
+        if (slug.isBlank())
+            slug = "product";
         if (slug.length() > 100)
             slug = slug.substring(0, 100);
         String full = slug + "-" + externalId.toLowerCase();
