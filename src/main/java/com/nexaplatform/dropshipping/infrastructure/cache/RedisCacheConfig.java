@@ -57,7 +57,8 @@ public class RedisCacheConfig {
                 Map.entry(CACHE_PRICING_AMOUNT, baseConfig(Duration.ofMinutes(5))),
                 Map.entry(CACHE_CURRENCY_RATES, baseConfig(Duration.ofMinutes(10))),
                 Map.entry(CACHE_PRODUCT_SPECS, baseConfig(Duration.ofMinutes(15))),
-                Map.entry(CACHE_PRODUCT_ATTRS, baseConfig(Duration.ofMinutes(15))));
+                Map.entry(CACHE_PRODUCT_ATTRS, baseConfig(Duration.ofMinutes(15))),
+                Map.entry(CACHE_SEARCH, baseConfig(Duration.ofSeconds(60))));
 
         return RedisCacheManager.builder(cf).cacheDefaults(defaults).withInitialCacheConfigurations(perCache)
                 .transactionAware().build();
@@ -65,7 +66,6 @@ public class RedisCacheConfig {
 
     private RedisCacheConfiguration baseConfig(Duration ttl) {
         ObjectMapper mapper = redisObjectMapper();
-        // Jackson2JsonRedisSerializer<Object> en su forma no-deprecada (con type-info en el mapper).
         Jackson2JsonRedisSerializer<Object> valueSerializer = new Jackson2JsonRedisSerializer<>(mapper, Object.class);
         return RedisCacheConfiguration.defaultCacheConfig().entryTtl(ttl).disableCachingNullValues()
                 .computePrefixWith(name -> "nx036:cache:" + name + ":")
@@ -82,6 +82,12 @@ public class RedisCacheConfig {
         mapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
         // Default-typing controlado: imprescindible para deserializar polimórficos
         // sin abrir el vector de gadget chains.
+        // ⚠️ BUG CONOCIDO (caché distribuida Redis DESACTIVADA por defecto): este typing no round-trip-ea
+        // valores Object/Map<String,Object> (los hits de /api/search) — al leer, los escalares del Map no
+        // llevan @class → InvalidTypeIdException/500. Verificado bajo carga (2026-07-26). NO activar
+        // nexadrop.cache.distributed=true hasta arreglar el serializador (p.ej. serializador por-tipo por
+        // caché, o excluir del typing el campo source del hit). El Caffeine L1 (default) NO tiene este
+        // problema porque guarda el objeto en memoria sin serializar a JSON.
         mapper.activateDefaultTyping(BasicPolymorphicTypeValidator.builder().allowIfBaseType(Object.class).build(),
                 ObjectMapper.DefaultTyping.NON_FINAL);
         return mapper;

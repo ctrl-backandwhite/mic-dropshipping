@@ -11,7 +11,10 @@ import org.opensearch.client.opensearch._types.SortOrder;
 import org.opensearch.client.opensearch.core.SearchRequest;
 import org.opensearch.client.opensearch.core.SearchResponse;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_SEARCH;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -61,6 +64,11 @@ public class ProductSearchService {
      * Preserves the identical JSON contract ({@code items, total, page, size};
      * each hit flattens its source document plus {@code _id}/{@code _score}).
      */
+    // Caché de resultados de búsqueda (TTL 60s): la búsqueda es el punto caliente de OpenSearch bajo carga
+    // y las consultas populares se repiten. Clave = keyword+idioma+page+size. NO depende de la moneda (los
+    // hits devuelven el documento indexado, sin precio convertido). Solo se cachean keywords no vacías.
+    @Cacheable(value = CACHE_SEARCH, key = "#keyword + ':' + #language + ':' + #page + ':' + #size",
+            condition = "#keyword != null && !#keyword.isBlank()")
     public SearchResultDtoOut searchTyped(String keyword, String language, int page, int size) {
         // Cap the page size to protect the search backend (was enforced in the controller).
         size = Math.min(size, 100);
