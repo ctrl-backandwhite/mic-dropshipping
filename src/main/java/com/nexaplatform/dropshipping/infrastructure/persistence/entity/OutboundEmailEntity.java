@@ -47,6 +47,14 @@ public class OutboundEmailEntity {
     @Column(length = 80)
     private String template;
 
+    /**
+     * Imágenes a adjuntar como inline (Content-ID), serializadas como JSON {@code {cid: urlPublica}}.
+     * El HTML las referencia con {@code src="cid:<clave>"} y el dispatcher las descarga del storage al
+     * enviar. Null o vacío = el correo no lleva imágenes propias (solo, si acaso, iconos del classpath).
+     */
+    @Column(name = "inline_images", columnDefinition = "TEXT")
+    private String inlineImages;
+
     @Column(nullable = false, length = 20)
     private String status;
 

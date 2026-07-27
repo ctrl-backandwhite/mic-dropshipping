@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -54,7 +55,8 @@ class OrderEmailServiceTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> varsCap = ArgumentCaptor.forClass(Map.class);
-        verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Invoice NX-100"), eq("emails/invoice"), varsCap.capture());
+        verify(emailQueue).enqueue(eq("buyer@x.com"), isNull(), eq("Invoice NX-100"), eq("emails/invoice"),
+                varsCap.capture(), anyMap());
         Map<String, Object> vars = varsCap.getValue();
         assertThat(vars).containsEntry("paymentMethod", "PayPal");
         assertThat(vars).containsEntry("ctaLabel", "Ver pedido y factura");
@@ -69,7 +71,7 @@ class OrderEmailServiceTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> varsCap = ArgumentCaptor.forClass(Map.class);
-        verify(emailQueue).enqueue(any(), any(), eq("emails/invoice"), varsCap.capture());
+        verify(emailQueue).enqueue(any(), any(), any(), eq("emails/invoice"), varsCap.capture(), anyMap());
         assertThat(varsCap.getValue()).containsEntry("ctaLabel", "View order & invoice");
     }
 
@@ -81,7 +83,7 @@ class OrderEmailServiceTest {
         service.paymentConfirmed(o, "buyer@x.com", "es", "Stripe");
 
         verify(invoiceService).model(eq(o), eq("es"), any(), eq("USD"));
-        verify(emailQueue).enqueue(any(), any(), eq("emails/invoice"), anyMap());
+        verify(emailQueue).enqueue(any(), any(), any(), eq("emails/invoice"), anyMap(), anyMap());
     }
 
     @Test

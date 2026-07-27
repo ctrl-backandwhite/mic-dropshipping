@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.fulfillment;
 
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
+import com.nexaplatform.dropshipping.domain.enums.TaxMode;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 
@@ -47,4 +48,11 @@ public interface FulfillmentProvider {
 
     /** Consulta el tracking del envío (estado actual + pasos). */
     TrackingSnapshot track(String trackingNumber, Instant forwardedAt, String countryCode);
+
+    /**
+     * Modo de despacho fiscal del destino: {@link TaxMode#DDP} (el impuesto se cobra en el checkout y lo
+     * liquida el transportista, sin cargo sorpresa para el comprador) o {@link TaxMode#DDU} (lo paga el
+     * destinatario en destino).
+     */
+    TaxMode taxModeFor(String countryCode);
 }
