@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -97,6 +98,16 @@ public class InvoiceService {
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
+    /**
+     * Clave del modelo con el mapa {@code cid → urlPublica} de las fotos de producto. No la usa la
+     * plantilla: la lee quien encola el correo para pasarla a
+     * {@code EmailQueueService.enqueue(..., inlineImages)}, que las adjunta dentro del mensaje.
+     */
+    public static final String INLINE_IMAGES_KEY = "inlineImages";
+
+    /** Prefijo del Content-ID de cada foto de línea; el sufijo es el índice de la línea. */
+    private static final String INLINE_IMAGE_CID_PREFIX = "invitem-";
+
     /** Fecha formateada con el mismo patrón que la factura (para reutilizar en emails). */
     public String formatDate(Instant when) {
         return when != null ? DATE.format(when.atZone(ZoneId.systemDefault())) : "";
@@ -113,14 +124,17 @@ public class InvoiceService {
      * factura con la tasa del día (2 decimales, redondeo arriba).
      */
     public Map<String, Object> model(Order o, String locale, String downloadUrl, String invoiceCurrency) {
-        // Email: imagen por URL pública (funciona en prod/Railway; el cliente de correo la descarga).
+        // Email: referencias cid: + el mapa de URLs en INLINE_IMAGES_KEY, para adjuntarlas al mensaje.
         return model(o, locale, downloadUrl, invoiceCurrency, false);
     }
 
     /**
      * @param embedImages si {@code true} (PDF), incrusta la imagen de cada línea como data-URI base64 —
      *        openhtmltopdf corre en el servidor y NO puede descargar la URL pública del storage
-     *        ({@code localhost}/host externo). Si {@code false} (email), usa la URL pública.
+     *        ({@code localhost}/host externo). Si {@code false} (email), emite referencias {@code cid:} y
+     *        deja las URLs en {@link #INLINE_IMAGES_KEY} para que el correo las lleve adjuntas: por URL
+     *        remota no se ven (localhost es inalcanzable para el proxy de Gmail, y Outlook/Apple Mail
+     *        bloquean las imágenes externas por defecto).
      */
     public Map<String, Object> model(Order o, String locale, String downloadUrl, String invoiceCurrency,
             boolean embedImages) {
@@ -131,8 +145,11 @@ public class InvoiceService {
         // El subtotal/total se SUMAN de las líneas para que la factura sea internamente coherente y coincida
         // con lo cobrado (no se convierte el total una sola vez).
         List<Map<String, Object>> items = new ArrayList<>();
+        // Imágenes que el EMAIL adjunta como inline (cid → url del storage). Ver INLINE_IMAGES_KEY.
+        Map<String, String> inlineImages = new LinkedHashMap<>();
         BigDecimal subtotalDisp = BigDecimal.ZERO;
         if (o.getItems() != null) {
+            int idx = 0;
             for (OrderItem it : o.getItems()) {
                 BigDecimal unit = conv(it.getUnitPriceCents(), cur);
                 BigDecimal lineDisp = unit.multiply(BigDecimal.valueOf(it.getQuantity()));
@@ -140,7 +157,9 @@ public class InvoiceService {
                 items.add(Map.of("title", it.getTitleSnapshot() != null ? it.getTitleSnapshot() : "—", "sku",
                         it.getSkuSnapshot() != null ? it.getSkuSnapshot() : "", "variant",
                         it.getVariantName() != null ? it.getVariantName() : "", "qty", it.getQuantity(), "unit",
-                        fmt(unit, cur), "lineTotal", fmt(lineDisp, cur), "image", lineImage(it, embedImages)));
+                        fmt(unit, cur), "lineTotal", fmt(lineDisp, cur), "image",
+                        lineImage(it, embedImages, idx, inlineImages)));
+                idx++;
             }
         }
         BigDecimal shippingDisp = conv(o.getShippingCents(), cur);
@@ -204,6 +223,7 @@ public class InvoiceService {
         m.put("colPrice", InvoiceLabel.PRICE.of(lang));
         m.put("colTotal", InvoiceLabel.TOTAL.of(lang));
         m.put("items", items);
+        m.put(INLINE_IMAGES_KEY, inlineImages);
         m.put("labelSubtotal", InvoiceLabel.SUBTOTAL.of(lang));
         m.put("labelShipping", InvoiceLabel.SHIPPING.of(lang));
         m.put("labelDiscount", InvoiceLabel.DISCOUNT.of(lang));
@@ -273,20 +293,32 @@ public class InvoiceService {
         return templateEngine.process("emails/invoice", ctx);
     }
 
-    /** Renderiza la factura PDF en la moneda del pedido. */
     /**
      * Imagen de una línea de la factura. Usa SIEMPRE la imagen VIVA del producto/variante: el
      * {@code imageUrlSnapshot} congelado en la orden puede apuntar a una clave de storage ya eliminada
-     * (al re-mirrorar el catálogo la imagen se vuelve a subir con otra clave). Para el PDF ({@code embed})
-     * la incrusta en base64; para el email devuelve la URL pública (válida en prod/Railway).
+     * (al re-mirrorar el catálogo la imagen se vuelve a subir con otra clave).
+     *
+     * <p>Según el destino:
+     * <ul>
+     *   <li><b>PDF</b> ({@code embed=true}): data-URI base64 — openhtmltopdf corre en el servidor y no
+     *       puede descargar la URL del storage.</li>
+     *   <li><b>Email</b> ({@code embed=false}): referencia {@code cid:} y la URL se anota en
+     *       {@code inlineImages} para que el dispatcher la adjunte dentro del mensaje. Con la URL pública
+     *       las fotos NO se veían: en local apunta a {@code localhost} (inalcanzable para los servidores
+     *       de Gmail, que descargan por proxy) y en cualquier entorno Outlook/Apple Mail bloquean las
+     *       imágenes remotas por defecto.</li>
+     * </ul>
      */
-    private String lineImage(OrderItem it, boolean embed) {
+    private String lineImage(OrderItem it, boolean embed, int index, Map<String, String> inlineImages) {
         String url = liveImageUrl(it);
         if (url == null || url.isBlank()) {
             return "";
         }
         if (!embed) {
-            return url;
+            // El CID debe casar con el patrón [A-Za-z0-9_-]+ que reconoce el dispatcher del email.
+            String cid = INLINE_IMAGE_CID_PREFIX + index;
+            inlineImages.put(cid, url);
+            return "cid:" + cid;
         }
         byte[] bytes = storage.bytesFromPublicUrl(url);
         if (bytes == null || bytes.length == 0) {

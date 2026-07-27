@@ -1,6 +1,9 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.fulfillment;
 
+import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
+import com.nexaplatform.dropshipping.application.service.CustomsValuationService.CustomsValuation;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
+import com.nexaplatform.dropshipping.domain.enums.TaxMode;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CainiaoZoneEntity;
@@ -43,6 +46,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
 
     private final CainiaoZoneRepository zoneRepository;
     private final YunExpressClient client;
+    private final CustomsValuationService customsValuation;
 
     @Value("${nexadrop.yunexpress.enabled:false}")
     private boolean enabled;
@@ -55,9 +59,6 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     /** Minutos por etapa del tracking simulado (mock) — pon un valor pequeño para ver el avance en demo. */
     @Value("${nexadrop.yunexpress.mock-stage-minutes:2}")
     private long mockStageMinutes;
-
-    /** Modo de despacho fiscal del canal. */
-    public enum TaxMode { DDP, DDU }
 
     private boolean isActive() {
         return enabled && client.hasCredentials();
@@ -120,22 +121,37 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     @Override
     public FulfillmentResult createShipment(Order order) {
         int etaMax = zone(order.getShippingCountry()).map(CainiaoZoneEntity::getEtaMaxDays).orElse(20);
+        CustomsValuation valuation = declarationFor(order);
         if (!isActive()) {
             String hex = order.getId().toString().replace("-", "").substring(0, 12).toUpperCase();
-            log.info("YunExpress mock-mode: envío simulado para pedido {}", order.getOrderNumber());
+            log.info("YunExpress mock-mode: envío simulado para pedido {} (declarado {} céntimos USD, {})",
+                    order.getOrderNumber(), valuation.declaredValueCents(), valuation.taxMode());
             return new FulfillmentResult(CARRIER_NAME, "YT" + hex + "YE", "YE" + hex, etaMax);
         }
-        return realCreateShipment(order, etaMax);
+        return realCreateShipment(order, etaMax, valuation);
+    }
+
+    /**
+     * Valoración aduanera del pedido: el importe que se declara es el valor INTRÍNSECO de los bienes —
+     * lo que el cliente pagó por el producto (subtotal − descuento) — nunca el coste de compra al
+     * proveedor. Declarar el coste haría que el transportista liquidase menos impuesto del cobrado al
+     * cliente (diferencia retenida que no corresponde) y constituiría infradeclaración en aduana.
+     */
+    public CustomsValuation declarationFor(Order order) {
+        int intrinsic = Math.max(0, order.getSubtotalCents() - order.getDiscountCents());
+        return customsValuation.valuate(order.getShippingCountry(), intrinsic, order.getTaxCents());
     }
 
     /**
      * Creación REAL del envío en YunExpress.
-     * <p><b>TODO(real):</b> construir el payload (remitente, destinatario, ítems, peso/dims, canal,
-     * {@link #resolveTaxMode}, IOSS via {@link #iossNumberOrNull}) y llamar a
-     * {@code client.invoke("/api/WayBill/CreateOrder", json)}; parsear tracking + label. Ver
-     * open.yunexpress.cn/openApi/doc.
+     * <p><b>TODO(real):</b> construir el payload (remitente, destinatario, ítems, peso/dims, canal) y
+     * llamar a {@code client.invoke("/api/WayBill/CreateOrder", json)}; parsear tracking + label. Ver
+     * open.yunexpress.cn/openApi/doc. El bloque aduanero del payload ya está resuelto en
+     * {@code valuation}: importe a declarar {@link CustomsValuation#declaredValueCents()}, modo
+     * {@link CustomsValuation#taxMode()} e IOSS vía {@link #iossNumberOrNull()} (solo aplicable cuando el
+     * pedido NO supera el umbral, ver {@link CustomsValuation#deMinimisExceeded()}).
      */
-    private FulfillmentResult realCreateShipment(Order order, int etaMax) {
+    private FulfillmentResult realCreateShipment(Order order, int etaMax, CustomsValuation valuation) {
         throw new UnsupportedOperationException(
                 "YunExpress createShipment real pendiente: implementar payload/endpoint y firma. "
                         + "Mientras, mantener enabled=false para usar el modo mock.");
@@ -184,15 +200,14 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     // ── Impuestos (DDP/DDU + IOSS) ───────────────────────────────────────────────────────────────
 
     /**
-     * Modo de despacho fiscal (DDP/DDU) para un país destino. Hoy devuelve el modo por defecto configurado;
-     * en el futuro se podrá sobreescribir por país según el canal disponible.
+     * Modo de despacho fiscal (DDP/DDU) del país destino. Se resuelve por país en
+     * {@code country_customs_rule}; el valor de {@code nexadrop.yunexpress.default-tax-mode} solo se usa
+     * como red de seguridad para destinos sin regla configurada.
      */
-    public TaxMode resolveTaxMode(String countryCode) {
-        try {
-            return TaxMode.valueOf(defaultTaxMode.trim().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            return TaxMode.DDP;
-        }
+    @Override
+    public TaxMode taxModeFor(String countryCode) {
+        TaxMode configured = customsValuation.taxModeFor(countryCode);
+        return configured != null ? configured : TaxMode.from(defaultTaxMode);
     }
 
     /** Número IOSS configurado del comercio (o null), para despacho de IVA en la UE. */

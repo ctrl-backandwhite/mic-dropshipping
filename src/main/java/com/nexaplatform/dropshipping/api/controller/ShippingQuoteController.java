@@ -1,7 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
-import com.nexaplatform.dropshipping.application.service.CainiaoTaxService;
+import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
 import com.nexaplatform.dropshipping.application.service.CountryTaxService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.ShippingQuoteService;
@@ -42,7 +42,7 @@ public class ShippingQuoteController {
 
     private final ShippingQuoteService shippingQuoteService;
     private final CountryTaxService countryTaxService;
-    private final CainiaoTaxService cainiaoTaxService;
+    private final CheckoutTotalsService checkoutTotalsService;
     private final PricingService pricingService;
     private final CurrencyRateService currencyService;
     private final ProductRepository productRepository;
@@ -71,11 +71,17 @@ public class ShippingQuoteController {
     /**
      * Respuesta del checkout: datos de envío + tasa de IVA (bps, solo para la etiqueta "X%") + los importes
      * de envío, IVA y total YA formateados en la moneda activa. El front no calcula nada.
+     *
+     * <p>{@code customsThresholdExceeded} avisa de que el valor de los bienes supera el umbral de
+     * importación del país (150 EUR en la UE, 135 GBP en UK...): el envío deja de acogerse al régimen
+     * simplificado y lleva despacho formal. {@code customsBlocked} indica que ese destino no admite el
+     * pedido por encima del umbral, para que el checkout lo impida antes de intentar cobrar.
      */
     public record QuoteResponse(boolean supported, String countryCode, int amountUsdCents, String carrier,
             String serviceName, int etaMinDays, int etaMaxDays, String zone, int taxRateBps,
             String shippingFormatted, String taxFormatted, String totalFormatted,
-            int discountCents, String discountFormatted) {
+            int discountCents, String discountFormatted,
+            boolean customsThresholdExceeded, boolean customsBlocked, String taxMode) {
     }
 
     @Operation(summary = "Cotizar envío + IVA + total del carrito para un país")
@@ -129,13 +135,16 @@ public class ShippingQuoteController {
         int discountUsdCents = (int) affiliateProgramService.referralDiscountCents(userId, subtotalUsdCents);
         int discountedSubtotalUsdCents = subtotalUsdCents - discountUsdCents;
 
-        int shippingUsdCents = q.supported() ? q.amountUsdCents() : 0;
-        // IVA resuelto por REGIÓN (estado/provincia con tasa propia → esa; si no, la nacional), sobre la
-        // base imponible en céntimos USD = (subtotal − descuento) + envío. Idéntico al cálculo del pedido.
-        // Fuente del impuesto conmutable por entorno (local: tabla; pre: Cainiao con fallback a tabla).
-        int taxBase = discountedSubtotalUsdCents + shippingUsdCents;
-        int taxRateBps = cainiaoTaxService.rateBpsFor(req.country(), req.region(), taxBase);
-        int taxUsdCents = cainiaoTaxService.taxCentsFor(req.country(), req.region(), taxBase);
+        int shippingBaseUsdCents = q.supported() ? q.amountUsdCents() : 0;
+        // Impuesto + despacho aduanero por el MISMO servicio que usa el cobro (CheckoutTotalsService), para
+        // que el desglose mostrado coincida al céntimo con el pedido: IVA por región/país sobre
+        // (subtotal − descuento) + envío, más el recargo del despacho DDP del destino y, si el valor de los
+        // bienes supera el umbral de minimis del país, el recargo por despacho formal.
+        CheckoutTotalsService.CheckoutTotals totals = checkoutTotalsService.compute(req.country(), req.region(),
+                discountedSubtotalUsdCents, shippingBaseUsdCents);
+        int shippingUsdCents = totals.shippingCents();
+        int taxRateBps = totals.taxRateBps();
+        int taxUsdCents = totals.taxCents();
         // Importes en la moneda activa: cada componente convertido y REDONDEADO a 2 decimales; el total
         // es la SUMA de esos componentes redondeados (igual que el detalle del pedido), para que el
         // desglose cuadre exactamente en pantalla (subtotal − descuento + envío + IVA = total) y coincida
@@ -146,13 +155,16 @@ public class ShippingQuoteController {
         BigDecimal taxDisp = currencyService.usdToDisplay(usd(taxUsdCents)).setScale(2, RoundingMode.HALF_UP);
         BigDecimal totalDisp = subDisp.subtract(discDisp).add(shipDisp).add(taxDisp);
 
-        QuoteResponse body = new QuoteResponse(q.supported(), q.countryCode(), q.amountUsdCents(), q.carrier(),
+        // amountUsdCents = envío TOTAL (tarifa + recargo de despacho), que es lo que se cobrará. Si se
+        // devolviera la tarifa sin recargo, el front pintaría un envío distinto del facturado.
+        QuoteResponse body = new QuoteResponse(q.supported(), q.countryCode(), shippingUsdCents, q.carrier(),
                 q.serviceName(), q.etaMinDays(), q.etaMaxDays(), q.zone(), taxRateBps,
                 currencyService.formatDisplay(shipDisp, code),
                 currencyService.formatDisplay(taxDisp, code),
                 currencyService.formatDisplay(totalDisp, code),
                 discountUsdCents,
-                currencyService.formatDisplay(discDisp, code));
+                currencyService.formatDisplay(discDisp, code),
+                totals.customs().deMinimisExceeded(), totals.blocked(), totals.customs().taxMode().name());
         return ResponseEntity.ok(body);
     }
 

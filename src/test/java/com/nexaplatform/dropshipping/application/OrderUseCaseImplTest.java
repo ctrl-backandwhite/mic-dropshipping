@@ -7,7 +7,8 @@ import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
-import com.nexaplatform.dropshipping.application.service.CainiaoTaxService;
+import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
+import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
@@ -15,6 +16,8 @@ import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.application.usecase.impl.OrderUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
+import com.nexaplatform.dropshipping.domain.enums.OverThresholdPolicy;
+import com.nexaplatform.dropshipping.domain.enums.TaxMode;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
@@ -42,6 +45,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -80,7 +85,7 @@ class OrderUseCaseImplTest {
     @Mock
     FulfillmentProvider cainiao;
     @Mock
-    CainiaoTaxService cainiaoTaxService;
+    CheckoutTotalsService checkoutTotalsService;
 
     @Mock
     com.nexaplatform.dropshipping.application.service.OperatorCommissionService operatorCommissionService;
@@ -95,12 +100,24 @@ class OrderUseCaseImplTest {
     void setup() {
         orderUseCase = new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository, userRepository,
                 shopConnectionRepository, userAddressRepository, webhooks, walletUseCase, notificationsPublisher,
-                pricingService, affiliateProgramService, stockService, paymentUseCase, orderEmailService, cainiao, cainiaoTaxService,
+                pricingService, affiliateProgramService, stockService, paymentUseCase, orderEmailService, cainiao, checkoutTotalsService,
                 operatorCommissionService, orderIndexer, orderSearchService);
         // Por defecto, sin envío en los tests de billing (no altera el total = subtotal).
         lenient().when(cainiao.quote(any(), anyInt())).thenReturn(ShippingQuote.unsupported("XX"));
-        // Por defecto, sin impuesto (mantiene total = subtotal + envío en los tests existentes).
-        lenient().when(cainiaoTaxService.taxCentsFor(any(), any(), anyInt())).thenReturn(0);
+        // Por defecto, sin impuesto ni recargo de despacho: total = subtotal + envío, como en los
+        // tests de billing existentes. El envío devuelto es el mismo que entra (sin handling fee).
+        lenient().when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt()))
+                .thenAnswer(inv -> noCustomsTotals(inv.getArgument(3)));
+    }
+
+    /**
+     * Desglose neutro para los tests de billing: sin impuesto, sin recargo de despacho y sin umbral
+     * superado, de modo que el envío cobrado es exactamente la tarifa cotizada.
+     */
+    private static CheckoutTotalsService.CheckoutTotals noCustomsTotals(int shippingBaseCents) {
+        CustomsValuationService.CustomsValuation customs = new CustomsValuationService.CustomsValuation("XX",
+                TaxMode.DDP, 0, false, OverThresholdPolicy.SURCHARGE, 0, false);
+        return new CheckoutTotalsService.CheckoutTotals(shippingBaseCents, 0, shippingBaseCents, 0, 0, customs);
     }
 
     /** DROP-637: the checkout now bills the priced amount (retailUsd) from PricingService. */
@@ -131,6 +148,35 @@ class OrderUseCaseImplTest {
         assertThat(order.getTotalCents()).isEqualTo(3750);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
         assertThat(order.getOrderNumber()).startsWith("NX-");
+    }
+
+    /**
+     * Destino cuya política aduanera prohíbe vender por encima de su umbral de importación: el pedido se
+     * rechaza ANTES de cobrar, en vez de aceptar uno que costaría aranceles y despacho formal no
+     * repercutidos al cliente.
+     */
+    @Test
+    void create_order_rejected_when_destination_blocks_over_threshold() {
+        UUID productId = UUID.randomUUID();
+        ProductEntity product = ProductEntity.builder().basePrice(new BigDecimal("12.50")).moq(1).titleZh("Widget")
+                .build();
+        product.setId(productId);
+        when(productRepository.findById(productId)).thenReturn(Optional.of(product));
+        when(pricingService.priceFor(any(), any())).thenReturn(priced("12.50"));
+        CustomsValuationService.CustomsValuation blocked = new CustomsValuationService.CustomsValuation("MX",
+                TaxMode.DDP, 0, true, OverThresholdPolicy.BLOCK, 0, true);
+        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt()))
+                .thenReturn(new CheckoutTotalsService.CheckoutTotals(0, 0, 0, 0, 0, blocked));
+
+        var req = new CreateOrderRequest("EXT-002",
+                new AddressInput("John Doe", "555", "j@x.com", "Line 1", null, "CDMX", null, "01000", "MX"), null,
+                List.of(new OrderItemInput(productId, null, 3)), null);
+        UUID userId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> orderUseCase.createOrder(userId, null, req))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("MX");
+        verify(orderRepository, never()).save(any(Order.class));
     }
 
     @Test

@@ -8,7 +8,7 @@ import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
-import com.nexaplatform.dropshipping.application.service.CainiaoTaxService;
+import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
 import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
 import com.nexaplatform.dropshipping.application.service.StockService;
@@ -102,7 +102,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final PaymentUseCase paymentUseCase;
     private final OrderEmailService orderEmailService;
     private final FulfillmentProvider fulfillment;
-    private final CainiaoTaxService cainiaoTaxService;
+    private final CheckoutTotalsService checkoutTotalsService;
     private final OperatorCommissionService operatorCommissionService;
     private final OrderIndexer orderIndexer;
     private final OrderSearchService orderSearchService;
@@ -217,18 +217,25 @@ public class OrderUseCaseImpl implements OrderUseCase {
         int discount = (int) affiliateProgramService.referralDiscountCents(userId, subtotal);
         int discountedSubtotal = subtotal - discount;
 
-        // Impuesto (IVA/sales tax) por país de envío, si está configurado. Base imponible = (subtotal −
-        // descuento) + envío. Se incluye en el total y, por tanto, en el cobro y la factura.
-        // IVA por estado/provincia (US/CA/BR) si la dirección lo indica; si no, tasa nacional.
-        // Fuente del impuesto conmutable por entorno (local: tabla country_tax_rate; pre: Cainiao con
-        // fallback a la tabla). Mismo cálculo que la cotización del checkout.
-        int taxCents = cainiaoTaxService.taxCentsFor(order.getShippingCountry(), order.getShippingState(),
-                discountedSubtotal + shippingCents);
+        // Impuesto + despacho aduanero, en el MISMO servicio que usa la vista previa del checkout
+        // (CheckoutTotalsService) para que lo mostrado coincida al céntimo con lo cobrado. Incluye:
+        //  · IVA por estado/provincia (US/CA/BR) o tasa nacional, sobre (subtotal − descuento) + envío.
+        //  · Recargo del despacho DDP del país (lo que el transportista cobra por adelantar el impuesto).
+        //  · Recargo de despacho formal si el valor de los bienes supera el umbral de minimis del destino.
+        CheckoutTotalsService.CheckoutTotals totals = checkoutTotalsService
+                .compute(order.getShippingCountry(), order.getShippingState(), discountedSubtotal, shippingCents);
+        // Destino cuya política prohíbe vender por encima del umbral: se rechaza ANTES de cobrar, en vez de
+        // aceptar un pedido que costaría aranceles y despacho formal no repercutidos.
+        if (totals.blocked()) {
+            throw new BusinessException("CUSTOMS_THRESHOLD_EXCEEDED",
+                    "El valor del pedido supera el límite de importación de " + order.getShippingCountry()
+                            + ". Reduce el importe del carrito o divídelo en varios pedidos.");
+        }
         order.setSubtotalCents(subtotal);
         order.setDiscountCents(discount);
-        order.setShippingCents(shippingCents);
-        order.setTaxCents(taxCents);
-        order.setTotalCents(Math.addExact(Math.addExact(discountedSubtotal, shippingCents), taxCents));
+        order.setShippingCents(totals.shippingCents());
+        order.setTaxCents(totals.taxCents());
+        order.setTotalCents(totals.totalCents(discountedSubtotal));
 
         Order saved = orderRepository.save(order);
         orderIndexer.indexOrder(saved.getId()); // auto-sync del índice al crear la orden

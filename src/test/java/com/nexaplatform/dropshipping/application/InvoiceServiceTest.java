@@ -43,6 +43,12 @@ class InvoiceServiceTest {
                 .build();
     }
 
+    /** Línea con foto ya mirrorada en el storage (el caso normal del catálogo). */
+    private static OrderItem itemWithImage(int unitCents, int qty, String title, String imageUrl) {
+        return OrderItem.builder().unitPriceCents(unitCents).quantity(qty).titleSnapshot(title).skuSnapshot("SKU")
+                .imageUrlSnapshot(imageUrl).build();
+    }
+
     // El formateo de importes delega ahora en CurrencyRateService.formatDisplay (locale-aware).
     // Lo simulamos como "símbolo + valor" (€ para EUR, $ resto) para asertar los importes.
     private static String display(InvocationOnMock inv) {
@@ -93,11 +99,64 @@ class InvoiceServiceTest {
         when(currencyRateService.usdTo(eq(new BigDecimal("10.00")), eq("EUR"))).thenReturn(new BigDecimal("9.00"));
         when(currencyRateService.usdTo(eq(new BigDecimal("5.00")), eq("EUR"))).thenReturn(new BigDecimal("4.50"));
         when(currencyRateService.usdTo(eq(new BigDecimal("2.10")), eq("EUR"))).thenReturn(new BigDecimal("1.89"));
+        // El descuento de referido (v86) también se convierte: sin este stub el mock devuelve null y el
+        // total revienta con NPE al restarlo. Pedido sin descuento → 0.
+        when(currencyRateService.usdTo(eq(new BigDecimal("0.00")), eq("EUR"))).thenReturn(BigDecimal.ZERO);
 
         Map<String, Object> m = service.model(order("EUR", item(1000, 1, "Tee")), "es", "http://dl", "EUR");
 
         // subtotal 9.00 + envío 4.50 + impuesto 1.89 = 15.39
         assertThat(m.get("subtotal")).isEqualTo("€9.00");
         assertThat(m.get("total")).isEqualTo("€15.39");
+    }
+
+    // ===== Fotos de producto en el EMAIL: adjuntas (cid:), no por URL remota =====
+    // Con la URL del storage no se veían: en local apunta a localhost —que los servidores de Gmail no
+    // pueden alcanzar cuando descargan la imagen por proxy— y Outlook/Apple Mail bloquean por defecto
+    // las imágenes externas. Los iconos del correo ya usaban cid: y por eso sí se veían.
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void model_emailReferencesImagesByCidAndExposesTheirUrls() {
+        when(currencyRateService.formatDisplay(any(BigDecimal.class), anyString()))
+                .thenAnswer(InvoiceServiceTest::display);
+        String url = "http://localhost:9100/product-images/media/4b/foto.jpg";
+
+        Map<String, Object> m = service.model(order("USD", itemWithImage(1000, 1, "Tee", url)), "es", "http://dl");
+
+        List<Map<String, Object>> items = (List<Map<String, Object>>) m.get("items");
+        assertThat(items.get(0).get("image")).isEqualTo("cid:invitem-0");
+        Map<String, String> inline = (Map<String, String>) m.get(InvoiceService.INLINE_IMAGES_KEY);
+        assertThat(inline).containsEntry("invitem-0", url);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void model_emailGivesEachLineItsOwnCid() {
+        when(currencyRateService.formatDisplay(any(BigDecimal.class), anyString()))
+                .thenAnswer(InvoiceServiceTest::display);
+
+        Map<String, Object> m = service.model(order("USD",
+                itemWithImage(1000, 1, "Tee", "http://localhost:9100/product-images/a.jpg"),
+                itemWithImage(2000, 1, "Cap", "http://localhost:9100/product-images/b.jpg")), "es", "http://dl");
+
+        List<Map<String, Object>> items = (List<Map<String, Object>>) m.get("items");
+        assertThat(items.get(0).get("image")).isEqualTo("cid:invitem-0");
+        assertThat(items.get(1).get("image")).isEqualTo("cid:invitem-1");
+        Map<String, String> inline = (Map<String, String>) m.get(InvoiceService.INLINE_IMAGES_KEY);
+        assertThat(inline).hasSize(2);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void model_emailWithoutImageDeclaresNoInlineAttachment() {
+        when(currencyRateService.formatDisplay(any(BigDecimal.class), anyString()))
+                .thenAnswer(InvoiceServiceTest::display);
+
+        Map<String, Object> m = service.model(order("USD", item(1000, 1, "Tee")), "es", "http://dl");
+
+        List<Map<String, Object>> items = (List<Map<String, Object>>) m.get("items");
+        assertThat(items.get(0).get("image")).isEqualTo("");
+        assertThat((Map<String, String>) m.get(InvoiceService.INLINE_IMAGES_KEY)).isEmpty();
     }
 }

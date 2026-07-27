@@ -60,7 +60,14 @@ public class OrderEmailService {
                 vars.put("paymentMethod", PaymentMethodLabel.localize(paymentMethod, locale));
             }
             vars.put("ctaLabel", InvoiceLabel.CTA_VIEW.of(InvoiceLabel.lang(locale)));
-            emailQueue.enqueue(email, String.valueOf(vars.get("subject")), "emails/invoice", vars);
+            // Las fotos de producto van ADJUNTAS al correo (cid:), no por URL: la URL del storage es
+            // localhost en local —inalcanzable para el proxy de Gmail— y Outlook/Apple Mail bloquean las
+            // imágenes remotas por defecto. Se saca del modelo para no pasarla a la plantilla.
+            @SuppressWarnings("unchecked")
+            Map<String, String> inlineImages = (Map<String, String>) vars
+                    .remove(InvoiceService.INLINE_IMAGES_KEY);
+            emailQueue.enqueue(email, null, String.valueOf(vars.get("subject")), "emails/invoice", vars,
+                    inlineImages != null ? inlineImages : Map.of());
         } catch (RuntimeException e) {
             log.warn("payment-confirmed email failed for order {}: {}", o.getOrderNumber(), e.getMessage());
         }
