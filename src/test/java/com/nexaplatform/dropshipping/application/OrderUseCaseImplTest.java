@@ -103,7 +103,8 @@ class OrderUseCaseImplTest {
                 pricingService, affiliateProgramService, stockService, paymentUseCase, orderEmailService, cainiao, checkoutTotalsService,
                 operatorCommissionService, orderIndexer, orderSearchService);
         // Por defecto, sin envío en los tests de billing (no altera el total = subtotal).
-        lenient().when(cainiao.quote(any(), anyInt())).thenReturn(ShippingQuote.unsupported("XX"));
+        lenient().when(cainiao.quote(any(), any(FulfillmentProvider.ParcelSpec.class)))
+                .thenReturn(ShippingQuote.unsupported("XX"));
         // Por defecto, sin impuesto ni recargo de despacho: total = subtotal + envío, como en los
         // tests de billing existentes. El envío devuelto es el mismo que entra (sin handling fee).
         lenient().when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt()))

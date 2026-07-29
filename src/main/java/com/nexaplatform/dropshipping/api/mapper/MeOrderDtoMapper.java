@@ -102,7 +102,10 @@ public class MeOrderDtoMapper {
                 .totalFormatted(currencyRateService.formatDisplay(total, ccy))
                 .discountFormatted(currencyRateService.formatDisplay(discount, ccy))
                 .shippingAddress(shippingAddress(model)).billingAddress(billingAddress(model)).notes(model.getNotes())
-                .trackingCarrier(null).trackingNumber(null).placedAt(model.getPlacedAt()).shippedAt(model.getShippedAt())
+                // Transportista y nº de seguimiento reales: la ficha del pedido los muestra en cuanto el
+                // envío existe, sin obligar al comprador a abrir el bloque de seguimiento para verlos.
+                .trackingCarrier(model.getCarrier()).trackingNumber(model.getTrackingNumber())
+                .placedAt(model.getPlacedAt()).shippedAt(model.getShippedAt())
                 .deliveredAt(model.getDeliveredAt()).cancelledAt(model.getCancelledAt()).items(items).build();
     }
 

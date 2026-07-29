@@ -330,20 +330,43 @@ nexadrop:
     # Cadencia del job que sincroniza el tracking y avanza el estado semiautomáticamente.
     sync-enabled: ${CAINIAO_SYNC_ENABLED:true}
 
-  # Fulfillment con YunExpress (云途) — proveedor alternativo a Cainiao (open.yunexpress.cn). Estructura
-  # preparada; INACTIVO por defecto hasta tener credenciales de sandbox y el algoritmo de firma real.
-  # Auth REST/JSON con appKey + appSecret (firma en cabecera). Ver YunExpressClient / YunExpressFulfillmentService.
+  # Fulfillment con YunExpress (云途) — carrier ACTIVO del sistema (open.yunexpress.cn).
+  # Auth OAuth2 client_credentials (appId + appSecret + sourceKey) y firma HmacSHA256 por petición.
+  # Con enabled=false o sin credenciales funciona en modo mock. Ver YunExpressClient.
   yunexpress:
     enabled: ${YUNEXPRESS_ENABLED:false}
-    app-key: ${YUNEXPRESS_APP_KEY:}
+    # 应用ID / 应用秘钥(AK) de 开发配置 → 沙盒应用, y sourcekey de 用户中心 → 用户信息.
+    app-id: ${YUNEXPRESS_APP_ID:}
     app-secret: ${YUNEXPRESS_APP_SECRET:}
-    # Sandbox por defecto; en producción apuntar al host formal que indique la doc de YunExpress.
-    base-url: ${YUNEXPRESS_BASE_URL:https://oms.api.yunexpress.cn}
+    source-key: ${YUNEXPRESS_SOURCE_KEY:}
+    # Sandbox por defecto. Para producción basta cambiar esta URL a https://openapi.yunexpress.cn
+    # y poner las credenciales de la aplicación formal: el contrato de la API es idéntico.
+    base-url: ${YUNEXPRESS_BASE_URL:https://openapi-sbx.yunexpress.cn}
+    # Clave de cifrado del webhook (开发配置 → 事件管理 → 加密策略). Vacía = el webhook rechaza todo.
+    encrypt-key: ${YUNEXPRESS_ENCRYPT_KEY:}
+    # Canal fijo (product_code de /v1/basic-data/products/getlist). Vacío = el más barato que cotice.
+    product-code: ${YUNEXPRESS_PRODUCT_CODE:}
+    # Grupo al que se restringe la simulación de tarifa (DH快递, EM经济, MA挂号, SP专线...). Vacío = todos.
+    product-group-code: ${YUNEXPRESS_PRODUCT_GROUP:}
+    # Formato de etiqueta pedido al crear el envío: PDF, ZPL o PNG.
+    label-type: ${YUNEXPRESS_LABEL_TYPE:PDF}
+    # Suscribir cada guía al push de trazabilidad al crearla (requiere el webhook registrado en 事件管理).
+    tracking-subscription-enabled: ${YUNEXPRESS_TRACK_SUBSCRIBE:true}
+    # A = trazabilidad completa, F = solo tramo de origen, L = solo reparto final, N = oculta.
+    tracking-subscribe-type: ${YUNEXPRESS_TRACK_SUBSCRIBE_TYPE:A}
+    # Espera máxima de la simulación de tarifa. Corto a propósito: está en el camino del checkout y hay
+    # fallback inmediato por la tabla de zonas, así que no se hace esperar al cliente.
+    quote-timeout-seconds: ${YUNEXPRESS_QUOTE_TIMEOUT:5}
     # Modo de despacho fiscal por defecto del canal: DDP (impuestos incluidos, los paga el comercio) o
     # DDU (los paga el destinatario). Se puede sobreescribir por país en yunexpress_channel (futuro).
     default-tax-mode: ${YUNEXPRESS_TAX_MODE:DDP}
     # Número IOSS del comercio para despacho de IVA en la UE (pedidos <=150 EUR). Vacío = sin IOSS.
     ioss-number: ${YUNEXPRESS_IOSS:}
+    # Peso VOLUMÉTRICO: el transportista factura el mayor entre peso real y L×W×H(cm)/divisor, y solo
+    # aplica el volumétrico a partir de cierto volumen (los bultos pequeños en bolsa van por peso real).
+    # Ajustar ambos al rate card del contrato cuando YunExpress lo facilite.
+    volumetric-divisor: ${YUNEXPRESS_VOLUMETRIC_DIVISOR:6000}
+    volumetric-min-cm3: ${YUNEXPRESS_VOLUMETRIC_MIN_CM3:6000}
 
   # Almacenamiento de objetos (MinIO/S3) para el mirror de imágenes de producto. El backend descarga
   # la imagen de origen (1688/alicdn, sin Referer) y la sube al bucket; el `public-url` es la base con

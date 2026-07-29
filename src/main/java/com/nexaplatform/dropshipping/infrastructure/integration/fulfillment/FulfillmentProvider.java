@@ -34,14 +34,49 @@ public interface FulfillmentProvider {
     record TrackingSnapshot(OrderStatus currentStatus, List<TrackingStep> steps) {
     }
 
+    /**
+     * Bulto a cotizar. Es lo que el transportista necesita para tarificar: peso real, dimensiones del
+     * paquete —de las que sale el peso VOLUMÉTRICO— y si lleva batería, que en YunExpress es el
+     * {@code PackageType} (0 = 普货 carga general, 1 = 带电 con batería) y cambia de canal y de tarifa.
+     *
+     * <p>Las dimensiones van en milímetros para no perder precisión con las medidas de catálogo; el
+     * proveedor las convierte a la unidad de su API (YunExpress las quiere en cm enteros).
+     */
+    record ParcelSpec(int weightGrams, int lengthMm, int widthMm, int heightMm, boolean withBattery) {
+
+        /** Bulto del que solo se conoce el peso (sin dimensiones ni batería declarada). */
+        public static ParcelSpec ofWeight(int weightGrams) {
+            return new ParcelSpec(weightGrams, 0, 0, 0, false);
+        }
+
+        /** ¿Tenemos las tres medidas para calcular volumen? */
+        public boolean hasDimensions() {
+            return lengthMm > 0 && widthMm > 0 && heightMm > 0;
+        }
+
+        /** Volumen del bulto en cm³ (0 si falta alguna medida). */
+        public double volumeCm3() {
+            return hasDimensions() ? (lengthMm / 10.0) * (widthMm / 10.0) * (heightMm / 10.0) : 0.0;
+        }
+    }
+
     /** ¿El proveedor envía a este país? */
     boolean isSupported(String countryCode);
 
     /** Países cubiertos (habilitados), ordenados por nombre. */
     List<SupportedCountry> supportedCountries();
 
-    /** Cotiza el envío a un destino para un peso total (gramos); {@link ShippingQuote#unsupported} si no cubre. */
-    ShippingQuote quote(String countryCode, int totalWeightGrams);
+    /** Cotiza el envío de un bulto a un destino; {@link ShippingQuote#unsupported} si no cubre. */
+    ShippingQuote quote(String countryCode, ParcelSpec parcel);
+
+    /**
+     * Cotización solo por peso, sin dimensiones ni batería. Se factura por el peso real, así que el
+     * importe puede quedarse corto frente al repeso del transportista en un bulto voluminoso: usar la
+     * sobrecarga con {@link ParcelSpec} siempre que se conozcan las medidas.
+     */
+    default ShippingQuote quote(String countryCode, int totalWeightGrams) {
+        return quote(countryCode, ParcelSpec.ofWeight(totalWeightGrams));
+    }
 
     /** Crea el envío al despachar el pedido (devuelve carrier + nº de seguimiento + referencia). */
     FulfillmentResult createShipment(Order order);

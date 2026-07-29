@@ -23,6 +23,7 @@ import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontMapper;
+import com.nexaplatform.dropshipping.application.service.CustomsProfileService;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
@@ -135,6 +136,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private final ProductRepository productRepository;
     private final SupplierRepository supplierRepository;
     private final CategoryRepository categoryRepository;
+    /** Completa HS code, material, uso, batería y medidas de paquete desde el perfil de la categoría. */
+    private final CustomsProfileService customsProfileService;
     private final ProductPriceTierRepository priceTierRepository;
     private final ProductImageRepository imageRepository;
     private final ObjectStorageService objectStorage;
@@ -1636,6 +1639,19 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (r.getHsCode() != null && !r.getHsCode().isBlank()) {
             p.setHsCode(r.getHsCode());
         }
+        if (r.getCustomsMaterial() != null && !r.getCustomsMaterial().isBlank()) {
+            p.setCustomsMaterial(r.getCustomsMaterial());
+        }
+        if (r.getCustomsUsage() != null && !r.getCustomsUsage().isBlank()) {
+            p.setCustomsUsage(r.getCustomsUsage());
+        }
+        if (r.getBatteryType() != null && !r.getBatteryType().isBlank()) {
+            p.setBatteryType(r.getBatteryType().trim().toUpperCase());
+        }
+        // Lo que la carga no traiga (partida arancelaria, material, uso, batería y medidas del paquete) se
+        // completa con el perfil de la categoría: sin esos datos el envío no se puede cotizar ni declarar.
+        customsProfileService.applyDefaults(p, p.getCategory() != null ? p.getCategory().getSlug()
+                : r.getCategorySlug());
         if (r.getCertifications() != null && !r.getCertifications().isEmpty()) {
             p.setCertifications(r.getCertifications());
         }

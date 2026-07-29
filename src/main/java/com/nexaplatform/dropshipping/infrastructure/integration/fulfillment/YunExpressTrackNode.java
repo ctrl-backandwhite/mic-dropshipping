@@ -1,0 +1,110 @@
+package com.nexaplatform.dropshipping.infrastructure.integration.fulfillment;
+
+import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
+
+/**
+ * Nodos de trazabilidad de YunExpress (轨迹节点表) y su equivalencia con {@link OrderStatus}.
+ *
+ * <p>Es la tabla oficial del portal (open.yunexpress.cn → 开发支持 → 业务文档 → 轨迹节点表), transcrita
+ * entera para que un {@code track_node_code} desconocido se detecte en vez de pasar desapercibido.
+ *
+ * <p>La correspondencia con nuestro estado de pedido es deliberadamente conservadora: solo
+ * {@link #DELIVERED} marca el pedido como entregado, y los nodos previos al primer escaneo (alta del
+ * envío, prealerta) se quedan en {@link OrderStatus#FORWARDED}. Todo lo demás —tránsito, aduana,
+ * reparto, incidencias y devoluciones— es {@link OrderStatus#SHIPPED}: el paquete está en circulación.
+ * Las incidencias no degradan el estado porque el histórico de pasos ya las muestra al cliente.
+ */
+public enum YunExpressTrackNode {
+
+    AIRPORT_HOLD("Export airport security hold", OrderStatus.SHIPPED),
+    AIRPORT_INSPECTION("Export airport security inspection", OrderStatus.SHIPPED),
+    AIRPORT_RELEASE("Export airport security released", OrderStatus.SHIPPED),
+    APPROVED("Batch infomation recieved", OrderStatus.FORWARDED),
+    ARRANGE_FOR_RETURN("Parcel being returned", OrderStatus.SHIPPED),
+    ARRIVAL_WAREHOUSE("Arrived at the destination warehouse", OrderStatus.SHIPPED),
+    ARRIVE_AT_DESTINATION("Arrived at destination hub", OrderStatus.SHIPPED),
+    ARRIVE_CONFIRM_OC("Arrival at the departure point", OrderStatus.SHIPPED),
+    ARRIVE_ORIN_CUSTOMS("Clearance processing", OrderStatus.SHIPPED),
+    ARRIVED_AT_BORDER("Arrived at border point", OrderStatus.SHIPPED),
+    CARRIER_PICKUP("Collected by carrier", OrderStatus.SHIPPED),
+    CONTAINER_ARRIVAL("Ocean: CY Entry (Container In-gate)", OrderStatus.SHIPPED),
+    CONTAINER_DEVANNED("Container devanned", OrderStatus.SHIPPED),
+    CONTAINER_LOADED("Container loaded", OrderStatus.SHIPPED),
+    CONTAINER_UNLOADED("Container unloaded", OrderStatus.SHIPPED),
+    CUSTOMS_COMPLETE("Clearance processing completed", OrderStatus.SHIPPED),
+    CUSTOMS_DELAY("Customs clearance delay", OrderStatus.SHIPPED),
+    CUSTOMS_HOLD("Customs detention", OrderStatus.SHIPPED),
+    CUSTOMS_INSPCTION("Customs inspection", OrderStatus.SHIPPED),
+    CUSTOMS_PROCESSING("Clearance processing", OrderStatus.SHIPPED),
+    CUSTOMS_RELEASE("Customs Released", OrderStatus.SHIPPED),
+    DELIVERED("Delivered", OrderStatus.DELIVERED),
+    DELIVERY_ATTEMPT("The parcel is currently being attempted for delivery.", OrderStatus.SHIPPED),
+    DELIVERY_FAILURE("Delivery failed", OrderStatus.SHIPPED),
+    DEPART_CONFIRM_CCA("The customs clearance line has shipped", OrderStatus.SHIPPED),
+    DEPART_CONFIRM_OC("Left origin hub", OrderStatus.SHIPPED),
+    DISCARDED_PARCEL("Discard parcel", OrderStatus.SHIPPED),
+    EC_RETURN("Empty Container Return to Depot", OrderStatus.SHIPPED),
+    EDD("Estimated delivery date", OrderStatus.SHIPPED),
+    EXPORT_CUSTOMS_COMPLETE("Export customs clearance completed", OrderStatus.SHIPPED),
+    FIRST_MILE_ARRIVE("Arrival scan", OrderStatus.SHIPPED),
+    FIRST_MILE_DEPART("Departure scan", OrderStatus.SHIPPED),
+    IN_TRANSIT("In transit", OrderStatus.SHIPPED),
+    IN_TRANSIT_CARRIER("In transit by carrier", OrderStatus.SHIPPED),
+    INBOUND_CCA("Into customs clearance warehouse", OrderStatus.SHIPPED),
+    MAIN_LINE_ARRIVE("Arrive at the destination country", OrderStatus.SHIPPED),
+    MAIN_LINE_DEPART("Departure from the starting point", OrderStatus.SHIPPED),
+    ORDER_CREATION("Order created", OrderStatus.FORWARDED),
+    OUTBOUND_CCA("Out of customs clearance", OrderStatus.SHIPPED),
+    PACKAGE_EXCEPTION("Package Delivery Anomaly", OrderStatus.SHIPPED),
+    PACKAGE_LOST("Parcel lost", OrderStatus.SHIPPED),
+    PICKED_UP("Parcel collected", OrderStatus.SHIPPED),
+    PICKUP_CARGO_TERMINAL("Collect from the goods station", OrderStatus.SHIPPED),
+    PRE_ADVICING("Pre-alert", OrderStatus.FORWARDED),
+    PRE_INFO("Pre Ascan", OrderStatus.FORWARDED),
+    READY_FOR_OUTBOUND("Ready for outbound", OrderStatus.SHIPPED),
+    READY_FOR_PICKUP("Notify the freight terminal to pick up the shipment", OrderStatus.SHIPPED),
+    REDELIVERY("Parcel being redelivered", OrderStatus.SHIPPED),
+    RETURN_TRANSIT_IN("Return transit in", OrderStatus.SHIPPED),
+    RETURN_TRANSIT_OUT("Return transit out", OrderStatus.SHIPPED),
+    RETURNED("The parcel has been returned.", OrderStatus.SHIPPED),
+    RETURNED_TO_SENDER("The parcel has been returned to the sender.", OrderStatus.SHIPPED),
+    SCHEDULE_DELIVERY("Schedule Delivery", OrderStatus.SHIPPED),
+    STATUS_UPDATED("Status updated", OrderStatus.SHIPPED),
+    TAXES_PAYABLE("Pending payment of customs taxes", OrderStatus.SHIPPED),
+    TRANSIT_DELAY("Transportation delay", OrderStatus.SHIPPED),
+    TRANSIT_IN("Transit in", OrderStatus.SHIPPED),
+    TRANSIT_OUT("Transit out", OrderStatus.SHIPPED),
+    TRANSITHUB_ARRIVE("Delivery to local carrier", OrderStatus.SHIPPED),
+    TRANSSHIPMENT_COMPLETED("Transshipment completed", OrderStatus.SHIPPED);
+
+    private final String description;
+    private final OrderStatus status;
+
+    YunExpressTrackNode(String description, OrderStatus status) {
+        this.description = description;
+        this.status = status;
+    }
+
+    /** Descripción en inglés del nodo, tal cual la publica YunExpress. */
+    public String description() {
+        return description;
+    }
+
+    /** Estado de pedido que implica este nodo. */
+    public OrderStatus status() {
+        return status;
+    }
+
+    /** Busca el nodo por su {@code track_node_code}; {@code null} si YunExpress manda uno que no conocemos. */
+    public static YunExpressTrackNode from(String code) {
+        if (code == null || code.isBlank()) {
+            return null;
+        }
+        for (YunExpressTrackNode node : values()) {
+            if (node.name().equalsIgnoreCase(code.trim())) {
+                return node;
+            }
+        }
+        return null;
+    }
+}

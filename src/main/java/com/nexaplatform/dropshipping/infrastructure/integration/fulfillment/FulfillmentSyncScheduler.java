@@ -45,7 +45,7 @@ public class FulfillmentSyncScheduler {
             try {
                 syncOrderById(id);
             } catch (RuntimeException e) {
-                log.warn("Cainiao sync falló para pedido {}: {}", id, e.getMessage());
+                log.warn("Fulfillment sync falló para pedido {}: {}", id, e.getMessage());
             }
         }
     }

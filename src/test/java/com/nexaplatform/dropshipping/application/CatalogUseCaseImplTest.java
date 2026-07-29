@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontMapper;
 import com.nexaplatform.dropshipping.api.mapper.ProductBulkExportMapper;
+import com.nexaplatform.dropshipping.application.service.CustomsProfileService;
 import com.nexaplatform.dropshipping.application.usecase.impl.CatalogUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
@@ -54,6 +55,8 @@ class CatalogUseCaseImplTest {
     @Mock
     CategoryRepository categoryRepository;
     @Mock
+    CustomsProfileService customsProfileService;
+    @Mock
     ProductPriceTierRepository priceTierRepository;
     @Mock
     ProductImageRepository imageRepository;
@@ -90,7 +93,8 @@ class CatalogUseCaseImplTest {
 
     @BeforeEach
     void setup() {
-        useCase = new CatalogUseCaseImpl(productRepository, supplierRepository, categoryRepository, priceTierRepository,
+        useCase = new CatalogUseCaseImpl(productRepository, supplierRepository, categoryRepository, customsProfileService,
+                priceTierRepository,
                 imageRepository, objectStorage, productJpaRepository, productMapper, catalogStorefrontMapper, kafkaTemplate,
                 variantRepository, productIndexer, categoryIndexer, productAttributeRepository,
                 productSpecificationRepository, variantValueRepository, jdbcTemplate, bulkExportMapper, imageMirrorService);

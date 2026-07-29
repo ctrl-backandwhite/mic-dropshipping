@@ -69,7 +69,10 @@ public interface AdminOrderMapper {
     @Mapping(target = "items", source = "items")
     @Mapping(target = "shippingAddress", expression = "java(toAddress(order))")
     @Mapping(target = "notes", source = "notes")
-    @Mapping(target = "trackingNumber", source = "externalOrderId")
+    // El número de seguimiento es el que da el transportista, no la referencia externa del pedido
+    // (externalOrderId, del tipo "ME-1784936692"): mostrar esa hacía que el admin viese en la ficha un
+    // número distinto del que aparece en el bloque de seguimiento y del que se comunica al cliente.
+    @Mapping(target = "trackingNumber", source = "trackingNumber")
     AdminOrderDetailDtoOut toDetail(Order order);
 
     @Mapping(target = "id", source = "id")

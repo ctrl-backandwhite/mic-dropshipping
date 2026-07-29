@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.application;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressEventCipher;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService.TrackingProgress;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
@@ -239,7 +240,7 @@ class FulfillmentServiceTest {
     @Test
     void applyPush_ignoresInvalidJson() {
         FulfillmentService svc = new FulfillmentService(orderRepository, trackingRepository, cainiao,
-                userRepository, orderEmailService, realMapper);
+                userRepository, orderEmailService, realMapper, new YunExpressEventCipher());
 
         svc.applyPush("TRACEPUSH", "{not-json");
 
@@ -249,7 +250,7 @@ class FulfillmentServiceTest {
     @Test
     void applyPush_resolvesByMailNoAndAppendsMappedDeliveredEvent() {
         FulfillmentService svc = new FulfillmentService(orderRepository, trackingRepository, cainiao,
-                userRepository, orderEmailService, realMapper);
+                userRepository, orderEmailService, realMapper, new YunExpressEventCipher());
         Order o = order(OrderStatus.SHIPPED, "CN-TRACK");
         when(orderRepository.findByTrackingNumber("CN-TRACK")).thenReturn(Optional.of(o));
         when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId())).thenReturn(List.of());
@@ -269,7 +270,7 @@ class FulfillmentServiceTest {
     @Test
     void applyPush_singleStatusSyncResolvedByOrderCodeMapsToForwarded() {
         FulfillmentService svc = new FulfillmentService(orderRepository, trackingRepository, cainiao,
-                userRepository, orderEmailService, realMapper);
+                userRepository, orderEmailService, realMapper, new YunExpressEventCipher());
         Order o = order(OrderStatus.PAID, null);
         when(orderRepository.findByOrderNumber("NX-1")).thenReturn(Optional.of(o));
         when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId())).thenReturn(List.of());
@@ -287,7 +288,7 @@ class FulfillmentServiceTest {
     @Test
     void applyPush_skipsEventAlreadyPresentAndDoesNotSaveOrder() {
         FulfillmentService svc = new FulfillmentService(orderRepository, trackingRepository, cainiao,
-                userRepository, orderEmailService, realMapper);
+                userRepository, orderEmailService, realMapper, new YunExpressEventCipher());
         Order o = order(OrderStatus.DELIVERED, "CN-TRACK");
         when(orderRepository.findByTrackingNumber("CN-TRACK")).thenReturn(Optional.of(o));
         // Timeline already has the DELIVERED|Entregado event → dedup, nothing changes.
@@ -304,7 +305,7 @@ class FulfillmentServiceTest {
     @Test
     void applyPush_noOpWhenOrderNotFoundInPayload() {
         FulfillmentService svc = new FulfillmentService(orderRepository, trackingRepository, cainiao,
-                userRepository, orderEmailService, realMapper);
+                userRepository, orderEmailService, realMapper, new YunExpressEventCipher());
         when(orderRepository.findByTrackingNumber("UNKNOWN")).thenReturn(Optional.empty());
 
         svc.applyPush("TRACEPUSH", "{\"mailNo\":\"UNKNOWN\",\"traces\":[{\"action\":\"DELIVER\",\"desc\":\"x\"}]}");

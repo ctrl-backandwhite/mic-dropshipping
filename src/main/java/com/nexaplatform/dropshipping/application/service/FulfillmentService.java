@@ -13,6 +13,8 @@ import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.Fulf
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.FulfillmentResult;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.TrackingSnapshot;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.TrackingStep;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressEventCipher;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressFulfillmentService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderTrackingEventEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderTrackingEventRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,12 +27,13 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 /**
- * Orquesta el fulfillment con Cainiao sobre el modelo de pedido: crea el envío al despachar, mantiene el
- * timeline de eventos de seguimiento y deriva el estado del envío. NO cambia el {@code OrderStatus} en el
+ * Orquesta el fulfillment con el proveedor activo (YunExpress) sobre el modelo de pedido: crea el envío
+ * al despachar, mantiene el timeline de eventos de seguimiento y deriva el estado del envío. NO cambia el {@code OrderStatus} en el
  * sondeo (eso lo hace el scheduler vía las transiciones del use case, para mantener emails/webhooks);
  * aquí solo se persisten los eventos y se calcula el estado objetivo.
  */
@@ -39,12 +42,21 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class FulfillmentService {
 
+    /**
+     * Origen que se graba en los eventos que produce el SONDEO del proveedor activo. Los pushes entrantes
+     * escriben el suyo propio (`YUNEXPRESS` / `CAINIAO`), así que el timeline distingue de dónde vino cada
+     * paso: sondeo del carrier, push del carrier o alta manual del admin.
+     */
+    private static final String CARRIER_SOURCE = "YUNEXPRESS";
+
     private final OrderRepository orderRepository;
     private final OrderTrackingEventRepository trackingRepository;
     private final FulfillmentProvider fulfillment;
     private final UserRepository userRepository;
     private final OrderEmailService orderEmailService;
     private final ObjectMapper objectMapper;
+    /** Verificación de firma y descifrado de los pushes de YunExpress (事件管理). */
+    private final YunExpressEventCipher eventCipher;
 
     /** Estado actual del pedido + estado objetivo del envío tras sondear el tracking. */
     public record TrackingProgress(OrderStatus current, OrderStatus target) {
@@ -58,7 +70,7 @@ public class FulfillmentService {
                 .map(Order::getId).toList();
     }
 
-    /** Al despachar el pedido: crea el envío en Cainiao y registra el primer evento del timeline. */
+    /** Al despachar el pedido: crea el envío en el carrier y registra el primer evento del timeline. */
     @Transactional
     public void createShipment(UUID orderId) {
         Order o = orderRepository.findById(orderId).orElse(null);
@@ -75,11 +87,11 @@ public class FulfillmentService {
         orderRepository.save(o);
         appendEvent(o.getId(), OrderStatus.FORWARDED.name(), "Envío registrado para entrega", "Shenzhen, CN", "SYSTEM",
                 o.getForwardedAt() != null ? o.getForwardedAt() : Instant.now());
-        log.info("Cainiao: envío {} creado para pedido {}", r.trackingNumber(), o.getOrderNumber());
+        log.info("Fulfillment: envío {} creado para pedido {}", r.trackingNumber(), o.getOrderNumber());
     }
 
     /**
-     * Sondea el tracking en Cainiao, añade los eventos nuevos al timeline, actualiza el último estado y
+     * Sondea el tracking en el carrier, añade los eventos nuevos al timeline, actualiza el último estado y
      * devuelve el estado actual + objetivo del envío (FORWARDED/SHIPPED/DELIVERED). No cambia
      * {@code OrderStatus} (lo hace el scheduler vía las transiciones del use case).
      */
@@ -99,7 +111,7 @@ public class FulfillmentService {
             seen.add(e.getStatus() + "|" + e.getDescription());
         }
         // Notificación por cada cambio de estado del envío. El estado interno FORWARDED ("registrado en
-        // Cainiao") NO se notifica. El PRIMER paso SHIPPED ("Recogido por el transportista") y el paso
+        // el carrier") NO se notifica. El PRIMER paso SHIPPED ("Recogido por el transportista") y el paso
         // DELIVERED los notifican shipped()/delivered() en el use case al avanzar el OrderStatus, así que
         // aquí solo notificamos los pasos intermedios SHIPPED (en tránsito, llegó al país, en reparto) para
         // no duplicar.
@@ -108,7 +120,7 @@ public class FulfillmentService {
         for (TrackingStep step : snap.steps()) {
             String key = step.status().name() + "|" + step.description();
             if (seen.add(key)) {
-                appendEvent(o.getId(), step.status().name(), step.description(), step.location(), "CAINIAO",
+                appendEvent(o.getId(), step.status().name(), step.description(), step.location(), CARRIER_SOURCE,
                         step.occurredAt());
                 if (step.status() == OrderStatus.SHIPPED) {
                     if (shippedSeen) {
@@ -253,6 +265,12 @@ public class FulfillmentService {
 
     /** Añade el evento si no existe ya (dedup por estado|descripción). Devuelve true si lo añadió. */
     private boolean appendIfNew(Order o, OrderStatus status, String desc, String location, Instant when) {
+        return appendIfNew(o, status, desc, location, when, "CAINIAO");
+    }
+
+    /** Variante que registra de qué transportista viene el evento, para poder auditar el timeline. */
+    private boolean appendIfNew(Order o, OrderStatus status, String desc, String location, Instant when,
+            String source) {
         if (desc == null || desc.isBlank()) {
             return false;
         }
@@ -262,7 +280,7 @@ public class FulfillmentService {
         if (exists) {
             return false;
         }
-        appendEvent(o.getId(), status.name(), desc, location, "CAINIAO", when);
+        appendEvent(o.getId(), status.name(), desc, location, source, when);
         o.setTrackingStatus(status.name());
         return true;
     }
@@ -280,6 +298,89 @@ public class FulfillmentService {
             return OrderStatus.FORWARDED;
         }
         return OrderStatus.SHIPPED;
+    }
+
+    // ─────────────────────── Push entrante de YunExpress (事件管理) ───────────────────────
+
+    /**
+     * Aplica un push de YunExpress al timeline del pedido. El controller ya verificó la firma; aquí se
+     * descifra el contenido (si viene cifrado), se resuelve el pedido por guía / número de cliente y se
+     * añaden los eventos NUEVOS con el mismo dedup que el sondeo.
+     *
+     * <p>El sobre del push trae el contenido en {@code encrypt} (AES) o directamente en claro según la
+     * política de cifrado de la aplicación; se admiten ambos para no depender de esa configuración.
+     */
+    @Transactional
+    public void applyYunExpressPush(String rawBody) {
+        JsonNode payload = parseYunExpressPayload(rawBody);
+        if (payload == null) {
+            return;
+        }
+        Order o = resolveYunExpressOrder(payload);
+        if (o == null) {
+            log.warn("YunExpress push: pedido no encontrado para el evento recibido");
+            return;
+        }
+        JsonNode nested = payload.path("track_Info").path("track_events");
+        JsonNode events = nested.isArray() && !nested.isEmpty() ? nested : payload.path("track_events");
+        YunExpressFulfillmentService provider = yunExpressProvider().orElse(null);
+        if (provider == null) {
+            log.warn("YunExpress push: el proveedor activo no es YunExpress — evento ignorado");
+            return;
+        }
+        TrackingSnapshot snap = provider.toSnapshot(events, o.getShippingCountry());
+        boolean changed = false;
+        for (TrackingStep step : snap.steps()) {
+            changed |= appendIfNew(o, step.status(), step.description(), step.location(), step.occurredAt(),
+                    "YUNEXPRESS");
+        }
+        if (changed) {
+            o.setLastTrackedAt(Instant.now());
+            orderRepository.save(o);
+            log.info("YunExpress push: timeline actualizado para pedido {}", o.getOrderNumber());
+        }
+    }
+
+    /** Desenvuelve el push: descifra {@code encrypt} si viene cifrado, o usa el cuerpo tal cual. */
+    private JsonNode parseYunExpressPayload(String rawBody) {
+        try {
+            JsonNode envelope = objectMapper.readTree(rawBody);
+            String encrypted = envelope.path("encrypt").asText(null);
+            if (encrypted == null || encrypted.isBlank()) {
+                return envelope;
+            }
+            return objectMapper.readTree(eventCipher.decrypt(encrypted));
+        } catch (JsonProcessingException e) {
+            log.warn("YunExpress push: JSON inválido");
+            return null;
+        }
+    }
+
+    /** Resuelve el pedido del push por guía, tracking o nuestro número de pedido. */
+    private Order resolveYunExpressOrder(JsonNode payload) {
+        JsonNode info = payload.path("track_Info");
+        for (String key : new String[] { "waybill_number", "order_number", "shipment_number", "tracking_number" }) {
+            String value = firstNodeText(payload, key);
+            if (value == null) {
+                value = firstNodeText(info, key);
+            }
+            if (value != null) {
+                Order found = orderRepository.findByTrackingNumber(value).orElse(null);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        String customerOrder = firstNodeText(payload, "customer_order_number");
+        if (customerOrder == null) {
+            customerOrder = firstNodeText(info, "customer_order_number");
+        }
+        return customerOrder != null ? orderRepository.findByOrderNumber(customerOrder).orElse(null) : null;
+    }
+
+    /** El proveedor activo, cuando es YunExpress (única implementación cableada hoy). */
+    private Optional<YunExpressFulfillmentService> yunExpressProvider() {
+        return fulfillment instanceof YunExpressFulfillmentService yun ? Optional.of(yun) : Optional.empty();
     }
 
     private static JsonNode firstArrayNode(JsonNode node, String... keys) {

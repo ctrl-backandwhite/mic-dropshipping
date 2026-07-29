@@ -31,43 +31,31 @@ public class ShippingQuoteService {
         return fulfillment.supportedCountries();
     }
 
-    /** Cotiza el envío a {@code country} para las líneas dadas (suma el peso real de cada producto). */
+    /**
+     * Cotiza el envío a {@code country} para las líneas dadas. El bulto (peso, medidas del paquete y
+     * batería) se arma con {@link ParcelAggregator}, el mismo que usa el cobro del pedido, para que la
+     * vista previa del checkout y el importe cobrado no puedan divergir.
+     */
     public ShippingQuote quote(String country, List<Line> lines) {
-        int weightGrams = 0;
+        ParcelAggregator parcel = new ParcelAggregator();
         if (lines != null) {
             for (Line line : lines) {
-                int unit = productRepository.findById(line.productId())
-                        .map(p -> packageWeight(p, line.variantId()))
-                        .orElse(500);
-                weightGrams += unit * Math.max(1, line.quantity());
+                ProductEntity product = productRepository.findById(line.productId()).orElse(null);
+                if (product != null) {
+                    parcel.add(product, variantOf(product, line.variantId()), line.quantity());
+                } else {
+                    parcel.addUnknown(line.quantity());
+                }
             }
         }
-        return fulfillment.quote(country, Math.max(1, weightGrams));
+        return fulfillment.quote(country, parcel.build());
     }
 
-    /**
-     * Peso del paquete a facturar por unidad: prioriza el peso REAL de la variante SELECCIONADA
-     * (báscula 1688: package&gt;neto), luego el peso a nivel producto y, en último caso, 500 g.
-     */
-    private int packageWeight(ProductEntity p, UUID variantId) {
-        if (variantId != null && p.getVariants() != null) {
-            ProductVariantEntity v = p.getVariants().stream()
-                    .filter(x -> variantId.equals(x.getId())).findFirst().orElse(null);
-            if (v != null) {
-                if (v.getPackageWeightGrams() != null && v.getPackageWeightGrams() > 0) {
-                    return v.getPackageWeightGrams();
-                }
-                if (v.getWeightGrams() != null && v.getWeightGrams() > 0) {
-                    return v.getWeightGrams();
-                }
-            }
+    /** La variante seleccionada de la línea, o {@code null} si el producto no tiene variantes. */
+    private ProductVariantEntity variantOf(ProductEntity product, UUID variantId) {
+        if (variantId == null || product.getVariants() == null) {
+            return null;
         }
-        if (p.getPackageWeightGrams() != null && p.getPackageWeightGrams() > 0) {
-            return p.getPackageWeightGrams();
-        }
-        if (p.getWeightGrams() != null && p.getWeightGrams() > 0) {
-            return p.getWeightGrams();
-        }
-        return 500;
+        return product.getVariants().stream().filter(v -> variantId.equals(v.getId())).findFirst().orElse(null);
     }
 }

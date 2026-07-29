@@ -14,6 +14,7 @@ import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
 import com.nexaplatform.dropshipping.application.service.StockService;
 import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
+import com.nexaplatform.dropshipping.application.service.ParcelAggregator;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
@@ -139,7 +140,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 : "es";
 
         int subtotal = 0;
-        int totalWeightGrams = 0;
+        ParcelAggregator parcel = new ParcelAggregator();
         for (var itemReq : req.items()) {
             // Cantidad dentro de un rango sano ANTES de calcular importes. Cierra el desbordamiento de
             // enteros del cobro (unitCents * quantity) y rechaza cantidades ≤ 0 aunque el DTO no valide.
@@ -201,13 +202,13 @@ public class OrderUseCaseImpl implements OrderUseCase {
                     .lineTotalCents(lineTotal).build());
 
             subtotal = Math.addExact(subtotal, lineTotal);
-            totalWeightGrams = Math.addExact(totalWeightGrams,
-                    Math.multiplyExact(packageWeightGrams(product, variant), itemReq.quantity()));
+            parcel.add(product, variant, itemReq.quantity());
         }
 
-        // Envío con Cainiao: tarifa por destino. Si el país no está cubierto por Cainiao, el envío
-        // queda en 0 aquí (el checkout del storefront bloquea antes el destino no soportado).
-        ShippingQuote quote = fulfillment.quote(order.getShippingCountry(), Math.max(1, totalWeightGrams));
+        // Envío: tarifa por destino del carrier. Si el país no está cubierto, el envío queda en 0 aquí
+        // (el checkout del storefront bloquea antes el destino no soportado). El bulto se arma con el
+        // MISMO agregador que la vista previa del checkout: peso, medidas del paquete y batería.
+        ShippingQuote quote = fulfillment.quote(order.getShippingCountry(), parcel.build());
         int shippingCents = quote.supported() ? quote.amountUsdCents() : 0;
 
         // Descuento de referido para el COMPRADOR: 10% del subtotal de producto si tiene una atribución
@@ -675,25 +676,6 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // Auto-sync del índice OpenSearch en cada transición de estado (forward/ship/deliver/cancel/refund).
         orderIndexer.indexOrder(o.getId());
         return enriched;
-    }
-
-    /** Peso del paquete (g) por unidad: variante > producto, con 500g por defecto si no hay dato. */
-    private int packageWeightGrams(ProductEntity p, ProductVariantEntity v) {
-        if (v != null) {
-            if (v.getPackageWeightGrams() != null && v.getPackageWeightGrams() > 0) {
-                return v.getPackageWeightGrams();
-            }
-            if (v.getWeightGrams() != null && v.getWeightGrams() > 0) {
-                return v.getWeightGrams();
-            }
-        }
-        if (p.getPackageWeightGrams() != null && p.getPackageWeightGrams() > 0) {
-            return p.getPackageWeightGrams();
-        }
-        if (p.getWeightGrams() != null && p.getWeightGrams() > 0) {
-            return p.getWeightGrams();
-        }
-        return 500;
     }
 
     /** Resuelve email/idioma del comprador y dispara el email transaccional del pedido. */

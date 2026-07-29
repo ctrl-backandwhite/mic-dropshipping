@@ -95,6 +95,22 @@ public class ProductEntity extends BaseEntity {
     @Column(name = "hs_code", length = 40)
     private String hsCode;
 
+    /** InvoicePart (材质) que se declara a YunExpress, en inglés. Sembrado desde el perfil de la categoría. */
+    @Column(name = "customs_material", length = 255)
+    private String customsMaterial;
+
+    /** InvoiceUsage (用途) que se declara a YunExpress, en inglés. Sembrado desde el perfil de la categoría. */
+    @Column(name = "customs_usage", length = 255)
+    private String customsUsage;
+
+    /**
+     * Presencia de batería: determina el {@code PackageType} de YunExpress (0 = 普货 carga general,
+     * 1 = 带电 con batería) y, por tanto, el canal y la tarifa. Valores: NONE, BUILT_IN, WITH_EQUIPMENT.
+     */
+    @Column(name = "battery_type", length = 20, nullable = false)
+    @Builder.Default
+    private String batteryType = "NONE";
+
     @Column(name = "package_weight_grams")
     private Integer packageWeightGrams;
 
