@@ -189,3 +189,5 @@ databaseChangeLog:
       file: db/changelog/schema-v89-outbound-email-inline-images.sql
   - include:
       file: db/changelog/schema-v90-yunexpress-customs-profile.sql
+  - include:
+      file: db/changelog/schema-v91-fulfillment-retry.sql

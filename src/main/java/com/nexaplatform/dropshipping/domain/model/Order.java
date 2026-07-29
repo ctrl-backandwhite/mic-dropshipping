@@ -57,6 +57,13 @@ public class Order {
     private Instant estimatedDeliveryAt;
     private Instant lastTrackedAt;
 
+    // Estado del intento de creación del envío en el transportista. Permite espaciar los reintentos,
+    // rendirse ante un fallo definitivo y enseñar el motivo al admin en vez de dejarlo solo en el log.
+    private int fulfillmentAttempts;
+    private String fulfillmentError;
+    private Instant fulfillmentFailedAt;
+    private Instant fulfillmentNextAttemptAt;
+
     @Builder.Default
     private List<OrderItem> items = new ArrayList<>();
 

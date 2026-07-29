@@ -12,6 +12,7 @@ import com.nexaplatform.dropshipping.domain.repository.UserRepository;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.FulfillmentResult;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.TrackingSnapshot;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentFailure;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.TrackingStep;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressEventCipher;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressFulfillmentService;
@@ -49,6 +50,14 @@ public class FulfillmentService {
      */
     private static final String CARRIER_SOURCE = "YUNEXPRESS";
 
+    /**
+     * Intentos de creación del envío antes de rendirse. Ocho intentos con espera creciente cubren más de
+     * dos horas de indisponibilidad del transportista; a partir de ahí ya no es un bache pasajero.
+     */
+    private static final int MAX_FULFILLMENT_ATTEMPTS = 8;
+    /** Techo de la espera entre intentos, para que el backoff no se vaya a horas. */
+    private static final long MAX_BACKOFF_MINUTES = 30L;
+
     private final OrderRepository orderRepository;
     private final OrderTrackingEventRepository trackingRepository;
     private final FulfillmentProvider fulfillment;
@@ -70,24 +79,102 @@ public class FulfillmentService {
                 .map(Order::getId).toList();
     }
 
-    /** Al despachar el pedido: crea el envío en el carrier y registra el primer evento del timeline. */
+    /**
+     * Al despachar el pedido: crea el envío en el carrier y registra el primer evento del timeline.
+     *
+     * <p>Si el transportista falla, el pedido NO se queda reintentando en silencio: el motivo se guarda
+     * en el propio pedido y el siguiente intento se espacia. Un fallo permanente —el bulto no cabe en el
+     * canal, la declaración es inválida— se abandona al primer intento, porque reintentarlo cada minuto
+     * no lo arregla y solo retrasa que alguien lo mire.
+     */
     @Transactional
     public void createShipment(UUID orderId) {
         Order o = orderRepository.findById(orderId).orElse(null);
         if (o == null || o.getTrackingNumber() != null || o.getStatus() != OrderStatus.FORWARDED) {
             return; // sin pedido, ya tiene envío, o aún no despachado
         }
-        FulfillmentResult r = fulfillment.createShipment(o);
+        if (!readyForAttempt(o)) {
+            return; // rendido, o aún dentro de la espera del backoff
+        }
+        FulfillmentResult r;
+        try {
+            r = fulfillment.createShipment(o);
+        } catch (RuntimeException e) {
+            recordFailure(o, FulfillmentFailure.of(e));
+            return;
+        }
         o.setCarrier(r.carrier());
         o.setTrackingNumber(r.trackingNumber());
         o.setFulfillmentRef(r.fulfillmentRef());
         o.setTrackingStatus(OrderStatus.FORWARDED.name());
         o.setEstimatedDeliveryAt(Instant.now().plus(Duration.ofDays(r.etaMaxDays())));
         o.setLastTrackedAt(Instant.now());
+        // La guía existe: se borra el rastro de los intentos fallidos para no dejar un error caducado
+        // a la vista del admin.
+        o.setFulfillmentAttempts(0);
+        o.setFulfillmentError(null);
+        o.setFulfillmentFailedAt(null);
+        o.setFulfillmentNextAttemptAt(null);
         orderRepository.save(o);
         appendEvent(o.getId(), OrderStatus.FORWARDED.name(), "Envío registrado para entrega", "Shenzhen, CN", "SYSTEM",
                 o.getForwardedAt() != null ? o.getForwardedAt() : Instant.now());
         log.info("Fulfillment: envío {} creado para pedido {}", r.trackingNumber(), o.getOrderNumber());
+    }
+
+    /** ¿Toca intentarlo? No si ya se dio por perdido ni si aún no ha vencido la espera del backoff. */
+    private boolean readyForAttempt(Order o) {
+        if (o.getFulfillmentFailedAt() != null) {
+            return false;
+        }
+        return o.getFulfillmentNextAttemptAt() == null || !Instant.now().isBefore(o.getFulfillmentNextAttemptAt());
+    }
+
+    /**
+     * Anota el fallo en el pedido y decide si habrá otro intento. La espera crece exponencialmente
+     * ({@code 2^intentos} minutos, con techo) para no martillear al transportista cuando está caído, y
+     * tras {@link #MAX_FULFILLMENT_ATTEMPTS} intentos se abandona: a esas alturas ya no es un problema
+     * pasajero y hace falta que alguien intervenga.
+     */
+    private void recordFailure(Order o, FulfillmentFailure failure) {
+        int attempts = o.getFulfillmentAttempts() + 1;
+        o.setFulfillmentAttempts(attempts);
+        o.setFulfillmentError(failure.getMessage());
+        boolean giveUp = failure.isPermanent() || attempts >= MAX_FULFILLMENT_ATTEMPTS;
+        if (giveUp) {
+            o.setFulfillmentFailedAt(Instant.now());
+            o.setFulfillmentNextAttemptAt(null);
+            log.error("::> [FULFILLMENT] Envío abandonado pedido={} intentos={} motivo={} causa={}",
+                    o.getOrderNumber(), attempts, failure.kind(), failure.getMessage());
+        } else {
+            long minutes = Math.min(MAX_BACKOFF_MINUTES, 1L << (attempts - 1));
+            o.setFulfillmentNextAttemptAt(Instant.now().plus(Duration.ofMinutes(minutes)));
+            log.warn("::> [FULFILLMENT] Envío falló pedido={} intento={} reintento en {} min causa={}",
+                    o.getOrderNumber(), attempts, minutes, failure.getMessage());
+        }
+        orderRepository.save(o);
+    }
+
+    /** Pedidos cuyo envío se abandonó y esperan intervención manual (bandeja de incidencias del admin). */
+    @Transactional(readOnly = true)
+    public List<Order> failedFulfillments() {
+        return orderRepository.findAll().stream()
+                .filter(o -> o.getFulfillmentFailedAt() != null && o.getTrackingNumber() == null)
+                .sorted((a, b) -> b.getFulfillmentFailedAt().compareTo(a.getFulfillmentFailedAt()))
+                .toList();
+    }
+
+    /**
+     * Rehabilita el envío de un pedido abandonado para que el scheduler vuelva a intentarlo. Se usa desde
+     * el admin después de corregir lo que lo bloqueaba (canal, peso, declaración).
+     */
+    @Transactional
+    public void retryFulfillment(UUID orderId) {
+        Order o = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException("Order"));
+        o.setFulfillmentFailedAt(null);
+        o.setFulfillmentNextAttemptAt(null);
+        o.setFulfillmentAttempts(0);
+        orderRepository.save(o);
+        log.info("::> [FULFILLMENT] Reintento manual habilitado pedido={}", o.getOrderNumber());
     }
 
     /**

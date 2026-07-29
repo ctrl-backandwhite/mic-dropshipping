@@ -19,6 +19,8 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Produ
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -85,6 +87,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     private final ProductRepository productRepository;
     /** La tarifa de YunExpress llega en su divisa (RMB); el sistema cotiza en céntimos USD. */
     private final CurrencyRateService currencyRateService;
+    /** Para saber si el entorno es productivo y, por tanto, si el modo simulado está permitido. */
+    private final Environment environment;
 
     @Value("${nexadrop.yunexpress.enabled:false}")
     private boolean enabled;
@@ -134,6 +138,19 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
 
     private boolean isActive() {
         return enabled && client.hasCredentials();
+    }
+
+    /**
+     * ¿Está permitido el modo simulado en este entorno? Solo fuera de producción.
+     *
+     * <p>El mock inventa una guía y hace avanzar el tracking solo hasta "entregado". En desarrollo es lo
+     * que permite recorrer el flujo entero sin API; en producción sería un desastre silencioso: si
+     * caducan las credenciales o alguien deja {@code enabled=false}, la plataforma daría por entregados
+     * pedidos que nunca se enviaron —y mandaría al cliente el correo de entrega—. Por eso en producción
+     * se prefiere fallar y que el pedido quede pendiente a la vista del admin.
+     */
+    private boolean mockAllowed() {
+        return !environment.acceptsProfiles(Profiles.of("pro", "pre"));
     }
 
     // ── Cobertura ────────────────────────────────────────────────────────────────────────────────
@@ -350,6 +367,11 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
                     order.getOrderNumber(), gaps);
         }
         if (!isActive()) {
+            if (!mockAllowed()) {
+                throw new FulfillmentFailure(FulfillmentFailure.Kind.TRANSIENT,
+                        "YunExpress no está operativo (enabled=" + enabled + ", credenciales="
+                                + client.hasCredentials() + ") y en producción no se generan envíos simulados");
+            }
             String hex = order.getId().toString().replace("-", "").substring(0, 12).toUpperCase();
             log.info("YunExpress mock-mode: envío simulado para pedido {} ({} líneas declaradas, {} céntimos USD, {})",
                     order.getOrderNumber(), parcels.size(), valuation.declaredValueCents(), valuation.taxMode());
@@ -518,16 +540,25 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         ParcelSpec parcel = parcelOf(order);
         String channel = resolveProductCode(order.getShippingCountry(), parcel);
         Map<String, Object> payload = createPayload(order, parcel, channel, valuation);
-        JsonNode response = client.post(PATH_CREATE, payload);
+        JsonNode response;
+        try {
+            response = client.post(PATH_CREATE, payload);
+        } catch (RuntimeException e) {
+            // Red, timeout o 5xx: no sabemos si el envío llegó a crearse, así que se reintenta.
+            throw FulfillmentFailure.of(e);
+        }
         if (!response.path("success").asBoolean(false)) {
-            throw new IllegalStateException("YunExpress rechazó el envío del pedido " + order.getOrderNumber()
+            // Aquí el carrier SÍ contestó: el código dice si el problema se arregla con el tiempo o si
+            // hace falta que alguien cambie el canal, el peso o la declaración.
+            throw FulfillmentFailure.from("YunExpress rechazó el envío del pedido " + order.getOrderNumber()
                     + ": " + response.path("code").asText("") + " " + response.path("msg").asText(""));
         }
         JsonNode result = response.path("result");
         String waybill = result.path("waybill_number").asText("");
         if (waybill.isBlank()) {
-            throw new IllegalStateException("YunExpress no devolvió número de guía para el pedido "
-                    + order.getOrderNumber() + ": " + result);
+            throw new FulfillmentFailure(FulfillmentFailure.Kind.TRANSIENT,
+                    "YunExpress no devolvió número de guía para el pedido " + order.getOrderNumber()
+                            + ": " + result);
         }
         log.info("YunExpress: envío creado pedido={} canal={} guía={}",
                 order.getOrderNumber(), channel, waybill);
@@ -672,8 +703,9 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         }
         RateOption best = cheapestRate(countryCode, parcel, chargeableWeightGrams(parcel));
         if (best == null) {
-            throw new IllegalStateException("YunExpress no ofrece ningún canal para " + countryCode
-                    + "; fija nexadrop.yunexpress.product-code con un canal del contrato");
+            throw new FulfillmentFailure(FulfillmentFailure.Kind.PERMANENT,
+                    "YunExpress no ofrece ningún canal para " + countryCode
+                            + "; fija nexadrop.yunexpress.product-code con un canal del contrato");
         }
         return best.productCode();
     }
@@ -751,6 +783,11 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     public TrackingSnapshot track(String trackingNumber, Instant forwardedAt, String countryCode) {
         if (isActive()) {
             return realTrack(trackingNumber, countryCode);
+        }
+        if (!mockAllowed()) {
+            // Sin proveedor real no hay trazabilidad que dar: se deja el envío como registrado en vez de
+            // inventar un avance que acabaría marcando el pedido como entregado.
+            return new TrackingSnapshot(OrderStatus.FORWARDED, List.of());
         }
         Instant start = forwardedAt != null ? forwardedAt : Instant.now();
         long elapsedMin = Math.max(0, Duration.between(start, Instant.now()).toMinutes());
