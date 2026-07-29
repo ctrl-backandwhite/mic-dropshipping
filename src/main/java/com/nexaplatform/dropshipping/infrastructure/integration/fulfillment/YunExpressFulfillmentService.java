@@ -378,11 +378,13 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     @Override
     public List<FulfillmentResult> createShipments(Order order) {
         List<ParcelSplitter.Bin> bins = splitOrder(order);
-        if (bins.size() <= 1) {
-            return List.of(createShipment(order));
+        if (bins.size() > 1) {
+            log.info("YunExpress: pedido {} repartido en {} bultos por los límites del canal",
+                    order.getOrderNumber(), bins.size());
         }
-        log.info("YunExpress: pedido {} repartido en {} bultos por los límites del canal",
-                order.getOrderNumber(), bins.size());
+        // También con un solo bulto se pasa por createShipmentForBin: así el envío guarda su peso y su
+        // valor declarado. Delegar en createShipment() los dejaba a cero y el dato se perdía.
+        warnCustomsGaps(order);
         List<FulfillmentResult> results = new ArrayList<>();
         for (int i = 0; i < bins.size(); i++) {
             results.add(createShipmentForBin(order, bins.get(i), i + 1));
@@ -516,16 +518,21 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         return lines;
     }
 
+    /** Deja constancia de lo que le falta a la declaración para pasar aduana sin fricción. */
+    private void warnCustomsGaps(Order order) {
+        List<String> gaps = customsGaps(declaredParcels(order));
+        if (!gaps.isEmpty()) {
+            log.warn("Pedido {}: declaración aduanera incompleta para YunExpress -> {}",
+                    order.getOrderNumber(), gaps);
+        }
+    }
+
     @Override
     public FulfillmentResult createShipment(Order order) {
         int etaMax = zone(order.getShippingCountry()).map(CainiaoZoneEntity::getEtaMaxDays).orElse(20);
         CustomsValuation valuation = declarationFor(order);
         List<ParcelDeclaration> parcels = declaredParcels(order);
-        List<String> gaps = customsGaps(parcels);
-        if (!gaps.isEmpty()) {
-            log.warn("Pedido {}: declaración aduanera incompleta para YunExpress -> {}",
-                    order.getOrderNumber(), gaps);
-        }
+        warnCustomsGaps(order);
         if (!isActive()) {
             if (!mockAllowed()) {
                 throw new FulfillmentFailure(FulfillmentFailure.Kind.TRANSIENT,

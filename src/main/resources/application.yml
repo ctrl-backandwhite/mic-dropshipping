@@ -96,6 +96,14 @@ spring:
           starttls:
             enable: ${SMTP_TLS:false}
 
+  jackson:
+    deserialization:
+      # Spring Boot 4 trae este flag ACTIVADO: un campo primitivo que no venga en el JSON llega como null
+      # al constructor (Lombok @AllArgsConstructor + parameter-names) y la petición entera se rechaza con
+      # "JSON inválido". Rompía el login si el cliente omitía `linkSocial`, y afectaba igual al checkout y
+      # a otros DTOs con primitivos. Un campo opcional ausente debe valer su default, no tumbar la llamada.
+      fail-on-null-for-primitives: false
+
   messages:
     basename: i18n/messages
     encoding: UTF-8

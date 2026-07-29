@@ -115,6 +115,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleNotReadable(HttpMessageNotReadableException ex) {
+        // El cliente solo recibe "JSON inválido" (no se le filtra el detalle interno), pero sin dejar
+        // rastro en el log un cuerpo que Jackson no sabe leer es indiagnosticable desde fuera.
+        log.warn("::> [API] Cuerpo de petición ilegible: {}", ex.getMostSpecificCause().getMessage());
         return new ResponseEntity<>(body("VE004", "El contenido enviado no es un JSON válido. Revisa el formato.",
                 List.of()), HttpStatus.BAD_REQUEST);
     }
