@@ -3,6 +3,8 @@ package com.nexaplatform.dropshipping.application;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService;
+import com.nexaplatform.dropshipping.application.service.OpsAlertService;
+import com.nexaplatform.dropshipping.application.usecase.NotificationUseCase;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressEventCipher;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService.TrackingProgress;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
@@ -16,8 +18,10 @@ import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.Fulf
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.TrackingSnapshot;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.TrackingStep;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderTrackingEventEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderTrackingEventRepository;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
@@ -53,6 +57,8 @@ class FulfillmentServiceTest {
     UserRepository userRepository;
     @Mock
     OrderEmailService orderEmailService;
+    @Mock
+    OrderShipmentRepository shipmentRepository;
     @InjectMocks
     FulfillmentService service;
 
@@ -108,8 +114,8 @@ class FulfillmentServiceTest {
     void createShipment_setsFulfillmentFieldsAndAppendsEvent() {
         Order o = order(OrderStatus.FORWARDED, null);
         when(orderRepository.findById(o.getId())).thenReturn(Optional.of(o));
-        when(cainiao.createShipment(o))
-                .thenReturn(new FulfillmentResult("Standard Shipping", "CN-TRACK", "LP-REF", 20));
+        when(cainiao.createShipments(o)).thenReturn(
+                List.of(new FulfillmentResult("Standard Shipping", "CN-TRACK", "LP-REF", 20)));
 
         service.createShipment(o.getId());
 
@@ -240,7 +246,9 @@ class FulfillmentServiceTest {
     @Test
     void applyPush_ignoresInvalidJson() {
         FulfillmentService svc = new FulfillmentService(orderRepository, trackingRepository, cainiao,
-                userRepository, orderEmailService, realMapper, new YunExpressEventCipher());
+                userRepository, orderEmailService, realMapper, new YunExpressEventCipher(),
+                Mockito.mock(OpsAlertService.class), Mockito.mock(NotificationUseCase.class),
+                shipmentRepository);
 
         svc.applyPush("TRACEPUSH", "{not-json");
 
@@ -250,7 +258,9 @@ class FulfillmentServiceTest {
     @Test
     void applyPush_resolvesByMailNoAndAppendsMappedDeliveredEvent() {
         FulfillmentService svc = new FulfillmentService(orderRepository, trackingRepository, cainiao,
-                userRepository, orderEmailService, realMapper, new YunExpressEventCipher());
+                userRepository, orderEmailService, realMapper, new YunExpressEventCipher(),
+                Mockito.mock(OpsAlertService.class), Mockito.mock(NotificationUseCase.class),
+                shipmentRepository);
         Order o = order(OrderStatus.SHIPPED, "CN-TRACK");
         when(orderRepository.findByTrackingNumber("CN-TRACK")).thenReturn(Optional.of(o));
         when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId())).thenReturn(List.of());
@@ -270,7 +280,9 @@ class FulfillmentServiceTest {
     @Test
     void applyPush_singleStatusSyncResolvedByOrderCodeMapsToForwarded() {
         FulfillmentService svc = new FulfillmentService(orderRepository, trackingRepository, cainiao,
-                userRepository, orderEmailService, realMapper, new YunExpressEventCipher());
+                userRepository, orderEmailService, realMapper, new YunExpressEventCipher(),
+                Mockito.mock(OpsAlertService.class), Mockito.mock(NotificationUseCase.class),
+                shipmentRepository);
         Order o = order(OrderStatus.PAID, null);
         when(orderRepository.findByOrderNumber("NX-1")).thenReturn(Optional.of(o));
         when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId())).thenReturn(List.of());
@@ -288,7 +300,9 @@ class FulfillmentServiceTest {
     @Test
     void applyPush_skipsEventAlreadyPresentAndDoesNotSaveOrder() {
         FulfillmentService svc = new FulfillmentService(orderRepository, trackingRepository, cainiao,
-                userRepository, orderEmailService, realMapper, new YunExpressEventCipher());
+                userRepository, orderEmailService, realMapper, new YunExpressEventCipher(),
+                Mockito.mock(OpsAlertService.class), Mockito.mock(NotificationUseCase.class),
+                shipmentRepository);
         Order o = order(OrderStatus.DELIVERED, "CN-TRACK");
         when(orderRepository.findByTrackingNumber("CN-TRACK")).thenReturn(Optional.of(o));
         // Timeline already has the DELIVERED|Entregado event → dedup, nothing changes.
@@ -305,7 +319,9 @@ class FulfillmentServiceTest {
     @Test
     void applyPush_noOpWhenOrderNotFoundInPayload() {
         FulfillmentService svc = new FulfillmentService(orderRepository, trackingRepository, cainiao,
-                userRepository, orderEmailService, realMapper, new YunExpressEventCipher());
+                userRepository, orderEmailService, realMapper, new YunExpressEventCipher(),
+                Mockito.mock(OpsAlertService.class), Mockito.mock(NotificationUseCase.class),
+                shipmentRepository);
         when(orderRepository.findByTrackingNumber("UNKNOWN")).thenReturn(Optional.empty());
 
         svc.applyPush("TRACEPUSH", "{\"mailNo\":\"UNKNOWN\",\"traces\":[{\"action\":\"DELIVER\",\"desc\":\"x\"}]}");

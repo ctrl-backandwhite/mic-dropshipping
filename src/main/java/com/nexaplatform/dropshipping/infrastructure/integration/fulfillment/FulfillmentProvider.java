@@ -22,8 +22,18 @@ public interface FulfillmentProvider {
     record SupportedCountry(String countryCode, String countryName) {
     }
 
-    /** Resultado de crear el envío: transportista + nº de seguimiento + referencia + ETA máx (días). */
-    record FulfillmentResult(String carrier, String trackingNumber, String fulfillmentRef, int etaMaxDays) {
+    /**
+     * Resultado de crear el envío de UN bulto: transportista, nº de seguimiento, referencia (guía) y ETA
+     * máx en días. {@code sequenceNo} indica qué bulto del pedido es (1..N) y {@code weightGrams} /
+     * {@code declaredValueCents} lo que finalmente viajó en él, que es lo que se enseña al cliente.
+     */
+    record FulfillmentResult(String carrier, String trackingNumber, String fulfillmentRef, int etaMaxDays,
+            int sequenceNo, int weightGrams, int declaredValueCents, String productCode) {
+
+        /** Bulto único de un pedido que no hizo falta repartir. */
+        public FulfillmentResult(String carrier, String trackingNumber, String fulfillmentRef, int etaMaxDays) {
+            this(carrier, trackingNumber, fulfillmentRef, etaMaxDays, 1, 0, 0, null);
+        }
     }
 
     /** Un paso de la línea temporal de tracking. */
@@ -80,6 +90,17 @@ public interface FulfillmentProvider {
 
     /** Crea el envío al despachar el pedido (devuelve carrier + nº de seguimiento + referencia). */
     FulfillmentResult createShipment(Order order);
+
+    /**
+     * Crea TODOS los envíos que necesita el pedido: uno por bulto.
+     *
+     * <p>Un pedido no siempre cabe en un paquete —cada canal impone peso y valor máximos—, así que se
+     * reparte y cada bulto viaja con su propia guía. Por defecto se delega en {@link #createShipment} y
+     * sale un único envío, que es el comportamiento de un proveedor que no sepa repartir.
+     */
+    default List<FulfillmentResult> createShipments(Order order) {
+        return List.of(createShipment(order));
+    }
 
     /** Consulta el tracking del envío (estado actual + pasos). */
     TrackingSnapshot track(String trackingNumber, Instant forwardedAt, String countryCode);

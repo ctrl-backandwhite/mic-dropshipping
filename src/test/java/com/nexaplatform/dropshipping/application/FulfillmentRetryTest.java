@@ -2,7 +2,9 @@ package com.nexaplatform.dropshipping.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService;
+import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
+import com.nexaplatform.dropshipping.application.usecase.NotificationUseCase;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
@@ -11,6 +13,7 @@ import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.Fulf
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.FulfillmentResult;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressEventCipher;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderTrackingEventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,11 +21,14 @@ import org.mockito.Mockito;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -43,14 +49,20 @@ class FulfillmentRetryTest {
     private FulfillmentProvider provider;
     private FulfillmentService service;
     private Order order;
+    private OpsAlertService opsAlertService;
+    private NotificationUseCase notificationUseCase;
+    private OrderShipmentRepository shipmentRepository;
 
     @BeforeEach
     void setUp() {
         orderRepository = Mockito.mock(OrderRepository.class);
         provider = Mockito.mock(FulfillmentProvider.class);
+        opsAlertService = Mockito.mock(OpsAlertService.class);
+        notificationUseCase = Mockito.mock(NotificationUseCase.class);
+        shipmentRepository = Mockito.mock(OrderShipmentRepository.class);
         service = new FulfillmentService(orderRepository, Mockito.mock(OrderTrackingEventRepository.class),
                 provider, Mockito.mock(UserRepository.class), Mockito.mock(OrderEmailService.class),
-                new ObjectMapper(), new YunExpressEventCipher());
+                new ObjectMapper(), new YunExpressEventCipher(), opsAlertService, notificationUseCase, shipmentRepository);
 
         order = new Order();
         order.setId(UUID.randomUUID());
@@ -63,7 +75,7 @@ class FulfillmentRetryTest {
     @Test
     void unFalloPermanenteSeAbandonaAlPrimerIntentoConElMotivoGuardado() {
         // "Order rule verification failed" = el bulto no cabe en el canal. Reintentar no lo arregla.
-        when(provider.createShipment(any(Order.class))).thenThrow(FulfillmentFailure.from(
+        when(provider.createShipments(any(Order.class))).thenThrow(FulfillmentFailure.from(
                 "YunExpress rechazó el envío: 02039171 Weight should not exceed 2KG"));
 
         service.createShipment(order.getId());
@@ -77,7 +89,7 @@ class FulfillmentRetryTest {
 
     @Test
     void unFalloTransitorioProgramaOtroIntento() {
-        when(provider.createShipment(any(Order.class)))
+        when(provider.createShipments(any(Order.class)))
                 .thenThrow(new FulfillmentFailure(FulfillmentFailure.Kind.TRANSIENT, "Service execution time-out"));
 
         service.createShipment(order.getId());
@@ -94,7 +106,7 @@ class FulfillmentRetryTest {
 
         service.createShipment(order.getId());
 
-        verify(provider, never()).createShipment(any(Order.class));
+        verify(provider, never()).createShipments(any(Order.class));
     }
 
     @Test
@@ -103,22 +115,37 @@ class FulfillmentRetryTest {
 
         service.createShipment(order.getId());
 
-        verify(provider, never()).createShipment(any(Order.class));
+        verify(provider, never()).createShipments(any(Order.class));
     }
 
     @Test
-    void trasVariosFallosTransitoriosSeAcabaAbandonando() {
-        when(provider.createShipment(any(Order.class)))
+    void alTercerFalloTransitorioSeDejaParaElAdminYSeAvisa() {
+        when(provider.createShipments(any(Order.class)))
                 .thenThrow(new FulfillmentFailure(FulfillmentFailure.Kind.TRANSIENT, "Service execution time-out"));
 
-        for (int i = 0; i < 8; i++) {
-            order.setFulfillmentNextAttemptAt(null); // simula que la espera ya venció
+        for (int i = 0; i < 3; i++) {
+            order.setFulfillmentNextAttemptAt(null); // simula que la espera de 10 min ya venció
             service.createShipment(order.getId());
         }
 
-        assertThat(order.getFulfillmentAttempts()).isEqualTo(8);
+        assertThat(order.getFulfillmentAttempts()).isEqualTo(3);
         assertThat(order.getFulfillmentFailedAt()).isNotNull();
-        verify(provider, times(8)).createShipment(any(Order.class));
+        verify(provider, times(3)).createShipments(any(Order.class));
+        // Aviso por correo Y en la bandeja del panel: que no dependa de que alguien lea el buzón.
+        verify(opsAlertService).fulfillmentFailed(eq("NX-1784936692-7159"), any(), eq(3), any());
+        verify(notificationUseCase).sendAdminNotification(any(), contains("NX-1784936692-7159"), any());
+    }
+
+    @Test
+    void entreIntentosSeEsperanDiezMinutos() {
+        when(provider.createShipments(any(Order.class)))
+                .thenThrow(new FulfillmentFailure(FulfillmentFailure.Kind.TRANSIENT, "Service execution time-out"));
+
+        service.createShipment(order.getId());
+
+        assertThat(order.getFulfillmentNextAttemptAt())
+                .isAfter(Instant.now().plus(Duration.ofMinutes(9)))
+                .isBefore(Instant.now().plus(Duration.ofMinutes(11)));
     }
 
     @Test
@@ -126,8 +153,8 @@ class FulfillmentRetryTest {
         order.setFulfillmentAttempts(3);
         order.setFulfillmentError("Service execution time-out");
         order.setFulfillmentNextAttemptAt(null);
-        when(provider.createShipment(any(Order.class)))
-                .thenReturn(new FulfillmentResult("Standard Shipping", "YT2621101299000012", "YT2621101299000012", 15));
+        when(provider.createShipments(any(Order.class))).thenReturn(List.of(
+                new FulfillmentResult("Standard Shipping", "YT2621101299000012", "YT2621101299000012", 15)));
 
         service.createShipment(order.getId());
 

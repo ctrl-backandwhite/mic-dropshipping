@@ -10,4 +10,7 @@ import java.util.UUID;
 public interface OrderTrackingEventRepository extends JpaRepository<OrderTrackingEventEntity, UUID> {
 
     List<OrderTrackingEventEntity> findByOrderIdOrderByOccurredAtAsc(UUID orderId);
+
+    /** Eventos de un bulto concreto, para el seguimiento paquete a paquete. */
+    List<OrderTrackingEventEntity> findByShipmentIdOrderByOccurredAtAsc(UUID shipmentId);
 }

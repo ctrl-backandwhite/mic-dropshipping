@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
+import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
 import com.nexaplatform.dropshipping.application.service.StockService;
@@ -77,6 +78,8 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     private final OrderEmailService orderEmailService;
     private final CurrencyRateService currencyRateService;
     private final StockService stockService;
+    /** Avisos al responsable cuando una pasarela deja de cobrar. */
+    private final OpsAlertService opsAlertService;
 
     @Override
     @Transactional
@@ -119,7 +122,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         p = paymentRepository.save(p);
 
         PaymentGateway gw = resolveGateway(method);
-        var result = gw.initiate(managedEntity(p.getId()));
+        var result = initiateOrAlert(gw, p.getId(), "recarga de saldo");
 
         p.setProvider(gw.providerName());
         p.setProviderRef(result.providerRef());
@@ -458,6 +461,23 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 .orElseThrow(() -> new BusinessException("No gateway for method: " + method));
     }
 
+    /**
+     * Arranca el pago en la pasarela y, si falla, avisa al responsable antes de propagar el error.
+     *
+     * <p>Un fallo aquí no lo puede resolver el cliente: significa que ese método de pago no está
+     * cobrando. Sin aviso, solo se detecta cuando alguien reclama o mirando los logs, y mientras tanto
+     * se pierden ventas. El error se relanza tal cual para que el flujo de pago siga comportándose igual.
+     */
+    private PaymentGateway.InitiateResult initiateOrAlert(PaymentGateway gw, UUID paymentId, String operation) {
+        try {
+            return gw.initiate(managedEntity(paymentId));
+        } catch (RuntimeException e) {
+            opsAlertService.paymentFailed(gw.providerName(), operation, paymentId.toString(),
+                    e.getMessage() != null ? e.getMessage() : e.toString());
+            throw e;
+        }
+    }
+
     /** Fetches the managed entity for the gateway call (gateways read the persisted id + user). */
     private PaymentEntity managedEntity(UUID paymentId) {
         return paymentJpaRepositoryAdapter.findById(paymentId).orElseThrow(() -> new NotFoundException("Payment"));
@@ -514,7 +534,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         p = paymentRepository.save(p);
 
         PaymentGateway gw = resolveGateway(method);
-        var result = gw.initiate(managedEntity(p.getId()));
+        var result = initiateOrAlert(gw, p.getId(), "cobro del pedido");
 
         p.setProvider(gw.providerName());
         p.setProviderRef(result.providerRef());

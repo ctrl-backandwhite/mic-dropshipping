@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService.CustomsValuation;
 import com.nexaplatform.dropshipping.application.service.ParcelAggregator;
+import com.nexaplatform.dropshipping.application.service.ParcelSplitter;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.enums.TaxMode;
 import com.nexaplatform.dropshipping.domain.model.Order;
@@ -135,6 +136,17 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
      */
     @Value("${nexadrop.yunexpress.quote-timeout-seconds:5}")
     private long quoteTimeoutSeconds;
+    /**
+     * Límites del canal para repartir el pedido en bultos. Son los del producto logístico contratado
+     * (el canal de pruebas BPA no admite más de 2 kg ni más de 24 $). Con 0 no se reparte: todo el
+     * pedido viaja en un único envío, que es el comportamiento anterior.
+     */
+    @Value("${nexadrop.yunexpress.max-parcel-weight-grams:0}")
+    private int maxParcelWeightGrams;
+    @Value("${nexadrop.yunexpress.max-parcel-value-cents:0}")
+    private int maxParcelValueCents;
+    @Value("${nexadrop.yunexpress.max-parcel-units:0}")
+    private int maxParcelUnits;
 
     private boolean isActive() {
         return enabled && client.hasCredentials();
@@ -355,6 +367,154 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     }
 
     // ── Crear envío ──────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Crea TODAS las guías del pedido: una por bulto.
+     *
+     * <p>Se reparte con {@link ParcelSplitter} según los límites del canal ({@code max-parcel-*}). Si un
+     * bulto falla, se propaga el error: dejar un pedido con la mitad de los envíos creados sería peor que
+     * reintentarlo entero — las guías ya creadas se pueden anular desde el panel.
+     */
+    @Override
+    public List<FulfillmentResult> createShipments(Order order) {
+        List<ParcelSplitter.Bin> bins = splitOrder(order);
+        if (bins.size() <= 1) {
+            return List.of(createShipment(order));
+        }
+        log.info("YunExpress: pedido {} repartido en {} bultos por los límites del canal",
+                order.getOrderNumber(), bins.size());
+        List<FulfillmentResult> results = new ArrayList<>();
+        for (int i = 0; i < bins.size(); i++) {
+            results.add(createShipmentForBin(order, bins.get(i), i + 1));
+        }
+        return results;
+    }
+
+    /** Reparte el pedido en bultos según los límites configurados del canal. */
+    ParcelSplitterBins splitOrderBins(Order order) {
+        return new ParcelSplitterBins(splitOrder(order));
+    }
+
+    /** Envoltorio para poder exponer el reparto a los tests sin filtrar el tipo interno. */
+    public record ParcelSplitterBins(List<ParcelSplitter.Bin> bins) {
+    }
+
+    private List<ParcelSplitter.Bin> splitOrder(Order order) {
+        List<ParcelSplitter.Unit> units = new ArrayList<>();
+        List<OrderItem> items = order.getItems();
+        for (int line = 0; line < items.size(); line++) {
+            OrderItem item = items.get(line);
+            ProductEntity product = item.getProductId() != null
+                    ? productRepository.findById(item.getProductId()).orElse(null) : null;
+            ProductVariantEntity variant = variantOf(product, item);
+            int unitWeight = product != null ? ParcelAggregator.unitWeightGrams(product, variant) : 500;
+            boolean battery = product != null && ParcelAggregator.hasBattery(product);
+            for (int q = 0; q < Math.max(1, item.getQuantity()); q++) {
+                units.add(new ParcelSplitter.Unit(line, unitWeight, item.getUnitPriceCents(),
+                        dimension(product, variant, Dimension.LENGTH),
+                        dimension(product, variant, Dimension.WIDTH),
+                        dimension(product, variant, Dimension.HEIGHT), battery));
+            }
+        }
+        return ParcelSplitter.split(units,
+                new ParcelSplitter.Limits(maxParcelWeightGrams, maxParcelValueCents, maxParcelUnits));
+    }
+
+    /** Qué medida del paquete se está pidiendo; el producto manda sobre la variante. */
+    private enum Dimension { LENGTH, WIDTH, HEIGHT }
+
+    private static int dimension(ProductEntity product, ProductVariantEntity variant, Dimension which) {
+        Integer fromProduct = product == null ? null : switch (which) {
+            case LENGTH -> product.getLengthMm();
+            case WIDTH -> product.getWidthMm();
+            case HEIGHT -> product.getHeightMm();
+        };
+        if (fromProduct != null && fromProduct > 0) {
+            return fromProduct;
+        }
+        Integer fromVariant = variant == null ? null : switch (which) {
+            case LENGTH -> variant.getLengthMm();
+            case WIDTH -> variant.getWidthMm();
+            case HEIGHT -> variant.getHeightMm();
+        };
+        return fromVariant != null && fromVariant > 0 ? fromVariant : 0;
+    }
+
+    private ProductVariantEntity variantOf(ProductEntity product, OrderItem item) {
+        if (product == null || item.getVariantId() == null || product.getVariants() == null) {
+            return null;
+        }
+        return product.getVariants().stream()
+                .filter(v -> item.getVariantId().equals(v.getId())).findFirst().orElse(null);
+    }
+
+    /** Crea la guía de UN bulto concreto del pedido. */
+    private FulfillmentResult createShipmentForBin(Order order, ParcelSplitter.Bin bin, int sequenceNo) {
+        int etaMax = zone(order.getShippingCountry()).map(CainiaoZoneEntity::getEtaMaxDays).orElse(20);
+        CustomsValuation valuation = declarationFor(order);
+        if (!isActive()) {
+            if (!mockAllowed()) {
+                throw new FulfillmentFailure(FulfillmentFailure.Kind.TRANSIENT,
+                        "YunExpress no está operativo y en producción no se generan envíos simulados");
+            }
+            String hex = order.getId().toString().replace("-", "").substring(0, 10).toUpperCase() + sequenceNo;
+            return new FulfillmentResult(CARRIER_NAME, "YT" + hex + "YE", "YE" + hex, etaMax, sequenceNo,
+                    bin.spec().weightGrams(), bin.valueCents(), productCode);
+        }
+        String channel = resolveProductCode(order.getShippingCountry(), bin.spec());
+        Map<String, Object> payload = createPayload(order, bin.spec(), channel, valuation);
+        // El número de cliente debe ser único por guía: el mismo para dos envíos lo rechaza el carrier.
+        payload.put("customer_order_number", order.getOrderNumber() + "-" + sequenceNo);
+        payload.put("declaration_info", declarationInfoOfBin(order, bin));
+        JsonNode response;
+        try {
+            response = client.post(PATH_CREATE, payload);
+        } catch (RuntimeException e) {
+            throw FulfillmentFailure.of(e);
+        }
+        if (!response.path("success").asBoolean(false)) {
+            throw FulfillmentFailure.from("YunExpress rechazó el bulto " + sequenceNo + " del pedido "
+                    + order.getOrderNumber() + ": " + response.path("code").asText("")
+                    + " " + response.path("msg").asText(""));
+        }
+        JsonNode result = response.path("result");
+        String waybill = result.path("waybill_number").asText("");
+        if (waybill.isBlank()) {
+            throw new FulfillmentFailure(FulfillmentFailure.Kind.TRANSIENT,
+                    "YunExpress no devolvió guía para el bulto " + sequenceNo + " del pedido "
+                            + order.getOrderNumber());
+        }
+        subscribeTracking(waybill);
+        return new FulfillmentResult(CARRIER_NAME, trackingOf(result, waybill), waybill, etaMax, sequenceNo,
+                bin.spec().weightGrams(), bin.valueCents(), channel);
+    }
+
+    /** Declaración aduanera limitada a lo que viaja en ESTE bulto. */
+    private List<Map<String, Object>> declarationInfoOfBin(Order order, ParcelSplitter.Bin bin) {
+        List<ParcelDeclaration> all = declaredParcels(order);
+        List<Map<String, Object>> lines = new ArrayList<>();
+        for (int line = 0; line < all.size(); line++) {
+            int qty = bin.quantityOfLine(line);
+            if (qty <= 0) {
+                continue;
+            }
+            ParcelDeclaration parcel = all.get(line);
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("name_en", parcel.eName());
+            entry.put("name_local", parcel.cName());
+            entry.put("quantity", qty);
+            entry.put("unit_price", BigDecimal.valueOf(parcel.unitPrice()));
+            entry.put("unit_weight", BigDecimal.valueOf(parcel.unitWeightKg()));
+            entry.put("currency", parcel.currencyCode());
+            entry.put("hs_code", parcel.hsCode());
+            entry.put("material", parcel.invoicePart());
+            entry.put("purpose", parcel.invoiceUsage());
+            entry.put("sales_url", parcel.productUrl());
+            entry.put("sku_code", parcel.sku());
+            lines.add(entry);
+        }
+        return lines;
+    }
 
     @Override
     public FulfillmentResult createShipment(Order order) {

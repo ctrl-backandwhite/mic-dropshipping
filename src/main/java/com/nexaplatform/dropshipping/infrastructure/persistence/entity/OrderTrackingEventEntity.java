@@ -36,6 +36,13 @@ public class OrderTrackingEventEntity {
     @Column(name = "order_id", nullable = false, columnDefinition = "uuid")
     private UUID orderId;
 
+    /**
+     * Bulto al que pertenece el evento. Nulo para los eventos del pedido que no son de un envío concreto
+     * (el "envío registrado" que escribe el sistema) y para el histórico anterior al reparto en guías.
+     */
+    @Column(name = "shipment_id", columnDefinition = "uuid")
+    private UUID shipmentId;
+
     @Column(nullable = false, length = 40)
     private String status;
 

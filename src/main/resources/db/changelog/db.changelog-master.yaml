@@ -191,3 +191,5 @@ databaseChangeLog:
       file: db/changelog/schema-v90-yunexpress-customs-profile.sql
   - include:
       file: db/changelog/schema-v91-fulfillment-retry.sql
+  - include:
+      file: db/changelog/schema-v92-order-shipments.sql
