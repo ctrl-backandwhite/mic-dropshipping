@@ -20,6 +20,7 @@ import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.application.service.BulkProductFields;
 import com.nexaplatform.dropshipping.application.service.BulkProductRules;
+import com.nexaplatform.dropshipping.application.service.BulkProductStructure;
 import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService;
@@ -1450,79 +1451,11 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             images.add(new IngestImage(u, imgPos, imgPos == 0 ? "MAIN" : GALLERY));
             imgPos++;
         }
-        // Ejes de variación (Color/Talla) desde el JSON.
-        List<IngestVariantOption> options = new ArrayList<>();
-        if (r.getVariantAxes() != null) {
-            for (var ax : r.getVariantAxes()) {
-                if (ax.getName() == null || ax.getName().isBlank()) {
-                    continue;
-                }
-                List<IngestVariantValue> vals = new ArrayList<>();
-                if (ax.getValues() != null) {
-                    int vp = 0;
-                    for (String val : ax.getValues()) {
-                        // DROP-674: imagen real por valor (p.ej. la foto del color), si el proveedor la trae.
-                        String img = ax.getValueImages() != null ? ax.getValueImages().get(val) : null;
-                        vals.add(new IngestVariantValue(val, vp++, img != null && !img.isBlank() ? img : null));
-                    }
-                }
-                options.add(new IngestVariantOption(ax.getName(), options.size(), vals));
-            }
-        }
-        // Si no se declararon ejes pero las variantes traen optionValues, se derivan los ejes y valores
-        // automáticamente (cada clave -> un eje; sus valores distintos -> los valores), preservando el
-        // orden. Así un import/alta que solo trae variantes (Color/Talla en optionValues) muestra el
-        // selector en la ficha sin tener que repetir los ejes a mano.
-        if (options.isEmpty() && r.getVariants() != null) {
-            LinkedHashMap<String, LinkedHashSet<String>> derived = new LinkedHashMap<>();
-            for (var v : r.getVariants()) {
-                if (v.getOptionValues() == null) {
-                    continue;
-                }
-                for (var e : v.getOptionValues().entrySet()) {
-                    if (e.getKey() == null || e.getKey().isBlank() || e.getValue() == null || e.getValue().isBlank()) {
-                        continue;
-                    }
-                    derived.computeIfAbsent(e.getKey().trim(), k -> new LinkedHashSet<>())
-                            .add(e.getValue().trim());
-                }
-            }
-            for (var en : derived.entrySet()) {
-                List<IngestVariantValue> vals = new ArrayList<>();
-                int vp = 0;
-                for (String val : en.getValue()) {
-                    vals.add(new IngestVariantValue(val, vp++, null));
-                }
-                options.add(new IngestVariantOption(en.getKey(), options.size(), vals));
-            }
-        }
-        // Variantes/SKU desde el JSON; si no vienen, una variante por defecto.
-        List<IngestVariant> variants = new ArrayList<>();
-        if (r.getVariants() != null && !r.getVariants().isEmpty()) {
-            int vi = 0;
-            for (var v : r.getVariants()) {
-                String sku = (v.getSku() != null && !v.getSku().isBlank()) ? v.getSku()
-                        : externalId + "-" + (vi + 1);
-                variants.add(new IngestVariant(sku, sku, esTitle,
-                        v.getPrice() != null ? v.getPrice() : price, v.getStock() != null ? v.getStock() : 0,
-                        v.getImageUrl(), v.getOptionValues() != null ? v.getOptionValues() : Map.of()));
-                vi++;
-            }
-        } else {
-            // DROP-680: sin variantes declaradas no se inventa inventario (stock real desconocido = 0).
-            variants.add(new IngestVariant(externalId + "-DEF", externalId + "-DEF", esTitle, price, 0, null,
-                    Map.of()));
-        }
-        // Tiered pricing (DROP-669): se persisten SOLO los tramos reales que declara el proveedor.
-        // Si no hay tramos no se inventa ninguno: la ficha muestra únicamente el precio unitario.
-        List<IngestPriceTier> tiers = new ArrayList<>();
-        if (r.getTieredPricing() != null && !r.getTieredPricing().isEmpty()) {
-            for (var t : r.getTieredPricing()) {
-                tiers.add(new IngestPriceTier(t.getMinQty() != null ? t.getMinQty() : 1, t.getMaxQty(),
-                        t.getUnitPrice() != null ? t.getUnitPrice() : price,
-                        t.getCurrency() != null ? t.getCurrency() : "CNY"));
-            }
-        }
+        // Ejes de variación (Color/Talla), variantes comprables y tramos de precio: se derivan de la
+        // fila sin inventar nada (ver BulkProductStructure).
+        List<IngestVariantOption> options = BulkProductStructure.variantOptionsOf(r);
+        List<IngestVariant> variants = BulkProductStructure.variantsOf(r, externalId, esTitle, price);
+        List<IngestPriceTier> tiers = BulkProductStructure.priceTiersOf(r, price);
         // DROP-680: rating, recompra y reseñas NO se inventan. Si el proveedor no los declara quedan
         // nulos/0; el desglose real (ratingBreakdown) se persiste y deriva reviewCount/rating en applyLogistics.
         var req = new IngestProductRequest("1688", externalId, zhTitle, esDesc, esDesc, r.getManufacturer(),
