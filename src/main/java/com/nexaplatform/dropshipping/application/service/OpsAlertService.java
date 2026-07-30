@@ -12,6 +12,8 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Avisos por correo al responsable de la plataforma cuando un servicio del que depende el negocio deja
@@ -65,6 +67,9 @@ public class OpsAlertService {
     @Value("${nexadrop.alerts.cooldown-minutes:30}")
     private long cooldownMinutes;
 
+    /** Código de error del proveedor (YunExpress los da de 8 dígitos): identifica la causa sin el pedido. */
+    private static final Pattern PROVIDER_CODE = Pattern.compile("\\b\\d{8}\\b");
+
     private final Map<String, Instant> lastSentByKey = new ConcurrentHashMap<>();
 
     /**
@@ -105,6 +110,8 @@ public class OpsAlertService {
         if (previous != null && previous.isAfter(now.minus(Duration.ofMinutes(cooldownMinutes)))) {
             return false;
         }
+        // Purga de entradas ya caducadas: el registro vive en memoria y no puede crecer sin techo.
+        lastSentByKey.values().removeIf(sent -> sent.isBefore(now.minus(Duration.ofMinutes(cooldownMinutes))));
         lastSentByKey.put(dedupeKey, now);
         return true;
     }
@@ -120,7 +127,7 @@ public class OpsAlertService {
         // El asunto lleva el PEDIDO, no la causa: es lo que identifica el aviso de un vistazo. La
         // agrupación sí usa la causa, para que una caída del carrier no mande un correo por pedido.
         notifyFailure(new Alert(AlertKind.FULFILLMENT, "no se ha podido crear el envío del pedido " + orderNumber,
-                detail, "FULFILLMENT:" + shortCause(error)));
+                detail, "FULFILLMENT:" + causeKey(error)));
     }
 
     /** Aviso de que una pasarela de pago ha fallado. */
@@ -130,7 +137,7 @@ public class OpsAlertService {
                 + "Si el fallo persiste, los clientes no podrán completar el pago con este método."
                 + technicalDetail(error);
         notifyFailure(new Alert(AlertKind.PAYMENT, "la pasarela " + provider + " ha fallado al " + operation,
-                detail, "PAYMENT:" + provider + ":" + operation + ":" + shortCause(error)));
+                detail, "PAYMENT:" + provider + ":" + operation + ":" + causeKey(error)));
     }
 
     /**
@@ -147,8 +154,9 @@ public class OpsAlertService {
     }
 
     /**
-     * Resumen corto y estable de la causa, para agrupar. Se queda con el principio del mensaje porque el
-     * final suele traer identificadores irrepetibles (ids, importes) que romperían el agrupamiento.
+     * Resumen corto de la causa, para el ASUNTO del correo. No sirve para agrupar: los mensajes del
+     * proveedor llevan el número de pedido, así que dos fallos idénticos producen resúmenes distintos.
+     * Para agrupar está {@link #causeKey(String)}.
      */
     public static String shortCause(String error) {
         if (error == null || error.isBlank()) {
@@ -156,5 +164,32 @@ public class OpsAlertService {
         }
         String flat = error.replaceAll("\\s+", " ").trim();
         return flat.length() <= 60 ? flat : flat.substring(0, 60);
+    }
+
+    /**
+     * Clave con la que se decide si dos fallos son "el mismo problema".
+     *
+     * <p>Tiene que ser INDEPENDIENTE del pedido concreto. Usar el principio del mensaje no vale: el
+     * proveedor lo devuelve como "rechazó el envío del pedido NX-1785149919-8710: 02039171…", así que
+     * cada pedido generaba su propia clave, el silencio no agrupaba nada y una caída del transportista
+     * llenaba el buzón con un correo por pedido — lo contrario de lo que se buscaba. Además el registro
+     * de claves crecía sin límite.
+     *
+     * <p>Se agrupa por el CÓDIGO de error del proveedor cuando aparece (8 dígitos); si no hay código, por
+     * el mensaje con los identificadores y las cifras neutralizados.
+     */
+    public static String causeKey(String error) {
+        if (error == null || error.isBlank()) {
+            return "desconocido";
+        }
+        Matcher code = PROVIDER_CODE.matcher(error);
+        if (code.find()) {
+            return code.group();
+        }
+        String normalized = error.replaceAll("\\s+", " ")
+                .replaceAll("[A-Z]{2}-\\d[\\w-]*", "#")   // referencias tipo NX-1785149919-8710
+                .replaceAll("\\d+", "#")                  // importes, pesos, ids sueltos
+                .trim();
+        return normalized.length() <= 60 ? normalized : normalized.substring(0, 60);
     }
 }

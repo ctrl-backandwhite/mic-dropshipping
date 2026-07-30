@@ -6,6 +6,7 @@ import com.nexaplatform.dropshipping.application.service.AuditLogger;
 import com.nexaplatform.dropshipping.application.mapper.UserUpdateMapper;
 import com.nexaplatform.dropshipping.application.service.PasswordPolicy;
 import com.nexaplatform.dropshipping.application.usecase.impl.UserUseCaseImpl;
+import com.nexaplatform.dropshipping.infrastructure.security.oauth.JwtRevocationService;
 import com.nexaplatform.dropshipping.domain.enums.UserRole;
 import com.nexaplatform.dropshipping.domain.model.User;
 import com.nexaplatform.dropshipping.domain.repository.UserRepository;
@@ -66,11 +67,13 @@ class UserUseCaseImplTest {
     PasswordPolicy policy = new PasswordPolicy();
 
     UserUseCaseImpl useCase;
+    JwtRevocationService jwtRevocationService;
 
     @BeforeEach
     void setup() {
+        jwtRevocationService = org.mockito.Mockito.mock(JwtRevocationService.class);
         useCase = new UserUseCaseImpl(userRepository, resetTokenRepository, userJpaRepository, encoder, policy,
-                emailQueueService, auditLogger, userUpdateMapper);
+                emailQueueService, auditLogger, userUpdateMapper, jwtRevocationService);
     }
 
     @Test

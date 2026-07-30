@@ -63,12 +63,33 @@ class OpsAlertServiceTest {
 
     @Test
     void elMismoProblemaNoSeNotificaDosVecesSeguidas() {
-        // Carrier caído: tres pedidos distintos, misma causa -> un solo correo.
-        service.fulfillmentFailed("NX-1", "ES", 3, "02039171 Weight should not exceed 2KG");
-        service.fulfillmentFailed("NX-2", "FR", 3, "02039171 Weight should not exceed 2KG");
-        service.fulfillmentFailed("NX-3", "DE", 3, "02039171 Weight should not exceed 2KG");
+        // Carrier caído con tres pedidos afectados. Los mensajes REALES del proveedor incluyen el número
+        // de pedido, así que si la agrupación se hiciera por el texto del mensaje saldrían tres correos:
+        // el buzón quedaría inservible justo cuando hay que leerlo.
+        service.fulfillmentFailed("NX-1785149919-8710", "ES", 3,
+                "YunExpress rechazó el envío del pedido NX-1785149919-8710: 02039171 Order rule verification failed");
+        service.fulfillmentFailed("NX-1784936692-7159", "FR", 3,
+                "YunExpress rechazó el envío del pedido NX-1784936692-7159: 02039171 Order rule verification failed");
+        service.fulfillmentFailed("NX-1785371378-9216", "DE", 3,
+                "YunExpress rechazó el envío del pedido NX-1785371378-9216: 02039171 Order rule verification failed");
 
         verify(emailQueue, times(1)).enqueue(anyString(), anyString(), anyString(), anyMap());
+    }
+
+    @Test
+    void laClaveDeAgrupacionIgnoraElPedidoYSeQuedaConLaCausa() {
+        // Mismo código de error en pedidos distintos -> misma clave.
+        assertThat(OpsAlertService.causeKey(
+                "YunExpress rechazó el envío del pedido NX-1: 02039171 Order rule verification failed"))
+                .isEqualTo(OpsAlertService.causeKey(
+                        "YunExpress rechazó el envío del pedido NX-2: 02039171 Order rule verification failed"));
+        // Causas distintas -> claves distintas, para no silenciar un problema nuevo.
+        assertThat(OpsAlertService.causeKey("... 02039171 rule failed"))
+                .isNotEqualTo(OpsAlertService.causeKey("... 02030012 time-out"));
+        // Sin código del proveedor se neutralizan referencias y cifras.
+        assertThat(OpsAlertService.causeKey("fallo de red en pedido NX-1785149919-8710 tras 3 intentos"))
+                .isEqualTo(OpsAlertService.causeKey("fallo de red en pedido NX-1784936692-7159 tras 8 intentos"));
+        assertThat(OpsAlertService.causeKey(null)).isEqualTo("desconocido");
     }
 
     @Test

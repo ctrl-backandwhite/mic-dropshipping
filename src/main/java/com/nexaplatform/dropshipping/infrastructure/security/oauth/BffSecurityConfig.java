@@ -20,6 +20,7 @@ import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 
@@ -64,7 +65,8 @@ public class BffSecurityConfig {
     @Bean
     @Order(2)
     public SecurityFilterChain bffFilterChain(HttpSecurity http, JWKSource<SecurityContext> jwkSource,
-            JwtRevocationService revocationService, @Value("${nexadrop.oauth.issuer}") String issuer) throws Exception {
+            JwtRevocationService revocationService, UserTokenRevocationFilter userTokenRevocationFilter,
+            @Value("${nexadrop.oauth.issuer}") String issuer) throws Exception {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
         authorities.setAuthoritiesClaimName("authorities");
@@ -129,7 +131,10 @@ public class BffSecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/me").permitAll().requestMatchers("/api/me/**")
                         .authenticated().anyRequest().authenticated())
                 .oauth2ResourceServer(
-                        oauth -> oauth.jwt(jwt -> jwt.decoder(decoder).jwtAuthenticationConverter(converter)));
+                        oauth -> oauth.jwt(jwt -> jwt.decoder(decoder).jwtAuthenticationConverter(converter)))
+                // Revoca en caliente los tokens de usuario (p.ej. tras un cambio de rol): un access token
+                // de 60 min con el rol viejo se corta en la siguiente petición en vez de seguir válido.
+                .addFilterBefore(userTokenRevocationFilter, BearerTokenAuthenticationFilter.class);
         return http.build();
     }
 }

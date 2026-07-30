@@ -72,6 +72,8 @@ public class UserUseCaseImpl implements UserUseCase {
     private final EmailQueueService emailQueueService;
     private final AuditLogger auditLogger;
     private final UserUpdateMapper userUpdateMapper;
+    /** Para invalidar en caliente los tokens de un usuario cuando cambia su rol (o su acceso). */
+    private final com.nexaplatform.dropshipping.infrastructure.security.oauth.JwtRevocationService jwtRevocationService;
 
     /**
      * Base URL pública del storefront para los enlaces de los emails
@@ -376,7 +378,13 @@ public class UserUseCaseImpl implements UserUseCase {
         }
         User u = findById(id);
         u.setRole(UserRole.valueOf(role.toUpperCase()));
-        return userRepository.update(u);
+        User updated = userRepository.update(u);
+        // El rol viaja como claim en el access token (60 min). Sin revocar, un usuario degradado de ADMIN
+        // conservaría los permisos de administrador hasta que su token caducara. Se invalidan TODOS sus
+        // tokens (sub = userId): la próxima petición se corta con 401 y el SPA renueva con el rol nuevo.
+        jwtRevocationService.revokeAllForClient(id.toString());
+        auditLogger.log("admin.user_role_changed", u.getEmail(), Map.of("role", updated.getRole().name()));
+        return updated;
     }
 
     /**
