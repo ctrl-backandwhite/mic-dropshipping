@@ -3,7 +3,15 @@ package com.nexaplatform.dropshipping.api.mapper;
 import com.nexaplatform.dropshipping.api.dto.out.AdminOrderDetailDtoOut;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import org.junit.jupiter.api.Test;
-import org.mapstruct.factory.Mappers;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
+import org.junit.jupiter.api.BeforeEach;
+import org.mockito.Mockito;
+
+import java.math.BigDecimal;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -17,7 +25,18 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AdminOrderMapperTest {
 
-    private final AdminOrderMapper mapper = Mappers.getMapper(AdminOrderMapper.class);
+    private AdminOrderMapper mapper;
+
+    @BeforeEach
+    void setUp() {
+        // El mapper dejó de ser interfaz al pasar el formateo de importes al backend: ahora es una clase
+        // abstracta con el conversor de divisa inyectado, así que se instancia su Impl generado.
+        mapper = new AdminOrderMapperImpl();
+        CurrencyRateService currency = Mockito.mock(CurrencyRateService.class);
+        lenient().when(currency.usdTo(any(BigDecimal.class), anyString())).thenAnswer(i -> i.getArgument(0));
+        lenient().when(currency.formatDisplay(any(BigDecimal.class), anyString())).thenReturn("0,00 €");
+        mapper.currencyRateService = currency;
+    }
 
     @Test
     void elNumeroDeSeguimientoEsElDelTransportistaNoLaReferenciaDelPedido() {

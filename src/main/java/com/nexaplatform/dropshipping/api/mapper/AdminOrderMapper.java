@@ -6,6 +6,12 @@ import com.nexaplatform.dropshipping.api.dto.out.AdminOrderLineDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminOrderRowDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MeOrderRowDtoOut;
 import com.nexaplatform.dropshipping.domain.model.Order;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -21,7 +27,38 @@ import java.util.List;
  * resolved from the managed {@code AddressEntity}.
  */
 @Mapper(componentModel = "spring")
-public interface AdminOrderMapper {
+public abstract class AdminOrderMapper {
+
+    /**
+     * Conversión y formato de importes. El listado del admin los pintaba en el navegador y salía un
+     * céntimo por debajo de lo cobrado; el precio se calcula y se formatea SIEMPRE en el backend.
+     */
+    @Autowired
+    protected CurrencyRateService currencyRateService;
+
+    /** Total del pedido en la divisa activa del admin, calculado igual que el cobro (línea a línea). */
+    protected String totalFormatted(Order order) {
+        String ccy = CurrencyHolder.get();
+        BigDecimal total = BigDecimal.ZERO;
+        if (order.getItems() != null) {
+            for (OrderItem item : order.getItems()) {
+                BigDecimal line = BigDecimal.valueOf((long) item.getUnitPriceCents() * item.getQuantity())
+                        .movePointLeft(2);
+                total = total.add(currencyRateService.usdTo(line, ccy).setScale(2, RoundingMode.HALF_UP));
+            }
+        }
+        total = total.add(currencyRateService.usdTo(
+                        BigDecimal.valueOf(order.getShippingCents()).movePointLeft(2), ccy)
+                .setScale(2, RoundingMode.HALF_UP));
+        total = total.add(currencyRateService.usdTo(
+                        BigDecimal.valueOf(order.getTaxCents()).movePointLeft(2), ccy)
+                .setScale(2, RoundingMode.HALF_UP));
+        total = total.subtract(currencyRateService.usdTo(
+                        BigDecimal.valueOf(order.getDiscountCents()).movePointLeft(2), ccy)
+                .setScale(2, RoundingMode.HALF_UP));
+        return currencyRateService.formatDisplay(total, ccy);
+    }
+
 
     @Mapping(target = "id", source = "id")
     @Mapping(target = "orderNumber", source = "orderNumber")
@@ -32,6 +69,7 @@ public interface AdminOrderMapper {
     @Mapping(target = "shippingCents", source = "shippingCents")
     @Mapping(target = "totalCents", source = "totalCents")
     @Mapping(target = "currency", source = "currency")
+    @Mapping(target = "totalFormatted", expression = "java(totalFormatted(order))")
     @Mapping(target = "itemCount", expression = "java(order.getItems() != null ? order.getItems().size() : 0)")
     @Mapping(target = "placedAt", source = "placedAt")
     @Mapping(target = "forwardedAt", source = "forwardedAt")
@@ -42,9 +80,9 @@ public interface AdminOrderMapper {
     @Mapping(target = "shopName", source = "shopName")
     @Mapping(target = "shopHandle", source = "shopHandle")
     @Mapping(target = "supplierName", source = "supplierName")
-    AdminOrderRowDtoOut toRow(Order order);
+    public abstract AdminOrderRowDtoOut toRow(Order order);
 
-    List<AdminOrderRowDtoOut> toRows(List<Order> orders);
+    public abstract List<AdminOrderRowDtoOut> toRows(List<Order> orders);
 
     @Mapping(target = "id", source = "id")
     @Mapping(target = "orderNumber", source = "orderNumber")
@@ -56,6 +94,7 @@ public interface AdminOrderMapper {
     @Mapping(target = "taxCents", source = "taxCents")
     @Mapping(target = "totalCents", source = "totalCents")
     @Mapping(target = "currency", source = "currency")
+    @Mapping(target = "totalFormatted", expression = "java(totalFormatted(order))")
     @Mapping(target = "itemCount", expression = "java(order.getItems() != null ? order.getItems().size() : 0)")
     @Mapping(target = "placedAt", source = "placedAt")
     @Mapping(target = "forwardedAt", source = "forwardedAt")
@@ -73,7 +112,7 @@ public interface AdminOrderMapper {
     // (externalOrderId, del tipo "ME-1784936692"): mostrar esa hacía que el admin viese en la ficha un
     // número distinto del que aparece en el bloque de seguimiento y del que se comunica al cliente.
     @Mapping(target = "trackingNumber", source = "trackingNumber")
-    AdminOrderDetailDtoOut toDetail(Order order);
+    public abstract AdminOrderDetailDtoOut toDetail(Order order);
 
     @Mapping(target = "id", source = "id")
     @Mapping(target = "productId", source = "productId")
@@ -85,13 +124,13 @@ public interface AdminOrderMapper {
     @Mapping(target = "unitPriceCents", source = "unitPriceCents")
     @Mapping(target = "lineTotalCents", source = "lineTotalCents")
     @Mapping(target = "productSourceUrl", source = "productSourceUrl")
-    AdminOrderLineDtoOut toLine(OrderItem item);
+    public abstract AdminOrderLineDtoOut toLine(OrderItem item);
 
     /**
      * Miniatura de la línea. Prioriza la imagen de la VARIANTE seleccionada (color concreto) para que
      * coincida con lo pedido; si no hay, cae al snapshot del pedido y luego a la imagen viva del producto.
      */
-    default String lineImage(OrderItem item) {
+    protected String lineImage(OrderItem item) {
         if (item.getVariantImageUrl() != null && !item.getVariantImageUrl().isBlank()) {
             return item.getVariantImageUrl();
         }
@@ -102,23 +141,24 @@ public interface AdminOrderMapper {
         return image;
     }
 
-    List<AdminOrderLineDtoOut> toLines(List<OrderItem> items);
+    public abstract List<AdminOrderLineDtoOut> toLines(List<OrderItem> items);
 
     @Mapping(target = "id", source = "id")
     @Mapping(target = "orderNumber", source = "orderNumber")
     @Mapping(target = "status", expression = "java(order.getStatus() != null ? order.getStatus().name() : null)")
     @Mapping(target = "totalCents", source = "totalCents")
     @Mapping(target = "currency", source = "currency")
+    @Mapping(target = "totalFormatted", expression = "java(totalFormatted(order))")
     @Mapping(target = "itemCount", expression = "java(order.getItems() != null ? order.getItems().size() : 0)")
     @Mapping(target = "placedAt", source = "placedAt")
     @Mapping(target = "shippedAt", source = "shippedAt")
     @Mapping(target = "deliveredAt", source = "deliveredAt")
-    MeOrderRowDtoOut toMeRow(Order order);
+    public abstract MeOrderRowDtoOut toMeRow(Order order);
 
-    List<MeOrderRowDtoOut> toMeRows(List<Order> orders);
+    public abstract List<MeOrderRowDtoOut> toMeRows(List<Order> orders);
 
     /** Builds the shipping address block from the order's flat snapshot fields ({@code state -> region}). */
-    default AdminOrderAddressDtoOut toAddress(Order order) {
+    protected AdminOrderAddressDtoOut toAddress(Order order) {
         if (order.getShippingFullName() == null && order.getShippingLine1() == null) {
             return null;
         }
@@ -129,7 +169,7 @@ public interface AdminOrderMapper {
     }
 
     /** Title fallback: explicit snapshot, then live product titleZh, then sku. */
-    default String resolveTitle(OrderItem item) {
+    protected String resolveTitle(OrderItem item) {
         if (item.getTitleSnapshot() != null) {
             return item.getTitleSnapshot();
         }

@@ -26,6 +26,8 @@ public class AdminOrderDetailDtoOut {
     int shippingCents;
     int taxCents;
     int totalCents;
+    /** Total ya formateado por el backend en la divisa activa: el mismo importe que se cobró al cliente. */
+    String totalFormatted;
     String currency;
     int itemCount;
     Instant placedAt;
