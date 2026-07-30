@@ -27,7 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CheckoutTotalsService {
 
-    private final CainiaoTaxService taxService;
+    private final CountryTaxService taxService;
     private final CustomsValuationService customsValuationService;
 
     /**
@@ -70,7 +70,7 @@ public class CheckoutTotalsService {
         int intrinsic = Math.max(0, discountedSubtotalCents);
         int taxableBase = Math.addExact(intrinsic, base);
 
-        int taxRateBps = taxService.rateBpsFor(country, region, taxableBase);
+        int taxRateBps = taxService.rateBpsFor(country, region);
         int taxCents = taxService.taxCentsFor(country, region, taxableBase);
 
         CustomsValuation customs = customsValuationService.valuate(country, intrinsic, taxCents);

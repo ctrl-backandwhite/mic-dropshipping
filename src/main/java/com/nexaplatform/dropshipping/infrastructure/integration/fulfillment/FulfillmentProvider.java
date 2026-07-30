@@ -14,7 +14,7 @@ import java.util.List;
  * <p>Abstrae al transportista para poder conmutar de proveedor sin tocar los consumidores
  * ({@code FulfillmentService}, {@code OrderUseCaseImpl}, {@code ShippingQuoteService},
  * {@code ShippingQuoteController}). La implementación activa hoy es {@link YunExpressFulfillmentService}
- * (única del tipo). {@code CainiaoFulfillmentService} queda fuera del flujo (no implementa este puerto).
+ * (única del tipo).
  */
 public interface FulfillmentProvider {
 

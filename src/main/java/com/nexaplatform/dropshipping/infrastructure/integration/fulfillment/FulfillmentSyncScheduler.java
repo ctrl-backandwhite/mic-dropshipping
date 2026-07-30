@@ -15,9 +15,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Seguimiento <b>semiautomático</b> del envío con Cainiao. Periódicamente:
+ * Seguimiento <b>semiautomático</b> del envío con el transportista activo. Periódicamente:
  * <ol>
- *   <li>crea el envío en Cainiao para los pedidos despachados (FORWARDED) que aún no tienen tracking,</li>
+ *   <li>crea el envío para los pedidos despachados (FORWARDED) que aún no tienen tracking,</li>
  *   <li>sondea el tracking y, según el estado del transportista, avanza el pedido
  *       FORWARDED→SHIPPED→DELIVERED <b>a través de las transiciones del use case</b> (para que se
  *       disparen los emails «en camino»/«entregado» y los webhooks).</li>
@@ -33,10 +33,10 @@ public class FulfillmentSyncScheduler {
     private final FulfillmentService fulfillmentService;
     private final OrderUseCase orderUseCase;
 
-    @Value("${nexadrop.cainiao.sync-enabled:true}")
+    @Value("${nexadrop.fulfillment.sync-enabled:${nexadrop.cainiao.sync-enabled:true}}")
     private boolean enabled;
 
-    @Scheduled(fixedDelayString = "${nexadrop.cainiao.sync-interval-ms:60000}")
+    @Scheduled(fixedDelayString = "${nexadrop.fulfillment.sync-interval-ms:${nexadrop.cainiao.sync-interval-ms:60000}}")
     public void run() {
         if (!enabled) {
             return;

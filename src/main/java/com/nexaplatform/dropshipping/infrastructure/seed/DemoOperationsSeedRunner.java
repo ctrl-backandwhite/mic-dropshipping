@@ -10,8 +10,10 @@ import com.nexaplatform.dropshipping.domain.enums.SubscriptionStatus;
 import com.nexaplatform.dropshipping.domain.enums.UserRole;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.*;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -38,6 +40,37 @@ import java.util.*;
 @ConditionalOnProperty(prefix = "nexadrop.demo-seed", name = "enabled", havingValue = "true", matchIfMissing = false)
 @RequiredArgsConstructor
 public class DemoOperationsSeedRunner {
+
+    /**
+     * Contraseña de las cuentas de demostración.
+     *
+     * <p>Estaba escrita en el código ("Demo!Customer2026" y compañía), así que cualquiera con acceso al
+     * repositorio conocía las credenciales de las cuentas que crea el seed —incluida una de OPERATOR—. El
+     * seed viene desactivado, pero basta con encenderlo en un entorno accesible para tener usuarios con
+     * contraseña pública.
+     *
+     * <p>Ahora se toma de {@code nexadrop.demo-seed.password}. Si no se define, se genera una aleatoria
+     * por arranque y se registra en el log: las cuentas quedan creadas pero sin credencial adivinable, y
+     * quien levante la demo puede leerla del arranque.
+     */
+    private String demoPassword;
+
+    @Value("${nexadrop.demo-seed.password:}")
+    private String configuredPassword;
+
+    /** Resuelve la contraseña una sola vez por arranque, para que todas las cuentas compartan la misma. */
+    private String demoPassword() {
+        if (demoPassword == null) {
+            if (configuredPassword != null && !configuredPassword.isBlank()) {
+                demoPassword = configuredPassword;
+            } else {
+                demoPassword = "Demo!" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+                log.warn("::> [SEED] Sin nexadrop.demo-seed.password: las cuentas de demo usan la contraseña "
+                        + "generada '{}' (solo este arranque)", demoPassword);
+            }
+        }
+        return demoPassword;
+    }
 
     private final UserRepository userRepository;
     private final UserAddressRepository addressRepository;
@@ -177,7 +210,7 @@ public class DemoOperationsSeedRunner {
             if (userRepository.existsByEmail(email))
                 continue;
             String language = languageForCountry(p[2]);
-            UserEntity u = UserEntity.builder().email(email).passwordHash(passwordEncoder.encode("Demo!Customer2026"))
+            UserEntity u = UserEntity.builder().email(email).passwordHash(passwordEncoder.encode(demoPassword()))
                     .role(UserRole.USER).active(true).displayName(p[0] + " " + p[1]).country(p[2]).language(language)
                     .build();
             out.add(userRepository.save(u));
@@ -206,7 +239,7 @@ public class DemoOperationsSeedRunner {
             String email = s[0] + "@partners.nx036.local";
             if (userRepository.existsByEmail(email))
                 continue;
-            UserEntity u = UserEntity.builder().email(email).passwordHash(passwordEncoder.encode("Demo!Partner2026"))
+            UserEntity u = UserEntity.builder().email(email).passwordHash(passwordEncoder.encode(demoPassword()))
                     .role(UserRole.PARTNER).active(true).displayName(s[1]).companyName(s[1] + " · " + s[3])
                     .country(s[2]).language(languageForCountry(s[2])).build();
             out.add(userRepository.save(u));
@@ -225,7 +258,7 @@ public class DemoOperationsSeedRunner {
             if (userRepository.existsByEmail(email))
                 continue;
             userRepository.save(UserEntity.builder().email(email)
-                    .passwordHash(passwordEncoder.encode("Demo!Operator2026")).role(UserRole.OPERATOR).active(true)
+                    .passwordHash(passwordEncoder.encode(demoPassword())).role(UserRole.OPERATOR).active(true)
                     .displayName(o[1]).country(o[2]).language(languageForCountry(o[2])).build());
         }
     }
