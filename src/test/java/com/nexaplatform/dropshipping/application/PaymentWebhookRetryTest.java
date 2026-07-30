@@ -20,6 +20,7 @@ import com.nexaplatform.dropshipping.infrastructure.integration.currency.Currenc
 import com.nexaplatform.dropshipping.infrastructure.integration.payment.PaymentGateway;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PaymentJpaRepositoryAdapter;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -35,7 +36,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -94,6 +94,21 @@ class PaymentWebhookRetryTest {
     private static final String STRIPE_PAID = """
             {"data":{"object":{"id":"pi_3Abc","metadata":{"paymentId":"%s"}}}}""";
 
+
+    /**
+     * Sujeto bajo prueba, construido una sola vez por test. Se instancia en {@code @BeforeEach} y no
+     * en la declaración del campo porque los dobles de prueba se inyectan DESPUÉS de crear la clase:
+     * hacerlo antes lo dejaría con todas las dependencias a nulo. Tenerlo aparte permite además que la
+     * lambda de cada aserción contenga una sola llamada capaz de lanzar, así que el fallo esperado sólo
+     * puede venir del método bajo prueba.
+     */
+    private PaymentUseCaseImpl subject;
+
+    @BeforeEach
+    void buildSubject() {
+        subject = useCase();
+    }
+
     // ------------------------------------------------------------ el fallo se propaga
 
     @Test
@@ -126,12 +141,12 @@ class PaymentWebhookRetryTest {
         when(paymentRepository.findByProviderAndProviderRef(anyString(), anyString()))
                 .thenThrow(new IllegalStateException("connection reset"));
 
-        assertThatThrownBy(() -> useCase().handlePayPalEvent(
+        assertThatThrownBy(() -> subject.handlePayPalEvent(
                 """
                         {"event_type":"PAYMENT.CAPTURE.COMPLETED","resource":{"id":"5X0"}}"""))
                 .isInstanceOf(WebhookProcessingException.class);
 
-        assertThatThrownBy(() -> useCase().handleCoinbaseEvent(
+        assertThatThrownBy(() -> subject.handleCoinbaseEvent(
                 """
                         {"event":{"type":"charge:confirmed","data":{"code":"ABC"}}}"""))
                 .isInstanceOf(WebhookProcessingException.class);

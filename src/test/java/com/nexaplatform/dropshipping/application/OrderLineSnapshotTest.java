@@ -29,6 +29,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Produ
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopConnectionRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserAddressRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -169,6 +170,21 @@ class OrderLineSnapshotTest {
         return useCase().createOrder(null, null, req).getItems().get(0);
     }
 
+
+    /**
+     * Sujeto bajo prueba, construido una sola vez por test. Se instancia en {@code @BeforeEach} y no
+     * en la declaración del campo porque los dobles de prueba se inyectan DESPUÉS de crear la clase:
+     * hacerlo antes lo dejaría con todas las dependencias a nulo. Tenerlo aparte permite además que la
+     * lambda de cada aserción contenga una sola llamada capaz de lanzar, así que el fallo esperado sólo
+     * puede venir del método bajo prueba.
+     */
+    private OrderUseCaseImpl subject;
+
+    @BeforeEach
+    void buildSubject() {
+        subject = useCase();
+    }
+
     // ---------------------------------------------------------------- imagen congelada
 
     @Test
@@ -303,7 +319,7 @@ class OrderLineSnapshotTest {
 
     @Test
     void unCarritoVacioNoCreaPedido() {
-        assertThatThrownBy(() -> useCase().createOrder(null, null,
+        assertThatThrownBy(() -> subject.createOrder(null, null,
                 new CreateOrderRequest("EXT-1", address(), null, List.of(), null)))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("at least one item");

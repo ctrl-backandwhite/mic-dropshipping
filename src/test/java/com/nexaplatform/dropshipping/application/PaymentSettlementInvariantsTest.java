@@ -24,6 +24,7 @@ import com.nexaplatform.dropshipping.infrastructure.integration.currency.Currenc
 import com.nexaplatform.dropshipping.infrastructure.integration.payment.PaymentGateway;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PaymentJpaRepositoryAdapter;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -143,6 +144,21 @@ class PaymentSettlementInvariantsTest {
         return o;
     }
 
+
+    /**
+     * Sujeto bajo prueba, construido una sola vez por test. Se instancia en {@code @BeforeEach} y no
+     * en la declaración del campo porque los dobles de prueba se inyectan DESPUÉS de crear la clase:
+     * hacerlo antes lo dejaría con todas las dependencias a nulo. Tenerlo aparte permite además que la
+     * lambda de cada aserción contenga una sola llamada capaz de lanzar, así que el fallo esperado sólo
+     * puede venir del método bajo prueba.
+     */
+    private PaymentUseCaseImpl subject;
+
+    @BeforeEach
+    void buildSubject() {
+        subject = useCase();
+    }
+
     // ---------------------------------------------------------------- abono del saldo
 
     @Test
@@ -212,7 +228,7 @@ class PaymentSettlementInvariantsTest {
         // Sin esta comprobación cualquiera inicia una recarga y la "confirma" sin pagar: dinero libre.
         Payment p = recharge(PaymentStatus.PENDING, realRef);
 
-        assertThatThrownBy(() -> useCase().confirmMockRecharge(userId, p.getId()))
+        assertThatThrownBy(() -> subject.confirmMockRecharge(userId, p.getId()))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("pasarela de pago real");
 
@@ -234,9 +250,9 @@ class PaymentSettlementInvariantsTest {
         // 404 y no 403: un 403 confirmaría al atacante que ese identificador de pago existe.
         Payment p = recharge(PaymentStatus.PENDING, "cs_mock_1");
 
-        assertThatThrownBy(() -> useCase().confirmMockRecharge(otherUserId, p.getId()))
+        assertThatThrownBy(() -> subject.confirmMockRecharge(otherUserId, p.getId()))
                 .isInstanceOf(NotFoundException.class);
-        assertThatThrownBy(() -> useCase().confirmRecharge(otherUserId, p.getId()))
+        assertThatThrownBy(() -> subject.confirmRecharge(otherUserId, p.getId()))
                 .isInstanceOf(NotFoundException.class);
 
         verify(walletUseCase, never()).deposit(any(), anyLong(), any(), anyString(), anyString());
@@ -259,7 +275,7 @@ class PaymentSettlementInvariantsTest {
         // Reembolsar un pago no cobrado saca dinero de la plataforma por algo que nunca entró.
         Payment p = orderPayment(PaymentStatus.valueOf(status), "pi_3Abc");
 
-        assertThatThrownBy(() -> useCase().refundOrderPayment(orderId, p.getId(), 100L))
+        assertThatThrownBy(() -> subject.refundOrderPayment(orderId, p.getId(), 100L))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("succeeded");
     }
@@ -269,7 +285,7 @@ class PaymentSettlementInvariantsTest {
         Payment p = orderPayment(PaymentStatus.SUCCEEDED, "usdt-tx");
         p.setMethod(PaymentMethod.USDT);
 
-        assertThatThrownBy(() -> useCase().refundOrderPayment(orderId, p.getId(), 100L))
+        assertThatThrownBy(() -> subject.refundOrderPayment(orderId, p.getId(), 100L))
                 .isInstanceOf(BusinessException.class);
 
         assertThat(p.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
@@ -280,9 +296,9 @@ class PaymentSettlementInvariantsTest {
         UUID foreignOrder = UUID.randomUUID();
         Payment p = orderPayment(PaymentStatus.SUCCEEDED, "pi_3Abc");
 
-        assertThatThrownBy(() -> useCase().refundOrderPayment(foreignOrder, p.getId(), 100L))
+        assertThatThrownBy(() -> subject.refundOrderPayment(foreignOrder, p.getId(), 100L))
                 .isInstanceOf(NotFoundException.class);
-        assertThatThrownBy(() -> useCase().confirmOrderPayment(foreignOrder, p.getId()))
+        assertThatThrownBy(() -> subject.confirmOrderPayment(foreignOrder, p.getId()))
                 .isInstanceOf(NotFoundException.class);
     }
 
@@ -327,7 +343,7 @@ class PaymentSettlementInvariantsTest {
         org.mockito.Mockito.doThrow(new BusinessException("Saldo insuficiente"))
                 .when(walletUseCase).charge(any(), anyLong(), any(), anyString(), anyString());
 
-        assertThatThrownBy(() -> useCase().chargeWalletForOrder(orderId, userId, "idem-1"))
+        assertThatThrownBy(() -> subject.chargeWalletForOrder(orderId, userId, "idem-1"))
                 .isInstanceOf(BusinessException.class);
 
         assertThat(o.getStatus()).isEqualTo(OrderStatus.AWAITING_PAYMENT);
@@ -339,7 +355,7 @@ class PaymentSettlementInvariantsTest {
         order(OrderStatus.AWAITING_PAYMENT);
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase().chargeWalletForOrder(orderId, userId, "idem-1"))
+        assertThatThrownBy(() -> subject.chargeWalletForOrder(orderId, userId, "idem-1"))
                 .isInstanceOf(NotFoundException.class);
 
         verify(walletUseCase, never()).charge(any(), anyLong(), any(), anyString(), anyString());

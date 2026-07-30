@@ -21,6 +21,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Affil
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.AffiliateReferralCodeRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.NotificationJpaRepositoryAdapter;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -142,6 +143,21 @@ class AffiliatePayoutInvariantsTest {
                         .currency("EUR").attributionModel("LAST_CLICK").build()));
     }
 
+
+    /**
+     * Sujeto bajo prueba, construido una sola vez por test. Se instancia en {@code @BeforeEach} y no
+     * en la declaración del campo porque los dobles de prueba se inyectan DESPUÉS de crear la clase:
+     * hacerlo antes lo dejaría con todas las dependencias a nulo. Tenerlo aparte permite además que la
+     * lambda de cada aserción contenga una sola llamada capaz de lanzar, así que el fallo esperado sólo
+     * puede venir del método bajo prueba.
+     */
+    private AffiliateProgramService subject;
+
+    @BeforeEach
+    void buildSubject() {
+        subject = service();
+    }
+
     // ---------------------------------------------------------------- no pagar dos veces
 
     @Test
@@ -160,7 +176,7 @@ class AffiliatePayoutInvariantsTest {
         affiliate();
         payout("REJECTED", "WALLET");
 
-        assertThatThrownBy(() -> service().approvePayout(payoutId))
+        assertThatThrownBy(() -> subject.approvePayout(payoutId))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("rechazado");
 
@@ -171,7 +187,7 @@ class AffiliatePayoutInvariantsTest {
     void unPagoYaEjecutadoNoSePuedeRechazarDespues() {
         payout("PAID", "WALLET");
 
-        assertThatThrownBy(() -> service().rejectPayout(payoutId, "me equivoqué"))
+        assertThatThrownBy(() -> subject.rejectPayout(payoutId, "me equivoqué"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("ya se ejecutó");
     }
@@ -251,7 +267,7 @@ class AffiliatePayoutInvariantsTest {
         config(5_000L);
         approvedCommissions(1_000L);
 
-        assertThatThrownBy(() -> service().requestPayout(userId, "WALLET"))
+        assertThatThrownBy(() -> subject.requestPayout(userId, "WALLET"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("mínimo");
 
@@ -266,7 +282,7 @@ class AffiliatePayoutInvariantsTest {
         approvedCommissions(5_000L);
         when(payoutRepo.existsByAffiliateIdAndStatus(affiliateId, "REQUESTED")).thenReturn(true);
 
-        assertThatThrownBy(() -> service().requestPayout(userId, "WALLET"))
+        assertThatThrownBy(() -> subject.requestPayout(userId, "WALLET"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("pendiente");
     }
@@ -276,7 +292,7 @@ class AffiliatePayoutInvariantsTest {
         affiliate();   // sin IBAN ni titular
         config(1_000L);
 
-        assertThatThrownBy(() -> service().requestPayout(userId, "BANK"))
+        assertThatThrownBy(() -> subject.requestPayout(userId, "BANK"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("datos bancarios");
     }
@@ -286,7 +302,7 @@ class AffiliatePayoutInvariantsTest {
         affiliate();
         config(1_000L);
 
-        assertThatThrownBy(() -> service().requestPayout(userId, "PAYPAL"))
+        assertThatThrownBy(() -> subject.requestPayout(userId, "PAYPAL"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("PayPal");
     }
@@ -294,7 +310,7 @@ class AffiliatePayoutInvariantsTest {
     @ParameterizedTest
     @ValueSource(strings = {"CRYPTO", "cheque", "efectivo"})
     void unMetodoDeCobroDesconocidoSeRechaza(String method) {
-        assertThatThrownBy(() -> service().requestPayout(userId, method))
+        assertThatThrownBy(() -> subject.requestPayout(userId, method))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("no válido");
     }
@@ -323,7 +339,7 @@ class AffiliatePayoutInvariantsTest {
     void solicitarPagoSinSerAfiliadoNoCreaNada() {
         when(affiliateRepo.findByUser_Id(userId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service().requestPayout(userId, "WALLET"))
+        assertThatThrownBy(() -> subject.requestPayout(userId, "WALLET"))
                 .isInstanceOf(NotFoundException.class);
 
         verify(payoutRepo, never()).save(any());

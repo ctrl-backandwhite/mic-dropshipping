@@ -10,6 +10,7 @@ import com.nexaplatform.dropshipping.domain.repository.WalletTransactionReposito
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.WalletIndexer;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.WalletSearchService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -81,13 +82,28 @@ class WalletLedgerInvariantsTest {
         return w;
     }
 
+
+    /**
+     * Sujeto bajo prueba, construido una sola vez por test. Se instancia en {@code @BeforeEach} y no
+     * en la declaración del campo porque los dobles de prueba se inyectan DESPUÉS de crear la clase:
+     * hacerlo antes lo dejaría con todas las dependencias a nulo. Tenerlo aparte permite además que la
+     * lambda de cada aserción contenga una sola llamada capaz de lanzar, así que el fallo esperado sólo
+     * puede venir del método bajo prueba.
+     */
+    private WalletUseCaseImpl subject;
+
+    @BeforeEach
+    void buildSubject() {
+        subject = useCase();
+    }
+
     // ---------------------------------------------------------------- no gastar lo que no hay
 
     @Test
     void noSeCobraMasDeLoQueHayEnElMonedero() {
         Wallet w = wallet(5_000L, 0L);
 
-        assertThatThrownBy(() -> useCase().charge(userId, 5_001L, orderId, "k1", "Pedido"))
+        assertThatThrownBy(() -> subject.charge(userId, 5_001L, orderId, "k1", "Pedido"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Insufficient");
 
@@ -112,7 +128,7 @@ class WalletLedgerInvariantsTest {
         // Un cargo negativo sería un abono encubierto: dinero regalado sin pasar por la pasarela.
         wallet(5_000L, 0L);
 
-        assertThatThrownBy(() -> useCase().charge(userId, amount, orderId, "k1", "Pedido"))
+        assertThatThrownBy(() -> subject.charge(userId, amount, orderId, "k1", "Pedido"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("positive");
 
@@ -124,7 +140,7 @@ class WalletLedgerInvariantsTest {
     void noSeAdmiteUnAbonoDeImporteCeroONegativo(long amount) {
         wallet(5_000L, 0L);
 
-        assertThatThrownBy(() -> useCase().deposit(userId, amount, null, "k1", "Recarga"))
+        assertThatThrownBy(() -> subject.deposit(userId, amount, null, "k1", "Recarga"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("positive");
     }
@@ -189,7 +205,7 @@ class WalletLedgerInvariantsTest {
     void unAjusteManualNegativoNoPuedeDejarElSaldoEnNegativo() {
         Wallet w = wallet(1_000L, 0L);
 
-        assertThatThrownBy(() -> useCase().adminAdjustEntry(userId, -1_001L, "Corrección", "a1"))
+        assertThatThrownBy(() -> subject.adminAdjustEntry(userId, -1_001L, "Corrección", "a1"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("negative");
 
@@ -212,11 +228,11 @@ class WalletLedgerInvariantsTest {
         // Un movimiento de dinero hecho a mano sin motivo escrito es imposible de auditar después.
         wallet(5_000L, 0L);
 
-        assertThatThrownBy(() -> useCase().adminAdjustEntry(userId, 100L, null, "a1"))
+        assertThatThrownBy(() -> subject.adminAdjustEntry(userId, 100L, null, "a1"))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> useCase().adminAdjustEntry(userId, 100L, "   ", "a1"))
+        assertThatThrownBy(() -> subject.adminAdjustEntry(userId, 100L, "   ", "a1"))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> useCase().adminAdjustEntry(userId, 0L, "Motivo", "a1"))
+        assertThatThrownBy(() -> subject.adminAdjustEntry(userId, 0L, "Motivo", "a1"))
                 .isInstanceOf(BusinessException.class);
 
         verify(txRepository, never()).save(any());
@@ -236,7 +252,7 @@ class WalletLedgerInvariantsTest {
     void operarSobreUnMonederoQueNoExisteFalla() {
         when(walletRepository.findByUserId(userId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase().charge(userId, 100L, orderId, "k1", "Pedido"))
+        assertThatThrownBy(() -> subject.charge(userId, 100L, orderId, "k1", "Pedido"))
                 .isInstanceOf(RuntimeException.class);
     }
 

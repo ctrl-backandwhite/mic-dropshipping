@@ -29,6 +29,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntit
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PaymentJpaRepositoryAdapter;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -148,6 +149,21 @@ class PaymentInitiationTest {
                 "cs_test_1", null, "https://pay/1", null, null, null, Map.of()));
     }
 
+
+    /**
+     * Sujeto bajo prueba, construido una sola vez por test. Se instancia en {@code @BeforeEach} y no
+     * en la declaración del campo porque los dobles de prueba se inyectan DESPUÉS de crear la clase:
+     * hacerlo antes lo dejaría con todas las dependencias a nulo. Tenerlo aparte permite además que la
+     * lambda de cada aserción contenga una sola llamada capaz de lanzar, así que el fallo esperado sólo
+     * puede venir del método bajo prueba.
+     */
+    private PaymentUseCaseImpl subject;
+
+    @BeforeEach
+    void buildSubject() {
+        subject = useCase();
+    }
+
     // ------------------------------------------------------------ lo que se rechaza antes de cobrar
 
     @ParameterizedTest
@@ -155,7 +171,7 @@ class PaymentInitiationTest {
     void noSeCobraUnPedidoCanceladoNiYaDevuelto(String status) {
         order(OrderStatus.valueOf(status), 9540);
 
-        assertThatThrownBy(() -> useCase().initiateOrderPayment(orderId, userId, PaymentMethod.CARD, "k1"))
+        assertThatThrownBy(() -> subject.initiateOrderPayment(orderId, userId, PaymentMethod.CARD, "k1"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("cannot be paid");
 
@@ -167,14 +183,14 @@ class PaymentInitiationTest {
         // Por debajo de 1,00 $ Stripe cobra más de comisión que el importe; el intento sólo genera ruido.
         order(OrderStatus.AWAITING_PAYMENT, 99);
 
-        assertThatThrownBy(() -> useCase().initiateOrderPayment(orderId, userId, PaymentMethod.CARD, "k1"))
+        assertThatThrownBy(() -> subject.initiateOrderPayment(orderId, userId, PaymentMethod.CARD, "k1"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("below $1.00");
     }
 
     @Test
     void sinMetodoDePagoNoSeLlegaAConsultarElPedido() {
-        assertThatThrownBy(() -> useCase().initiateOrderPayment(orderId, userId, null, "k1"))
+        assertThatThrownBy(() -> subject.initiateOrderPayment(orderId, userId, null, "k1"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("paymentMethod required");
     }
@@ -184,7 +200,7 @@ class PaymentInitiationTest {
         order(OrderStatus.AWAITING_PAYMENT, 9540);
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase().initiateOrderPayment(orderId, userId, PaymentMethod.CARD, "k1"))
+        assertThatThrownBy(() -> subject.initiateOrderPayment(orderId, userId, PaymentMethod.CARD, "k1"))
                 .isInstanceOf(NotFoundException.class);
 
         verify(gateway, never()).initiate(any());
@@ -194,7 +210,7 @@ class PaymentInitiationTest {
     void unPedidoInexistenteNoAbreUnCobro() {
         when(orderRepository.findById(orderId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> useCase().initiateOrderPayment(orderId, userId, PaymentMethod.CARD, "k1"))
+        assertThatThrownBy(() -> subject.initiateOrderPayment(orderId, userId, PaymentMethod.CARD, "k1"))
                 .isInstanceOf(NotFoundException.class);
     }
 
@@ -275,7 +291,7 @@ class PaymentInitiationTest {
         happyGateway();
         when(gateway.initiate(any())).thenThrow(new IllegalStateException("stripe unreachable"));
 
-        assertThatThrownBy(() -> useCase().initiateOrderPayment(orderId, userId, PaymentMethod.CARD, "k1"))
+        assertThatThrownBy(() -> subject.initiateOrderPayment(orderId, userId, PaymentMethod.CARD, "k1"))
                 .isInstanceOf(IllegalStateException.class);
 
         verify(opsAlertService).paymentFailed(anyString(), anyString(), anyString(), anyString());
