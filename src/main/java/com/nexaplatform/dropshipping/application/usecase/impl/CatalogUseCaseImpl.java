@@ -18,6 +18,7 @@ import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
+import com.nexaplatform.dropshipping.application.service.BulkProductRules;
 import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService;
@@ -1383,26 +1384,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             List<SupplierEntity> suppliers) {
         CategoryEntity cat = resolveBulkCategory(r);
         // DROP-670: si la categoría define atributos obligatorios, el producto debe traerlos (integridad).
-        var requiredSchema = categoryAttributeSchemaRepository.findByCategory_IdOrderByPositionAsc(cat.getId()).stream()
-                .filter(CategoryAttributeSchemaEntity::isRequired)
-                .map(CategoryAttributeSchemaEntity::getAttrKey)
-                .toList();
-        if (!requiredSchema.isEmpty()) {
-            Set<String> provided = new HashSet<>();
-            if (r.getAttributes() != null) {
-                for (var a : r.getAttributes()) {
-                    if (a.getKey() != null && a.getValue() != null && !a.getValue().isBlank()) {
-                        provided.add(a.getKey().trim().toLowerCase());
-                    }
-                }
-            }
-            for (String key : requiredSchema) {
-                if (!provided.contains(key.toLowerCase())) {
-                    throw new BusinessException("Falta el atributo obligatorio '" + key + "' para la categoría "
-                            + cat.getSlug());
-                }
-            }
-        }
+        BulkProductRules.assertRequiredAttributes(r,
+                categoryAttributeSchemaRepository.findByCategory_IdOrderByPositionAsc(cat.getId()), cat.getSlug());
         // El proveedor se toma de supplierName; si no, del fabricante (manufacturer). Solo si no hay
         // ninguno se usa el primero por defecto.
         String supName = (r.getSupplierName() != null && !r.getSupplierName().isBlank()) ? r.getSupplierName()
@@ -1431,49 +1414,17 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         }
         String esTitle = r.getTitleEs();
         // DROP-682: el título es obligatorio en al menos un idioma; mensaje claro (no genérico).
-        if (esTitle == null || esTitle.isBlank()) {
-            throw new BusinessException("Falta el título del producto en al menos un idioma (titleEs o translations).");
-        }
+        BulkProductRules.assertTitle(esTitle);
         String enTitle = (r.getTitleEn() != null && !r.getTitleEn().isBlank()) ? r.getTitleEn() : esTitle;
         String zhTitle = (r.getTitleZh() != null && !r.getTitleZh().isBlank()) ? r.getTitleZh() : esTitle;
         String esDesc = (r.getDescriptionEs() != null && !r.getDescriptionEs().isBlank()) ? r.getDescriptionEs()
                 : esTitle;
-        // DROP-680: el precio es dato real obligatorio; no se inventa. Si no viene explícito se toma
-        // del tramo de precio más bajo (price break real); si tampoco hay tramos, se rechaza la fila.
-        BigDecimal price = r.getPrice();
-        if (price == null && r.getTieredPricing() != null) {
-            for (var t : r.getTieredPricing()) {
-                if (t.getUnitPrice() != null && (price == null || t.getUnitPrice().compareTo(price) < 0)) {
-                    price = t.getUnitPrice();
-                }
-            }
-        }
-        if (price == null) {
-            throw new BusinessException("Falta el precio real del producto (price o tieredPricing): " + esTitle);
-        }
-        // Envío e IVA (CNY) son OBLIGATORIOS en la carga (decisión del usuario). Sin ellos no se calcula
-        // el total (base×margen + iva + envío), así que se rechaza la fila con un mensaje claro.
-        if (r.getShippingCny() == null) {
-            throw new BusinessException("Falta el envío (shippingCny) del producto: " + esTitle);
-        }
-        if (r.getIvaCny() == null) {
-            throw new BusinessException("Falta el IVA (ivaCny) del producto: " + esTitle);
-        }
-        // external_id es varchar(120): con títulos largos el slug autogenerado lo desbordaba. Se capa
-        // el slug para que "BULK-<slug>-<nanoTime>" (y cualquier externalId provisto) quepa en 120.
-        String externalId;
-        if (r.getExternalId() != null && !r.getExternalId().isBlank()) {
-            externalId = r.getExternalId().trim();
-        } else {
-            String base = SLUG.slugify(esTitle);
-            if (base.length() > 90) {
-                base = base.substring(0, 90);
-            }
-            externalId = "BULK-" + base + "-" + System.nanoTime();
-        }
-        if (externalId.length() > 120) {
-            externalId = externalId.substring(0, 120);
-        }
+        // DROP-680: el precio es dato real obligatorio; no se inventa. Envío e IVA (CNY) también, porque
+        // sin ellos no se puede calcular el total (base×margen + iva + envío).
+        BigDecimal price = BulkProductRules.resolvePrice(r, esTitle);
+        BulkProductRules.assertShippingAndVat(r, esTitle);
+        // external_id es varchar(120): con títulos largos el slug autogenerado lo desbordaba.
+        String externalId = BulkProductRules.externalIdOf(r, esTitle, SLUG::slugify, System.nanoTime());
         // UPSERT idempotente por externalId: el producto se ACTUALIZA EN SITIO (mismo id, se preservan
         // enlaces/favoritos/pedidos). El producto y sus traducciones ya los upserta upsertProduct/writer;
         // aquí solo limpiamos las COLECCIONES HIJAS que se reconstruyen (variantes/opciones/imágenes/
