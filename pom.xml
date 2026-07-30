@@ -58,6 +58,26 @@
         <resilience4j.version>2.3.0</resilience4j.version>
         <thumbnailator.version>0.4.20</thumbnailator.version>
         <liquibase.version>4.31.1</liquibase.version>
+
+        <!-- ============ Versiones forzadas por seguridad (Snyk, 30-jul-2026) ============
+             Estas propiedades las define el parent de Spring Boot; subirlas aquí actualiza la
+             dependencia transitiva sin tocar el árbol. Cada una arregla vulnerabilidades reales
+             del escaneo: se indica cuántas y de qué gravedad. -->
+        <!-- 12 vulnerabilidades (11 altas) repartidas por netty-codec-http/http2/http3/dns/compression. -->
+        <netty.version>4.2.16.Final</netty.version>
+        <!-- 5 altas en tomcat-embed-core: es el servidor que atiende TODAS las peticiones. -->
+        <tomcat.version>11.0.23</tomcat.version>
+        <!-- Jackson 3 (tools.jackson) es el que serializa toda la API en Spring Boot 4: 1 alta. -->
+        <jackson-bom.version>3.1.5</jackson-bom.version>
+        <!-- Jackson 2 sigue en el árbol por dependencias de terceros: 3 altas. Son properties distintas
+             en el parent (jackson-bom = 3.x, jackson-2-bom = 2.x); confundirlas rompe la resolución. -->
+        <jackson-2-bom.version>2.21.5</jackson-2-bom.version>
+        <!-- 1 alta en logback-core. -->
+        <logback.version>1.5.36</logback.version>
+        <!-- 1 alta en el driver de PostgreSQL. -->
+        <postgresql.version>42.7.12</postgresql.version>
+        <!-- 1 alta en httpcore5-h2. -->
+        <httpcore5.version>5.4.3</httpcore5.version>
     </properties>
 
     <dependencies>
@@ -182,10 +202,20 @@
         <!-- ============ Object storage (MinIO / S3) ============ -->
         <!-- Mirror de imágenes/multimedia de producto: descargamos de 1688 y servimos desde nuestro
              bucket (MinIO en local/dev, S3 compatible en prod) para no depender del hotlink de alicdn. -->
+        <!-- 8.6.0: la 8.5.17 arrastraba una vulnerabilidad alta (Snyk, 30-jul-2026). -->
         <dependency>
             <groupId>io.minio</groupId>
             <artifactId>minio</artifactId>
-            <version>8.5.17</version>
+            <version>8.6.0</version>
+        </dependency>
+        <!-- MinIO 8.6.0 salta a OkHttp 5, que es multiplataforma: el artefacto `okhttp` es solo el
+             descriptor y las clases de JVM viven en `okhttp-jvm`. Maven no lee los metadatos de módulo
+             de Gradle, así que sin esta línea el classpath se queda sin okhttp3.MediaType y cualquier
+             subida a S3/MinIO revienta con ClassNotFoundException en ejecución. -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp-jvm</artifactId>
+            <version>5.1.0</version>
         </dependency>
 
         <!-- ============ Image processing ============ -->
@@ -369,6 +399,28 @@
                 <groupId>org.apache.pdfbox</groupId>
                 <artifactId>xmpbox</artifactId>
                 <version>2.0.35</version>
+            </dependency>
+
+            <!-- ============ Versiones forzadas por seguridad (Snyk, 30-jul-2026) ============
+                 Transitivas que no cuelgan de ninguna propiedad del parent: se fijan aquí. -->
+            <!-- 4 altas en Bouncy Castle, que es quien cifra los pushes del transportista y los tokens
+                 guardados de las tiendas conectadas. -->
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>1.84</version>
+            </dependency>
+            <!-- 1 alta: consumo de recursos sin límite al parsear JSON; entra por el cliente de OpenSearch. -->
+            <dependency>
+                <groupId>org.eclipse.parsson</groupId>
+                <artifactId>parsson</artifactId>
+                <version>1.1.8</version>
+            </dependency>
+            <!-- 1 alta en la compresión LZ4 que usa el cliente de Kafka. -->
+            <dependency>
+                <groupId>at.yawk.lz4</groupId>
+                <artifactId>lz4-java</artifactId>
+                <version>1.11.1</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
