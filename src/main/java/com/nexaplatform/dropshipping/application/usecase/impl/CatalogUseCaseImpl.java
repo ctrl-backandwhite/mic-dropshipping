@@ -18,6 +18,7 @@ import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
+import com.nexaplatform.dropshipping.application.service.BulkProductFields;
 import com.nexaplatform.dropshipping.application.service.BulkProductRules;
 import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
@@ -1625,156 +1626,18 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // Envío e IVA (CNY): obligatorios en la carga; se suman al total SIN margen (ver PricingService).
         p.setShippingCny(r.getShippingCny());
         p.setIvaCny(r.getIvaCny());
-        if (r.getPackageWeightGrams() != null) {
-            p.setPackageWeightGrams(r.getPackageWeightGrams());
-        }
-        if (r.getLengthMm() != null) {
-            p.setLengthMm(r.getLengthMm());
-        }
-        if (r.getWidthMm() != null) {
-            p.setWidthMm(r.getWidthMm());
-        }
-        if (r.getHeightMm() != null) {
-            p.setHeightMm(r.getHeightMm());
-        }
-        if (r.getCountryOfOrigin() != null && !r.getCountryOfOrigin().isBlank()) {
-            p.setCountryOfOrigin(r.getCountryOfOrigin());
-        }
-        if (r.getHsCode() != null && !r.getHsCode().isBlank()) {
-            p.setHsCode(r.getHsCode());
-        }
-        if (r.getCustomsMaterial() != null && !r.getCustomsMaterial().isBlank()) {
-            p.setCustomsMaterial(r.getCustomsMaterial());
-        }
-        if (r.getCustomsUsage() != null && !r.getCustomsUsage().isBlank()) {
-            p.setCustomsUsage(r.getCustomsUsage());
-        }
-        if (r.getBatteryType() != null && !r.getBatteryType().isBlank()) {
-            p.setBatteryType(r.getBatteryType().trim().toUpperCase());
-        }
+        BulkProductFields.applyPackageDimensions(p, r);
+        BulkProductFields.applyCustomsFields(p, r);
         // Lo que la carga no traiga (partida arancelaria, material, uso, batería y medidas del paquete) se
         // completa con el perfil de la categoría: sin esos datos el envío no se puede cotizar ni declarar.
         customsProfileService.applyDefaults(p, p.getCategory() != null ? p.getCategory().getSlug()
                 : r.getCategorySlug());
-        if (r.getCertifications() != null && !r.getCertifications().isEmpty()) {
-            p.setCertifications(r.getCertifications());
-        }
-        if (r.getShipFrom() != null && !r.getShipFrom().isBlank()) {
-            p.setShipFrom(r.getShipFrom());
-        }
-        if (r.getLeadTimeDays() != null) {
-            p.setLeadTimeDays(r.getLeadTimeDays());
-        }
-        if (r.getVideoUrl() != null && !r.getVideoUrl().isBlank()) {
-            p.setVideoUrl(r.getVideoUrl());
-            p.setHasVideo(true);
-        }
-        // v44: campos internacionales adicionales.
-        if (r.getVideoUrls() != null && !r.getVideoUrls().isEmpty()) {
-            p.setVideoUrls(r.getVideoUrls());
-            p.setHasVideo(true);
-        }
-        if (r.getSalesRegions() != null && !r.getSalesRegions().isEmpty()) {
-            p.setSalesRegions(r.getSalesRegions());
-        }
-        if (r.getRatingBreakdown() != null && !r.getRatingBreakdown().isEmpty()) {
-            // DROP-676/680: desglose por estrellas REAL. De él derivamos reviewCount (suma) y, si el
-            // proveedor no declaró una media explícita, el rating ponderado. Nada inventado.
-            p.setRatingBreakdown(r.getRatingBreakdown());
-            int total = 0;
-            long weighted = 0;
-            for (var e : r.getRatingBreakdown().entrySet()) {
-                int stars;
-                try {
-                    stars = Integer.parseInt(e.getKey().trim());
-                } catch (NumberFormatException ex) {
-                    continue;
-                }
-                int cnt = e.getValue() != null ? e.getValue() : 0;
-                total += cnt;
-                weighted += (long) stars * cnt;
-            }
-            p.setReviewCount(total);
-            if (r.getRating() == null && total > 0) {
-                p.setRating(BigDecimal.valueOf((double) weighted / total)
-                        .setScale(2, RoundingMode.HALF_UP));
-            }
-        }
-        if (r.getCrossBorderSupport() != null && !r.getCrossBorderSupport().isEmpty()) {
-            p.setCrossBorderSupport(r.getCrossBorderSupport());
-        }
-        if (r.getDropshipShipped30d() != null) {
-            p.setDropshipShipped30d(r.getDropshipShipped30d());
-        }
-        if (r.getDropshipPickupRate48h() != null) {
-            p.setDropshipPickupRate48h(r.getDropshipPickupRate48h());
-        }
-        // supplierSkuId + peso/dimensiones por variante (DROP-675): se matchean por SKU sobre las
+        BulkProductFields.applyCommercialFields(p, r);
+        BulkProductFields.applyRatingBreakdown(p, r);
+        // supplierSkuId + peso/dimensiones por variante (DROP-675): se emparejan por SKU sobre las
         // variantes ya creadas por upsertProduct.
-        if (r.getVariants() != null && !r.getVariants().isEmpty()) {
-            Map<String, BulkProductDtoIn.BulkVariant> bySku =
-                    new HashMap<>();
-            for (var v : r.getVariants()) {
-                if (v.getSku() != null && !v.getSku().isBlank()) {
-                    bySku.put(v.getSku(), v);
-                }
-            }
-            if (!bySku.isEmpty()) {
-                for (ProductVariantEntity pv : p.getVariants()) {
-                    var v = bySku.get(pv.getSku());
-                    if (v == null) {
-                        continue;
-                    }
-                    if (v.getSupplierSkuId() != null && !v.getSupplierSkuId().isBlank()) {
-                        pv.setSupplierSkuId(v.getSupplierSkuId());
-                    }
-                    if (v.getWeightGrams() != null) {
-                        pv.setWeightGrams(v.getWeightGrams());
-                    }
-                    if (v.getPackageWeightGrams() != null) {
-                        pv.setPackageWeightGrams(v.getPackageWeightGrams());
-                    }
-                    if (v.getLengthMm() != null) {
-                        pv.setLengthMm(v.getLengthMm());
-                    }
-                    if (v.getWidthMm() != null) {
-                        pv.setWidthMm(v.getWidthMm());
-                    }
-                    if (v.getHeightMm() != null) {
-                        pv.setHeightMm(v.getHeightMm());
-                    }
-                }
-            }
-        }
-        // Traducciones por idioma de los valores de variación (Color/Talla) desde el JSON: se matchean
-        // por value_zh sobre los valores ya creados. Reemplaza las traducciones de ese valor.
-        if (r.getVariantAxes() != null) {
-            Map<String, Map<String, String>> byValue = new HashMap<>();
-            for (var ax : r.getVariantAxes()) {
-                if (ax.getValueTranslations() != null) {
-                    byValue.putAll(ax.getValueTranslations());
-                }
-            }
-            if (!byValue.isEmpty()) {
-                for (var opt : p.getVariantOptions()) {
-                    for (var vv : opt.getValues()) {
-                        var trMap = byValue.get(vv.getValueZh());
-                        if (trMap == null || trMap.isEmpty()) {
-                            continue;
-                        }
-                        vv.getTranslations().clear();
-                        for (var e : trMap.entrySet()) {
-                            if (e.getKey() != null && !e.getKey().isBlank() && e.getValue() != null
-                                    && !e.getValue().isBlank()) {
-                                vv.getTranslations().add(VariantValueTranslationEntity
-                                        .builder().variantValue(vv).language(e.getKey().trim().toLowerCase())
-                                        .value(e.getValue().trim()).build());
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        BulkProductFields.applyVariantLogistics(p, r);
+        BulkProductFields.applyVariantValueTranslations(p, r);
         // Atributos taxonómicos (facetas): se reemplazan en cada import.
         if (r.getAttributes() != null && !r.getAttributes().isEmpty()) {
             productAttributeRepository.deleteAll(productAttributeRepository.findByProduct_Id(p.getId()));
@@ -1803,32 +1666,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 sp++;
             }
         }
-        // Contenido por idioma ILIMITADO: el writer fija es/en/pt/zh desde los campos fijos; aquí se
-        // upsertan las traducciones del mapa `translations` para CUALQUIER idioma (incl. fr/de/ja/…),
-        // sin duplicar (si ya existe el idioma, se actualiza). El mapa tiene prioridad (más explícito).
-        if (r.getTranslations() != null && !r.getTranslations().isEmpty()) {
-            for (var e : r.getTranslations().entrySet()) {
-                String lang = e.getKey() != null ? e.getKey().trim().toLowerCase() : null;
-                var tr = e.getValue();
-                if (lang == null || lang.isEmpty() || tr == null
-                        || (tr.getTitle() == null || tr.getTitle().isBlank())) {
-                    continue;
-                }
-                var existing = p.getTranslations().stream()
-                        .filter(t -> lang.equalsIgnoreCase(t.getLanguage())).findFirst().orElse(null);
-                if (existing == null) {
-                    existing = ProductTranslationEntity
-                            .builder().product(p).language(lang).provider("bulk").build();
-                    p.getTranslations().add(existing);
-                }
-                existing.setTitle(tr.getTitle().trim());
-                String sd = tr.getShortDescription() != null && !tr.getShortDescription().isBlank()
-                        ? tr.getShortDescription().trim()
-                        : (tr.getDescription() != null ? tr.getDescription().trim() : tr.getTitle().trim());
-                existing.setShortDescription(sd != null && sd.length() > 2000 ? sd.substring(0, 2000) : sd);
-                existing.setDescription(tr.getDescription() != null ? tr.getDescription().trim() : sd);
-            }
-        }
+        BulkProductFields.applyExtraTranslations(p, r);
         // Las traducciones (título + descripción por idioma) las fija el writer dentro de su transacción.
         // DROP-679: como el writer publica el producto (status ACTIVE), generamos aquí el SEO por idioma
         // a partir de esas traducciones reales (las colecciones ya están adjuntas a la entidad gestionada).
