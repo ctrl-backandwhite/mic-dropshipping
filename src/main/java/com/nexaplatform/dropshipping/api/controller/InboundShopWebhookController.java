@@ -59,7 +59,15 @@ public class InboundShopWebhookController implements InboundShopWebhookApi {
 
         CreateOrderRequest req;
         try {
-            req = parsePayload(json.readTree(rawBody), shop, idempotencyKey);
+            JsonNode root = json.readTree(rawBody);
+            // Un cuerpo vacío o que no sea un objeto JSON (una lista, un número suelto) no se puede
+            // recorrer por clave. Se rechaza aquí con un mensaje que dice qué se esperaba, en vez de
+            // dejar que reviente al leer el primer campo.
+            if (root == null || !root.isObject()) {
+                log.warn("Inbound webhook from shop {} with a non-object body", shopId);
+                return ResponseEntity.badRequest().build();
+            }
+            req = parsePayload(root, shop, idempotencyKey);
         } catch (UnknownLineItemException e) {
             log.warn("Inbound order from shop {}: unmapped SKU {}", shopId, e.sku);
             return ResponseEntity.unprocessableEntity().build();
@@ -200,6 +208,9 @@ public class InboundShopWebhookController implements InboundShopWebhookApi {
      * en su propio estilo ({@code lineItems} o {@code line_items}), así que el consumidor acepta ambos.
      */
     private static JsonNode firstPresent(JsonNode root, String... names) {
+        if (root == null) {
+            return null;
+        }
         for (String name : names) {
             if (root.has(name)) {
                 return root.get(name);

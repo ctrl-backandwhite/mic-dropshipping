@@ -276,10 +276,23 @@ public class AffiliateProgramService {
                 .build());
     }
 
+    /**
+     * Activa o desactiva un código de referido, comprobando que pertenece a QUIEN lo pide.
+     *
+     * <p>Sin esa comprobación bastaba estar autenticado y conocer un identificador de código para apagar
+     * el enlace de otro afiliado, y con él sus comisiones futuras: los clics con ese código dejarían de
+     * atribuirse. El código ajeno se responde como inexistente y no como prohibido, porque un 403
+     * confirmaría al atacante que ese identificador existe.
+     */
     @Transactional
-    public AffiliateReferralCodeEntity setCodeActive(UUID codeId, boolean active) {
+    public AffiliateReferralCodeEntity setCodeActive(UUID userId, UUID codeId, boolean active) {
         AffiliateReferralCodeEntity c = codeRepo.findById(codeId).orElseThrow(
                 () -> new NotFoundException("Code not found"));
+        UUID owner = c.getAffiliate() != null ? c.getAffiliate().getId() : null;
+        UUID mine = affiliateRepo.findByUser_Id(userId).map(AffiliateEntity::getId).orElse(null);
+        if (owner == null || !owner.equals(mine)) {
+            throw new NotFoundException("Code not found");
+        }
         c.setActive(active);
         return codeRepo.save(c);
     }

@@ -70,8 +70,12 @@ public class MeAffiliateController {
     }
 
     @PostMapping("/codes/{codeId}/toggle")
-    public ResponseEntity<ReferralCodeView> toggle(@PathVariable UUID codeId, @RequestParam boolean active) {
-        return ResponseEntity.ok(mapper.toCodeView(service.setCodeActive(codeId, active)));
+    public ResponseEntity<ReferralCodeView> toggle(Authentication auth, @PathVariable UUID codeId,
+            @RequestParam boolean active) {
+        // El sujeto sale del token, como en el resto de /api/me/affiliate: era el único punto de este
+        // controlador que no lo hacía, y sin él cualquiera podía apagar el código de otro.
+        UUID userId = UUID.fromString(auth.getName());
+        return ResponseEntity.ok(mapper.toCodeView(service.setCodeActive(userId, codeId, active)));
     }
 
     /** Binds an anonymous referral cookie to this authenticated customer (DROP-645). */
