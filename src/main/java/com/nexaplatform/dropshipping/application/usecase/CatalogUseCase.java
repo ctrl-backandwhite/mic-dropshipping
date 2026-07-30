@@ -155,6 +155,25 @@ public interface CatalogUseCase {
     /** Permanently deletes a product and its catalog children (refused if it has orders). */
     void deleteProduct(UUID id);
 
+    /**
+     * Resultado de una operación en lote: cuántas salieron bien y el motivo de cada fallo.
+     *
+     * <p>Los lotes NO se paran ante el primer error: un producto que no se puede borrar porque tiene
+     * pedidos no debe impedir que se borren los demás de la selección.
+     */
+    record BulkOutcome(int succeeded, List<String> errors) {
+
+        public int failed() {
+            return errors.size();
+        }
+    }
+
+    /** Borra los productos indicados, continuando ante fallos individuales. */
+    BulkOutcome bulkDeleteProducts(List<UUID> ids);
+
+    /** Cambia el estado (ACTIVE/PAUSED/ARCHIVED) de los productos indicados. */
+    BulkOutcome bulkUpdateStatus(List<UUID> ids, String status);
+
     /** Bulk-creates categories from friendly JSON rows. */
     BulkResultDtoOut bulkCreateCategories(
             List<BulkCategoryDtoIn> rows);

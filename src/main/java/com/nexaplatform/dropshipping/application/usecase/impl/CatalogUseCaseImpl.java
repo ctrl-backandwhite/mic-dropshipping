@@ -1286,6 +1286,34 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             "shop_product_listing", "pod_design");
 
     @Override
+    public BulkOutcome bulkDeleteProducts(List<UUID> ids) {
+        return runBatch(ids, this::deleteProduct);
+    }
+
+    @Override
+    public BulkOutcome bulkUpdateStatus(List<UUID> ids, String status) {
+        return runBatch(ids, id -> updateStatus(id, status));
+    }
+
+    /**
+     * Aplica una acción a cada id y acumula los fallos sin cortar el lote. Cada elemento va en su propia
+     * transacción (la abre el método invocado), así que un fallo no arrastra a los que ya pasaron.
+     */
+    private BulkOutcome runBatch(List<UUID> ids, java.util.function.Consumer<UUID> action) {
+        int succeeded = 0;
+        List<String> errors = new ArrayList<>();
+        for (UUID id : ids == null ? List.<UUID>of() : ids) {
+            try {
+                action.accept(id);
+                succeeded++;
+            } catch (RuntimeException ex) {
+                errors.add(id + ": " + ErrorMessages.humanize(ex));
+            }
+        }
+        return new BulkOutcome(succeeded, errors);
+    }
+
+    @Override
     @Transactional
     @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),

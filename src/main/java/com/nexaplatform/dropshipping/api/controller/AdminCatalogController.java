@@ -214,33 +214,17 @@ public class AdminCatalogController implements AdminCatalogApi {
 
     @Override
     public ResponseEntity<Map<String, Object>> bulkDeleteProducts(List<UUID> ids) {
-        int deleted = 0;
-        List<String> errors = new ArrayList<>();
-        for (UUID id : ids) {
-            try {
-                catalogUseCase.deleteProduct(id); // per-id tx + cache evict; refused if it has orders
-                deleted++;
-            } catch (RuntimeException ex) {
-                errors.add(id + ": " + ErrorMessages.humanize(ex));
-            }
-        }
-        return ResponseEntity.ok(Map.of("deleted", deleted, "failed", errors.size(), "errors", errors));
+        CatalogUseCase.BulkOutcome result = catalogUseCase.bulkDeleteProducts(ids);
+        return ResponseEntity.ok(Map.of("deleted", result.succeeded(), "failed", result.failed(),
+                "errors", result.errors()));
     }
 
     /** Bulk publish/pause/archive the selected products (sets status: ACTIVE/PAUSED/ARCHIVED). */
     @PutMapping("/products/bulk-status")
     public ResponseEntity<Map<String, Object>> bulkProductStatus(@RequestBody BulkStatusRequest req) {
-        int succeeded = 0;
-        List<String> errors = new ArrayList<>();
-        for (UUID id : req.ids()) {
-            try {
-                catalogUseCase.updateStatus(id, req.status());
-                succeeded++;
-            } catch (RuntimeException ex) {
-                errors.add(id + ": " + ErrorMessages.humanize(ex));
-            }
-        }
-        return ResponseEntity.ok(Map.of("succeeded", succeeded, "failed", errors.size(), "errors", errors));
+        CatalogUseCase.BulkOutcome result = catalogUseCase.bulkUpdateStatus(req.ids(), req.status());
+        return ResponseEntity.ok(Map.of("succeeded", result.succeeded(), "failed", result.failed(),
+                "errors", result.errors()));
     }
 
     public record BulkStatusRequest(List<UUID> ids, String status) {
