@@ -152,44 +152,13 @@ public class InvoiceService {
         List<Map<String, Object>> items = new ArrayList<>();
         // Imágenes que el EMAIL adjunta como inline (cid → url del storage). Ver INLINE_IMAGES_KEY.
         Map<String, String> inlineImages = new LinkedHashMap<>();
-        BigDecimal subtotalDisp = BigDecimal.ZERO;
-        if (o.getItems() != null) {
-            int idx = 0;
-            for (OrderItem it : o.getItems()) {
-                BigDecimal unit = conv(it.getUnitPriceCents(), cur);
-                BigDecimal lineDisp = unit.multiply(BigDecimal.valueOf(it.getQuantity()));
-                subtotalDisp = subtotalDisp.add(lineDisp);
-                items.add(Map.of(TITLE, it.getTitleSnapshot() != null ? it.getTitleSnapshot() : "—", "sku",
-                        it.getSkuSnapshot() != null ? it.getSkuSnapshot() : "", "variant",
-                        it.getVariantName() != null ? it.getVariantName() : "", "qty", it.getQuantity(), "unit",
-                        fmt(unit, cur), "lineTotal", fmt(lineDisp, cur), "image",
-                        lineImage(it, embedImages, idx, inlineImages)));
-                idx++;
-            }
-        }
-        BigDecimal shippingDisp = conv(o.getShippingCents(), cur);
-        BigDecimal taxDisp = conv(o.getTaxCents(), cur);
-        BigDecimal discountDisp = conv(o.getDiscountCents(), cur);
-        // Total = subtotal − DESCUENTO de referido + envío + IVA. total_cents del pedido ya resta el
-        // descuento, así que esto coincide con lo cobrado.
-        BigDecimal totalDisp = subtotalDisp.subtract(discountDisp).add(shippingDisp).add(taxDisp);
-        // Pedido ya pagado: la factura muestra EXACTAMENTE lo cobrado (settlement), no la re-conversión a la
-        // tasa actual (que deriva con el tiempo). Escalamos el desglose (conversión lineal) para que cuadre.
-        BigDecimal settle = settlementTotal(o.getId(), cur);
-        if (settle != null && totalDisp.signum() > 0) {
-            BigDecimal f = settle.divide(totalDisp, 10, RoundingMode.HALF_UP);
-            subtotalDisp = subtotalDisp.multiply(f).setScale(2, RoundingMode.HALF_UP);
-            shippingDisp = shippingDisp.multiply(f).setScale(2, RoundingMode.HALF_UP);
-            discountDisp = discountDisp.multiply(f).setScale(2, RoundingMode.HALF_UP);
-            totalDisp = settle.setScale(2, RoundingMode.HALF_UP);
-            taxDisp = totalDisp.subtract(subtotalDisp).add(discountDisp).subtract(shippingDisp);
-        }
-        // Base imponible = (subtotal − descuento) + envío (lo gravado por el IVA). Tipo efectivo derivado
-        // de los importes para mostrar "IVA (X%)" sin depender de un campo de tipo separado.
-        BigDecimal baseDisp = subtotalDisp.subtract(discountDisp).add(shippingDisp);
-        int vatRate = baseDisp.signum() > 0
-                ? taxDisp.multiply(BigDecimal.valueOf(100)).divide(baseDisp, 0, RoundingMode.HALF_UP).intValue()
-                : 0;
+        InvoiceAmounts amounts = computeAmounts(o, cur, items, inlineImages, embedImages);
+        BigDecimal subtotalDisp = amounts.subtotal();
+        BigDecimal shippingDisp = amounts.shipping();
+        BigDecimal taxDisp = amounts.tax();
+        BigDecimal discountDisp = amounts.discount();
+        BigDecimal totalDisp = amounts.total();
+        int vatRate = amounts.vatRate();
         String city = join(o.getShippingCity(), o.getShippingState(), o.getShippingPostalCode());
         Instant when = o.getPlacedAt() != null ? o.getPlacedAt() : o.getCreatedAt();
 
@@ -287,6 +256,66 @@ public class InvoiceService {
     }
 
     /** Renderiza la factura como HTML (cuerpo del email) en la moneda del pedido. */
+    /** Importes de la factura ya en la moneda en que se emite, más el tipo de IVA efectivo. */
+    public record InvoiceAmounts(BigDecimal subtotal, BigDecimal shipping, BigDecimal tax, BigDecimal discount,
+            BigDecimal total, int vatRate) {
+    }
+
+    /**
+     * Calcula el desglose de la factura y, de paso, rellena las líneas y las imágenes que el correo
+     * adjuntará.
+     *
+     * <p>El subtotal se SUMA línea a línea en vez de convertir el total de una vez, para que la factura
+     * cuadre consigo misma y con lo que el comprador vio en el carrito.
+     *
+     * <p>Si el pedido ya se cobró, manda el importe LIQUIDADO: la factura tiene que decir exactamente lo
+     * que se cobró, no lo que costaría hoy —el tipo de cambio se mueve y una factura emitida semanas
+     * después mostraría una cifra que no coincide con el cargo del banco—. El desglose se escala en
+     * proporción para que siga sumando el total, y el impuesto se deja como el resto, de forma que
+     * base + impuesto = total sin céntimos sueltos.
+     */
+    private InvoiceAmounts computeAmounts(Order o, String cur, List<Map<String, Object>> items,
+            Map<String, String> inlineImages, boolean embedImages) {
+        BigDecimal subtotal = BigDecimal.ZERO;
+        if (o.getItems() != null) {
+            int idx = 0;
+            for (OrderItem it : o.getItems()) {
+                BigDecimal unit = conv(it.getUnitPriceCents(), cur);
+                BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(it.getQuantity()));
+                subtotal = subtotal.add(lineTotal);
+                items.add(Map.of(TITLE, it.getTitleSnapshot() != null ? it.getTitleSnapshot() : "—", "sku",
+                        it.getSkuSnapshot() != null ? it.getSkuSnapshot() : "", "variant",
+                        it.getVariantName() != null ? it.getVariantName() : "", "qty", it.getQuantity(), "unit",
+                        fmt(unit, cur), "lineTotal", fmt(lineTotal, cur), "image",
+                        lineImage(it, embedImages, idx, inlineImages)));
+                idx++;
+            }
+        }
+        BigDecimal shipping = conv(o.getShippingCents(), cur);
+        BigDecimal tax = conv(o.getTaxCents(), cur);
+        BigDecimal discount = conv(o.getDiscountCents(), cur);
+        // Total = subtotal − DESCUENTO de referido + envío + IVA. total_cents del pedido ya resta el
+        // descuento, así que esto coincide con lo cobrado.
+        BigDecimal total = subtotal.subtract(discount).add(shipping).add(tax);
+
+        BigDecimal settled = settlementTotal(o.getId(), cur);
+        if (settled != null && total.signum() > 0) {
+            BigDecimal factor = settled.divide(total, 10, RoundingMode.HALF_UP);
+            subtotal = subtotal.multiply(factor).setScale(2, RoundingMode.HALF_UP);
+            shipping = shipping.multiply(factor).setScale(2, RoundingMode.HALF_UP);
+            discount = discount.multiply(factor).setScale(2, RoundingMode.HALF_UP);
+            total = settled.setScale(2, RoundingMode.HALF_UP);
+            tax = total.subtract(subtotal).add(discount).subtract(shipping);
+        }
+        // Base imponible = (subtotal − descuento) + envío (lo gravado por el IVA). El tipo se deriva de los
+        // importes para poder mostrar "IVA (X%)" sin depender de un campo separado que podría no cuadrar.
+        BigDecimal taxableBase = subtotal.subtract(discount).add(shipping);
+        int vatRate = taxableBase.signum() > 0
+                ? tax.multiply(BigDecimal.valueOf(100)).divide(taxableBase, 0, RoundingMode.HALF_UP).intValue()
+                : 0;
+        return new InvoiceAmounts(subtotal, shipping, tax, discount, total, vatRate);
+    }
+
     public String renderHtml(Order o, String locale, String downloadUrl) {
         return renderHtml(o, locale, downloadUrl, o.getCurrency() != null ? o.getCurrency() : "USD");
     }
