@@ -29,11 +29,7 @@ public class CountryTaxService {
     /** Tasa nacional en puntos básicos para el país (0 si no hay tasa activa configurada). */
     @Transactional(readOnly = true)
     public int rateBpsFor(String country) {
-        if (country == null || country.isBlank()) {
-            return 0;
-        }
-        return repository.findByCountryCodeIgnoreCase(country.trim()).filter(CountryTaxRateEntity::isActive)
-                .map(CountryTaxRateEntity::getRateBps).orElse(0);
+        return nationalRateBps(country);
     }
 
     /**
@@ -42,6 +38,37 @@ public class CountryTaxService {
      */
     @Transactional(readOnly = true)
     public int rateBpsFor(String country, String region) {
+        return regionalRateBps(country, region);
+    }
+
+    /** Impuesto en céntimos sobre {@code taxableBaseCents} (subtotal + envío), redondeado HALF_UP. */
+    @Transactional(readOnly = true)
+    public int taxCentsFor(String country, int taxableBaseCents) {
+        return computeTaxCents(country, null, taxableBaseCents);
+    }
+
+    /** Igual que {@link #taxCentsFor(String, int)} pero resolviendo la tasa por región (estado/provincia). */
+    @Transactional(readOnly = true)
+    public int taxCentsFor(String country, String region, int taxableBaseCents) {
+        return computeTaxCents(country, region, taxableBaseCents);
+    }
+
+    /*
+     * Los cuatro métodos públicos se llamaban entre sí con `this`, así que el proxy de Spring no
+     * intervenía y su @Transactional(readOnly) era una promesa que nadie cumplía en las llamadas
+     * internas. El cálculo vive ahora en estos privados sin anotar y la transacción queda solo en el
+     * punto de entrada, que es donde de verdad se abre.
+     */
+
+    private int nationalRateBps(String country) {
+        if (country == null || country.isBlank()) {
+            return 0;
+        }
+        return repository.findByCountryCodeIgnoreCase(country.trim()).filter(CountryTaxRateEntity::isActive)
+                .map(CountryTaxRateEntity::getRateBps).orElse(0);
+    }
+
+    private int regionalRateBps(String country, String region) {
         if (country != null && !country.isBlank() && region != null && !region.isBlank()) {
             Integer regionBps = regionRepository
                     .findByCountryCodeIgnoreCaseAndRegionCodeIgnoreCase(country.trim(), region.trim())
@@ -52,20 +79,11 @@ public class CountryTaxService {
                 return Math.max(0, regionBps);
             }
         }
-        return rateBpsFor(country);
+        return nationalRateBps(country);
     }
 
-    /** Impuesto en céntimos sobre {@code taxableBaseCents} (subtotal + envío), redondeado HALF_UP. */
-    @Transactional(readOnly = true)
-    public int taxCentsFor(String country, int taxableBaseCents) {
-        return taxCentsFor(country, null, taxableBaseCents);
-    }
-
-    /** Igual que {@link #taxCentsFor(String, int)} pero resolviendo la tasa por región (estado/provincia). */
-    // Abre la lectura aquí: rateBpsFor es autoinvocación y su @Transactional no se aplica.
-    @Transactional(readOnly = true)
-    public int taxCentsFor(String country, String region, int taxableBaseCents) {
-        int bps = rateBpsFor(country, region);
+    private int computeTaxCents(String country, String region, int taxableBaseCents) {
+        int bps = regionalRateBps(country, region);
         if (bps <= 0 || taxableBaseCents <= 0) {
             return 0;
         }

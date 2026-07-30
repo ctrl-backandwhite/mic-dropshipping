@@ -60,7 +60,7 @@ class Cov01EmailDispatchConsumerTest {
         ReflectionTestUtils.setField(consumer, "baseUrl", BASE_URL);
     }
 
-    private static ConsumerRecord<String, Object> record(String topic, Map<String, Object> payload) {
+    private static ConsumerRecord<String, Object> kafkaRecord(String topic, Map<String, Object> payload) {
         return new ConsumerRecord<>(topic, 0, 0L, "k", payload);
     }
 
@@ -85,14 +85,14 @@ class Cov01EmailDispatchConsumerTest {
         // El topic lleva también notificaciones internas (sin userEmail): no son correos, se ignoran.
         Map<String, Object> payload = notification(null, "Pedido enviado");
 
-        consumer.onDispatch(record(NexaTopics.NOTIFICATIONS_DISPATCH, payload));
+        consumer.onDispatch(kafkaRecord(NexaTopics.NOTIFICATIONS_DISPATCH, payload));
 
         verifyNoInteractions(emailQueue);
     }
 
     @Test
     void unEventoConDestinatarioEnBlancoNoGeneraCorreo() {
-        consumer.onDispatch(record(NexaTopics.NOTIFICATIONS_DISPATCH, notification("   ", "Pedido enviado")));
+        consumer.onDispatch(kafkaRecord(NexaTopics.NOTIFICATIONS_DISPATCH, notification("   ", "Pedido enviado")));
 
         verifyNoInteractions(emailQueue);
     }
@@ -100,7 +100,7 @@ class Cov01EmailDispatchConsumerTest {
     @Test
     void unEventoSinAsuntoNoGeneraCorreo() {
         // El título es el asunto del correo: sin él saldría un email con la línea de asunto vacía.
-        consumer.onDispatch(record(NexaTopics.NOTIFICATIONS_DISPATCH, notification("ana@test.com", null)));
+        consumer.onDispatch(kafkaRecord(NexaTopics.NOTIFICATIONS_DISPATCH, notification("ana@test.com", null)));
 
         verifyNoInteractions(emailQueue);
     }
@@ -113,7 +113,7 @@ class Cov01EmailDispatchConsumerTest {
         user.setMarketingOptOut(true);
         when(userRepository.findByEmail("ana@test.com")).thenReturn(Optional.of(user));
 
-        consumer.onDispatch(record(NexaTopics.NOTIFICATIONS_DISPATCH, payload));
+        consumer.onDispatch(kafkaRecord(NexaTopics.NOTIFICATIONS_DISPATCH, payload));
 
         verify(emailQueue, never()).enqueue(anyString(), anyString(), anyString(), anyMap());
     }
@@ -127,7 +127,7 @@ class Cov01EmailDispatchConsumerTest {
         user.setMarketingOptOut(true);
         when(userRepository.findByEmail("ana@test.com")).thenReturn(Optional.of(user));
 
-        consumer.onDispatch(record(NexaTopics.NOTIFICATIONS_DISPATCH, payload));
+        consumer.onDispatch(kafkaRecord(NexaTopics.NOTIFICATIONS_DISPATCH, payload));
 
         verify(emailQueue).enqueue(eq("ana@test.com"), eq("Tu pedido va en camino"), eq(TEMPLATE), anyMap());
     }
@@ -139,7 +139,7 @@ class Cov01EmailDispatchConsumerTest {
         payload.put("marketing", true);
         when(userRepository.findByEmail("nueva@test.com")).thenReturn(Optional.empty());
 
-        consumer.onDispatch(record(NexaTopics.NOTIFICATIONS_DISPATCH, payload));
+        consumer.onDispatch(kafkaRecord(NexaTopics.NOTIFICATIONS_DISPATCH, payload));
 
         verify(emailQueue).enqueue(eq("nueva@test.com"), eq("Novedades"), eq(TEMPLATE), anyMap());
     }
@@ -150,7 +150,7 @@ class Cov01EmailDispatchConsumerTest {
         Map<String, Object> payload = notification("ana@test.com", "Seguimiento");
         payload.put("ctaUrl", "https://tracking.carrier.test/AB123");
 
-        consumer.onDispatch(record(NexaTopics.NOTIFICATIONS_DISPATCH, payload));
+        consumer.onDispatch(kafkaRecord(NexaTopics.NOTIFICATIONS_DISPATCH, payload));
 
         assertThat(captureVars()).containsEntry("ctaUrl", "https://tracking.carrier.test/AB123");
     }
@@ -160,7 +160,7 @@ class Cov01EmailDispatchConsumerTest {
         Map<String, Object> payload = notification("ana@test.com", "Pedido");
         payload.put("ctaUrl", "/orders/42");
 
-        consumer.onDispatch(record(NexaTopics.NOTIFICATIONS_DISPATCH, payload));
+        consumer.onDispatch(kafkaRecord(NexaTopics.NOTIFICATIONS_DISPATCH, payload));
 
         assertThat(captureVars()).containsEntry("ctaUrl", BASE_URL + "/orders/42");
     }
@@ -171,7 +171,7 @@ class Cov01EmailDispatchConsumerTest {
         Map<String, Object> payload = notification("ana@test.com", "Pedido");
         payload.put("ctaUrl", "orders/42");
 
-        consumer.onDispatch(record(NexaTopics.NOTIFICATIONS_DISPATCH, payload));
+        consumer.onDispatch(kafkaRecord(NexaTopics.NOTIFICATIONS_DISPATCH, payload));
 
         assertThat(captureVars()).containsEntry("ctaUrl", BASE_URL + "/orders/42");
     }
@@ -181,7 +181,7 @@ class Cov01EmailDispatchConsumerTest {
         Map<String, Object> payload = notification("ana@test.com", "Aviso");
         payload.put("ctaUrl", "  ");
 
-        consumer.onDispatch(record(NexaTopics.NOTIFICATIONS_DISPATCH, payload));
+        consumer.onDispatch(kafkaRecord(NexaTopics.NOTIFICATIONS_DISPATCH, payload));
 
         Map<String, Object> vars = captureVars();
         assertThat(vars).containsKey("ctaUrl");
@@ -196,7 +196,7 @@ class Cov01EmailDispatchConsumerTest {
         payload.put("preheader", "Resumen corto");
         payload.put("ctaLabel", "Ver pedido");
 
-        consumer.onDispatch(record(NexaTopics.NOTIFICATIONS_DISPATCH, payload));
+        consumer.onDispatch(kafkaRecord(NexaTopics.NOTIFICATIONS_DISPATCH, payload));
 
         assertThat(captureVars()).containsEntry("title", "Aviso").containsEntry("body", "Texto plano")
                 .containsEntry("bodyHtml", "<p>Texto</p>").containsEntry("preheader", "Resumen corto")
@@ -210,7 +210,7 @@ class Cov01EmailDispatchConsumerTest {
                 .thenThrow(new IllegalStateException("smtp caído"));
 
         assertThatCode(() -> consumer.onDispatch(
-                record(NexaTopics.NOTIFICATIONS_DISPATCH, notification("ana@test.com", "Aviso"))))
+                kafkaRecord(NexaTopics.NOTIFICATIONS_DISPATCH, notification("ana@test.com", "Aviso"))))
                 .doesNotThrowAnyException();
     }
 
@@ -221,7 +221,7 @@ class Cov01EmailDispatchConsumerTest {
         Map<String, Object> payload = new HashMap<>();
         payload.put("bodyHtml", "<p>Hola</p>");
 
-        consumer.onNewsletter(record(NexaTopics.NEWSLETTER_SEND, payload));
+        consumer.onNewsletter(kafkaRecord(NexaTopics.NEWSLETTER_SEND, payload));
 
         verifyNoInteractions(subscriberRepository);
         verifyNoInteractions(emailQueue);
@@ -232,7 +232,7 @@ class Cov01EmailDispatchConsumerTest {
         Map<String, Object> payload = new HashMap<>();
         payload.put("subject", "Boletín de julio");
 
-        consumer.onNewsletter(record(NexaTopics.NEWSLETTER_SEND, payload));
+        consumer.onNewsletter(kafkaRecord(NexaTopics.NEWSLETTER_SEND, payload));
 
         verifyNoInteractions(emailQueue);
     }
@@ -247,7 +247,7 @@ class Cov01EmailDispatchConsumerTest {
         NewsletterSubscriberEntity b = NewsletterSubscriberEntity.builder().email("b@test.com").token("tok-b").build();
         when(subscriberRepository.findByStatus("SUBSCRIBED")).thenReturn(List.of(a, b));
 
-        consumer.onNewsletter(record(NexaTopics.NEWSLETTER_SEND, payload));
+        consumer.onNewsletter(kafkaRecord(NexaTopics.NEWSLETTER_SEND, payload));
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
@@ -267,7 +267,7 @@ class Cov01EmailDispatchConsumerTest {
         payload.put("bodyHtml", "<p>x</p>");
         when(subscriberRepository.findByStatus("SUBSCRIBED")).thenReturn(List.of());
 
-        consumer.onNewsletter(record(NexaTopics.NEWSLETTER_SEND, payload));
+        consumer.onNewsletter(kafkaRecord(NexaTopics.NEWSLETTER_SEND, payload));
 
         verify(subscriberRepository).findByStatus("SUBSCRIBED");
         verify(emailQueue, never()).enqueue(anyString(), anyString(), anyString(), anyMap());
@@ -280,7 +280,7 @@ class Cov01EmailDispatchConsumerTest {
         payload.put("bodyHtml", "<p>x</p>");
         when(subscriberRepository.findByStatus(any())).thenThrow(new IllegalStateException("BD caída"));
 
-        assertThatCode(() -> consumer.onNewsletter(record(NexaTopics.NEWSLETTER_SEND, payload)))
+        assertThatCode(() -> consumer.onNewsletter(kafkaRecord(NexaTopics.NEWSLETTER_SEND, payload)))
                 .doesNotThrowAnyException();
     }
 }

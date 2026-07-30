@@ -65,13 +65,13 @@ public class EmailQueueService {
 
     @Transactional
     public OutboundEmailEntity enqueue(String to, String subject, String template, Map<String, Object> vars) {
-        return enqueue(to, null, subject, template, vars);
+        return doEnqueue(to, null, subject, template, vars, Map.of());
     }
 
     @Transactional
     public OutboundEmailEntity enqueue(String to, String replyTo, String subject, String template,
             Map<String, Object> vars) {
-        return enqueue(to, replyTo, subject, template, vars, Map.of());
+        return doEnqueue(to, replyTo, subject, template, vars, Map.of());
     }
 
     /**
@@ -83,6 +83,17 @@ public class EmailQueueService {
      */
     @Transactional
     public OutboundEmailEntity enqueue(String to, String replyTo, String subject, String template,
+            Map<String, Object> vars, Map<String, String> inlineImages) {
+        return doEnqueue(to, replyTo, subject, template, vars, inlineImages);
+    }
+
+    /**
+     * Cuerpo compartido por las tres sobrecargas. Encadenarlas con {@code this} dejaba el
+     * {@code @Transactional} de las variantes cortas sin efecto (el proxy de Spring no intercepta la
+     * autoinvocación); ahora la transacción se abre en la sobrecarga por la que se entra y aquí solo
+     * se escribe.
+     */
+    private OutboundEmailEntity doEnqueue(String to, String replyTo, String subject, String template,
             Map<String, Object> vars, Map<String, String> inlineImages) {
         Context ctx = new Context();
         vars.forEach(ctx::setVariable);

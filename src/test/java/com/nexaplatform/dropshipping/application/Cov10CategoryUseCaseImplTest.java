@@ -15,6 +15,7 @@ import jakarta.persistence.TypedQuery;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -60,14 +61,14 @@ class Cov10CategoryUseCaseImplTest {
     @Mock
     EntityManager em;
 
+    @InjectMocks
     CategoryUseCaseImpl useCase;
 
     @BeforeEach
     void setUp() throws Exception {
-        useCase = new CategoryUseCaseImpl(categoryRepository, categoryUpdateMapper, categoryIndexer,
-                categorySearchService);
-        // El EntityManager entra por @PersistenceContext, no por el constructor de Lombok: si no se
-        // inyecta a mano, todos los conteos de productos revientan con NullPointerException.
+        // El EntityManager entra por @PersistenceContext, no por el constructor de Lombok: Mockito lo
+        // ignora al inyectar por constructor, y sin ponerlo a mano todos los conteos de productos
+        // revientan con NullPointerException.
         Field emField = CategoryUseCaseImpl.class.getDeclaredField("em");
         emField.setAccessible(true);
         emField.set(useCase, em);
@@ -130,7 +131,7 @@ class Cov10CategoryUseCaseImplTest {
 
         assertThat(result.getContent()).singleElement().extracting(Category::getProductCount).isEqualTo(4L);
         // El camino eficiente NO debe pedir las 100.000 filas para filtrar en memoria.
-        verify(categoryRepository, never()).search(eq("mod"), eq(PageRequest.of(0, 100_000)));
+        verify(categoryRepository, never()).search("mod", PageRequest.of(0, 100_000));
     }
 
     @Test

@@ -393,55 +393,63 @@ class Cov05ProductMapperTest {
     /* ===================== tramos de precio ===================== */
 
     @Test
-    @DisplayName("el tramo de precio se muestra CON margen, nunca al coste del proveedor")
-    void elTramoDePrecioSeMuestraConMargen() {
+    @DisplayName("el tramo de precio sale de la MISMA cuenta que el precio que se cobra")
+    void elTramoDePrecioSeTarificaComoElPrecioQueSeCobra() {
+        // El tramo tenía su propia fórmula (coste → USD → margen) y se quedaba ahí, sin el IVA ni el
+        // envío que sí lleva el precio real: la ficha anunciaba «2+ → 1,99 $» y se cobraban 3,57 $.
+        // Ahora pasa por PricingService, que es quien tarifica también la ficha, la variante y el pedido.
         ProductEntity p = product();
         ProductPriceTierEntity tier = ProductPriceTierEntity.builder().product(p).minQty(10).maxQty(49)
                 .unitPrice(new BigDecimal("14.13")).currency("CNY").build();
-        when(currencyRateService.toUsd(any(), eq("CNY"))).thenReturn(new BigDecimal("14.13"));
-        when(marginService.apply(any(), any(), any()))
-                .thenReturn(new PriceWithMargin(new BigDecimal("14.13"), new BigDecimal("28.26"), null,
-                        new BigDecimal("100")));
-        when(currencyRateService.usdToDisplay(new BigDecimal("28.26"))).thenReturn(new BigDecimal("28.26"));
-        when(pricingService.displayCurrencyCode()).thenReturn("EUR");
-        when(currencyRateService.formatDisplay(new BigDecimal("28.26"), "EUR")).thenReturn("28,26 €");
+        when(pricingService.priceForSupplierAmount(p, null, new BigDecimal("14.13")))
+                .thenReturn(precio(new BigDecimal("28.26"), "EUR", "28,26 €"));
 
         PriceTierView view = mapper.toPriceTierView(tier);
 
-        // Mostrar 14,13 € y cobrar 28,26 € al pagar sería un cambio de precio en el checkout.
         assertThat(view.unitPrice()).isEqualByComparingTo("28.26");
         assertThat(view.unitPriceFormatted()).isEqualTo("28,26 €");
+        assertThat(view.currency()).isEqualTo("EUR");
         assertThat(view.minQty()).isEqualTo(10);
         assertThat(view.maxQty()).isEqualTo(49);
     }
 
-    @Test
-    @DisplayName("un tramo sin divisa se interpreta en yuanes (moneda del proveedor)")
-    void unTramoSinDivisaSeInterpretaEnYuanes() {
-        ProductEntity p = product();
-        ProductPriceTierEntity tier = ProductPriceTierEntity.builder().product(p).minQty(1)
-                .unitPrice(new BigDecimal("9.00")).currency(null).build();
-        when(currencyRateService.toUsd(any(), any())).thenReturn(new BigDecimal("9.00"));
-        when(marginService.apply(any(), any(), any()))
-                .thenReturn(new PriceWithMargin(new BigDecimal("9.00"), new BigDecimal("18.00"), null, null));
-
-        mapper.toPriceTierView(tier);
-
-        verify(currencyRateService).toUsd(new BigDecimal("9.00"), "CNY");
+    /** PricedAmount con lo único que lee la vista del tramo: importe, divisa y texto formateado. */
+    private static PricedAmount precio(BigDecimal importe, String divisa, String formateado) {
+        return new PricedAmount(null, null, importe, divisa, "€", formateado, null, null,
+                null, null, null, null, null, null);
     }
 
     @Test
-    @DisplayName("si el margen no devuelve precio de venta, el tramo cae al coste en vez de quedarse vacío")
-    void siNoHayPrecioDeVentaElTramoCaeAlCoste() {
+    @DisplayName("el importe del tramo se tarifica con el producto al que pertenece")
+    void elTramoSeTarificaConSuProducto() {
+        // El IVA y el envío son del producto, así que el tramo tiene que ir acompañado del suyo: con
+        // otro producto saldrían los impuestos de otro país o un envío que no es el de esta pieza.
+        ProductEntity p = product();
+        ProductPriceTierEntity tier = ProductPriceTierEntity.builder().product(p).minQty(1)
+                .unitPrice(new BigDecimal("9.00")).currency(null).build();
+        when(pricingService.priceForSupplierAmount(any(), any(), any()))
+                .thenReturn(precio(new BigDecimal("18.00"), "EUR", "18,00 €"));
+
+        mapper.toPriceTierView(tier);
+
+        verify(pricingService).priceForSupplierAmount(p, null, new BigDecimal("9.00"));
+    }
+
+    @Test
+    @DisplayName("si no se puede tarificar, el tramo usa la divisa de display en vez de quedarse sin ella")
+    void unTramoSinTarifaConservaLaDivisaDeDisplay() {
         ProductEntity p = product();
         ProductPriceTierEntity tier = ProductPriceTierEntity.builder().product(p).minQty(1)
                 .unitPrice(new BigDecimal("7.00")).currency("CNY").build();
-        when(currencyRateService.toUsd(any(), any())).thenReturn(new BigDecimal("7.00"));
-        when(marginService.apply(any(), any(), any()))
-                .thenReturn(new PriceWithMargin(new BigDecimal("7.00"), null, null, null));
-        when(currencyRateService.usdToDisplay(new BigDecimal("7.00"))).thenReturn(new BigDecimal("7.00"));
+        when(pricingService.priceForSupplierAmount(any(), any(), any()))
+                .thenReturn(precio(null, null, null));
+        when(pricingService.displayCurrencyCode()).thenReturn("EUR");
+        when(currencyRateService.formatDisplay(null, "EUR")).thenReturn("—");
 
-        assertThat(mapper.toPriceTierView(tier).unitPrice()).isEqualByComparingTo("7.00");
+        PriceTierView view = mapper.toPriceTierView(tier);
+
+        assertThat(view.unitPrice()).isNull();
+        assertThat(view.currency()).isEqualTo("EUR");
     }
 
     /* ===================== imágenes ===================== */

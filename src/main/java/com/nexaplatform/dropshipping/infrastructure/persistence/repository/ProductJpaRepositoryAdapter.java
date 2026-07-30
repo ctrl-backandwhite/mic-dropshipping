@@ -89,6 +89,13 @@ public interface ProductJpaRepositoryAdapter extends JpaRepository<ProductEntity
                                 AND (LOWER(a.attrValue) LIKE CONCAT('%', CAST(:needle AS string), '%')
                                      OR LOWER(a.attrKey) LIKE CONCAT('%', CAST(:needle AS string), '%'))))
             """)
+    // Los filtros NO se pueden agrupar en un record (java:S107): Spring Data enlaza un @Param por
+    // parámetro declarado y con él conoce el tipo Java de cada uno. Pasarlos dentro de un objeto
+    // obligaría a expresiones SpEL (:#{#f.needle}), que se evalúan en ejecución y pierden ese tipo: un
+    // filtro a null volvería a viajar sin tipo y PostgreSQL rompería la consulta con
+    // "operator does not exist: text ~~ bytea", que es justo lo que evitan los CAST de arriba.
+    // El agrupado en record sí existe aguas arriba, en ProductListFilters (api/mapper).
+    @SuppressWarnings("java:S107")
     Page<ProductEntity> searchStorefront(@Param("status") ProductStatus status, @Param("needle") String needle,
             @Param("categoryId") UUID categoryId, @Param("supplierId") UUID supplierId,
             @Param("minPrice") BigDecimal minPrice, @Param("maxPrice") BigDecimal maxPrice,

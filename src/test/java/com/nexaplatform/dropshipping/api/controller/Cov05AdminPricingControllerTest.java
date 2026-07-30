@@ -32,7 +32,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -188,8 +187,7 @@ class Cov05AdminPricingControllerTest {
 
         Map<String, Object> body = controller.bulkDelete(List.of(ok1, bad, ok2)).getBody();
 
-        assertThat(body).isNotNull();
-        assertThat(body).containsEntry("succeeded", 2).containsEntry("failed", 1);
+        assertThat(body).isNotNull().containsEntry("succeeded", 2).containsEntry("failed", 1);
         // El operador tiene que poder ver QUÉ id falló y por qué, no solo un contador.
         @SuppressWarnings("unchecked")
         List<String> errors = (List<String>) body.get("errors");
@@ -247,6 +245,6 @@ class Cov05AdminPricingControllerTest {
 
         controller.bulkToggle(new BulkToggleRequest(List.of(a), true));
 
-        verify(useCase).setActive(eq(a), eq(true));
+        verify(useCase).setActive(a, true);
     }
 }

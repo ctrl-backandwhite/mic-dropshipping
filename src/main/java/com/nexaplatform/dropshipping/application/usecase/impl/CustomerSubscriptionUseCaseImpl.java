@@ -98,6 +98,15 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     @Override
     @Transactional(readOnly = true)
     public CustomerSubscription getById(UUID id) {
+        return requireById(id);
+    }
+
+    /**
+     * Cuerpo sin anotar de {@link #getById(UUID)}, que es al que llaman los métodos de esta clase: una
+     * llamada interna no pasa por el proxy de Spring, así que su {@code @Transactional} nunca se aplicaría.
+     * La transacción la abre el método público de entrada.
+     */
+    private CustomerSubscription requireById(UUID id) {
         CustomerSubscription model = customerSubscriptionRepository.getById(id);
         if (Objects.isNull(model)) {
             throw new NotFoundException("Subscription not found: " + id);
@@ -108,7 +117,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     @Override
     @Transactional
     public CustomerSubscription update(CustomerSubscription model, UUID id) {
-        CustomerSubscription existing = getById(id);
+        CustomerSubscription existing = requireById(id);
         customerSubscriptionUpdateMapper.updateFromModel(model, existing);
         CustomerSubscription saved = customerSubscriptionRepository.update(existing);
         log.info("::> [BILLING] Subscription updated id={}", id);
@@ -118,7 +127,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     @Override
     @Transactional
     public void delete(UUID id) {
-        getById(id);
+        requireById(id);
         customerSubscriptionRepository.delete(id);
         log.info("::> [BILLING] Subscription deleted id={}", id);
     }
@@ -173,6 +182,11 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     @Override
     @Transactional
     public CustomerSubscription createSubscription(UUID userId, String planCode, String billingPeriod) {
+        return newSubscription(userId, planCode, billingPeriod);
+    }
+
+    /** Cuerpo sin anotar de {@link #createSubscription}: es al que llaman los flujos de esta clase. */
+    private CustomerSubscription newSubscription(UUID userId, String planCode, String billingPeriod) {
         SubscriptionPlanEntity plan = getPlanEntityByCode(planCode);
         Instant now = Instant.now();
 
@@ -264,7 +278,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         SubscriptionPlanEntity plan = getPlanEntityByCode(planCode);
 
         if (!stripeService.isEnabled()) {
-            CustomerSubscription sub = createSubscription(userId, planCode, period);
+            CustomerSubscription sub = newSubscription(userId, planCode, period);
             return SubscribeResult.builder().checkoutUrl("/billing/success?dev=1").sessionId(sub.getId().toString())
                     .build();
         }
@@ -427,7 +441,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
 
         // Plan gratis: suscripción ACTIVE directa, sin pasar por Stripe.
         if (cnyCents <= 0) {
-            CustomerSubscription free = createSubscription(userId, planCode, billingPeriod);
+            CustomerSubscription free = newSubscription(userId, planCode, billingPeriod);
             return new SubscribeOutcome(free.getId().toString(), "active");
         }
 
@@ -511,6 +525,11 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     @Override
     @Transactional(readOnly = true)
     public CustomerSubscription currentSubscription(UUID userId) {
+        return latestNonCanceled(userId);
+    }
+
+    /** Cuerpo sin anotar de {@link #currentSubscription(UUID)}: es al que llaman los flujos internos. */
+    private CustomerSubscription latestNonCanceled(UUID userId) {
         return customerSubscriptionRepository.findByUserId(userId).stream()
                 .filter(s -> s.getStatus() != SubscriptionStatus.CANCELED)
                 .max(Comparator.comparing(CustomerSubscription::getCreatedAt,
@@ -521,7 +540,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     @Override
     @Transactional(noRollbackFor = StripeException.class)
     public void cancelMySubscription(UUID userId) throws StripeException {
-        CustomerSubscription sub = currentSubscription(userId);
+        CustomerSubscription sub = latestNonCanceled(userId);
         if (sub == null) {
             throw new NotFoundException("No tienes una suscripción activa");
         }

@@ -201,7 +201,7 @@ class Cov07WalletSearchServiceTest {
         service.pageIds(null, null, null, 0, 10);
 
         HttpRequest request = sentRequest();
-        assertThat(request.uri().toString()).isEqualTo("http://nodo-1:9400/wallets/_search");
+        assertThat(request.uri()).hasToString("http://nodo-1:9400/wallets/_search");
         assertThat(request.method()).isEqualTo("POST");
         assertThat(request.headers().firstValue("Content-Type")).contains("application/json");
     }

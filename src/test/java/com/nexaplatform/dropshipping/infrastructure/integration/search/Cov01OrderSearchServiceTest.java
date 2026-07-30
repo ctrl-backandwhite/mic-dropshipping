@@ -141,12 +141,12 @@ class Cov01OrderSearchServiceTest {
 
         service.pageIds(null, null, 0, 20);
 
-        String body = sentBody();
-        assertThat(body).contains("\"query\":{\"match_all\":{}}");
         // El orden es la garantía de la pantalla: el admin espera ver arriba lo que acaba de entrar.
-        assertThat(body).contains("\"sort\":[{\"sortTs\":{\"order\":\"desc\"}}]");
-        // Sin track_total_hits OpenSearch corta el conteo en 10.000 y el paginador mentiría.
-        assertThat(body).contains("\"track_total_hits\":true");
+        // Y sin track_total_hits OpenSearch corta el conteo en 10.000, con lo que el paginador mentiría.
+        assertThat(sentBody())
+                .contains("\"query\":{\"match_all\":{}}")
+                .contains("\"sort\":[{\"sortTs\":{\"order\":\"desc\"}}]")
+                .contains("\"track_total_hits\":true");
     }
 
     @Test

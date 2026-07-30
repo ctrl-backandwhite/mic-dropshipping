@@ -190,7 +190,7 @@ class Cov09ImageMirrorBatchTest {
     }
 
     @Test
-    void unOrigenNuloDeVarianteNoRompeElBarrido() throws Exception {
+    void unOrigenNuloDeVarianteNoRompeElBarrido() {
         // Una variante sin URL de origen debe caer en el mismo camino de fallo, no reventar el job.
         when(storage.isReady()).thenReturn(true);
         when(storage.publicUrl()).thenReturn("https://cdn.example.com");

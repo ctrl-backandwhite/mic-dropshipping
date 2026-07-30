@@ -65,9 +65,12 @@ class Cov07AdminPartnerOAuthTest {
 
     @Test
     void unClienteOAuthSinNombreNoSeCrea() {
-        assertThatThrownBy(() -> useCase.createOAuthClient("  ", List.of("catalog.read"), UUID.randomUUID()))
+        List<String> scopes = List.of("catalog.read");
+        UUID ownerId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> useCase.createOAuthClient("  ", scopes, ownerId))
                 .isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> useCase.createOAuthClient(null, List.of("catalog.read"), UUID.randomUUID()))
+        assertThatThrownBy(() -> useCase.createOAuthClient(null, scopes, ownerId))
                 .isInstanceOf(BusinessException.class);
         verify(registeredClientRepository, never()).save(any());
     }

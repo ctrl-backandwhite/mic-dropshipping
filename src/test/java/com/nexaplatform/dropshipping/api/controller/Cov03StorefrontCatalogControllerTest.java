@@ -70,6 +70,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.Month;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -596,7 +597,7 @@ class Cov03StorefrontCatalogControllerTest {
         // Calcular la ventana con la zona de la máquina haría que el mismo "últimos N días" devolviera un
         // día más o menos según dónde corriera el servidor.
         UUID id = UUID.randomUUID();
-        ProductHistoryEntity h = ProductHistoryEntity.builder().snapshotDate(LocalDate.of(2026, 1, 5))
+        ProductHistoryEntity h = ProductHistoryEntity.builder().snapshotDate(LocalDate.of(2026, Month.JANUARY, 5))
                 .priceUsdCents(1999).stock(7).build();
         when(historyRepository.findByProduct_IdAndSnapshotDateGreaterThanEqualOrderBySnapshotDateAsc(eq(id), any()))
                 .thenReturn(List.of(h));
@@ -797,8 +798,7 @@ class Cov03StorefrontCatalogControllerTest {
 
         List<ImageSearchResult> res = controller.searchByImage(new ImageSearchRequest(null, null, null), "es");
 
-        assertThat(res).hasSize(12);
-        assertThat(res).isSortedAccordingTo((a, b) -> Double.compare(b.score(), a.score()));
+        assertThat(res).hasSize(12).isSortedAccordingTo((a, b) -> Double.compare(b.score(), a.score()));
     }
 
     /* ==================== paginación de los más vendidos ==================== */
@@ -837,7 +837,7 @@ class Cov03StorefrontCatalogControllerTest {
         // deja a Mockito con un stub sin terminar.
         ProductSummaryView vista = resumen(relacionado.getId());
         when(productDetailQuery.relatedProducts(id, 4)).thenReturn(List.of(relacionado));
-        when(productMapper.toSummary(eq(relacionado), eq("es"))).thenReturn(vista);
+        when(productMapper.toSummary(relacionado, "es")).thenReturn(vista);
         when(productDetailQuery.attributes(id, "es")).thenReturn(Map.of("color", "rojo"));
         when(productDetailQuery.tags(id)).thenReturn(List.of("oferta"));
 

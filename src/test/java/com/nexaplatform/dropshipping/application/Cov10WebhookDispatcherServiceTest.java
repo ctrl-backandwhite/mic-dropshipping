@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -59,6 +60,7 @@ class Cov10WebhookDispatcherServiceTest {
     @Mock
     PartnerWebhookDispatcherService partnerWebhooks;
 
+    @InjectMocks
     WebhookDispatcherService service;
     WebhookDispatcherService self;
 
@@ -67,7 +69,6 @@ class Cov10WebhookDispatcherServiceTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        service = new WebhookDispatcherService(subscriptionRepository, deliveryRepository, partnerWebhooks);
         // `self` es la autoreferencia por el proxy (@Autowired @Lazy): sin ella queue() cae al catch y el
         // envío nunca se dispara. Se sustituye por un doble para poder observar la llamada.
         self = mock(WebhookDispatcherService.class);

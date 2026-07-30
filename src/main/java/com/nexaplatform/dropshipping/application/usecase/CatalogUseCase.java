@@ -53,6 +53,19 @@ public interface CatalogUseCase {
 
     Page<ProductSummaryView> listProducts(ProductStatus status, Pageable pageable, String language);
 
+    /**
+     * Listado del panel de admin.
+     *
+     * <p>Los filtros piden a gritos un record que los agrupe ({@code status}, {@code query} y
+     * {@code sort} son tres cadenas seguidas que al llamar se pueden intercambiar sin error de
+     * compilación), pero la firma no puede cambiar desde aquí: la implementación es la que lleva el
+     * {@code @Transactional(readOnly = true)} que mantiene abierta la sesión mientras se mapean las
+     * traducciones LAZY, y una firma nueva obligaría a un método puente en esta interfaz. Ese puente
+     * llamaría al método anotado desde dentro del propio objetivo —sin pasar por el proxy—, así que el
+     * listado se quedaría sin transacción y reventaría con LazyInitializationException. La agrupación
+     * llega cuando se migren de golpe el controlador de admin y sus pruebas.
+     */
+    @SuppressWarnings("java:S107")
     Page<ProductSummaryView> listProductsForAdmin(String status, UUID categoryId, String query, int page, int size,
             String language, String sort, Boolean verified);
 

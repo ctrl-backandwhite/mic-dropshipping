@@ -72,7 +72,7 @@ public class AffiliateIndexer {
         try {
             if (affiliateSearchService.pageIds(null, null, 0, 1).isEmpty()) {
                 log.info("Affiliate index '{}' empty/unavailable on startup → reindexing", index);
-                reindexAll();
+                doReindexAll();
             }
         } catch (Exception e) {
             log.warn("Affiliate index warm-up skipped: {}", e.getMessage());
@@ -90,6 +90,15 @@ public class AffiliateIndexer {
     /** Re-indexes every affiliate. Returns the number indexed. */
     @Transactional(readOnly = true)
     public int reindexAll() {
+        return doReindexAll();
+    }
+
+    /**
+     * Cuerpo del reindexado. Sin anotar: el arranque lo invoca desde dentro de la misma clase, y esa
+     * autoinvocación se salta el proxy de Spring, con lo que el {@code @Transactional} del método público
+     * no llegaría a aplicarse (java:S6809). La anotación se queda en el punto de entrada.
+     */
+    private int doReindexAll() {
         int[] n = { 0 };
         affiliateRepo.findAll().forEach(a -> {
             indexAffiliate(a);

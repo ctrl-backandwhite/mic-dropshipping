@@ -152,7 +152,7 @@ public class CatalogStorefrontReadService {
     public PageResponse<ProductSummaryView> productsByCategory(String idOrSlug, int page, int size, String lang,
             String sort) {
         UUID categoryId = resolveCategory(idOrSlug).getId();
-        return productList(page, size, lang, null, categoryId, null, null, null, sort);
+        return listing(page, size, lang, ProductListFilters.basic(null, categoryId, null, null, null), sort);
     }
 
     /* ============================ Suppliers ============================ */
@@ -182,7 +182,7 @@ public class CatalogStorefrontReadService {
             + "+ ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get()")
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productsBySupplier(UUID id, int page, int size, String lang, String sort) {
-        return productList(page, size, lang, null, null, id, null, null, sort);
+        return listing(page, size, lang, ProductListFilters.basic(null, null, id, null, null), sort);
     }
 
     /* ============================ Variants ============================ */
@@ -217,6 +217,17 @@ public class CatalogStorefrontReadService {
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productListFull(int page, int size, String lang,
             ProductListFilters filters, String sort) {
+        return listing(page, size, lang, filters, sort);
+    }
+
+    /**
+     * El listado real. Va sin anotaciones a propósito: es el punto al que llaman los demás métodos de
+     * esta misma clase. La autoinvocación NO pasa por el proxy de Spring, así que el {@code @Cacheable}
+     * y el {@code @Transactional} del método invocado nunca se aplicaban; con el cuerpo aquí, esas
+     * anotaciones quedan solo donde de verdad actúan: el método público por el que entra la petición.
+     */
+    private PageResponse<ProductSummaryView> listing(int page, int size, String lang, ProductListFilters filters,
+            String sort) {
         String q = filters.q();
         UUID categoryId = filters.categoryId();
         UUID supplierId = filters.supplierId();
@@ -309,16 +320,20 @@ public class CatalogStorefrontReadService {
         return (min == null || price.compareTo(min) >= 0) && (max == null || price.compareTo(max) <= 0);
     }
 
-    // @Transactional imprescindible: este método delega en productListFull() por self-invocation (misma
-    // clase), y en la self-invocation NO se aplica el proxy @Transactional de productListFull. Sin la
-    // transacción aquí, el mapeo a summary (que carga translations LAZY) falla con LazyInitializationException
-    // "no session" (p.ej. GET /catalog/products/newest daba 500). Con esta anotación la sesión sigue abierta.
+    // @Transactional imprescindible: sin la transacción aquí, el mapeo a summary (que carga translations
+    // LAZY) falla con LazyInitializationException "no session" (p.ej. GET /catalog/products/newest daba
+    // 500). Con esta anotación la sesión sigue abierta mientras se construye la página.
+    //
+    // Versión con los filtros sueltos de {@link #productListFull}, que es la que los agrupa en
+    // ProductListFilters. Sobrevive porque la usan llamadores (controlador del escaparate y sus tests)
+    // que se migrarán aparte; de ahí que se silencie S107 en vez de partir la firma por la mitad.
+    @SuppressWarnings("java:S107")
     @Cacheable(value = CACHE_PRODUCT_LIST, keyGenerator = "currencyAwareKeyGenerator")
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productList(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String sort) {
-        return productListFull(page, size, lang,
-                ProductListFilters.basic(q, categoryId, supplierId, minPrice, maxPrice), sort);
+        return listing(page, size, lang, ProductListFilters.basic(q, categoryId, supplierId, minPrice, maxPrice),
+                sort);
     }
 
     /* ============================ helpers ============================ */

@@ -101,8 +101,7 @@ class Cov07ShopifyConnectorTest {
 
         connector.push(shop(handle), "tok", product());
 
-        assertThat(sentRequest().uri().toString())
-                .isEqualTo("https://" + host + "/admin/api/2024-10/products.json");
+        assertThat(sentRequest().uri()).hasToString("https://" + host + "/admin/api/2024-10/products.json");
     }
 
     /* ==================== respuesta de Shopify ==================== */

@@ -119,9 +119,10 @@ class Cov06CatalogStorefrontReadServiceTest {
     @Test
     void unIdConFormaDeUuidQueNoExisteEs404SinBuscarPorSlug() {
         UUID id = UUID.randomUUID();
+        String idComoTexto = id.toString();
         when(categoryRepository.findById(id)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.resolveCategory(id.toString())).isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> service.resolveCategory(idComoTexto)).isInstanceOf(NotFoundException.class);
         verify(categoryRepository, never()).findBySlug(anyString());
     }
 

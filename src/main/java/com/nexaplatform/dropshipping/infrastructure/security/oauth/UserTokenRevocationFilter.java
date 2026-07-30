@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Date;
+import java.time.Instant;
 
 /**
  * Revocación inmediata de los tokens de USUARIO del SPA (los que emite {@code UserTokenService}, con
@@ -53,10 +53,10 @@ public class UserTokenRevocationFilter extends OncePerRequestFilter {
             JWTClaimsSet claims = JWTParser.parse(auth.substring(7)).getJWTClaimsSet();
             String sub = claims.getSubject();
             // Nimbus expone el claim "iat" como java.util.Date y no ofrece accesor java.time; se convierte
-            // aquí mismo para que el resto del filtro trabaje solo con segundos de época.
-            Date iat = claims.getIssueTime();
+            // en el acto para que el resto del filtro trabaje solo con java.time (java:S2143).
+            Instant iat = claims.getIssueTime() == null ? null : claims.getIssueTime().toInstant();
             if (sub != null && iat != null
-                    && !revocationService.isStillValid(sub, iat.toInstant().getEpochSecond())) {
+                    && !revocationService.isStillValid(sub, iat.getEpochSecond())) {
                 res.setStatus(401);
                 res.setCharacterEncoding("UTF-8");
                 res.setHeader("WWW-Authenticate",

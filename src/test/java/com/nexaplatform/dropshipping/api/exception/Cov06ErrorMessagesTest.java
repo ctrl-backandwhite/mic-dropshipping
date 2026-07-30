@@ -149,8 +149,8 @@ class Cov06ErrorMessagesTest {
         String humano = ErrorMessages.humanize(e);
 
         assertThat(humano)
-                .isEqualTo("No se pudo guardar por un conflicto de datos. Revisa los valores e inténtalo de nuevo.");
-        assertThat(humano).doesNotContain("PSQLException");
+                .isEqualTo("No se pudo guardar por un conflicto de datos. Revisa los valores e inténtalo de nuevo.")
+                .doesNotContain("PSQLException");
     }
 
     @Test

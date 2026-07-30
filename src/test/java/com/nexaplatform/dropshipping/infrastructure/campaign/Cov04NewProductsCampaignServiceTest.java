@@ -243,7 +243,7 @@ class Cov04NewProductsCampaignServiceTest {
         when(storefrontRead.categoriesFlat("fr")).thenReturn(List.of(categoria(categoriaId, "Mode")));
         when(storefrontRead.productsByCategory(eq(categoriaId.toString()), anyInt(), anyInt(), eq("fr"),
                 eq("newest"))).thenReturn(new PageResponse<>(List.of(producto("T-shirt")), 0, 3, 1, 1));
-        when(storefrontRead.categoryDetail(eq(categoriaId.toString()), eq("fr")))
+        when(storefrontRead.categoryDetail(categoriaId.toString(), "fr"))
                 .thenReturn(categoria(categoriaId, "Mode"));
         when(userRepository.findByEmail("qa@test")).thenReturn(Optional.empty());
 

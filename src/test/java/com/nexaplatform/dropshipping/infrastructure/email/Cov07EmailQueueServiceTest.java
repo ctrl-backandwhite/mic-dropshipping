@@ -10,6 +10,8 @@ import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -123,31 +125,16 @@ class Cov07EmailQueueServiceTest {
         verify(mailSender).send(message);
     }
 
-    @Test
-    void lasFacturasSalenDesdeElAliasDeFacturacion() throws Exception {
-        pending("<p>x</p>", "emails/invoice", null, null);
+    /** Facturación, soporte y el resto (sin plantilla) salen cada uno desde su alias. */
+    @ParameterizedTest(name = "{0} → {1}")
+    @CsvSource(nullValues = "SIN_PLANTILLA", value = { "emails/invoice, billing@nexadrop.local",
+            "emails/contact-ack, support@nexadrop.local", "SIN_PLANTILLA, noreply@nexadrop.local" })
+    void elRemitenteLoDecideLaPlantillaDelCorreo(String plantilla, String remitenteEsperado) throws Exception {
+        pending("<p>x</p>", plantilla, null, null);
 
         service.dispatchPending();
 
-        assertThat(((InternetAddress) message.getFrom()[0]).getAddress()).isEqualTo("billing@nexadrop.local");
-    }
-
-    @Test
-    void elAcuseDeContactoSaleDesdeElAliasDeSoporte() throws Exception {
-        pending("<p>x</p>", "emails/contact-ack", null, null);
-
-        service.dispatchPending();
-
-        assertThat(((InternetAddress) message.getFrom()[0]).getAddress()).isEqualTo("support@nexadrop.local");
-    }
-
-    @Test
-    void unCorreoSinPlantillaUsaElRemitentePorDefecto() throws Exception {
-        pending("<p>x</p>", null, null, null);
-
-        service.dispatchPending();
-
-        assertThat(((InternetAddress) message.getFrom()[0]).getAddress()).isEqualTo("noreply@nexadrop.local");
+        assertThat(((InternetAddress) message.getFrom()[0]).getAddress()).isEqualTo(remitenteEsperado);
     }
 
     @Test

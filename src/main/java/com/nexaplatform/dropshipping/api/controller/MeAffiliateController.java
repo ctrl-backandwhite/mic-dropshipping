@@ -1,7 +1,6 @@
 package com.nexaplatform.dropshipping.api.controller;
 
 import java.math.BigDecimal;
-import com.nexaplatform.dropshipping.api.dto.AffiliateDtos;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.AffiliateProgramConfigEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.AffiliateConversionEntity;
 import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.*;

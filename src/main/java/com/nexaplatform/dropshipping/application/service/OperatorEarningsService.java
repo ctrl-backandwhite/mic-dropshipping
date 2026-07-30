@@ -51,7 +51,7 @@ public class OperatorEarningsService {
     /** Histórico paginado del operador autenticado (intenta OpenSearch; si falla, Postgres). */
     @Transactional(readOnly = true)
     public OperatorActionPage myHistory(String fromDate, String toDate, int page, int size) {
-        return history(SecurityUtils.currentSubject(), fromDate, toDate, page, size);
+        return historyPage(SecurityUtils.currentSubject(), fromDate, toDate, page, size);
     }
 
     /** Reindexa en OpenSearch todas las acciones de operador (botón admin "Reindexar"). Devuelve el nº indexado. */
@@ -69,6 +69,16 @@ public class OperatorEarningsService {
     /** Histórico paginado (admin): de un operador concreto o de todos. */
     @Transactional(readOnly = true)
     public OperatorActionPage history(String operatorSubject, String fromDate, String toDate, int page, int size) {
+        return historyPage(operatorSubject, fromDate, toDate, page, size);
+    }
+
+    /**
+     * Consulta real del histórico, sin anotación transaccional, para que {@link #myHistory} la reutilice
+     * sin llamarse a sí misma: la autoinvocación no pasa por el proxy, así que el {@code @Transactional}
+     * del método invocado no se aplicaba. La transacción la abre el método público de entrada.
+     */
+    private OperatorActionPage historyPage(String operatorSubject, String fromDate, String toDate, int page,
+            int size) {
         Instant from = startOf(fromDate, 90);
         Instant to = endOf(toDate);
         int pageSize = Math.clamp(size, 1, 200);

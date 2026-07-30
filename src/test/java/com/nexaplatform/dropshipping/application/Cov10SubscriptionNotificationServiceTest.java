@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -50,12 +51,11 @@ class Cov10SubscriptionNotificationServiceTest {
     @Mock
     EmailQueueService emailQueue;
 
+    @InjectMocks
     SubscriptionNotificationService service;
 
     @BeforeEach
     void setUp() throws Exception {
-        service = new SubscriptionNotificationService(customerSubscriptionRepository, notificationRepository,
-                userRepository, emailQueue);
         Field baseUrl = SubscriptionNotificationService.class.getDeclaredField("baseUrl");
         baseUrl.setAccessible(true);
         baseUrl.set(service, "https://tienda.example");

@@ -68,7 +68,7 @@ public class WalletIndexer {
         try {
             if (walletSearchService.pageIds(null, null, null, 0, 1).isEmpty()) {
                 log.info("Wallet index '{}' empty/unavailable on startup → reindexing", index);
-                reindexAll();
+                doReindexAll();
             }
         } catch (Exception e) {
             log.warn("Wallet index warm-up skipped: {}", e.getMessage());
@@ -92,6 +92,15 @@ public class WalletIndexer {
      */
     @Transactional(readOnly = true)
     public int reindexAll() {
+        return doReindexAll();
+    }
+
+    /**
+     * Cuerpo del reindexado, sin anotar: el arranque lo llama desde {@code warmUpOnStartup}, que ya abre
+     * su propia transacción de lectura. Una llamada por {@code this.reindexAll()} no pasa por el proxy de
+     * Spring y su {@code @Transactional} nunca llegaba a aplicarse (java:S6809).
+     */
+    private int doReindexAll() {
         int[] indexed = { 0 };
         int[] failed = { 0 };
         walletRepository.findAll().forEach(w -> {

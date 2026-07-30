@@ -52,6 +52,15 @@ public class WalletUseCaseImpl implements WalletUseCase {
     @Override
     @Transactional
     public Wallet getOrCreate(UUID userId) {
+        return walletOf(userId);
+    }
+
+    /**
+     * Monedero del usuario, creándolo si es su primera vez. El cuerpo vive aquí, sin anotación, porque el
+     * resto de métodos de la clase lo necesitan dentro de SU transacción: llamando al método público desde
+     * dentro de la propia clase el proxy de Spring no interviene y su {@code @Transactional} no se aplicaría.
+     */
+    private Wallet walletOf(UUID userId) {
         return walletRepository.findByUserId(userId).orElseGet(() -> createFor(userId));
     }
 
@@ -66,7 +75,7 @@ public class WalletUseCaseImpl implements WalletUseCase {
     @Override
     @Transactional
     public Wallet getMyWallet(UUID userId) {
-        Wallet w = getOrCreate(userId);
+        Wallet w = walletOf(userId);
         long available = Math.max(0L, w.getBalanceUsdCents() - w.getHoldUsdCents());
         String currency = CurrencyHolder.get();
         BigDecimal usd = BigDecimal.valueOf(w.getBalanceUsdCents()).divide(BigDecimal.valueOf(100), 4,
@@ -91,7 +100,15 @@ public class WalletUseCaseImpl implements WalletUseCase {
     @Override
     @Transactional(readOnly = true)
     public List<WalletTransaction> getMyTransactions(UUID userId, int page, int size) {
-        Wallet w = getOrCreate(userId);
+        // Consultar el extracto NO abre el monedero. Antes se llamaba a walletOf, que lo crea: dentro de
+        // una transacción de solo lectura Hibernate no vuelca el INSERT, así que el monedero no llegaba a
+        // la base de datos pero sí se indexaba, y el buscador del panel enseñaba monederos fantasma.
+        // Quien no tiene monedero no tiene movimientos, que es exactamente lo que hay que responder.
+        Optional<Wallet> found = walletRepository.findByUserId(userId);
+        if (found.isEmpty()) {
+            return List.of();
+        }
+        Wallet w = found.get();
         List<WalletTransaction> txs = txRepository.findByWalletIdOrderByCreatedAtDesc(w.getId(), page,
                 Math.min(size, 100));
         // Importes del libro mayor (USD canónico) formateados EN EL BACKEND con la convención del país del
@@ -112,7 +129,10 @@ public class WalletUseCaseImpl implements WalletUseCase {
     @Override
     @Transactional(readOnly = true)
     public long countMyTransactions(UUID userId) {
-        return txRepository.countByWalletId(getOrCreate(userId).getId());
+        // Igual que el extracto: contar no puede crear el monedero (ver getMyTransactions).
+        return walletRepository.findByUserId(userId)
+                .map(w -> txRepository.countByWalletId(w.getId()))
+                .orElse(0L);
     }
 
     /* ============ Admin ============ */
@@ -122,7 +142,7 @@ public class WalletUseCaseImpl implements WalletUseCase {
     public WalletTransaction adminTopup(UUID userId, long amountCents, String description, String idempotencyKey) {
         String key = idempotencyKey != null ? idempotencyKey : UUID.randomUUID().toString();
         String desc = description != null && !description.isBlank() ? description : "Admin manual top-up";
-        return deposit(userId, amountCents, null, key, desc);
+        return credit(userId, amountCents, null, key, desc);
     }
 
     @Override
@@ -146,7 +166,7 @@ public class WalletUseCaseImpl implements WalletUseCase {
     @Override
     @Transactional
     public Wallet adminGetWalletDetail(UUID userId) {
-        Wallet w = getOrCreate(userId);
+        Wallet w = walletOf(userId);
         w.setAvailableUsdCents(available(w));
         return w;
     }
@@ -166,6 +186,10 @@ public class WalletUseCaseImpl implements WalletUseCase {
     @Override
     @Transactional(readOnly = true)
     public List<Wallet> adminListWallets(String q, String status, String currency) {
+        return filterWallets(q, status, currency);
+    }
+
+    private List<Wallet> filterWallets(String q, String status, String currency) {
         String needle = q == null ? "" : q.trim().toLowerCase();
         return walletRepository.findAll().stream()
                 .filter(w -> status == null || status.isBlank() || w.getStatus().equalsIgnoreCase(status))
@@ -190,7 +214,7 @@ public class WalletUseCaseImpl implements WalletUseCase {
             List<Wallet> items = idx.get().ids().stream().map(byId::get).filter(Objects::nonNull).toList();
             return new WalletPage(items, page, size, idx.get().total());
         }
-        List<Wallet> all = adminListWallets(q, status, currency);
+        List<Wallet> all = filterWallets(q, status, currency);
         int from = Math.min(Math.max(0, page) * size, all.size());
         int to = Math.min(from + size, all.size());
         return new WalletPage(all.subList(from, to), page, size, all.size());
@@ -201,6 +225,12 @@ public class WalletUseCaseImpl implements WalletUseCase {
     @Override
     @Transactional
     public WalletTransaction deposit(UUID userId, long amountUsdCents, UUID paymentId, String idempotencyKey,
+            String description) {
+        return credit(userId, amountUsdCents, paymentId, idempotencyKey, description);
+    }
+
+    /** Abono al monedero; privado para que el alta manual del admin lo reutilice dentro de SU transacción. */
+    private WalletTransaction credit(UUID userId, long amountUsdCents, UUID paymentId, String idempotencyKey,
             String description) {
         if (amountUsdCents <= 0)
             throw new BusinessException("Deposit amount must be positive");

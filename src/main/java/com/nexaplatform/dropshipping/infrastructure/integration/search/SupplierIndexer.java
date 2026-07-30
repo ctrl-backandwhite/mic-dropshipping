@@ -86,7 +86,7 @@ public class SupplierIndexer {
         try {
             if (supplierSearchService.listFromIndex(null).isEmpty()) {
                 log.info("Supplier index '{}' empty/unavailable on startup → reindexing", index);
-                reindexAll();
+                doReindexAll();
             }
         } catch (Exception e) {
             log.warn("Supplier index warm-up skipped: {}", e.getMessage());
@@ -105,6 +105,15 @@ public class SupplierIndexer {
     /** Re-indexes every supplier (with a fresh product-count snapshot). Returns the number indexed. */
     @Transactional(readOnly = true)
     public int reindexAll() {
+        return doReindexAll();
+    }
+
+    /**
+     * El warm-up de arranque llamaba a {@code reindexAll()} con {@code this}, así que su
+     * {@code @Transactional} no se aplicaba: la lectura la abría ya el propio listener. La anotación
+     * queda solo en el método público y el recorrido vive aquí, sin anotar.
+     */
+    private int doReindexAll() {
         Map<UUID, Long> counts = productCountBySupplier();
         int[] n = { 0 };
         supplierRepository.findAll().forEach(s -> {

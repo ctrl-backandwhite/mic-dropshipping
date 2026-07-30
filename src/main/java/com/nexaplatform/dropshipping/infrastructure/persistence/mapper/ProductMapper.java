@@ -146,16 +146,19 @@ public class ProductMapper {
     }
 
     public PriceTierView toPriceTierView(ProductPriceTierEntity t) {
-        // El tramo se guarda en la moneda del proveedor (CNY) como COSTE. Para mostrarlo al cliente hay que
-        // aplicar el MISMO margen que el headline/variante/pedido; si no, el PDP enseñaría el coste (p.ej.
-        // 14,13 €) y al pagar se cobraría con margen (28,26 €). Coste → USD → margen → moneda de display.
-        BigDecimal costUsd = currencyRateService.toUsd(t.getUnitPrice(), t.getCurrency() != null ? t.getCurrency()
-                : "CNY");
-        BigDecimal retailUsd = marginService.apply(costUsd, t.getProduct(), null).retailUsd();
-        BigDecimal displayAmount = currencyRateService.usdToDisplay(retailUsd != null ? retailUsd : costUsd);
-        String displayCode = pricingService.displayCurrencyCode();
+        // El tramo se guarda en la moneda del proveedor (CNY) como COSTE, y se tarifica por la MISMA vía
+        // que el precio de la ficha, el de la variante y el del pedido.
+        //
+        // Antes tenía su propia cuenta —coste → USD → margen— y se quedaba ahí: le faltaban el IVA y el
+        // envío, que sí lleva el precio que se cobra. La ficha anunciaba «2+ → 1,99 $» y al pagar salían
+        // 3,57 $ la unidad, un 79% más de lo prometido en la tabla de cantidades.
+        PricedAmount priced = pricingService.priceForSupplierAmount(t.getProduct(), null, t.getUnitPrice());
+        BigDecimal displayAmount = priced.displayAmount();
+        String displayCode = priced.displayCurrency() != null ? priced.displayCurrency()
+                : pricingService.displayCurrencyCode();
         return new PriceTierView(t.getMinQty(), t.getMaxQty(), displayAmount, displayCode,
-                currencyRateService.formatDisplay(displayAmount, displayCode));
+                priced.displayFormatted() != null ? priced.displayFormatted()
+                        : currencyRateService.formatDisplay(displayAmount, displayCode));
     }
 
     /* ------------------ helpers ------------------ */

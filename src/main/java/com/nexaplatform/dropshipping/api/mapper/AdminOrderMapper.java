@@ -33,30 +33,32 @@ public abstract class AdminOrderMapper {
      * Conversión y formato de importes. El listado del admin los pintaba en el navegador y salía un
      * céntimo por debajo de lo cobrado; el precio se calcula y se formatea SIEMPRE en el backend.
      */
-    @Autowired
     protected CurrencyRateService currencyRateService;
 
+    /**
+     * Inyección por setter, no por constructor: MapStruct genera {@code AdminOrderMapperImpl extends
+     * AdminOrderMapper} sin declarar constructor alguno, así que un constructor con argumentos aquí
+     * dejaría a la clase generada sin un {@code super()} al que llamar y no compilaría.
+     */
+    @Autowired
+    protected void setCurrencyRateService(CurrencyRateService currencyRateService) {
+        this.currencyRateService = currencyRateService;
+    }
+
     /** Total del pedido en la divisa activa del admin, calculado igual que el cobro (línea a línea). */
+    /**
+     * Total del pedido tal y como se le cobró al cliente.
+     *
+     * <p>Se convierte {@code totalCents} —el importe que se cobró y que consta en el pedido— en vez de
+     * recomponerlo sumando líneas, envío e impuestos. Recalcularlo redondeaba cada componente por
+     * separado y el panel acababa enseñando 14,21 € donde el cliente había pagado 14,20 €: un céntimo
+     * de diferencia justo en la pantalla desde la que se atiende una reclamación.
+     */
     protected String totalFormatted(Order order) {
         String ccy = CurrencyHolder.get();
-        BigDecimal total = BigDecimal.ZERO;
-        if (order.getItems() != null) {
-            for (OrderItem item : order.getItems()) {
-                BigDecimal line = BigDecimal.valueOf((long) item.getUnitPriceCents() * item.getQuantity())
-                        .movePointLeft(2);
-                total = total.add(currencyRateService.usdTo(line, ccy).setScale(2, RoundingMode.HALF_UP));
-            }
-        }
-        total = total.add(currencyRateService.usdTo(
-                        BigDecimal.valueOf(order.getShippingCents()).movePointLeft(2), ccy)
-                .setScale(2, RoundingMode.HALF_UP));
-        total = total.add(currencyRateService.usdTo(
-                        BigDecimal.valueOf(order.getTaxCents()).movePointLeft(2), ccy)
-                .setScale(2, RoundingMode.HALF_UP));
-        total = total.subtract(currencyRateService.usdTo(
-                        BigDecimal.valueOf(order.getDiscountCents()).movePointLeft(2), ccy)
-                .setScale(2, RoundingMode.HALF_UP));
-        return currencyRateService.formatDisplay(total, ccy);
+        BigDecimal charged = BigDecimal.valueOf(order.getTotalCents()).movePointLeft(2);
+        return currencyRateService.formatDisplay(
+                currencyRateService.usdTo(charged, ccy).setScale(2, RoundingMode.HALF_UP), ccy);
     }
 
 

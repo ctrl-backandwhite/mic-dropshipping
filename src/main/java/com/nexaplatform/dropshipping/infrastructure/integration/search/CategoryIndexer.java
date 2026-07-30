@@ -85,7 +85,7 @@ public class CategoryIndexer {
             // Optional = empty index or OpenSearch down → (re)build it from the DB.
             if (categorySearchService.listFromIndex(null).isEmpty()) {
                 log.info("Category index '{}' empty/unavailable on startup → reindexing", index);
-                reindexAll();
+                doReindexAll();
             }
         } catch (Exception e) {
             log.warn("Category index warm-up skipped: {}", e.getMessage());
@@ -104,6 +104,15 @@ public class CategoryIndexer {
     /** Re-indexes every category. Returns the number indexed. */
     @Transactional(readOnly = true)
     public int reindexAll() {
+        return doReindexAll();
+    }
+
+    /**
+     * Cuerpo del reindexado, sin anotar: el arranque lo llama desde {@code warmUpOnStartup}, que ya abre
+     * su propia transacción de lectura. Una llamada por {@code this.reindexAll()} no pasa por el proxy de
+     * Spring y su {@code @Transactional} nunca llegaba a aplicarse (java:S6809).
+     */
+    private int doReindexAll() {
         int[] n = { 0 };
         categoryRepository.findAll().forEach(c -> {
             indexEntity(c);

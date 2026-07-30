@@ -37,6 +37,9 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class SourcingUseCaseImpl implements SourcingUseCase {
 
+    /** Código de mercado de Amazon: se repite en la detección, el patrón y la normalización del ASIN. */
+    private static final String SRC_AMAZON = "amazon";
+
     private final SourcingRequestRepository sourcingRequestRepository;
     private final SourcingQuoteRepository sourcingQuoteRepository;
     private final SourcingAgentRepository sourcingAgentRepository;
@@ -86,7 +89,7 @@ public class SourcingUseCaseImpl implements SourcingUseCase {
         else if (low.contains("ebay.com"))
             src = "ebay";
         else if (low.contains("amazon."))
-            src = "amazon";
+            src = SRC_AMAZON;
         if (src == null) {
             throw new BusinessException(
                     "Marketplace no soportado. Usa 1688, Taobao, AliExpress, eBay o Amazon.");
@@ -233,7 +236,8 @@ public class SourcingUseCaseImpl implements SourcingUseCase {
     private static final Pattern ITEM_ID_QUERY = Pattern.compile("[?&]id=(\\d+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern ITEM_ALIEXPRESS = Pattern.compile("/item/(?:[^/]*?-)?(\\d+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern ITEM_EBAY = Pattern.compile("/itm/(?:[^/]+/)?(\\d+)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern ASIN_AMAZON = Pattern.compile("/(?:dp|gp/product)/([A-Za-z0-9]{10})",
+    // El patrón ya es CASE_INSENSITIVE, así que "A-Z" dentro de la clase sobraba (java:S5869).
+    private static final Pattern ASIN_AMAZON = Pattern.compile("/(?:dp|gp/product)/([a-z0-9]{10})",
             Pattern.CASE_INSENSITIVE);
 
     /**
@@ -250,7 +254,7 @@ public class SourcingUseCaseImpl implements SourcingUseCase {
             case "taobao" -> ITEM_ID_QUERY;
             case "aliexpress" -> ITEM_ALIEXPRESS;
             case "ebay" -> ITEM_EBAY;
-            case "amazon" -> ASIN_AMAZON;
+            case SRC_AMAZON -> ASIN_AMAZON;
             default -> null;
         };
         if (pattern == null) {
@@ -261,6 +265,6 @@ public class SourcingUseCaseImpl implements SourcingUseCase {
             return null;
         }
         // El ASIN de Amazon es canónicamente en mayúsculas; los demás mercados usan identificadores numéricos.
-        return "amazon".equals(source) ? m.group(1).toUpperCase(Locale.ROOT) : m.group(1);
+        return SRC_AMAZON.equals(source) ? m.group(1).toUpperCase(Locale.ROOT) : m.group(1);
     }
 }

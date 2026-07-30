@@ -79,6 +79,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
 
     // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
     private static final String ORDER_NOT_FOUND = "Order not found";
+    /** Recurso del 404 corto que devuelven el checkout y el detalle del cliente. */
+    private static final String ORDER_RESOURCE = "Order";
     private static final String WALLET = "WALLET";
 
     private static final SecureRandom RNG = new SecureRandom();
@@ -121,6 +123,15 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Override
     @Transactional
     public Order createOrder(UUID partnerAppId, UUID userId, CreateOrderRequest req) {
+        return newOrder(partnerAppId, userId, req);
+    }
+
+    /**
+     * Alta del pedido. El cuerpo vive aquí, sin anotación, porque los demás flujos de alta (manual, partner,
+     * demo, checkout) lo invocan dentro de su propia transacción: llamando al método público desde dentro de
+     * la clase el proxy de Spring no interviene y su {@code @Transactional} sería una promesa vacía.
+     */
+    private Order newOrder(UUID partnerAppId, UUID userId, CreateOrderRequest req) {
         if (req.items() == null || req.items().isEmpty()) {
             throw new BusinessException("CART_EMPTY", "Order must have at least one item");
         }
@@ -289,7 +300,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
             userId = userRepository.findByEmail(customerEmail.trim()).map(u -> u.getId())
                     .orElseThrow(() -> new NotFoundException("No existe un usuario con email: " + customerEmail));
         }
-        Order order = createOrder(null, userId, req);
+        Order order = newOrder(null, userId, req);
         log.info("Admin manual order {} created ({} items, customer={})", order.getOrderNumber(),
                 req.items().size(), customerEmail != null ? customerEmail : "guest");
         return order;
@@ -298,12 +309,20 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Override
     @Transactional(readOnly = true)
     public Order getOrder(UUID id) {
+        return requireOrder(id);
+    }
+
+    private Order requireOrder(UUID id) {
         return orderRepository.findById(id).orElseThrow(() -> new NotFoundException("Order not found: " + id));
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<Order> listForPartner(UUID partnerAppId) {
+        return partnerOrders(partnerAppId);
+    }
+
+    private List<Order> partnerOrders(UUID partnerAppId) {
         return orderRepository.findByPartnerAppId(partnerAppId);
     }
 
@@ -312,19 +331,19 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Override
     @Transactional
     public Order createOrderForPartner(Jwt jwt, CreateOrderRequest req) {
-        return createOrder(resolvePartnerId(jwt), null, req);
+        return newOrder(resolvePartnerId(jwt), null, req);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<Order> listForPartner(Jwt jwt) {
-        return listForPartner(resolvePartnerId(jwt));
+        return partnerOrders(resolvePartnerId(jwt));
     }
 
     @Override
     @Transactional(readOnly = true)
     public Order getPartnerOrder(UUID id) {
-        return getOrder(id);
+        return requireOrder(id);
     }
 
     private UUID resolvePartnerId(Jwt jwt) {
@@ -337,6 +356,10 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Override
     @Transactional(readOnly = true)
     public List<Order> listAdminOrders(String status, String q) {
+        return adminOrders(status, q);
+    }
+
+    private List<Order> adminOrders(String status, String q) {
         String needle = q == null ? "" : q.trim().toLowerCase();
         return orderRepository.findAll().stream()
                 .filter(o -> status == null || status.isBlank() || o.getStatus().name().equalsIgnoreCase(status))
@@ -364,7 +387,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
             return new OrderPage(items, page, size, idx.get().total());
         }
         // Fallback (OpenSearch caído): listado BD filtrado/ordenado + página en memoria (dataset acotado).
-        List<Order> all = listAdminOrders(status, q);
+        List<Order> all = adminOrders(status, q);
         int from = Math.min(Math.max(0, page) * size, all.size());
         int to = Math.min(from + size, all.size());
         return new OrderPage(all.subList(from, to), page, size, all.size());
@@ -591,7 +614,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 "Madrid", "M", "28001", "ES");
         CreateOrderRequest req = new CreateOrderRequest("DEMO-" + Instant.now().getEpochSecond(), addr, null,
                 List.of(new OrderItemInput(p.getId(), null, 2)), "demo order from admin panel");
-        return createOrder(null, null, req);
+        return newOrder(null, null, req);
     }
 
     /* ============ Me (B2C) ============ */
@@ -626,11 +649,11 @@ public class OrderUseCaseImpl implements OrderUseCase {
         Order created;
         if (reused) {
             created = orderRepository.findById(reusable.getId())
-                    .orElseThrow(() -> new NotFoundException("Order"));
+                    .orElseThrow(() -> new NotFoundException(ORDER_RESOURCE));
         } else {
             CreateOrderRequest orderReq = new CreateOrderRequest("ME-" + Instant.now().getEpochSecond(), addr, null,
                     items, req.getNotes());
-            created = createOrder(null, userId, orderReq);
+            created = newOrder(null, userId, orderReq);
         }
 
         // DROP-549: only charge the wallet when the requested method is WALLET.
@@ -638,7 +661,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // with /me/orders/{id}/payment-intent for the external flow.
         String method = req.getPaymentMethod() == null ? WALLET : req.getPaymentMethod().toUpperCase();
         Order o = orderRepository.findById(created.getId())
-                .orElseThrow(() -> new NotFoundException("Order"));
+                .orElseThrow(() -> new NotFoundException(ORDER_RESOURCE));
         if (WALLET.equals(method)) {
             long charge = created.getTotalCents();
             String idemKey = idem != null ? idem : ("checkout-" + created.getId());
@@ -724,9 +747,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Override
     @Transactional(readOnly = true)
     public Order getMyOrderDetail(UUID userId, UUID id, String lang) {
-        Order o = orderRepository.findById(id).orElseThrow(() -> new NotFoundException("Order"));
+        Order o = orderRepository.findById(id).orElseThrow(() -> new NotFoundException(ORDER_RESOURCE));
         if (!userId.equals(o.getUserId()))
-            throw new NotFoundException("Order");
+            throw new NotFoundException(ORDER_RESOURCE);
         resolveItemTitles(o, lang);
         return o;
     }

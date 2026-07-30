@@ -72,7 +72,7 @@ public class OrderIndexer {
         try {
             if (orderSearchService.pageIds(null, null, 0, 1).isEmpty()) {
                 log.info("Order index '{}' empty/unavailable on startup → reindexing", index);
-                reindexAll();
+                reindexAllOrders();
             }
         } catch (Exception e) {
             log.warn("Order index warm-up skipped: {}", e.getMessage());
@@ -90,6 +90,15 @@ public class OrderIndexer {
     /** Re-indexes every order. Returns the number indexed. */
     @Transactional(readOnly = true)
     public int reindexAll() {
+        return reindexAllOrders();
+    }
+
+    /**
+     * Cuerpo del barrido, SIN anotar: lo llama el calentamiento del arranque, que ya abre su propia
+     * sesión de lectura. Una llamada dentro de la misma instancia no pasa por el proxy de Spring, así que
+     * repetir aquí {@code @Transactional} sería una anotación que nunca se aplica.
+     */
+    private int reindexAllOrders() {
         int[] n = { 0 };
         orderRepository.findAll().forEach(o -> {
             indexOrderModel(o);

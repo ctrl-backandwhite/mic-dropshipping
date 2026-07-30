@@ -127,7 +127,7 @@ class Cov10AffiliateSearchServiceTest {
     /* ---------- lectura de la respuesta ---------- */
 
     @Test
-    void elIdSaleDeSourceYSiElIndiceNoLoGuardoDelIdentificadorDelDocumento() throws Exception {
+    void elIdSaleDeSourceYSiElIndiceNoLoGuardoDelIdentificadorDelDocumento() {
         UUID conSource = UUID.randomUUID();
         UUID soloDocId = UUID.randomUUID();
         respuesta.set("{\"hits\":{\"total\":{\"value\":2},\"hits\":["
@@ -142,7 +142,7 @@ class Cov10AffiliateSearchServiceTest {
     }
 
     @Test
-    void unIdCorruptoSeDescartaSinTirarLaPaginaEntera() throws Exception {
+    void unIdCorruptoSeDescartaSinTirarLaPaginaEntera() {
         UUID bueno = UUID.randomUUID();
         respuesta.set("{\"hits\":{\"total\":{\"value\":3},\"hits\":["
                 + "{\"_id\":\"no-es-un-uuid\",\"_source\":{}},"
@@ -158,7 +158,7 @@ class Cov10AffiliateSearchServiceTest {
     /* ---------- caídas al listado de base de datos ---------- */
 
     @Test
-    void unFiltroSinResultadosSeDevuelveComoPaginaVaciaYNoComoIndiceCaido() throws Exception {
+    void unFiltroSinResultadosSeDevuelveComoPaginaVaciaYNoComoIndiceCaido() {
         // Optional.empty() significa «el índice no ha contestado, tira de base de datos». Cero resultados
         // es una respuesta VÁLIDA —un filtro que no encaja con nada— y devolverla como vacío forzaba una
         // consulta a base de datos que tampoco iba a encontrar nada.
@@ -172,7 +172,7 @@ class Cov10AffiliateSearchServiceTest {
     }
 
     @Test
-    void unaPaginaSinNingunIdValidoTambienCaeALaBaseDeDatos() throws Exception {
+    void unaPaginaSinNingunIdValidoTambienCaeALaBaseDeDatos() {
         respuesta.set("{\"hits\":{\"total\":{\"value\":5},\"hits\":["
                 + "{\"_id\":\"no-es-un-uuid\",\"_source\":{}}]}}");
 

@@ -191,9 +191,8 @@ class Cov09YunExpressClientTest {
         assertThat(p.cabeceras()).containsEntry("token", "tok-1");
         String date = p.cabeceras().get("date");
         assertThat(Long.parseLong(date)).isPositive();
-        assertThat(p.cabeceras().get("sign"))
-                .isEqualTo(YunExpressClient.sign(
-                        YunExpressClient.signatureContent("GET", RUTA_NEGOCIO, null, date), SECRETO));
+        assertThat(p.cabeceras()).containsEntry("sign", YunExpressClient.sign(
+                YunExpressClient.signatureContent("GET", RUTA_NEGOCIO, null, date), SECRETO));
     }
 
     @Test
@@ -203,7 +202,7 @@ class Cov09YunExpressClientTest {
         Peticion p = ultimaDeNegocio();
         assertThat(p.metodo()).isEqualTo("POST");
         assertThat(p.cuerpo()).isEqualTo("{\"weight\":1200}");
-        assertThat(p.cabeceras().get("sign")).isEqualTo(YunExpressClient.sign(
+        assertThat(p.cabeceras()).containsEntry("sign", YunExpressClient.sign(
                 YunExpressClient.signatureContent("POST", RUTA_NEGOCIO, p.cuerpo(), p.cabeceras().get("date")),
                 SECRETO));
     }

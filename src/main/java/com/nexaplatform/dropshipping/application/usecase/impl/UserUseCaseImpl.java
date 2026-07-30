@@ -225,6 +225,15 @@ public class UserUseCaseImpl implements UserUseCase {
     @Override
     @Transactional
     public void requestPasswordReset(String email) {
+        doRequestPasswordReset(email);
+    }
+
+    /**
+     * Cuerpo real del reset. Se separa del método anotado porque {@code adminResetPassword} lo invocaba
+     * con {@code this}: el proxy de Spring no intercepta esa llamada, así que el {@code @Transactional}
+     * del método público no pintaba nada ahí. La anotación queda solo en el punto de entrada.
+     */
+    private void doRequestPasswordReset(String email) {
         String normalized = normalizeEmail(email);
         // Always behave the same regardless of existence (no user enumeration).
         userRepository.findByEmail(normalized).ifPresent(user -> {
@@ -283,7 +292,7 @@ public class UserUseCaseImpl implements UserUseCase {
     @Override
     @Transactional
     public void requestAccountDeletion(UUID userId) {
-        User user = findById(userId);
+        User user = loadUser(userId);
         // Código numérico de 6 dígitos, fácil de teclear desde el email. SecureRandom (no Math.random).
         String code = String.format("%06d", RNG.nextInt(1_000_000));
         user.setDeletionCode(code);
@@ -301,7 +310,7 @@ public class UserUseCaseImpl implements UserUseCase {
     @Override
     @Transactional
     public void confirmAccountDeletion(UUID userId, String code) {
-        User user = findById(userId);
+        User user = loadUser(userId);
         String provided = code == null ? null : code.trim();
         if (user.getDeletionCode() == null || provided == null || !user.getDeletionCode().equals(provided)
                 || user.getDeletionCodeExpiresAt() == null
@@ -331,6 +340,15 @@ public class UserUseCaseImpl implements UserUseCase {
     @Override
     @Transactional(readOnly = true)
     public User findById(UUID id) {
+        return loadUser(id);
+    }
+
+    /**
+     * Carga sin anotar para el uso interno de la clase: las llamadas a {@code findById} desde otros
+     * métodos iban por {@code this}, así que su {@code @Transactional(readOnly)} nunca se aplicaba. Con
+     * esto la anotación queda solo donde de verdad actúa, en la entrada por proxy.
+     */
+    private User loadUser(UUID id) {
         User user = userRepository.getById(id);
         if (Objects.isNull(user)) {
             throw new NotFoundException("User not found");
@@ -386,7 +404,7 @@ public class UserUseCaseImpl implements UserUseCase {
         if (role == null) {
             throw new BusinessException("role required");
         }
-        User u = findById(id);
+        User u = loadUser(id);
         u.setRole(UserRole.valueOf(role.toUpperCase()));
         User updated = userRepository.update(u);
         // El rol viaja como claim en el access token (60 min). Sin revocar, un usuario degradado de ADMIN
@@ -405,7 +423,7 @@ public class UserUseCaseImpl implements UserUseCase {
     @Override
     @Transactional
     public User editUser(UUID id, User patch, Boolean active) {
-        User u = findById(id);
+        User u = loadUser(id);
         // Partial update: null source fields are ignored by the update mapper.
         userUpdateMapper.updateFromModel(patch, u);
         if (active != null)
@@ -416,7 +434,7 @@ public class UserUseCaseImpl implements UserUseCase {
     @Override
     @Transactional
     public User lock(UUID id, int minutes) {
-        User u = findById(id);
+        User u = loadUser(id);
         u.setLockedUntil(Instant.now().plus(minutes, ChronoUnit.MINUTES));
         return userRepository.update(u);
     }
@@ -424,7 +442,7 @@ public class UserUseCaseImpl implements UserUseCase {
     @Override
     @Transactional
     public User unlock(UUID id) {
-        User u = findById(id);
+        User u = loadUser(id);
         u.setLockedUntil(null);
         u.setFailedLoginCount(0);
         return userRepository.update(u);
@@ -433,7 +451,7 @@ public class UserUseCaseImpl implements UserUseCase {
     @Override
     @Transactional
     public User forceActivate(UUID id) {
-        User u = findById(id);
+        User u = loadUser(id);
         u.setActive(true);
         u.setActivationCode(null);
         u.setActivationCodeExpiresAt(null);
@@ -518,7 +536,7 @@ public class UserUseCaseImpl implements UserUseCase {
     @Override
     @Transactional
     public void linkGoogleAccount(UUID id) {
-        User user = findById(id);
+        User user = loadUser(id);
         if (!user.isGoogleLinked()) {
             user.setGoogleLinked(true);
             userRepository.save(user);
@@ -531,15 +549,15 @@ public class UserUseCaseImpl implements UserUseCase {
     @Override
     @Transactional
     public void adminResetPassword(UUID id) {
-        User user = findById(id);
-        requestPasswordReset(user.getEmail());
+        User user = loadUser(id);
+        doRequestPasswordReset(user.getEmail());
         auditLogger.log("auth.admin.password_reset", user.getEmail(), Map.of(USERID, id));
     }
 
     @Override
     @Transactional
     public void deleteUser(UUID id) {
-        User user = findById(id);
+        User user = loadUser(id);
         if (user.getRole() == UserRole.ADMIN) {
             throw new BusinessException("No se puede eliminar una cuenta de administrador");
         }

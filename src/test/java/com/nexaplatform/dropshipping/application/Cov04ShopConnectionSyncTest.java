@@ -307,10 +307,11 @@ class Cov04ShopConnectionSyncTest {
     void nadieOperaSobreLaTiendaDeOtroUsuario() {
         // Se responde "no existe" en vez de "no es tuya": confirmar la existencia ya filtra información.
         UUID intruso = UUID.randomUUID();
+        UUID otroProducto = UUID.randomUUID();
 
         assertThatThrownBy(() -> useCase.disconnect(intruso, shopId)).isInstanceOf(NotFoundException.class);
         assertThatThrownBy(() -> useCase.listings(intruso, shopId)).isInstanceOf(NotFoundException.class);
-        assertThatThrownBy(() -> useCase.listProduct(intruso, shopId, UUID.randomUUID()))
+        assertThatThrownBy(() -> useCase.listProduct(intruso, shopId, otroProducto))
                 .isInstanceOf(NotFoundException.class);
         verify(shopRepository, never()).delete(any(UUID.class));
     }

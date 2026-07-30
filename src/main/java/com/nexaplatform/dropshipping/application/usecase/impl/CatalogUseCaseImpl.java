@@ -186,15 +186,24 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     // cada elemento va en su propia transacción, pero llamarlos con this los saltaba: la autoinvocación no
     // pasa por el proxy de Spring, así que el @Transactional del método invocado no se aplicaba y el lote
     // entero corría sin transacción propia. @Lazy evita el ciclo de construcción consigo mismo.
-    @Autowired
-    @Lazy
     private CatalogUseCase self;
 
-    // @Lazy field injection breaks the CatalogUseCaseImpl <-> CatalogFillWriter constructor cycle
-    // (the writer ingests through this same use case).
-    @Autowired
-    @Lazy
+    // El escritor ingesta a través de ESTE mismo caso de uso, así que por constructor el ciclo no se
+    // podría resolver; @Lazy difiere la resolución hasta el primer uso.
     private CatalogFillWriter catalogFillWriter;
+
+    // Inyección por método (no por campo): ni la auto-referencia ni el escritor pueden entrar por el
+    // constructor sin cerrar un ciclo de creación, y el setter deja la dependencia explícita en la API
+    // de la clase en vez de escondida en un campo anotado.
+    @Autowired
+    public void setSelf(@Lazy CatalogUseCase self) {
+        this.self = self;
+    }
+
+    @Autowired
+    public void setCatalogFillWriter(@Lazy CatalogFillWriter catalogFillWriter) {
+        this.catalogFillWriter = catalogFillWriter;
+    }
 
     /* ============ Suppliers ============ */
 
@@ -217,13 +226,18 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     /* ============ Categories ============ */
 
+    // Las cachés de categorías se invalidan también aquí: el alta delegaba en upsertCategory() con this y
+    // la autoinvocación no pasa por el proxy, así que sus @CacheEvict no llegaban a ejecutarse y la
+    // categoría recién creada no salía en el escaparate hasta que caducaba la caché.
     @Override
     @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_CATEGORY_TREE, allEntries = true),
+            @CacheEvict(value = CACHE_CATEGORIES_FLAT, allEntries = true)})
     public CategoryEntity createCategoryRejectingDuplicateSlug(IngestCategoryRequest req) {
         if (categoryRepository.findBySlug(req.slug()).isPresent()) {
             throw new BusinessException("Ya existe una categoría con slug \"" + req.slug() + "\"");
         }
-        return upsertCategory(req);
+        return upsertCategoryInternal(req);
     }
 
     @Override
@@ -231,6 +245,11 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Caching(evict = {@CacheEvict(value = CACHE_CATEGORY_TREE, allEntries = true),
             @CacheEvict(value = CACHE_CATEGORIES_FLAT, allEntries = true)})
     public CategoryEntity upsertCategory(IngestCategoryRequest req) {
+        return upsertCategoryInternal(req);
+    }
+
+    /** Alta/actualización real de la categoría; las anotaciones viven en los métodos públicos de entrada. */
+    private CategoryEntity upsertCategoryInternal(IngestCategoryRequest req) {
         CategoryEntity entity = categoryRepository.findBySlug(req.slug())
                 .orElseGet(() -> CategoryEntity.builder().slug(req.slug()).active(true).build());
         entity.setNameZh(req.nameZh());
@@ -412,7 +431,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                     .map(p -> productMapper.toSummary(p, language));
         }
         if (categoryId == null) {
-            return listProducts(st, pageable, language);
+            return pageProducts(st, pageable, language);
         }
         Page<ProductEntity> entities = (st == null)
                 ? productJpaRepository.findByCategoryId(categoryId, pageable)
@@ -440,6 +459,15 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Override
     @Transactional(readOnly = true)
     public Page<ProductSummaryView> listProducts(ProductStatus status, Pageable pageable, String language) {
+        return pageProducts(status, pageable, language);
+    }
+
+    /**
+     * Página de productos sin anotación transaccional, para que la reutilice el listado de admin de esta
+     * misma clase: la autoinvocación no pasa por el proxy y el {@code @Transactional} del método invocado
+     * no se aplicaba. La transacción la abre el método público de entrada.
+     */
+    private Page<ProductSummaryView> pageProducts(ProductStatus status, Pageable pageable, String language) {
         Page<ProductEntity> page = (status == null)
                 ? productJpaRepository.findAll(pageable)
                 : productJpaRepository.findByStatus(status, pageable);
@@ -506,6 +534,15 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_PRODUCT_DETAIL, key = "'id:' + #id + ':' + #language + ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get() + ':' + T(com.nexaplatform.dropshipping.application.service.PricingChannelHolder).get() + ':' + T(com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils).isAdmin()")
     public ProductDetailView getProductById(UUID id, String language) {
+        return detailById(id, language);
+    }
+
+    /**
+     * Ficha por id sin anotaciones: la reutiliza la búsqueda por identificador externo de esta misma
+     * clase. La autoinvocación no pasa por el proxy, así que ni el {@code @Cacheable} ni el
+     * {@code @Transactional} del método invocado se aplicaban; ahora viven solo en el método de entrada.
+     */
+    private ProductDetailView detailById(UUID id, String language) {
         ProductEntity p = productJpaRepository.findWithDetailsById(id)
                 .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND + id));
         forceLoadCollections(p);
@@ -517,7 +554,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     public ProductDetailView getProductByExternal(String source, String externalId, String language) {
         ProductEntity p = productJpaRepository.findBySourceAndExternalId(source, externalId)
                 .orElseThrow(() -> new NotFoundException("Product"));
-        return getProductById(p.getId(), language);
+        return detailById(p.getId(), language);
     }
 
     /** Trigger lazy collections while still inside the transaction (open-in-view=false). */
@@ -528,8 +565,15 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         p.getTranslations().size();
     }
 
+    // Esta variante también invalida las cachés de producto: delegaba en updateStatus(UUID, ProductStatus)
+    // con this y la autoinvocación no pasa por el proxy, así que sus @CacheEvict no se ejecutaban y el
+    // escaparate seguía sirviendo el producto con el estado anterior hasta que la entrada caducaba.
     @Override
     @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true),
+            @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
     public void updateStatus(UUID id, String status) {
         // valueOf crudo daba un 500 con un estado desconocido, mientras el listado del mismo panel tolera
         // basura. Aquí sí hay que rechazarlo —cambiar el estado a «lo que sea» no significa nada— pero como
@@ -541,7 +585,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             throw new ArgumentException("Estado de producto no válido: " + status + ". Valores admitidos: "
                     + Arrays.toString(ProductStatus.values()));
         }
-        updateStatus(id, parsed);
+        applyStatus(id, parsed);
     }
 
     @Override
@@ -551,6 +595,11 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true),
             @CacheEvict(value = CACHE_PRICING_AMOUNT, allEntries = true)})
     public void updateStatus(UUID id, ProductStatus status) {
+        applyStatus(id, status);
+    }
+
+    /** Cambio de estado real; las anotaciones de caché y transacción viven en los métodos de entrada. */
+    private void applyStatus(UUID id, ProductStatus status) {
         ProductEntity p = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND + id));
         p.setStatus(status);

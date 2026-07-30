@@ -55,6 +55,16 @@ public class PartnerPlanSyncService {
      */
     @Transactional
     public void syncForUser(UUID userId) {
+        doSyncForUser(userId);
+    }
+
+    /**
+     * Cuerpo de la sincronización, sin anotar: lo llama también el webhook, que ya está dentro de su
+     * transacción. Invocarlo con {@code this.syncForUser(...)} se saltaba el proxy de Spring, así que
+     * aquella {@code @Transactional} no llegaba a aplicarse (java:S6809); ahora la anotación queda solo
+     * en los puntos de entrada públicos, que es donde de verdad actúa.
+     */
+    private void doSyncForUser(UUID userId) {
         List<CustomerSubscriptionEntity> active = subsRepo.findActiveByUserId(userId);
         String tier = active.isEmpty() ? SANDBOX : mapPlanCodeToTier(active.get(0).getPlan().getCode());
         int updated = updateClientSettings(userId, tier, active.isEmpty() ? null : active.get(0).getPlan().getCode());
@@ -69,7 +79,7 @@ public class PartnerPlanSyncService {
             log.warn("Stripe subscription event {} for unknown stripe_id={}", eventType, stripeSubscriptionId);
             return;
         }
-        syncForUser(sub.getUser().getId());
+        doSyncForUser(sub.getUser().getId());
     }
 
     /**

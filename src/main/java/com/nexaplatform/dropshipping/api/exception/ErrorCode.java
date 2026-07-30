@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.exception;
 
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -131,46 +132,43 @@ public enum ErrorCode {
             "Il codice di eliminazione non è valido o è scaduto.",
             "De verwijdercode is ongeldig of verlopen.");
 
-    private final String es;
-    private final String en;
-    private final String pt;
-    private final String zh;
-    private final String fr;
-    private final String de;
-    private final String it;
-    private final String nl;
+    /**
+     * Orden EXACTO en el que cada constante declara sus textos. Añadir un idioma es añadirlo aquí y en
+     * todas las constantes.
+     */
+    private enum Lang {
+        ES, EN, PT, ZH, FR, DE, IT, NL;
 
-    ErrorCode(String es, String en, String pt, String zh, String fr, String de, String it, String nl) {
-        this.es = es;
-        this.en = en;
-        this.pt = pt;
-        this.zh = zh;
-        this.fr = fr;
-        this.de = de;
-        this.it = it;
-        this.nl = nl;
+        /** Idioma del código ISO recibido, con el castellano como respaldo. */
+        static Lang of(String code) {
+            for (Lang candidate : values()) {
+                if (candidate.name().equalsIgnoreCase(code)) {
+                    return candidate;
+                }
+            }
+            return ES;
+        }
+    }
+
+    private final List<String> messages;
+
+    /**
+     * Los textos llegan como lista variable en el orden de {@link Lang}: ocho parámetros {@code String}
+     * seguidos son justo el caso en el que intercambiar dos al declarar una constante compila igual y el
+     * error sale en el idioma equivocado. Si a una constante le faltara un idioma, la clase falla al
+     * cargarse en vez de devolver un mensaje vacío al usuario.
+     */
+    ErrorCode(String... messages) {
+        if (messages.length != Lang.values().length) {
+            throw new IllegalArgumentException(
+                    "Cada ErrorCode debe declarar " + Lang.values().length + " traducciones");
+        }
+        this.messages = List.of(messages);
     }
 
     public String of(String lang) {
-        String l = lang == null ? "es" : lang.trim().toLowerCase(Locale.ROOT).split("[-_]")[0];
-        switch (l) {
-            case "en":
-                return en;
-            case "pt":
-                return pt;
-            case "zh":
-                return zh;
-            case "fr":
-                return fr;
-            case "de":
-                return de;
-            case "it":
-                return it;
-            case "nl":
-                return nl;
-            default:
-                return es;
-        }
+        String code = lang == null ? "es" : lang.trim().toLowerCase(Locale.ROOT).split("[-_]")[0];
+        return messages.get(Lang.of(code).ordinal());
     }
 
     /** Mensaje localizado para el {@code code} indicado, o {@code null} si el código no está catalogado. */

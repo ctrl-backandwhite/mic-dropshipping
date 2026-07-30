@@ -28,11 +28,21 @@ public class EventPublisher {
     /** Publica un evento dentro de la transacción actual (sin nueva tx). */
     @Transactional(propagation = Propagation.MANDATORY)
     public void publish(String topic, String aggregateType, String aggregateId, String partitionKey, Object payload) {
-        publish(topic, aggregateType, aggregateId, partitionKey, payload, null);
+        enqueue(topic, aggregateType, aggregateId, partitionKey, payload, null);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void publish(String topic, String aggregateType, String aggregateId, String partitionKey, Object payload,
+            Map<String, String> headers) {
+        enqueue(topic, aggregateType, aggregateId, partitionKey, payload, headers);
+    }
+
+    /**
+     * Escribe la fila en la outbox. Privado y sin anotación: la sobrecarga corta llamaba a la larga por
+     * {@code this}, así que el proxy no entraba y su {@code MANDATORY} no comprobaba nada. Dejando la
+     * anotación solo en los métodos públicos, la exigencia de transacción activa sí se aplica siempre.
+     */
+    private void enqueue(String topic, String aggregateType, String aggregateId, String partitionKey, Object payload,
             Map<String, String> headers) {
         @SuppressWarnings("unchecked")
         Map<String, Object> json = mapper.convertValue(payload, Map.class);

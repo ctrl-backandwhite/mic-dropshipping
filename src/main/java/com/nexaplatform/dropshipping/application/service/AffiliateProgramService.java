@@ -199,6 +199,15 @@ public class AffiliateProgramService {
 
     @Transactional(readOnly = true)
     public AffiliateProgramConfigEntity config() {
+        return currentConfig();
+    }
+
+    /**
+     * Cuerpo de {@link #config()} SIN anotar, que es al que llaman el resto de métodos de esta clase. Una
+     * llamada interna no pasa por el proxy de Spring, así que un {@code @Transactional} aquí sería una
+     * anotación que no se aplica nunca; la transacción la abre el método público de entrada.
+     */
+    private AffiliateProgramConfigEntity currentConfig() {
         return configRepo.findFirstByOrderByCreatedAtAsc().orElseGet(() -> AffiliateProgramConfigEntity.builder()
                 .defaultPercent(new BigDecimal("10.000")).attributionWindowDays(30).returnPeriodDays(14)
                 .minPayoutCents(5000).currency("EUR").attributionModel("LAST_CLICK").build());
@@ -208,7 +217,7 @@ public class AffiliateProgramService {
     public AffiliateProgramConfigEntity updateConfig(BigDecimal defaultPercent, Integer windowDays, Integer returnDays,
             Long minPayoutCents, String currency, Long maxCommissionPeriodCents) {
         AffiliateProgramConfigEntity c = configRepo.findFirstByOrderByCreatedAtAsc()
-                .orElseGet(() -> configRepo.save(config()));
+                .orElseGet(() -> configRepo.save(currentConfig()));
         if (defaultPercent != null) c.setDefaultPercent(defaultPercent);
         if (windowDays != null) c.setAttributionWindowDays(windowDays);
         if (returnDays != null) c.setReturnPeriodDays(returnDays);
@@ -223,6 +232,11 @@ public class AffiliateProgramService {
     /** Returns the user's affiliate account, creating an ACTIVE one (with a first code) on demand. */
     @Transactional
     public AffiliateEntity getOrCreateForUser(UUID userId) {
+        return getOrCreateAffiliate(userId);
+    }
+
+    /** Cuerpo sin anotar de {@link #getOrCreateForUser(UUID)}: es al que llaman los métodos de esta clase. */
+    private AffiliateEntity getOrCreateAffiliate(UUID userId) {
         UserEntity user = userRepository.findById(userId).orElseThrow(
                 () -> new NotFoundException("User not found"));
         // Data rule: admin/operator accounts cannot be affiliates.
@@ -249,7 +263,7 @@ public class AffiliateProgramService {
     /** DROP-650: explicit opt-in to the program (records terms acceptance, activates, notifies). */
     @Transactional
     public AffiliateEntity joinProgram(UUID userId) {
-        AffiliateEntity a = getOrCreateForUser(userId);
+        AffiliateEntity a = getOrCreateAffiliate(userId);
         if (a.getAcceptedTermsAt() == null) {
             a.setAcceptedTermsAt(Instant.now());
             a.setStatus(ACTIVE);
@@ -339,7 +353,7 @@ public class AffiliateProgramService {
             return Optional.empty();
         }
         Instant now = Instant.now();
-        AffiliateProgramConfigEntity cfg = config();
+        AffiliateProgramConfigEntity cfg = currentConfig();
         // DROP-652: de-duplicate clicks — repeated clicks of the same code by the same visitor
         // within the dedup window refresh the existing attribution instead of inflating metrics.
         if (visitorToken != null && !visitorToken.isBlank()) {
@@ -457,7 +471,7 @@ public class AffiliateProgramService {
                 .affiliateId(affiliate.getId()).referralCodeId(attr.getReferralCodeId()).referredUserId(userId)
                 .orderId(orderId).baseAmountCents(subtotalCents).currency(ccy).status("CONFIRMED").build());
 
-        AffiliateProgramConfigEntity cfg = config();
+        AffiliateProgramConfigEntity cfg = currentConfig();
         BigDecimal pct = affiliate.getCommissionPercentOverride() != null
                 ? affiliate.getCommissionPercentOverride()
                 : cfg.getDefaultPercent();
@@ -540,7 +554,7 @@ public class AffiliateProgramService {
     /** Moves PENDING commissions past the return period to APPROVED. Returns how many were approved. */
     @Transactional
     public int approveDueCommissions() {
-        int days = config().getReturnPeriodDays();
+        int days = currentConfig().getReturnPeriodDays();
         Instant cutoff = Instant.now().minus(Duration.ofDays(days));
         int approved = 0;
         for (AffiliateCommissionEntity comm : commissionRepo.findByStatus(PENDING)) {
@@ -584,7 +598,7 @@ public class AffiliateProgramService {
     /** Affiliate requests a payout of their APPROVED commissions (must meet the minimum). */
     @Transactional
     public AffiliatePayoutEntity requestPayout(UUID userId) {
-        return requestPayout(userId, WALLET);
+        return createPayoutRequest(userId, WALLET);
     }
 
     /**
@@ -594,6 +608,11 @@ public class AffiliateProgramService {
      */
     @Transactional
     public AffiliatePayoutEntity requestPayout(UUID userId, String method) {
+        return createPayoutRequest(userId, method);
+    }
+
+    /** Cuerpo sin anotar que comparten las dos sobrecargas públicas de {@code requestPayout}. */
+    private AffiliatePayoutEntity createPayoutRequest(UUID userId, String method) {
         String m = method == null ? WALLET : method.toUpperCase();
         if (!m.matches("WALLET|BANK|PAYPAL")) {
             throw new BusinessException("INVALID_PAYOUT_METHOD", "Método de cobro no válido");
@@ -612,7 +631,7 @@ public class AffiliateProgramService {
         }
         List<AffiliateCommissionEntity> approved = commissionRepo.findByAffiliateIdAndStatus(affiliate.getId(), APPROVED);
         long total = approved.stream().mapToLong(AffiliateCommissionEntity::getAmountCents).sum();
-        AffiliateProgramConfigEntity cfg = config();
+        AffiliateProgramConfigEntity cfg = currentConfig();
         if (total < cfg.getMinPayoutCents()) {
             throw new BusinessException(
                     "Saldo aprobado por debajo del pago mínimo");
@@ -633,11 +652,12 @@ public class AffiliateProgramService {
     /**
      * Operator approves & executes a WALLET payout: credits the affiliate's wallet and marks the
      * APPROVED commissions as PAID. No automatic payment happens without this explicit approval
-     * (DROP-651). Delegates to {@link #approvePayout(UUID, UUID, String)} with no admin/reference.
+     * (DROP-651). Ejecuta el mismo pago que {@link #approvePayout(UUID, UUID, String)} pero sin admin ni
+     * referencia externa.
      */
     @Transactional
     public AffiliatePayoutEntity approvePayout(UUID payoutId) {
-        return approvePayout(payoutId, null, null);
+        return executePayout(payoutId, null, null);
     }
 
     /**
@@ -649,6 +669,15 @@ public class AffiliateProgramService {
      */
     @Transactional
     public AffiliatePayoutEntity approvePayout(UUID payoutId, UUID adminUserId, String reference) {
+        return executePayout(payoutId, adminUserId, reference);
+    }
+
+    /**
+     * Cuerpo sin anotar del pago: lo comparten las dos sobrecargas públicas y el pago directo del
+     * operador. Al llamarse dentro de la misma instancia no pasaría por el proxy, así que la transacción
+     * la abre siempre el método público de entrada.
+     */
+    private AffiliatePayoutEntity executePayout(UUID payoutId, UUID adminUserId, String reference) {
         AffiliatePayoutEntity payout = payoutRepo.findById(payoutId).orElseThrow(
                 () -> new NotFoundException("Payout not found"));
         if ("PAID".equals(payout.getStatus())) {
@@ -727,13 +756,13 @@ public class AffiliateProgramService {
         if (approvedTotal <= 0) {
             return 0;
         }
-        if (!force && approvedTotal < config().getMinPayoutCents()) {
+        if (!force && approvedTotal < currentConfig().getMinPayoutCents()) {
             return 0;
         }
         AffiliatePayoutEntity payout = payoutRepo.save(AffiliatePayoutEntity.builder().affiliateId(affiliateId)
-                .amountCents(approvedTotal).currency(config().getCurrency()).status(APPROVED).method(WALLET)
+                .amountCents(approvedTotal).currency(currentConfig().getCurrency()).status(APPROVED).method(WALLET)
                 .requestedAt(Instant.now()).note("Pago directo del operador").build());
-        AffiliatePayoutEntity done = approvePayout(payout.getId());
+        AffiliatePayoutEntity done = executePayout(payout.getId(), null, null);
         return "PAID".equals(done.getStatus()) ? done.getAmountCents() : 0;
     }
 

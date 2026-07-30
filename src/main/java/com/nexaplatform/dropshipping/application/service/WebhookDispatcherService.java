@@ -48,8 +48,6 @@ public class WebhookDispatcherService {
     // Auto-referencia POR EL PROXY: attempt() es @Async y llamarlo con this lo ejecutaba en el hilo que
     // publica el evento —síncrono y bloqueante, justo lo contrario del "fire-and-forget" que promete—.
     // La autoinvocación no pasa por el proxy, así que ni @Async ni @Transactional se aplicaban.
-    @Autowired
-    @Lazy
     private WebhookDispatcherService self;
 
     private final WebhookSubscriptionRepository subscriptionRepository;
@@ -62,9 +60,29 @@ public class WebhookDispatcherService {
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5))
             .followRedirects(HttpClient.Redirect.NEVER).build();
 
+    /**
+     * La auto-referencia se inyecta por SETTER y no por el constructor a propósito: un bean que se pide a
+     * sí mismo mientras se construye es un ciclo que Spring no puede cerrar por constructor. Con setter el
+     * ciclo se rompe, y {@code @Lazy} garantiza que lo que entra es el PROXY (con @Async/@Transactional) y
+     * no la instancia desnuda. Las dependencias normales sí van por constructor.
+     */
+    @Autowired
+    public void setSelf(@Lazy WebhookDispatcherService self) {
+        this.self = self;
+    }
+
     /** Publish an event to every active subscription that listens to {@code eventType}. */
     @Transactional
     public void publish(String eventType, String eventId, Map<String, Object> data) {
+        fanOut(eventType, eventId, data);
+    }
+
+    /**
+     * Cuerpo del reparto, SIN anotar. Las llamadas internas van aquí: al invocarse dentro de la misma
+     * instancia no pasan por el proxy, así que un {@code @Transactional} en este punto sería una promesa
+     * que nadie cumple. La transacción la abre el método público de entrada.
+     */
+    private void fanOut(String eventType, String eventId, Map<String, Object> data) {
         // DROP-663: fan the event out to active partner apps too (recorded in partner_webhook_delivery).
         partnerWebhooks.publish(eventType, eventId, data);
         List<WebhookSubscriptionEntity> subs = subscriptionRepository.findByActiveTrue();
@@ -90,7 +108,7 @@ public class WebhookDispatcherService {
      */
     @Transactional
     public void publishTest(WebhookSubscriptionEntity subscription) {
-        publishTest(subscription.getId());
+        fireTestPing(subscription.getId());
     }
 
     /**
@@ -100,7 +118,12 @@ public class WebhookDispatcherService {
      */
     @Transactional
     public void publishTest(UUID subscriptionId) {
-        publish("test.ping", "test-" + UUID.randomUUID(), Map.of("message", "NX036 webhook test event",
+        fireTestPing(subscriptionId);
+    }
+
+    /** Cuerpo del ping de prueba, sin anotar: lo comparten las dos sobrecargas públicas. */
+    private void fireTestPing(UUID subscriptionId) {
+        fanOut("test.ping", "test-" + UUID.randomUUID(), Map.of("message", "NX036 webhook test event",
                 "subscriptionId", subscriptionId.toString(), "at", Instant.now().toString()));
     }
 

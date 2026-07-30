@@ -3,6 +3,8 @@ package com.nexaplatform.dropshipping.infrastructure.integration.search;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.opensearch.client.opensearch.OpenSearchClient;
 
 import java.io.IOException;
@@ -35,29 +37,16 @@ class Cov06OpenSearchConfigTest {
                 objectMapper)).isInstanceOf(IllegalStateException.class).hasMessageContaining("https");
     }
 
-    /** Local sin credenciales: conexión plana, que es el modo de desarrollo. */
-    @Test
-    void sinCredencialesElClientePlanoSeConstruye() throws IOException {
-        OpenSearchClient cliente = config.openSearchClient("http://localhost:9200", "", "", false, objectMapper);
-
-        assertThat(cliente).isNotNull();
-        cliente._transport().close();
-    }
-
-    /** Una lista de nodos separada por comas usa el primero; los espacios sobrantes no rompen la URI. */
-    @Test
-    void deVariasUrisSeUsaLaPrimera() throws IOException {
-        OpenSearchClient cliente = config.openSearchClient(" http://localhost:9200 , http://otro:9200", "", "",
-                false, objectMapper);
-
-        assertThat(cliente).isNotNull();
-        cliente._transport().close();
-    }
-
-    /** Sin puerto en la URI se asume el 9200 (el de OpenSearch) en vez de fallar. */
-    @Test
-    void sinPuertoEnLaUriSeAsumeElNueveMilDoscientos() throws IOException {
-        OpenSearchClient cliente = config.openSearchClient("http://opensearch", "", "", false, objectMapper);
+    /**
+     * Formas de la URI que el cliente sin credenciales (el modo de desarrollo) tiene que aceptar: una
+     * sola URI; una lista de nodos separada por comas, de la que se usa la primera sin que los espacios
+     * sobrantes rompan la URI; y una URI sin puerto, donde se asume el 9200 de OpenSearch en vez de fallar.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"http://localhost:9200", " http://localhost:9200 , http://otro:9200",
+            "http://opensearch"})
+    void sinCredencialesElClientePlanoSeConstruyeSeaCualSeaLaFormaDeLaUri(String uris) throws IOException {
+        OpenSearchClient cliente = config.openSearchClient(uris, "", "", false, objectMapper);
 
         assertThat(cliente).isNotNull();
         cliente._transport().close();

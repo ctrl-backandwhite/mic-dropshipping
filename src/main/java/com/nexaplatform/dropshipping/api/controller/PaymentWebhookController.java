@@ -93,7 +93,7 @@ public class PaymentWebhookController implements PaymentWebhookApi {
         if (signature == null || signature.isBlank())
             return false;
         byte[] provided = decodeHex(signature);
-        if (provided == null) {
+        if (provided.length == 0) {
             return false;
         }
         try {
@@ -109,15 +109,16 @@ public class PaymentWebhookController implements PaymentWebhookApi {
     }
 
     /**
-     * Firma hexadecimal a bytes, o {@code null} si no es hexadecimal válido. Una firma mal formada es
-     * simplemente un webhook a rechazar, no un error del servidor: por eso se traduce a {@code null} en
-     * vez de propagar la excepción.
+     * Firma hexadecimal a bytes, o array vacío si no es hexadecimal válido. Una firma mal formada es
+     * simplemente un webhook a rechazar, no un error del servidor: por eso se traduce a "sin firma" en
+     * vez de propagar la excepción. Se devuelve vacío y no {@code null} para que quien llama no tenga que
+     * distinguir dos formas de "no hay firma" (la vacía ya se rechaza antes por firma en blanco).
      */
     private static byte[] decodeHex(String signature) {
         try {
             return HexFormat.of().parseHex(signature.trim().toLowerCase());
         } catch (IllegalArgumentException badHex) {
-            return null;
+            return new byte[0];
         }
     }
 }

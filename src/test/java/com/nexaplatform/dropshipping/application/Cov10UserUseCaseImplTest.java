@@ -286,7 +286,9 @@ class Cov10UserUseCaseImplTest {
 
     @Test
     void cambiarElRolSinIndicarloSeRechaza() {
-        assertThatThrownBy(() -> useCase.changeRole(UUID.randomUUID(), null)).isInstanceOf(BusinessException.class);
+        UUID id = UUID.randomUUID();
+
+        assertThatThrownBy(() -> useCase.changeRole(id, null)).isInstanceOf(BusinessException.class);
         verify(userRepository, never()).update(any());
     }
 

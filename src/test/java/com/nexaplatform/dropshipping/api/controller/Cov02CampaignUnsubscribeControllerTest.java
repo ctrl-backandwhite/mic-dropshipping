@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -45,11 +46,11 @@ class Cov02CampaignUnsubscribeControllerTest {
     @Mock
     private TemplateEngine templateEngine;
 
+    @InjectMocks
     private CampaignUnsubscribeController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new CampaignUnsubscribeController(unsubscribeService, templateEngine);
         ReflectionTestUtils.setField(controller, "backendBaseUrl", BACKEND);
         ReflectionTestUtils.setField(controller, "storefrontBaseUrl", TIENDA);
         when(templateEngine.process(anyString(), any(IContext.class))).thenReturn("<html>pagina</html>");

@@ -237,8 +237,7 @@ class Cov03RateLimitFilterTest {
         Map<String, Object> partner = filter.policies().stream()
                 .filter(p -> "partner.catalog.read".equals(p.get("name"))).findFirst().orElseThrow();
 
-        assertThat(partner.get("tiers")).isEqualTo(Map.of("sandbox", 1, "paid", 5));
-        assertThat(partner.get("period")).isEqualTo("1m");
+        assertThat(partner).containsEntry("tiers", Map.of("sandbox", 1, "paid", 5)).containsEntry("period", "1m");
     }
 
     @Test

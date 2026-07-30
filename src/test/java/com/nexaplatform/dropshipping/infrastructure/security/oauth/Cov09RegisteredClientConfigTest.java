@@ -9,6 +9,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -58,11 +59,11 @@ class Cov09RegisteredClientConfigTest {
     @Mock
     CustomerSubscriptionRepository subsRepo;
 
+    @InjectMocks
     private RegisteredClientConfig subject;
 
     @BeforeEach
     void buildSubject() {
-        subject = new RegisteredClientConfig(passwordEncoder, repo);
         when(passwordEncoder.encode(any())).thenAnswer(i -> "enc(" + i.getArgument(0) + ")");
         secreto("s3cret0");
     }

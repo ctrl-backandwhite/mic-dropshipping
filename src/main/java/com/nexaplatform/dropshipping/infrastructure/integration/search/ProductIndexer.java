@@ -71,11 +71,11 @@ public class ProductIndexer {
     }
 
     @KafkaListener(topics = NexaTopics.PRODUCT_INGESTED, groupId = "nexadrop-search-indexer")
-    // La transacción tiene que abrirse AQUÍ: indexProduct se llama en la misma clase y su propia
-    // anotación no pasa por el proxy de Spring, así que el indexado corría sin sesión JPA.
+    // La transacción tiene que abrirse AQUÍ: el cuerpo del indexado se llama en la misma clase y una
+    // llamada interna no pasa por el proxy de Spring, así que el indexado corría sin sesión JPA.
     @Transactional(readOnly = true)
     public void onProductIngested(ProductIngestedEvent event) {
-        indexProduct(event.productId());
+        indexProductDoc(event.productId());
     }
 
     /** Removes a single product document from the search index (best-effort). */
@@ -89,7 +89,7 @@ public class ProductIndexer {
 
     /**
      * Re-indexes every product into OpenSearch. {@code @Transactional} keeps one session open
-     * for the whole sweep so the self-invoked {@link #indexProduct} can read the lazy
+     * for the whole sweep so the per-product indexing body can read the lazy
      * {@code translations}/{@code images} collections. Returns the number indexed.
      */
     @Transactional(readOnly = true)
@@ -100,7 +100,7 @@ public class ProductIndexer {
         purgeIndex();
         int[] n = { 0 };
         productRepository.findAll().forEach(p -> {
-            indexProduct(p.getId());
+            indexProductDoc(p.getId());
             n[0]++;
         });
         log.info("::> [REINDEX] reindexed {} products into '{}' (índice purgado antes de reconstruir)", n[0], index);
@@ -119,6 +119,15 @@ public class ProductIndexer {
 
     @Transactional(readOnly = true)
     public void indexProduct(UUID productId) {
+        indexProductDoc(productId);
+    }
+
+    /**
+     * Cuerpo del indexado, SIN anotar. Es al que llaman {@link #onProductIngested} y {@link #reindexAll},
+     * que ya abren la sesión JPA: anotarlo de nuevo aquí no serviría de nada porque una llamada dentro de
+     * la misma instancia no atraviesa el proxy de Spring.
+     */
+    private void indexProductDoc(UUID productId) {
         ProductEntity p = productRepository.findWithDetailsById(productId).orElse(null);
         if (p == null)
             return;

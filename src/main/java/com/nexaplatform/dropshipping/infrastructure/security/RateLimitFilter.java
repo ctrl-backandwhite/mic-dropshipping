@@ -59,8 +59,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     // local/dev y para una sola instancia). En prod multi-instancia se
     // sustituye por DistributedBucketFactory (Bucket4j sobre Redis) y todas
     // las réplicas comparten el mismo bucket → cuota global consistente.
-    @Autowired
-    private BucketFactory bucketFactory;
+    private final BucketFactory bucketFactory;
 
     // Nº de proxies de confianza por delante (LB/edge). La IP real del cliente es la que
     // añade el proxy de confianza al final de X-Forwarded-For; los valores que el cliente
@@ -69,6 +68,20 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private int trustedProxyCount;
 
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
+
+    /**
+     * Inyección por constructor (java:S6813). Va anotado porque hay un segundo constructor: con más de uno
+     * y ninguno marcado, Spring elegiría el vacío y el filtro se quedaría sin la factoría compartida.
+     */
+    @Autowired
+    public RateLimitFilter(BucketFactory bucketFactory) {
+        this.bucketFactory = bucketFactory;
+    }
+
+    /** Sin factoría: cada instancia lleva sus propios cubos en memoria. Lo usan las pruebas del filtro. */
+    public RateLimitFilter() {
+        this(null);
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)

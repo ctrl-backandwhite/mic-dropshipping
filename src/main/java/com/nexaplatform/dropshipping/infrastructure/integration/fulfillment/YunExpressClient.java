@@ -52,7 +52,13 @@ public class YunExpressClient {
     private static final Duration TOKEN_REFRESH_MARGIN = Duration.ofMinutes(5);
     /** Espera por defecto de una llamada (crear envío, tracking, etiqueta): operaciones no interactivas. */
     private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
-    private static final String TOKEN_PATH = "/openapi/oauth2/token";
+    /**
+     * Ruta del endpoint de token, parte del CONTRATO de la Open Platform y no un parámetro de despliegue:
+     * es idéntica en sandbox y en producción (lo único que cambia entre entornos es el host, que sí es
+     * configurable en {@code nexadrop.yunexpress.base-url}) y además entra en el contenido que se firma,
+     * así que moverla por configuración invalidaría la firma en vez de apuntar a otro sitio.
+     */
+    private static final String TOKEN_PATH = "/openapi/oauth2/token"; // NOSONAR java:S1075 — ruta fija del contrato
 
     private static final ObjectMapper JSON = new ObjectMapper();
 

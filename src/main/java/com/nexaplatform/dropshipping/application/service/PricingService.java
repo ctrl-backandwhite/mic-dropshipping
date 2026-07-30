@@ -1,7 +1,6 @@
 package com.nexaplatform.dropshipping.application.service;
 
 import com.nexaplatform.dropshipping.application.service.MarginService.PriceWithMargin;
-import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
@@ -53,6 +52,23 @@ public class PricingService {
         BigDecimal supplierAmount = effective != null && effective.getPrice() != null
                 ? effective.getPrice()
                 : product.getBasePrice();
+        return priceForSupplierAmount(product, effective, supplierAmount);
+    }
+
+    /**
+     * Tarifica un importe de proveedor concreto con las reglas del producto: margen sobre la base, y
+     * después IVA y envío SIN margen.
+     *
+     * <p>Existe para que los tramos por cantidad pasen por AQUÍ y no por su propia cuenta. Los tramos
+     * calculaban coste → USD → margen y se quedaban ahí, sin IVA ni envío: la ficha anunciaba «2+ →
+     * 1,99 $» y al pagar se cobraban 3,57 $ por unidad. Con una sola fórmula, lo que se enseña y lo que
+     * se cobra no pueden separarse otra vez.
+     */
+    public PricedAmount priceForSupplierAmount(ProductEntity product, ProductVariantEntity effective,
+            BigDecimal supplierAmount) {
+        if (product == null) {
+            return unpriced();
+        }
         String sourceCurrency = product.getCurrency() != null ? product.getCurrency() : "CNY";
         BigDecimal costUsd = supplierAmount != null ? currencyService.toUsd(supplierAmount, sourceCurrency) : null;
         PriceWithMargin withMargin = marginService.apply(costUsd, product, effective);

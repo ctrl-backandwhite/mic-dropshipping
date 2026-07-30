@@ -12,9 +12,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.time.Instant;
-import java.util.Date;
-import java.util.Optional;
 
 /**
  * Rechaza con 401 los JWT cuyo `iat` sea anterior al timestamp de revocación
@@ -46,11 +43,13 @@ public class JwtRevocationFilter extends OncePerRequestFilter {
         try {
             JWTClaimsSet claims = JWTParser.parse(auth.substring(7)).getJWTClaimsSet();
             String sub = claims.getSubject();
-            // Nimbus expone el `iat` como java.util.Date porque su API no ofrece java.time; se convierte
-            // a Instant nada más leerlo para que dentro del filtro solo circulen segundos epoch.
-            Instant issuedAt = Optional.ofNullable(claims.getIssueTime()).map(Date::toInstant).orElse(null);
-            if (sub != null && issuedAt != null
-                    && !revocationService.isStillValid(sub, issuedAt.getEpochSecond())) {
+            // El `iat` se lee del mapa JSON del claim set y no de getIssueTime(): Nimbus solo lo expone
+            // tipado como java.util.Date, mientras que en JSON ya viaja como segundos epoch, que es
+            // exactamente lo que compara el servicio de revocación.
+            Object iatClaim = claims.toJSONObject().get("iat");
+            Long issuedAtEpochSeconds = iatClaim instanceof Number n ? Long.valueOf(n.longValue()) : null;
+            if (sub != null && issuedAtEpochSeconds != null
+                    && !revocationService.isStillValid(sub, issuedAtEpochSeconds)) {
                 res.setStatus(401);
                 res.setHeader("WWW-Authenticate",
                         "Bearer error=\"invalid_token\", error_description=\"Token revoked by issuer (plan change or credential removed). Request a new token via /oauth2/token.\"");

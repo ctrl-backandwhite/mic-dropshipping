@@ -58,6 +58,15 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
     @Override
     @Transactional(readOnly = true)
     public List<Category> findAll() {
+        return loadAllWithCounts();
+    }
+
+    /**
+     * Cuerpo real del listado. Vive aparte para que las llamadas internas no pasen por {@code this.findAll()}:
+     * una autoinvocación se salta el proxy de Spring y el {@code @Transactional} del método público no se
+     * aplicaría (java:S6809). Así la anotación queda solo en el punto de entrada, que es donde actúa.
+     */
+    private List<Category> loadAllWithCounts() {
         Map<UUID, Long> productCount = productCountByCategory();
         // DROP: list from the OpenSearch index (kept in sync on every change), falling back to the DB
         // when the index is empty or OpenSearch is unavailable. productCount is not indexed, so it is
@@ -117,7 +126,7 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
     @Override
     @Transactional(readOnly = true)
     public List<Category> findWithProducts() {
-        return findAll().stream().filter(c -> c.getProductCount() > 0).toList();
+        return loadAllWithCounts().stream().filter(c -> c.getProductCount() > 0).toList();
     }
 
     @Override
@@ -130,25 +139,34 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
         }
         int updated = 0;
         for (UUID id : ids) {
-            // getById lanza si el id ya no existe, así que la comprobación de nulo no se alcanzaba nunca y
-            // UNA categoría borrada entre medias tumbaba el lote entero con un 404. Una selección con un id
-            // obsoleto es lo normal cuando dos administradores trabajan a la vez: se salta y sigue.
-            Category c;
-            try {
-                c = getById(id);
-            } catch (NotFoundException e) {
-                log.warn("Activación en lote: la categoría {} ya no existe, se omite", id);
-                continue;
+            if (applyActive(id, active)) {
+                updated++;
             }
-            if (Boolean.valueOf(active).equals(c.getActive())) {
-                continue;
-            }
-            c.setActive(active);
-            categoryRepository.update(c);
-            categoryIndexer.indexCategory(id);
-            updated++;
         }
         return updated;
+    }
+
+    /**
+     * Aplica el estado a UNA categoría del lote. Devuelve {@code false} si no hubo cambio.
+     *
+     * <p>El id puede haber desaparecido entre la selección y el envío (dos administradores trabajando a la
+     * vez): antes eso tumbaba el lote entero con un 404, así que se omite y se sigue.
+     */
+    private boolean applyActive(UUID id, boolean active) {
+        Category c;
+        try {
+            c = requireById(id);
+        } catch (NotFoundException e) {
+            log.warn("Activación en lote: la categoría {} ya no existe, se omite", id);
+            return false;
+        }
+        if (Boolean.valueOf(active).equals(c.getActive())) {
+            return false;
+        }
+        c.setActive(active);
+        categoryRepository.update(c);
+        categoryIndexer.indexCategory(id);
+        return true;
     }
 
     @Override
@@ -156,7 +174,7 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
     @Caching(evict = {@CacheEvict(value = CACHE_CATEGORY_TREE, allEntries = true),
             @CacheEvict(value = CACHE_CATEGORIES_FLAT, allEntries = true)})
     public Category toggle(UUID id) {
-        Category model = getById(id);
+        Category model = requireById(id);
         model.setActive(!Boolean.TRUE.equals(model.getActive()));
         Category saved = categoryRepository.update(model);
         categoryIndexer.indexCategory(id);
@@ -169,7 +187,7 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
     @Caching(evict = {@CacheEvict(value = CACHE_CATEGORY_TREE, allEntries = true),
             @CacheEvict(value = CACHE_CATEGORIES_FLAT, allEntries = true)})
     public Category update(Category model, UUID id) {
-        Category existing = getById(id);
+        Category existing = requireById(id);
         if (!existing.getSlug().equals(model.getSlug())) {
             categoryRepository.findBySlug(model.getSlug()).ifPresent(other -> {
                 if (!other.getId().equals(id)) {
@@ -202,7 +220,7 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
     @Caching(evict = {@CacheEvict(value = CACHE_CATEGORY_TREE, allEntries = true),
             @CacheEvict(value = CACHE_CATEGORIES_FLAT, allEntries = true)})
     public void delete(UUID id) {
-        getById(id);
+        requireById(id);
         long products = productCount(id);
         if (products > 0) {
             throw new BusinessException("Cannot delete: " + products + " products still reference this category");
@@ -220,6 +238,11 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
     @Override
     @Transactional(readOnly = true)
     public Category getById(UUID id) {
+        return requireById(id);
+    }
+
+    /** Carga la categoría o lanza 404. Sin anotar: es la que usan los métodos internos (ver java:S6809). */
+    private Category requireById(UUID id) {
         Category model = categoryRepository.getById(id);
         if (Objects.isNull(model)) {
             throw new NotFoundException("Category");

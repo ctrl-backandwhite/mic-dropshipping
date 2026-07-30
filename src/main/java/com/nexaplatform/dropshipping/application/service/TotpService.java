@@ -85,7 +85,7 @@ public class TotpService {
         if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
             throw new BusinessException("Invalid password");
         }
-        disable(userId);
+        deleteSecret(userId);
     }
 
     /**
@@ -187,6 +187,15 @@ public class TotpService {
 
     @Transactional
     public void disable(UUID userId) {
+        deleteSecret(userId);
+    }
+
+    /**
+     * Borrado del secreto SIN anotar: es al que llama {@link #disableWithPassword}, que ya está dentro de
+     * su transacción. Una llamada dentro de la misma instancia no pasa por el proxy de Spring, de modo que
+     * el {@code @Transactional} del método público no se aplicaría a la llamada interna.
+     */
+    private void deleteSecret(UUID userId) {
         repo.deleteById(userId);
     }
 

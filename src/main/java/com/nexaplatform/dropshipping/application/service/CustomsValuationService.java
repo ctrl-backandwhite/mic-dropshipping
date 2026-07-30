@@ -86,7 +86,7 @@ public class CustomsValuationService {
     @Transactional(readOnly = true)
     public CustomsValuation valuate(String countryCode, int intrinsicValueCents, int taxCents) {
         int intrinsic = Math.max(0, intrinsicValueCents);
-        Optional<CountryCustomsRuleEntity> found = rule(countryCode);
+        Optional<CountryCustomsRuleEntity> found = activeRule(countryCode);
         if (found.isEmpty()) {
             return neutral(countryCode, intrinsic);
         }
@@ -111,12 +111,21 @@ public class CustomsValuationService {
     /** Modo de despacho fiscal configurado para el país (DDP si no hay regla). */
     @Transactional(readOnly = true)
     public TaxMode taxModeFor(String countryCode) {
-        return rule(countryCode).map(r -> TaxMode.from(r.getTaxMode())).orElse(TaxMode.DDP);
+        return activeRule(countryCode).map(r -> TaxMode.from(r.getTaxMode())).orElse(TaxMode.DDP);
     }
 
     /** Regla activa del país, o vacío si no está configurado o está desactivado. */
     @Transactional(readOnly = true)
     public Optional<CountryCustomsRuleEntity> rule(String countryCode) {
+        return activeRule(countryCode);
+    }
+
+    /**
+     * Igual que {@link #rule(String)} pero sin anotar: es la que usan {@code valuate} y {@code taxModeFor}.
+     * Llamar al método público desde dentro se salta el proxy de Spring, así que su {@code @Transactional}
+     * no llegaría a aplicarse (java:S6809); la anotación queda solo en el punto de entrada.
+     */
+    private Optional<CountryCustomsRuleEntity> activeRule(String countryCode) {
         if (countryCode == null || countryCode.isBlank()) {
             return Optional.empty();
         }

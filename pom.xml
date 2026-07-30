@@ -36,10 +36,13 @@
              la palabra española "todo" ("todo el catálogo", "todo error sale en el idioma del usuario")
              se confunde con el marcador de tarea sin terminar. Se revisaron los 30 avisos uno a uno el
              30-jul-2026 y ninguno señalaba trabajo pendiente. Reescribir los comentarios para esquivar
-             una palabra corriente del idioma empeoraría la documentación. -->
-        <sonar.issue.ignore.multicriteria>esTodo</sonar.issue.ignore.multicriteria>
+             una palabra corriente del idioma empeoraría la documentación. Esta misma explicación hace
+             saltar la regla en el propio pom (xml:S1135), por eso la exclusión cubre también el XML. -->
+        <sonar.issue.ignore.multicriteria>esTodo,esTodoXml</sonar.issue.ignore.multicriteria>
         <sonar.issue.ignore.multicriteria.esTodo.ruleKey>java:S1135</sonar.issue.ignore.multicriteria.esTodo.ruleKey>
         <sonar.issue.ignore.multicriteria.esTodo.resourceKey>**/*.java</sonar.issue.ignore.multicriteria.esTodo.resourceKey>
+        <sonar.issue.ignore.multicriteria.esTodoXml.ruleKey>xml:S1135</sonar.issue.ignore.multicriteria.esTodoXml.ruleKey>
+        <sonar.issue.ignore.multicriteria.esTodoXml.resourceKey>**/pom.xml</sonar.issue.ignore.multicriteria.esTodoXml.resourceKey>
         <java.version>21</java.version>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>

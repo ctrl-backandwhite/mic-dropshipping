@@ -45,11 +45,20 @@ public class TranslationService {
     @KafkaListener(topics = "product.ingested", groupId = "nexadrop-translation")
     @Transactional
     public void onProductIngested(ProductIngestedEvent event) {
-        translateProduct(event.productId());
+        doTranslateProduct(event.productId());
     }
 
     @Transactional
     public void translateProduct(UUID productId) {
+        doTranslateProduct(productId);
+    }
+
+    /**
+     * El listener de Kafka llamaba a {@code translateProduct} con {@code this}, así que el
+     * {@code @Transactional} de ese método no se aplicaba (la transacción la abría ya el listener).
+     * El trabajo vive aquí sin anotar y cada entrada pública abre su propia transacción por proxy.
+     */
+    private void doTranslateProduct(UUID productId) {
         Optional<ProductEntity> opt = productRepository.findById(productId);
         if (opt.isEmpty())
             return;

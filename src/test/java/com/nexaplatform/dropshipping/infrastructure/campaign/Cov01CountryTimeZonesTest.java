@@ -81,8 +81,8 @@ class Cov01CountryTimeZonesTest {
 
         // La franja de Madrid siempre tiene países: sin esta comprobación, allSatisfy pasaría también con
         // el conjunto vacío y el test quedaría en verde sin haber comprobado nada.
-        assertThat(inSlot).isNotEmpty();
-        assertThat(inSlot).allSatisfy(country -> assertThat(CountryTimeZones.isLocalHour(country, hour)).isTrue());
+        assertThat(inSlot).isNotEmpty()
+                .allSatisfy(country -> assertThat(CountryTimeZones.isLocalHour(country, hour)).isTrue());
     }
 
     @Test

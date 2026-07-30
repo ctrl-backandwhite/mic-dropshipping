@@ -283,8 +283,9 @@ class Cov07MarginServiceRulesTest {
         List<PriceRuleEntity> listed = service.listAll();
 
         assertThat(listed).hasSize(1);
-        assertThatThrownBy(() -> listed.add(rule(PriceRuleScope.GLOBAL, null, "1")))
-                .isInstanceOf(UnsupportedOperationException.class);
+        // La regla se construye fuera de la lambda: dentro solo debe quedar la llamada que se espera que falle.
+        PriceRuleEntity otra = rule(PriceRuleScope.GLOBAL, null, "1");
+        assertThatThrownBy(() -> listed.add(otra)).isInstanceOf(UnsupportedOperationException.class);
     }
 
     /* ==================== helpers ==================== */

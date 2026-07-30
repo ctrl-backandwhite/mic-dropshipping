@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -61,11 +62,11 @@ class Cov09WalletIndexerTest {
     @Mock
     WalletSearchService walletSearchService;
 
+    @InjectMocks
     private WalletIndexer indexer;
 
     @BeforeEach
     void buildSubject() throws Exception {
-        indexer = new WalletIndexer(client, walletRepository, walletSearchService);
         // El nombre del índice viene de un @Value: sin Spring quedaría a null y todo iría al índice "null".
         Field f = WalletIndexer.class.getDeclaredField("index");
         f.setAccessible(true);
@@ -190,8 +191,8 @@ class Cov09WalletIndexerTest {
                 .containsEntry("status", "ACTIVE")
                 // La divisa se normaliza a mayúsculas: el filtro del admin compara por término exacto.
                 .containsEntry("currency", "USD")
-                .containsEntry("createdAt", "2026-01-02T03:04:05Z");
-        assertThat(doc).doesNotContainKeys("balanceUsdCents", "balance", "holdUsdCents");
+                .containsEntry("createdAt", "2026-01-02T03:04:05Z")
+                .doesNotContainKeys("balanceUsdCents", "balance", "holdUsdCents");
     }
 
     @Test

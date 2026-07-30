@@ -86,8 +86,15 @@ public class RegisteredClientConfig {
         }
         RegisteredClient existing = repo.findByClientId(clientId);
         String internalId = existing != null ? existing.getId() : UUID.randomUUID().toString();
+        // El contrato de PasswordEncoder no garantiza un resultado no nulo: un encoder que devolviera
+        // null registraría el cliente SIN secreto, la misma credencial trivial que evita el guard de arriba.
+        String encodedSecret = passwordEncoder.encode(rawSecret);
+        if (encodedSecret == null) {
+            throw new IllegalStateException(
+                    "El codificador devolvió un secreto nulo para el cliente OAuth " + clientId);
+        }
         repo.save(RegisteredClient.withId(internalId).clientId(clientId).clientName(clientName)
-                .clientSecret(passwordEncoder.encode(rawSecret))
+                .clientSecret(encodedSecret)
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS).scope("catalog.read")
                 .scope("orders.write").scope("shop.sync")
