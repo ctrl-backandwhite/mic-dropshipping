@@ -174,12 +174,16 @@ public class ProductRepositoryImpl implements ProductRepository {
         // variantOptions, translations) se resuelven abajo porque requieren
         // lookups de repositorio o reconstrucción de sub-entidades.
         productEntityMapper.updateEntity(entity, model);
+        // Un id que no existe es un error de datos, no «sin relación»: con orElse(null) el producto se
+        // guardaba sin proveedor ni categoría y quedaba fuera del escaparate sin que nadie se enterara.
         entity.setSupplier(model.getSupplierId() == null
                 ? null
-                : supplierJpaRepositoryAdapter.findById(model.getSupplierId()).orElse(null));
+                : supplierJpaRepositoryAdapter.findById(model.getSupplierId())
+                        .orElseThrow(() -> new NotFoundException("Supplier")));
         entity.setCategory(model.getCategoryId() == null
                 ? null
-                : categoryJpaRepositoryAdapter.findById(model.getCategoryId()).orElse(null));
+                : categoryJpaRepositoryAdapter.findById(model.getCategoryId())
+                        .orElseThrow(() -> new NotFoundException("Category")));
         rebuildImages(entity, model);
         rebuildVariantOptions(entity, model);
         rebuildVariants(entity, model);

@@ -1,0 +1,8 @@
+<!DOCTYPE html>
+<!--
+  Envío de PRUEBA de la campaña de novedades. Es la misma pieza que emails/new-products, pero con otro
+  nombre a propósito: la campaña real se deduplica por (destinatario, plantilla, día) y, cuando la prueba
+  se mandaba con el nombre de la plantilla real, probar el formato contra la dirección de un usuario le
+  ROBABA su correo de ese día — el barrido lo veía como ya enviado y se lo saltaba.
+-->
+<th:block xmlns:th="http://www.thymeleaf.org" th:replace="~{emails/new-products}"></th:block>

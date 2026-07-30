@@ -29,6 +29,15 @@ import java.util.UUID;
 @Slf4j
 @Service
 public class OrderSearchService {
+    /** Tope de resultados por página: por encima, la consulta la paga el índice sin que nadie la lea. */
+    private static final int MAX_PAGE_SIZE = 100;
+    /**
+     * Tope de desplazamiento. OpenSearch rechaza from+size por encima de index.max_result_window
+     * (10.000 por defecto), así que pedir la página un millón devolvía un error del índice y una caída
+     * silenciosa a base de datos en vez de una página vacía.
+     */
+    private static final int MAX_FROM = 10_000;
+
 
     private final ObjectMapper objectMapper;
     private final String searchUrl;
@@ -49,8 +58,12 @@ public class OrderSearchService {
 
     public Optional<IdPage> pageIds(String status, String q, int page, int size) {
         try {
-            int from = Math.max(0, page) * size;
-            String body = "{\"track_total_hits\":true,\"from\":" + from + ",\"size\":" + size + ",\"_source\":[\"id\"],"
+            // page y size llegan del cliente: se acotan los DOS. Con size=0 salía una página vacía con
+            // total>0 (el listado parecía roto) y un page enorme desbordaba el int hasta un from negativo,
+            // que OpenSearch rechaza con 400 y aquí acababa en caída a base de datos.
+            int pageSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
+            int from = (int) Math.min((long) Math.max(0, page) * pageSize, MAX_FROM);
+            String body = "{\"track_total_hits\":true,\"from\":" + from + ",\"size\":" + pageSize + ",\"_source\":[\"id\"],"
                     + "\"query\":" + buildQuery(status, q) + ",\"sort\":[{\"sortTs\":{\"order\":\"desc\"}}]}";
             HttpRequest req = HttpRequest.newBuilder(URI.create(searchUrl)).timeout(Duration.ofSeconds(10))
                     .header("Content-Type", "application/json")

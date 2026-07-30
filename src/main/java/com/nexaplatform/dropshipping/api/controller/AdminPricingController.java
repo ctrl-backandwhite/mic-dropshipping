@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.api.controller;
 import com.nexaplatform.dropshipping.api.AdminPricingApi;
 import com.nexaplatform.dropshipping.api.dto.in.PriceRuleDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.PriceRuleDtoOut;
+import com.nexaplatform.dropshipping.api.exception.ArgumentException;
 import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.api.mapper.PriceRuleDtoMapper;
 import com.nexaplatform.dropshipping.application.usecase.PriceRuleUseCase;
@@ -92,8 +93,16 @@ public class AdminPricingController implements AdminPricingApi {
     public record BulkToggleRequest(List<UUID> ids, boolean active) {
     }
 
-    /** Runs an action over each id, isolating failures so one bad id never aborts the batch. */
+    /**
+     * Runs an action over each id, isolating failures so one bad id never aborts the batch.
+     *
+     * <p>Un cuerpo vacío o sin lista de ids es una petición mal formada, no un lote de cero: se responde
+     * 400. Antes se recorría la lista sin comprobar nulo y salía un 500 sin explicación.
+     */
     private ResponseEntity<Map<String, Object>> bulkApply(List<UUID> ids, Consumer<UUID> action) {
+        if (ids == null || ids.isEmpty()) {
+            throw new ArgumentException("Selecciona al menos un elemento.");
+        }
         int succeeded = 0;
         List<String> errors = new ArrayList<>();
         for (UUID id : ids) {

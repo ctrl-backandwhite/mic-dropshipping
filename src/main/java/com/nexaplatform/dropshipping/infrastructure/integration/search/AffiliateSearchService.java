@@ -28,6 +28,15 @@ import java.util.UUID;
 @Slf4j
 @Service
 public class AffiliateSearchService {
+    /** Tope de resultados por página: por encima, la consulta la paga el índice sin que nadie la lea. */
+    private static final int MAX_PAGE_SIZE = 100;
+    /**
+     * Tope de desplazamiento. OpenSearch rechaza from+size por encima de index.max_result_window
+     * (10.000 por defecto), así que pedir la página un millón devolvía un error del índice y una caída
+     * silenciosa a base de datos en vez de una página vacía.
+     */
+    private static final int MAX_FROM = 10_000;
+
 
     private final ObjectMapper objectMapper;
     private final String searchUrl;
@@ -47,8 +56,12 @@ public class AffiliateSearchService {
 
     public Optional<IdPage> pageIds(String q, String status, int page, int size) {
         try {
-            int from = Math.max(0, page) * size;
-            String body = "{\"track_total_hits\":true,\"from\":" + from + ",\"size\":" + size + ",\"_source\":[\"id\"],"
+            // page y size llegan del cliente: se acotan los DOS. Con size=0 salía una página vacía con
+            // total>0 (el listado parecía roto) y un page enorme desbordaba el int hasta un from negativo,
+            // que OpenSearch rechaza con 400 y aquí acababa en caída a base de datos.
+            int pageSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
+            int from = (int) Math.min((long) Math.max(0, page) * pageSize, MAX_FROM);
+            String body = "{\"track_total_hits\":true,\"from\":" + from + ",\"size\":" + pageSize + ",\"_source\":[\"id\"],"
                     + "\"query\":" + query(q, status) + ",\"sort\":[{\"createdAt\":{\"order\":\"desc\"}}]}";
             HttpRequest req = HttpRequest.newBuilder(URI.create(searchUrl)).timeout(Duration.ofSeconds(10))
                     .header("Content-Type", "application/json")
@@ -60,11 +73,16 @@ public class AffiliateSearchService {
             }
             JsonNode root = objectMapper.readTree(res.body());
             long total = root.path("hits").path("total").path("value").asLong(0);
-            if (total == 0) {
+            // Optional.empty() significa «el índice no ha contestado, tira de base de datos». Cero
+            // resultados es una respuesta VÁLIDA —un filtro que no encaja con nada— y devolverla como
+            // vacío forzaba una consulta a base de datos que tampoco iba a encontrar nada.
+            List<UUID> ids = idsOf(root);
+            if (total > 0 && ids.isEmpty()) {
+                // El índice dice que hay resultados pero no devuelve ni un id legible: está corrupto y
+                // aquí sí toca la base de datos.
                 return Optional.empty();
             }
-            List<UUID> ids = idsOf(root);
-            return ids.isEmpty() ? Optional.empty() : Optional.of(new IdPage(ids, total));
+            return Optional.of(new IdPage(ids, total));
         } catch (Exception e) {
             // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
             // interrupción deja al pool sin enterarse de que le han pedido parar.

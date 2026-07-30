@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.WebhookDeliveryEntity;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.mapper.WebhookSubscriptionUpdateMapper;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
@@ -106,7 +107,7 @@ public class WebhookSubscriptionUseCaseImpl implements WebhookSubscriptionUseCas
     @Override
     @Transactional(readOnly = true)
     public List<WebhookDelivery> deliveries(UUID id) {
-        var rows = deliveryRepository.findBySubscription_IdOrderByCreatedAtDesc(id).stream().limit(MAX_DELIVERIES)
+        List<WebhookDeliveryEntity> rows = deliveryRepository.findBySubscription_IdOrderByCreatedAtDesc(id).stream().limit(MAX_DELIVERIES)
                 .toList();
         return webhookSubscriptionEntityMapper.toDeliveryDomainList(rows);
     }

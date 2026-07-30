@@ -1,5 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ShippingRateEntity;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos;
 import com.nexaplatform.dropshipping.api.StorefrontCatalogApi;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
@@ -32,6 +34,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 
+import java.util.List;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -364,7 +367,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         int unitGrams = effectiveWeight(p);
         int totalGrams = unitGrams * Math.max(1, req.quantity());
 
-        var rates = rateRepository.findBySupplier_IdAndCountryCodeAndActiveTrue(s.getId(), req.country().toUpperCase());
+        List<ShippingRateEntity> rates = rateRepository.findBySupplier_IdAndCountryCodeAndActiveTrue(s.getId(), req.country().toUpperCase());
         return rates.stream().filter(r -> r.getMaxWeightGrams() == null || totalGrams <= r.getMaxWeightGrams())
                 .filter(r -> r.getMinWeightGrams() == null || totalGrams >= r.getMinWeightGrams()).map(r -> {
                     double kg = totalGrams / 1000.0;
@@ -448,13 +451,13 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     @Transactional(readOnly = true)
     public HomeSectionsResponse homeSections(String lang, int perSection) {
         Pageable p = PageRequest.of(0, Math.min(perSection, 24));
-        var trending = catalogUseCase.listBestsellers(null, p, lang).getContent();
-        var newest = storefrontRead.productList(0, perSection, lang, null, null, null, null, null, NEWEST).items();
-        var topSales = storefrontRead.productList(0, perSection, lang, null, null, null, null, null, "sales").items();
+        List<ProductSummaryView> trending = catalogUseCase.listBestsellers(null, p, lang).getContent();
+        List<ProductSummaryView> newest = storefrontRead.productList(0, perSection, lang, null, null, null, null, null, NEWEST).items();
+        List<ProductSummaryView> topSales = storefrontRead.productList(0, perSection, lang, null, null, null, null, null, "sales").items();
         // Filtrado en BD por hasVideo=true (antes traía 500 y filtraba en memoria: con el catálogo repoblado
         // los productos con vídeo caían fuera del lote y la sección salía vacía). Reutiliza el pageable ya
         // acotado (perSection topado a 24) para no dejar el tamaño de página a merced del cliente.
-        var video = productRepository.findVisibleWithVideo(ProductStatus.ACTIVE, p)
+        List<ProductSummaryView> video = productRepository.findVisibleWithVideo(ProductStatus.ACTIVE, p)
                 .getContent().stream().map(x -> productMapper.toSummary(x, lang)).toList();
 
         List<HomeSection> sections = new ArrayList<>();
@@ -469,7 +472,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         // productos tienen. DROP-269: nunca una categoría con 0 productos.
         List<CategoryView> allCats = new ArrayList<>();
         flattenCategories(storefrontRead.categoriesTree(lang), allCats);
-        var hot = allCats.stream().filter(v -> v.directProductCount() > 0)
+        List<CategoryView> hot = allCats.stream().filter(v -> v.directProductCount() > 0)
                 .sorted((a, b) -> Integer.compare(b.directProductCount(), a.directProductCount())).limit(8).toList();
         return new HomeSectionsResponse(sections, hot);
     }
@@ -729,7 +732,9 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     }
 
     private String translatedTitle(ProductEntity p, String lang) {
-        if (p.getTranslations() == null)
+        // El idioma se comprueba aquí y no se confía en el defaultValue del @RequestParam: quien llame a
+        // este método desde otro sitio no tiene por qué saber que un nulo lo hacía reventar.
+        if (p.getTranslations() == null || lang == null)
             return null;
         return p.getTranslations().stream().filter(t -> lang.equalsIgnoreCase(t.getLanguage()))
                 .map(ProductTranslationEntity::getTitle).findFirst().orElse(null);

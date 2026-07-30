@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.mapper;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueTranslationEntity;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.PriceTierView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView;
@@ -131,7 +132,7 @@ public class ProductMapper {
         // Traducciones por idioma + override neutral (value). valueLocalized = traducción del idioma
         // pedido, si no el override neutral; el frontend cae a translateVariantCN(valueZh) si ambos faltan.
         Map<String, String> tr = new LinkedHashMap<>();
-        for (var t : v.getTranslations()) {
+        for (VariantValueTranslationEntity t : v.getTranslations()) {
             if (t.getLanguage() != null && t.getValue() != null) {
                 tr.put(t.getLanguage().toLowerCase(), t.getValue());
             }

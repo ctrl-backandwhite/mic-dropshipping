@@ -105,7 +105,7 @@ public class WebhookDispatcherService {
     }
 
     private static boolean matches(WebhookSubscriptionEntity s, String eventType) {
-        var events = s.getEvents();
+        List<String> events = s.getEvents();
         if (events == null || events.isEmpty())
             return true; // empty filter = receive all
         return events.contains(eventType) || events.contains("*");

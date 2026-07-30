@@ -88,19 +88,19 @@ public interface FulfillmentProvider {
         return quote(countryCode, ParcelSpec.ofWeight(totalWeightGrams));
     }
 
-    /** Crea el envío al despachar el pedido (devuelve carrier + nº de seguimiento + referencia). */
-    FulfillmentResult createShipment(Order order);
-
     /**
      * Crea TODOS los envíos que necesita el pedido: uno por bulto.
      *
      * <p>Un pedido no siempre cabe en un paquete —cada canal impone peso y valor máximos—, así que se
-     * reparte y cada bulto viaja con su propia guía. Por defecto se delega en {@link #createShipment} y
-     * sale un único envío, que es el comportamiento de un proveedor que no sepa repartir.
+     * reparte y cada bulto viaja con su propia guía.
+     *
+     * <p>Aquí había además un {@code createShipment(Order)} de un solo envío, y era una trampa: devolvía
+     * el resultado con el constructor de cuatro argumentos, así que peso, valor declarado y canal se
+     * quedaban a cero. Un proveedor que sólo implementara ese método guardaba envíos sin los datos que se
+     * le enseñan al cliente y que la aduana necesita. Ahora el contrato es uno solo, y quien no sepa
+     * repartir devuelve una lista de un elemento —con sus datos completos.
      */
-    default List<FulfillmentResult> createShipments(Order order) {
-        return List.of(createShipment(order));
-    }
+    List<FulfillmentResult> createShipments(Order order);
 
     /** Consulta el tracking del envío (estado actual + pasos). */
     TrackingSnapshot track(String trackingNumber, Instant forwardedAt, String countryCode);

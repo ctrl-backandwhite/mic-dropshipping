@@ -60,7 +60,9 @@ public class MeOrderDtoMapper {
 
         BigDecimal subtotal = BigDecimal.ZERO;
         List<MeOrderItemDetailDtoOut> items = new ArrayList<>();
-        for (OrderItem item : model.getItems()) {
+        // Igual que formatOrderTotal: un pedido sin líneas cargadas no puede romper la ficha (la lista
+        // ya lo tolera, y ver un pedido sin líneas es mejor que un 500 al abrirlo).
+        for (OrderItem item : model.getItems() == null ? List.<OrderItem>of() : model.getItems()) {
             BigDecimal usdUnit = BigDecimal.valueOf(item.getUnitPriceCents()).movePointLeft(2);
             BigDecimal unit = currencyRateService.usdTo(usdUnit, ccy);
             BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(item.getQuantity()));

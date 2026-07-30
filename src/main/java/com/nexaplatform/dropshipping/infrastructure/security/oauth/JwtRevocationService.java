@@ -1,6 +1,8 @@
 package com.nexaplatform.dropshipping.infrastructure.security.oauth;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.ScanOptions;
+import org.springframework.data.redis.core.Cursor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -36,6 +38,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class JwtRevocationService {
 
     private static final String PREFIX = "nx:jwt:revoked-before:";
+    /** Claves por vuelta de SCAN: suficientes para no encadenar mil viajes, pocas para no bloquear. */
+    private static final int SCAN_BATCH = 200;
     private static final String JTI_PREFIX = "nx:jwt:refresh-jti:";
     // Debe ser ≥ la vida del token más largo que protege. El refresh de usuario vive 14 días,
     // así que la marca de revocación debe persistir más que eso; si no, un refresh robado
@@ -107,21 +111,28 @@ public class JwtRevocationService {
         return revokedAt == null || issuedAtEpochSeconds > revokedAt;
     }
 
-    /** Para debugging desde el admin: snapshot de revocaciones activas. */
+    /**
+     * Para debugging desde el admin: snapshot de revocaciones activas.
+     *
+     * <p>Se recorre con SCAN y no con KEYS: KEYS bloquea a Redis mientras recorre TODO el keyspace, así
+     * que abrir esta pantalla de diagnóstico en producción congelaba de paso la sesión de cada usuario
+     * que hubiera en ese momento. SCAN va por trozos y deja respirar al servidor entre ellos.
+     */
     public Map<String, Long> snapshot() {
-        if (redis != null) {
-            Map<String, Long> out = new HashMap<>();
-            Set<String> keys = redis.keys(PREFIX + "*");
-            if (keys != null) {
-                for (Object k : keys) {
-                    String key = String.valueOf(k);
-                    String v = redis.opsForValue().get(key);
-                    if (v != null)
-                        out.put(key.substring(PREFIX.length()), Long.parseLong(v));
+        if (redis == null) {
+            return new HashMap<>(fallback);
+        }
+        Map<String, Long> out = new HashMap<>();
+        ScanOptions options = ScanOptions.scanOptions().match(PREFIX + "*").count(SCAN_BATCH).build();
+        try (Cursor<String> cursor = redis.scan(options)) {
+            while (cursor.hasNext()) {
+                String key = cursor.next();
+                String v = redis.opsForValue().get(key);
+                if (v != null) {
+                    out.put(key.substring(PREFIX.length()), Long.parseLong(v));
                 }
             }
-            return out;
         }
-        return new HashMap<>(fallback);
+        return out;
     }
 }

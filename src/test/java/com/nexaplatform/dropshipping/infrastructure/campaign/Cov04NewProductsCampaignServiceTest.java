@@ -50,6 +50,12 @@ import static org.mockito.Mockito.when;
 class Cov04NewProductsCampaignServiceTest {
 
     private static final String TEMPLATE = "emails/new-products";
+    /**
+     * El envío de PRUEBA usa su propia plantilla: la campaña se deduplica por (destinatario, plantilla,
+     * día), así que mandar la prueba con el nombre de la real dejaba al destinatario marcado como «ya
+     * recibido» y el barrido de ese día se lo saltaba.
+     */
+    private static final String TEMPLATE_TEST = "emails/new-products-test";
     private static final String TIENDA = "https://tienda.test";
     private static final String BACKEND = "https://api.test";
 
@@ -244,7 +250,7 @@ class Cov04NewProductsCampaignServiceTest {
         assertThat(service.sendTest("qa@test", "FR")).isTrue();
 
         ArgumentCaptor<Map<String, Object>> captor = varsCaptor();
-        verify(emailQueue).enqueue(eq("qa@test"), anyString(), eq(TEMPLATE), captor.capture());
+        verify(emailQueue).enqueue(eq("qa@test"), anyString(), eq(TEMPLATE_TEST), captor.capture());
         // Sin usuario registrado no hay token de baja: se enlaza la página de preferencias.
         assertThat(captor.getValue()).containsEntry("unsubscribeUrl", TIENDA + "/account/email-preferences");
         verifyNoInteractions(productRepository);

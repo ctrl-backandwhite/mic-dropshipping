@@ -158,10 +158,17 @@ class Cov10AffiliateSearchServiceTest {
     /* ---------- caídas al listado de base de datos ---------- */
 
     @Test
-    void unIndiceVacioDevuelveVacioParaQueElListadoLoResuelvaLaBaseDeDatos() throws Exception {
+    void unFiltroSinResultadosSeDevuelveComoPaginaVaciaYNoComoIndiceCaido() throws Exception {
+        // Optional.empty() significa «el índice no ha contestado, tira de base de datos». Cero resultados
+        // es una respuesta VÁLIDA —un filtro que no encaja con nada— y devolverla como vacío forzaba una
+        // consulta a base de datos que tampoco iba a encontrar nada.
         respuesta.set("{\"hits\":{\"total\":{\"value\":0},\"hits\":[]}}");
 
-        assertThat(service.pageIds(null, null, 0, 25)).isEmpty();
+        assertThat(service.pageIds(null, null, 0, 25))
+                .hasValueSatisfying(p -> {
+                    assertThat(p.ids()).isEmpty();
+                    assertThat(p.total()).isZero();
+                });
     }
 
     @Test

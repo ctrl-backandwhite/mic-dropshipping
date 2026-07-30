@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.service;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.OperatorActionIndexer;
@@ -78,7 +79,7 @@ public class OperatorCommissionService {
         String name = null;
         try {
             UUID uid = UUID.fromString(subject);
-            var u = userRepository.findById(uid).orElse(null);
+            UserEntity u = userRepository.findById(uid).orElse(null);
             if (u != null) {
                 email = u.getEmail();
                 name = u.getDisplayName();

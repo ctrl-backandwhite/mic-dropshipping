@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository.impl;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.WarehouseEntity;
 import com.nexaplatform.dropshipping.domain.model.Warehouse;
 import com.nexaplatform.dropshipping.domain.repository.WarehouseRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.WarehouseEntityMapper;
@@ -24,7 +25,7 @@ public class WarehouseRepositoryImpl implements WarehouseRepository {
 
     @Override
     public Warehouse save(Warehouse model) {
-        var entity = warehouseJpaRepositoryAdapter.save(warehouseEntityMapper.toEntity(model));
+        WarehouseEntity entity = warehouseJpaRepositoryAdapter.save(warehouseEntityMapper.toEntity(model));
         return warehouseEntityMapper.toDomain(entity);
     }
 

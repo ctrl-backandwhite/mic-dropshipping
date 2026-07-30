@@ -517,7 +517,11 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         }
     }
 
-    @Override
+    /**
+     * Crea el envío del pedido como UN solo bulto, sin repartir. Se conserva para las pruebas de
+     * integración contra el sandbox; el flujo real entra por {@link #createShipments(Order)}, que es
+     * quien rellena peso, valor declarado y canal de cada bulto.
+     */
     public FulfillmentResult createShipment(Order order) {
         int etaMax = zone(order.getShippingCountry()).map(CainiaoZoneEntity::getEtaMaxDays).orElse(20);
         CustomsValuation valuation = declarationFor(order);

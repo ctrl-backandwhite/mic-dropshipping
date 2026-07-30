@@ -9,9 +9,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.data.redis.core.ScanOptions;
+import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
+import java.util.Iterator;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -23,6 +26,7 @@ import static org.assertj.core.api.Assertions.entry;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -189,21 +193,35 @@ class Cov04JwtRevocationServiceTest {
 
         @Test
         void elSnapshotQuitaElPrefijoTecnicoDeLasClaves() {
-            when(redis.keys(PREFIX + "*")).thenReturn(Set.of(PREFIX + "cliente-1", PREFIX + "cliente-2"));
+            // El recorrido va por SCAN y no por KEYS: KEYS bloquea Redis entero mientras barre el
+            // keyspace, y esto se abre desde una pantalla de diagnóstico con usuarios conectados.
+            // El cursor se construye ANTES del when: crearlo dentro deja un stubbing anidado a medias.
+            Cursor<String> cursor = cursorDe(PREFIX + "cliente-1", PREFIX + "cliente-2");
+            when(redis.scan(any(ScanOptions.class))).thenReturn(cursor);
             when(valueOps.get(PREFIX + "cliente-1")).thenReturn("100");
             when(valueOps.get(PREFIX + "cliente-2")).thenReturn(null);
 
             Map<String, Long> snapshot = service.snapshot();
 
-            // Solo las claves con valor: una entrada caducada entre el keys() y el get() no debe colarse.
+            // Solo las claves con valor: una entrada caducada entre el scan() y el get() no debe colarse.
             assertThat(snapshot).containsExactly(entry("cliente-1", 100L));
         }
 
         @Test
         void unRedisSinClavesDevuelveUnSnapshotVacio() {
-            when(redis.keys(anyString())).thenReturn(null);
+            Cursor<String> vacio = cursorDe();
+            when(redis.scan(any(ScanOptions.class))).thenReturn(vacio);
 
             assertThat(service.snapshot()).isEmpty();
+        }
+
+        /** Cursor de SCAN sobre las claves dadas, como el que devuelve RedisTemplate. */
+        private Cursor<String> cursorDe(String... keys) {
+            Iterator<String> it = List.of(keys).iterator();
+            Cursor<String> cursor = mock(Cursor.class);
+            when(cursor.hasNext()).thenAnswer(inv -> it.hasNext());
+            when(cursor.next()).thenAnswer(inv -> it.next());
+            return cursor;
         }
     }
 }

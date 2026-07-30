@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository.impl;
 
+import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.domain.model.IntelligenceAlert;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.IntelligenceAlertEntity;
@@ -90,7 +91,7 @@ class Cov09IntelligenceAlertRepositoryImplTest {
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
         IntelligenceAlert modelo = model(null, userId, null);
 
-        assertThatThrownBy(() -> subject.save(modelo)).isInstanceOf(NoSuchElementException.class);
+        assertThatThrownBy(() -> subject.save(modelo)).isInstanceOf(NotFoundException.class);
 
         verify(intelligenceAlertJpaRepositoryAdapter, never()).save(any());
     }
@@ -161,16 +162,18 @@ class Cov09IntelligenceAlertRepositoryImplTest {
     }
 
     @Test
-    void unaAlertaCuyoIdentificadorYaNoExisteSeGuardaComoNueva() {
-        // Comportamiento actual: en vez de fallar, se crea una entidad limpia (la alerta se recrea).
+    void unaAlertaCuyoIdentificadorYaNoExisteNoSeRecrea() {
+        // Antes se caía a una entidad limpia: editar una alerta borrada entre medias la RECREABA con otro
+        // id, así que el usuario acababa con una copia que ya no era la que tenía delante.
         UserEntity user = new UserEntity();
         user.setId(userId);
         usuarioExiste(user);
         when(intelligenceAlertJpaRepositoryAdapter.findById(alertId)).thenReturn(Optional.empty());
 
-        subject.save(model(alertId, userId, null));
+        IntelligenceAlert modelo = model(alertId, userId, null);
+        assertThatThrownBy(() -> subject.save(modelo)).isInstanceOf(NotFoundException.class);
 
-        assertThat(guardada().getId()).isNull();
+        verify(intelligenceAlertJpaRepositoryAdapter, never()).save(any());
     }
 
     @Test

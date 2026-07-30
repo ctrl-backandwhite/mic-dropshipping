@@ -1,5 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.AffiliateProgramConfigEntity;
+import com.nexaplatform.dropshipping.api.dto.AffiliateDtos;
 import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.*;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.mapper.AffiliateViewMapper;
@@ -54,7 +56,7 @@ public class AdminAffiliateController {
 
     @GetMapping("/{id}")
     public ResponseEntity<AdminAffiliateDetail> detail(@PathVariable UUID id) {
-        var cfg = service.config();
+        AffiliateProgramConfigEntity cfg = service.config();
         String currency = cfg.getCurrency();
         AffiliateEntity a = service.allAffiliates().stream().filter(x -> x.getId().equals(id)).findFirst()
                 .orElseThrow(() -> new NotFoundException("Affiliate not found"));
@@ -62,7 +64,7 @@ public class AdminAffiliateController {
         List<AffiliateConversionEntity> convs = service.conversionsForAffiliate(id);
         List<AffiliateCommissionEntity> comms = service.commissionsForAffiliate(id);
         Map<UUID, AffiliateConversionEntity> convById = mapper.indexByConversionId(convs);
-        var row = mapper.toAdminRow(a, codes, comms, currency);
+        AdminAffiliateRow row = mapper.toAdminRow(a, codes, comms, currency);
         return ResponseEntity.ok(new AdminAffiliateDetail(row, codes.stream().map(mapper::toCodeView).toList(),
                 comms.stream().map(c -> mapper.toCommissionView(c, convById, cfg.getReturnPeriodDays())).toList()));
     }
@@ -147,7 +149,7 @@ public class AdminAffiliateController {
 
     @PutMapping("/config")
     public ResponseEntity<ProgramConfigView> updateConfig(@RequestBody ConfigUpdateRequest req) {
-        var c = service.updateConfig(req.defaultPercent(), req.attributionWindowDays(), req.returnPeriodDays(),
+        AffiliateProgramConfigEntity c = service.updateConfig(req.defaultPercent(), req.attributionWindowDays(), req.returnPeriodDays(),
                 req.minPayoutCents(), req.currency(), req.maxCommissionPeriodCents());
         return ResponseEntity.ok(mapper.toConfigView(c));
     }

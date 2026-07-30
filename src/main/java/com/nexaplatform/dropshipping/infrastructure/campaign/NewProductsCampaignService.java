@@ -43,6 +43,12 @@ public class NewProductsCampaignService {
 
     private static final Logger log = LoggerFactory.getLogger(NewProductsCampaignService.class);
     private static final String TEMPLATE = "emails/new-products";
+    /**
+     * Plantilla del envío de PRUEBA. Es la misma pieza con otro nombre porque la campaña se deduplica
+     * por (destinatario, plantilla, día): mandar la prueba con el nombre real dejaba al destinatario
+     * marcado como «ya recibido» y el barrido de ese día se lo saltaba.
+     */
+    private static final String TEMPLATE_TEST = "emails/new-products-test";
     private static final int PRODUCTS_PER_CATEGORY = 3;
 
     private final ProductRepository productRepository;
@@ -143,7 +149,7 @@ public class NewProductsCampaignService {
         vars.put("footerNote", NewProductsEmailLabel.FOOTER.of(language));
         vars.put("unsubscribeUrl", unsubscribeUrl);
         vars.put("unsubscribeLabel", NewProductsEmailLabel.UNSUBSCRIBE.of(language));
-        emailQueue.enqueue(email, NewProductsEmailLabel.SUBJECT.of(language), TEMPLATE, vars);
+        emailQueue.enqueue(email, NewProductsEmailLabel.SUBJECT.of(language), TEMPLATE_TEST, vars);
         return true;
     }
 

@@ -87,6 +87,6 @@ public class ShopConnectionRepositoryImpl implements ShopConnectionRepository {
         if (userId == null) {
             return null;
         }
-        return userRepository.findById(userId).orElseThrow();
+        return userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User"));
     }
 }

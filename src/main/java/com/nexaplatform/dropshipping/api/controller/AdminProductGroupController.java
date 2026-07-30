@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.controller;
 
+import com.nexaplatform.dropshipping.api.exception.ArgumentException;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.service.MarginService;
@@ -122,7 +123,7 @@ public class AdminProductGroupController {
         int added = 0;
         if (raw instanceof List<?> list) {
             for (Object o : list) {
-                UUID productId = UUID.fromString(o.toString());
+                UUID productId = parseProductId(o);
                 if (!memberRepository.existsByIdGroupIdAndIdProductId(id, productId)
                         && productRepository.existsById(productId)) {
                     memberRepository.save(new ProductGroupMemberEntity(new ProductGroupMemberEntity.Id(id, productId)));
@@ -132,6 +133,20 @@ public class AdminProductGroupController {
         }
         marginService.invalidateCache();
         return ResponseEntity.ok(Map.of("added", added));
+    }
+
+    /**
+     * Identificador de producto tal y como llega en el cuerpo (JSON libre, sin DTO).
+     *
+     * <p>{@code UUID.fromString} lanza IllegalArgumentException, que sale como 500: un id mal escrito es
+     * culpa de quien llama, no del servidor.
+     */
+    private static UUID parseProductId(Object raw) {
+        try {
+            return UUID.fromString(String.valueOf(raw).trim());
+        } catch (IllegalArgumentException e) {
+            throw new ArgumentException("Identificador de producto no válido: " + raw);
+        }
     }
 
     @DeleteMapping("/{id}/members/{productId}")

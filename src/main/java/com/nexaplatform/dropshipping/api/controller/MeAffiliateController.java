@@ -1,5 +1,9 @@
 package com.nexaplatform.dropshipping.api.controller;
 
+import java.math.BigDecimal;
+import com.nexaplatform.dropshipping.api.dto.AffiliateDtos;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.AffiliateProgramConfigEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.AffiliateConversionEntity;
 import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.*;
 import com.nexaplatform.dropshipping.api.mapper.AffiliateViewMapper;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
@@ -91,11 +95,11 @@ public class MeAffiliateController {
         List<AffiliateReferralCodeEntity> codes = service.listCodes(a.getId());
         List<AffiliateConversionEntity> convs = service.conversionsForAffiliate(a.getId());
         List<AffiliateCommissionEntity> comms = service.commissionsForAffiliate(a.getId());
-        var convById = mapper.indexByConversionId(convs);
-        var config = service.config();
-        var pct = a.getCommissionPercentOverride() != null ? a.getCommissionPercentOverride()
+        Map<UUID,AffiliateConversionEntity> convById = mapper.indexByConversionId(convs);
+        AffiliateProgramConfigEntity config = service.config();
+        BigDecimal pct = a.getCommissionPercentOverride() != null ? a.getCommissionPercentOverride()
                 : config.getDefaultPercent();
-        var stats = mapper.stats(codes, convs, comms, config.getCurrency());
+        AffiliateStats stats = mapper.stats(codes, convs, comms, config.getCurrency());
         boolean joined = a.getAcceptedTermsAt() != null;
         boolean payoutRequested = service.payoutsForAffiliate(a.getId()).stream()
                 .anyMatch(p -> "REQUESTED".equals(p.getStatus()));

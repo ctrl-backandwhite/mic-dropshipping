@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.currency;
 
+import java.util.Map.Entry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -72,7 +73,7 @@ public class CurrencyLayerAdapter {
             return Collections.emptyMap();
 
         Map<String, BigDecimal> out = new HashMap<>();
-        for (var entry : quotes.entrySet()) {
+        for (Entry<String,Number> entry : quotes.entrySet()) {
             String k = entry.getKey().toUpperCase(Locale.ROOT);
             if (k.length() == 6 && k.startsWith("USD")) {
                 out.put(k.substring(3), new BigDecimal(entry.getValue().toString()));

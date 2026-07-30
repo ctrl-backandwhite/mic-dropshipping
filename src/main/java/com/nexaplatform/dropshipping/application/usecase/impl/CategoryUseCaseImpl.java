@@ -130,8 +130,17 @@ public class CategoryUseCaseImpl implements CategoryUseCase {
         }
         int updated = 0;
         for (UUID id : ids) {
-            Category c = getById(id);
-            if (c == null || Boolean.valueOf(active).equals(c.getActive())) {
+            // getById lanza si el id ya no existe, así que la comprobación de nulo no se alcanzaba nunca y
+            // UNA categoría borrada entre medias tumbaba el lote entero con un 404. Una selección con un id
+            // obsoleto es lo normal cuando dos administradores trabajan a la vez: se salta y sigue.
+            Category c;
+            try {
+                c = getById(id);
+            } catch (NotFoundException e) {
+                log.warn("Activación en lote: la categoría {} ya no existe, se omite", id);
+                continue;
+            }
+            if (Boolean.valueOf(active).equals(c.getActive())) {
                 continue;
             }
             c.setActive(active);

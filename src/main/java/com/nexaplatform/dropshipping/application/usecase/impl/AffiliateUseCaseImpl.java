@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.usecase.AffiliateUseCase;
 import com.nexaplatform.dropshipping.domain.model.Affiliate;
 import com.nexaplatform.dropshipping.domain.repository.AffiliateRepository;
@@ -32,7 +33,8 @@ public class AffiliateUseCaseImpl implements AffiliateUseCase {
     @Transactional
     public Affiliate getOrCreate(UUID userId) {
         return affiliateRepository.findByUserId(userId).orElseGet(() -> {
-            UserEntity user = userRepository.findById(userId).orElseThrow();
+            UserEntity user = userRepository.findById(userId)
+                    .orElseThrow(() -> new NotFoundException("User"));
             return affiliateRepository
                     .save(Affiliate.builder().userId(userId).code(generateCode(user)).active(true).build());
         });

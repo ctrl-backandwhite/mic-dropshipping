@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository.impl;
 
+import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.domain.model.UserAddress;
 import com.nexaplatform.dropshipping.domain.repository.UserAddressRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserAddressEntity;
@@ -30,7 +31,8 @@ public class UserAddressRepositoryImpl implements UserAddressRepository {
     @Override
     public UserAddress save(UserAddress model) {
         UserAddressEntity entity = userAddressEntityMapper.toEntity(model);
-        UserEntity user = userRepository.findById(model.getUserId()).orElseThrow();
+        UserEntity user = userRepository.findById(model.getUserId())
+                .orElseThrow(() -> new NotFoundException("User"));
         entity.setUser(user);
         return userAddressEntityMapper.toDomain(userAddressJpaRepositoryAdapter.save(entity));
     }

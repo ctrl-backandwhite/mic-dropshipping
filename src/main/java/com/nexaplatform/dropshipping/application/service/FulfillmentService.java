@@ -340,8 +340,10 @@ public class FulfillmentService {
             shipmentRepository.save(shipment);
             appendShipmentEvents(o, shipment, own);
             all.addAll(own.steps());
-            // El pedido va tan atrasado como su bulto más atrasado.
-            if (own.currentStatus().ordinal() < aggregated.ordinal()) {
+            // El pedido va tan atrasado como su bulto más atrasado. Se compara por progress() y no por
+            // ordinal(): CANCELLED y REFUNDED están declarados DETRÁS de DELIVERED, así que por posición
+            // un bulto devuelto contaba como el más avanzado y dejaba el pedido entero como entregado.
+            if (own.currentStatus().progress() < aggregated.progress()) {
                 aggregated = own.currentStatus();
             }
         }
@@ -490,9 +492,16 @@ public class FulfillmentService {
             return;
         }
         TrackingSnapshot snap = provider.toSnapshot(events, o.getShippingCountry());
+        // El timeline se lee UNA vez para todo el push. Antes se releía entero por cada paso —N consultas
+        // por notificación— y, peor, los pasos añadidos en este mismo push no se veían entre sí salvo que
+        // la sesión hiciera flush, así que un push con el mismo evento repetido lo insertaba dos veces.
+        Set<String> known = new HashSet<>();
+        for (OrderTrackingEventEntity e : trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId())) {
+            known.add(e.getStatus() + "|" + e.getDescription());
+        }
         boolean changed = false;
         for (TrackingStep step : snap.steps()) {
-            changed |= appendIfNew(o, step.status(), step.description(), step.location(), step.occurredAt(),
+            changed |= appendIfNew(o, known, step.status(), step.description(), step.location(), step.occurredAt(),
                     CARRIER_SOURCE);
         }
         if (changed) {
@@ -543,15 +552,14 @@ public class FulfillmentService {
      * Añade el evento si no estaba ya (dedup por estado|descripción) y deja constancia de quién lo trajo.
      * Devuelve true si lo añadió, para saber si hay que tocar el pedido.
      */
-    private boolean appendIfNew(Order o, OrderStatus status, String desc, String location, Instant when,
-            String source) {
+    private boolean appendIfNew(Order o, Set<String> known, OrderStatus status, String desc, String location,
+            Instant when, String source) {
         if (desc == null || desc.isBlank()) {
             return false;
         }
-        String key = status.name() + "|" + desc;
-        boolean exists = trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId()).stream()
-                .anyMatch(e -> key.equals(e.getStatus() + "|" + e.getDescription()));
-        if (exists) {
+        // `known` se actualiza aquí mismo: así el dedup vale también entre los pasos de un mismo push,
+        // sin depender de cuándo decida la sesión de JPA volcar los INSERT a la base de datos.
+        if (!known.add(status.name() + "|" + desc)) {
             return false;
         }
         appendEvent(o.getId(), status.name(), desc, location, source, when);

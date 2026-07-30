@@ -64,7 +64,7 @@ public class PartnerPlanSyncService {
     /** Llamado por el webhook de Stripe. Resuelve el userId via stripe_subscription_id. */
     @Transactional
     public void onSubscriptionEvent(String stripeSubscriptionId, String stripeStatus, String eventType) {
-        var sub = subsRepo.findByStripeSubscriptionId(stripeSubscriptionId).orElse(null);
+        CustomerSubscriptionEntity sub = subsRepo.findByStripeSubscriptionId(stripeSubscriptionId).orElse(null);
         if (sub == null) {
             log.warn("Stripe subscription event {} for unknown stripe_id={}", eventType, stripeSubscriptionId);
             return;

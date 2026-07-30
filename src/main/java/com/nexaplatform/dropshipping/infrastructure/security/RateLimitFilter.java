@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.security;
 
+import com.nimbusds.jwt.JWTClaimsSet;
 import com.nexaplatform.dropshipping.infrastructure.security.ratelimit.BucketFactory;
 import com.nimbusds.jwt.JWTParser;
 import io.github.bucket4j.Bandwidth;
@@ -210,7 +211,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (auth == null || !auth.startsWith("Bearer "))
             return Optional.empty();
         try {
-            var claims = JWTParser.parse(auth.substring(7)).getJWTClaimsSet();
+            JWTClaimsSet claims = JWTParser.parse(auth.substring(7)).getJWTClaimsSet();
             String sub = claims.getSubject();
             String plan = claims.getStringClaim("plan");
             return Optional.of(new JwtInfo(sub, plan != null ? plan : SANDBOX));

@@ -32,10 +32,13 @@ public class ProductSearchService {
     private String index;
 
     /**
-     * Typed variant of {@link #search(String, String, int, int)} returning a
-     * strongly-typed envelope instead of an ad-hoc {@code Map<String,Object>}.
-     * Preserves the identical JSON contract ({@code items, total, page, size};
-     * each hit flattens its source document plus {@code _id}/{@code _score}).
+     * Búsqueda de productos en el índice, con envoltorio tipado.
+     *
+     * <p>Aquí convivía un {@code search(...)} que devolvía un {@code Map<String,Object>} suelto y al que
+     * ya no llamaba nadie. Estaba borrado y se ha ido con él: a diferencia de éste, NO acotaba page ni
+     * size, así que reexponerlo habría reintroducido el 500 por parámetro inválido que se corrigió aquí.
+     * El contrato JSON es el mismo ({@code items, total, page, size}; cada resultado con su documento
+     * más {@code _id}/{@code _score}).
      */
     // Caché de resultados de búsqueda (TTL 60s): la búsqueda es el punto caliente de OpenSearch bajo carga
     // y las consultas populares se repiten. Clave = keyword+idioma+page+size. NO depende de la moneda (los

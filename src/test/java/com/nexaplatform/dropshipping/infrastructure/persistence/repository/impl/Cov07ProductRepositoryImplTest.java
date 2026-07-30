@@ -133,16 +133,16 @@ class Cov07ProductRepositoryImplTest {
     }
 
     @Test
-    void unProveedorInexistenteDejaLaRelacionVaciaEnVezDeFallar() {
+    void unProveedorInexistenteNoSeGuardaComoProductoSinProveedor() {
+        // Antes se resolvía con orElse(null): el producto se guardaba sin proveedor y nadie se enteraba
+        // de que la referencia estaba mal. Un id que no existe es un error de datos, no «sin relación».
         UUID supplierId = UUID.randomUUID();
         model.setSupplierId(supplierId);
         when(supplierJpaRepositoryAdapter.findById(supplierId)).thenReturn(Optional.empty());
 
-        repository.save(model);
+        assertThatThrownBy(() -> repository.save(model)).isInstanceOf(NotFoundException.class);
 
-        ArgumentCaptor<ProductEntity> captor = ArgumentCaptor.forClass(ProductEntity.class);
-        verify(productJpaRepositoryAdapter).save(captor.capture());
-        assertThat(captor.getValue().getSupplier()).isNull();
+        verify(productJpaRepositoryAdapter, never()).save(any());
     }
 
     /* ==================== save: colecciones anidadas ==================== */

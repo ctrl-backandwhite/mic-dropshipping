@@ -1,5 +1,7 @@
 package com.nexaplatform.dropshipping.application.service;
 
+import com.nexaplatform.dropshipping.application.service.MarginService.PriceWithMargin;
+import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
@@ -7,6 +9,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVa
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Comparator;
@@ -52,7 +55,7 @@ public class PricingService {
                 : product.getBasePrice();
         String sourceCurrency = product.getCurrency() != null ? product.getCurrency() : "CNY";
         BigDecimal costUsd = supplierAmount != null ? currencyService.toUsd(supplierAmount, sourceCurrency) : null;
-        var withMargin = marginService.apply(costUsd, product, effective);
+        PriceWithMargin withMargin = marginService.apply(costUsd, product, effective);
         // Base CON margen (el margen SOLO se aplica al precio base). El IVA y el envío se suman DESPUÉS,
         // sin margen (decisión del usuario). Ambos vienen en CNY (misma moneda que base) y se convierten a USD.
         BigDecimal retailBaseUsd = withMargin.retailUsd();
@@ -115,7 +118,7 @@ public class PricingService {
             return null;
         }
         try {
-            var variants = product.getVariants();
+            List<ProductVariantEntity> variants = product.getVariants();
             if (variants == null || variants.isEmpty()) {
                 return null;
             }

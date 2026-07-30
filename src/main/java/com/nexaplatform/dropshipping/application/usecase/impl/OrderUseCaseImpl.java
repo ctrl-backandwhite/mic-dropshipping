@@ -1,5 +1,7 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount;
+import com.nexaplatform.dropshipping.api.dto.PartnerDtos;
 import com.nexaplatform.dropshipping.application.service.Texts;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.AddressInput;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.CreateOrderRequest;
@@ -146,7 +148,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
 
         int subtotal = 0;
         ParcelAggregator parcel = new ParcelAggregator();
-        for (var itemReq : req.items()) {
+        for (OrderItemInput itemReq : req.items()) {
             OrderItem line = buildLine(itemReq, orderLang, parcel);
             order.getItems().add(line);
             subtotal = Math.addExact(subtotal, line.getLineTotalCents());
@@ -191,7 +193,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // DROP-637: charge the PRICED amount (raw supplier price → USD → margin), not the raw
         // CNY value. The order currency is USD, so we bill retailUsd — the same figure the
         // storefront showed — instead of the stored 14.90 CNY mis-billed as $14.90.
-        var priced = pricingService.priceFor(product, variant);
+        PricedAmount priced = pricingService.priceFor(product, variant);
         BigDecimal unitPrice = priced.retailUsd();
         if (unitPrice == null) {
             throw new BusinessException("Product " + product.getSlug() + " has no price");
@@ -635,7 +637,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // For CARD/PAYPAL/USDT the order stays PENDING and the client follows up
         // with /me/orders/{id}/payment-intent for the external flow.
         String method = req.getPaymentMethod() == null ? WALLET : req.getPaymentMethod().toUpperCase();
-        Order o = orderRepository.findById(created.getId()).orElseThrow();
+        Order o = orderRepository.findById(created.getId())
+                .orElseThrow(() -> new NotFoundException("Order"));
         if (WALLET.equals(method)) {
             long charge = created.getTotalCents();
             String idemKey = idem != null ? idem : ("checkout-" + created.getId());

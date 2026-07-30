@@ -50,7 +50,7 @@ public class AdminOrderController implements AdminOrderApi {
     public ResponseEntity<PageResponse<AdminOrderRowDtoOut>> list(String status, String q, int page, int size) {
         OrderUseCase.OrderPage p = orderUseCase.pageAdminOrders(status, q, page, size);
         List<AdminOrderRowDtoOut> items = adminOrderMapper.toRows(p.items());
-        var pageable = PageRequest.of(Math.max(0, p.page()), Math.max(1, p.size()));
+        PageRequest pageable = PageRequest.of(Math.max(0, p.page()), Math.max(1, p.size()));
         return ResponseEntity.ok(PageResponse.from(new PageImpl<>(items, pageable, p.total())));
     }
 

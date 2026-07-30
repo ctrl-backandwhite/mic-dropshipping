@@ -1,6 +1,8 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn.BulkTranslation;
 import com.github.slugify.Slugify;
+import com.nexaplatform.dropshipping.api.exception.ArgumentException;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestPriceTier;
@@ -78,6 +80,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Locale;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -235,7 +239,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         entity.setPosition(req.position());
         entity.setIcon(req.icon());
         if (req.parentId() != null) {
-            entity.setParent(categoryRepository.findById(req.parentId()).orElse(null));
+            // Con orElse(null) un padre inexistente NO se ignoraba: borraba el padre que la categoría ya
+            // tenía, y la rama entera saltaba a la raíz del árbol del escaparate.
+            entity.setParent(categoryRepository.findById(req.parentId())
+                    .orElseThrow(() -> new NotFoundException("Parent category")));
         }
         entity = categoryRepository.save(entity);
         if (req.nameTranslations() != null) {
@@ -524,7 +531,17 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Override
     @Transactional
     public void updateStatus(UUID id, String status) {
-        updateStatus(id, ProductStatus.valueOf(status.toUpperCase()));
+        // valueOf crudo daba un 500 con un estado desconocido, mientras el listado del mismo panel tolera
+        // basura. Aquí sí hay que rechazarlo —cambiar el estado a «lo que sea» no significa nada— pero como
+        // 400 y diciendo cuáles valen.
+        ProductStatus parsed;
+        try {
+            parsed = ProductStatus.valueOf(status == null ? "" : status.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new ArgumentException("Estado de producto no válido: " + status + ". Valores admitidos: "
+                    + Arrays.toString(ProductStatus.values()));
+        }
+        updateStatus(id, parsed);
     }
 
     @Override
@@ -679,7 +696,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 .category(src.getCategory()).status(ProductStatus.DRAFT).slug(buildSlug(src.getTitleZh(), newExt))
                 .build();
         ProductEntity saved = productJpaRepository.save(copy);
-        for (var tr : src.getTranslations()) {
+        for (ProductTranslationEntity tr : src.getTranslations()) {
             saved.getTranslations()
                     .add(ProductTranslationEntity
                             .builder().product(saved).language(tr.getLanguage())
@@ -919,7 +936,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void renameVariantValue(UUID valueId, String label) {
-        var v = variantValueRepository.findById(valueId).orElseThrow(() -> new NotFoundException(VARIANT_VALUE));
+        VariantValueEntity v = variantValueRepository.findById(valueId).orElseThrow(() -> new NotFoundException(VARIANT_VALUE));
         v.setValue(label != null && !label.isBlank() ? label.trim() : null);
         variantValueRepository.save(v);
         if (v.getOption() != null && v.getOption().getProduct() != null) {
@@ -933,8 +950,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void deleteVariantValue(UUID valueId) {
-        var v = variantValueRepository.findById(valueId).orElseThrow(() -> new NotFoundException(VARIANT_VALUE));
-        var opt = v.getOption();
+        VariantValueEntity v = variantValueRepository.findById(valueId).orElseThrow(() -> new NotFoundException(VARIANT_VALUE));
+        VariantOptionEntity opt = v.getOption();
         UUID productId = (opt != null && opt.getProduct() != null) ? opt.getProduct().getId() : null;
         if (productId != null) {
             // Nombre del eje tal como se guarda en product_variant.options_json ("Color"/"Talla"/…).
@@ -956,7 +973,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void setVariantValueImage(UUID valueId, String imageUrl) {
-        var v = variantValueRepository.findById(valueId).orElseThrow(() -> new NotFoundException(VARIANT_VALUE));
+        VariantValueEntity v = variantValueRepository.findById(valueId).orElseThrow(() -> new NotFoundException(VARIANT_VALUE));
         // DROP-674: imagen real por color. Una cadena vacía la elimina (volverá a usar la principal).
         String url = imageUrl != null ? imageUrl.trim() : null;
         v.setImageSourceUrl(url != null && !url.isEmpty() ? url : null);
@@ -976,7 +993,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (language == null || language.isBlank()) {
             throw new BusinessException("language es obligatorio");
         }
-        var v = variantValueRepository.findById(valueId).orElseThrow(() -> new NotFoundException(VARIANT_VALUE));
+        VariantValueEntity v = variantValueRepository.findById(valueId).orElseThrow(() -> new NotFoundException(VARIANT_VALUE));
         String lang = language.trim().toLowerCase();
         String val = value != null ? value.trim() : null;
         v.getTranslations().removeIf(tt -> lang.equalsIgnoreCase(tt.getLanguage()));
@@ -1175,7 +1192,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         List<UUID> createdIds = new ArrayList<>();
         List<SupplierEntity> suppliers = supplierRepository.findAll();
         for (int i = 0; i < rows.size(); i++) {
-            var r = rows.get(i);
+            BulkProductDtoIn r = rows.get(i);
             try {
                 createdIds.add(buildAndWriteProduct(r, suppliers));
                 created++;
@@ -1393,7 +1410,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             Map<String, BulkProductDtoIn.BulkTranslation> m,
             Supplier<String> getTitle, Consumer<String> setTitle,
             Supplier<String> getDesc, Consumer<String> setDesc) {
-        var tr = m.get(lang);
+        BulkTranslation tr = m.get(lang);
         if (tr == null) {
             return;
         }
@@ -1699,13 +1716,13 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                     .orElseThrow(() -> new BusinessException("Categoría no encontrada: " + slug));
         }
         if (r.getCategory1688Id() != null && !r.getCategory1688Id().isBlank()) {
-            var m = category1688MappingRepository.findByExternal1688Id(r.getCategory1688Id().trim());
+            Optional<Category1688MappingEntity> m = category1688MappingRepository.findByExternal1688Id(r.getCategory1688Id().trim());
             if (m.isPresent()) {
                 return m.get().getCategory();
             }
         }
         if (r.getCategory1688Name() != null && !r.getCategory1688Name().isBlank()) {
-            var m = category1688MappingRepository.findFirstByExternal1688NameIgnoreCase(r.getCategory1688Name().trim());
+            Optional<Category1688MappingEntity> m = category1688MappingRepository.findFirstByExternal1688NameIgnoreCase(r.getCategory1688Name().trim());
             if (m.isPresent()) {
                 return m.get().getCategory();
             }
@@ -1722,8 +1739,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         }
         CategoryEntity cat = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new NotFoundException(CATEGORY_NOT_FOUND + categoryId));
-        var existing = category1688MappingRepository.findByExternal1688Id(external1688Id.trim());
-        var m = existing.orElseGet(
+        Optional<Category1688MappingEntity> existing = category1688MappingRepository.findByExternal1688Id(external1688Id.trim());
+        Category1688MappingEntity m = existing.orElseGet(
                 Category1688MappingEntity::new);
         m.setExternal1688Id(external1688Id.trim());
         m.setExternal1688Name(external1688Name != null && !external1688Name.isBlank() ? external1688Name.trim() : null);
@@ -1769,8 +1786,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         }
         CategoryEntity cat = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new NotFoundException(CATEGORY_NOT_FOUND + categoryId));
-        var existing = categoryAttributeSchemaRepository.findByCategory_IdAndAttrKey(categoryId, attrKey.trim());
-        var s = existing.orElseGet(
+        Optional<CategoryAttributeSchemaEntity> existing = categoryAttributeSchemaRepository.findByCategory_IdAndAttrKey(categoryId, attrKey.trim());
+        CategoryAttributeSchemaEntity s = existing.orElseGet(
                 CategoryAttributeSchemaEntity::new);
         s.setCategory(cat);
         s.setAttrKey(attrKey.trim());
@@ -1801,7 +1818,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             String supplierName) {
         if (supplierExternalId != null && !supplierExternalId.isBlank()) {
             String ext = supplierExternalId.trim();
-            var existing = supplierRepository.findBySourceAndExternalId("1688", ext);
+            Optional<SupplierEntity> existing = supplierRepository.findBySourceAndExternalId("1688", ext);
             if (existing.isPresent()) {
                 return existing.get().getId();
             }

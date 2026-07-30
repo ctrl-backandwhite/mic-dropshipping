@@ -74,12 +74,12 @@ public class OperatorEarningsService {
         int pageSize = Math.clamp(size, 1, 200);
         // Consulta preferente desde OpenSearch (indexado); si no responde, fallback a Postgres.
         try {
-            var res = indexer.search(operatorSubject, from, to, page, pageSize);
+            Map<String,Object> res = indexer.search(operatorSubject, from, to, page, pageSize);
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> hits = (List<Map<String, Object>>) res.get("items");
             if (hits != null) {
                 List<OperatorAction> items = new ArrayList<>();
-                for (var m : hits) {
+                for (Map<String,Object> m : hits) {
                     items.add(new OperatorAction(str(m, "operatorSubject"), str(m, "operatorEmail"),
                             str(m, "operatorName"), str(m, "orderId"), str(m, "orderNumber"), str(m, "action"),
                             lng(m, "commissionCnyCents"), (int) lng(m, "itemCount"), inst(m.get("processedAt"))));

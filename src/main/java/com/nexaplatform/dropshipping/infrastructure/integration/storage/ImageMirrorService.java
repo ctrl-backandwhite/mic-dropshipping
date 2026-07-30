@@ -146,7 +146,16 @@ public class ImageMirrorService {
         if (!storage.isReady()) {
             return;
         }
-        String prefix = Texts.stripTrailingSlashes(storage.publicUrl()) + "%";
+        // publicUrl() habla con el almacenamiento y puede fallar. Estaba fuera de todo try, así que un
+        // almacenamiento caído no dejaba «cero imágenes espejadas» sino la excepción subiendo por el
+        // planificador y ese ciclo entero perdido, incluidas las tareas que van detrás.
+        String prefix;
+        try {
+            prefix = Texts.stripTrailingSlashes(storage.publicUrl()) + "%";
+        } catch (RuntimeException e) {
+            log.warn("Mirror de imágenes de variante omitido: el almacenamiento no responde ({})", e.toString());
+            return;
+        }
         PageRequest top = PageRequest.of(0, Math.max(1, limit));
         int ok = 0;
         for (ProductVariantEntity v : variantRepository.findNeedingImageMirror(prefix, top)) {

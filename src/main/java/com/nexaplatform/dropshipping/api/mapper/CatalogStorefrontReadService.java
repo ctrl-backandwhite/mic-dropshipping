@@ -262,7 +262,9 @@ public class CatalogStorefrontReadService {
                     .map(p -> productMapper.toSummary(p, lang))
                     .filter(v -> withinPrice(v.displayPrice(), minPrice, maxPrice)).toList();
             int total = all.size();
-            int from = Math.min(page * safeSize, total);
+            // (long) para que un ?page enorme no desborde el int: el índice salía negativo y el subList
+            // respondía 500 en vez de una página vacía.
+            int from = (int) Math.min((long) page * safeSize, total);
             int to = Math.min(from + safeSize, total);
             return PageResponse.from(new PageImpl<>(all.subList(from, to), pageable, total));
         }
@@ -371,7 +373,16 @@ public class CatalogStorefrontReadService {
         };
     }
 
+    /**
+     * Nombre de la categoría en el idioma pedido, con el chino como respaldo.
+     *
+     * <p>El idioma se comprueba aquí: hoy no llega nulo porque el parámetro de la petición tiene valor
+     * por defecto, pero eso es una casualidad de una capa que este método no controla.
+     */
     public static String translatedName(CategoryEntity c, String lang) {
+        if (lang == null || c.getTranslations() == null) {
+            return c.getNameZh();
+        }
         return c.getTranslations().stream().filter(t -> lang.equalsIgnoreCase(t.getLanguage()))
                 .map(CategoryTranslationEntity::getName).findFirst().orElse(c.getNameZh());
     }

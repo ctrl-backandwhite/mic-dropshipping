@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.usecase.PodDesignUseCase;
 import com.nexaplatform.dropshipping.domain.model.PodAiResult;
@@ -153,7 +154,7 @@ public class PodDesignUseCaseImpl implements PodDesignUseCase {
             title = p.getTitleZh();
         String image = null;
         if (p.getImages() != null && !p.getImages().isEmpty()) {
-            var img = p.getImages().get(0);
+            ProductImageEntity img = p.getImages().get(0);
             image = img.getCdnUrl() != null && !img.getCdnUrl().isBlank() ? img.getCdnUrl() : img.getSourceUrl();
         }
         return PodBlankProduct.builder().id(p.getId()).slug(p.getSlug()).title(title).mainImage(image)

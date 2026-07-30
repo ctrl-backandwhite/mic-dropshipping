@@ -22,6 +22,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Sourcing use case: orchestrates sourcing requests, the agents marketplace and
@@ -75,7 +77,6 @@ public class SourcingUseCaseImpl implements SourcingUseCase {
         }
         // Detect source from URL.
         String src = null;
-        String ext = null;
         if (low.contains("1688.com"))
             src = "1688";
         else if (low.contains("taobao.com"))
@@ -92,7 +93,7 @@ public class SourcingUseCaseImpl implements SourcingUseCase {
         }
 
         SourcingRequest model = SourcingRequest.builder().userId(userId).sourceUrl(url.trim()).source(src)
-                .externalId(ext)
+                .externalId(externalIdFrom(src, url.trim()))
                 .status("PENDING").titleHint(titleHint).notes(notes).planQuota(plan).build();
         return withQuotesCount(sourcingRequestRepository.save(model));
     }
@@ -225,5 +226,41 @@ public class SourcingUseCaseImpl implements SourcingUseCase {
             log.warn("No se pudo resolver el plan de {} para la cuota de sourcing: {}", userId, e.getMessage());
             return "FREE";
         }
+    }
+
+    /** Identificador del producto dentro de la URL de cada mercado (la URL llega tal cual la pegó el usuario). */
+    private static final Pattern OFFER_1688 = Pattern.compile("/offer/(\\d+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern ITEM_ID_QUERY = Pattern.compile("[?&]id=(\\d+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern ITEM_ALIEXPRESS = Pattern.compile("/item/(?:[^/]*?-)?(\\d+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern ITEM_EBAY = Pattern.compile("/itm/(?:[^/]+/)?(\\d+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern ASIN_AMAZON = Pattern.compile("/(?:dp|gp/product)/([A-Za-z0-9]{10})",
+            Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Referencia del producto dentro de la URL, para poder reconocer dos peticiones sobre el mismo
+     * artículo. Antes se guardaba una variable que nunca se asignaba, así que el campo llegaba
+     * siempre vacío a la base de datos y la referencia se perdía.
+     *
+     * @return el identificador, o {@code null} si esa URL no lo lleva (sigue siendo una petición válida:
+     *         el equipo de compras trabaja con la URL).
+     */
+    private String externalIdFrom(String source, String url) {
+        Pattern pattern = switch (source) {
+            case "1688" -> OFFER_1688;
+            case "taobao" -> ITEM_ID_QUERY;
+            case "aliexpress" -> ITEM_ALIEXPRESS;
+            case "ebay" -> ITEM_EBAY;
+            case "amazon" -> ASIN_AMAZON;
+            default -> null;
+        };
+        if (pattern == null) {
+            return null;
+        }
+        Matcher m = pattern.matcher(url);
+        if (!m.find()) {
+            return null;
+        }
+        // El ASIN de Amazon es canónicamente en mayúsculas; los demás mercados usan identificadores numéricos.
+        return "amazon".equals(source) ? m.group(1).toUpperCase(Locale.ROOT) : m.group(1);
     }
 }

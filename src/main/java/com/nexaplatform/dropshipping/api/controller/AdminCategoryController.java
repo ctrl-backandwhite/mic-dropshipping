@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.controller;
 
+import org.springframework.data.domain.Page;
 import com.nexaplatform.dropshipping.api.AdminCategoryApi;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AdminCategoryUpsertDtoIn;
@@ -45,9 +46,9 @@ public class AdminCategoryController implements AdminCategoryApi {
     public ResponseEntity<PageResponse<AdminCategoryDtoOut>> listPaged(String q, Boolean hasProducts, int page,
             int size) {
         // Ordered by position then slug — covered by the (position) / (parent_id, position) indexes (v57).
-        var pageable = PageRequest.of(Math.max(0, page), Math.max(1, size),
+        PageRequest pageable = PageRequest.of(Math.max(0, page), Math.max(1, size),
                 Sort.by(Sort.Order.asc("position"), Sort.Order.asc("slug")));
-        var result = useCase.findAllPaged(q, hasProducts, pageable);
+        Page<Category> result = useCase.findAllPaged(q, hasProducts, pageable);
         return ResponseEntity.ok(PageResponse.map(result, mapper::toDtoOut));
     }
 

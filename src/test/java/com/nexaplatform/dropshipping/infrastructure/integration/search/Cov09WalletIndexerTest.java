@@ -263,6 +263,9 @@ class Cov09WalletIndexerTest {
         when(walletRepository.findAll()).thenReturn(List.of(wallet(UUID.randomUUID()), wallet(UUID.randomUUID())));
         when(client.index(any(IndexRequest.class))).thenThrow(new IOException("down"));
 
-        assertThat(indexer.reindexAll()).isEqualTo(2);
+        // Se intentan los dos —el fallo del primero no corta el pase— pero el recuento son los que el
+        // índice ACEPTÓ: con OpenSearch caído, decir «reindexed 2» con el índice vacío engañaba al admin.
+        assertThat(indexer.reindexAll()).isZero();
+        verify(client, times(2)).index(any(IndexRequest.class));
     }
 }

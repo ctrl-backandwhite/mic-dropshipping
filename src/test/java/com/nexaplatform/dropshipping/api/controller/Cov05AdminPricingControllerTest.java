@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.controller;
 
+import com.nexaplatform.dropshipping.api.exception.ArgumentException;
 import com.nexaplatform.dropshipping.api.controller.AdminPricingController.BulkToggleRequest;
 import com.nexaplatform.dropshipping.api.dto.in.PriceRuleDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.PriceRuleDtoOut;
@@ -26,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -228,10 +230,13 @@ class Cov05AdminPricingControllerTest {
 
     @Test
     @DisplayName("un lote vacío responde sin errores y sin tocar el caso de uso")
-    void unLoteVacioNoHaceNada() {
-        Map<String, Object> body = controller.bulkToggle(new BulkToggleRequest(List.of(), true)).getBody();
+    void unLoteVacioSeRechazaComoPeticionInvalida() {
+        // Un cuerpo sin ids es una petición mal formada, no un lote de cero: antes se recorría la lista
+        // sin comprobar nulo y un bulk-delete con el cuerpo vacío salía como 500 sin explicación.
+        BulkToggleRequest sinIds = new BulkToggleRequest(List.of(), true);
 
-        assertThat(body).containsEntry("succeeded", 0).containsEntry("failed", 0);
+        assertThatThrownBy(() -> controller.bulkToggle(sinIds)).isInstanceOf(ArgumentException.class);
+
         verify(useCase, never()).setActive(any(), anyBoolean());
     }
 

@@ -56,7 +56,7 @@ public class AdminMentorsController {
         if (email == null || email.isEmpty()) {
             throw new BusinessException("userEmail es obligatorio (el mentor se asocia a un usuario existente).");
         }
-        var user = userRepository.findByEmail(email)
+        UserEntity user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new BusinessException("No existe un usuario con email: " + email));
         MentorProfileEntity e = new MentorProfileEntity();
         e.setUser(user);

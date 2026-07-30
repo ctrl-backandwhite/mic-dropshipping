@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.application.usecase.WinningProductUseCase;
 import com.nexaplatform.dropshipping.domain.model.WinningProduct;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
@@ -52,7 +53,7 @@ public class WinningProductUseCaseImpl implements WinningProductUseCase {
         String img = null;
         try {
             if (p.getImages() != null && !p.getImages().isEmpty()) {
-                var im = p.getImages().get(0);
+                ProductImageEntity im = p.getImages().get(0);
                 img = im.getCdnUrl() != null && !im.getCdnUrl().isBlank() ? im.getCdnUrl() : im.getSourceUrl();
             }
         } catch (Exception ignored) {

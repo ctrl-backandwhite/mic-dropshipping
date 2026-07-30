@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository.impl;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.AcademyCourseEntity;
 import com.nexaplatform.dropshipping.domain.model.AcademyCourse;
 import com.nexaplatform.dropshipping.domain.repository.AcademyCourseRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.AcademyCourseEntityMapper;
@@ -25,7 +26,7 @@ public class AcademyCourseRepositoryImpl implements AcademyCourseRepository {
 
     @Override
     public AcademyCourse save(AcademyCourse model) {
-        var entity = academyCourseJpaRepositoryAdapter.save(academyCourseEntityMapper.toEntity(model));
+        AcademyCourseEntity entity = academyCourseJpaRepositoryAdapter.save(academyCourseEntityMapper.toEntity(model));
         return academyCourseEntityMapper.toDomain(entity);
     }
 

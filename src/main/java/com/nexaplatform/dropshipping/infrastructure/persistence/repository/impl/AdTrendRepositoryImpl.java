@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository.impl;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.AdTrendEntity;
 import com.nexaplatform.dropshipping.domain.model.AdTrend;
 import com.nexaplatform.dropshipping.domain.repository.AdTrendRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.AdTrendEntityMapper;
@@ -24,7 +25,7 @@ public class AdTrendRepositoryImpl implements AdTrendRepository {
 
     @Override
     public AdTrend save(AdTrend model) {
-        var entity = adTrendJpaRepositoryAdapter.save(adTrendEntityMapper.toEntity(model));
+        AdTrendEntity entity = adTrendJpaRepositoryAdapter.save(adTrendEntityMapper.toEntity(model));
         return adTrendEntityMapper.toDomain(entity);
     }
 

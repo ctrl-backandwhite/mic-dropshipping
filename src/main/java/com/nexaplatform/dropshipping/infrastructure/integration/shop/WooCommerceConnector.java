@@ -53,7 +53,12 @@ public class WooCommerceConnector implements ShopConnector {
             return PushResult.fail("URL de tienda inválida: se esperaba la URL base de WordPress (https://mi-tienda.com).");
         }
         try {
-            String title = product.getTitleZh() != null ? product.getTitleZh() : product.getSlug();
+            // Map.of no admite nulos: un producto sin título NI slug reventaba con un NPE que el catch
+            // genérico convertía en «No se pudo conectar con WooCommerce: null», despistando sobre la causa.
+            String title = Texts.firstNonBlank(product.getTitleZh(), product.getSlug());
+            if (title == null) {
+                return PushResult.fail("El producto no tiene título ni identificador: complétalo antes de publicarlo.");
+            }
             BigDecimal price = product.getBasePrice() != null ? product.getBasePrice() : BigDecimal.ZERO;
             Map<String, Object> body = Map.of(
                     "name", title,

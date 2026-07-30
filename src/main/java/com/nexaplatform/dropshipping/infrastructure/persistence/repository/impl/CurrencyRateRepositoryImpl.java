@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository.impl;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CurrencyRateEntity;
 import com.nexaplatform.dropshipping.domain.model.CurrencyRate;
 import com.nexaplatform.dropshipping.domain.repository.CurrencyRateRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.CurrencyRateEntityMapper;
@@ -25,7 +26,7 @@ public class CurrencyRateRepositoryImpl implements CurrencyRateRepository {
 
     @Override
     public CurrencyRate save(CurrencyRate model) {
-        var entity = currencyRateJpaRepositoryAdapter.save(currencyRateEntityMapper.toEntity(model));
+        CurrencyRateEntity entity = currencyRateJpaRepositoryAdapter.save(currencyRateEntityMapper.toEntity(model));
         return currencyRateEntityMapper.toDomain(entity);
     }
 

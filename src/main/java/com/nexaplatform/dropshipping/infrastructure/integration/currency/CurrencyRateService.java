@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.currency;
 
+import java.util.Map.Entry;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CurrencyRateEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CurrencyRateRepository;
@@ -195,8 +196,10 @@ public class CurrencyRateService {
         Instant now = Instant.now();
         int updated = 0;
         int created = 0;
-        for (var entry : ratesFromProvider.entrySet()) {
-            String code = entry.getKey() == null ? null : entry.getKey().toUpperCase();
+        for (Entry<String,BigDecimal> entry : ratesFromProvider.entrySet()) {
+            // Locale.ROOT: con la configuración regional turca "tr", toUpperCase() convierte la i en İ y
+            // "try" saldría como "TRY" con punto, creando una moneda distinta de la que ya existe.
+            String code = entry.getKey() == null ? null : entry.getKey().toUpperCase(Locale.ROOT);
             if (code == null || code.length() != 3) {
                 continue; // ignorar metales/cripto u otros códigos no ISO de 3 letras
             }

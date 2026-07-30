@@ -72,7 +72,8 @@ public class ProductRawConsumer {
                     textOrNull(root, "brand"), intOrNull(root, "moq"), bdOrNull(root, "base_price"),
                     textOrNull(root, "currency"), intOrNull(root, "weight_grams"), intOrNull(root, "monthly_sales"),
                     bdOrNull(root, "repurchase_rate"), bdOrNull(root, "rating"), intOrNull(root, "review_count"),
-                    textOrNull(root, "source_url"), supplierId, null, mapImages(root.get("images")),
+                    textOrNull(root, "source_url"), supplierId, uuidOrNull(root, "category_id"),
+                    mapImages(root.get("images")),
                     mapOptions(root.get("options")), mapVariants(root.get("variants")),
                     mapPriceTiers(root.get("price_tiers")));
 
@@ -148,6 +149,24 @@ public class ProductRawConsumer {
     }
 
     /* ---------- small JSON helpers ---------- */
+
+    /**
+     * Identificador que el rastreador manda como texto. Antes se pasaba {@code null} fijo al ingerir,
+     * así que el {@code category_id} del mensaje se descartaba en silencio y el producto entraba sin
+     * categoría; un valor que no sea un UUID se ignora en vez de tumbar el mensaje entero.
+     */
+    private static UUID uuidOrNull(JsonNode n, String field) {
+        String raw = textOrNull(n, field);
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(raw.trim());
+        } catch (IllegalArgumentException e) {
+            log.warn("Ignorado {}='{}': no es un UUID", field, raw);
+            return null;
+        }
+    }
 
     private static String textOrNull(JsonNode n, String field) {
         if (n == null)
