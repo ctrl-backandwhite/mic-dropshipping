@@ -3,7 +3,6 @@ package com.nexaplatform.dropshipping.api.mapper;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
-import com.nexaplatform.dropshipping.api.mapper.AdminOrderMapperImpl;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

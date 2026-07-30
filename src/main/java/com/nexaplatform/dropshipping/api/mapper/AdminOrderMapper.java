@@ -45,9 +45,8 @@ public abstract class AdminOrderMapper {
         this.currencyRateService = currencyRateService;
     }
 
-    /** Total del pedido en la divisa activa del admin, calculado igual que el cobro (línea a línea). */
     /**
-     * Total del pedido tal y como se le cobró al cliente.
+     * Total del pedido tal y como se le cobró al cliente, en la divisa activa del panel.
      *
      * <p>Se convierte {@code totalCents} —el importe que se cobró y que consta en el pedido— en vez de
      * recomponerlo sumando líneas, envío e impuestos. Recalcularlo redondeaba cada componente por

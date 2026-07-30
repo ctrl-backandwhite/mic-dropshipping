@@ -1,5 +1,29 @@
 package com.nexaplatform.dropshipping.api.controller;
 
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.VariantView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SpecificationView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.AttributeView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.TagView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ShippingZoneView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ShippingRateView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ShippingQuoteItem;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ShippingQuoteRequest;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.AttributeKeyView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SuggestionView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CartQuoteItemIn;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CartQuoteLineOut;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CartQuoteOut;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.HomeSection;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.HomeSectionsResponse;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImportUrlRequest;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImportUrlResponse;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImageSearchRequest;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImageSearchResult;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.HistoryPoint;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.MarginEstimate;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ShippingRateEntity;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos;
 import com.nexaplatform.dropshipping.api.StorefrontCatalogApi;
@@ -86,50 +110,18 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     /* =========================== VIEW RECORDS =========================== */
 
-    public record CategoryView(UUID id, String slug, String name, String nameZh, UUID parentId, int position,
-            String icon, int directProductCount, List<CategoryView> children) {
-    }
 
-    public record CategoryBreadcrumb(UUID id, String slug, String name) {
-    }
 
-    public record SupplierView(UUID id, String slug, String name, String nameZh, String country, String city,
-            BigDecimal rating, Integer yearsActive, boolean verified, boolean trustPass, long productCount) {
-    }
 
-    public record VariantView(UUID id, String sku, String externalId, String title, BigDecimal price, int stock,
-            String imageUrl, Map<String, String> options, boolean active) {
-    }
 
-    public record SpecificationView(String key, String value, int position) {
-    }
 
-    public record AttributeView(String key, String value) {
-    }
 
-    public record TagView(String tag) {
-    }
 
-    public record ShippingZoneView(UUID supplierId, String supplierName, String countryCode, String region,
-            boolean active) {
-    }
 
-    public record ShippingRateView(UUID id, UUID supplierId, String countryCode, String method, String carrier,
-            int transitDaysMin, int transitDaysMax, BigDecimal baseCost, BigDecimal perKgCost, Integer maxWeightGrams) {
-    }
 
-    public record ShippingQuoteItem(UUID supplierId, String method, String carrier, int transitDaysMin,
-            int transitDaysMax, BigDecimal cost, String currency) {
-    }
 
-    public record ShippingQuoteRequest(UUID productId, UUID variantId, int quantity, String country) {
-    }
 
-    public record AttributeKeyView(String key, long usage) {
-    }
 
-    public record SuggestionView(String type, String text, String slug) {
-    }
 
     /* =========================== CATEGORIES (shared read) =========================== */
 
@@ -380,16 +372,8 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     /* =========================== CART QUOTE (precio actual = el que se cobra) =========================== */
 
-    public record CartQuoteItemIn(UUID productId, UUID variantId, int quantity) {
-    }
 
-    public record CartQuoteLineOut(UUID productId, UUID variantId, BigDecimal unit, BigDecimal lineTotal,
-            String unitFormatted, String lineTotalFormatted) {
-    }
 
-    public record CartQuoteOut(String currency, String symbol, List<CartQuoteLineOut> items, BigDecimal subtotal,
-            String subtotalFormatted) {
-    }
 
     /**
      * Cotiza el carrito con el precio ACTUAL de cada producto (margen + tasa del día, 2 decimales hacia
@@ -441,11 +425,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     /* =========================== HOME SECTIONS (DROP-20) =========================== */
 
-    public record HomeSection(String code, String title, List<ProductSummaryView> items) {
-    }
 
-    public record HomeSectionsResponse(List<HomeSection> sections, List<CategoryView> hotCategories) {
-    }
 
     @Override
     @Transactional(readOnly = true)
@@ -490,12 +470,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     /* =========================== IMPORT BY URL (DROP-15) =========================== */
 
-    public record ImportUrlRequest(@NotBlank String url) {
-    }
 
-    public record ImportUrlResponse(boolean matched, String source, String externalId, ProductSummaryView product,
-            String resolveHint) {
-    }
 
     @Override
     @Transactional(readOnly = true)
@@ -546,11 +521,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     /* =========================== IMAGE SEARCH MOCK (DROP-16) =========================== */
 
-    public record ImageSearchRequest(String imageBase64, String imageUrl, Integer limit) {
-    }
 
-    public record ImageSearchResult(ProductSummaryView product, double score) {
-    }
 
     @Override
     @Transactional(readOnly = true)
@@ -581,8 +552,6 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     /* =========================== PRICE/STOCK HISTORY (DROP-25) =========================== */
 
-    public record HistoryPoint(LocalDate date, BigDecimal price, int stock) {
-    }
 
     @Override
     @Transactional(readOnly = true)
@@ -599,10 +568,6 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     /* =========================== MARGIN ESTIMATE (DROP-24) =========================== */
 
-    public record MarginEstimate(BigDecimal cost, BigDecimal suggestedRetail, BigDecimal shipping,
-            BigDecimal commission, BigDecimal netProfit, BigDecimal marginPct,
-            String currency, BigDecimal appliedMarginPct, Integer appliedTierMinQty) {
-    }
 
     @Override
     @Transactional(readOnly = true)

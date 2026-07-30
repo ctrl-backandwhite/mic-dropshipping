@@ -1,9 +1,9 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
-import com.nexaplatform.dropshipping.api.controller.StorefrontCatalogController.CategoryBreadcrumb;
-import com.nexaplatform.dropshipping.api.controller.StorefrontCatalogController.CategoryView;
-import com.nexaplatform.dropshipping.api.controller.StorefrontCatalogController.SupplierView;
-import com.nexaplatform.dropshipping.api.controller.StorefrontCatalogController.VariantView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.VariantView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;

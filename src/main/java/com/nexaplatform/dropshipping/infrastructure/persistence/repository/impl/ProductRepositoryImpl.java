@@ -137,15 +137,6 @@ public class ProductRepositoryImpl implements ProductRepository {
         return productEntityMapper.toDomainList(productJpaRepositoryAdapter.findAllById(ids));
     }
 
-    @Override
-    public Page<Product> searchStorefront(ProductStatus status, String needle, UUID categoryId, UUID supplierId,
-            BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping, Boolean selfPickup,
-            Boolean hasVideo, BigDecimal minRating, Integer minInv, Pageable pageable) {
-        return productJpaRepositoryAdapter.searchStorefront(status, needle, categoryId, supplierId, minPrice, maxPrice,
-                shipFrom, freeShipping, selfPickup, hasVideo, minRating, minInv, pageable)
-                .map(productEntityMapper::toDomain);
-    }
-
     /* ------------------ persistence-only helpers ------------------ */
 
     /** Maps the entity to domain and attaches the price-tier ladder from its own table. */

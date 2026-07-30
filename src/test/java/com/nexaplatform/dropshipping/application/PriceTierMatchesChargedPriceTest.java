@@ -10,6 +10,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -40,7 +41,9 @@ class PriceTierMatchesChargedPriceTest {
     @Mock
     private MarginService marginService;
 
+    @InjectMocks
     private PricingService pricingService;
+
     private ProductEntity product;
 
     /** Coste del proveedor y del tramo: el mismo, como en el producto que destapó el fallo. */
@@ -54,8 +57,6 @@ class PriceTierMatchesChargedPriceTest {
 
     @BeforeEach
     void setUp() {
-        pricingService = new PricingService(currencyRateService, marginService);
-
         product = new ProductEntity();
         product.setBasePrice(COSTE_CNY);
         product.setCurrency("CNY");

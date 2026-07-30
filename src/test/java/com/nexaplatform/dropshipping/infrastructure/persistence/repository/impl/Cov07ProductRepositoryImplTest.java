@@ -375,16 +375,12 @@ class Cov07ProductRepositoryImplTest {
         UUID categoryId = UUID.randomUUID();
         when(productJpaRepositoryAdapter.findByCategoryOrderByTrend(categoryId, ProductStatus.ACTIVE, pageable))
                 .thenReturn(page);
-        when(productJpaRepositoryAdapter.searchStorefront(any(), any(), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any())).thenReturn(page);
 
         assertThat(repository.findByStatus(ProductStatus.ACTIVE, pageable).getContent()).hasSize(1);
         assertThat(repository.findAll(pageable).getContent()).hasSize(1);
         assertThat(repository.findTopByTrendScore(ProductStatus.ACTIVE, pageable).getContent()).hasSize(1);
         assertThat(repository.findByCategoryOrderByTrend(categoryId, ProductStatus.ACTIVE, pageable).getContent())
                 .hasSize(1);
-        assertThat(repository.searchStorefront(ProductStatus.ACTIVE, "camisa", null, null, null, null, null, null,
-                null, null, null, null, pageable).getContent()).hasSize(1);
     }
 
     @Test
