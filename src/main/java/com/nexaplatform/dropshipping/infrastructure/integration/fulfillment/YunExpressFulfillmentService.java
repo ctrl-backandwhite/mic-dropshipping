@@ -464,10 +464,9 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
                     bin.spec().weightGrams(), bin.valueCents(), productCode);
         }
         String channel = resolveProductCode(order.getShippingCountry(), bin.spec());
-        Map<String, Object> payload = createPayload(order, bin.spec(), channel, valuation);
         // El número de cliente debe ser único por guía: el mismo para dos envíos lo rechaza el carrier.
-        payload.put("customer_order_number", order.getOrderNumber() + "-" + sequenceNo);
-        payload.put("declaration_info", declarationInfoOfBin(order, bin));
+        YunExpressRequests.CreateShipment payload = createPayload(order, bin.spec(), channel, valuation,
+                order.getOrderNumber() + "-" + sequenceNo, declarationInfoOfBin(order, bin));
         JsonNode response;
         try {
             response = client.post(PATH_CREATE, payload);
@@ -492,28 +491,14 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     }
 
     /** Declaración aduanera limitada a lo que viaja en ESTE bulto. */
-    private List<Map<String, Object>> declarationInfoOfBin(Order order, ParcelSplitter.Bin bin) {
+    private List<YunExpressRequests.DeclarationLine> declarationInfoOfBin(Order order, ParcelSplitter.Bin bin) {
         List<ParcelDeclaration> all = declaredParcels(order);
-        List<Map<String, Object>> lines = new ArrayList<>();
+        List<YunExpressRequests.DeclarationLine> lines = new ArrayList<>();
         for (int line = 0; line < all.size(); line++) {
             int qty = bin.quantityOfLine(line);
-            if (qty <= 0) {
-                continue;
+            if (qty > 0) {
+                lines.add(toDeclarationLine(all.get(line), qty));
             }
-            ParcelDeclaration parcel = all.get(line);
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("name_en", parcel.eName());
-            entry.put("name_local", parcel.cName());
-            entry.put("quantity", qty);
-            entry.put("unit_price", BigDecimal.valueOf(parcel.unitPrice()));
-            entry.put("unit_weight", BigDecimal.valueOf(parcel.unitWeightKg()));
-            entry.put("currency", parcel.currencyCode());
-            entry.put("hs_code", parcel.hsCode());
-            entry.put("material", parcel.invoicePart());
-            entry.put("purpose", parcel.invoiceUsage());
-            entry.put("sales_url", parcel.productUrl());
-            entry.put("sku_code", parcel.sku());
-            lines.add(entry);
         }
         return lines;
     }
@@ -706,7 +691,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     private FulfillmentResult realCreateShipment(Order order, int etaMax, CustomsValuation valuation) {
         ParcelSpec parcel = parcelOf(order);
         String channel = resolveProductCode(order.getShippingCountry(), parcel);
-        Map<String, Object> payload = createPayload(order, parcel, channel, valuation);
+        YunExpressRequests.CreateShipment payload = createPayload(order, parcel, channel, valuation);
         JsonNode response;
         try {
             response = client.post(PATH_CREATE, payload);
@@ -744,10 +729,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         if (!trackingSubscriptionEnabled) {
             return;
         }
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("waybill_numbers", List.of(waybillNumber));
-        payload.put("subscribe_type", trackingSubscribeType);
-        payload.put("query_type", List.of("Y"));
+        YunExpressRequests.SubscribeTracking payload = new YunExpressRequests.SubscribeTracking(
+                List.of(waybillNumber), trackingSubscribeType, List.of("Y"));
         try {
             JsonNode response = client.post(PATH_SUBSCRIBE, payload);
             if (!response.path("success").asBoolean(false)) {
@@ -771,48 +754,42 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     }
 
     /** Cuerpo de {@code /v1/order/package/create} con los nombres de campo de la API. */
-    Map<String, Object> createPayload(Order order, ParcelSpec parcel, String channel, CustomsValuation valuation) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("product_code", channel);
-        payload.put("customer_order_number", order.getOrderNumber());
-        payload.put("weight_unit", "KG");
-        payload.put("size_unit", "CM");
-        payload.put("sensitive_type", "W");
-        payload.put("label_type", labelType);
+    YunExpressRequests.CreateShipment createPayload(Order order, ParcelSpec parcel, String channel,
+            CustomsValuation valuation) {
+        return createPayload(order, parcel, channel, valuation, order.getOrderNumber(),
+                declarationInfoOf(order));
+    }
 
-        Map<String, Object> box = new LinkedHashMap<>();
-        box.put("weight", new BigDecimal(Math.max(1, parcel.weightGrams()))
-                .divide(BigDecimal.valueOf(1000), 3, RoundingMode.HALF_UP));
-        if (parcel.hasDimensions()) {
-            box.put("length", new BigDecimal(cm(parcel.lengthMm())));
-            box.put("width", new BigDecimal(cm(parcel.widthMm())));
-            box.put("height", new BigDecimal(cm(parcel.heightMm())));
-        }
-        payload.put("packages", List.of(box));
-        payload.put("receiver", receiverOf(order));
-        payload.put("declaration_info", declarationInfoOf(order));
+    /**
+     * Cuerpo del alta de envío. El número de cliente y la declaración se pasan aparte porque, al repartir
+     * un pedido en varios bultos, cada guía lleva su propio sufijo y solo lo que viaja en ese bulto.
+     */
+    YunExpressRequests.CreateShipment createPayload(Order order, ParcelSpec parcel, String channel,
+            CustomsValuation valuation, String customerOrderNumber,
+            List<YunExpressRequests.DeclarationLine> declaration) {
+        YunExpressRequests.Parcel box = new YunExpressRequests.Parcel(
+                new BigDecimal(Math.max(1, parcel.weightGrams()))
+                        .divide(BigDecimal.valueOf(1000), 3, RoundingMode.HALF_UP),
+                parcel.hasDimensions() ? new BigDecimal(cm(parcel.lengthMm())) : null,
+                parcel.hasDimensions() ? new BigDecimal(cm(parcel.widthMm())) : null,
+                parcel.hasDimensions() ? new BigDecimal(cm(parcel.heightMm())) : null);
 
+        // El IOSS solo viaja cuando el pedido NO supera el umbral de minimis: por encima el régimen no
+        // aplica y declararlo hace que la aduana rechace la liquidación.
         String ioss = iossNumberOrNull();
-        if (ioss != null && !valuation.deMinimisExceeded()) {
-            payload.put("customs_number", Map.of("ioss_code", ioss));
-        }
-        return payload;
+        YunExpressRequests.CustomsNumber customs = ioss != null && !valuation.deMinimisExceeded()
+                ? new YunExpressRequests.CustomsNumber(ioss) : null;
+
+        return new YunExpressRequests.CreateShipment(channel, customerOrderNumber, "KG", "CM", "W", labelType,
+                List.of(box), receiverOf(order), declaration, customs);
     }
 
     /** Destinatario a partir del snapshot de dirección del pedido. */
-    private Map<String, Object> receiverOf(Order order) {
-        Map<String, Object> receiver = new LinkedHashMap<>();
+    private YunExpressRequests.Receiver receiverOf(Order order) {
         String[] name = splitName(order.getShippingFullName());
-        receiver.put("first_name", name[0]);
-        receiver.put("last_name", name[1]);
-        receiver.put("country_code", upper(order.getShippingCountry()));
-        receiver.put("province", order.getShippingState());
-        receiver.put("city", order.getShippingCity());
-        receiver.put("address_lines", addressLines(order));
-        receiver.put("postal_code", order.getShippingPostalCode());
-        receiver.put("phone_number", order.getShippingPhone());
-        receiver.put("email", order.getShippingEmail());
-        return receiver;
+        return new YunExpressRequests.Receiver(name[0], name[1], upper(order.getShippingCountry()),
+                order.getShippingState(), order.getShippingCity(), addressLines(order),
+                order.getShippingPostalCode(), order.getShippingPhone(), order.getShippingEmail());
     }
 
     private static List<String> addressLines(Order order) {
@@ -843,24 +820,20 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     }
 
     /** {@code declaration_info[]}: la declaración aduanera ya construida, con los nombres de la API. */
-    private List<Map<String, Object>> declarationInfoOf(Order order) {
-        List<Map<String, Object>> lines = new ArrayList<>();
+    private List<YunExpressRequests.DeclarationLine> declarationInfoOf(Order order) {
+        List<YunExpressRequests.DeclarationLine> lines = new ArrayList<>();
         for (ParcelDeclaration parcel : declaredParcels(order)) {
-            Map<String, Object> line = new LinkedHashMap<>();
-            line.put("name_en", parcel.eName());
-            line.put("name_local", parcel.cName());
-            line.put("quantity", parcel.quantity());
-            line.put("unit_price", BigDecimal.valueOf(parcel.unitPrice()));
-            line.put("unit_weight", BigDecimal.valueOf(parcel.unitWeightKg()));
-            line.put("currency", parcel.currencyCode());
-            line.put("hs_code", parcel.hsCode());
-            line.put("material", parcel.invoicePart());
-            line.put("purpose", parcel.invoiceUsage());
-            line.put("sales_url", parcel.productUrl());
-            line.put("sku_code", parcel.sku());
-            lines.add(line);
+            lines.add(toDeclarationLine(parcel, parcel.quantity()));
         }
         return lines;
+    }
+
+    /** Una línea de la declaración con la cantidad que realmente viaja (puede diferir al repartir bultos). */
+    private static YunExpressRequests.DeclarationLine toDeclarationLine(ParcelDeclaration parcel, int quantity) {
+        return new YunExpressRequests.DeclarationLine(parcel.eName(), parcel.cName(), quantity,
+                BigDecimal.valueOf(parcel.unitPrice()), BigDecimal.valueOf(parcel.unitWeightKg()),
+                parcel.currencyCode(), parcel.hsCode(), parcel.invoicePart(), parcel.invoiceUsage(),
+                parcel.productUrl(), parcel.sku());
     }
 
     /** Canal a usar: el fijado en configuración o, si no hay, el más barato que cotice el destino. */
@@ -935,7 +908,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
 
     /** Anula la guía en YunExpress (solo posible antes de que el envío entre en almacén). */
     public boolean cancelShipment(String waybillNumber) {
-        JsonNode response = client.post(PATH_CANCEL, Map.of("waybill_number", waybillNumber));
+        JsonNode response = client.post(PATH_CANCEL, new YunExpressRequests.CancelShipment(waybillNumber));
         boolean ok = response.path("success").asBoolean(false);
         if (!ok) {
             log.warn("YunExpress: no se pudo anular la guía {} -> {} {}", waybillNumber,
