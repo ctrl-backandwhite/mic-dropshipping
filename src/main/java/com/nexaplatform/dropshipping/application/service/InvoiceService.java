@@ -268,7 +268,7 @@ public class InvoiceService {
                 legal.append(" · ").append(issuerEmail);
             }
         }
-        legal.append(legal.length() > 0 ? " · " : "").append(o.getOrderNumber());
+        legal.append(!legal.isEmpty() ? " · " : "").append(o.getOrderNumber());
         m.put("footerLegal", legal.toString());
 
         // QR de verificación: codifica la URL pública de verificación de esta factura.
@@ -506,7 +506,7 @@ public class InvoiceService {
                 legal.append(" · ").append(issuerEmail);
             }
         }
-        legal.append(legal.length() > 0 ? " · " : "").append(nz(d.number()));
+        legal.append(!legal.isEmpty() ? " · " : "").append(nz(d.number()));
         m.put("footerLegal", legal.toString());
 
         String verifyUrl = d.hostedUrl() != null ? d.hostedUrl() : "";
@@ -594,7 +594,7 @@ public class InvoiceService {
         StringBuilder sb = new StringBuilder();
         for (String p : parts) {
             if (p != null && !p.isBlank()) {
-                if (sb.length() > 0) {
+                if (!sb.isEmpty()) {
                     sb.append(", ");
                 }
                 sb.append(p);

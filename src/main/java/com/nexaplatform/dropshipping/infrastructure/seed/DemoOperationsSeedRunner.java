@@ -980,7 +980,7 @@ public class DemoOperationsSeedRunner {
             String hook = hooks[rnd.nextInt(hooks.length)].replace("{}", displayTitleFor(p));
             adTrendRepo.save(AdTrendEntity.builder()
                     .source(src).headline(hook).productSlug(p.getSlug())
-                    .impressions(10000L + (long) rnd.nextInt(900000)).engagement(500L + (long) rnd.nextInt(40000))
+                    .impressions(10000L + rnd.nextInt(900000)).engagement(500L + (long) rnd.nextInt(40000))
                     .score(new BigDecimal(
                             String.format(Locale.US, "%.3f", 0.5 + rnd.nextDouble() * 0.5)))
                     .region(new String[]{"US", "ES", "BR", "MX", "GB"}[rnd.nextInt(5)])

@@ -26,6 +26,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
 
 @ExtendWith(MockitoExtension.class)
 class OrderEmailServiceTest {
@@ -223,7 +224,7 @@ class OrderEmailServiceTest {
     @Test
     void trackingUpdate_swallowsEnqueueFailureWithoutBreakingFlow() {
         Order o = order("NX-500", "TRK-9", null, "USD");
-        org.mockito.Mockito.doThrow(new RuntimeException("queue down"))
+        doThrow(new RuntimeException("queue down"))
                 .when(emailQueue).enqueue(any(), any(), any(), anyMap());
 
         assertThatCode(() -> service.trackingUpdate(o, "buyer@x.com", "es", "En tránsito", "Madrid"))

@@ -138,12 +138,12 @@ public class AffiliateProgramService {
         appendNamePart(sb, u.getFirstName());
         appendNamePart(sb, u.getLastName1());
         appendNamePart(sb, u.getLastName2());
-        return sb.length() > 0 ? sb.toString() : "(sin nombre)";
+        return !sb.isEmpty() ? sb.toString() : "(sin nombre)";
     }
 
     private void appendNamePart(StringBuilder sb, String part) {
         if (part != null && !part.isBlank()) {
-            if (sb.length() > 0) {
+            if (!sb.isEmpty()) {
                 sb.append(' ');
             }
             sb.append(part.trim());

@@ -611,7 +611,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         String method = req.getPaymentMethod() == null ? WALLET : req.getPaymentMethod().toUpperCase();
         Order o = orderRepository.findById(created.getId()).orElseThrow();
         if (WALLET.equals(method)) {
-            long charge = (long) created.getTotalCents();
+            long charge = created.getTotalCents();
             String idemKey = idem != null ? idem : ("checkout-" + created.getId());
             walletUseCase.charge(userId, charge, created.getId(), idemKey, "Order " + created.getOrderNumber());
             o.setStatus(OrderStatus.PAID);

@@ -23,6 +23,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
 class JwtRevocationFilterTest {
@@ -41,11 +42,11 @@ class JwtRevocationFilterTest {
     @BeforeEach
     void setUp() {
         res = new MockHttpServletResponse();
-        chain = org.mockito.Mockito.mock(FilterChain.class);
+        chain = mock(FilterChain.class);
     }
 
     /** Builds an unsigned JWT carrying the given subject and issued-at instant. */
-    private String token(String sub, long iatEpochSeconds) throws Exception {
+    private String token(String sub, long iatEpochSeconds) {
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
                 .subject(sub)
                 .issueTime(new Date(iatEpochSeconds * 1000L))

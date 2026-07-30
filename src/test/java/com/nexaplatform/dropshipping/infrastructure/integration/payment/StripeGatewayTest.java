@@ -99,7 +99,7 @@ class StripeGatewayTest {
     // ---------------------------------------------------------------- checkout session (order)
 
     @Test
-    void initiateCheckoutSessionMapsResponse() throws Exception {
+    void initiateCheckoutSessionMapsResponse() {
         enable();
         PaymentEntity p = payment(ORDER_ID, "USD", new BigDecimal("49.99"), 4_999L);
 
@@ -123,7 +123,7 @@ class StripeGatewayTest {
     }
 
     @Test
-    void initiateCheckoutSessionUsesEurSettlementCentsExact() throws Exception {
+    void initiateCheckoutSessionUsesEurSettlementCentsExact() {
         enable();
         // 49.99 EUR -> 4999 cents (exact rounding from settlementAmount, NOT amountUsdCents=9999)
         PaymentEntity p = payment(ORDER_ID, "EUR", new BigDecimal("49.99"), 9_999L);
@@ -150,7 +150,7 @@ class StripeGatewayTest {
     }
 
     @Test
-    void initiateCheckoutSessionFallsBackToUsdCentsWhenNoSettlementAmount() throws Exception {
+    void initiateCheckoutSessionFallsBackToUsdCentsWhenNoSettlementAmount() {
         enable();
         PaymentEntity p = payment(ORDER_ID, "USD", null, 7_777L);
 
@@ -177,7 +177,7 @@ class StripeGatewayTest {
     // ---------------------------------------------------------------- checkout session (wallet recharge)
 
     @Test
-    void initiateCheckoutSessionForWalletRecharge() throws Exception {
+    void initiateCheckoutSessionForWalletRecharge() {
         // La recarga (sin orderId) usa el mismo Checkout hospedado que los pedidos (antes era PaymentIntent).
         enable();
         PaymentEntity p = payment(null, "USD", null, 2_500L);
@@ -211,7 +211,7 @@ class StripeGatewayTest {
     }
 
     @Test
-    void retrieveCheckoutSessionPaid() throws Exception {
+    void retrieveCheckoutSessionPaid() {
         enable();
         Session session = mock(Session.class);
         when(session.getPaymentStatus()).thenReturn("paid");
@@ -228,7 +228,7 @@ class StripeGatewayTest {
     }
 
     @Test
-    void retrieveCheckoutSessionUnpaidPassesThroughStatus() throws Exception {
+    void retrieveCheckoutSessionUnpaidPassesThroughStatus() {
         enable();
         Session session = mock(Session.class);
         when(session.getPaymentStatus()).thenReturn("unpaid");
@@ -252,7 +252,7 @@ class StripeGatewayTest {
     }
 
     @Test
-    void refundFull(/* amount<=0 -> no amount set */) throws Exception {
+    void refundFull(/* amount<=0 -> no amount set */) {
         enable();
         Refund refund = mock(Refund.class);
         when(refund.getId()).thenReturn("re_1");
@@ -274,7 +274,7 @@ class StripeGatewayTest {
     }
 
     @Test
-    void refundPartialSetsAmount() throws Exception {
+    void refundPartialSetsAmount() {
         enable();
         Refund refund = mock(Refund.class);
         when(refund.getId()).thenReturn("re_2");

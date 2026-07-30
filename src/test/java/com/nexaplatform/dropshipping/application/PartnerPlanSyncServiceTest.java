@@ -60,8 +60,8 @@ class PartnerPlanSyncServiceTest {
         service.syncForUser(userId);
 
         Map<String, Object> written = capturedSettings();
-        assertThat(written.get("nexadrop.plan")).isEqualTo("paid");
-        assertThat(written.get("nexadrop.plan_code")).isEqualTo("PRO");
+        assertThat(written).containsEntry("nexadrop.plan", "paid");
+        assertThat(written).containsEntry("nexadrop.plan_code", "PRO");
         assertThat(written.get("nexadrop.plan_synced_at")).isNotNull();
         verify(revocationService).revokeAllForClients(List.of("cli-1"));
     }
@@ -76,8 +76,8 @@ class PartnerPlanSyncServiceTest {
         service.syncForUser(userId);
 
         Map<String, Object> written = capturedSettings();
-        assertThat(written.get("nexadrop.plan")).isEqualTo("sandbox");
-        assertThat(written.get("nexadrop.plan_code")).isEqualTo("FREE");
+        assertThat(written).containsEntry("nexadrop.plan", "sandbox");
+        assertThat(written).containsEntry("nexadrop.plan_code", "FREE");
     }
 
     @Test
@@ -90,9 +90,9 @@ class PartnerPlanSyncServiceTest {
         service.syncForUser(userId);
 
         Map<String, Object> written = capturedSettings();
-        assertThat(written.get("nexadrop.plan")).isEqualTo("sandbox");
+        assertThat(written).containsEntry("nexadrop.plan", "sandbox");
         // planCode is null → key left as the previous value, never overwritten
-        assertThat(written.get("nexadrop.plan_code")).isEqualTo("PRO");
+        assertThat(written).containsEntry("nexadrop.plan_code", "PRO");
     }
 
     @Test
@@ -150,7 +150,7 @@ class PartnerPlanSyncServiceTest {
         service.onSubscriptionEvent("sub_K", "active", "customer.subscription.updated");
 
         Map<String, Object> written = capturedSettings();
-        assertThat(written.get("nexadrop.plan")).isEqualTo("paid");
+        assertThat(written).containsEntry("nexadrop.plan", "paid");
         verify(revocationService).revokeAllForClients(List.of("cli-1"));
     }
 

@@ -167,13 +167,13 @@ public interface OrderEntityMapper {
             StringBuilder sb = new StringBuilder();
             for (String val : opts.values()) {
                 if (val != null && !val.isBlank()) {
-                    if (sb.length() > 0) {
+                    if (!sb.isEmpty()) {
                         sb.append(" / ");
                     }
                     sb.append(val);
                 }
             }
-            if (sb.length() > 0) {
+            if (!sb.isEmpty()) {
                 return sb.toString();
             }
         }

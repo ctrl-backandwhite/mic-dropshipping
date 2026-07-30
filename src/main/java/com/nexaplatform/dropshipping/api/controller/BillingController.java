@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.controller;
 
+import com.stripe.exception.StripeException;
 import com.nexaplatform.dropshipping.api.BillingApi;
 import com.nexaplatform.dropshipping.api.dto.in.SubscribeDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BillingPlanDtoOut;
@@ -56,7 +57,7 @@ public class BillingController implements BillingApi {
     }
 
     @Override
-    public ResponseEntity<SubscribeDtoOut> subscribe(UserDetails principal, SubscribeDtoIn req) throws Exception {
+    public ResponseEntity<SubscribeDtoOut> subscribe(UserDetails principal, SubscribeDtoIn req) throws StripeException {
         UUID userId = UUID.fromString(principal.getUsername());
         return ResponseEntity
                 .ok(mapper.toSubscribeDtoOut(useCase.subscribe(userId, req.getPlanCode(), req.getPeriod())));

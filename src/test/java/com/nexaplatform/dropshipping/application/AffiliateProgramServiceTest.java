@@ -223,7 +223,7 @@ class AffiliateProgramServiceTest {
 
         long paid = service.payoutApproved(affiliateId, false); // 10.00 < 50.00 min
 
-        assertThat(paid).isEqualTo(0);
+        assertThat(paid).isZero();
         verify(walletUseCase, never()).adminTopup(any(), anyLong(), any(), any());
     }
 }

@@ -34,7 +34,7 @@ public class ResourceServerConfig {
     @Order(1)
     public SecurityFilterChain partnerApiFilterChain(HttpSecurity http, JwtRevocationFilter revocationFilter,
             JWKSource<SecurityContext> jwkSource, @Value("${nexadrop.oauth.issuer}") String issuer)
-            throws Exception {
+ {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
         authoritiesConverter.setAuthoritiesClaimName("scope");

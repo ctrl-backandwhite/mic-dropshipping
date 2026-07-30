@@ -24,6 +24,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.mockito.ArgumentMatchers;
+import org.springframework.core.ParameterizedTypeReference;
 
 class PayPalGatewayTest {
 
@@ -42,7 +44,7 @@ class PayPalGatewayTest {
     /**
      * Each call to {@code webClientBuilder.build()} returns a fresh WebClient whose fluent chain
      * funnels into the same response spec; per-test we enqueue the JSON bodies returned by
-     * {@code bodyToMono(Map.class)} in call order (token first, then the actual operation).
+     * {@code bodyToMono(...)} in call order (token first, then the actual operation).
      */
     @SuppressWarnings("unchecked")
     @BeforeEach
@@ -76,7 +78,7 @@ class PayPalGatewayTest {
         ReflectionTestUtils.setField(gateway, "enabled", true);
     }
 
-    /** Enqueue the Map responses returned by consecutive bodyToMono(Map.class).block() calls. */
+    /** Enqueue the Map responses returned by consecutive bodyToMono(...).block() calls. */
     @SuppressWarnings("unchecked")
     private void enqueueResponses(Map<String, Object> first, Map<String, Object>... rest) {
         Mono<Map<String, Object>> firstMono = Mono.just(first);
@@ -85,7 +87,10 @@ class PayPalGatewayTest {
             restMonos[i] = Mono.just(rest[i]);
         }
         // Real Monos: the gateway chains .timeout(...).block() on them, which executes for real.
-        when(responseSpec.bodyToMono(Map.class)).thenReturn((Mono) firstMono, (Mono[]) restMonos);
+        // El gateway pide el tipo parametrizado, no Map.class: con el tipo crudo el genérico se perdía
+        // y obligaba a castear la respuesta con @SuppressWarnings.
+        when(responseSpec.bodyToMono(ArgumentMatchers.<ParameterizedTypeReference<Map<String, Object>>>any()))
+                .thenReturn((Mono) firstMono, (Mono[]) restMonos);
     }
 
     private PaymentEntity payment(UUID orderId, long usdCents, String idempotencyKey) {
@@ -168,7 +173,7 @@ class PayPalGatewayTest {
         assertThat(units.get(0)).containsEntry("invoice_id", ORDER_ID.toString());
 
         // Idempotency key flows into PayPal-Request-Id header.
-        verify(bodySpec).header(eq("PayPal-Request-Id"), eq("idem-key-1"));
+        verify(bodySpec).header("PayPal-Request-Id", "idem-key-1");
     }
 
     @Test
@@ -200,7 +205,7 @@ class PayPalGatewayTest {
         assertThat(units.get(0)).doesNotContainKey("invoice_id");
 
         // No idempotency key -> falls back to payment id in PayPal-Request-Id.
-        verify(bodySpec).header(eq("PayPal-Request-Id"), eq(PAYMENT_ID.toString()));
+        verify(bodySpec).header("PayPal-Request-Id", PAYMENT_ID.toString());
     }
 
     @Test

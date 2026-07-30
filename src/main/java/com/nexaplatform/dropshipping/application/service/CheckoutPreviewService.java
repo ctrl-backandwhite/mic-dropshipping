@@ -88,7 +88,7 @@ public class CheckoutPreviewService {
             // HALF_UP (céntimo más cercano) — el MISMO redondeo que el catálogo y que el pedido
             // (OrderUseCaseImpl), para que catálogo == carrito == preview == cobro, sin descuadre de 1 cént.
             int unitCents = retail.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
-            int qty = Math.min(Math.max(1, it.quantity()), MAX_LINE_QUANTITY);
+            int qty = Math.clamp(1, it.quantity(), MAX_LINE_QUANTITY);
             subtotalUsdCents = Math.addExact(subtotalUsdCents, Math.multiplyExact(unitCents, qty));
             // Unidad en la moneda mostrada, redondeada a 2 dec., × cantidad (misma unidad que carrito/detalle).
             subDispAcc = subDispAcc.add(currencyService.usdToDisplay(usd(unitCents)).multiply(BigDecimal.valueOf(qty)));

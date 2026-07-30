@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import com.stripe.exception.StripeException;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.mapper.CustomerSubscriptionUpdateMapper;
@@ -239,7 +240,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
 
     @Override
     @Transactional
-    public SubscribeResult subscribe(UUID userId, String planCode, String period) throws Exception {
+    public SubscribeResult subscribe(UUID userId, String planCode, String period) throws StripeException {
         SubscriptionPlanEntity plan = getPlanEntityByCode(planCode);
 
         if (!stripeService.isEnabled()) {
@@ -310,7 +311,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
 
     @Override
     @Transactional
-    public String createSetupIntentSecret(UUID userId) throws Exception {
+    public String createSetupIntentSecret(UUID userId) throws StripeException {
         requireStripe();
         String customerId = resolveStripeCustomerId(userId);
         return stripeService.createSetupIntent(customerId).getClientSecret();
@@ -318,7 +319,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
 
     @Override
     @Transactional(readOnly = true)
-    public List<CardInfo> listCards(UUID userId) throws Exception {
+    public List<CardInfo> listCards(UUID userId) throws StripeException {
         requireStripe();
         UserEntity user = loadUser(userId);
         String customerId = user.getStripeCustomerId();
@@ -331,7 +332,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
 
     @Override
     @Transactional
-    public void setDefaultCard(UUID userId, String paymentMethodId) throws Exception {
+    public void setDefaultCard(UUID userId, String paymentMethodId) throws StripeException {
         requireStripe();
         String customerId = resolveStripeCustomerId(userId);
         assertCardBelongsToCustomer(customerId, paymentMethodId);
@@ -340,7 +341,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
 
     @Override
     @Transactional
-    public void deleteCard(UUID userId, String paymentMethodId) throws Exception {
+    public void deleteCard(UUID userId, String paymentMethodId) throws StripeException {
         requireStripe();
         String customerId = resolveStripeCustomerId(userId);
         assertCardBelongsToCustomer(customerId, paymentMethodId);
@@ -359,7 +360,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     }
 
     /** Devuelve el customerId de Stripe del usuario; lo crea y persiste de forma perezosa si no lo tiene. */
-    private String resolveStripeCustomerId(UUID userId) throws Exception {
+    private String resolveStripeCustomerId(UUID userId) throws StripeException {
         UserEntity user = loadUser(userId);
         if (user.getStripeCustomerId() != null && !user.getStripeCustomerId().isBlank()) {
             return user.getStripeCustomerId();
@@ -372,7 +373,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     }
 
     /** Evita que un usuario manipule (default/borrado) una tarjeta que no es de su Customer. */
-    private void assertCardBelongsToCustomer(String customerId, String paymentMethodId) throws Exception {
+    private void assertCardBelongsToCustomer(String customerId, String paymentMethodId) throws StripeException {
         boolean owned = stripeService.listCards(customerId).stream()
                 .anyMatch(pm -> pm.getId().equals(paymentMethodId));
         if (!owned) {
@@ -393,7 +394,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
 
     @Override
     @Transactional
-    public SubscribeOutcome subscribeWithSavedCard(UUID userId, String planCode, String period) throws Exception {
+    public SubscribeOutcome subscribeWithSavedCard(UUID userId, String planCode, String period) throws StripeException {
         requireStripe();
         SubscriptionPlanEntity plan = getPlanEntityByCode(planCode);
         String billingPeriod = YEARLY.equalsIgnoreCase(period) ? YEARLY : MONTHLY;
@@ -482,7 +483,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
 
     @Override
     @Transactional
-    public void cancelMySubscription(UUID userId) throws Exception {
+    public void cancelMySubscription(UUID userId) throws StripeException {
         CustomerSubscription sub = currentSubscription(userId);
         if (sub == null) {
             throw new NotFoundException("No tienes una suscripción activa");
@@ -500,7 +501,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
 
     @Override
     @Transactional(readOnly = true)
-    public List<InvoiceView> listInvoices(UUID userId) throws Exception {
+    public List<InvoiceView> listInvoices(UUID userId) throws StripeException {
         if (!stripeService.isEnabled()) {
             return List.of();
         }
@@ -516,7 +517,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
 
     @Override
     @Transactional(readOnly = true)
-    public byte[] renderInvoicePdf(UUID userId, String number, String locale) throws Exception {
+    public byte[] renderInvoicePdf(UUID userId, String number, String locale) throws StripeException {
         requireStripe();
         String customerId = loadUser(userId).getStripeCustomerId();
         if (customerId == null || customerId.isBlank()) {

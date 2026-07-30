@@ -20,6 +20,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 /**
  * Revocación en caliente de los tokens de usuario del SPA.
@@ -43,10 +44,10 @@ class UserTokenRevocationFilterTest {
     @BeforeEach
     void setUp() {
         res = new MockHttpServletResponse();
-        chain = org.mockito.Mockito.mock(FilterChain.class);
+        chain = mock(FilterChain.class);
     }
 
-    private String token(String sub, long iatEpochSeconds) throws Exception {
+    private String token(String sub, long iatEpochSeconds) {
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
                 .subject(sub).issueTime(new Date(iatEpochSeconds * 1000L)).build();
         return new PlainJWT(claims).serialize();

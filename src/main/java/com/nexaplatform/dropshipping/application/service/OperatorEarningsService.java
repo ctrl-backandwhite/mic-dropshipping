@@ -71,7 +71,7 @@ public class OperatorEarningsService {
     public OperatorActionPage history(String operatorSubject, String fromDate, String toDate, int page, int size) {
         Instant from = startOf(fromDate, 90);
         Instant to = endOf(toDate);
-        int pageSize = Math.min(Math.max(size, 1), 200);
+        int pageSize = Math.clamp(size, 1, 200);
         // Consulta preferente desde OpenSearch (indexado); si no responde, fallback a Postgres.
         try {
             var res = indexer.search(operatorSubject, from, to, page, pageSize);

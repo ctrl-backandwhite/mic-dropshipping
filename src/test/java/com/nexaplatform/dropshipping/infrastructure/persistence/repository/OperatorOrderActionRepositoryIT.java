@@ -104,7 +104,7 @@ class OperatorOrderActionRepositoryIT extends PersistenceITBase {
 
         assertThat(actions.sumCommissionForOperator("op-1", FROM, TO)).isEqualTo(4000L);
         // COALESCE: empty aggregate returns 0, never null.
-        assertThat(actions.sumCommissionForOperator("op-unknown", FROM, TO)).isEqualTo(0L);
+        assertThat(actions.sumCommissionForOperator("op-unknown", FROM, TO)).isZero();
     }
 
     @Test

@@ -28,6 +28,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 /**
  * Consultas de la ficha de producto, extraídas del controlador del escaparate.
@@ -60,11 +61,11 @@ class ProductDetailQueryServiceTest {
 
     @BeforeEach
     void setUp() {
-        products = Mockito.mock(ProductRepository.class);
-        specs = Mockito.mock(ProductSpecificationRepository.class);
-        attributes = Mockito.mock(ProductAttributeRepository.class);
+        products = mock(ProductRepository.class);
+        specs = mock(ProductSpecificationRepository.class);
+        attributes = mock(ProductAttributeRepository.class);
         service = new ProductDetailQueryService(products, specs, attributes,
-                Mockito.mock(ProductTagRepository.class));
+                mock(ProductTagRepository.class));
         base = product(categoryId, 1.0);
         lenient().when(products.findById(base.getId())).thenReturn(Optional.of(base));
     }

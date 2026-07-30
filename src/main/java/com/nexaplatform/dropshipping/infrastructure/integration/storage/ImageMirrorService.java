@@ -17,6 +17,8 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.net.UnknownHostException;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -309,7 +311,7 @@ public class ImageMirrorService {
      *       origen mienta en el header) se descarta y NUNCA entra al bucket → no se puede servir ni ejecutar.</li>
      * </ul>
      */
-    private Stored fetchAndStore(String src) throws Exception {
+    private Stored fetchAndStore(String src) throws IOException, InterruptedException {
         HttpResponse<byte[]> res = fetchFollowingRedirects(src.trim(), 5);
         byte[] data = res.body();
         if (res.statusCode() / 100 != 2 || data == null || data.length == 0) {
@@ -323,7 +325,8 @@ public class ImageMirrorService {
     }
 
     /** Sigue redirects MANUALMENTE (máx {@code maxHops}), validando cada URL contra SSRF antes de pedirla. */
-    private HttpResponse<byte[]> fetchFollowingRedirects(String url, int maxHops) throws Exception {
+    private HttpResponse<byte[]> fetchFollowingRedirects(String url, int maxHops)
+            throws IOException, InterruptedException {
         String current = url;
         for (int hop = 0; hop <= maxHops; hop++) {
             URI uri = URI.create(current);
@@ -345,7 +348,7 @@ public class ImageMirrorService {
     }
 
     /** Anti-SSRF: rechaza esquemas no http(s) y hosts que resuelvan a IP no enrutable públicamente. */
-    static void assertPublicHttpUrl(URI uri) throws Exception {
+    static void assertPublicHttpUrl(URI uri) throws UnknownHostException {
         String scheme = uri.getScheme();
         if (scheme == null || !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))) {
             throw new SecurityException("Esquema no permitido para descarga de imagen: " + scheme);

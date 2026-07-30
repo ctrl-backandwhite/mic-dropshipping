@@ -252,7 +252,7 @@ public class AdminCatalogController implements AdminCatalogApi {
 
     @Override
     public ResponseEntity<StreamingResponseBody> exportProductsNdjson(int batch) {
-        int safeBatch = Math.min(Math.max(batch, 1), MAX_BATCH);
+        int safeBatch = Math.clamp(batch, 1, MAX_BATCH);
         // Stream one product per line; keyset-paginate and flush each batch so memory stays bounded to a
         // single page regardless of the total number of products (scales to millions).
         StreamingResponseBody body = out -> {
@@ -281,7 +281,7 @@ public class AdminCatalogController implements AdminCatalogApi {
 
     @Override
     public ResponseEntity<BulkResultDtoOut> importProductsNdjson(HttpServletRequest request, int batch) {
-        int safeBatch = Math.min(Math.max(batch, 1), MAX_BATCH);
+        int safeBatch = Math.clamp(batch, 1, MAX_BATCH);
         NdjsonImportAccumulator acc = new NdjsonImportAccumulator();
         List<BulkProductDtoIn> buffer = new ArrayList<>(safeBatch);
         try (BufferedReader reader = new BufferedReader(

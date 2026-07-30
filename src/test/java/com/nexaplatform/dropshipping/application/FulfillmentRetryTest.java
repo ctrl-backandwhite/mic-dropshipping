@@ -34,6 +34,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 /**
  * Tolerancia a fallo al crear el envío en el transportista.
@@ -56,15 +57,15 @@ class FulfillmentRetryTest {
 
     @BeforeEach
     void setUp() {
-        orderRepository = Mockito.mock(OrderRepository.class);
-        provider = Mockito.mock(FulfillmentProvider.class);
-        opsAlertService = Mockito.mock(OpsAlertService.class);
-        notificationUseCase = Mockito.mock(NotificationUseCase.class);
-        shipmentRepository = Mockito.mock(OrderShipmentRepository.class);
-        service = new FulfillmentService(orderRepository, Mockito.mock(OrderTrackingEventRepository.class),
-                provider, Mockito.mock(UserRepository.class), Mockito.mock(OrderEmailService.class),
+        orderRepository = mock(OrderRepository.class);
+        provider = mock(FulfillmentProvider.class);
+        opsAlertService = mock(OpsAlertService.class);
+        notificationUseCase = mock(NotificationUseCase.class);
+        shipmentRepository = mock(OrderShipmentRepository.class);
+        service = new FulfillmentService(orderRepository, mock(OrderTrackingEventRepository.class),
+                provider, mock(UserRepository.class), mock(OrderEmailService.class),
                 new ObjectMapper(), new YunExpressEventCipher(), opsAlertService, notificationUseCase, shipmentRepository,
-                Mockito.mock(TrackingViewMapper.class));
+                mock(TrackingViewMapper.class));
 
         order = new Order();
         order.setId(UUID.randomUUID());

@@ -91,18 +91,31 @@ public class ObjectStorageService {
     }
 
     /** Sube los bytes con la clave dada y devuelve la URL pública navegable. */
-    public String upload(String key, byte[] data, String contentType) throws Exception {
-        client.putObject(PutObjectArgs.builder().bucket(bucket).object(key)
-                .stream(new ByteArrayInputStream(data), data.length, -1)
-                .contentType(contentType != null && !contentType.isBlank() ? contentType : "application/octet-stream")
-                .build());
+    public String upload(String key, byte[] data, String contentType) {
+        try {
+            client.putObject(PutObjectArgs.builder().bucket(bucket).object(key)
+                    .stream(new ByteArrayInputStream(data), data.length, -1)
+                    .contentType(
+                            contentType != null && !contentType.isBlank() ? contentType : "application/octet-stream")
+                    .build());
+        } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw new ObjectStorageException("No se pudo subir el objeto " + key, e);
+        }
         return publicUrl.replaceAll("/++$", "") + "/" + key;
     }
 
     /** Descarga los bytes de un objeto por su clave (usa el endpoint INTERNO, alcanzable por el backend). */
-    public byte[] download(String key) throws Exception {
+    public byte[] download(String key) {
         try (var is = client.getObject(GetObjectArgs.builder().bucket(bucket).object(key).build())) {
             return is.readAllBytes();
+        } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw new ObjectStorageException("No se pudo descargar el objeto " + key, e);
         }
     }
 

@@ -89,7 +89,7 @@ class StripeServiceTest {
             assertThat(result).isSameAs(created);
             cust.verify(() -> Customer.create(captor.capture()));
             Map<String, Object> raw = captor.getValue().toMap();
-            assertThat(raw.get("email")).isEqualTo("buyer@nx.com");
+            assertThat(raw).containsEntry("email", "buyer@nx.com");
             @SuppressWarnings("unchecked")
             Map<String, Object> md = (Map<String, Object>) raw.get("metadata");
             assertThat(md).containsEntry("platform", PLATFORM_ID)
@@ -110,7 +110,7 @@ class StripeServiceTest {
             assertThat(result).isSameAs(intent);
             si.verify(() -> SetupIntent.create(captor.capture()));
             Map<String, Object> raw = captor.getValue().toMap();
-            assertThat(raw.get("customer")).isEqualTo("cus_1");
+            assertThat(raw).containsEntry("customer", "cus_1");
             assertThat(raw.get("payment_method_types")).asInstanceOf(
                     org.assertj.core.api.InstanceOfAssertFactories.list(String.class)).contains("card");
         }
@@ -130,8 +130,8 @@ class StripeServiceTest {
             assertThat(result).containsExactly(card);
             pm.verify(() -> PaymentMethod.list(captor.capture()));
             Map<String, Object> raw = captor.getValue().toMap();
-            assertThat(raw.get("customer")).isEqualTo("cus_9");
-            assertThat(raw.get("type")).isEqualTo("card");
+            assertThat(raw).containsEntry("customer", "cus_9");
+            assertThat(raw).containsEntry("type", "card");
         }
     }
 
@@ -172,12 +172,12 @@ class StripeServiceTest {
             assertThat(id).isEqualTo("price_new");
             price.verify(() -> Price.create(captor.capture()));
             Map<String, Object> raw = captor.getValue().toMap();
-            assertThat(raw.get("currency")).isEqualTo("eur");
-            assertThat(raw.get("unit_amount")).isEqualTo(19990L);
-            assertThat(raw.get("lookup_key")).isEqualTo("nx_pro_yearly_19990_eur");
+            assertThat(raw).containsEntry("currency", "eur");
+            assertThat(raw).containsEntry("unit_amount", 19990L);
+            assertThat(raw).containsEntry("lookup_key", "nx_pro_yearly_19990_eur");
             @SuppressWarnings("unchecked")
             Map<String, Object> recurring = (Map<String, Object>) raw.get("recurring");
-            assertThat(recurring.get("interval")).isEqualTo("year");
+            assertThat(recurring).containsEntry("interval", "year");
         }
     }
 
@@ -219,9 +219,9 @@ class StripeServiceTest {
             assertThat(id).isEqualTo("txr_new");
             tax.verify(() -> TaxRate.create(captor.capture()));
             Map<String, Object> raw = captor.getValue().toMap();
-            assertThat(raw.get("country")).isEqualTo("ES");
-            assertThat(raw.get("inclusive")).isEqualTo(Boolean.FALSE);
-            assertThat(raw.get("percentage")).isEqualTo(new java.math.BigDecimal("21.00"));
+            assertThat(raw).containsEntry("country", "ES");
+            assertThat(raw).containsEntry("inclusive", Boolean.FALSE);
+            assertThat(raw).containsEntry("percentage", new java.math.BigDecimal("21.00"));
             @SuppressWarnings("unchecked")
             Map<String, Object> md = (Map<String, Object>) raw.get("metadata");
             assertThat(md).containsEntry("nx_tag", "nx_iva_es_2100").containsEntry("platform", PLATFORM_ID);
@@ -249,9 +249,9 @@ class StripeServiceTest {
 
             s.verify(() -> Subscription.create(captor.capture()));
             Map<String, Object> raw = captor.getValue().toMap();
-            assertThat(raw.get("customer")).isEqualTo("cus_1");
-            assertThat(raw.get("payment_behavior")).isEqualTo("error_if_incomplete");
-            assertThat(raw.get("default_payment_method")).isEqualTo("pm_1");
+            assertThat(raw).containsEntry("customer", "cus_1");
+            assertThat(raw).containsEntry("payment_behavior", "error_if_incomplete");
+            assertThat(raw).containsEntry("default_payment_method", "pm_1");
             assertThat(raw.get("default_tax_rates")).asInstanceOf(
                     org.assertj.core.api.InstanceOfAssertFactories.list(String.class)).contains("txr_1");
             @SuppressWarnings("unchecked")
@@ -292,8 +292,8 @@ class StripeServiceTest {
             assertThat(info.hostedUrl()).isEqualTo("https://hosted");
             invoices.verify(() -> Invoice.list(captor.capture()));
             Map<String, Object> raw = captor.getValue().toMap();
-            assertThat(raw.get("customer")).isEqualTo("cus_5");
-            assertThat(raw.get("limit")).isEqualTo(3L);
+            assertThat(raw).containsEntry("customer", "cus_5");
+            assertThat(raw).containsEntry("limit", 3L);
         }
     }
 

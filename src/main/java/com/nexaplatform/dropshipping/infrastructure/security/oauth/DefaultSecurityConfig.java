@@ -31,7 +31,7 @@ public class DefaultSecurityConfig {
     @Order(3)
     public SecurityFilterChain defaultFilterChain(HttpSecurity http,
             GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler,
-            GithubOAuth2UserService githubOAuth2UserService) throws Exception {
+            GithubOAuth2UserService githubOAuth2UserService) {
         http.cors(Customizer.withDefaults())
                 // Aquí CSRF está ACTIVO (esta cadena sí tiene formulario y sesión); solo se exceptúan
                 // rutas concretas. La cookie va sin HttpOnly a propósito: el patrón de doble envío exige

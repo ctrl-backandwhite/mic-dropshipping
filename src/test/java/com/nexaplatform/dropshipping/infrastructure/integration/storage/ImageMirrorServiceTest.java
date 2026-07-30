@@ -85,7 +85,7 @@ class ImageMirrorServiceTest {
 
         int mirrored = service.mirrorPendingBatch(50);
 
-        assertThat(mirrored).isEqualTo(0);
+        assertThat(mirrored).isZero();
         verify(imageRepository, never()).markMirrored(any(), any(), any(), any(), any(), any());
         verify(imageRepository, never()).markStatus(any(), any());
     }
@@ -100,7 +100,7 @@ class ImageMirrorServiceTest {
         int mirrored = service.mirrorPendingBatch(50);
 
         // Sin URL de origen no se descarga nada: directo a FAILED, 0 espejadas.
-        assertThat(mirrored).isEqualTo(0);
+        assertThat(mirrored).isZero();
         verify(imageRepository).markStatus(id, MirrorStatus.FAILED);
         verify(imageRepository, never()).markMirrored(any(), any(), any(), any(), any(), any());
     }
@@ -158,7 +158,7 @@ class ImageMirrorServiceTest {
         gone.setCdnUrl("https://cdn.example.com/media/cd/gone.jpg");
         gone.setMirrorStatus(MirrorStatus.MIRRORED);
         when(imageRepository.findByMirrorStatusAndCdnUrlStartingWith(
-                eq(MirrorStatus.MIRRORED), eq("https://cdn.example.com/")))
+                MirrorStatus.MIRRORED, "https://cdn.example.com/"))
                 .thenReturn(List.of(kept, gone));
 
         // No hay PENDING tras el heal: el resto del lote es no-op controlable.

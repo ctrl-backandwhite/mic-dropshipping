@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 
 /**
  * El modo simulado NO puede actuar en producción.
@@ -37,9 +38,9 @@ import static org.mockito.Mockito.lenient;
 class YunExpressMockGuardTest {
 
     private YunExpressFulfillmentService serviceOn(String... activeProfiles) {
-        CainiaoZoneRepository zones = Mockito.mock(CainiaoZoneRepository.class);
-        CustomsValuationService customs = Mockito.mock(CustomsValuationService.class);
-        YunExpressClient client = Mockito.mock(YunExpressClient.class);
+        CainiaoZoneRepository zones = mock(CainiaoZoneRepository.class);
+        CustomsValuationService customs = mock(CustomsValuationService.class);
+        YunExpressClient client = mock(YunExpressClient.class);
         lenient().when(zones.findByCountryCodeIgnoreCase(anyString())).thenReturn(Optional.empty());
         lenient().when(customs.valuate(anyString(), anyInt(), anyInt()))
                 .thenReturn(new CustomsValuation("ES", TaxMode.DDP, 1000, false,

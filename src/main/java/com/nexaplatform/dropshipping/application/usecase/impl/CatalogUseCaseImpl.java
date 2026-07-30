@@ -1197,7 +1197,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Override
     @Transactional(readOnly = true)
     public ProductExportBatch exportBatchAfter(UUID afterId, int limit) {
-        int safeLimit = Math.min(Math.max(limit, 1), 1000);
+        int safeLimit = Math.clamp(limit, 1, 1000);
         // Keyset pagination by id. A native query with an explicit uuid cast is used because Hibernate does
         // not reliably translate the JPQL "p.id > :afterId" comparison on a UUID column (it silently returns
         // no rows past a point), which truncated the stream. Native SQL uses Postgres' native uuid ordering.
@@ -1649,7 +1649,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             if ((rv.getBody() == null || rv.getBody().isBlank()) && (rv.getTitle() == null || rv.getTitle().isBlank())) {
                 continue;
             }
-            short rating = rv.getRating() != null ? (short) Math.max(1, Math.min(5, rv.getRating())) : 5;
+            short rating = rv.getRating() != null ? (short) Math.clamp(rv.getRating(), 1, 5) : 5;
             var e = ProductReviewEntity.builder()
                     .product(ref)
                     .authorName(rv.getAuthorName() != null && !rv.getAuthorName().isBlank() ? rv.getAuthorName().trim()

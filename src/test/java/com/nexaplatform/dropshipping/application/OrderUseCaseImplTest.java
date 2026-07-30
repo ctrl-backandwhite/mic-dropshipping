@@ -262,8 +262,8 @@ class OrderUseCaseImplTest {
         orderUseCase.forwardOrder(id);
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.FORWARDED);
-        org.mockito.Mockito.verify(orderRepository).save(order);
-        org.mockito.Mockito.verify(webhooks).publish(org.mockito.ArgumentMatchers.eq("order.forwarded"),
+        verify(orderRepository).save(order);
+        verify(webhooks).publish(org.mockito.ArgumentMatchers.eq("order.forwarded"),
                 org.mockito.ArgumentMatchers.eq(id.toString()), org.mockito.ArgumentMatchers.any());
     }
 
@@ -280,7 +280,7 @@ class OrderUseCaseImplTest {
         orderUseCase.refundOrder(id);
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
-        org.mockito.Mockito.verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer),
+        verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer),
                 org.mockito.ArgumentMatchers.eq(2500L), org.mockito.ArgumentMatchers.eq(id),
                 org.mockito.ArgumentMatchers.eq("refund-" + id), org.mockito.ArgumentMatchers.anyString());
     }
@@ -300,7 +300,7 @@ class OrderUseCaseImplTest {
         orderUseCase.cancelMyOrder(buyer, id, true); // reembolso a la wallet (inmediato)
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-        org.mockito.Mockito.verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer),
+        verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer),
                 org.mockito.ArgumentMatchers.eq(1500L), org.mockito.ArgumentMatchers.eq(id),
                 org.mockito.ArgumentMatchers.eq("cancel-" + id), org.mockito.ArgumentMatchers.anyString());
     }
@@ -324,8 +324,8 @@ class OrderUseCaseImplTest {
         orderUseCase.cancelMyOrder(buyer, id, false); // reembolso al método original (tarjeta → Stripe)
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-        org.mockito.Mockito.verify(paymentUseCase).refundOrderPayment(id, paymentId, 0);
-        org.mockito.Mockito.verify(walletUseCase, org.mockito.Mockito.never()).deposit(any(), org.mockito
+        verify(paymentUseCase).refundOrderPayment(id, paymentId, 0);
+        verify(walletUseCase, never()).deposit(any(), org.mockito
                 .ArgumentMatchers.anyLong(), any(), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString());
     }
@@ -368,7 +368,7 @@ class OrderUseCaseImplTest {
         orderUseCase.cancelOrder(id);
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-        org.mockito.Mockito.verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer),
+        verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer),
                 org.mockito.ArgumentMatchers.eq(3000L), org.mockito.ArgumentMatchers.eq(id),
                 org.mockito.ArgumentMatchers.eq("cancel-" + id), org.mockito.ArgumentMatchers.anyString());
     }

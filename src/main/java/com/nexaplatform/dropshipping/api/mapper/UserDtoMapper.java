@@ -55,12 +55,12 @@ public interface UserDtoMapper {
         appendPart(sb, user.getFirstName());
         appendPart(sb, user.getLastName1());
         appendPart(sb, user.getLastName2());
-        return sb.length() == 0 ? user.getDisplayName() : sb.toString();
+        return sb.isEmpty() ? user.getDisplayName() : sb.toString();
     }
 
     private void appendPart(StringBuilder sb, String part) {
         if (part != null && !part.isBlank()) {
-            if (sb.length() > 0) {
+            if (!sb.isEmpty()) {
                 sb.append(' ');
             }
             sb.append(part.trim());

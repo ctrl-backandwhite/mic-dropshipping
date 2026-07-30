@@ -19,6 +19,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class CategorySearchServiceTest {
@@ -44,7 +46,7 @@ class CategorySearchServiceTest {
     private HttpResponse<String> response(int status, String body) {
         // Answer en lugar de when(): el helper se llama DENTRO de when(send()).thenReturn(...),
         // y un when() anidado durante otro stubbing dispara UnfinishedStubbingException.
-        return (HttpResponse<String>) org.mockito.Mockito.mock(HttpResponse.class, invocation -> {
+        return (HttpResponse<String>) mock(HttpResponse.class, invocation -> {
             String m = invocation.getMethod().getName();
             if ("statusCode".equals(m)) {
                 return status;
@@ -94,7 +96,7 @@ class CategorySearchServiceTest {
         service.listFromIndex(null);
 
         ArgumentCaptor<HttpRequest> captor = ArgumentCaptor.forClass(HttpRequest.class);
-        org.mockito.Mockito.verify(httpClient).send(captor.capture(), any(HttpResponse.BodyHandler.class));
+        verify(httpClient).send(captor.capture(), any(HttpResponse.BodyHandler.class));
         HttpRequest req = captor.getValue();
         assertThat(req.uri().toString()).isEqualTo("http://localhost:9400/categories/_search");
         // We cannot read the publisher body directly here; the empty-hits path is what matters.

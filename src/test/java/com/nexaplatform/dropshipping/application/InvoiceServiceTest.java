@@ -65,14 +65,14 @@ class InvoiceServiceTest {
         Map<String, Object> m = service.model(order("USD", item(1000, 2, "Camiseta"), item(550, 1, "Gorra")),
                 "es", "http://dl");
 
-        assertThat(m.get("subtotal")).isEqualTo("$25.50");
-        assertThat(m.get("shipping")).isEqualTo("$5.00");
-        assertThat(m.get("tax")).isEqualTo("$2.10");
-        assertThat(m.get("total")).isEqualTo("$32.60");
+        assertThat(m).containsEntry("subtotal", "$25.50");
+        assertThat(m).containsEntry("shipping", "$5.00");
+        assertThat(m).containsEntry("tax", "$2.10");
+        assertThat(m).containsEntry("total", "$32.60");
         assertThat((String) m.get("labelTax")).startsWith("IVA");
-        assertThat(m.get("title")).isEqualTo("Pago confirmado");
+        assertThat(m).containsEntry("title", "Pago confirmado");
         // País con nombre completo (ISO "ES" → "España"), QR de verificación y URL con el nº de pedido.
-        assertThat(m.get("shipCountry")).isEqualTo("España");
+        assertThat(m).containsEntry("shipCountry", "España");
         assertThat((String) m.get("qr")).startsWith("data:image/png;base64,");
         assertThat((String) m.get("verifyUrl")).contains("NX-100");
         @SuppressWarnings("unchecked")
@@ -87,8 +87,8 @@ class InvoiceServiceTest {
                 .thenAnswer(InvoiceServiceTest::display);
         Map<String, Object> m = service.model(order("USD", item(1000, 1, "Tee")), "en", "http://dl");
         assertThat((String) m.get("labelTax")).startsWith("VAT");
-        assertThat(m.get("title")).isEqualTo("Payment confirmed");
-        assertThat(m.get("subject")).isEqualTo("Invoice NX-100");
+        assertThat(m).containsEntry("title", "Payment confirmed");
+        assertThat(m).containsEntry("subject", "Invoice NX-100");
     }
 
     @Test
@@ -96,18 +96,18 @@ class InvoiceServiceTest {
         when(currencyRateService.formatDisplay(any(BigDecimal.class), anyString()))
                 .thenAnswer(InvoiceServiceTest::display);
         // Cada importe (línea, envío, impuesto) se convierte con usdTo; devolvemos valores deterministas.
-        when(currencyRateService.usdTo(eq(new BigDecimal("10.00")), eq("EUR"))).thenReturn(new BigDecimal("9.00"));
-        when(currencyRateService.usdTo(eq(new BigDecimal("5.00")), eq("EUR"))).thenReturn(new BigDecimal("4.50"));
-        when(currencyRateService.usdTo(eq(new BigDecimal("2.10")), eq("EUR"))).thenReturn(new BigDecimal("1.89"));
+        when(currencyRateService.usdTo(new BigDecimal("10.00"), "EUR")).thenReturn(new BigDecimal("9.00"));
+        when(currencyRateService.usdTo(new BigDecimal("5.00"), "EUR")).thenReturn(new BigDecimal("4.50"));
+        when(currencyRateService.usdTo(new BigDecimal("2.10"), "EUR")).thenReturn(new BigDecimal("1.89"));
         // El descuento de referido (v86) también se convierte: sin este stub el mock devuelve null y el
         // total revienta con NPE al restarlo. Pedido sin descuento → 0.
-        when(currencyRateService.usdTo(eq(new BigDecimal("0.00")), eq("EUR"))).thenReturn(BigDecimal.ZERO);
+        when(currencyRateService.usdTo(new BigDecimal("0.00"), "EUR")).thenReturn(BigDecimal.ZERO);
 
         Map<String, Object> m = service.model(order("EUR", item(1000, 1, "Tee")), "es", "http://dl", "EUR");
 
         // subtotal 9.00 + envío 4.50 + impuesto 1.89 = 15.39
-        assertThat(m.get("subtotal")).isEqualTo("€9.00");
-        assertThat(m.get("total")).isEqualTo("€15.39");
+        assertThat(m).containsEntry("subtotal", "€9.00");
+        assertThat(m).containsEntry("total", "€15.39");
     }
 
     // ===== Fotos de producto en el EMAIL: adjuntas (cid:), no por URL remota =====
@@ -125,7 +125,7 @@ class InvoiceServiceTest {
         Map<String, Object> m = service.model(order("USD", itemWithImage(1000, 1, "Tee", url)), "es", "http://dl");
 
         List<Map<String, Object>> items = (List<Map<String, Object>>) m.get("items");
-        assertThat(items.get(0).get("image")).isEqualTo("cid:invitem-0");
+        assertThat(items.get(0)).containsEntry("image", "cid:invitem-0");
         Map<String, String> inline = (Map<String, String>) m.get(InvoiceService.INLINE_IMAGES_KEY);
         assertThat(inline).containsEntry("invitem-0", url);
     }
@@ -141,8 +141,8 @@ class InvoiceServiceTest {
                 itemWithImage(2000, 1, "Cap", "http://localhost:9100/product-images/b.jpg")), "es", "http://dl");
 
         List<Map<String, Object>> items = (List<Map<String, Object>>) m.get("items");
-        assertThat(items.get(0).get("image")).isEqualTo("cid:invitem-0");
-        assertThat(items.get(1).get("image")).isEqualTo("cid:invitem-1");
+        assertThat(items.get(0)).containsEntry("image", "cid:invitem-0");
+        assertThat(items.get(1)).containsEntry("image", "cid:invitem-1");
         Map<String, String> inline = (Map<String, String>) m.get(InvoiceService.INLINE_IMAGES_KEY);
         assertThat(inline).hasSize(2);
     }
@@ -156,7 +156,7 @@ class InvoiceServiceTest {
         Map<String, Object> m = service.model(order("USD", item(1000, 1, "Tee")), "es", "http://dl");
 
         List<Map<String, Object>> items = (List<Map<String, Object>>) m.get("items");
-        assertThat(items.get(0).get("image")).isEqualTo("");
+        assertThat(items.get(0)).containsEntry("image", "");
         assertThat((Map<String, String>) m.get(InvoiceService.INLINE_IMAGES_KEY)).isEmpty();
     }
 }

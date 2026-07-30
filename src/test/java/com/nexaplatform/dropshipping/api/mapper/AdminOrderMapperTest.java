@@ -14,6 +14,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 /**
  * Mapeo del detalle de pedido que ve el ADMIN.
@@ -32,7 +33,7 @@ class AdminOrderMapperTest {
         // El mapper dejó de ser interfaz al pasar el formateo de importes al backend: ahora es una clase
         // abstracta con el conversor de divisa inyectado, así que se instancia su Impl generado.
         mapper = new AdminOrderMapperImpl();
-        CurrencyRateService currency = Mockito.mock(CurrencyRateService.class);
+        CurrencyRateService currency = mock(CurrencyRateService.class);
         lenient().when(currency.usdTo(any(BigDecimal.class), anyString())).thenAnswer(i -> i.getArgument(0));
         lenient().when(currency.formatDisplay(any(BigDecimal.class), anyString())).thenReturn("0,00 €");
         mapper.currencyRateService = currency;

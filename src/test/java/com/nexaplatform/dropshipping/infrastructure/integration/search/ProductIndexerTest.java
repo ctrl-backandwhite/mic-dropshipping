@@ -31,6 +31,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class ProductIndexerTest {
@@ -151,7 +153,7 @@ class ProductIndexerTest {
 
         indexer.indexProduct(id);
 
-        verify(client, org.mockito.Mockito.never()).index(any(IndexRequest.class));
+        verify(client, never()).index(any(IndexRequest.class));
     }
 
     @Test
@@ -200,7 +202,7 @@ class ProductIndexerTest {
         int count = indexer.reindexAll();
 
         assertThat(count).isEqualTo(2);
-        verify(client, org.mockito.Mockito.times(2)).index(any(IndexRequest.class));
+        verify(client, times(2)).index(any(IndexRequest.class));
     }
 
     @SuppressWarnings("unchecked")

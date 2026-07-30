@@ -70,7 +70,7 @@ public class BffSecurityConfig {
     @Order(2)
     public SecurityFilterChain bffFilterChain(HttpSecurity http, JWKSource<SecurityContext> jwkSource,
             JwtRevocationService revocationService, UserTokenRevocationFilter userTokenRevocationFilter,
-            @Value("${nexadrop.oauth.issuer}") String issuer) throws Exception {
+            @Value("${nexadrop.oauth.issuer}") String issuer) {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
         authorities.setAuthoritiesClaimName("authorities");

@@ -27,7 +27,7 @@ public class PlanLimitService {
     private final SubscriptionPlanRepository planRepository;
 
     /** Límite del feature para el usuario (plan activo, o FREE si no tiene); -1 = sin límite/desconocido. */
-    @Transactional(readOnly = true)
+    // Sin @Transactional propia: sólo se llama desde assertWithinLimit, que ya abre la lectura.
     public long limitFor(UUID userId, String featureKey) {
         UUID activePlanId = subscriptionRepository.findByUserId(userId).stream()
                 .filter(s -> s.getStatus() == SubscriptionStatus.ACTIVE || s.getStatus() == SubscriptionStatus.TRIALING)

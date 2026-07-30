@@ -30,7 +30,7 @@ public class AuthorizationServerConfig {
 
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE)
-    public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) {
         OAuth2AuthorizationServerConfigurer authServerConfigurer = new OAuth2AuthorizationServerConfigurer();
 
         http.securityMatcher(authServerConfigurer.getEndpointsMatcher())
@@ -85,7 +85,7 @@ public class AuthorizationServerConfig {
     @Bean
     public AuthenticationManager authenticationManager(
             AuthenticationConfiguration cfg)
-            throws Exception {
+ {
         return cfg.getAuthenticationManager();
     }
 }

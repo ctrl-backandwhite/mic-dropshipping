@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 
 /**
  * Datos de seguimiento en la ficha de pedido del COMPRADOR.
@@ -32,8 +33,8 @@ class MeOrderTrackingMappingTest {
 
     @BeforeEach
     void setUp() {
-        CurrencyRateService currency = Mockito.mock(CurrencyRateService.class);
-        PaymentJpaRepositoryAdapter payments = Mockito.mock(PaymentJpaRepositoryAdapter.class);
+        CurrencyRateService currency = mock(CurrencyRateService.class);
+        PaymentJpaRepositoryAdapter payments = mock(PaymentJpaRepositoryAdapter.class);
         lenient().when(currency.usdTo(any(BigDecimal.class), anyString())).thenAnswer(i -> i.getArgument(0));
         lenient().when(currency.formatDisplay(any(BigDecimal.class), anyString())).thenReturn("$0.00");
         lenient().when(payments.findByOrderIdOrderByCreatedAtDesc(any(UUID.class))).thenReturn(List.of());

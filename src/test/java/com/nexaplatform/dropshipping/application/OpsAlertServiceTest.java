@@ -20,6 +20,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 /**
  * Avisos al responsable cuando el transportista o una pasarela dejan de funcionar.
@@ -35,7 +36,7 @@ class OpsAlertServiceTest {
 
     @BeforeEach
     void setUp() {
-        emailQueue = Mockito.mock(EmailQueueService.class);
+        emailQueue = mock(EmailQueueService.class);
         service = new OpsAlertService(emailQueue);
         ReflectionTestUtils.setField(service, "alertEmail", "jfinol02@gmail.com");
         ReflectionTestUtils.setField(service, "enabled", true);

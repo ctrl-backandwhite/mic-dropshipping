@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api;
 
+import com.stripe.exception.StripeException;
 import com.nexaplatform.dropshipping.api.dto.in.SubscribeDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BillingConfigDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.BillingInvoiceDtoOut;
@@ -37,28 +38,28 @@ public interface MeBillingApi {
     @Operation(summary = "Crea un SetupIntent para guardar una tarjeta con Stripe Elements")
     @ApiResponse(responseCode = "200", description = "client_secret devuelto")
     @PostMapping("/payment-methods/setup-intent")
-    ResponseEntity<SetupIntentDtoOut> createSetupIntent(Authentication auth) throws Exception;
+    ResponseEntity<SetupIntentDtoOut> createSetupIntent(Authentication auth) throws StripeException;
 
     @Operation(summary = "Lista las tarjetas guardadas del usuario autenticado")
     @ApiResponse(responseCode = "200", description = "Tarjetas listadas")
     @GetMapping("/payment-methods")
-    ResponseEntity<List<PaymentMethodDtoOut>> listPaymentMethods(Authentication auth) throws Exception;
+    ResponseEntity<List<PaymentMethodDtoOut>> listPaymentMethods(Authentication auth) throws StripeException;
 
     @Operation(summary = "Marca una tarjeta guardada como la predeterminada (la que cobra las suscripciones)")
     @ApiResponse(responseCode = "204", description = "Tarjeta por defecto fijada")
     @PostMapping("/payment-methods/{id}/default")
-    ResponseEntity<Void> setDefault(Authentication auth, @PathVariable String id) throws Exception;
+    ResponseEntity<Void> setDefault(Authentication auth, @PathVariable String id) throws StripeException;
 
     @Operation(summary = "Borra (desvincula) una tarjeta guardada")
     @ApiResponse(responseCode = "204", description = "Tarjeta borrada")
     @DeleteMapping("/payment-methods/{id}")
-    ResponseEntity<Void> delete(Authentication auth, @PathVariable String id) throws Exception;
+    ResponseEntity<Void> delete(Authentication auth, @PathVariable String id) throws StripeException;
 
     @Operation(summary = "Contrata un plan cobrando con la tarjeta guardada por defecto")
     @ApiResponse(responseCode = "200", description = "Suscripción creada")
     @PostMapping("/subscription")
     ResponseEntity<SubscribeStatusDtoOut> subscribe(Authentication auth, @Valid @RequestBody SubscribeDtoIn req)
-            throws Exception;
+            throws StripeException;
 
     @Operation(summary = "Suscripción vigente del usuario (o 204 si no tiene)")
     @ApiResponse(responseCode = "200", description = "Suscripción vigente")
@@ -68,10 +69,10 @@ public interface MeBillingApi {
     @Operation(summary = "Cancela la suscripción vigente al final del periodo")
     @ApiResponse(responseCode = "204", description = "Cancelación programada")
     @PostMapping("/subscription/cancel")
-    ResponseEntity<Void> cancelSubscription(Authentication auth) throws Exception;
+    ResponseEntity<Void> cancelSubscription(Authentication auth) throws StripeException;
 
     @Operation(summary = "Historial de facturas del usuario (de Stripe)")
     @ApiResponse(responseCode = "200", description = "Facturas listadas")
     @GetMapping("/billing/invoices")
-    ResponseEntity<List<BillingInvoiceDtoOut>> invoices(Authentication auth) throws Exception;
+    ResponseEntity<List<BillingInvoiceDtoOut>> invoices(Authentication auth) throws StripeException;
 }

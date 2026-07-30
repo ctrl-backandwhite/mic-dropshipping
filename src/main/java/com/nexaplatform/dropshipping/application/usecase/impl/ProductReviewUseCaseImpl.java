@@ -67,7 +67,7 @@ public class ProductReviewUseCaseImpl implements ProductReviewUseCase {
     @Transactional
     public ProductReview create(UUID productId, ProductReview review) {
         var product = productRepo.findById(productId).orElseThrow(() -> new NotFoundException("Product"));
-        short rating = (short) Math.max(1, Math.min(5, review.getRating()));
+        short rating = (short) Math.clamp(review.getRating(), 1, 5);
         var entity = ProductReviewEntity.builder()
                 .product(product)
                 .authorName(review.getAuthorName() != null && !review.getAuthorName().isBlank()

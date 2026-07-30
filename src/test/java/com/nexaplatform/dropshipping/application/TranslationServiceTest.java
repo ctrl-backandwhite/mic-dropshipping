@@ -28,6 +28,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class TranslationServiceTest {
@@ -119,7 +120,7 @@ class TranslationServiceTest {
         // Dos idiomas (es, en) -> el proveedor se usa una vez por idioma, y cada resultado se cachea 90 días.
         verify(provider).translate("你好", "zh", "es");
         verify(provider).translate("你好", "zh", "en");
-        verify(valueOps, org.mockito.Mockito.times(2)).set(anyString(), eq("hello"), eq(Duration.ofDays(90)));
+        verify(valueOps, times(2)).set(anyString(), eq("hello"), eq(Duration.ofDays(90)));
         ProductTranslationEntity es = p.getTranslations().stream()
                 .filter(t -> "es".equals(t.getLanguage())).findFirst().orElseThrow();
         assertThat(es.getTitle()).isEqualTo("hello");

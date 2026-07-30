@@ -143,13 +143,13 @@ public class UserUseCaseImpl implements UserUseCase {
         StringBuilder sb = new StringBuilder();
         for (String part : new String[]{user.getFirstName(), user.getLastName1(), user.getLastName2()}) {
             if (part != null && !part.isBlank()) {
-                if (sb.length() > 0) {
+                if (!sb.isEmpty()) {
                     sb.append(' ');
                 }
                 sb.append(part.trim());
             }
         }
-        return sb.length() == 0 ? null : sb.toString();
+        return sb.isEmpty() ? null : sb.toString();
     }
 
     @Override

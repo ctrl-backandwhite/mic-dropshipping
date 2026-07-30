@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
@@ -112,7 +113,7 @@ class JwkKeyServiceTest {
         service.init();
 
         ArgumentCaptor<JwkKeyEntity> captor = ArgumentCaptor.forClass(JwkKeyEntity.class);
-        org.mockito.Mockito.verify(jwkKeyRepository).save(captor.capture());
+        verify(jwkKeyRepository).save(captor.capture());
         JwkKeyEntity saved = captor.getValue();
         assertThat(saved.isActive()).isTrue();
         assertThat(saved.getKid()).isNotBlank();

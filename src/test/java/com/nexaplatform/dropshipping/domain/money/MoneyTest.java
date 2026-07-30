@@ -214,8 +214,8 @@ class MoneyTest {
     class Stringification {
         @Test
         void toString_uses_commercial_scale() {
-            assertThat(Money.of("10.123", "EUR").toString()).isEqualTo("10.12 EUR");
-            assertThat(Money.of("0", "USD").toString()).isEqualTo("0.00 USD");
+            assertThat(Money.of("10.123", "EUR")).hasToString("10.12 EUR");
+            assertThat(Money.of("0", "USD")).hasToString("0.00 USD");
         }
     }
 }

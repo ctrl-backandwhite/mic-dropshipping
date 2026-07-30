@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 /**
  * Listado de afiliados del panel, extraído del controlador.
@@ -40,9 +41,9 @@ class AdminAffiliateQueryServiceTest {
 
     @BeforeEach
     void setUp() {
-        affiliates = Mockito.mock(AffiliateProgramService.class);
-        search = Mockito.mock(AffiliateSearchService.class);
-        AffiliateViewMapper mapper = Mockito.mock(AffiliateViewMapper.class);
+        affiliates = mock(AffiliateProgramService.class);
+        search = mock(AffiliateSearchService.class);
+        AffiliateViewMapper mapper = mock(AffiliateViewMapper.class);
         service = new AdminAffiliateQueryService(affiliates, mapper, search);
 
         AffiliateProgramConfigEntity cfg = new AffiliateProgramConfigEntity();
@@ -58,7 +59,7 @@ class AdminAffiliateQueryServiceTest {
         lenient().when(affiliates.listCodes(any())).thenReturn(List.of());
         lenient().when(affiliates.commissionsForAffiliate(any())).thenReturn(List.of());
         lenient().when(mapper.toAdminRow(any(), any(), any(), anyString()))
-                .thenReturn(Mockito.mock(AdminAffiliateRow.class));
+                .thenReturn(mock(AdminAffiliateRow.class));
     }
 
     @Test

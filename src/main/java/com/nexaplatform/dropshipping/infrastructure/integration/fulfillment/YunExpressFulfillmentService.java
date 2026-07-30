@@ -951,7 +951,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         List<TrackingStep> steps = new ArrayList<>();
         for (int i = 0; i <= stage; i++) {
             steps.add(new TrackingStep(OrderStatus.valueOf(plan[i][0]), plan[i][1], plan[i][2],
-                    start.plus(Duration.ofMinutes((long) i * stageDur))));
+                    start.plus(Duration.ofMinutes(i * stageDur))));
         }
         OrderStatus current = OrderStatus.valueOf(plan[stage][0]);
         return new TrackingSnapshot(current, steps);

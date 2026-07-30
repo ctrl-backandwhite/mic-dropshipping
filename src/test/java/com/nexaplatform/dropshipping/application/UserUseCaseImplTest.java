@@ -40,6 +40,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 /**
  * Mirrors {@code PriceRuleUseCaseImplTest}: unit tests for the consolidated
@@ -71,7 +72,7 @@ class UserUseCaseImplTest {
 
     @BeforeEach
     void setup() {
-        jwtRevocationService = org.mockito.Mockito.mock(JwtRevocationService.class);
+        jwtRevocationService = mock(JwtRevocationService.class);
         useCase = new UserUseCaseImpl(userRepository, resetTokenRepository, userJpaRepository, encoder, policy,
                 emailQueueService, auditLogger, userUpdateMapper, jwtRevocationService);
     }

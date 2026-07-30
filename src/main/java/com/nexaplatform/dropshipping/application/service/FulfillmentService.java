@@ -440,7 +440,8 @@ public class FulfillmentService {
     }
 
     /** Registra un evento del timeline a mano (p.ej. desde el admin). */
-    @Transactional
+    // Sin @Transactional propia: sólo se llama desde métodos de esta clase que ya la abren, y por
+    // autoinvocación la anotación no llegaba a aplicarse. Participa en la transacción del llamador.
     public void appendEvent(UUID orderId, String status, String description, String location, String source,
             Instant occurredAt) {
         trackingRepository.save(OrderTrackingEventEntity.builder().orderId(orderId).status(status)

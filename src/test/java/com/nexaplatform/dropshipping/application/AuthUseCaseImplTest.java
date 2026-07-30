@@ -43,6 +43,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 /**
  * Unit tests for {@link AuthUseCaseImpl}: the security-relevant behaviour of the
@@ -106,8 +107,8 @@ class AuthUseCaseImplTest {
     void login_normalizesEmailBeforeAuthenticating() {
         UUID id = UUID.randomUUID();
         LoginDtoIn req = LoginDtoIn.builder().email("  User@Example.COM  ").password("pw").build();
-        HttpServletRequest httpRequest = org.mockito.Mockito.mock(HttpServletRequest.class);
-        HttpServletResponse httpResponse = org.mockito.Mockito.mock(HttpServletResponse.class);
+        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
+        HttpServletResponse httpResponse = mock(HttpServletResponse.class);
 
         Authentication auth = new UsernamePasswordAuthenticationToken(id.toString(), null,
                 List.of(new SimpleGrantedAuthority("ROLE_USER")));
@@ -132,8 +133,8 @@ class AuthUseCaseImplTest {
     void login_issuesTokensAndBuildsResponse() {
         UUID id = UUID.randomUUID();
         LoginDtoIn req = LoginDtoIn.builder().email("user@example.com").password("pw").build();
-        HttpServletRequest httpRequest = org.mockito.Mockito.mock(HttpServletRequest.class);
-        HttpServletResponse httpResponse = org.mockito.Mockito.mock(HttpServletResponse.class);
+        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
+        HttpServletResponse httpResponse = mock(HttpServletResponse.class);
 
         Authentication auth = new UsernamePasswordAuthenticationToken(id.toString(), null,
                 List.of(new SimpleGrantedAuthority("ROLE_USER")));
@@ -156,8 +157,8 @@ class AuthUseCaseImplTest {
     @DisplayName("login: usuario inexistente -> propaga BadCredentials genérico (anti-enumeración)")
     void login_unknownUser_propagatesGenericBadCredentials() {
         LoginDtoIn req = LoginDtoIn.builder().email("ghost@example.com").password("pw").build();
-        HttpServletRequest httpRequest = org.mockito.Mockito.mock(HttpServletRequest.class);
-        HttpServletResponse httpResponse = org.mockito.Mockito.mock(HttpServletResponse.class);
+        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
+        HttpServletResponse httpResponse = mock(HttpServletResponse.class);
         // El AuthenticationManager no revela si el usuario existe: mismo BadCredentials.
         when(authenticationManager.authenticate(any()))
                 .thenThrow(new BadCredentialsException("Bad credentials"));
@@ -176,8 +177,8 @@ class AuthUseCaseImplTest {
     @DisplayName("login: password incorrecta -> MISMA excepción y mensaje que usuario inexistente")
     void login_wrongPassword_sameGenericError() {
         LoginDtoIn req = LoginDtoIn.builder().email("real@example.com").password("wrong").build();
-        HttpServletRequest httpRequest = org.mockito.Mockito.mock(HttpServletRequest.class);
-        HttpServletResponse httpResponse = org.mockito.Mockito.mock(HttpServletResponse.class);
+        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
+        HttpServletResponse httpResponse = mock(HttpServletResponse.class);
         when(authenticationManager.authenticate(any()))
                 .thenThrow(new BadCredentialsException("Bad credentials"));
 
@@ -195,9 +196,9 @@ class AuthUseCaseImplTest {
     void login_completesPendingGoogleLink_whenEmailMatches() {
         UUID id = UUID.randomUUID();
         LoginDtoIn req = LoginDtoIn.builder().email("me@example.com").password("pw").build();
-        HttpServletRequest httpRequest = org.mockito.Mockito.mock(HttpServletRequest.class);
-        HttpServletResponse httpResponse = org.mockito.Mockito.mock(HttpServletResponse.class);
-        HttpSession session = org.mockito.Mockito.mock(HttpSession.class);
+        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
+        HttpServletResponse httpResponse = mock(HttpServletResponse.class);
+        HttpSession session = mock(HttpSession.class);
 
         Authentication auth = new UsernamePasswordAuthenticationToken(id.toString(), null,
                 List.of(new SimpleGrantedAuthority("ROLE_USER")));
@@ -220,9 +221,9 @@ class AuthUseCaseImplTest {
     void login_doesNotLinkGoogle_whenEmailMismatch() {
         UUID id = UUID.randomUUID();
         LoginDtoIn req = LoginDtoIn.builder().email("me@example.com").password("pw").build();
-        HttpServletRequest httpRequest = org.mockito.Mockito.mock(HttpServletRequest.class);
-        HttpServletResponse httpResponse = org.mockito.Mockito.mock(HttpServletResponse.class);
-        HttpSession session = org.mockito.Mockito.mock(HttpSession.class);
+        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
+        HttpServletResponse httpResponse = mock(HttpServletResponse.class);
+        HttpSession session = mock(HttpSession.class);
 
         Authentication auth = new UsernamePasswordAuthenticationToken(id.toString(), null,
                 List.of(new SimpleGrantedAuthority("ROLE_USER")));

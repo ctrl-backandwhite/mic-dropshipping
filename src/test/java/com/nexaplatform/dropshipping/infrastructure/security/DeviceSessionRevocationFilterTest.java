@@ -23,6 +23,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
 class DeviceSessionRevocationFilterTest {
@@ -41,7 +42,7 @@ class DeviceSessionRevocationFilterTest {
     void setUp() {
         req = new MockHttpServletRequest("GET", "/api/me");
         res = new MockHttpServletResponse();
-        chain = org.mockito.Mockito.mock(FilterChain.class);
+        chain = mock(FilterChain.class);
         SecurityContextHolder.clearContext();
     }
 
