@@ -9,6 +9,7 @@ import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
+import com.nexaplatform.dropshipping.application.service.ProductDetailQueryService;
 import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
@@ -57,6 +58,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     private final CatalogUseCase catalogUseCase;
     private final CatalogStorefrontReadService storefrontRead;
+    private final ProductDetailQueryService productDetailQuery;
     private final ProductRepository productRepository;
     private final ProductSpecificationRepository specRepository;
     private final ProductAttributeRepository attributeRepository;
@@ -218,57 +220,28 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     @Override
     @Transactional(readOnly = true)
     public List<ProductSummaryView> relatedProducts(UUID id, String lang, int limit) {
-        ProductEntity p = productRepository.findById(id).orElseThrow(() -> new NotFoundException("Product"));
-        UUID catId = p.getCategory() != null ? p.getCategory().getId() : null;
-        return productRepository.findAll().stream().filter(x -> x.getStatus() == ProductStatus.ACTIVE)
-                .filter(x -> !x.getId().equals(id))
-                .filter(x -> catId == null || (x.getCategory() != null && catId.equals(x.getCategory().getId())))
-                .sorted((a, b) -> {
-                    BigDecimal ta = a.getTrendScore() == null ? BigDecimal.ZERO : a.getTrendScore();
-                    BigDecimal tb = b.getTrendScore() == null ? BigDecimal.ZERO : b.getTrendScore();
-                    return tb.compareTo(ta);
-                }).limit(limit).map(x -> productMapper.toSummary(x, lang)).toList();
+        return productDetailQuery.relatedProducts(id, limit).stream()
+                .map(x -> productMapper.toSummary(x, lang)).toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<SpecificationView> specifications(UUID id, String lang) {
-        var specs = specRepository.findByProduct_IdAndLocaleOrderByPositionAsc(id, lang);
-        if (specs.isEmpty())
-            specs = specRepository.findByProduct_IdAndLocaleOrderByPositionAsc(id, "en");
-        if (specs.isEmpty())
-            specs = specRepository.findByProduct_IdOrderByPositionAsc(id);
-        return specs.stream().map(s -> new SpecificationView(s.getSpecKey(), s.getSpecValue(), s.getPosition()))
-                .toList();
+        return productDetailQuery.specifications(id, lang).stream()
+                .map(s -> new SpecificationView(s.getSpecKey(), s.getSpecValue(), s.getPosition())).toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<AttributeView> attributes(UUID id, String lang) {
-        // DROP-672: se parte de los atributos neutrales (locale NULL) y se sobreescribe por clave con
-        // la variante traducida al idioma pedido cuando existe. Así el comprador ve el valor en su idioma
-        // sin perder los atributos que solo existen como neutrales.
-        var all = attributeRepository.findByProduct_Id(id);
-        LinkedHashMap<String, String> byKey = new LinkedHashMap<>();
-        for (var a : all) {
-            if (a.getLocale() == null) {
-                byKey.putIfAbsent(a.getAttrKey(), a.getAttrValue());
-            }
-        }
-        if (lang != null) {
-            for (var a : all) {
-                if (lang.equalsIgnoreCase(a.getLocale())) {
-                    byKey.put(a.getAttrKey(), a.getAttrValue());
-                }
-            }
-        }
-        return byKey.entrySet().stream().map(e -> new AttributeView(e.getKey(), e.getValue())).toList();
+        return productDetailQuery.attributes(id, lang).entrySet().stream()
+                .map(e -> new AttributeView(e.getKey(), e.getValue())).toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<String> tags(UUID id) {
-        return tagRepository.findByProduct_Id(id).stream().map(ProductTagEntity::getTag).toList();
+        return productDetailQuery.tags(id);
     }
 
     @Override
