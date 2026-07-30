@@ -21,6 +21,7 @@ import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.application.service.BulkProductFields;
 import com.nexaplatform.dropshipping.application.service.BulkProductRules;
 import com.nexaplatform.dropshipping.application.service.BulkProductStructure;
+import com.nexaplatform.dropshipping.application.service.ProductSeoMetadata;
 import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService;
@@ -544,69 +545,13 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // DROP-679: al publicar se generan los metadatos SEO por idioma a partir del contenido real
         // (título/descripción ya traducidos), sin sobrescribir los que el operador haya definido.
         if (status == ProductStatus.ACTIVE) {
-            generateSeoMetadata(p);
+            ProductSeoMetadata.generate(p);
         }
         productJpaRepository.save(p);
         productIndexer.indexProduct(id);
     }
 
     /** DROP-679: rellena meta_title/meta_description (solo si están vacíos) desde el contenido real. */
-    private void generateSeoMetadata(ProductEntity p) {
-        for (var tr : p.getTranslations()) {
-            boolean zh = "zh".equalsIgnoreCase(tr.getLanguage());
-            String title = tr.getTitle() != null && !tr.getTitle().isBlank() ? sanitizeSeo(tr.getTitle(), zh) : null;
-            if (title == null || title.isBlank()) {
-                continue;
-            }
-            if (tr.getMetaTitle() == null || tr.getMetaTitle().isBlank() || (!zh && hasCjk(tr.getMetaTitle()))) {
-                String mt = title;
-                if (p.getBrand() != null && !p.getBrand().isBlank()
-                        && !title.toLowerCase().contains(p.getBrand().toLowerCase())
-                        && (mt.length() + p.getBrand().length() + 3) <= 65) {
-                    mt = mt + " | " + p.getBrand().trim();
-                }
-                tr.setMetaTitle(mt.length() > 200 ? mt.substring(0, 200) : mt);
-            }
-            if (tr.getMetaDescription() == null || tr.getMetaDescription().isBlank()
-                    || (!zh && hasCjk(tr.getMetaDescription()))) {
-                String base = tr.getShortDescription() != null && !tr.getShortDescription().isBlank()
-                        ? tr.getShortDescription()
-                        : (tr.getDescription() != null ? tr.getDescription() : title);
-                String md = sanitizeSeo(base, zh);
-                if (md.length() > 155) {
-                    md = md.substring(0, 152).trim() + "…";
-                }
-                tr.setMetaDescription(md);
-            }
-        }
-    }
-
-    /**
-     * DROP-686: para idiomas no-chinos, elimina caracteres CJK (p.ej. 露趾) que se cuelan del origen,
-     * para que el SEO de un producto en español/inglés no contenga texto en chino. Colapsa espacios y
-     * limpia separadores huérfanos que queden tras la eliminación.
-     */
-    /** Clase CJK precompilada: el patrón ".*[...].*" con matches() retrocede sobre todo el texto. */
-    private static final Pattern CJK = Pattern.compile("[\\u3400-\\u4DBF\\u4E00-\\u9FFF\\uF900-\\uFAFF]");
-
-    /** ¿Contiene caracteres CJK (chino/japonés/coreano)? */
-    private boolean hasCjk(String text) {
-        return text != null && CJK.matcher(text).find();
-    }
-
-    private String sanitizeSeo(String text, boolean zh) {
-        if (text == null) {
-            return "";
-        }
-        String t = text;
-        if (!zh) {
-            t = t.replaceAll("[\\u3000-\\u303F\\u3400-\\u4DBF\\u4E00-\\u9FFF\\uF900-\\uFAFF\\uFF00-\\uFFEF]", " ");
-            t = t.replaceAll("\\s*([|·,;])\\s*([|·,;])", " $1 "); // separadores duplicados
-            t = t.replaceAll("\\s*([|·])\\s*$", "");             // separador colgante final
-            t = t.replaceAll("^\\s*([|·,;])\\s*", "");           // separador colgante inicial
-        }
-        return t.replaceAll("\\s+", " ").trim();
-    }
 
     @Override
     @Transactional
@@ -834,10 +779,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                         && (tr.getMetaTitle() == null || tr.getMetaTitle().isBlank()
                                 || tr.getMetaDescription() == null || tr.getMetaDescription().isBlank()
                                 // DROP-686: meta contaminado con CJK en idioma no-chino → regenerar.
-                                || (!zh && (hasCjk(tr.getMetaTitle()) || hasCjk(tr.getMetaDescription()))));
+                                || (!zh && (ProductSeoMetadata.hasCjk(tr.getMetaTitle()) || ProductSeoMetadata.hasCjk(tr.getMetaDescription()))));
             });
             if (missing) {
-                generateSeoMetadata(p);
+                ProductSeoMetadata.generate(p);
                 productJpaRepository.save(p);
                 filled++;
             }
@@ -1585,7 +1530,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // Las traducciones (título + descripción por idioma) las fija el writer dentro de su transacción.
         // DROP-679: como el writer publica el producto (status ACTIVE), generamos aquí el SEO por idioma
         // a partir de esas traducciones reales (las colecciones ya están adjuntas a la entidad gestionada).
-        generateSeoMetadata(p);
+        ProductSeoMetadata.generate(p);
     }
 
     @Override
