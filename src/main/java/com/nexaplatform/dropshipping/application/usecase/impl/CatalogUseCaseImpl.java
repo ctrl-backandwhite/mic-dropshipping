@@ -1444,49 +1444,11 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // y el atajo `imageUrl` (string suelto). Si no hay NINGUNA a nivel de producto, se usan como
         // respaldo las imágenes de las variantes (o de los valores/colores del eje) para no rechazar
         // un producto cuya única imagen vive en la variante. Se deduplica preservando el orden.
-        LinkedHashSet<String> imageUrlSet = new LinkedHashSet<>();
-        if (r.getImageUrls() != null) {
-            for (String u : r.getImageUrls()) {
-                if (u != null && !u.isBlank()) {
-                    imageUrlSet.add(u.trim());
-                }
-            }
-        }
-        if (r.getImageUrl() != null && !r.getImageUrl().isBlank()) {
-            imageUrlSet.add(r.getImageUrl().trim());
-        }
-        if (imageUrlSet.isEmpty()) {
-            if (r.getVariants() != null) {
-                for (var v : r.getVariants()) {
-                    if (v.getImageUrl() != null && !v.getImageUrl().isBlank()) {
-                        imageUrlSet.add(v.getImageUrl().trim());
-                    }
-                }
-            }
-            if (r.getVariantAxes() != null) {
-                for (var ax : r.getVariantAxes()) {
-                    if (ax.getValueImages() != null) {
-                        for (String u : ax.getValueImages().values()) {
-                            if (u != null && !u.isBlank()) {
-                                imageUrlSet.add(u.trim());
-                            }
-                        }
-                    }
-                }
-            }
-        }
         List<IngestImage> images = new ArrayList<>();
         int imgPos = 0;
-        for (String u : imageUrlSet) {
+        for (String u : BulkProductRules.imageUrlsOf(r, esTitle)) {
             images.add(new IngestImage(u, imgPos, imgPos == 0 ? "MAIN" : GALLERY));
             imgPos++;
-        }
-        // Calidad de datos: NO se importan productos sin imagen real (ni de producto ni de variante).
-        if (images.isEmpty()) {
-            throw new BusinessException("El producto '"
-                    + (r.getExternalId() != null && !r.getExternalId().isBlank() ? r.getExternalId() : esTitle)
-                    + "' no tiene imágenes — indica al menos una en 'imageUrls' (también vale 'images' o el "
-                    + "atajo 'imageUrl', o una imagen de variante).");
         }
         // Ejes de variación (Color/Talla) desde el JSON.
         List<IngestVariantOption> options = new ArrayList<>();

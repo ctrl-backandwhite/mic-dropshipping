@@ -5,6 +5,9 @@ import com.nexaplatform.dropshipping.application.service.BulkProductFields;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantOptionEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueTranslationEntity;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -390,5 +393,100 @@ class BulkProductFieldsTest {
         t.setTitle(title);
         t.setDescription(description);
         return t;
+    }
+
+    // ---------------------------------------------------------------- traducciones de los ejes
+
+    @Test
+    void lasTraduccionesDelValorSeEmparejanPorSuTextoEnChino() {
+        // El chino es la clave estable que viene del proveedor; el texto traducido cambia entre cargas.
+        ProductEntity p = productWithColour("红色");
+        BulkProductDtoIn r = emptyRow();
+        r.setVariantAxes(List.of(axisWithTranslations("红色",
+                new LinkedHashMap<>(Map.of("es", "Rojo", "en", "Red")))));
+
+        BulkProductFields.applyVariantValueTranslations(p, r);
+
+        VariantValueEntity value = p.getVariantOptions().get(0).getValues().get(0);
+        assertThat(value.getTranslations()).hasSize(2);
+        assertThat(value.getTranslations()).anyMatch(t -> "es".equals(t.getLanguage()) && "Rojo".equals(t.getValue()));
+    }
+
+    @Test
+    void reimportarReemplazaLasTraduccionesDelValorEnVezDeAcumularlas() {
+        // Reimportar es la forma de corregir una traducción mala: acumular dejaría la vieja conviviendo
+        // con la nueva y el escaparate mostraría una u otra según el orden.
+        ProductEntity p = productWithColour("红色");
+        VariantValueEntity value = p.getVariantOptions().get(0).getValues().get(0);
+        value.getTranslations().add(VariantValueTranslationEntity.builder()
+                .variantValue(value).language("es").value("Colorado").build());
+
+        BulkProductDtoIn r = emptyRow();
+        r.setVariantAxes(List.of(axisWithTranslations("红色", new LinkedHashMap<>(Map.of("es", "Rojo")))));
+
+        BulkProductFields.applyVariantValueTranslations(p, r);
+
+        assertThat(value.getTranslations()).hasSize(1);
+        assertThat(value.getTranslations().get(0).getValue()).isEqualTo("Rojo");
+    }
+
+    @Test
+    void unValorSinTraduccionesEnLaFilaConservaLasQueYaTenia() {
+        ProductEntity p = productWithColour("红色");
+        VariantValueEntity value = p.getVariantOptions().get(0).getValues().get(0);
+        value.getTranslations().add(VariantValueTranslationEntity.builder()
+                .variantValue(value).language("es").value("Rojo").build());
+
+        BulkProductDtoIn r = emptyRow();
+        r.setVariantAxes(List.of(axisWithTranslations("蓝色", new LinkedHashMap<>(Map.of("es", "Azul")))));
+
+        BulkProductFields.applyVariantValueTranslations(p, r);
+
+        assertThat(value.getTranslations()).hasSize(1);
+        assertThat(value.getTranslations().get(0).getValue()).isEqualTo("Rojo");
+    }
+
+    @Test
+    void unaTraduccionConIdiomaOValorEnBlancoSeDescarta() {
+        ProductEntity p = productWithColour("红色");
+        BulkProductDtoIn r = emptyRow();
+        Map<String, String> trs = new LinkedHashMap<>();
+        trs.put("es", "Rojo");
+        trs.put("  ", "Vacío");
+        trs.put("fr", "   ");
+        r.setVariantAxes(List.of(axisWithTranslations("红色", trs)));
+
+        BulkProductFields.applyVariantValueTranslations(p, r);
+
+        assertThat(p.getVariantOptions().get(0).getValues().get(0).getTranslations()).hasSize(1);
+    }
+
+    @Test
+    void unaFilaSinEjesNoTocaLasTraduccionesExistentes() {
+        ProductEntity p = productWithColour("红色");
+        VariantValueEntity value = p.getVariantOptions().get(0).getValues().get(0);
+        value.getTranslations().add(VariantValueTranslationEntity.builder()
+                .variantValue(value).language("es").value("Rojo").build());
+
+        BulkProductFields.applyVariantValueTranslations(p, emptyRow());
+
+        assertThat(value.getTranslations()).hasSize(1);
+    }
+
+    private static ProductEntity productWithColour(String valueZh) {
+        VariantValueEntity value = VariantValueEntity.builder().valueZh(valueZh).value(valueZh).build();
+        value.setTranslations(new java.util.ArrayList<>());
+        VariantOptionEntity option = VariantOptionEntity.builder().name("Color").nameZh("颜色").build();
+        option.setValues(new java.util.ArrayList<>(List.of(value)));
+        ProductEntity p = new ProductEntity();
+        p.setVariantOptions(new java.util.ArrayList<>(List.of(option)));
+        return p;
+    }
+
+    private static BulkProductDtoIn.BulkAxis axisWithTranslations(String valueZh, Map<String, String> translations) {
+        BulkProductDtoIn.BulkAxis ax = new BulkProductDtoIn.BulkAxis();
+        ax.setName("Color");
+        ax.setValueTranslations(new LinkedHashMap<>(Map.of(valueZh, translations)));
+        return ax;
     }
 }

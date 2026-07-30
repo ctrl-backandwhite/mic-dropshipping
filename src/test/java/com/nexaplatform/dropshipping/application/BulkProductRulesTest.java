@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.application;
 
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn.BulkAttr;
+import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn.BulkVariant;
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn.BulkTier;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.application.service.BulkProductRules;
@@ -242,5 +243,90 @@ class BulkProductRulesTest {
         r.setExternalId("   ");
 
         assertThat(BulkProductRules.externalIdOf(r, "Reloj", s -> s, 7L)).isEqualTo("BULK-Reloj-7");
+    }
+
+    // ---------------------------------------------------------------- imágenes
+
+    @Test
+    void lasImagenesSeTomanEnElOrdenDeLaFilaYSinRepetir() {
+        // El orden es el que el producto tiene en el proveedor y la ficha lo respeta; deduplicar
+        // reordenando cambiaría cuál es la foto principal.
+        BulkProductDtoIn r = row();
+        r.setImageUrls(List.of("https://cdn/a.jpg", "https://cdn/b.jpg", "https://cdn/a.jpg"));
+
+        assertThat(BulkProductRules.imageUrlsOf(r, "Reloj"))
+                .containsExactly("https://cdn/a.jpg", "https://cdn/b.jpg");
+    }
+
+    @Test
+    void elAtajoDeUnaSolaImagenSeSumaALaLista() {
+        BulkProductDtoIn r = row();
+        r.setImageUrls(List.of("https://cdn/a.jpg"));
+        r.setImageUrl("https://cdn/z.jpg");
+
+        assertThat(BulkProductRules.imageUrlsOf(r, "Reloj"))
+                .containsExactly("https://cdn/a.jpg", "https://cdn/z.jpg");
+    }
+
+    @Test
+    void lasUrlEnBlancoSeDescartanSinContarComoImagen() {
+        BulkProductDtoIn r = row();
+        r.setImageUrls(java.util.Arrays.asList("  https://cdn/a.jpg  ", "", "   ", null));
+
+        assertThat(BulkProductRules.imageUrlsOf(r, "Reloj")).containsExactly("https://cdn/a.jpg");
+    }
+
+    @Test
+    void sinImagenDeProductoSeRecurreALaDeLaVariante() {
+        // Hay productos cuya única foto vive en el color; rechazarlos por eso perdería la carga.
+        BulkProductDtoIn r = row();
+        BulkVariant v = new BulkVariant();
+        v.setSku("SKU-ROJO");
+        v.setImageUrl("https://cdn/rojo.jpg");
+        r.setVariants(List.of(v));
+
+        assertThat(BulkProductRules.imageUrlsOf(r, "Reloj")).containsExactly("https://cdn/rojo.jpg");
+    }
+
+    @Test
+    void sinImagenDeProductoNiDeVarianteSeRecurreALaDelValorDelEje() {
+        BulkProductDtoIn r = row();
+        BulkProductDtoIn.BulkAxis ax = new BulkProductDtoIn.BulkAxis();
+        ax.setName("Color");
+        ax.setValueImages(new java.util.LinkedHashMap<>(java.util.Map.of("Rojo", "https://cdn/rojo.jpg")));
+        r.setVariantAxes(List.of(ax));
+
+        assertThat(BulkProductRules.imageUrlsOf(r, "Reloj")).containsExactly("https://cdn/rojo.jpg");
+    }
+
+    @Test
+    void laImagenDeProductoTienePrioridadSobreLaDeLaVariante() {
+        BulkProductDtoIn r = row();
+        r.setImageUrls(List.of("https://cdn/producto.jpg"));
+        BulkVariant v = new BulkVariant();
+        v.setImageUrl("https://cdn/rojo.jpg");
+        r.setVariants(List.of(v));
+
+        assertThat(BulkProductRules.imageUrlsOf(r, "Reloj")).containsExactly("https://cdn/producto.jpg");
+    }
+
+    @Test
+    void unProductoSinNingunaImagenNoSeCargaYElMensajeDiceCual() {
+        // Regla dura del manual de carga: un producto sin foto no se puede vender, así que vale más que
+        // la fila no entre a que entre vacía.
+        BulkProductDtoIn r = row();
+        r.setExternalId("1688-123456789");
+
+        assertThatThrownBy(() -> BulkProductRules.imageUrlsOf(r, "Reloj"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("no tiene imágenes")
+                .hasMessageContaining("1688-123456789");
+    }
+
+    @Test
+    void sinIdentificadorElMensajeDeFaltaDeImagenIdentificaPorElTitulo() {
+        assertThatThrownBy(() -> BulkProductRules.imageUrlsOf(row(), "Reloj de pulsera"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Reloj de pulsera");
     }
 }

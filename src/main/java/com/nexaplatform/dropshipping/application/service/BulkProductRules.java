@@ -2,12 +2,14 @@ package com.nexaplatform.dropshipping.application.service;
 
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn.BulkAttr;
+import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn.BulkVariant;
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn.BulkTier;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryAttributeSchemaEntity;
 
 import java.math.BigDecimal;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -123,5 +125,65 @@ public final class BulkProductRules {
             externalId = "BULK-" + base + "-" + uniqueSuffix;
         }
         return externalId.length() > MAX_EXTERNAL_ID ? externalId.substring(0, MAX_EXTERNAL_ID) : externalId;
+    }
+
+    /**
+     * URLs de imagen del producto, en orden y sin repetir.
+     *
+     * <p>Se aceptan varias claves de entrada porque los volcados de 1688 no son homogéneos: la lista
+     * {@code imageUrls} (con sus alias) y el atajo {@code imageUrl}. Si a nivel de producto no hay
+     * ninguna, se recurre a las de las variantes y a las de los valores del eje —hay productos cuya única
+     * foto vive en el color—, antes que rechazar la fila.
+     *
+     * <p>El ORDEN es el de la fila y se conserva: es el mismo que tiene el producto en el proveedor, y la
+     * ficha lo respeta. Se deduplica sin reordenar.
+     *
+     * @throws BusinessException si no hay ninguna imagen. Es una regla de calidad dura: un producto sin
+     *         foto no se puede vender, así que vale más que la fila no entre a que entre vacía.
+     */
+    public static List<String> imageUrlsOf(BulkProductDtoIn r, String esTitle) {
+        LinkedHashSet<String> urls = new LinkedHashSet<>();
+        if (r.getImageUrls() != null) {
+            addNonBlank(urls, r.getImageUrls());
+        }
+        if (r.getImageUrl() != null && !r.getImageUrl().isBlank()) {
+            urls.add(r.getImageUrl().trim());
+        }
+        if (urls.isEmpty()) {
+            addVariantImages(urls, r);
+        }
+        if (urls.isEmpty()) {
+            String who = r.getExternalId() != null && !r.getExternalId().isBlank() ? r.getExternalId() : esTitle;
+            throw new BusinessException("El producto '" + who
+                    + "' no tiene imágenes — indica al menos una en 'imageUrls' (también vale 'images' o el "
+                    + "atajo 'imageUrl', o una imagen de variante).");
+        }
+        return List.copyOf(urls);
+    }
+
+    /** Respaldo: fotos de las variantes y de los valores del eje (el color suele traer la suya). */
+    private static void addVariantImages(LinkedHashSet<String> urls, BulkProductDtoIn r) {
+        if (r.getVariants() != null) {
+            for (BulkVariant v : r.getVariants()) {
+                if (v.getImageUrl() != null && !v.getImageUrl().isBlank()) {
+                    urls.add(v.getImageUrl().trim());
+                }
+            }
+        }
+        if (r.getVariantAxes() != null) {
+            for (BulkProductDtoIn.BulkAxis ax : r.getVariantAxes()) {
+                if (ax.getValueImages() != null) {
+                    addNonBlank(urls, ax.getValueImages().values());
+                }
+            }
+        }
+    }
+
+    private static void addNonBlank(LinkedHashSet<String> target, Iterable<String> source) {
+        for (String u : source) {
+            if (u != null && !u.isBlank()) {
+                target.add(u.trim());
+            }
+        }
     }
 }
