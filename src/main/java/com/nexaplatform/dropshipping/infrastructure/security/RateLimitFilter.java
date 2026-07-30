@@ -196,6 +196,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (xff == null || xff.isBlank())
             return req.getRemoteAddr();
         String[] parts = xff.split(",");
+        // Una cabecera de solo comas (",", ",,,") deja el array VACÍO: split descarta los trozos vacíos
+        // finales. Sin este corte, el acceso por índice lanzaba ArrayIndexOutOfBoundsException dentro del
+        // filtro que limita las peticiones. Hoy Tomcat rechaza antes esa cabecera, pero depender de eso
+        // deja el fallo a merced de la configuración de proxies.
+        if (parts.length == 0) {
+            return req.getRemoteAddr();
+        }
         // Tomamos la IP que añadió el proxy de confianza (a `trustedProxyCount` desde el final),
         // NO la primera, que el cliente puede falsificar para evadir el rate limit por IP.
         int idx = parts.length - Math.max(1, trustedProxyCount);

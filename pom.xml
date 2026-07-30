@@ -19,6 +19,10 @@
 
     <properties>
         <sonar.organization>ctrl-backandwhite</sonar.organization>
+        <!-- Proyecto en SonarQube Cloud. El TOKEN nunca va aquí: se pasa por la variable de entorno
+             SONAR_TOKEN (en CI viene del secret del repositorio). -->
+        <sonar.projectKey>ctrl-backandwhite_mic-dropshipping</sonar.projectKey>
+        <sonar.host.url>https://sonarcloud.io</sonar.host.url>
         <java.version>21</java.version>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
