@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
 import com.nexaplatform.dropshipping.application.usecase.NotificationUseCase;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
@@ -77,6 +78,8 @@ public class FulfillmentService {
     private final NotificationUseCase notificationUseCase;
     /** Bultos del pedido: un pedido puede viajar en varias guías. */
     private final OrderShipmentRepository shipmentRepository;
+    /** Proyección de entidades de seguimiento a las vistas de la API (MapStruct). */
+    private final TrackingViewMapper trackingViewMapper;
 
     /** Estado actual del pedido + estado objetivo del envío tras sondear el tracking. */
     public record TrackingProgress(OrderStatus current, OrderStatus target) {
@@ -409,15 +412,10 @@ public class FulfillmentService {
 
     private TrackingView view(Order o) {
         List<OrderTrackingEventEntity> all = trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId());
-        List<TrackingEventView> events = all.stream().map(FulfillmentService::toEventView).toList();
+        List<TrackingEventView> events = trackingViewMapper.toEventViews(all);
         return new TrackingView(o.getStatus() != null ? o.getStatus().name() : null, o.getCarrier(),
                 o.getTrackingNumber(), o.getEstimatedDeliveryAt(), o.getLastTrackedAt(), events,
                 shipmentViews(o, all));
-    }
-
-    private static TrackingEventView toEventView(OrderTrackingEventEntity e) {
-        return new TrackingEventView(e.getStatus(), e.getDescription(), e.getLocation(), e.getSource(),
-                e.getOccurredAt());
     }
 
     /**
@@ -431,12 +429,9 @@ public class FulfillmentService {
         }
         List<ShipmentTrackingView> views = new ArrayList<>();
         for (OrderShipmentEntity shipment : shipments) {
-            List<TrackingEventView> own = allEvents.stream()
-                    .filter(e -> shipment.getId().equals(e.getShipmentId()))
-                    .map(FulfillmentService::toEventView).toList();
-            views.add(new ShipmentTrackingView(shipment.getSequenceNo(), shipment.getCarrier(),
-                    shipment.getTrackingNumber(), shipment.getStatus(), shipment.getWeightGrams(),
-                    shipment.getEstimatedDeliveryAt(), own));
+            List<TrackingEventView> own = trackingViewMapper.toEventViews(allEvents.stream()
+                    .filter(e -> shipment.getId().equals(e.getShipmentId())).toList());
+            views.add(trackingViewMapper.toShipmentView(shipment, own));
         }
         return views;
     }

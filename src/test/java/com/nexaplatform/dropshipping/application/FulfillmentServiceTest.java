@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService;
 import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.usecase.NotificationUseCase;
@@ -59,6 +60,8 @@ class FulfillmentServiceTest {
     OrderEmailService orderEmailService;
     @Mock
     OrderShipmentRepository shipmentRepository;
+    @Mock
+    TrackingViewMapper trackingViewMapper;
     @InjectMocks
     FulfillmentService service;
 

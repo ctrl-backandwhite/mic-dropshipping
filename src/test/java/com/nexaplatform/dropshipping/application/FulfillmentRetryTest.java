@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService;
 import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
@@ -62,7 +63,8 @@ class FulfillmentRetryTest {
         shipmentRepository = Mockito.mock(OrderShipmentRepository.class);
         service = new FulfillmentService(orderRepository, Mockito.mock(OrderTrackingEventRepository.class),
                 provider, Mockito.mock(UserRepository.class), Mockito.mock(OrderEmailService.class),
-                new ObjectMapper(), new YunExpressEventCipher(), opsAlertService, notificationUseCase, shipmentRepository);
+                new ObjectMapper(), new YunExpressEventCipher(), opsAlertService, notificationUseCase, shipmentRepository,
+                Mockito.mock(TrackingViewMapper.class));
 
         order = new Order();
         order.setId(UUID.randomUUID());
