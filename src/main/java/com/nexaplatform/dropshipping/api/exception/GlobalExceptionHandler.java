@@ -156,6 +156,18 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(body("ME001", ex.getMessage(), List.of()), HttpStatus.METHOD_NOT_ALLOWED);
     }
 
+    /**
+     * Parámetros que la aplicación rechaza por inválidos (p.ej. {@code size=-1} o {@code page=-1}, que
+     * hacen fallar a {@code PageRequest}). Es culpa de la PETICIÓN, no del servidor: devolverlos como 500
+     * ensuciaba los logs de errores reales y daba a cualquiera una forma trivial de provocar fallos.
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponseDtoOut<?>> handleIllegalArgument(IllegalArgumentException ex) {
+        log.warn("::> [API] Parámetro inválido: {}", ex.getMessage());
+        return new ResponseEntity<>(body("VE005", "Parámetros de la petición inválidos.",
+                List.of(ex.getMessage() == null ? "" : ex.getMessage())), HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleGlobal(Exception ex) {
         log.error("Unhandled exception: {}", ex.getMessage(), ex);

@@ -70,10 +70,12 @@ public class ProductSearchService {
     @Cacheable(value = CACHE_SEARCH, key = "#keyword + ':' + #language + ':' + #page + ':' + #size",
             condition = "#keyword != null && !#keyword.isBlank()")
     public SearchResultDtoOut searchTyped(String keyword, String language, int page, int size) {
-        // Cap the page size to protect the search backend (was enforced in the controller).
-        size = Math.min(size, 100);
-        final int pageSize = size;
-        final int fromOffset = page * size;
+        // Se acota el tamaño por arriba para proteger al motor de búsqueda y también POR ABAJO: un
+        // `size` o `page` negativos llegaban tal cual a OpenSearch, que respondía con un error y salía
+        // como 500. Un parámetro inválido no debe convertirse en un fallo del servidor ni dar a
+        // cualquiera una forma trivial de provocarlos.
+        final int pageSize = Math.clamp(size, 1, 100);
+        final int fromOffset = Math.max(0, page) * pageSize;
         String field = "title" + capitalize(language == null ? "es" : language);
         try {
             SearchResponse<Map> response = client.search(SearchRequest.of(s -> s.index(index).from(fromOffset)

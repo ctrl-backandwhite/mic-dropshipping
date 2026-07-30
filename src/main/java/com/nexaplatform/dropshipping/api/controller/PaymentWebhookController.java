@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.PaymentWebhookApi;
+import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.model.Event;
@@ -29,6 +30,8 @@ import java.util.HexFormat;
 public class PaymentWebhookController implements PaymentWebhookApi {
 
     private final PaymentUseCase paymentUseCase;
+    /** Aviso al responsable si la pasarela deja de poder confirmar cobros. */
+    private final OpsAlertService opsAlertService;
 
     @Value("${nexadrop.stripe.webhook-secret:}")
     private String stripeWebhookSecret;
@@ -40,8 +43,16 @@ public class PaymentWebhookController implements PaymentWebhookApi {
     @Override
     public ResponseEntity<String> stripe(String payload, String sig) {
         if (stripeWebhookSecret == null || stripeWebhookSecret.isBlank()) {
-            log.warn("Stripe webhook hit with no secret configured");
-            return ResponseEntity.ok("ignored");
+            // Sin secreto el evento NO se procesa (no se puede verificar quién lo manda). Pero tampoco se
+            // contesta 2xx: Stripe lo tomaría por entregado y dejaría de reintentar, así que los pagos con
+            // tarjeta se quedarían sin confirmar y nadie se enteraría. Con 5xx los reintenta durante días,
+            // y en cuanto se configure el secreto entran solos.
+            log.error("::> [PAYMENT] Webhook de Stripe recibido sin secreto configurado: evento NO procesado");
+            opsAlertService.paymentFailed("stripe", "recibir el webhook", null,
+                    "No hay STRIPE_WEBHOOK_SECRET configurado: los eventos de pago no se pueden verificar "
+                            + "y quedan sin procesar. Los cobros con tarjeta no se confirmarán hasta "
+                            + "configurarlo.");
+            return ResponseEntity.status(503).body("webhook secret not configured");
         }
         Event event;
         try {
