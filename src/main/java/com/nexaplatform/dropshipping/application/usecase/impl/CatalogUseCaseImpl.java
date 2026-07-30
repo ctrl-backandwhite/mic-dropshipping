@@ -303,73 +303,93 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             categoryRepository.findById(req.categoryId()).ifPresent(product::setCategory);
         }
 
-        // Replace images
-        product.getImages().clear();
-        if (req.images() != null) {
-            for (int i = 0; i < req.images().size(); i++) {
-                var img = req.images().get(i);
-                product.getImages()
-                        .add(ProductImageEntity.builder().product(product).position(img.position())
-                                .role(img.role() != null ? img.role() : GALLERY).sourceUrl(img.sourceUrl())
-                                .mirrorStatus(MirrorStatus.PENDING).build());
-            }
-        }
-
-        // DROP variant-images: a variant/value with no image of its own falls back to the
-        // product's main image, so every variant always shows a coherent picture.
-        final String mainImageUrl = mainImageUrlOf(req.images());
-
-        // Replace variant options & values
-        product.getVariantOptions().clear();
-        if (req.options() != null) {
-            for (IngestVariantOption optReq : req.options()) {
-                VariantOptionEntity opt = VariantOptionEntity.builder().product(product).nameZh(optReq.nameZh())
-                        .position(optReq.position()).build();
-                if (optReq.values() != null) {
-                    for (var v : optReq.values()) {
-                        opt.getValues().add(VariantValueEntity.builder().option(opt).valueZh(v.valueZh())
-                                .position(v.position())
-                                .imageSourceUrl(v.imageSourceUrl() != null ? v.imageSourceUrl() : mainImageUrl).build());
-                    }
-                }
-                product.getVariantOptions().add(opt);
-            }
-        }
-
-        // Replace variants
-        product.getVariants().clear();
-        if (req.variants() != null) {
-            for (var v : req.variants()) {
-                product.getVariants()
-                        .add(ProductVariantEntity.builder().product(product).externalId(v.externalId()).sku(v.sku())
-                                .title(v.title()).price(v.price()).stock(v.stock() != null ? v.stock() : 0)
-                                .imageSourceUrl(v.imageSourceUrl() != null ? v.imageSourceUrl() : mainImageUrl)
-                                .options(v.options()).active(true).build());
-            }
-        }
+        // Las colecciones hijas se REEMPLAZAN enteras en cada ingesta: es lo que hace que reimportar sea
+        // idempotente en vez de ir acumulando imágenes y variantes duplicadas.
+        replaceImages(product, req);
+        // DROP variant-images: una variante o un valor sin imagen propia cae a la principal del producto,
+        // para que el comprador vea siempre una foto coherente al elegir.
+        String mainImageUrl = mainImageUrlOf(req.images());
+        replaceVariantOptions(product, req, mainImageUrl);
+        replaceVariants(product, req, mainImageUrl);
 
         product = productJpaRepository.save(product);
-
-        // Price tiers separately
-        if (req.priceTiers() != null) {
-            priceTierRepository.findByProductIdOrderByMinQtyAsc(product.getId()).forEach(priceTierRepository::delete);
-            for (var t : req.priceTiers()) {
-                priceTierRepository.save(ProductPriceTierEntity.builder().product(product).minQty(t.minQty())
-                        .maxQty(t.maxQty()).unitPrice(t.unitPrice())
-                        .currency(t.currency() != null ? t.currency() : "CNY").build());
-            }
-        }
-
-        // Emit events. Guard against null ids — JPA assigns them at flush; in tests with
-        // pure mocks they may be absent, in which case we silently skip to avoid NPEs.
-        if (product.getId() != null) {
-            kafkaTemplate.send(NexaTopics.PRODUCT_INGESTED, product.getId().toString(), new ProductIngestedEvent(
-                    product.getId(), product.getSlug(), product.getSource(), product.getExternalId()));
-            // Imágenes: se conservan con su URL de origen; sin espejo a S3.
-        }
+        replacePriceTiers(product, req);
+        publishIngested(product);
 
         log.info("Upserted product {} ({} - {})", product.getId(), product.getSource(), product.getExternalId());
         return product;
+    }
+
+    /** Imágenes del producto, todas PENDING de espejar a nuestro almacenamiento. */
+    private void replaceImages(ProductEntity product, IngestProductRequest req) {
+        product.getImages().clear();
+        if (req.images() == null) {
+            return;
+        }
+        for (IngestImage img : req.images()) {
+            product.getImages().add(ProductImageEntity.builder().product(product).position(img.position())
+                    .role(img.role() != null ? img.role() : GALLERY).sourceUrl(img.sourceUrl())
+                    .mirrorStatus(MirrorStatus.PENDING).build());
+        }
+    }
+
+    /** Ejes de variación (Color, Talla) con sus valores y la foto de cada uno. */
+    private void replaceVariantOptions(ProductEntity product, IngestProductRequest req, String mainImageUrl) {
+        product.getVariantOptions().clear();
+        if (req.options() == null) {
+            return;
+        }
+        for (IngestVariantOption optReq : req.options()) {
+            VariantOptionEntity opt = VariantOptionEntity.builder().product(product).nameZh(optReq.nameZh())
+                    .position(optReq.position()).build();
+            if (optReq.values() != null) {
+                for (IngestVariantValue v : optReq.values()) {
+                    opt.getValues().add(VariantValueEntity.builder().option(opt).valueZh(v.valueZh())
+                            .position(v.position())
+                            .imageSourceUrl(v.imageSourceUrl() != null ? v.imageSourceUrl() : mainImageUrl).build());
+                }
+            }
+            product.getVariantOptions().add(opt);
+        }
+    }
+
+    /** Variantes comprables. Sin stock declarado se guarda 0: el stock real no se inventa. */
+    private void replaceVariants(ProductEntity product, IngestProductRequest req, String mainImageUrl) {
+        product.getVariants().clear();
+        if (req.variants() == null) {
+            return;
+        }
+        for (IngestVariant v : req.variants()) {
+            product.getVariants().add(ProductVariantEntity.builder().product(product).externalId(v.externalId())
+                    .sku(v.sku()).title(v.title()).price(v.price()).stock(v.stock() != null ? v.stock() : 0)
+                    .imageSourceUrl(v.imageSourceUrl() != null ? v.imageSourceUrl() : mainImageUrl)
+                    .options(v.options()).active(true).build());
+        }
+    }
+
+    /** Tramos de precio: van en su propia tabla, así que se borran y recrean aparte del producto. */
+    private void replacePriceTiers(ProductEntity product, IngestProductRequest req) {
+        if (req.priceTiers() == null) {
+            return;
+        }
+        priceTierRepository.findByProductIdOrderByMinQtyAsc(product.getId()).forEach(priceTierRepository::delete);
+        for (IngestPriceTier t : req.priceTiers()) {
+            priceTierRepository.save(ProductPriceTierEntity.builder().product(product).minQty(t.minQty())
+                    .maxQty(t.maxQty()).unitPrice(t.unitPrice())
+                    .currency(t.currency() != null ? t.currency() : "CNY").build());
+        }
+    }
+
+    /**
+     * Avisa al indexador de que el producto cambió. El id puede faltar todavía —JPA lo asigna al volcar, y
+     * en un test con dobles puros puede no llegar nunca—, y en ese caso no se publica en vez de reventar.
+     */
+    private void publishIngested(ProductEntity product) {
+        if (product.getId() == null) {
+            return;
+        }
+        kafkaTemplate.send(NexaTopics.PRODUCT_INGESTED, product.getId().toString(), new ProductIngestedEvent(
+                product.getId(), product.getSlug(), product.getSource(), product.getExternalId()));
     }
 
     @Override

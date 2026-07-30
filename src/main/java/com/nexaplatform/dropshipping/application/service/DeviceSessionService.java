@@ -11,6 +11,7 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -119,21 +120,51 @@ public class DeviceSessionService {
     }
 
     /** Etiqueta legible "Navegador · SO" a partir del User-Agent. */
+    /**
+     * Navegadores, EN ORDEN DE COMPROBACIÓN. El orden no es cosmético: Edge y Opera se anuncian también
+     * como Chrome, y Chrome se anuncia además como Safari, así que el más específico va primero.
+     */
+    private static final List<Map.Entry<String[], String>> BROWSERS = List.of(
+            Map.entry(new String[] {"Edg"}, "Edge"),
+            Map.entry(new String[] {"OPR", "Opera"}, "Opera"),
+            Map.entry(new String[] {"Chrome"}, "Chrome"),
+            Map.entry(new String[] {"Firefox"}, "Firefox"),
+            Map.entry(new String[] {"Safari"}, "Safari"));
+
+    /**
+     * Sistemas operativos, EN ORDEN DE COMPROBACIÓN. El identificador de iPhone y iPad contiene
+     * "Mac OS X", así que iOS tiene que mirarse ANTES que macOS o todos los móviles de Apple se
+     * etiquetarían como ordenadores.
+     */
+    private static final List<Map.Entry<String[], String>> OPERATING_SYSTEMS = List.of(
+            Map.entry(new String[] {"Windows"}, "Windows"),
+            Map.entry(new String[] {"Android"}, "Android"),
+            Map.entry(new String[] {"iPhone", "iPad", "iPod"}, "iOS"),
+            Map.entry(new String[] {"Macintosh", "Mac OS"}, "macOS"),
+            Map.entry(new String[] {"Linux"}, "Linux"));
+
+    /**
+     * Nombre legible del dispositivo a partir del identificador que manda el navegador, para que el
+     * usuario reconozca sus sesiones abiertas y sepa cuál revocar.
+     */
     private String parseDevice(String ua) {
         if (ua == null || ua.isBlank()) {
             return "Dispositivo desconocido";
         }
-        String browser = ua.contains("Edg") ? "Edge"
-                : ua.contains("OPR") || ua.contains("Opera") ? "Opera"
-                        : ua.contains("Chrome") ? "Chrome"
-                                : ua.contains("Firefox") ? "Firefox"
-                                        : ua.contains("Safari") ? "Safari" : "Navegador";
-        // OJO: el UA de iPhone/iPad contiene "Mac OS X", así que iOS se comprueba ANTES que macOS.
-        String os = ua.contains("Windows") ? "Windows"
-                : ua.contains("Android") ? "Android"
-                        : (ua.contains("iPhone") || ua.contains("iPad") || ua.contains("iPod")) ? "iOS"
-                                : (ua.contains("Macintosh") || ua.contains("Mac OS")) ? "macOS"
-                                        : ua.contains("Linux") ? "Linux" : "";
+        String browser = firstMatch(ua, BROWSERS, "Navegador");
+        String os = firstMatch(ua, OPERATING_SYSTEMS, "");
         return os.isEmpty() ? browser : browser + " · " + os;
+    }
+
+    /** Primera entrada de la tabla cuyo identificador aparezca en el texto; el orden manda. */
+    private static String firstMatch(String ua, List<Map.Entry<String[], String>> table, String fallback) {
+        for (Map.Entry<String[], String> entry : table) {
+            for (String marker : entry.getKey()) {
+                if (ua.contains(marker)) {
+                    return entry.getValue();
+                }
+            }
+        }
+        return fallback;
     }
 }
