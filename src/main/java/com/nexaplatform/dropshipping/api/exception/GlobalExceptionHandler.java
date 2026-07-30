@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.List;
 
@@ -38,7 +39,7 @@ public class GlobalExceptionHandler {
         // mensaje en el idioma de la petición (LocaleHolder); si no, el mensaje original de la excepción.
         String localized = ErrorCode.localize(code, LocaleHolder.get());
         return ApiResponseDtoOut.builder().code(code).message(localized != null ? localized : message)
-                .details(details).timestamp(ZonedDateTime.now()).build();
+                .details(details).timestamp(ZonedDateTime.now(ZoneOffset.UTC)).build();
     }
 
     // ---------------- Domain hierarchy ----------------
