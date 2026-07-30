@@ -61,8 +61,8 @@ public class DefaultSecurityConfig {
                         .hasAnyAuthority("ROLE_ADMIN", "ROLE_OPERATOR").anyRequest().authenticated())
                 .formLogin(form -> form.loginPage(LOGIN).permitAll())
                 .oauth2Login(oauth -> oauth.loginPage(LOGIN)
-                        // GitHub (no-OIDC) usa nuestro user service para resolver el email verificado;
-                        // Google (OIDC) sigue con el OidcUserService por defecto.
+                        // GitHub no habla OIDC, así que su email verificado lo resuelve nuestro propio
+                        // servicio de usuario. Google sí lo habla y se queda con el que trae Spring.
                         .userInfoEndpoint(userInfo -> userInfo.userService(githubOAuth2UserService))
                         .successHandler(googleOAuth2SuccessHandler)
                         .failureHandler((req, res, ex) -> res.sendRedirect(frontBaseUrl + "/login?error=google"))

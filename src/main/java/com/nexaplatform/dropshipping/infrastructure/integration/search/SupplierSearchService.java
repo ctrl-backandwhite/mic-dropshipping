@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.search;
 
+import com.nexaplatform.dropshipping.application.service.Texts;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -41,9 +42,10 @@ public class SupplierSearchService {
             @Value("${nexadrop.opensearch.uris:http://localhost:9400}") String uris,
             @Value("${nexadrop.opensearch.suppliers-index:suppliers}") String index) {
         this.objectMapper = objectMapper;
-        String base = uris.split(",")[0].trim().replaceAll("/++$", "");
-        this.searchUrl = base + "/" + index + "/_search";
+        // Sólo el primer nodo de la lista: este cliente no hace balanceo, apunta a uno.
+        this.searchUrl = Texts.stripTrailingSlashes(uris.split(",")[0].trim()) + "/" + index + "/_search";
     }
+
 
     /** A flattened supplier row read from the OpenSearch index (everything the listing needs). */
     public record IndexedSupplier(UUID id, String externalId, String name, String nameZh, String country, String city,

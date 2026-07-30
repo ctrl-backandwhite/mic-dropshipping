@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -118,10 +117,5 @@ public class ShippingQuoteController {
         List<RegionOut> out = countryTaxService.regionsFor(country).stream()
                 .map(r -> new RegionOut(r.getRegionCode(), r.getRegionName())).toList();
         return ResponseEntity.ok(out);
-    }
-
-    /** Céntimos USD (int) → importe USD (BigDecimal) para convertir a la moneda de display. */
-    private static BigDecimal usd(int cents) {
-        return BigDecimal.valueOf(cents).movePointLeft(2);
     }
 }

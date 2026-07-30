@@ -86,16 +86,24 @@ public class AdminAffiliateController {
 
     /* ---- DROP-651: payout requests (operator approval required) ---- */
 
+    /**
+     * Nombre con el que se identifica al afiliado en la bandeja de pagos. El orden de comprobación es
+     * el importante: manda el nombre que el propio usuario eligió y, solo si no tiene ninguno, se cae
+     * a su email; un pago sin usuario asociado se queda sin nombre en lugar de reventar.
+     */
+    private static String displayNameOf(UserEntity user) {
+        if (user == null) {
+            return null;
+        }
+        return user.getDisplayName() != null && !user.getDisplayName().isBlank()
+                ? user.getDisplayName()
+                : user.getEmail();
+    }
+
     @GetMapping("/payouts/pending")
     public ResponseEntity<List<PendingPayoutView>> pendingPayouts() {
         Map<UUID, String> nameByAffiliateId = new HashMap<>();
-        service.allAffiliates().forEach(a -> {
-            UserEntity user = a.getUser();
-            String name = user != null && user.getDisplayName() != null && !user.getDisplayName().isBlank()
-                    ? user.getDisplayName()
-                    : user != null ? user.getEmail() : null;
-            nameByAffiliateId.put(a.getId(), name);
-        });
+        service.allAffiliates().forEach(a -> nameByAffiliateId.put(a.getId(), displayNameOf(a.getUser())));
         List<PendingPayoutView> views = service.pendingPayouts().stream()
                 .map(payout -> new PendingPayoutView(payout.getId(), payout.getAffiliateId(),
                         nameByAffiliateId.get(payout.getAffiliateId()), payout.getAmountCents(),

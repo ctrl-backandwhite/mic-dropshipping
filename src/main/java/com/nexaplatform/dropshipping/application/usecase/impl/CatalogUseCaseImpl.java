@@ -22,6 +22,7 @@ import com.nexaplatform.dropshipping.application.service.BulkProductFields;
 import com.nexaplatform.dropshipping.application.service.BulkProductRules;
 import com.nexaplatform.dropshipping.application.service.BulkProductStructure;
 import com.nexaplatform.dropshipping.application.service.ProductSeoMetadata;
+import com.nexaplatform.dropshipping.application.service.Texts;
 import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService;
@@ -167,6 +168,12 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private final JdbcTemplate jdbcTemplate;
     private final ProductBulkExportMapper bulkExportMapper;
     private final ImageMirrorService imageMirrorService;
+    /** DROP-677: mapeo de categorías de 1688 → categoría interna, usado al resolver la fila de carga. */
+    private final Category1688MappingRepository category1688MappingRepository;
+    /** DROP-670: esquema de atributos obligatorios por categoría, validado en cada alta masiva. */
+    private final CategoryAttributeSchemaRepository categoryAttributeSchemaRepository;
+    /** Reseñas reales que vienen en la carga masiva. */
+    private final ProductReviewJpaRepositoryAdapter productReviewJpaRepositoryAdapter;
 
     @PersistenceContext
     private EntityManager em;
@@ -184,18 +191,6 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Autowired
     @Lazy
     private CatalogFillWriter catalogFillWriter;
-
-    // DROP-677: mapeo de categorías 1688 → interna (inyección por campo para no alterar el constructor).
-    @Autowired
-    private Category1688MappingRepository category1688MappingRepository;
-
-    // DROP-670: esquema de atributos por categoría (inyección por campo para no alterar el constructor).
-    @Autowired
-    private CategoryAttributeSchemaRepository categoryAttributeSchemaRepository;
-
-    // Reseñas reales en la carga masiva (inyección por campo para no alterar el constructor).
-    @Autowired
-    private ProductReviewJpaRepositoryAdapter productReviewJpaRepositoryAdapter;
 
     /* ============ Suppliers ============ */
 
@@ -575,56 +570,93 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     public ProductDetailView quickEdit(UUID id, AdminProductQuickEditDtoIn req, String lang) {
         ProductEntity p = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND + id));
-        if (req.getBrand() != null)
-            p.setBrand(req.getBrand());
-        if (req.getBasePrice() != null)
-            p.setBasePrice(req.getBasePrice());
-        if (req.getCurrency() != null && !req.getCurrency().isBlank())
-            p.setCurrency(req.getCurrency());
-        if (req.getMoq() != null)
-            p.setMoq(req.getMoq());
-        // Verificación manual del admin (checkbox del listado): true = revisado OK, false = pendiente/reimportar.
-        if (req.getVerified() != null)
-            p.setVerified(req.getVerified());
-        // Reasignar categoría desde el admin (selector de la ficha). Se resuelve por id y se valida que exista.
-        if (req.getCategoryId() != null) {
-            CategoryEntity cat = categoryRepository.findById(req.getCategoryId())
-                    .orElseThrow(() -> new NotFoundException(CATEGORY_NOT_FOUND + req.getCategoryId()));
-            p.setCategory(cat);
-        }
-        // DROP-673: edición del vídeo real del producto desde el admin (cadena vacía lo elimina).
-        if (req.getVideoUrl() != null) {
-            String vu = req.getVideoUrl().trim();
-            p.setVideoUrl(vu.isEmpty() ? null : vu);
-            p.setHasVideo(!vu.isEmpty() || (p.getVideoUrls() != null && !p.getVideoUrls().isEmpty()));
-        }
-        boolean touchesTranslation = (req.getTitle() != null && !req.getTitle().isBlank())
-                || req.getShortDescription() != null || req.getDescription() != null
-                || req.getMetaTitle() != null || req.getMetaDescription() != null;
-        if (touchesTranslation) {
-            // Update the active-language translation (title/short/long description), not the canonical title_zh.
-            var trOpt = p.getTranslations().stream().filter(t -> lang.equalsIgnoreCase(t.getLanguage())).findFirst();
-            var tr = trOpt.orElseGet(() -> {
-                var n = ProductTranslationEntity
-                        .builder().product(p).language(lang).provider("admin").build();
-                p.getTranslations().add(n);
-                return n;
-            });
-            if (req.getTitle() != null && !req.getTitle().isBlank())
-                tr.setTitle(req.getTitle());
-            if (req.getShortDescription() != null)
-                tr.setShortDescription(req.getShortDescription());
-            if (req.getDescription() != null)
-                tr.setDescription(req.getDescription());
-            // DROP-688: edición manual del SEO (meta título/descripción) del idioma activo.
-            if (req.getMetaTitle() != null)
-                tr.setMetaTitle(req.getMetaTitle().isBlank() ? null : req.getMetaTitle().trim());
-            if (req.getMetaDescription() != null)
-                tr.setMetaDescription(req.getMetaDescription().isBlank() ? null : req.getMetaDescription().trim());
-        }
+        applyQuickEditScalars(p, req);
+        applyQuickEditVideo(p, req);
+        applyQuickEditTranslation(p, req, lang);
         productJpaRepository.save(p);
         productIndexer.indexProduct(id);
         return productMapper.toDetail(p, lang, priceTierRepository.findByProductIdOrderByMinQtyAsc(p.getId()));
+    }
+
+    /** Campos sueltos de la ficha: sólo se toca lo que el admin manda, un null es "no lo edito". */
+    private void applyQuickEditScalars(ProductEntity p, AdminProductQuickEditDtoIn req) {
+        if (req.getBrand() != null) {
+            p.setBrand(req.getBrand());
+        }
+        if (req.getBasePrice() != null) {
+            p.setBasePrice(req.getBasePrice());
+        }
+        if (Texts.has(req.getCurrency())) {
+            p.setCurrency(req.getCurrency());
+        }
+        if (req.getMoq() != null) {
+            p.setMoq(req.getMoq());
+        }
+        // Verificación manual del admin (checkbox del listado): true = revisado OK, false = pendiente/reimportar.
+        if (req.getVerified() != null) {
+            p.setVerified(req.getVerified());
+        }
+        // Reasignar categoría desde el admin (selector de la ficha). Se resuelve por id y se valida que exista.
+        if (req.getCategoryId() != null) {
+            p.setCategory(categoryRepository.findById(req.getCategoryId())
+                    .orElseThrow(() -> new NotFoundException(CATEGORY_NOT_FOUND + req.getCategoryId())));
+        }
+    }
+
+    /** DROP-673: edición del vídeo real del producto desde el admin (cadena vacía lo elimina). */
+    private void applyQuickEditVideo(ProductEntity p, AdminProductQuickEditDtoIn req) {
+        if (req.getVideoUrl() == null) {
+            return;
+        }
+        String url = req.getVideoUrl().trim();
+        p.setVideoUrl(url.isEmpty() ? null : url);
+        // Borrar el vídeo principal no significa que el producto se quede sin vídeo: puede quedar alguno
+        // en la lista secundaria, y en ese caso la ficha lo sigue anunciando.
+        p.setHasVideo(!url.isEmpty() || (p.getVideoUrls() != null && !p.getVideoUrls().isEmpty()));
+    }
+
+    /**
+     * Contenido del idioma activo (título, descripciones y SEO). Se edita la traducción, NUNCA el
+     * {@code title_zh} canónico: ese es el dato del proveedor y es el que empareja las reimportaciones.
+     */
+    private void applyQuickEditTranslation(ProductEntity p, AdminProductQuickEditDtoIn req, String lang) {
+        if (!touchesTranslation(req)) {
+            return;
+        }
+        ProductTranslationEntity tr = translationFor(p, lang);
+        if (Texts.has(req.getTitle())) {
+            tr.setTitle(req.getTitle());
+        }
+        if (req.getShortDescription() != null) {
+            tr.setShortDescription(req.getShortDescription());
+        }
+        if (req.getDescription() != null) {
+            tr.setDescription(req.getDescription());
+        }
+        // DROP-688: edición manual del SEO (meta título/descripción) del idioma activo.
+        if (req.getMetaTitle() != null) {
+            tr.setMetaTitle(req.getMetaTitle().isBlank() ? null : req.getMetaTitle().trim());
+        }
+        if (req.getMetaDescription() != null) {
+            tr.setMetaDescription(req.getMetaDescription().isBlank() ? null : req.getMetaDescription().trim());
+        }
+    }
+
+    /** ¿La edición toca algún campo traducible? Si no, no se crea una traducción vacía para ese idioma. */
+    private static boolean touchesTranslation(AdminProductQuickEditDtoIn req) {
+        return Texts.has(req.getTitle()) || req.getShortDescription() != null || req.getDescription() != null
+                || req.getMetaTitle() != null || req.getMetaDescription() != null;
+    }
+
+    /** Traducción del idioma activo, creándola si el producto todavía no la tiene. */
+    private static ProductTranslationEntity translationFor(ProductEntity p, String lang) {
+        return p.getTranslations().stream().filter(t -> lang.equalsIgnoreCase(t.getLanguage())).findFirst()
+                .orElseGet(() -> {
+                    ProductTranslationEntity created = ProductTranslationEntity.builder().product(p).language(lang)
+                            .provider("admin").build();
+                    p.getTranslations().add(created);
+                    return created;
+                });
     }
 
     @Override
@@ -719,50 +751,77 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     public int backfillVariantAxes() {
         int filled = 0;
         for (ProductEntity p : productJpaRepository.findAll()) {
-            if (!p.getVariantOptions().isEmpty() || p.getVariants() == null || p.getVariants().isEmpty()) {
-                continue;
+            if (backfillAxesOf(p)) {
+                filled++;
             }
-            LinkedHashMap<String, LinkedHashSet<String>> derived = new LinkedHashMap<>();
-            for (var v : p.getVariants()) {
-                if (v.getOptions() == null) {
-                    continue;
-                }
-                for (var e : v.getOptions().entrySet()) {
-                    if (e.getKey() == null || e.getKey().isBlank() || e.getValue() == null || e.getValue().isBlank()) {
-                        continue;
-                    }
-                    derived.computeIfAbsent(e.getKey().trim(), k -> new LinkedHashSet<>())
-                            .add(e.getValue().trim());
-                }
-            }
-            if (derived.isEmpty()) {
-                continue;
-            }
-            int op = 0;
-            for (var en : derived.entrySet()) {
-                var opt = new VariantOptionEntity();
-                opt.setProduct(p);
-                opt.setNameZh(en.getKey());
-                opt.setName(en.getKey());
-                opt.setPosition(op++);
-                int vp = 0;
-                for (String val : en.getValue()) {
-                    var vv = new VariantValueEntity();
-                    vv.setOption(opt);
-                    vv.setValueZh(val);
-                    vv.setPosition(vp++);
-                    opt.getValues().add(vv);
-                }
-                p.getVariantOptions().add(opt);
-            }
-            productJpaRepository.save(p);
-            productIndexer.indexProduct(p.getId());
-            filled++;
         }
         if (filled > 0) {
             log.info("::> [VARIANTS] Backfilled variation axes from variants for {} products", filled);
         }
         return filled;
+    }
+
+    /**
+     * Reconstruye los ejes (Color/Talla) de un producto a partir de las opciones de sus variantes.
+     *
+     * <p>Sólo actúa sobre el producto que NO tiene ejes pero SÍ variantes: si ya los tiene son los que
+     * declaró el proveedor y pisarlos con los derivados perdería nombres y orden reales.
+     *
+     * @return true si se rellenaron ejes (para contarlo en el resumen del backfill)
+     */
+    private boolean backfillAxesOf(ProductEntity p) {
+        if (!p.getVariantOptions().isEmpty() || p.getVariants() == null || p.getVariants().isEmpty()) {
+            return false;
+        }
+        Map<String, LinkedHashSet<String>> derived = axesFromVariantOptions(p);
+        if (derived.isEmpty()) {
+            return false;
+        }
+        int position = 0;
+        for (Map.Entry<String, LinkedHashSet<String>> axis : derived.entrySet()) {
+            p.getVariantOptions().add(buildAxis(p, axis.getKey(), axis.getValue(), position++));
+        }
+        productJpaRepository.save(p);
+        productIndexer.indexProduct(p.getId());
+        return true;
+    }
+
+    /**
+     * Nombre de eje → valores distintos, conservando el orden de aparición en las variantes (por eso
+     * LinkedHashMap/LinkedHashSet: ese orden es el que verá el usuario en el selector de la ficha).
+     */
+    private static Map<String, LinkedHashSet<String>> axesFromVariantOptions(ProductEntity p) {
+        Map<String, LinkedHashSet<String>> derived = new LinkedHashMap<>();
+        for (ProductVariantEntity v : p.getVariants()) {
+            if (v.getOptions() == null) {
+                continue;
+            }
+            for (Map.Entry<String, String> e : v.getOptions().entrySet()) {
+                if (Texts.has(e.getKey()) && Texts.has(e.getValue())) {
+                    derived.computeIfAbsent(e.getKey().trim(), k -> new LinkedHashSet<>()).add(e.getValue().trim());
+                }
+            }
+        }
+        return derived;
+    }
+
+    /** Eje derivado: el nombre no está traducido, así que se guarda igual como canónico y como visible. */
+    private static VariantOptionEntity buildAxis(ProductEntity p, String name, LinkedHashSet<String> values,
+            int position) {
+        VariantOptionEntity opt = new VariantOptionEntity();
+        opt.setProduct(p);
+        opt.setNameZh(name);
+        opt.setName(name);
+        opt.setPosition(position);
+        int valuePosition = 0;
+        for (String value : values) {
+            VariantValueEntity vv = new VariantValueEntity();
+            vv.setOption(opt);
+            vv.setValueZh(value);
+            vv.setPosition(valuePosition++);
+            opt.getValues().add(vv);
+        }
+        return opt;
     }
 
     @Override
@@ -1356,67 +1415,24 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 categoryAttributeSchemaRepository.findByCategory_IdOrderByPositionAsc(cat.getId()), cat.getSlug());
         // El proveedor se toma de supplierName; si no, del fabricante (manufacturer). Solo si no hay
         // ninguno se usa el primero por defecto.
-        String supName = (r.getSupplierName() != null && !r.getSupplierName().isBlank()) ? r.getSupplierName()
-                : r.getManufacturer();
+        String supName = Texts.firstNonBlankOr(r.getManufacturer(), r.getSupplierName());
         UUID supplierId = resolveBulkSupplier(suppliers, r.getSupplierExternalId(), supName);
-        // Idiomas ilimitados: si el contenido viene en el mapa `translations`, se rellenan los campos
-        // canónicos es/en/pt/zh donde falten (para slug/validación/writer); el resto de idiomas del
-        // mapa se upsertan luego en applyLogistics. Si no hay 'es' explícito, se usa el primer idioma
-        // disponible como canónico para que el alta no falle por requerir titleEs.
-        if (r.getTranslations() != null && !r.getTranslations().isEmpty()) {
-            var m = r.getTranslations();
-            mergeTranslationField("es", m, r::getTitleEs, r::setTitleEs, r::getDescriptionEs, r::setDescriptionEs);
-            mergeTranslationField("en", m, r::getTitleEn, r::setTitleEn, r::getDescriptionEn, r::setDescriptionEn);
-            mergeTranslationField("pt", m, r::getTitlePt, r::setTitlePt, r::getDescriptionPt, r::setDescriptionPt);
-            mergeTranslationField("zh", m, r::getTitleZh, r::setTitleZh, r::getDescriptionZh, r::setDescriptionZh);
-            if (r.getTitleEs() == null || r.getTitleEs().isBlank()) {
-                var any = m.values().stream().filter(t -> t != null && t.getTitle() != null && !t.getTitle().isBlank())
-                        .findFirst().orElse(null);
-                if (any != null) {
-                    r.setTitleEs(any.getTitle().trim());
-                    if (r.getDescriptionEs() == null || r.getDescriptionEs().isBlank()) {
-                        r.setDescriptionEs(any.getDescription());
-                    }
-                }
-            }
-        }
+        fillCanonicalContentFromTranslations(r);
         String esTitle = r.getTitleEs();
         // DROP-682: el título es obligatorio en al menos un idioma; mensaje claro (no genérico).
         BulkProductRules.assertTitle(esTitle);
-        String enTitle = (r.getTitleEn() != null && !r.getTitleEn().isBlank()) ? r.getTitleEn() : esTitle;
-        String zhTitle = (r.getTitleZh() != null && !r.getTitleZh().isBlank()) ? r.getTitleZh() : esTitle;
-        String esDesc = (r.getDescriptionEs() != null && !r.getDescriptionEs().isBlank()) ? r.getDescriptionEs()
-                : esTitle;
+        String enTitle = Texts.firstNonBlankOr(esTitle, r.getTitleEn());
+        String zhTitle = Texts.firstNonBlankOr(esTitle, r.getTitleZh());
+        String ptTitle = Texts.firstNonBlankOr(esTitle, r.getTitlePt());
+        String esDesc = Texts.firstNonBlankOr(esTitle, r.getDescriptionEs());
         // DROP-680: el precio es dato real obligatorio; no se inventa. Envío e IVA (CNY) también, porque
         // sin ellos no se puede calcular el total (base×margen + iva + envío).
         BigDecimal price = BulkProductRules.resolvePrice(r, esTitle);
         BulkProductRules.assertShippingAndVat(r, esTitle);
         // external_id es varchar(120): con títulos largos el slug autogenerado lo desbordaba.
         String externalId = BulkProductRules.externalIdOf(r, esTitle, SLUG::slugify, System.nanoTime());
-        // UPSERT idempotente por externalId: el producto se ACTUALIZA EN SITIO (mismo id, se preservan
-        // enlaces/favoritos/pedidos). El producto y sus traducciones ya los upserta upsertProduct/writer;
-        // aquí solo limpiamos las COLECCIONES HIJAS que se reconstruyen (variantes/opciones/imágenes/
-        // atributos/specs/tiers) por product_id ANTES de recrearlas, para no duplicar al reimportar. NO se
-        // borra el producto padre, así que su id no cambia (a diferencia de un delete+create).
-        if (r.getExternalId() != null && !r.getExternalId().isBlank()) {
-            productJpaRepository.findFirstByExternalId(externalId).ifPresent(existing -> {
-                UUID exId = existing.getId();
-                for (String table : PRODUCT_CHILD_TABLES) {
-                    // NOSONAR java:S2077 — nombre de tabla de una constante del código; valor parametrizado.
-                    jdbcTemplate.update("DELETE FROM " + table + " WHERE product_id = ?", exId); // NOSONAR
-                }
-            });
-        }
-        // Imágenes del producto. Se aceptan varias claves (imageUrls/images/photos/... vía @JsonAlias)
-        // y el atajo `imageUrl` (string suelto). Si no hay NINGUNA a nivel de producto, se usan como
-        // respaldo las imágenes de las variantes (o de los valores/colores del eje) para no rechazar
-        // un producto cuya única imagen vive en la variante. Se deduplica preservando el orden.
-        List<IngestImage> images = new ArrayList<>();
-        int imgPos = 0;
-        for (String u : BulkProductRules.imageUrlsOf(r, esTitle)) {
-            images.add(new IngestImage(u, imgPos, imgPos == 0 ? "MAIN" : GALLERY));
-            imgPos++;
-        }
+        deleteRebuiltChildRows(r, externalId);
+        List<IngestImage> images = ingestImagesOf(r, esTitle);
         // Ejes de variación (Color/Talla), variantes comprables y tramos de precio: se derivan de la
         // fila sin inventar nada (ver BulkProductStructure).
         List<IngestVariantOption> options = BulkProductStructure.variantOptionsOf(r);
@@ -1424,28 +1440,100 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         List<IngestPriceTier> tiers = BulkProductStructure.priceTiersOf(r, price);
         // DROP-680: rating, recompra y reseñas NO se inventan. Si el proveedor no los declara quedan
         // nulos/0; el desglose real (ratingBreakdown) se persiste y deriva reviewCount/rating en applyLogistics.
-        var req = new IngestProductRequest("1688", externalId, zhTitle, esDesc, esDesc, r.getManufacturer(),
-                r.getMoq() != null ? r.getMoq() : 1, price, "CNY", r.getWeightGrams(),
+        IngestProductRequest req = new IngestProductRequest("1688", externalId, zhTitle, esDesc, esDesc,
+                r.getManufacturer(), r.getMoq() != null ? r.getMoq() : 1, price, "CNY", r.getWeightGrams(),
                 r.getMonthlySales() != null ? r.getMonthlySales() : 0, null,
                 r.getRating(), 0,
-                (r.getSourceUrl() != null && !r.getSourceUrl().isBlank()) ? r.getSourceUrl().trim()
-                        : "https://detail.1688.com/offer/" + externalId + ".html",
+                Texts.firstNonBlankOr("https://detail.1688.com/offer/" + externalId + ".html",
+                        r.getSourceUrl() != null ? r.getSourceUrl().trim() : null),
                 supplierId, cat.getId(), images, options, variants, tiers);
-        String ptTitle = (r.getTitlePt() != null && !r.getTitlePt().isBlank()) ? r.getTitlePt() : esTitle;
         // El writer corre @Transactional: aplica títulos+descripciones por idioma y la logística
         // (vía el hook) sobre la entidad gestionada, evitando LazyInitialization.
         UUID id = catalogFillWriter.write(req, esTitle, enTitle, ptTitle, zhTitle, esDesc, r.getDescriptionEn(),
                 r.getDescriptionPt(), r.getDescriptionZh(), p -> applyLogistics(p, r));
-        // El writer publica como ACTIVE por defecto; si el operador pidió DRAFT, se respeta.
-        if (r.getStatus() != null && "DRAFT".equalsIgnoreCase(r.getStatus().trim())) {
-            productJpaRepository.findById(id).ifPresent(pp -> {
-                pp.setStatus(ProductStatus.DRAFT);
-                productJpaRepository.save(pp);
-                productIndexer.indexProduct(id);
-            });
-        }
+        applyRequestedDraftStatus(id, r);
         createBulkReviews(id, r.getReviews());
         return id;
+    }
+
+    /**
+     * Idiomas ilimitados: si el contenido viene en el mapa {@code translations}, rellena los campos
+     * canónicos es/en/pt/zh donde falten, porque de ellos salen el slug, la validación y lo que escribe
+     * el writer; el resto de idiomas del mapa se upsertan después en {@link #applyLogistics}.
+     *
+     * <p>Si no hay 'es' explícito se toma el primer idioma con título como canónico: el alta exige
+     * titleEs y, sin este respaldo, una fila perfectamente válida en inglés se rechazaría.
+     */
+    private void fillCanonicalContentFromTranslations(BulkProductDtoIn r) {
+        Map<String, BulkProductDtoIn.BulkTranslation> m = r.getTranslations();
+        if (m == null || m.isEmpty()) {
+            return;
+        }
+        mergeTranslationField("es", m, r::getTitleEs, r::setTitleEs, r::getDescriptionEs, r::setDescriptionEs);
+        mergeTranslationField("en", m, r::getTitleEn, r::setTitleEn, r::getDescriptionEn, r::setDescriptionEn);
+        mergeTranslationField("pt", m, r::getTitlePt, r::setTitlePt, r::getDescriptionPt, r::setDescriptionPt);
+        mergeTranslationField("zh", m, r::getTitleZh, r::setTitleZh, r::getDescriptionZh, r::setDescriptionZh);
+        if (Texts.has(r.getTitleEs())) {
+            return;
+        }
+        BulkProductDtoIn.BulkTranslation any = m.values().stream()
+                .filter(t -> t != null && Texts.has(t.getTitle())).findFirst().orElse(null);
+        if (any == null) {
+            return;
+        }
+        r.setTitleEs(any.getTitle().trim());
+        if (!Texts.has(r.getDescriptionEs())) {
+            r.setDescriptionEs(any.getDescription());
+        }
+    }
+
+    /**
+     * UPSERT idempotente por externalId: el producto se ACTUALIZA EN SITIO (mismo id, se preservan
+     * enlaces, favoritos y pedidos). El producto y sus traducciones ya los upsertan upsertProduct y el
+     * writer; aquí sólo se limpian las COLECCIONES HIJAS que se reconstruyen (variantes, opciones,
+     * imágenes, atributos, fichas técnicas y tramos) por product_id ANTES de recrearlas, para no
+     * duplicarlas al reimportar. El producto padre NO se borra, así que su id no cambia (a diferencia
+     * de un delete + create).
+     */
+    private void deleteRebuiltChildRows(BulkProductDtoIn r, String externalId) {
+        if (!Texts.has(r.getExternalId())) {
+            return;
+        }
+        productJpaRepository.findFirstByExternalId(externalId).ifPresent(existing -> {
+            UUID exId = existing.getId();
+            for (String table : PRODUCT_CHILD_TABLES) {
+                // NOSONAR java:S2077 — nombre de tabla de una constante del código; valor parametrizado.
+                jdbcTemplate.update("DELETE FROM " + table + " WHERE product_id = ?", exId); // NOSONAR
+            }
+        });
+    }
+
+    /**
+     * Imágenes del producto. Se aceptan varias claves (imageUrls/images/photos/... vía @JsonAlias) y el
+     * atajo {@code imageUrl} (string suelto). Si no hay NINGUNA a nivel de producto se usan como respaldo
+     * las de las variantes (o las de los valores/colores del eje), para no rechazar un producto cuya
+     * única imagen vive en la variante. La primera posición es la MAIN, el resto galería.
+     */
+    private static List<IngestImage> ingestImagesOf(BulkProductDtoIn r, String esTitle) {
+        List<IngestImage> images = new ArrayList<>();
+        int position = 0;
+        for (String url : BulkProductRules.imageUrlsOf(r, esTitle)) {
+            images.add(new IngestImage(url, position, position == 0 ? "MAIN" : GALLERY));
+            position++;
+        }
+        return images;
+    }
+
+    /** El writer publica como ACTIVE por defecto; sólo se degrada a DRAFT si el operador lo pidió. */
+    private void applyRequestedDraftStatus(UUID id, BulkProductDtoIn r) {
+        if (r.getStatus() == null || !"DRAFT".equalsIgnoreCase(r.getStatus().trim())) {
+            return;
+        }
+        productJpaRepository.findById(id).ifPresent(p -> {
+            p.setStatus(ProductStatus.DRAFT);
+            productJpaRepository.save(p);
+            productIndexer.indexProduct(id);
+        });
     }
 
     /** Crea las reseñas reales del producto desde la carga masiva (cada una con su idioma). */
@@ -1458,28 +1546,32 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (ref == null) {
             return;
         }
-        for (var rv : reviews) {
-            if ((rv.getBody() == null || rv.getBody().isBlank()) && (rv.getTitle() == null || rv.getTitle().isBlank())) {
-                continue;
+        for (BulkProductDtoIn.BulkReview rv : reviews) {
+            // Una reseña sin cuerpo NI título no dice nada al comprador: se descarta en vez de guardarla vacía.
+            if (Texts.has(rv.getBody()) || Texts.has(rv.getTitle())) {
+                productReviewJpaRepositoryAdapter.save(toReviewEntity(ref, rv));
             }
-            short rating = rv.getRating() != null ? (short) Math.clamp(rv.getRating(), 1, 5) : 5;
-            var e = ProductReviewEntity.builder()
-                    .product(ref)
-                    .authorName(rv.getAuthorName() != null && !rv.getAuthorName().isBlank() ? rv.getAuthorName().trim()
-                            : "Anónimo")
-                    .authorCountry(rv.getAuthorCountry())
-                    .rating(rating)
-                    .title(rv.getTitle())
-                    .body(rv.getBody())
-                    .tags(rv.getTags() != null ? String.join(",", rv.getTags()) : null)
-                    .verifiedPurchase(Boolean.TRUE.equals(rv.getVerifiedPurchase()))
-                    .approved(true)
-                    .language(rv.getLanguage() != null && !rv.getLanguage().isBlank()
-                            ? rv.getLanguage().trim().toLowerCase()
-                            : "es")
-                    .build();
-            productReviewJpaRepositoryAdapter.save(e);
         }
+    }
+
+    /**
+     * Reseña real de la carga. Sin autor se firma como "Anónimo" y sin idioma se asume español (es el
+     * idioma por defecto del escaparate); la puntuación se acota a 1..5, que es lo que pinta la ficha.
+     */
+    private static ProductReviewEntity toReviewEntity(ProductEntity product, BulkProductDtoIn.BulkReview rv) {
+        short rating = rv.getRating() != null ? (short) Math.clamp(rv.getRating(), 1, 5) : 5;
+        return ProductReviewEntity.builder()
+                .product(product)
+                .authorName(Texts.has(rv.getAuthorName()) ? rv.getAuthorName().trim() : "Anónimo")
+                .authorCountry(rv.getAuthorCountry())
+                .rating(rating)
+                .title(rv.getTitle())
+                .body(rv.getBody())
+                .tags(rv.getTags() != null ? String.join(",", rv.getTags()) : null)
+                .verifiedPurchase(Boolean.TRUE.equals(rv.getVerifiedPurchase()))
+                .approved(true)
+                .language(Texts.has(rv.getLanguage()) ? rv.getLanguage().trim().toLowerCase() : "es")
+                .build();
     }
 
     /** Fija los campos de logística/aduana sobre la entidad gestionada (dentro de la transacción del writer). */
@@ -1499,39 +1591,57 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // variantes ya creadas por upsertProduct.
         BulkProductFields.applyVariantLogistics(p, r);
         BulkProductFields.applyVariantValueTranslations(p, r);
-        // Atributos taxonómicos (facetas): se reemplazan en cada import.
-        if (r.getAttributes() != null && !r.getAttributes().isEmpty()) {
-            productAttributeRepository.deleteAll(productAttributeRepository.findByProduct_Id(p.getId()));
-            for (var a : r.getAttributes()) {
-                if (a.getKey() != null && !a.getKey().isBlank() && a.getValue() != null && !a.getValue().isBlank()) {
-                    // DROP-672: locale opcional (es/en/pt/zh); en blanco = neutral (faceta).
-                    String loc = a.getLocale() != null && !a.getLocale().isBlank() ? a.getLocale().trim().toLowerCase()
-                            : null;
-                    productAttributeRepository.save(ProductAttributeEntity.builder().product(p).attrKey(a.getKey())
-                            .attrValue(a.getValue()).locale(loc).createdAt(Instant.now()).build());
-                }
-            }
-        }
-        // Ficha técnica por idioma: se reemplaza en cada import.
-        if (r.getSpecifications() != null && !r.getSpecifications().isEmpty()) {
-            productSpecificationRepository
-                    .deleteAll(productSpecificationRepository.findByProduct_IdOrderByPositionAsc(p.getId()));
-            int sp = 0;
-            for (var s : r.getSpecifications()) {
-                if (s.getKey() != null && !s.getKey().isBlank() && s.getValue() != null && !s.getValue().isBlank()) {
-                    productSpecificationRepository.save(ProductSpecificationEntity.builder().product(p)
-                            .locale(s.getLocale() != null && !s.getLocale().isBlank() ? s.getLocale() : "es")
-                            .specKey(s.getKey()).specValue(s.getValue())
-                            .position(s.getPosition() != null ? s.getPosition() : sp).createdAt(Instant.now()).build());
-                }
-                sp++;
-            }
-        }
+        replaceProductAttributes(p, r);
+        replaceProductSpecifications(p, r);
         BulkProductFields.applyExtraTranslations(p, r);
         // Las traducciones (título + descripción por idioma) las fija el writer dentro de su transacción.
         // DROP-679: como el writer publica el producto (status ACTIVE), generamos aquí el SEO por idioma
         // a partir de esas traducciones reales (las colecciones ya están adjuntas a la entidad gestionada).
         ProductSeoMetadata.generate(p);
+    }
+
+    /**
+     * Atributos taxonómicos (las facetas del buscador): se reemplazan ENTEROS en cada import. Acumularlos
+     * dejaría conviviendo el valor viejo y el nuevo, y el filtro devolvería el producto por los dos.
+     */
+    private void replaceProductAttributes(ProductEntity p, BulkProductDtoIn r) {
+        if (r.getAttributes() == null || r.getAttributes().isEmpty()) {
+            return;
+        }
+        productAttributeRepository.deleteAll(productAttributeRepository.findByProduct_Id(p.getId()));
+        for (BulkProductDtoIn.BulkAttr a : r.getAttributes()) {
+            if (Texts.has(a.getKey()) && Texts.has(a.getValue())) {
+                // DROP-672: locale opcional (es/en/pt/zh); en blanco = neutral (faceta).
+                String locale = Texts.has(a.getLocale()) ? a.getLocale().trim().toLowerCase() : null;
+                productAttributeRepository.save(ProductAttributeEntity.builder().product(p).attrKey(a.getKey())
+                        .attrValue(a.getValue()).locale(locale).createdAt(Instant.now()).build());
+            }
+        }
+    }
+
+    /**
+     * Ficha técnica por idioma: también se reemplaza entera en cada import.
+     *
+     * <p>La posición de respaldo avanza con TODAS las filas leídas, no sólo con las guardadas: así una
+     * fila incompleta descartada no reordena las siguientes respecto al fichero original.
+     */
+    private void replaceProductSpecifications(ProductEntity p, BulkProductDtoIn r) {
+        if (r.getSpecifications() == null || r.getSpecifications().isEmpty()) {
+            return;
+        }
+        productSpecificationRepository
+                .deleteAll(productSpecificationRepository.findByProduct_IdOrderByPositionAsc(p.getId()));
+        int fallbackPosition = 0;
+        for (BulkProductDtoIn.BulkSpec s : r.getSpecifications()) {
+            if (Texts.has(s.getKey()) && Texts.has(s.getValue())) {
+                productSpecificationRepository.save(ProductSpecificationEntity.builder().product(p)
+                        .locale(Texts.firstNonBlankOr("es", s.getLocale()))
+                        .specKey(s.getKey()).specValue(s.getValue())
+                        .position(s.getPosition() != null ? s.getPosition() : fallbackPosition)
+                        .createdAt(Instant.now()).build());
+            }
+            fallbackPosition++;
+        }
     }
 
     @Override
@@ -1543,26 +1653,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         int failed = 0;
         List<String> errors = new ArrayList<>();
         for (int i = 0; i < rows.size(); i++) {
-            var r = rows.get(i);
             try {
-                if (r.getNameEs() == null || r.getNameEs().isBlank()) {
-                    throw new BusinessException("nameEs es obligatorio");
-                }
-                int position = r.getPosition() != null ? r.getPosition() : (int) (categoryRepository.count() + 1);
-                String pt = (r.getNamePt() != null && !r.getNamePt().isBlank()) ? r.getNamePt() : r.getNameEs();
-                String en = (r.getNameEn() != null && !r.getNameEn().isBlank()) ? r.getNameEn() : r.getNameEs();
-                String zh = (r.getNameZh() != null && !r.getNameZh().isBlank()) ? r.getNameZh() : r.getNameEs();
-                // Resolve the optional parent by slug (a parent listed earlier in the batch is
-                // already persisted, so it is visible here). An unknown slug fails just that row.
-                UUID parentId = null;
-                if (r.getParentSlug() != null && !r.getParentSlug().isBlank()) {
-                    parentId = categoryRepository.findBySlug(r.getParentSlug()).map(CategoryEntity::getId)
-                            .orElseThrow(() -> new BusinessException(
-                                    "Categoría padre no encontrada: " + r.getParentSlug()));
-                }
-                self.upsertCategory(new IngestCategoryRequest(r.getSlug(), parentId, "1688", null, zh, position,
-                        r.getIcon() != null ? r.getIcon() : "tag",
-                        Map.of("es", r.getNameEs(), "en", en, "pt", pt)));
+                upsertBulkCategory(rows.get(i));
                 created++;
             } catch (Exception e) {
                 failed++;
@@ -1570,6 +1662,29 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             }
         }
         return new BulkResultDtoOut(created, failed, errors);
+    }
+
+    /**
+     * Alta o actualización de UNA categoría de la carga. Los nombres que falten caen al español, el único
+     * obligatorio. El padre se resuelve por slug: uno listado antes en el mismo lote ya está persistido y
+     * se ve desde aquí; un slug desconocido tumba SÓLO esta fila (lo recoge el catch del bucle).
+     */
+    private void upsertBulkCategory(BulkCategoryDtoIn r) {
+        if (!Texts.has(r.getNameEs())) {
+            throw new BusinessException("nameEs es obligatorio");
+        }
+        int position = r.getPosition() != null ? r.getPosition() : (int) (categoryRepository.count() + 1);
+        String pt = Texts.firstNonBlankOr(r.getNameEs(), r.getNamePt());
+        String en = Texts.firstNonBlankOr(r.getNameEs(), r.getNameEn());
+        String zh = Texts.firstNonBlankOr(r.getNameEs(), r.getNameZh());
+        UUID parentId = null;
+        if (Texts.has(r.getParentSlug())) {
+            parentId = categoryRepository.findBySlug(r.getParentSlug()).map(CategoryEntity::getId)
+                    .orElseThrow(() -> new BusinessException("Categoría padre no encontrada: " + r.getParentSlug()));
+        }
+        self.upsertCategory(new IngestCategoryRequest(r.getSlug(), parentId, "1688", null, zh, position,
+                r.getIcon() != null ? r.getIcon() : "tag",
+                Map.of("es", r.getNameEs(), "en", en, "pt", pt)));
     }
 
     /**

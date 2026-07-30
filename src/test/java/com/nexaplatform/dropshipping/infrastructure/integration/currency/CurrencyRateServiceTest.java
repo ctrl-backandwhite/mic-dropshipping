@@ -7,6 +7,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -23,18 +24,17 @@ class CurrencyRateServiceTest {
     @Mock
     private CurrencyRateRepository repository;
 
+    @InjectMocks
     private CurrencyRateService service;
 
     private static CurrencyRateEntity rate(String code, String symbol, String locale, String rateVsUsd,
             boolean active) {
-        CurrencyRateEntity e = CurrencyRateEntity.builder().code(code).name(code).symbol(symbol).locale(locale)
+        return CurrencyRateEntity.builder().code(code).name(code).symbol(symbol).locale(locale)
                 .rateVsUsd(new BigDecimal(rateVsUsd)).active(active).build();
-        return e;
     }
 
     @BeforeEach
     void setUp() {
-        service = new CurrencyRateService(repository);
         // @PostConstruct.warm() is NOT invoked under plain Mockito; the cache is empty and
         // cacheStamp = Instant.EPOCH, so the first public read triggers ensureFresh() -> refreshCache().
         lenient().when(repository.findAll()).thenReturn(List.of(

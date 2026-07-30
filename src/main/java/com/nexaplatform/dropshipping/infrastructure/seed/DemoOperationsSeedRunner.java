@@ -3,9 +3,7 @@ package com.nexaplatform.dropshipping.infrastructure.seed;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
-import com.nexaplatform.dropshipping.domain.enums.MarginType;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
-import com.nexaplatform.dropshipping.domain.enums.PriceRuleScope;
 import com.nexaplatform.dropshipping.domain.enums.SubscriptionStatus;
 import com.nexaplatform.dropshipping.domain.enums.UserRole;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
@@ -23,8 +21,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.text.Normalizer;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
@@ -154,16 +154,36 @@ public class DemoOperationsSeedRunner {
         List<UserEntity> demoPartners = partners.stream()
                 .filter(u -> u.getEmail() != null && u.getEmail().contains(PARTNERS_NX036_LOCAL)).toList();
 
+        seedCommerce(demoCustomers, demoPartners);
+        seedCatalogExtras();
+        seedPlatform(demoCustomers, demoPartners);
+
+        log.info("NX036 demo ops seed finished — users={} orders={} payments={} subs={} priceRules={}",
+                userRepository.count(), orderRepository.count(), paymentRepository.count(),
+                subscriptionRepository.count(), priceRuleRepository.count());
+    }
+
+    /**
+     * Direcciones, pedidos y suscripciones. Cada bloque solo entra si la tabla está por debajo del mínimo
+     * que hace presentable la demo: así el seed es idempotente por secciones y volver a arrancar no
+     * duplica datos.
+     *
+     * <p>NO se siembra saldo de wallet (recargas/depósitos de prueba). La wallet arranca en 0 y solo se
+     * acredita con recargas reales (Stripe/PayPal) o reembolsos. Ver decisión 2026-07-01.
+     *
+     * <p>Las reglas de margen tampoco se siembran: las define el operador (decisión 2026-06-13).
+     */
+    private void seedCommerce(List<UserEntity> demoCustomers, List<UserEntity> demoPartners) {
         if (addressRepository.count() < 50)
             seedAddressesFor(demoCustomers, demoPartners);
-        // NOTA: NO se siembra saldo de wallet (recargas/depósitos de prueba). La wallet arranca en 0 y solo
-        // se acredita con recargas reales (Stripe/PayPal) o reembolsos. Ver decisión 2026-07-01.
         if (orderRepository.count() < 30)
             seedOrders(demoCustomers, 60);
         if (subscriptionRepository.count() < 5)
             seedSubscriptions(demoPartners);
-        // Reglas de margen: NO se siembran automáticamente — las define el operador
-        // (decisión 2026-06-13). El método seedPriceRules() se conserva sin invocar.
+    }
+
+    /** Todo lo que cuelga del catálogo: fichas, envío, banderas comerciales e histórico de precios. */
+    private void seedCatalogExtras() {
         if (specRepository.count() < 50)
             seedSpecifications();
         if (attrRepository.count() < 50)
@@ -175,6 +195,11 @@ public class DemoOperationsSeedRunner {
         seedProductFlagsAndVideos();
         if (historyRepository.count() < 50)
             seedPriceHistory();
+        seedProductBrandsAndReadyToShip();
+    }
+
+    /** Módulos de plataforma: agentes, academia, mentores, almacenes, tendencias, avisos y tiendas. */
+    private void seedPlatform(List<UserEntity> demoCustomers, List<UserEntity> demoPartners) {
         if (agentProfileRepo.count() == 0)
             seedAgents();
         if (courseRepo.count() == 0)
@@ -189,11 +214,6 @@ public class DemoOperationsSeedRunner {
             seedNotifications(demoCustomers);
         if (shopConnectionRepo.count() == 0)
             seedShopConnections(demoCustomers);
-        seedProductBrandsAndReadyToShip();
-
-        log.info("NX036 demo ops seed finished — users={} orders={} payments={} subs={} priceRules={}",
-                userRepository.count(), orderRepository.count(), paymentRepository.count(),
-                subscriptionRepository.count(), priceRuleRepository.count());
     }
 
     private static int countDemo(List<UserEntity> us) {
@@ -379,32 +399,7 @@ public class DemoOperationsSeedRunner {
                     .totalCents(0).notes(noteVariants[rnd.nextInt(noteVariants.length)])
                     .placedAt(Instant.now().minus(rnd.nextInt(120), ChronoUnit.DAYS)).build();
 
-            // 1-6 items per order — más variedad para que los totales se distribuyan.
-            int itemCount = 1 + rnd.nextInt(6);
-            int subtotal = 0;
-            for (int j = 0; j < itemCount; j++) {
-                ProductEntity prod = products.get(rnd.nextInt(products.size()));
-                // Qty con cola: 70% 1-3, 20% 4-10, 10% 11-50 — para ver totales grandes
-                int qtyBucket = rnd.nextInt(100);
-                int qty = qtyBucket < 70
-                        ? 1 + rnd.nextInt(3)
-                        : qtyBucket < 90 ? 4 + rnd.nextInt(7) : 11 + rnd.nextInt(40);
-                // Unit price: si la base está demasiado uniforme, añadimos variación ±30%
-                int baseUnit = (int) Math.round(prod.getBasePrice().doubleValue() * 100);
-                if (baseUnit < 100)
-                    baseUnit = 200 + rnd.nextInt(15000); // 2..152 USD
-                double variation = 0.7 + rnd.nextDouble() * 0.6; // 0.7..1.3
-                int unitCents = Math.max(100, (int) Math.round(baseUnit * variation));
-                int lineTotal = unitCents * qty;
-                String img = prod.getImages() != null && !prod.getImages().isEmpty()
-                        ? prod.getImages().get(0).getSourceUrl()
-                        : null;
-                OrderItemEntity it = OrderItemEntity.builder().order(o).product(prod).titleSnapshot(prod.getTitleZh())
-                        .imageUrlSnapshot(img).skuSnapshot(prod.getExternalId()).unitPriceCents(unitCents)
-                        .costCents((int) Math.round(unitCents * 0.65)).quantity(qty).lineTotalCents(lineTotal).build();
-                o.getItems().add(it);
-                subtotal += lineTotal;
-            }
+            int subtotal = addOrderItems(o, products);
             int shipping = 0; // free shipping in demo
             int tax = (int) Math.round(subtotal * 0.0);
             o.setSubtotalCents(subtotal);
@@ -421,6 +416,46 @@ public class DemoOperationsSeedRunner {
         }
         log.info("Seeded {} orders", created.size());
         return created;
+    }
+
+    /** Añade 1-6 líneas al pedido — más variedad para que los totales se distribuyan — y da el subtotal. */
+    private int addOrderItems(CustomerOrderEntity o, List<ProductEntity> products) {
+        int itemCount = 1 + rnd.nextInt(6);
+        int subtotal = 0;
+        for (int j = 0; j < itemCount; j++) {
+            ProductEntity prod = products.get(rnd.nextInt(products.size()));
+            int qty = randomQuantity();
+            int unitCents = randomUnitCents(prod);
+            int lineTotal = unitCents * qty;
+            String img = prod.getImages() != null && !prod.getImages().isEmpty()
+                    ? prod.getImages().get(0).getSourceUrl()
+                    : null;
+            OrderItemEntity it = OrderItemEntity.builder().order(o).product(prod).titleSnapshot(prod.getTitleZh())
+                    .imageUrlSnapshot(img).skuSnapshot(prod.getExternalId()).unitPriceCents(unitCents)
+                    .costCents((int) Math.round(unitCents * 0.65)).quantity(qty).lineTotalCents(lineTotal).build();
+            o.getItems().add(it);
+            subtotal += lineTotal;
+        }
+        return subtotal;
+    }
+
+    /** Cantidad con cola: 70% de 1-3, 20% de 4-10 y 10% de 11-50, para que se vean totales grandes. */
+    private int randomQuantity() {
+        int bucket = rnd.nextInt(100);
+        if (bucket < 70) {
+            return 1 + rnd.nextInt(3);
+        }
+        return bucket < 90 ? 4 + rnd.nextInt(7) : 11 + rnd.nextInt(40);
+    }
+
+    /** Precio unitario con variación de ±30% sobre la base; si la base es irrisoria, se inventa una. */
+    private int randomUnitCents(ProductEntity prod) {
+        int baseUnit = (int) Math.round(prod.getBasePrice().doubleValue() * 100);
+        if (baseUnit < 100) {
+            baseUnit = 200 + rnd.nextInt(15000); // 2..152 USD
+        }
+        double variation = 0.7 + rnd.nextDouble() * 0.6; // 0.7..1.3
+        return Math.max(100, (int) Math.round(baseUnit * variation));
     }
 
     private void applyStatusTimeline(CustomerOrderEntity o, OrderStatus target) {
@@ -465,74 +500,28 @@ public class DemoOperationsSeedRunner {
             if (!subscriptionRepository.findByUserId(p.getId()).isEmpty())
                 continue;
             SubscriptionPlanEntity assignedPlan = i % 3 == 0 ? free : paid;
-            boolean isFreePlan = assignedPlan.getPriceMonthlyCents() == 0 && assignedPlan.getPriceYearlyCents() == 0;
-            // DROP-634: un plan gratuito (FREE) no puede estar en periodo de prueba —
-            // un plan sin coste ya es "activo" desde el primer momento. Forzamos
-            // ACTIVE cuando el plan asignado es gratuito.
-            SubscriptionStatus st = statuses[i % statuses.length];
-            if (isFreePlan && st == SubscriptionStatus.TRIALING) {
-                st = SubscriptionStatus.ACTIVE;
-            }
-            Instant now = Instant.now();
-            CustomerSubscriptionEntity s = CustomerSubscriptionEntity.builder().user(p).plan(assignedPlan)
-                    // DROP-634: usamos el formato canónico MONTHLY/YEARLY (igual que el
-                    // use case real) para que el frontend lo traduzca siempre vía i18n.
-                    .status(st).billingPeriod(i % 2 == 0 ? "MONTHLY" : "YEARLY")
-                    .currentPeriodStart(now.minus(15L + rnd.nextInt(30), ChronoUnit.DAYS))
-                    .currentPeriodEnd(now.plus(15L + rnd.nextInt(30), ChronoUnit.DAYS))
-                    .canceledAt(st == SubscriptionStatus.CANCELED ? now.minus(5, ChronoUnit.DAYS) : null)
-                    .trialEndsAt(st == SubscriptionStatus.TRIALING ? now.plus(7, ChronoUnit.DAYS) : null).build();
-            subscriptionRepository.save(s);
+            subscriptionRepository.save(buildSubscription(p, assignedPlan, statuses[i % statuses.length], i));
             created++;
         }
         log.info("Seeded {} subscriptions", created);
     }
 
-    /* ============================== pricing rules ============================== */
-
-    private void seedPriceRules() {
-        if (priceRuleRepository.count() >= 5)
-            return;
-        List<PriceRuleEntity> rules = new ArrayList<>();
-        // Only add the GLOBAL default rule if one isn't already present (v2 SQL seed creates it).
-        boolean hasGlobalDefault = priceRuleRepository.findAll().stream()
-                .anyMatch(r -> r.getScope() == PriceRuleScope.GLOBAL && r.getMarginType() == MarginType.PERCENTAGE
-                        && r.getScopeId() == null);
-        if (!hasGlobalDefault) {
-            rules.add(rule(PriceRuleScope.GLOBAL, null, MarginType.PERCENTAGE, "35.00", 100,
-                    "Margen global por defecto (35%)"));
-        }
-        Map<String, BigDecimal> catMargins = Map.of(CONSUMER_ELECTRONICS, new BigDecimal("28.00"), FASHION_APPAREL,
-                new BigDecimal("45.00"), HOME_KITCHEN, new BigDecimal("38.00"), BEAUTY_PERSONAL_CARE,
-                new BigDecimal("52.00"), SPORTS_OUTDOORS, new BigDecimal("40.00"), TOYS_GIFTS,
-                new BigDecimal("48.00"));
-        catMargins.forEach((slug, value) -> categoryRepository.findBySlug(slug).ifPresent(cat -> {
-            // Prefer a localized name from translations; fall back to the zh column then the slug.
-            String label = cat.getTranslations() == null
-                    ? null
-                    : cat.getTranslations().stream()
-                            .filter(tr -> "es".equals(tr.getLanguage()) || "en".equals(tr.getLanguage()))
-                            .map(tr -> tr.getName()).filter(n -> n != null && !n.isBlank()).findFirst().orElse(null);
-            if (label == null || label.isBlank())
-                label = cat.getNameZh();
-            if (label == null || label.isBlank())
-                label = cat.getSlug();
-            rules.add(rule(PriceRuleScope.CATEGORY, cat.getId(), MarginType.PERCENTAGE, value.toPlainString(), 200,
-                    "Margen categoría — " + label));
-        }));
-        supplierRepository.findAll().stream().limit(3).forEach(s -> rules.add(rule(PriceRuleScope.SUPPLIER, s.getId(),
-                MarginType.PERCENTAGE, "30.00", 300, "Proveedor preferido — " + s.getName())));
-        rules.add(rule(PriceRuleScope.GLOBAL, null, MarginType.FIXED, "1.50", 50,
-                "Recargo fijo para productos de bajo coste"));
-
-        priceRuleRepository.saveAll(rules);
-        log.info("Seeded {} price rules", rules.size());
-    }
-
-    private PriceRuleEntity rule(PriceRuleScope scope, UUID scopeId, MarginType type, String value, int position,
-            String description) {
-        return PriceRuleEntity.builder().scope(scope).scopeId(scopeId).marginType(type)
-                .marginValue(new BigDecimal(value)).active(true).position(position).description(description).build();
+    private CustomerSubscriptionEntity buildSubscription(UserEntity partner, SubscriptionPlanEntity plan,
+            SubscriptionStatus status, int index) {
+        boolean isFreePlan = plan.getPriceMonthlyCents() == 0 && plan.getPriceYearlyCents() == 0;
+        // DROP-634: un plan gratuito (FREE) no puede estar en periodo de prueba — un plan sin coste ya es
+        // "activo" desde el primer momento. Forzamos ACTIVE cuando el plan asignado es gratuito.
+        SubscriptionStatus st = isFreePlan && status == SubscriptionStatus.TRIALING ? SubscriptionStatus.ACTIVE
+                : status;
+        Instant now = Instant.now();
+        return CustomerSubscriptionEntity.builder().user(partner).plan(plan)
+                // DROP-634: usamos el formato canónico MONTHLY/YEARLY (igual que el use case real) para
+                // que el frontend lo traduzca siempre vía i18n.
+                .status(st).billingPeriod(index % 2 == 0 ? "MONTHLY" : "YEARLY")
+                .currentPeriodStart(now.minus(15L + rnd.nextInt(30), ChronoUnit.DAYS))
+                .currentPeriodEnd(now.plus(15L + rnd.nextInt(30), ChronoUnit.DAYS))
+                .canceledAt(st == SubscriptionStatus.CANCELED ? now.minus(5, ChronoUnit.DAYS) : null)
+                .trialEndsAt(st == SubscriptionStatus.TRIALING ? now.plus(7, ChronoUnit.DAYS) : null).build();
     }
 
     /* ============================== specifications ============================== */
@@ -560,34 +549,94 @@ public class DemoOperationsSeedRunner {
         log.info("Seeded {} product specifications", created);
     }
 
-    private List<String[]> specsFor(ProductEntity p, String lang) {
-        String category = p.getCategory() != null ? p.getCategory().getSlug() : GENERAL;
-        boolean es = "es".equals(lang);
-        List<String[]> out = new ArrayList<>();
-        out.add(new String[]{es ? "Marca" : "Brand", p.getBrand() != null ? p.getBrand() : "NX036 Generic"});
-        out.add(new String[]{"Material", materialFor(category)});
-        out.add(new String[]{es ? "Modelo" : "Model", p.getExternalId()});
-        out.add(new String[]{es ? "País de origen" : "Country of origin", "CN"});
-        out.add(new String[]{es ? "Peso neto" : "Net weight",
-                (p.getWeightGrams() != null ? p.getWeightGrams() : 250 + rnd.nextInt(800)) + " g"});
-        out.add(new String[]{es ? "Garantía" : "Warranty", (3 + rnd.nextInt(22)) + (es ? " meses" : " months")});
-        out.add(new String[]{es ? "Lead time del proveedor" : "Supplier lead time",
-                (2 + rnd.nextInt(8)) + (es ? " días" : " days")});
-        if (CONSUMER_ELECTRONICS.equals(category)) {
-            out.add(new String[]{es ? "Voltaje" : "Voltage", "100-240V AC, 50/60Hz"});
-            out.add(new String[]{es ? "Certificaciones" : "Certifications", "CE, FCC, RoHS"});
-            out.add(new String[]{es ? "Conectividad" : "Connectivity", "Bluetooth 5.3 · USB-C"});
-        } else if (FASHION_APPAREL.equals(category)) {
-            out.add(new String[]{es ? "Composición" : "Composition", "Cotton 80% / Polyester 20%"});
-            out.add(new String[]{es ? "Cuidado" : "Care",
-                    es ? "Lavar a 30°C, no plancha directa" : "Machine wash 30°C"});
-        } else if (BEAUTY_PERSONAL_CARE.equals(category)) {
-            out.add(new String[]{es ? "Tipo de piel" : "Skin type", es ? "Todo tipo" : "All types"});
-            out.add(new String[]{es ? "Caducidad" : "Shelf life", "24 " + (es ? "meses" : "months")});
-        } else if (HOME_KITCHEN.equals(category)) {
-            out.add(new String[]{es ? "Apto para lavavajillas" : "Dishwasher safe", es ? "Sí" : "Yes"});
+    /**
+     * Textos de las especificaciones de demostración. El seed solo escribe las fichas en español e inglés,
+     * así que cada constante lleva sus dos versiones: nombre del campo, unidades y los pocos valores que
+     * también van traducidos.
+     */
+    private enum SpecText {
+        BRAND("Marca", "Brand"),
+        MATERIAL("Material", "Material"),
+        MODEL("Modelo", "Model"),
+        ORIGIN("País de origen", "Country of origin"),
+        NET_WEIGHT("Peso neto", "Net weight"),
+        WARRANTY("Garantía", "Warranty"),
+        LEAD_TIME("Lead time del proveedor", "Supplier lead time"),
+        VOLTAGE("Voltaje", "Voltage"),
+        CERTIFICATIONS("Certificaciones", "Certifications"),
+        CONNECTIVITY("Conectividad", "Connectivity"),
+        COMPOSITION("Composición", "Composition"),
+        CARE("Cuidado", "Care"),
+        SKIN_TYPE("Tipo de piel", "Skin type"),
+        SHELF_LIFE("Caducidad", "Shelf life"),
+        DISHWASHER_SAFE("Apto para lavavajillas", "Dishwasher safe"),
+        MONTHS_UNIT(" meses", " months"),
+        DAYS_UNIT(" días", " days"),
+        CARE_VALUE("Lavar a 30°C, no plancha directa", "Machine wash 30°C"),
+        ALL_SKIN_TYPES("Todo tipo", "All types"),
+        YES("Sí", "Yes");
+
+        private final String es;
+        private final String en;
+
+        SpecText(String es, String en) {
+            this.es = es;
+            this.en = en;
         }
+
+        String of(boolean spanish) {
+            return spanish ? es : en;
+        }
+    }
+
+    private List<String[]> specsFor(ProductEntity p, String lang) {
+        boolean es = "es".equals(lang);
+        String category = p.getCategory() != null ? p.getCategory().getSlug() : GENERAL;
+        List<String[]> out = new ArrayList<>(commonSpecs(p, category, es));
+        out.addAll(categorySpecs(category, es));
         return out;
+    }
+
+    /** Las 7 especificaciones que lleva cualquier producto, tenga la categoría que tenga. */
+    private List<String[]> commonSpecs(ProductEntity p, String category, boolean es) {
+        List<String[]> out = new ArrayList<>();
+        out.add(spec(SpecText.BRAND, es, p.getBrand() != null ? p.getBrand() : "NX036 Generic"));
+        out.add(spec(SpecText.MATERIAL, es, materialFor(category)));
+        out.add(spec(SpecText.MODEL, es, p.getExternalId()));
+        out.add(spec(SpecText.ORIGIN, es, "CN"));
+        int grams = p.getWeightGrams() != null ? p.getWeightGrams() : 250 + rnd.nextInt(800);
+        out.add(spec(SpecText.NET_WEIGHT, es, grams + " g"));
+        out.add(spec(SpecText.WARRANTY, es, (3 + rnd.nextInt(22)) + SpecText.MONTHS_UNIT.of(es)));
+        out.add(spec(SpecText.LEAD_TIME, es, (2 + rnd.nextInt(8)) + SpecText.DAYS_UNIT.of(es)));
+        return out;
+    }
+
+    /** Especificaciones propias de la categoría; las que no están contempladas no añaden ninguna. */
+    private static List<String[]> categorySpecs(String category, boolean es) {
+        if (CONSUMER_ELECTRONICS.equals(category)) {
+            return List.of(spec(SpecText.VOLTAGE, es, "100-240V AC, 50/60Hz"),
+                    spec(SpecText.CERTIFICATIONS, es, "CE, FCC, RoHS"),
+                    spec(SpecText.CONNECTIVITY, es, "Bluetooth 5.3 · USB-C"));
+        }
+        if (FASHION_APPAREL.equals(category)) {
+            return List.of(spec(SpecText.COMPOSITION, es, "Cotton 80% / Polyester 20%"),
+                    spec(SpecText.CARE, es, SpecText.CARE_VALUE.of(es)));
+        }
+        if (BEAUTY_PERSONAL_CARE.equals(category)) {
+            return List.of(spec(SpecText.SKIN_TYPE, es, SpecText.ALL_SKIN_TYPES.of(es)),
+                    spec(SpecText.SHELF_LIFE, es, "24" + SpecText.MONTHS_UNIT.of(es)));
+        }
+        if (HOME_KITCHEN.equals(category)) {
+            // El tipo va explícito: con UN solo elemento, List.of(String[]) se interpreta como varargs y
+            // devolvería List<String> en vez de List<String[]>.
+            return List.<String[]>of(spec(SpecText.DISHWASHER_SAFE, es, SpecText.YES.of(es)));
+        }
+        return List.of();
+    }
+
+    /** Par clave/valor tal y como lo consume {@code seedSpecifications}. */
+    private static String[] spec(SpecText label, boolean es, String value) {
+        return new String[]{label.of(es), value};
     }
 
     private String materialFor(String slug) {
@@ -666,22 +715,32 @@ public class DemoOperationsSeedRunner {
                         .active(true).build());
                 zCount++;
 
-                // 4 shipping methods per zone
-                rateRepository.save(rate(s, c, "STANDARD", "CJPacket", 7, 14, 350, 800, 30000));
-                rateRepository.save(rate(s, c, "EXPRESS", "DHL Express", 3, 6, 1200, 2500, 20000));
-                rateRepository.save(rate(s, c, "AIR", "China Post Air", 5, 10, 700, 1500, 30000));
-                rateRepository.save(rate(s, c, "SEA", "Sea LCL", 25, 45, 1500, 400, 200000));
-                rCount += 4;
+                for (RateSpec spec : DEMO_RATES) {
+                    rateRepository.save(rate(s, c, spec));
+                }
+                rCount += DEMO_RATES.size();
             }
         }
         log.info("Seeded {} shipping zones and {} shipping rates", zCount, rCount);
     }
 
-    private ShippingRateEntity rate(SupplierEntity s, String country, String method, String carrier, int dMin, int dMax,
-            int baseCents, int perKgCents, int maxGrams) {
-        return ShippingRateEntity.builder().supplier(s).countryCode(country).method(method).carrier(carrier)
-                .transitDaysMin(dMin).transitDaysMax(dMax).baseCents(baseCents).perKgCents(perKgCents)
-                .maxWeightGrams(maxGrams).active(true).build();
+    /** Tarifa de demostración: transporte, tránsito en días, coste base y por kilo, y peso máximo. */
+    private record RateSpec(String method, String carrier, int transitDaysMin, int transitDaysMax, int baseCents,
+            int perKgCents, int maxWeightGrams) {
+    }
+
+    /** Los cuatro métodos de envío que se siembran en cada zona. */
+    private static final List<RateSpec> DEMO_RATES = List.of(
+            new RateSpec("STANDARD", "CJPacket", 7, 14, 350, 800, 30000),
+            new RateSpec("EXPRESS", "DHL Express", 3, 6, 1200, 2500, 20000),
+            new RateSpec("AIR", "China Post Air", 5, 10, 700, 1500, 30000),
+            new RateSpec("SEA", "Sea LCL", 25, 45, 1500, 400, 200000));
+
+    private ShippingRateEntity rate(SupplierEntity s, String country, RateSpec spec) {
+        return ShippingRateEntity.builder().supplier(s).countryCode(country).method(spec.method())
+                .carrier(spec.carrier()).transitDaysMin(spec.transitDaysMin()).transitDaysMax(spec.transitDaysMax())
+                .baseCents(spec.baseCents()).perKgCents(spec.perKgCents()).maxWeightGrams(spec.maxWeightGrams())
+                .active(true).build();
     }
 
     private static String regionOf(String c) {
@@ -703,35 +762,44 @@ public class DemoOperationsSeedRunner {
         List<ProductEntity> products = productRepository.findAll();
         int updated = 0;
         for (ProductEntity p : products) {
+            // Con plazo y certificaciones ya puestos no queda nada que rellenar en esta ficha.
             if (p.getLeadTimeDays() != null && p.getCertifications() != null)
                 continue;
-            if (p.getLeadTimeDays() == null)
-                p.setLeadTimeDays(2 + rnd.nextInt(8));
-            if (p.getWarrantyMonths() == null)
-                p.setWarrantyMonths(3 + rnd.nextInt(22));
-            if (p.getReturnPolicyDays() == null)
-                p.setReturnPolicyDays(rnd.nextInt(2) == 0 ? 14 : 30);
-            if (p.getCountryOfOrigin() == null)
-                p.setCountryOfOrigin("CN");
-            if (p.getPackageWeightGrams() == null && p.getWeightGrams() != null) {
-                p.setPackageWeightGrams(p.getWeightGrams() + 80 + rnd.nextInt(220));
-            }
-            if (p.getCertifications() == null || p.getCertifications().isEmpty()) {
-                String slug = p.getCategory() != null ? p.getCategory().getSlug() : GENERAL;
-                p.setCertifications(switch (slug) {
-                    case CONSUMER_ELECTRONICS -> List.of("CE", "FCC", "RoHS");
-                    case FASHION_APPAREL -> List.of("OEKO-TEX");
-                    case BEAUTY_PERSONAL_CARE -> List.of("ISO 22716", "GMP");
-                    case HOME_KITCHEN -> List.of("FDA", "LFGB");
-                    case SPORTS_OUTDOORS -> List.of("CE");
-                    case TOYS_GIFTS -> List.of("EN71", "ASTM F963", "CPSIA");
-                    default -> List.of();
-                });
-            }
+            fillProductExtras(p);
             productRepository.save(p);
             updated++;
         }
         log.info("Updated {} products with extras (lead time, warranty, certifications)", updated);
+    }
+
+    /** Rellena SOLO las columnas vacías: nunca pisa un dato que ya trae el producto. */
+    private void fillProductExtras(ProductEntity p) {
+        if (p.getLeadTimeDays() == null)
+            p.setLeadTimeDays(2 + rnd.nextInt(8));
+        if (p.getWarrantyMonths() == null)
+            p.setWarrantyMonths(3 + rnd.nextInt(22));
+        if (p.getReturnPolicyDays() == null)
+            p.setReturnPolicyDays(rnd.nextInt(2) == 0 ? 14 : 30);
+        if (p.getCountryOfOrigin() == null)
+            p.setCountryOfOrigin("CN");
+        if (p.getPackageWeightGrams() == null && p.getWeightGrams() != null) {
+            p.setPackageWeightGrams(p.getWeightGrams() + 80 + rnd.nextInt(220));
+        }
+        if (p.getCertifications() == null || p.getCertifications().isEmpty()) {
+            p.setCertifications(certificationsFor(p.getCategory() != null ? p.getCategory().getSlug() : GENERAL));
+        }
+    }
+
+    private static List<String> certificationsFor(String categorySlug) {
+        return switch (categorySlug) {
+            case CONSUMER_ELECTRONICS -> List.of("CE", "FCC", "RoHS");
+            case FASHION_APPAREL -> List.of("OEKO-TEX");
+            case BEAUTY_PERSONAL_CARE -> List.of("ISO 22716", "GMP");
+            case HOME_KITCHEN -> List.of("FDA", "LFGB");
+            case SPORTS_OUTDOORS -> List.of("CE");
+            case TOYS_GIFTS -> List.of("EN71", "ASTM F963", "CPSIA");
+            default -> List.of();
+        };
     }
 
     /* ============================== category expansion (DROP-19) ============================== */
@@ -774,32 +842,7 @@ public class DemoOperationsSeedRunner {
         List<ProductEntity> products = productRepository.findAll();
         int updated = 0;
         for (ProductEntity p : products) {
-            boolean changed = false;
-            if (p.getShipFrom() == null) {
-                p.setShipFrom(shipFromPool[rnd.nextInt(shipFromPool.length)]);
-                changed = true;
-            }
-            if (p.getFreeShipping() == null) {
-                p.setFreeShipping(rnd.nextInt(3) == 0);
-                changed = true; // ~33% free shipping
-            }
-            if (p.getSelfPickup() == null) {
-                p.setSelfPickup(rnd.nextInt(8) == 0);
-                changed = true; // ~12% self pickup
-            }
-            if (p.getHasVideo() == null) {
-                p.setHasVideo(rnd.nextInt(4) == 0);
-                changed = true; // ~25% have video
-            }
-            if (Boolean.TRUE.equals(p.getHasVideo()) && p.getVideoUrl() == null) {
-                p.setVideoUrl("https://cdn.nx036.local/v/" + p.getId() + ".mp4");
-                changed = true;
-            }
-            if (p.getInventoryCount() == null) {
-                p.setInventoryCount(50 + rnd.nextInt(9950));
-                changed = true;
-            }
-            if (changed) {
+            if (fillFlagsAndVideo(p, shipFromPool)) {
                 productRepository.save(p);
                 updated++;
             }
@@ -808,11 +851,45 @@ public class DemoOperationsSeedRunner {
             log.info("Filled ship-from / free-shipping / video / inventory on {} products", updated);
     }
 
+    /** Rellena las banderas comerciales que falten; devuelve {@code true} si tocó alguna. */
+    private boolean fillFlagsAndVideo(ProductEntity p, String[] shipFromPool) {
+        boolean changed = false;
+        if (p.getShipFrom() == null) {
+            p.setShipFrom(shipFromPool[rnd.nextInt(shipFromPool.length)]);
+            changed = true;
+        }
+        if (p.getFreeShipping() == null) {
+            p.setFreeShipping(rnd.nextInt(3) == 0);
+            changed = true; // ~33% free shipping
+        }
+        if (p.getSelfPickup() == null) {
+            p.setSelfPickup(rnd.nextInt(8) == 0);
+            changed = true; // ~12% self pickup
+        }
+        if (p.getHasVideo() == null) {
+            p.setHasVideo(rnd.nextInt(4) == 0);
+            changed = true; // ~25% have video
+        }
+        // Va después del bloque anterior a propósito: el vídeo se inventa también para los que acaban de
+        // marcarse con vídeo en esta misma pasada.
+        if (Boolean.TRUE.equals(p.getHasVideo()) && p.getVideoUrl() == null) {
+            p.setVideoUrl("https://cdn.nx036.local/v/" + p.getId() + ".mp4");
+            changed = true;
+        }
+        if (p.getInventoryCount() == null) {
+            p.setInventoryCount(50 + rnd.nextInt(9950));
+            changed = true;
+        }
+        return changed;
+    }
+
     /* ============================== price + stock history (DROP-25) ============================== */
 
     /** 90 days of price/stock snapshots per active product with small daily noise. */
     private void seedPriceHistory() {
-        LocalDate today = LocalDate.now();
+        // Fechas en UTC: las instantáneas son la serie que pinta la ficha del producto y no deben moverse
+        // un día arriba o abajo según la zona horaria de la máquina que arranca la demo.
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
         LocalDate from = today.minusDays(90);
         List<ProductEntity> products = productRepository.findAll().stream()
                 .filter(p -> p.getStatus() != null && "ACTIVE".equals(p.getStatus().name())).toList();
@@ -982,7 +1059,7 @@ public class DemoOperationsSeedRunner {
             String hook = hooks[rnd.nextInt(hooks.length)].replace("{}", displayTitleFor(p));
             adTrendRepo.save(AdTrendEntity.builder()
                     .source(src).headline(hook).productSlug(p.getSlug())
-                    .impressions(10000L + rnd.nextInt(900000)).engagement(500L + (long) rnd.nextInt(40000))
+                    .impressions(10000L + rnd.nextInt(900000)).engagement(500L + rnd.nextInt(40000))
                     .score(new BigDecimal(
                             String.format(Locale.US, "%.3f", 0.5 + rnd.nextDouble() * 0.5)))
                     .region(new String[]{"US", "ES", "BR", "MX", "GB"}[rnd.nextInt(5)])
@@ -1076,9 +1153,14 @@ public class DemoOperationsSeedRunner {
 
     /* ============================== tiny helpers ============================== */
 
+    /**
+     * Nombre a slug: se descompone el texto (NFD) y se tiran las marcas diacríticas, de modo que la tilde
+     * cae sea cual sea la letra y venga precompuesta o suelta. La lista de literales que había antes solo
+     * cubría las vocales del castellano y se comía por completo las que no estaban (ã, ç, ê…).
+     */
     private static String slugify(String s) {
-        return s.toLowerCase().replaceAll("[áàä]", "a").replaceAll("[éèë]", "e").replaceAll("[íìï]", "i")
-                .replaceAll("[óòö]", "o").replaceAll("[úùü]", "u").replaceAll("ñ", "n").replaceAll("[^a-z0-9]", "");
+        String decomposed = Normalizer.normalize(s.toLowerCase(Locale.ROOT), Normalizer.Form.NFD);
+        return decomposed.replaceAll("\\p{M}++", "").replaceAll("[^a-z0-9]++", "");
     }
 
     private static String languageForCountry(String country) {

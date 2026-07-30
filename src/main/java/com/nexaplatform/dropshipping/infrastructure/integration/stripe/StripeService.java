@@ -82,7 +82,14 @@ public class StripeService {
     @Value("${nexadrop.stripe.platform-env:dev}")
     private String platformEnv;
 
+    /**
+     * {@code Stripe.apiKey} es un campo ESTÁTICO GLOBAL del SDK de Stripe: no hay forma de configurar la
+     * clave por instancia. Se escribe desde aquí porque este es el único punto donde ya está resuelta la
+     * configuración del entorno (@Value) y antes de que se atienda ninguna petición. De ahí la excepción
+     * a java:S2696 ("no escribir campos estáticos desde un método de instancia").
+     */
     @PostConstruct
+    @SuppressWarnings("java:S2696")
     public void init() {
         if (enabled && secretKey != null && !secretKey.isBlank()) {
             Stripe.apiKey = secretKey;

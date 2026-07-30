@@ -1,6 +1,5 @@
 package com.nexaplatform.dropshipping.application;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService;
@@ -60,9 +59,6 @@ class FulfillmentServiceTest {
     TrackingViewMapper trackingViewMapper;
     @InjectMocks
     FulfillmentService service;
-
-    // Real ObjectMapper is fine: applyPush only parses JSON, no IO/network.
-    private final ObjectMapper realMapper = new ObjectMapper();
 
     private static Order order(OrderStatus status, String trackingNumber) {
         return Order.builder().id(UUID.randomUUID()).orderNumber("NX-1").status(status)

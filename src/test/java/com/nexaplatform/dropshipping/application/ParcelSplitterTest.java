@@ -48,8 +48,8 @@ class ParcelSplitterTest {
         // 6 unidades de 900 g con tope de 2 kg -> caben 2 por bulto (1800 g), es decir 3 bultos.
         List<Bin> bins = ParcelSplitter.split(units(6, 900, 100), new Limits(2000, 0, 0));
 
-        assertThat(bins).hasSize(3);
-        assertThat(bins).allSatisfy(b -> assertThat(b.spec().weightGrams()).isLessThanOrEqualTo(2000));
+        assertThat(bins).hasSize(3)
+                .allSatisfy(b -> assertThat(b.spec().weightGrams()).isLessThanOrEqualTo(2000));
     }
 
     @Test
@@ -57,8 +57,8 @@ class ParcelSplitterTest {
         // 4 unidades de 10 $ con tope de 24 $ -> 2 por bulto.
         List<Bin> bins = ParcelSplitter.split(units(4, 100, 1000), new Limits(0, 2400, 0));
 
-        assertThat(bins).hasSize(2);
-        assertThat(bins).allSatisfy(b -> assertThat(b.valueCents()).isLessThanOrEqualTo(2400));
+        assertThat(bins).hasSize(2)
+                .allSatisfy(b -> assertThat(b.valueCents()).isLessThanOrEqualTo(2400));
     }
 
     @Test
@@ -121,8 +121,8 @@ class ParcelSplitterTest {
     void tambienSePuedeLimitarPorNumeroDeArticulos() {
         List<Bin> bins = ParcelSplitter.split(units(5, 100, 100), new Limits(0, 0, 2));
 
-        assertThat(bins).hasSize(3);
-        assertThat(bins).allSatisfy(b -> assertThat(b.units()).hasSizeLessThanOrEqualTo(2));
+        assertThat(bins).hasSize(3)
+                .allSatisfy(b -> assertThat(b.units()).hasSizeLessThanOrEqualTo(2));
     }
 
     @Test

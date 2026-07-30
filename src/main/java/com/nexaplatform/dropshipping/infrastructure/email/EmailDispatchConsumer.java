@@ -40,9 +40,9 @@ public class EmailDispatchConsumer {
 
     /** Single transactional / event notification → one branded email. */
     @KafkaListener(topics = NexaTopics.NOTIFICATIONS_DISPATCH, groupId = "nexadrop-email-dispatch")
-    public void onDispatch(ConsumerRecord<String, Object> record) {
+    public void onDispatch(ConsumerRecord<String, Object> event) {
         try {
-            JsonNode n = objectMapper.valueToTree(record.value());
+            JsonNode n = objectMapper.valueToTree(event.value());
             String email = text(n, "userEmail");
             String title = text(n, TITLE);
             if (email == null || email.isBlank() || title == null || title.isBlank()) {
@@ -68,9 +68,9 @@ public class EmailDispatchConsumer {
 
     /** Newsletter fan-out: one event → an email per subscribed recipient. */
     @KafkaListener(topics = NexaTopics.NEWSLETTER_SEND, groupId = "nexadrop-newsletter")
-    public void onNewsletter(ConsumerRecord<String, Object> record) {
+    public void onNewsletter(ConsumerRecord<String, Object> event) {
         try {
-            JsonNode n = objectMapper.valueToTree(record.value());
+            JsonNode n = objectMapper.valueToTree(event.value());
             String subject = text(n, "subject");
             String bodyHtml = text(n, BODYHTML);
             if (subject == null || bodyHtml == null) {
@@ -96,11 +96,19 @@ public class EmailDispatchConsumer {
         return userRepository.findByEmail(email).map(u -> u.isMarketingOptOut()).orElse(false);
     }
 
+    /**
+     * URL absoluta del botón del email. El orden de comprobación importa: una URL que ya es absoluta se
+     * respeta tal cual (puede apuntar fuera del escaparate); solo las rutas relativas se prefijan con la
+     * base pública, garantizando la barra separadora.
+     */
     private String absolute(String url) {
         if (url == null || url.isBlank()) {
             return null;
         }
-        return url.startsWith("http") ? url : baseUrl + (url.startsWith("/") ? url : "/" + url);
+        if (url.startsWith("http")) {
+            return url;
+        }
+        return url.startsWith("/") ? baseUrl + url : baseUrl + "/" + url;
     }
 
     private static String text(JsonNode n, String field) {

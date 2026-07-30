@@ -45,6 +45,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -233,7 +234,7 @@ class PaymentSettlementInvariantsTest {
     @ValueSource(strings = {"cs_test_51Abc", "cs_live_51Abc", "pi_3Abc", "PAYID-REAL", ""})
     void laViaMockNoAcreditaSaldoDeUnaPasarelaReal(String realRef) {
         // Sin esta comprobación cualquiera inicia una recarga y la "confirma" sin pagar: dinero libre.
-        Payment p = recharge(PaymentStatus.PENDING, realRef);
+        recharge(PaymentStatus.PENDING, realRef);
 
         assertThatThrownBy(() -> subject.confirmMockRecharge(userId, paymentId))
                 .isInstanceOf(BusinessException.class)
@@ -255,7 +256,7 @@ class PaymentSettlementInvariantsTest {
     @Test
     void nadieConfirmaLaRecargaDeOtroYElPagoAjenoNiSeReconoce() {
         // 404 y no 403: un 403 confirmaría al atacante que ese identificador de pago existe.
-        Payment p = recharge(PaymentStatus.PENDING, "cs_mock_1");
+        recharge(PaymentStatus.PENDING, "cs_mock_1");
 
         assertThatThrownBy(() -> subject.confirmMockRecharge(otherUserId, paymentId))
                 .isInstanceOf(NotFoundException.class);
@@ -280,7 +281,7 @@ class PaymentSettlementInvariantsTest {
     @ValueSource(strings = {"PENDING", "FAILED", "REFUNDED"})
     void soloSeReembolsaLoQueDeVerdadSeCobro(String status) {
         // Reembolsar un pago no cobrado saca dinero de la plataforma por algo que nunca entró.
-        Payment p = orderPayment(PaymentStatus.valueOf(status), "pi_3Abc");
+        orderPayment(PaymentStatus.valueOf(status), "pi_3Abc");
 
         assertThatThrownBy(() -> subject.refundOrderPayment(orderId, paymentId, 100L))
                 .isInstanceOf(BusinessException.class)
@@ -301,7 +302,7 @@ class PaymentSettlementInvariantsTest {
     @Test
     void unPagoDeOtroPedidoNoSeConfirmaNiSeReembolsa() {
         UUID foreignOrder = UUID.randomUUID();
-        Payment p = orderPayment(PaymentStatus.SUCCEEDED, "pi_3Abc");
+        orderPayment(PaymentStatus.SUCCEEDED, "pi_3Abc");
 
         assertThatThrownBy(() -> subject.refundOrderPayment(foreignOrder, paymentId, 100L))
                 .isInstanceOf(NotFoundException.class);
@@ -347,7 +348,7 @@ class PaymentSettlementInvariantsTest {
         when(walletUseCase.getOrCreate(userId)).thenReturn(wallet);
         when(userRepository.findById(userId)).thenReturn(Optional.of(
                 mock(com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity.class)));
-        org.mockito.Mockito.doThrow(new BusinessException("Saldo insuficiente"))
+        doThrow(new BusinessException("Saldo insuficiente"))
                 .when(walletUseCase).charge(any(), anyLong(), any(), anyString(), anyString());
 
         assertThatThrownBy(() -> subject.chargeWalletForOrder(orderId, userId, "idem-1"))

@@ -92,21 +92,32 @@ public class PaymentWebhookController implements PaymentWebhookApi {
         }
         if (signature == null || signature.isBlank())
             return false;
+        byte[] provided = decodeHex(signature);
+        if (provided == null) {
+            return false;
+        }
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
             byte[] expected = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
-            byte[] provided;
-            try {
-                provided = HexFormat.of().parseHex(signature.trim().toLowerCase());
-            } catch (IllegalArgumentException badHex) {
-                return false;
-            }
             // Comparación en tiempo constante para no filtrar la firma por timing.
             return MessageDigest.isEqual(expected, provided);
         } catch (Exception e) {
             log.error("HMAC verification error", e);
             return false;
+        }
+    }
+
+    /**
+     * Firma hexadecimal a bytes, o {@code null} si no es hexadecimal válido. Una firma mal formada es
+     * simplemente un webhook a rechazar, no un error del servidor: por eso se traduce a {@code null} en
+     * vez de propagar la excepción.
+     */
+    private static byte[] decodeHex(String signature) {
+        try {
+            return HexFormat.of().parseHex(signature.trim().toLowerCase());
+        } catch (IllegalArgumentException badHex) {
+            return null;
         }
     }
 }

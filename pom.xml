@@ -32,11 +32,11 @@
             **/configuration/**,
             **/*Application.java
         </sonar.coverage.exclusions>
-        <!-- java:S1135 ("elimina esta etiqueta TODO") no es aplicable aquí: el código se documenta en
-             castellano y la regla marca la palabra española "todo" ("todo el catálogo", "TODO error sale
-             en el idioma del usuario") como si fuese un marcador de tarea pendiente. Se revisaron los 30
-             avisos uno a uno el 30-jul-2026 y ninguno señalaba trabajo sin terminar. Reescribir los
-             comentarios para esquivar una palabra corriente empeoraría la documentación. -->
+        <!-- La regla de "tareas pendientes" no es aplicable aquí: el código se documenta en castellano y
+             la palabra española "todo" ("todo el catálogo", "todo error sale en el idioma del usuario")
+             se confunde con el marcador de tarea sin terminar. Se revisaron los 30 avisos uno a uno el
+             30-jul-2026 y ninguno señalaba trabajo pendiente. Reescribir los comentarios para esquivar
+             una palabra corriente del idioma empeoraría la documentación. -->
         <sonar.issue.ignore.multicriteria>esTodo</sonar.issue.ignore.multicriteria>
         <sonar.issue.ignore.multicriteria.esTodo.ruleKey>java:S1135</sonar.issue.ignore.multicriteria.esTodo.ruleKey>
         <sonar.issue.ignore.multicriteria.esTodo.resourceKey>**/*.java</sonar.issue.ignore.multicriteria.esTodo.resourceKey>

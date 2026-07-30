@@ -70,8 +70,12 @@ public final class CatalogDtos {
     public record ProductImageView(UUID id, int position, String role, String sourceUrl, String cdnUrl) {
     }
 
-    // value = override neutral (compat); valueLocalized = etiqueta del idioma activo (traducción ?? value);
-    // translations = todas las traducciones por idioma (para el editor del admin).
+    /**
+     * Valor de un eje de variante. El campo {@code value} es el override neutral que se mantiene por
+     * compatibilidad; {@code valueLocalized} es la etiqueta del idioma activo, que cae al override
+     * cuando no hay traducción; y {@code translations} lleva todas las traducciones por idioma, que es
+     * lo que necesita el editor del admin.
+     */
     public record VariantValueView(UUID id, String valueZh, String value, String valueLocalized, String imageUrl,
             String imageSourceUrl, int position, Map<String, String> translations) {
     }

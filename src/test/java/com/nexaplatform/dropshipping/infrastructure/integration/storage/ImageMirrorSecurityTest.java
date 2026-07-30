@@ -33,16 +33,22 @@ class ImageMirrorSecurityTest {
     })
     void rejects_loopback_and_metadata_and_private_ips(String url) {
         URI uri = URI.create(url);
+        // Se exige que el mensaje señale el HOST rechazado, no sólo que salte una excepción: así se
+        // distingue este rechazo del de esquema. Sin ese matiz, una URL descartada por otro motivo daría
+        // el test por bueno sin haber llegado a resolver la dirección, que es la comprobación anti-SSRF.
         assertThatThrownBy(() -> ImageMirrorService.assertPublicHttpUrl(uri))
-                .isInstanceOf(SecurityException.class);
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining(uri.getHost());
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"file:///etc/passwd", "gopher://x/"})
     void rejects_non_http_schemes(String url) {
         URI uri = URI.create(url);
+        // Aquí el mensaje debe señalar el ESQUEMA: es lo que separa este caso del rechazo por IP interna.
         assertThatThrownBy(() -> ImageMirrorService.assertPublicHttpUrl(uri))
-                .isInstanceOf(SecurityException.class);
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining(uri.getScheme());
     }
 
     @Test

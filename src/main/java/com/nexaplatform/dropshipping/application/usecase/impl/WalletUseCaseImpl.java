@@ -135,10 +135,12 @@ public class WalletUseCaseImpl implements WalletUseCase {
         if (amountCents == 0) {
             throw new BusinessException("Adjustment amount cannot be zero");
         }
-        // A manual adjustment can credit (+) or debit (-); record() applies the signed amount and
-        // rejects it if it would overdraw the wallet. (DROP-603: negative adjustments used to fail.)
+        // A manual adjustment can credit (+) or debit (-); recordTransaction() applies the signed amount
+        // and rejects it if it would overdraw the wallet. (DROP-603: negative adjustments used to fail.)
         String key = idempotencyKey != null ? idempotencyKey : UUID.randomUUID().toString();
-        return record(userId, "ADJUSTMENT", amountCents, null, null, key, "[Adjustment] " + description, null);
+        return recordTransaction(
+                new LedgerEntry(userId, "ADJUSTMENT", amountCents, null, null, key, "[Adjustment] " + description),
+                null);
     }
 
     @Override
@@ -178,8 +180,9 @@ public class WalletUseCaseImpl implements WalletUseCase {
     @Override
     @Transactional(readOnly = true)
     public WalletPage pageAdminWallets(String q, String status, String currency, int page, int size) {
-        // Primario: OpenSearch (índice `wallets`) → página de IDs ordenada (reciente→antigua) y filtrada;
-        // el saldo se lee fresco de la BD (dinero → consistencia estricta; el índice solo pagina/ordena/filtra).
+        // La vía primaria es OpenSearch con el índice de wallets, que devuelve la página de identificadores
+        // ya ordenada de más reciente a más antigua y filtrada. El saldo se lee siempre fresco de la base
+        // de datos, porque es dinero y exige consistencia estricta: el índice solo pagina, ordena y filtra.
         Optional<WalletSearchService.IdPage> idx = walletSearchService.pageIds(q, status, currency, page, size);
         if (idx.isPresent()) {
             Map<UUID, Wallet> byId = new HashMap<>();
@@ -201,7 +204,9 @@ public class WalletUseCaseImpl implements WalletUseCase {
             String description) {
         if (amountUsdCents <= 0)
             throw new BusinessException("Deposit amount must be positive");
-        return record(userId, "DEPOSIT", amountUsdCents, paymentId, null, idempotencyKey, description, null);
+        return recordTransaction(
+                new LedgerEntry(userId, "DEPOSIT", amountUsdCents, paymentId, null, idempotencyKey, description),
+                null);
     }
 
     @Override
@@ -214,14 +219,17 @@ public class WalletUseCaseImpl implements WalletUseCase {
         if (available(w) < amountUsdCents) {
             throw new BusinessException("WALLET_INSUFFICIENT_BALANCE", "Insufficient wallet balance");
         }
-        return record(userId, "PAYMENT", -amountUsdCents, null, orderId, idempotencyKey, description, null);
+        return recordTransaction(
+                new LedgerEntry(userId, "PAYMENT", -amountUsdCents, null, orderId, idempotencyKey, description),
+                null);
     }
 
     @Override
     @Transactional
     public WalletTransaction refund(UUID userId, long amountUsdCents, UUID orderId, String idempotencyKey,
             String reason) {
-        return record(userId, "REFUND", amountUsdCents, null, orderId, idempotencyKey, reason, null);
+        return recordTransaction(
+                new LedgerEntry(userId, "REFUND", amountUsdCents, null, orderId, idempotencyKey, reason), null);
     }
 
     @Override
@@ -232,7 +240,8 @@ public class WalletUseCaseImpl implements WalletUseCase {
             throw new BusinessException("WALLET_INSUFFICIENT_BALANCE", "Insufficient balance to hold");
         w.setHoldUsdCents(w.getHoldUsdCents() + amountUsdCents);
         w = walletRepository.save(w);
-        return record(userId, "HOLD", -amountUsdCents, null, orderId, idempotencyKey, "Hold for order", w);
+        return recordTransaction(
+                new LedgerEntry(userId, "HOLD", -amountUsdCents, null, orderId, idempotencyKey, "Hold for order"), w);
     }
 
     @Override
@@ -241,7 +250,8 @@ public class WalletUseCaseImpl implements WalletUseCase {
         Wallet w = require(userId);
         w.setHoldUsdCents(Math.max(0L, w.getHoldUsdCents() - amountUsdCents));
         w = walletRepository.save(w);
-        return record(userId, "RELEASE", amountUsdCents, null, orderId, idempotencyKey, "Release hold", w);
+        return recordTransaction(
+                new LedgerEntry(userId, "RELEASE", amountUsdCents, null, orderId, idempotencyKey, "Release hold"), w);
     }
 
     /* ============ Internals ============ */
@@ -254,32 +264,45 @@ public class WalletUseCaseImpl implements WalletUseCase {
         return walletRepository.findByUserId(userId).orElseThrow(() -> new NotFoundException("Wallet not found"));
     }
 
-    private WalletTransaction record(UUID userId, String kind, long signedAmount, UUID paymentId, UUID orderId,
-            String idempotencyKey, String description, Wallet preloadedWallet) {
-        if (idempotencyKey != null) {
-            var existing = txRepository.findByIdempotencyKey(idempotencyKey);
+    /**
+     * Apunte del libro mayor antes de aplicarlo: qué movimiento es, por cuánto (con signo) y contra qué
+     * documento (pago o pedido) va. La clave de idempotencia viaja con el apunte porque es lo que impide
+     * abonar dos veces el mismo webhook.
+     */
+    private record LedgerEntry(UUID userId, String kind, long signedAmount, UUID paymentId, UUID orderId,
+            String idempotencyKey, String description) {
+    }
+
+    /**
+     * Escribe el apunte en el libro mayor. {@code preloadedWallet} evita releer la wallet cuando quien
+     * llama ya la ha modificado (HOLD/RELEASE): releerla descartaría ese cambio pendiente.
+     */
+    private WalletTransaction recordTransaction(LedgerEntry entry, Wallet preloadedWallet) {
+        if (entry.idempotencyKey() != null) {
+            Optional<WalletTransaction> existing = txRepository.findByIdempotencyKey(entry.idempotencyKey());
             if (existing.isPresent()) {
-                log.info("Returning existing wallet tx for idempotency-key={}", idempotencyKey);
+                log.info("Returning existing wallet tx for idempotency-key={}", entry.idempotencyKey());
                 return existing.get();
             }
         }
-        Wallet w = preloadedWallet != null ? preloadedWallet : require(userId);
+        Wallet w = preloadedWallet != null ? preloadedWallet : require(entry.userId());
         // For HOLD/RELEASE we do NOT change balance, only hold counter (signedAmount is informational).
-        boolean affectsBalance = !"HOLD".equals(kind) && !"RELEASE".equals(kind);
+        boolean affectsBalance = !"HOLD".equals(entry.kind()) && !"RELEASE".equals(entry.kind());
         long newBalance = w.getBalanceUsdCents();
         if (affectsBalance) {
-            newBalance += signedAmount;
+            newBalance += entry.signedAmount();
             if (newBalance < 0)
                 throw new BusinessException("Wallet balance would go negative");
             w.setBalanceUsdCents(newBalance);
             walletRepository.save(w);
         }
-        WalletTransaction tx = WalletTransaction.builder().walletId(w.getId()).kind(kind).amountUsdCents(signedAmount)
-                .balanceAfterCents(newBalance).paymentId(paymentId).orderId(orderId).idempotencyKey(idempotencyKey)
-                .status("COMPLETED").description(description).build();
+        WalletTransaction tx = WalletTransaction.builder().walletId(w.getId()).kind(entry.kind())
+                .amountUsdCents(entry.signedAmount()).balanceAfterCents(newBalance).paymentId(entry.paymentId())
+                .orderId(entry.orderId()).idempotencyKey(entry.idempotencyKey()).status("COMPLETED")
+                .description(entry.description()).build();
         WalletTransaction saved = txRepository.save(tx);
-        auditLogger.log("wallet." + kind.toLowerCase(), String.valueOf(userId),
-                Map.of("amount", signedAmount, "balance_after", newBalance, "tx_id", saved.getId()));
+        auditLogger.log("wallet." + entry.kind().toLowerCase(), String.valueOf(entry.userId()),
+                Map.of("amount", entry.signedAmount(), "balance_after", newBalance, "tx_id", saved.getId()));
         return saved;
     }
 }

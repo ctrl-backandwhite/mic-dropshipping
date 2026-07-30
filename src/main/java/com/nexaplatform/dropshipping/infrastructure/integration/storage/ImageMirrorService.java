@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.storage;
 
+import com.nexaplatform.dropshipping.application.service.Texts;
 import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
@@ -33,6 +34,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -82,42 +84,57 @@ public class ImageMirrorService {
         if (!mirrorEnabled || !storage.isReady()) {
             return;
         }
-        // Auto-heal (1 vez/arranque): si hay cdn_url de otro entorno (p.ej. localhost tras cambiar a
-        // un MinIO nuevo) o muertos, se reencolan a PENDING para re-espejar con la URL pública vigente.
         if (!healedStaleUrls) {
-            try {
-                // (a) cdn_url de otro entorno/dominio o nulo → reencolar.
-                int n = imageRepository.requeueNotMirrored(storage.publicUrl() + "%");
-                if (n > 0) {
-                    log.info("Mirror auto-heal: {} imágenes con cdn_url no-vigente reencoladas a PENDING", n);
-                }
-                // (b) cdn_url con nuestro dominio pero cuyo OBJETO ya no existe (p.ej. MinIO reseteado):
-                //     listamos las claves reales del bucket y reencolamos las que falten.
-                Set<String> keys = storage.listKeys();
-                if (!keys.isEmpty()) {
-                    String base = storage.publicUrl().replaceAll("/++$", "") + "/";
-                    int missing = 0;
-                    for (ProductImageEntity img : imageRepository
-                            .findByMirrorStatusAndCdnUrlStartingWith(MirrorStatus.MIRRORED, base)) {
-                        String cdn = img.getCdnUrl();
-                        String key = cdn.length() > base.length() ? cdn.substring(base.length()) : "";
-                        if (!keys.contains(key)) {
-                            imageRepository.markStatus(img.getId(), MirrorStatus.PENDING);
-                            missing++;
-                        }
-                    }
-                    if (missing > 0) {
-                        log.info("Mirror auto-heal: {} imágenes MIRRORED con objeto inexistente reencoladas", missing);
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("Mirror auto-heal falló: {}", e.getMessage());
-            }
-            healedStaleUrls = true;
+            healStaleCdnUrls();
+            healedStaleUrls = true; // se marca aunque falle: es un saneo oportunista, no puede bloquear el job
         }
         mirrorPendingBatch(mirrorBatch);
         mirrorVariantImagesBatch(mirrorBatch);
     }
+
+    /**
+     * Auto-heal (1 vez/arranque): si hay cdn_url de otro entorno (p.ej. localhost tras cambiar a un MinIO
+     * nuevo) o muertos, se reencolan a PENDING para re-espejar con la URL pública vigente.
+     */
+    private void healStaleCdnUrls() {
+        try {
+            // (a) cdn_url de otro entorno/dominio o nulo → reencolar.
+            int n = imageRepository.requeueNotMirrored(storage.publicUrl() + "%");
+            if (n > 0) {
+                log.info("Mirror auto-heal: {} imágenes con cdn_url no-vigente reencoladas a PENDING", n);
+            }
+            requeueMirroredWithoutObject();
+        } catch (Exception e) {
+            log.warn("Mirror auto-heal falló: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * (b) cdn_url con nuestro dominio pero cuyo OBJETO ya no existe (p.ej. MinIO reseteado): listamos las
+     * claves reales del bucket y reencolamos las que falten. Si el listado viene vacío no se toca nada: un
+     * bucket que no responde no puede confundirse con un bucket sin objetos y reencolarlo TODO.
+     */
+    private void requeueMirroredWithoutObject() {
+        Set<String> keys = storage.listKeys();
+        if (keys.isEmpty()) {
+            return;
+        }
+        String base = Texts.stripTrailingSlashes(storage.publicUrl()) + "/";
+        int missing = 0;
+        for (ProductImageEntity img : imageRepository
+                .findByMirrorStatusAndCdnUrlStartingWith(MirrorStatus.MIRRORED, base)) {
+            String cdn = img.getCdnUrl();
+            String key = cdn.length() > base.length() ? cdn.substring(base.length()) : "";
+            if (!keys.contains(key)) {
+                imageRepository.markStatus(img.getId(), MirrorStatus.PENDING);
+                missing++;
+            }
+        }
+        if (missing > 0) {
+            log.info("Mirror auto-heal: {} imágenes MIRRORED con objeto inexistente reencoladas", missing);
+        }
+    }
+
 
     /**
      * Espeja a storage las imágenes de las VARIANTES y de los VALORES de eje (p.ej. la foto de cada
@@ -129,7 +146,7 @@ public class ImageMirrorService {
         if (!storage.isReady()) {
             return;
         }
-        String prefix = storage.publicUrl().replaceAll("/++$", "") + "%";
+        String prefix = Texts.stripTrailingSlashes(storage.publicUrl()) + "%";
         PageRequest top = PageRequest.of(0, Math.max(1, limit));
         int ok = 0;
         for (ProductVariantEntity v : variantRepository.findNeedingImageMirror(prefix, top)) {
@@ -181,13 +198,12 @@ public class ImageMirrorService {
                     ok++;
                     mirroredImageIds.add(pending.get(i).getId());
                 }
-            } catch (Exception ex) {
-                // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
-                // interrupción deja al pool sin enterarse de que le han pedido parar.
-                if (ex instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                }
-                // el fallo individual ya se marca FAILED dentro de mirrorOne
+            } catch (InterruptedException ex) {
+                // Tragarse la interrupción deja al pool sin enterarse de que le han pedido parar.
+                Thread.currentThread().interrupt();
+            } catch (ExecutionException ex) {
+                log.debug("Mirror falló imagen {}: {}", pending.get(i).getId(), ex.toString());
+                // el estado FAILED de la imagen ya se marca dentro de mirrorOne
             }
         }
         // Reindexar en OpenSearch los productos cuyas imágenes acaban de espejarse: su flag hasImage pasa a
@@ -221,13 +237,12 @@ public class ImageMirrorService {
                 if (Boolean.TRUE.equals(futures.get(i).get())) {
                     mirroredImageIds.add(imgs.get(i).getId());
                 }
-            } catch (Exception ex) {
-                // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
-                // interrupción deja al pool sin enterarse de que le han pedido parar.
-                if (ex instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                }
-                // el fallo individual ya se marca FAILED dentro de mirrorOne
+            } catch (InterruptedException ex) {
+                // Tragarse la interrupción deja al pool sin enterarse de que le han pedido parar.
+                Thread.currentThread().interrupt();
+            } catch (ExecutionException ex) {
+                log.debug("Mirror falló imagen {}: {}", imgs.get(i).getId(), ex.toString());
+                // el estado FAILED de la imagen ya se marca dentro de mirrorOne
             }
         }
         reindexAffectedProducts(mirroredImageIds);

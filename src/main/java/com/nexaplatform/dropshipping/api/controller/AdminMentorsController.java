@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.api.controller;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.MentorProfileEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.MentorProfileJpaRepositoryAdapter;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -114,11 +115,11 @@ public class AdminMentorsController {
     }
 
     private Map<String, Object> toMap(MentorProfileEntity e) {
-        var u = e.getUser();
+        UserEntity u = e.getUser();
         Map<String, Object> m = new HashMap<>();
         m.put("id", e.getId());
         m.put(USEREMAIL, u != null ? u.getEmail() : null);
-        m.put("name", u != null && u.getDisplayName() != null ? u.getDisplayName() : (u != null ? u.getEmail() : ""));
+        m.put("name", displayName(u));
         m.put("avatarUrl", u != null ? u.getAvatarUrl() : null);
         m.put(HEADLINE, e.getHeadline() != null ? e.getHeadline() : "");
         m.put("bio", e.getBio() != null ? e.getBio() : "");
@@ -128,5 +129,17 @@ public class AdminMentorsController {
         m.put("languages", e.getLanguages() != null ? e.getLanguages() : List.of());
         m.put(ACTIVE, e.isActive());
         return m;
+    }
+
+    /**
+     * Nombre visible del mentor. El orden de comprobación importa: primero el nombre elegido por el
+     * usuario, si no el email como identificador legible, y cadena vacía si el perfil quedó huérfano
+     * (la FK admite nulos históricos), porque el front pinta este campo sin comprobar nulos.
+     */
+    private String displayName(UserEntity u) {
+        if (u == null) {
+            return "";
+        }
+        return u.getDisplayName() != null ? u.getDisplayName() : u.getEmail();
     }
 }

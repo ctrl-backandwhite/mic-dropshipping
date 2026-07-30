@@ -143,9 +143,9 @@ class PartnerWebhookDispatcherServiceTest {
 
         service.drainDue();
 
-        // The dispatcher signs payload with webhook_secret using WebhookDispatcherService.sign;
-        // we cannot capture the outbound HTTP header (dead URL), but we assert the helper is the
-        // same one the reference test pins, by recomputing it here for parity confidence.
+        // El despachador firma el payload con el secreto del webhook. No podemos capturar la cabecera
+        // HTTP saliente porque la URL está muerta, así que comprobamos lo que sí es observable: que la
+        // firma es determinista con el mismo secreto y distinta con otro, que es lo que fija el helper.
         String payload = (String) row.get("payload");
         String secret = (String) row.get("webhook_secret");
         assertThat(WebhookDispatcherService.sign(payload, secret))

@@ -148,8 +148,22 @@ public final class BulkProductFields {
      * transportista cotice mal y reclame la diferencia después.
      */
     public static void applyVariantLogistics(ProductEntity p, BulkProductDtoIn r) {
-        if (r.getVariants() == null || r.getVariants().isEmpty()) {
+        Map<String, BulkProductDtoIn.BulkVariant> bySku = variantsBySku(r);
+        if (bySku.isEmpty()) {
             return;
+        }
+        for (ProductVariantEntity pv : p.getVariants()) {
+            BulkProductDtoIn.BulkVariant v = bySku.get(pv.getSku());
+            if (v != null) {
+                copyVariantLogistics(pv, v);
+            }
+        }
+    }
+
+    /** Índice SKU → variante de la fila. Una variante sin SKU no se puede emparejar, así que se descarta. */
+    private static Map<String, BulkProductDtoIn.BulkVariant> variantsBySku(BulkProductDtoIn r) {
+        if (r.getVariants() == null) {
+            return Map.of();
         }
         Map<String, BulkProductDtoIn.BulkVariant> bySku = new HashMap<>();
         for (BulkProductDtoIn.BulkVariant v : r.getVariants()) {
@@ -157,32 +171,28 @@ public final class BulkProductFields {
                 bySku.put(v.getSku(), v);
             }
         }
-        if (bySku.isEmpty()) {
-            return;
+        return bySku;
+    }
+
+    /** Copia campo a campo; cada uno sólo si la fila lo trae, porque un null es "no hablo de esto". */
+    private static void copyVariantLogistics(ProductVariantEntity pv, BulkProductDtoIn.BulkVariant v) {
+        if (has(v.getSupplierSkuId())) {
+            pv.setSupplierSkuId(v.getSupplierSkuId());
         }
-        for (ProductVariantEntity pv : p.getVariants()) {
-            BulkProductDtoIn.BulkVariant v = bySku.get(pv.getSku());
-            if (v == null) {
-                continue;
-            }
-            if (has(v.getSupplierSkuId())) {
-                pv.setSupplierSkuId(v.getSupplierSkuId());
-            }
-            if (v.getWeightGrams() != null) {
-                pv.setWeightGrams(v.getWeightGrams());
-            }
-            if (v.getPackageWeightGrams() != null) {
-                pv.setPackageWeightGrams(v.getPackageWeightGrams());
-            }
-            if (v.getLengthMm() != null) {
-                pv.setLengthMm(v.getLengthMm());
-            }
-            if (v.getWidthMm() != null) {
-                pv.setWidthMm(v.getWidthMm());
-            }
-            if (v.getHeightMm() != null) {
-                pv.setHeightMm(v.getHeightMm());
-            }
+        if (v.getWeightGrams() != null) {
+            pv.setWeightGrams(v.getWeightGrams());
+        }
+        if (v.getPackageWeightGrams() != null) {
+            pv.setPackageWeightGrams(v.getPackageWeightGrams());
+        }
+        if (v.getLengthMm() != null) {
+            pv.setLengthMm(v.getLengthMm());
+        }
+        if (v.getWidthMm() != null) {
+            pv.setWidthMm(v.getWidthMm());
+        }
+        if (v.getHeightMm() != null) {
+            pv.setHeightMm(v.getHeightMm());
         }
     }
 
@@ -192,8 +202,21 @@ public final class BulkProductFields {
      * forma de corregir una traducción mala, así que acumularlas dejaría la vieja conviviendo con la nueva.
      */
     public static void applyVariantValueTranslations(ProductEntity p, BulkProductDtoIn r) {
-        if (r.getVariantAxes() == null) {
+        Map<String, Map<String, String>> byValue = translationsByChineseValue(r);
+        if (byValue.isEmpty()) {
             return;
+        }
+        for (VariantOptionEntity opt : p.getVariantOptions()) {
+            for (VariantValueEntity vv : opt.getValues()) {
+                replaceValueTranslations(vv, byValue.get(vv.getValueZh()));
+            }
+        }
+    }
+
+    /** Traducciones de TODOS los ejes de la fila en un solo índice valor-chino → (idioma → texto). */
+    private static Map<String, Map<String, String>> translationsByChineseValue(BulkProductDtoIn r) {
+        if (r.getVariantAxes() == null) {
+            return Map.of();
         }
         Map<String, Map<String, String>> byValue = new HashMap<>();
         for (BulkProductDtoIn.BulkAxis ax : r.getVariantAxes()) {
@@ -201,22 +224,19 @@ public final class BulkProductFields {
                 byValue.putAll(ax.getValueTranslations());
             }
         }
-        if (byValue.isEmpty()) {
+        return byValue;
+    }
+
+    /** Reemplaza las traducciones del valor. Si la fila no habla de él, se deja intacto (no se vacía). */
+    private static void replaceValueTranslations(VariantValueEntity vv, Map<String, String> trMap) {
+        if (trMap == null || trMap.isEmpty()) {
             return;
         }
-        for (VariantOptionEntity opt : p.getVariantOptions()) {
-            for (VariantValueEntity vv : opt.getValues()) {
-                Map<String, String> trMap = byValue.get(vv.getValueZh());
-                if (trMap == null || trMap.isEmpty()) {
-                    continue;
-                }
-                vv.getTranslations().clear();
-                for (Map.Entry<String, String> e : trMap.entrySet()) {
-                    if (has(e.getKey()) && has(e.getValue())) {
-                        vv.getTranslations().add(VariantValueTranslationEntity.builder().variantValue(vv)
-                                .language(e.getKey().trim().toLowerCase()).value(e.getValue().trim()).build());
-                    }
-                }
+        vv.getTranslations().clear();
+        for (Map.Entry<String, String> e : trMap.entrySet()) {
+            if (has(e.getKey()) && has(e.getValue())) {
+                vv.getTranslations().add(VariantValueTranslationEntity.builder().variantValue(vv)
+                        .language(e.getKey().trim().toLowerCase()).value(e.getValue().trim()).build());
             }
         }
     }

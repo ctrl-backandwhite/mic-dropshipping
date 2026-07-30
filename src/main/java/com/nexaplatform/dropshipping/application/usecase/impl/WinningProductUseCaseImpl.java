@@ -56,6 +56,8 @@ public class WinningProductUseCaseImpl implements WinningProductUseCase {
                 img = im.getCdnUrl() != null && !im.getCdnUrl().isBlank() ? im.getCdnUrl() : im.getSourceUrl();
             }
         } catch (Exception ignored) {
+            // La galería del producto es una colección perezosa: si la sesión ya está cerrada, el
+            // producto ganador se muestra sin foto en lugar de tumbar la lista entera.
         }
         String title = null;
         if (p.getTranslations() != null) {

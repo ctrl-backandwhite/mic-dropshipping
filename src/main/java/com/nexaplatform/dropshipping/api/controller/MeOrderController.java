@@ -7,8 +7,10 @@ import com.nexaplatform.dropshipping.api.dto.out.MeOrderRowDtoOut;
 import com.nexaplatform.dropshipping.api.mapper.AdminOrderMapper;
 import com.nexaplatform.dropshipping.api.mapper.MeOrderDtoMapper;
 import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
+import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
 import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PaymentEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PaymentJpaRepositoryAdapter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -88,7 +91,7 @@ public class MeOrderController implements MeOrderApi {
     private String resolvePaymentMethod(UUID orderId) {
         return paymentRepository.findByOrderIdOrderByCreatedAtDesc(orderId).stream()
                 .filter(p -> p.getStatus() == PaymentStatus.SUCCEEDED)
-                .map(p -> p.getMethod()).filter(m -> m != null).map(m -> m.name())
+                .map(PaymentEntity::getMethod).filter(Objects::nonNull).map(PaymentMethod::name)
                 .findFirst().orElse("WALLET");
     }
 }

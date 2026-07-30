@@ -352,8 +352,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Override
     @Transactional(readOnly = true)
     public OrderPage pageAdminOrders(String status, String q, int page, int size) {
-        // Primario: OpenSearch (índice `orders`) → página de IDs ya ordenada (reciente→antigua) y filtrada;
-        // solo enriquecemos esa página cargándola de la BD (mantiene el enriquecido fuera de la tabla completa).
+        // Primario: el índice de OpenSearch devuelve la página de IDs ya ordenada de reciente a antigua y
+        // ya filtrada; solo se enriquece esa página cargándola de la BD, que es lo que mantiene el
+        // enriquecido entre agregados fuera de la tabla completa.
         Optional<OrderSearchService.IdPage> idx = orderSearchService.pageIds(status, q, page, size);
         if (idx.isPresent()) {
             List<Order> items = idx.get().ids().stream().map(id -> orderRepository.findById(id).orElse(null))
@@ -395,22 +396,30 @@ public class OrderUseCaseImpl implements OrderUseCase {
             OrderItem prev = merged.get(key);
             if (prev == null) {
                 merged.put(key, it);
-                continue;
-            }
-            // same product & unit price → merge quantities and keep the most informative line
-            prev.setQuantity(prev.getQuantity() + it.getQuantity());
-            prev.setLineTotalCents(prev.getUnitPriceCents() * prev.getQuantity());
-            boolean prevHasSku = prev.getSkuSnapshot() != null && !prev.getSkuSnapshot().isBlank();
-            boolean curHasSku = it.getSkuSnapshot() != null && !it.getSkuSnapshot().isBlank();
-            if (!prevHasSku && curHasSku) {
-                prev.setSkuSnapshot(it.getSkuSnapshot());
-                if (it.getTitleSnapshot() != null) {
-                    prev.setTitleSnapshot(it.getTitleSnapshot());
-                }
+            } else {
+                mergeInto(prev, it);
             }
         }
         if (merged.size() != o.getItems().size()) {
             o.setItems(new ArrayList<>(merged.values()));
+        }
+    }
+
+    /**
+     * Funde dos líneas del mismo producto y mismo precio unitario: suma cantidades y se queda con la más
+     * informativa. Que la línea que llega traiga SKU y la anterior no es justo el artefacto que se quiere
+     * corregir, así que en ese caso —y solo en ese— pisa también el título congelado.
+     */
+    private void mergeInto(OrderItem prev, OrderItem it) {
+        prev.setQuantity(prev.getQuantity() + it.getQuantity());
+        prev.setLineTotalCents(prev.getUnitPriceCents() * prev.getQuantity());
+        boolean prevHasSku = prev.getSkuSnapshot() != null && !prev.getSkuSnapshot().isBlank();
+        boolean curHasSku = it.getSkuSnapshot() != null && !it.getSkuSnapshot().isBlank();
+        if (!prevHasSku && curHasSku) {
+            prev.setSkuSnapshot(it.getSkuSnapshot());
+            if (it.getTitleSnapshot() != null) {
+                prev.setTitleSnapshot(it.getTitleSnapshot());
+            }
         }
     }
 
@@ -576,9 +585,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 .filter(x -> x.getStatus() != null && x.getStatus().name().equals("ACTIVE"))
                 .filter(x -> x.getBasePrice() != null).findFirst()
                 .orElseThrow(() -> new NotFoundException("No active product to seed demo order"));
-        var addr = new AddressInput("Demo Customer", "+34000000", "demo@nx036.local", "C/ Demo 1", null, "Madrid", "M",
-                "28001", "ES");
-        var req = new CreateOrderRequest("DEMO-" + Instant.now().getEpochSecond(), addr, null,
+        AddressInput addr = new AddressInput("Demo Customer", "+34000000", "demo@nx036.local", "C/ Demo 1", null,
+                "Madrid", "M", "28001", "ES");
+        CreateOrderRequest req = new CreateOrderRequest("DEMO-" + Instant.now().getEpochSecond(), addr, null,
                 List.of(new OrderItemInput(p.getId(), null, 2)), "demo order from admin panel");
         return createOrder(null, null, req);
     }
@@ -598,22 +607,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Override
     @Transactional
     public Order checkout(UUID userId, MeCheckoutDtoIn req, String idem) {
-        AddressInput addr = req.getShippingAddressInline();
-        if (req.getShippingAddressId() != null) {
-            UserAddressEntity saved = userAddressRepository.findById(req.getShippingAddressId())
-                    .orElseThrow(() -> new NotFoundException("Address not found"));
-            if (!saved.getUser().getId().equals(userId))
-                throw new NotFoundException("Address not found");
-            addr = new AddressInput(saved.getFullName(), saved.getPhone(), null, saved.getLine1(), saved.getLine2(),
-                    saved.getCity(), saved.getState(), saved.getPostalCode(), saved.getCountry());
-        }
-        if (addr == null)
-            throw new BusinessException("SHIPPING_ADDRESS_REQUIRED", "Shipping address is required");
-        // Cainiao solo envía a países cubiertos: bloqueamos el destino no soportado antes de cobrar.
-        if (!fulfillment.isSupported(addr.country())) {
-            throw new BusinessException(
-                    "No realizamos envíos a este destino (" + addr.country() + "). Elige un país soportado.");
-        }
+        AddressInput addr = resolveShippingAddress(userId, req);
 
         List<OrderItemInput> items = req.getItems().stream()
                 .map(i -> new OrderItemInput(i.getProductId(), i.getVariantId(), i.getQuantity())).toList();
@@ -632,8 +626,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
             created = orderRepository.findById(reusable.getId())
                     .orElseThrow(() -> new NotFoundException("Order"));
         } else {
-            var orderReq = new CreateOrderRequest("ME-" + Instant.now().getEpochSecond(), addr, null, items,
-                    req.getNotes());
+            CreateOrderRequest orderReq = new CreateOrderRequest("ME-" + Instant.now().getEpochSecond(), addr, null,
+                    items, req.getNotes());
             created = createOrder(null, userId, orderReq);
         }
 
@@ -671,26 +665,57 @@ public class OrderUseCaseImpl implements OrderUseCase {
             affiliateProgramService.onOrderPlaced(o.getId(), userId, commissionBase, o.getCurrency());
         }
 
-        // Plan 300k: publish to the notifications outbox in the same tx as the order
-        // so we never end up with an "order without notification".
-        String totalPlain = BigDecimal.valueOf(created.getTotalCents())
-                .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP).toPlainString();
-        final String orderNumber = created.getOrderNumber();
-        final String currency = created.getCurrency();
-        final Order paidOrder = o;
-        final boolean wasReused = reused;
-        userRepository.findById(userId).ifPresent(u -> {
-            // El email "pedido recibido" solo la primera vez (en reuso ya se envió).
-            if (!wasReused) {
-                notificationsPublisher.orderPlaced(userId, u.getEmail(), orderNumber, totalPlain, currency, u.getLanguage());
-            }
-            // Pago con saldo del wallet: la orden ya queda PAID → email de confirmación + FACTURA.
-            if (paidOrder.getStatus() == OrderStatus.PAID) {
-                orderEmailService.paymentConfirmed(paidOrder, u.getEmail(), u.getLanguage(), WALLET);
-            }
-        });
+        notifyCheckout(userId, created, o, reused);
 
         return o;
+    }
+
+    /**
+     * Dirección de envío del pedido: la guardada que indique el cliente o la que llega en línea.
+     *
+     * <p>Una dirección guardada de OTRO usuario se responde 404 y no 403: un 403 confirmaría al atacante
+     * que esa dirección existe. Y el destino se comprueba AQUÍ, antes de crear y cobrar nada, porque
+     * descubrir después que no hay transporte deja un cobro que hay que reembolsar.
+     */
+    private AddressInput resolveShippingAddress(UUID userId, MeCheckoutDtoIn req) {
+        AddressInput addr = req.getShippingAddressInline();
+        if (req.getShippingAddressId() != null) {
+            UserAddressEntity saved = userAddressRepository.findById(req.getShippingAddressId())
+                    .orElseThrow(() -> new NotFoundException("Address not found"));
+            if (!saved.getUser().getId().equals(userId)) {
+                throw new NotFoundException("Address not found");
+            }
+            addr = new AddressInput(saved.getFullName(), saved.getPhone(), null, saved.getLine1(), saved.getLine2(),
+                    saved.getCity(), saved.getState(), saved.getPostalCode(), saved.getCountry());
+        }
+        if (addr == null) {
+            throw new BusinessException("SHIPPING_ADDRESS_REQUIRED", "Shipping address is required");
+        }
+        if (!fulfillment.isSupported(addr.country())) {
+            throw new BusinessException(
+                    "No realizamos envíos a este destino (" + addr.country() + "). Elige un país soportado.");
+        }
+        return addr;
+    }
+
+    /**
+     * Avisos del checkout. Se publican en la misma transacción que el pedido para que nunca quede un
+     * "pedido sin notificación": el correo de "pedido recibido" solo la primera vez —en el reintento de un
+     * carrito ya existente se envió antes—, y el de pago confirmado con su factura solo cuando la orden ya
+     * sale PAID, que es el caso de haber pagado con el saldo del monedero.
+     */
+    private void notifyCheckout(UUID userId, Order created, Order placed, boolean reused) {
+        String totalPlain = BigDecimal.valueOf(created.getTotalCents())
+                .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP).toPlainString();
+        userRepository.findById(userId).ifPresent(u -> {
+            if (!reused) {
+                notificationsPublisher.orderPlaced(userId, u.getEmail(), created.getOrderNumber(), totalPlain,
+                        created.getCurrency(), u.getLanguage());
+            }
+            if (placed.getStatus() == OrderStatus.PAID) {
+                orderEmailService.paymentConfirmed(placed, u.getEmail(), u.getLanguage(), WALLET);
+            }
+        });
     }
 
     @Override

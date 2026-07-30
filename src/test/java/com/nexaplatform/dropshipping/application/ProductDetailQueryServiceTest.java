@@ -89,8 +89,7 @@ class ProductDetailQueryServiceTest {
 
         List<ProductEntity> related = service.relatedProducts(base.getId(), 8);
 
-        assertThat(related).containsExactly(fuerte, flojo);
-        assertThat(related).doesNotContain(base);
+        assertThat(related).containsExactly(fuerte, flojo).doesNotContain(base);
     }
 
     @Test

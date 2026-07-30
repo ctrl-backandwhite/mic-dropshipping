@@ -27,7 +27,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORIES_FLAT;
@@ -52,7 +52,7 @@ import java.util.stream.Collectors;
  * identical shapes without one controller injecting the other (the partner→storefront
  * controller dependency is replaced by this shared collaborator + the CatalogUseCase).
  */
-@Component
+@Service
 @RequiredArgsConstructor
 public class CatalogStorefrontReadService {
 

@@ -35,6 +35,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVa
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -396,36 +397,43 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     @PostMapping("/cart-quote")
     @Transactional(readOnly = true)
     public CartQuoteOut cartQuote(@RequestBody List<CartQuoteItemIn> items) {
+        String displayCode = pricingService.displayCurrencyCode();
         List<CartQuoteLineOut> lines = new ArrayList<>();
         BigDecimal subtotal = BigDecimal.ZERO;
-        if (items != null) {
-            for (CartQuoteItemIn it : items) {
-                if (it == null || it.productId() == null) {
-                    continue;
-                }
-                ProductEntity p = productRepository.findById(it.productId()).orElse(null);
-                if (p == null) {
-                    continue;
-                }
-                ProductVariantEntity v = it.variantId() == null ? null
-                        : p.getVariants().stream().filter(x -> it.variantId().equals(x.getId())).findFirst()
-                                .orElse(null);
-                int qty = Math.max(1, it.quantity());
-                BigDecimal unit = pricingService.priceFor(p, v).displayAmount();
-                if (unit == null) {
-                    continue;
-                }
-                BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(qty));
-                subtotal = subtotal.add(lineTotal);
-                String displayCode = pricingService.displayCurrencyCode();
-                lines.add(new CartQuoteLineOut(p.getId(), v != null ? v.getId() : null, unit, lineTotal,
-                        currencyService.formatDisplay(unit, displayCode),
-                        currencyService.formatDisplay(lineTotal, displayCode)));
+        for (CartQuoteItemIn it : items == null ? List.<CartQuoteItemIn>of() : items) {
+            CartQuoteLineOut line = quoteLine(it, displayCode);
+            if (line != null) {
+                lines.add(line);
+                subtotal = subtotal.add(line.lineTotal());
             }
         }
-        String displayCode = pricingService.displayCurrencyCode();
         return new CartQuoteOut(displayCode, pricingService.displayCurrencySymbol(), lines, subtotal,
                 currencyService.formatDisplay(subtotal, displayCode));
+    }
+
+    /**
+     * Línea cotizada al precio actual, o {@code null} si no es cotizable (línea vacía, producto que ya no
+     * existe o sin precio). Esas líneas se descartan en silencio a propósito: el carrito guardado en el
+     * navegador puede arrastrar productos retirados del catálogo y no debe tumbar la cotización entera.
+     */
+    private CartQuoteLineOut quoteLine(CartQuoteItemIn it, String displayCode) {
+        if (it == null || it.productId() == null) {
+            return null;
+        }
+        ProductEntity p = productRepository.findById(it.productId()).orElse(null);
+        if (p == null) {
+            return null;
+        }
+        ProductVariantEntity v = it.variantId() == null ? null
+                : p.getVariants().stream().filter(x -> it.variantId().equals(x.getId())).findFirst().orElse(null);
+        BigDecimal unit = pricingService.priceFor(p, v).displayAmount();
+        if (unit == null) {
+            return null;
+        }
+        BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(Math.max(1, it.quantity())));
+        return new CartQuoteLineOut(p.getId(), v != null ? v.getId() : null, unit, lineTotal,
+                currencyService.formatDisplay(unit, displayCode),
+                currencyService.formatDisplay(lineTotal, displayCode));
     }
 
     /* =========================== HOME SECTIONS (DROP-20) =========================== */
@@ -545,10 +553,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     @Transactional(readOnly = true)
     public List<ImageSearchResult> searchByImage(ImageSearchRequest req, String lang) {
         // MVP: no real embedding model deployed yet — deterministic score from image hash.
-        int seed = (req.imageBase64() != null
-                ? req.imageBase64().hashCode()
-                : req.imageUrl() != null ? req.imageUrl().hashCode() : 0);
-        Random r = new Random(seed | 1);
+        Random r = new Random(imageSeed(req) | 1);
         int limit = req.limit() != null ? Math.min(req.limit(), 24) : 12;
 
         List<ProductEntity> pool = new ArrayList<>(
@@ -559,6 +564,18 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
                 .sorted((a, b) -> Double.compare(b.score(), a.score())).toList();
     }
 
+    /**
+     * Semilla determinista de la búsqueda por imagen. La imagen subida (base64) manda sobre la URL: si
+     * llegan las dos, la subida es la que el usuario acaba de elegir. Sin ninguna de las dos, semilla 0 —
+     * la misma petición devuelve siempre los mismos resultados.
+     */
+    private static int imageSeed(ImageSearchRequest req) {
+        if (req.imageBase64() != null) {
+            return req.imageBase64().hashCode();
+        }
+        return req.imageUrl() != null ? req.imageUrl().hashCode() : 0;
+    }
+
     /* =========================== PRICE/STOCK HISTORY (DROP-25) =========================== */
 
     public record HistoryPoint(LocalDate date, BigDecimal price, int stock) {
@@ -567,7 +584,10 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     @Override
     @Transactional(readOnly = true)
     public List<HistoryPoint> priceHistory(UUID id, int days) {
-        LocalDate from = LocalDate.now().minusDays(Math.min(days, 365));
+        // La ventana se calcula en UTC, igual que se fechan las instantáneas de product_history: dejarla
+        // en la zona de la máquina haría que el mismo "últimos N días" devolviera un día más o un día
+        // menos según dónde corra el servidor.
+        LocalDate from = LocalDate.now(ZoneOffset.UTC).minusDays(Math.min(days, 365));
         return historyRepository.findByProduct_IdAndSnapshotDateGreaterThanEqualOrderBySnapshotDateAsc(id, from)
                 .stream().map(h -> new HistoryPoint(h.getSnapshotDate(),
                         BigDecimal.valueOf(h.getPriceUsdCents()).movePointLeft(2), h.getStock()))
@@ -587,61 +607,80 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         ProductEntity p = productRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Product"));
         int qty = Math.max(1, quantity);
-        RoundingMode HU = RoundingMode.HALF_UP;
+        RoundingMode halfUp = RoundingMode.HALF_UP;
         // DROP-675: si se indica una variante, el envío usa su peso/dimensiones reales (no el del producto).
         ProductVariantEntity variant = variantId == null ? null : p.getVariants().stream()
                 .filter(v -> variantId.equals(v.getId())).findFirst().orElse(null);
-        // DROP-669: el coste parte del TRAMO de precio real aplicable a la cantidad (price break),
-        // no de un precio plano. Si no hay tramos, se usa el precio unitario base. Todo se normaliza a USD.
-        var tier = applicableTier(p.getId(), qty);
-        BigDecimal unitSource;
-        String sourceCurrency;
-        Integer appliedTierMinQty;
-        if (tier != null && tier.getUnitPrice() != null) {
-            unitSource = tier.getUnitPrice();
-            sourceCurrency = tier.getCurrency() != null ? tier.getCurrency()
-                    : (p.getCurrency() != null ? p.getCurrency() : "CNY");
-            appliedTierMinQty = tier.getMinQty();
-        } else {
-            unitSource = p.getBasePrice();
-            sourceCurrency = p.getCurrency() != null ? p.getCurrency() : "CNY";
-            appliedTierMinQty = null;
-        }
-        BigDecimal costUsd = unitSource != null ? currencyService.toUsd(unitSource, sourceCurrency) : BigDecimal.ZERO;
+        CostBasis basis = costBasis(p, qty);
+        BigDecimal costUsd = basis.unitSource() != null
+                ? currencyService.toUsd(basis.unitSource(), basis.sourceCurrency())
+                : BigDecimal.ZERO;
         // DROP-678: el retail sugerido aplica la REGLA DE MARGEN configurada (MarginService), no un x2.5.
-        var withMargin = marginService.apply(costUsd, p, null);
+        MarginService.PriceWithMargin withMargin = marginService.apply(costUsd, p, null);
         BigDecimal retailUsd = withMargin.retailUsd() != null ? withMargin.retailUsd() : costUsd;
-        BigDecimal appliedMarginPct = withMargin.appliedPercentage();
-        // Envío real por destino (base_cents/per_kg_cents en USD) con el peso real del paquete.
-        BigDecimal shippingUsd = BigDecimal.ZERO;
-        if (p.getSupplier() != null) {
-            var rates = rateRepository.findBySupplier_IdAndCountryCodeAndActiveTrue(p.getSupplier().getId(),
-                    country.toUpperCase());
-            // DROP-675: peso de envío real, priorizando el de la variante seleccionada.
-            int grams = shippingGrams(p, variant);
-            shippingUsd = rates.stream().map(r -> {
-                double kg = grams / 1000.0;
-                long cents = r.getBaseCents() + Math.round(r.getPerKgCents() * kg);
-                return BigDecimal.valueOf(cents).movePointLeft(2);
-            }).min(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
-        }
+        BigDecimal shippingUsd = cheapestShippingUsd(p, variant, country);
         // Comisión de plataforma configurable (DROP-680: por defecto 0; no se inventa).
         BigDecimal commPct = platformCommissionPct != null ? platformCommissionPct : BigDecimal.ZERO;
-        BigDecimal commissionUsd = retailUsd.multiply(commPct).movePointLeft(2).setScale(2, HU);
+        BigDecimal commissionUsd = retailUsd.multiply(commPct).movePointLeft(2).setScale(2, halfUp);
         BigDecimal netUsd = retailUsd.subtract(costUsd).subtract(shippingUsd).subtract(commissionUsd)
-                .multiply(BigDecimal.valueOf(qty)).setScale(2, HU);
+                .multiply(BigDecimal.valueOf(qty)).setScale(2, halfUp);
         BigDecimal marginPct = retailUsd.signum() == 0
                 ? BigDecimal.ZERO
-                : netUsd.divide(retailUsd.multiply(BigDecimal.valueOf(qty)), 4, HU).multiply(BigDecimal.valueOf(100));
+                : netUsd.divide(retailUsd.multiply(BigDecimal.valueOf(qty)), 4, halfUp)
+                        .multiply(BigDecimal.valueOf(100));
         // Presentar en la moneda activa (coherente con el resto de la tienda, vía X-Currency).
         String displayCode = pricingService.displayCurrencyCode();
         return new MarginEstimate(
-                currencyService.usdToDisplay(costUsd).setScale(2, HU),
-                currencyService.usdToDisplay(retailUsd).setScale(2, HU),
-                currencyService.usdToDisplay(shippingUsd).setScale(2, HU),
-                currencyService.usdToDisplay(commissionUsd).setScale(2, HU),
-                currencyService.usdToDisplay(netUsd).setScale(2, HU),
-                marginPct.setScale(1, HU), displayCode, appliedMarginPct, appliedTierMinQty);
+                currencyService.usdToDisplay(costUsd).setScale(2, halfUp),
+                currencyService.usdToDisplay(retailUsd).setScale(2, halfUp),
+                currencyService.usdToDisplay(shippingUsd).setScale(2, halfUp),
+                currencyService.usdToDisplay(commissionUsd).setScale(2, halfUp),
+                currencyService.usdToDisplay(netUsd).setScale(2, halfUp),
+                marginPct.setScale(1, halfUp), displayCode, withMargin.appliedPercentage(),
+                basis.appliedTierMinQty());
+    }
+
+    /** Precio unitario de origen del que parte la estimación, su divisa y el tramo que lo justifica. */
+    private record CostBasis(BigDecimal unitSource, String sourceCurrency, Integer appliedTierMinQty) {
+    }
+
+    /**
+     * DROP-669: el coste parte del TRAMO de precio real aplicable a la cantidad (price break), no de un
+     * precio plano. Si no hay tramos se usa el precio unitario base y {@code appliedTierMinQty} queda a
+     * null, que es lo que el front pinta como "sin tramo aplicado".
+     */
+    private CostBasis costBasis(ProductEntity p, int qty) {
+        ProductPriceTierEntity tier = applicableTier(p.getId(), qty);
+        if (tier != null && tier.getUnitPrice() != null) {
+            // El tramo puede no traer divisa propia: entonces vale la del producto.
+            String currency = tier.getCurrency() != null ? tier.getCurrency() : productCurrency(p);
+            return new CostBasis(tier.getUnitPrice(), currency, tier.getMinQty());
+        }
+        return new CostBasis(p.getBasePrice(), productCurrency(p), null);
+    }
+
+    /** Divisa de origen del producto; CNY por defecto, que es la del catálogo importado de 1688. */
+    private static String productCurrency(ProductEntity p) {
+        return p.getCurrency() != null ? p.getCurrency() : "CNY";
+    }
+
+    /**
+     * Envío real por destino (base_cents/per_kg_cents en USD) con el peso real del paquete: se toma la
+     * tarifa MÁS BARATA de las activas, que es la que el usuario esperaría ver en una estimación.
+     */
+    private BigDecimal cheapestShippingUsd(ProductEntity p, ProductVariantEntity variant, String country) {
+        if (p.getSupplier() == null) {
+            return BigDecimal.ZERO;
+        }
+        List<ShippingRateEntity> rates = rateRepository
+                .findBySupplier_IdAndCountryCodeAndActiveTrue(p.getSupplier().getId(), country.toUpperCase());
+        // DROP-675: peso de envío real, priorizando el de la variante seleccionada.
+        int grams = shippingGrams(p, variant);
+        return rates.stream().map(r -> {
+            double kg = grams / 1000.0;
+            long cents = r.getBaseCents() + Math.round(r.getPerKgCents() * kg);
+            return BigDecimal.valueOf(cents).movePointLeft(2);
+        }).min(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
     }
 
     /**
@@ -664,11 +703,10 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     }
 
     /** DROP-669: tramo de precio real cuyo rango [minQty,maxQty] contiene la cantidad (o {@code null}). */
-    private ProductPriceTierEntity applicableTier(
-            UUID productId, int qty) {
-        var tiers = priceTierRepository.findByProductIdOrderByMinQtyAsc(productId);
+    private ProductPriceTierEntity applicableTier(UUID productId, int qty) {
+        List<ProductPriceTierEntity> tiers = priceTierRepository.findByProductIdOrderByMinQtyAsc(productId);
         ProductPriceTierEntity best = null;
-        for (var t : tiers) {
+        for (ProductPriceTierEntity t : tiers) {
             Integer max = t.getMaxQty();
             if (qty >= t.getMinQty() && (max == null || qty <= max)) {
                 best = t;

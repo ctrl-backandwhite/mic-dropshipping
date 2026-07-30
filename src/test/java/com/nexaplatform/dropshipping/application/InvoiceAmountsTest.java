@@ -116,12 +116,12 @@ class InvoiceAmountsTest {
 
         // 80,00 − 8,00 + 10,00 + 5,40 = 87,40
         assertThat(m.get("total")).hasToString("87.40");
-        assertThat(m.get("hasDiscount")).isEqualTo(true);
+        assertThat(m).containsEntry("hasDiscount", true);
     }
 
     @Test
     void sinDescuentoLaFacturaNoMuestraEsaLinea() {
-        assertThat(modelOf(order(0), "EUR").get("hasDiscount")).isEqualTo(false);
+        assertThat(modelOf(order(0), "EUR")).containsEntry("hasDiscount", false);
     }
 
     @Test

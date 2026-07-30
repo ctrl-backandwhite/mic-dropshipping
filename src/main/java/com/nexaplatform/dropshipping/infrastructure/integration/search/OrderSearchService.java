@@ -1,5 +1,7 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.search;
 
+import com.nexaplatform.dropshipping.application.service.Texts;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -36,9 +38,10 @@ public class OrderSearchService {
             @Value("${nexadrop.opensearch.uris:http://localhost:9400}") String uris,
             @Value("${nexadrop.opensearch.orders-index:orders}") String index) {
         this.objectMapper = objectMapper;
-        String base = uris.split(",")[0].trim().replaceAll("/++$", "");
+        String base = Texts.stripTrailingSlashes(uris.split(",")[0].trim());
         this.searchUrl = base + "/" + index + "/_search";
     }
+
 
     /** A page of order IDs (in newest-first order) plus the grand total for the filter. */
     public record IdPage(List<UUID> ids, long total) {
@@ -46,18 +49,9 @@ public class OrderSearchService {
 
     public Optional<IdPage> pageIds(String status, String q, int page, int size) {
         try {
-            List<String> must = new ArrayList<>();
-            if (status != null && !status.isBlank()) {
-                must.add("{\"term\":{\"status\":" + objectMapper.writeValueAsString(status.trim().toUpperCase()) + "}}");
-            }
-            if (q != null && !q.isBlank()) {
-                must.add("{\"multi_match\":{\"query\":" + objectMapper.writeValueAsString(q.trim())
-                        + ",\"fields\":[\"orderNumber\",\"externalOrderId\",\"shippingName\"]}}");
-            }
-            String query = must.isEmpty() ? "{\"match_all\":{}}" : "{\"bool\":{\"must\":[" + String.join(",", must) + "]}}";
             int from = Math.max(0, page) * size;
             String body = "{\"track_total_hits\":true,\"from\":" + from + ",\"size\":" + size + ",\"_source\":[\"id\"],"
-                    + "\"query\":" + query + ",\"sort\":[{\"sortTs\":{\"order\":\"desc\"}}]}";
+                    + "\"query\":" + buildQuery(status, q) + ",\"sort\":[{\"sortTs\":{\"order\":\"desc\"}}]}";
             HttpRequest req = HttpRequest.newBuilder(URI.create(searchUrl)).timeout(Duration.ofSeconds(10))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body)).build();
@@ -71,15 +65,7 @@ public class OrderSearchService {
             if (total == 0) {
                 return Optional.empty();
             }
-            List<UUID> ids = new ArrayList<>();
-            for (JsonNode hit : root.path("hits").path("hits")) {
-                String id = hit.path("_source").path("id").isMissingNode() ? hit.path("_id").asText()
-                        : hit.path("_source").path("id").asText();
-                UUID uuid = parse(id);
-                if (uuid != null) {
-                    ids.add(uuid);
-                }
-            }
+            List<UUID> ids = extractIds(root);
             return ids.isEmpty() ? Optional.empty() : Optional.of(new IdPage(ids, total));
         } catch (Exception e) {
             // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
@@ -90,6 +76,36 @@ public class OrderSearchService {
             log.warn("Order index page read failed, falling back to DB: {}", e.getMessage());
             return Optional.empty();
         }
+    }
+
+    /**
+     * Cuerpo del {@code query}: filtro por estado y/o texto libre. Los valores se serializan con Jackson
+     * (nunca concatenados en crudo) para que una comilla en la búsqueda no rompa el JSON de la consulta.
+     */
+    private String buildQuery(String status, String q) throws JsonProcessingException {
+        List<String> must = new ArrayList<>();
+        if (status != null && !status.isBlank()) {
+            must.add("{\"term\":{\"status\":" + objectMapper.writeValueAsString(status.trim().toUpperCase()) + "}}");
+        }
+        if (q != null && !q.isBlank()) {
+            must.add("{\"multi_match\":{\"query\":" + objectMapper.writeValueAsString(q.trim())
+                    + ",\"fields\":[\"orderNumber\",\"externalOrderId\",\"shippingName\"]}}");
+        }
+        return must.isEmpty() ? "{\"match_all\":{}}" : "{\"bool\":{\"must\":[" + String.join(",", must) + "]}}";
+    }
+
+    /** IDs de los hits, en el orden en el que llegan del índice. Un id ilegible se descarta, no rompe la página. */
+    private static List<UUID> extractIds(JsonNode root) {
+        List<UUID> ids = new ArrayList<>();
+        for (JsonNode hit : root.path("hits").path("hits")) {
+            String id = hit.path("_source").path("id").isMissingNode() ? hit.path("_id").asText()
+                    : hit.path("_source").path("id").asText();
+            UUID uuid = parse(id);
+            if (uuid != null) {
+                ids.add(uuid);
+            }
+        }
+        return ids;
     }
 
     private static UUID parse(String s) {

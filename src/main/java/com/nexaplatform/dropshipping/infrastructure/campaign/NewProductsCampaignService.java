@@ -103,27 +103,9 @@ public class NewProductsCampaignService {
         Map<String, List<Map<String, Object>>> categoriesByLang = new HashMap<>();
         int sent = 0;
         for (UserEntity user : audience) {
-            if (outboundEmailRepository.existsByToAddressAndTemplateAndCreatedAtGreaterThanEqual(
-                    user.getEmail(), TEMPLATE, since)) {
-                continue;
+            if (enqueueIfDue(user, since, ctaUrl, categoryIds, categoriesByLang)) {
+                sent++;
             }
-            String lang = normalizeLang(user.getLanguage());
-            List<Map<String, Object>> categories = categoriesByLang.computeIfAbsent(lang,
-                    l -> buildCategories(categoryIds, l));
-            if (categories.isEmpty()) {
-                continue;
-            }
-            Map<String, Object> vars = new HashMap<>();
-            vars.put(TITLE, NewProductsEmailLabel.TITLE.of(lang));
-            vars.put("intro", NewProductsEmailLabel.INTRO.of(lang));
-            vars.put("categories", categories);
-            vars.put("ctaUrl", ctaUrl);
-            vars.put("ctaLabel", NewProductsEmailLabel.CTA.of(lang));
-            vars.put("footerNote", NewProductsEmailLabel.FOOTER.of(lang));
-            vars.put("unsubscribeUrl", unsubscribeUrl(user.getId(), lang));
-            vars.put("unsubscribeLabel", NewProductsEmailLabel.UNSUBSCRIBE.of(lang));
-            emailQueue.enqueue(user.getEmail(), NewProductsEmailLabel.SUBJECT.of(lang), TEMPLATE, vars);
-            sent++;
         }
         if (sent > 0) {
             log.info("New-products campaign: {} emails enqueued (countries={}, categories={})", sent, countries,
@@ -162,6 +144,40 @@ public class NewProductsCampaignService {
         vars.put("unsubscribeUrl", unsubscribeUrl);
         vars.put("unsubscribeLabel", NewProductsEmailLabel.UNSUBSCRIBE.of(language));
         emailQueue.enqueue(email, NewProductsEmailLabel.SUBJECT.of(language), TEMPLATE, vars);
+        return true;
+    }
+
+    /**
+     * Encola la campaña para UN usuario, si le toca. No le toca cuando ya recibió esta plantilla hoy
+     * (deduplicación: como máximo un correo al día) o cuando en su idioma no hay contenido que enseñar
+     * — preferimos no enviar nada antes que un correo vacío.
+     *
+     * @param categoriesByLang caché por idioma dentro de la misma tanda: el modelo de categorías es caro
+     *        (una consulta de productos por categoría) y se repite para todos los usuarios de un idioma.
+     * @return true si el correo se encoló.
+     */
+    private boolean enqueueIfDue(UserEntity user, Instant since, String ctaUrl, List<UUID> categoryIds,
+            Map<String, List<Map<String, Object>>> categoriesByLang) {
+        if (outboundEmailRepository.existsByToAddressAndTemplateAndCreatedAtGreaterThanEqual(
+                user.getEmail(), TEMPLATE, since)) {
+            return false;
+        }
+        String lang = normalizeLang(user.getLanguage());
+        List<Map<String, Object>> categories = categoriesByLang.computeIfAbsent(lang,
+                l -> buildCategories(categoryIds, l));
+        if (categories.isEmpty()) {
+            return false;
+        }
+        Map<String, Object> vars = new HashMap<>();
+        vars.put(TITLE, NewProductsEmailLabel.TITLE.of(lang));
+        vars.put("intro", NewProductsEmailLabel.INTRO.of(lang));
+        vars.put("categories", categories);
+        vars.put("ctaUrl", ctaUrl);
+        vars.put("ctaLabel", NewProductsEmailLabel.CTA.of(lang));
+        vars.put("footerNote", NewProductsEmailLabel.FOOTER.of(lang));
+        vars.put("unsubscribeUrl", unsubscribeUrl(user.getId(), lang));
+        vars.put("unsubscribeLabel", NewProductsEmailLabel.UNSUBSCRIBE.of(lang));
+        emailQueue.enqueue(user.getEmail(), NewProductsEmailLabel.SUBJECT.of(lang), TEMPLATE, vars);
         return true;
     }
 

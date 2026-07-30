@@ -84,13 +84,27 @@ public class InboundShopWebhookController implements InboundShopWebhookApi {
 
     /** Acepta tanto el shape canónico de NexaDrop como Shopify-style. */
     private CreateOrderRequest parsePayload(JsonNode root, ShopConnectionEntity shop, String idempotencyKey) {
-        String externalId = idempotencyKey;
-        if (externalId == null)
-            externalId = text(root, "externalOrderId", "id");
-        if (externalId == null)
-            externalId = "shop-" + shop.getId() + "-" + System.currentTimeMillis();
+        String externalId = externalOrderId(root, shop, idempotencyKey);
+        List<OrderItemInput> items = parseItems(root, shop);
+        AddressInput shipping = parseShippingAddress(root);
+        return new CreateOrderRequest(externalId, shipping, null, items, text(root, "notes"));
+    }
 
-        // Items: aceptamos `items` o `line_items`.
+    /**
+     * Referencia externa del pedido. La Idempotency-Key manda sobre el id del payload: es la que la tienda
+     * reenvía al reintentar, así que es la única que garantiza no duplicar el pedido. Si no llega ninguna
+     * de las dos se sintetiza una, que al menos deja el pedido trazable a la tienda de origen.
+     */
+    private static String externalOrderId(JsonNode root, ShopConnectionEntity shop, String idempotencyKey) {
+        if (idempotencyKey != null) {
+            return idempotencyKey;
+        }
+        String fromPayload = text(root, "externalOrderId", "id");
+        return fromPayload != null ? fromPayload : "shop-" + shop.getId() + "-" + System.currentTimeMillis();
+    }
+
+    /** Líneas del pedido: se aceptan bajo la clave {@code items} o {@code line_items}. */
+    private List<OrderItemInput> parseItems(JsonNode root, ShopConnectionEntity shop) {
         JsonNode itemsNode = firstPresent(root, "items", "line_items");
         if (itemsNode == null || !itemsNode.isArray() || itemsNode.isEmpty()) {
             throw new IllegalArgumentException("Missing items / line_items");
@@ -101,19 +115,28 @@ public class InboundShopWebhookController implements InboundShopWebhookApi {
             UUID productId = resolveProductId(it, shop);
             UUID variantId = it.hasNonNull("variantId") ? UUID.fromString(it.get("variantId").asText()) : null;
             items.add(new OrderItemInput(productId, variantId, qty));
-            // DROP-548: si el producto no está listado en la tienda, lo
-            // auto-listamos al recibir la orden — así el contador "productos
-            // publicados" deja de quedar a 0 mientras hay ventas reales.
-            if (productId != null
-                    && !listingRepo.findByShopConnection_IdAndProduct_Id(shop.getId(), productId).isPresent()) {
-                productRepo.findById(productId)
-                        .ifPresent(p -> listingRepo.save(ShopProductListingEntity.builder().shopConnection(shop)
-                                .product(p).remoteProductId(it.hasNonNull("sku") ? it.get("sku").asText() : null)
-                                .status("PUBLISHED").build()));
-            }
+            autoListIfMissing(shop, productId, it);
         }
+        return items;
+    }
 
-        // Address: `shippingAddress` o `shipping_address`.
+    /**
+     * DROP-548: si el producto no está listado en la tienda, lo auto-listamos al recibir la orden — así el
+     * contador "productos publicados" deja de quedar a 0 mientras hay ventas reales.
+     */
+    private void autoListIfMissing(ShopConnectionEntity shop, UUID productId, JsonNode item) {
+        if (productId == null
+                || listingRepo.findByShopConnection_IdAndProduct_Id(shop.getId(), productId).isPresent()) {
+            return;
+        }
+        productRepo.findById(productId)
+                .ifPresent(p -> listingRepo.save(ShopProductListingEntity.builder().shopConnection(shop)
+                        .product(p).remoteProductId(item.hasNonNull("sku") ? item.get("sku").asText() : null)
+                        .status("PUBLISHED").build()));
+    }
+
+    /** Dirección de envío: se acepta bajo la clave {@code shippingAddress} o {@code shipping_address}. */
+    private static AddressInput parseShippingAddress(JsonNode root) {
         JsonNode addr = firstPresent(root, "shippingAddress", "shipping_address");
         if (addr == null) {
             // El contrato marca la dirección de envío como obligatoria (@NotNull). Dejar pasar el pedido sin
@@ -121,12 +144,10 @@ public class InboundShopWebhookController implements InboundShopWebhookApi {
             // está cobrado. Se rechaza aquí, con un mensaje que dice qué falta.
             throw new IllegalArgumentException("Missing shippingAddress / shipping_address");
         }
-        AddressInput shipping = new AddressInput(text(addr, "fullName", "name"), text(addr, "phone"), text(addr, "email"),
-                        text(addr, "line1", "address1"), text(addr, "line2", "address2"), text(addr, "city"),
-                        text(addr, "state", "region", "province"), text(addr, "postalCode", "zip"),
-                        text(addr, "country", "country_code"));
-
-        return new CreateOrderRequest(externalId, shipping, null, items, text(root, "notes"));
+        return new AddressInput(text(addr, "fullName", "name"), text(addr, "phone"), text(addr, "email"),
+                text(addr, "line1", "address1"), text(addr, "line2", "address2"), text(addr, "city"),
+                text(addr, "state", "region", "province"), text(addr, "postalCode", "zip"),
+                text(addr, "country", "country_code"));
     }
 
     /**

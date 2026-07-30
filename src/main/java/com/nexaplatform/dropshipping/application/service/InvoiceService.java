@@ -40,6 +40,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -56,6 +57,12 @@ public class InvoiceService {
     private static final String EMAILS_INVOICE = "emails/invoice";
     private static final String BODYBG = "bodyBg";
     private static final String TITLE = "title";
+
+    /**
+     * Estados con los que la factura se sella como PAGADA. Cualquier otro (incluido un estado nuevo que
+     * no se añada aquí) sale como pendiente, que es el lado seguro: nunca decimos "pagada" sin serlo.
+     */
+    private static final Set<String> PAID_STATUSES = Set.of("PAID", "SHIPPED", "DELIVERED", "FULFILLED", "COMPLETED");
 
     private final TemplateEngine templateEngine;
     private final CurrencyRateService currencyRateService;
@@ -143,8 +150,7 @@ public class InvoiceService {
      */
     public Map<String, Object> model(Order o, String locale, String downloadUrl, String invoiceCurrency,
             boolean embedImages) {
-        boolean es = locale == null || locale.toLowerCase(Locale.ROOT).startsWith("es");
-        String cur = invoiceCurrency != null && !invoiceCurrency.isBlank() ? invoiceCurrency.toUpperCase() : "USD";
+        String cur = normalizeCurrency(invoiceCurrency);
 
         // Precio por línea en la moneda de la factura (2 dec hacia arriba), igual que el carrito y el cobro.
         // El subtotal/total se SUMAN de las líneas para que la factura sea internamente coherente y coincida
@@ -176,16 +182,14 @@ public class InvoiceService {
         m.put("labelShipTo", InvoiceLabel.BILL_TO.of(lang));
         m.put("labelMethod", InvoiceLabel.PAYMENT_METHOD.of(lang));
         m.put("orderNumber", o.getOrderNumber());
-        m.put("invoiceDate", when != null ? DATE.format(when.atZone(ZoneId.systemDefault())) : "");
+        m.put("invoiceDate", formatDate(when));
         m.put("labelIssueDate", InvoiceLabel.ISSUE_DATE.of(lang));
         m.put("paymentMethod", null);
         // Estado del pedido como insignia (PAGADA en verde si está pagado/cumplido).
         String statusName = o.getStatus() != null ? o.getStatus().name() : "";
-        boolean paid = statusName.equals("PAID") || statusName.equals("SHIPPED")
-                || statusName.equals("DELIVERED") || statusName.equals("FULFILLED") || statusName.equals("COMPLETED");
+        boolean paid = PAID_STATUSES.contains(statusName);
         m.put("statusPaid", paid);
-        m.put("statusLabel", statusName.isEmpty() ? ""
-                : (paid ? InvoiceLabel.PAID.of(lang) : InvoiceLabel.PENDING.of(lang)));
+        m.put("statusLabel", statusLabel(statusName, paid, lang));
         m.put("shipName", nz(o.getShippingFullName()));
         m.put("shipEmail", nz(o.getShippingEmail()));
         m.put("shipPhone", nz(o.getShippingPhone()));
@@ -211,37 +215,11 @@ public class InvoiceService {
         m.put("tax", fmt(taxDisp, cur));
         m.put("total", fmt(totalDisp, cur));
 
-        // Bloque fiscal del EMISOR (solo si está configurado: no inventamos datos legales).
-        boolean hasIssuer = issuerLegalName != null && !issuerLegalName.isBlank();
-        m.put("hasIssuer", hasIssuer);
-        m.put("labelIssuer", es ? "Emisor" : "Issuer");
-        m.put("labelBillTo", InvoiceLabel.BILL_TO.of(lang));
-        m.put("labelTaxId", InvoiceLabel.TAX_ID.of(lang));
-        m.put("issuerLegalName", nz(issuerLegalName));
-        m.put("issuerTaxId", nz(issuerTaxId));
-        m.put("issuerAddress", nz(issuerAddress));
-        m.put("issuerCityLine", nz(issuerCityLine));
-        m.put("issuerCountry", nz(issuerCountry));
-        m.put("issuerEmail", nz(issuerEmail));
-        m.put("issuerRegistry", nz(issuerRegistry));
-        m.put("legalNote", nz(legalNote));
-
-        // Línea legal del pie: razón social · CIF · email · nº de factura (lo que esté configurado).
-        StringBuilder legal = new StringBuilder();
-        if (hasIssuer) {
-            legal.append(issuerLegalName);
-            if (issuerTaxId != null && !issuerTaxId.isBlank()) {
-                legal.append(" · ").append(InvoiceLabel.TAX_ID_PREFIX.of(lang)).append(issuerTaxId);
-            }
-            if (issuerEmail != null && !issuerEmail.isBlank()) {
-                legal.append(" · ").append(issuerEmail);
-            }
-        }
-        legal.append(!legal.isEmpty() ? " · " : "").append(o.getOrderNumber());
-        m.put("footerLegal", legal.toString());
+        putIssuerBlock(m, locale, lang);
+        m.put("footerLegal", footerLegal(o.getOrderNumber(), lang));
 
         // QR de verificación: codifica la URL pública de verificación de esta factura.
-        String base = verifyBaseUrl != null ? verifyBaseUrl.replaceAll("/++$", "") : "";
+        String base = Texts.stripTrailingSlashes(verifyBaseUrl);
         String verifyUrl = base + "/api/v1/invoices/" + o.getOrderNumber() + "/verify";
         m.put("verifyUrl", verifyUrl);
         m.put("qr", qrDataUri(verifyUrl));
@@ -255,7 +233,6 @@ public class InvoiceService {
         return m;
     }
 
-    /** Renderiza la factura como HTML (cuerpo del email) en la moneda del pedido. */
     /** Importes de la factura ya en la moneda en que se emite, más el tipo de IVA efectivo. */
     public record InvoiceAmounts(BigDecimal subtotal, BigDecimal shipping, BigDecimal tax, BigDecimal discount,
             BigDecimal total, int vatRate) {
@@ -316,6 +293,7 @@ public class InvoiceService {
         return new InvoiceAmounts(subtotal, shipping, tax, discount, total, vatRate);
     }
 
+    /** Renderiza la factura como HTML (cuerpo del email) en la moneda del pedido. */
     public String renderHtml(Order o, String locale, String downloadUrl) {
         return renderHtml(o, locale, downloadUrl, o.getCurrency() != null ? o.getCurrency() : "USD");
     }
@@ -451,8 +429,7 @@ public class InvoiceService {
 
     /** Modelo de la factura del plan con las MISMAS claves que la de pedidos (importes ya en la moneda de cobro). */
     private Map<String, Object> planModel(PlanInvoiceData d, String locale) {
-        boolean es = locale == null || locale.toLowerCase(Locale.ROOT).startsWith("es");
-        String cur = d.currency() != null && !d.currency().isBlank() ? d.currency().toUpperCase() : "USD";
+        String cur = normalizeCurrency(d.currency());
         String lang = InvoiceLabel.lang(locale);
 
         BigDecimal subtotal = BigDecimal.valueOf(d.subtotalCents()).movePointLeft(2);
@@ -511,32 +488,8 @@ public class InvoiceService {
         m.put("tax", fmt(tax, cur));
         m.put("total", fmt(total, cur));
 
-        boolean hasIssuer = issuerLegalName != null && !issuerLegalName.isBlank();
-        m.put("hasIssuer", hasIssuer);
-        m.put("labelIssuer", es ? "Emisor" : "Issuer");
-        m.put("labelBillTo", InvoiceLabel.BILL_TO.of(lang));
-        m.put("labelTaxId", InvoiceLabel.TAX_ID.of(lang));
-        m.put("issuerLegalName", nz(issuerLegalName));
-        m.put("issuerTaxId", nz(issuerTaxId));
-        m.put("issuerAddress", nz(issuerAddress));
-        m.put("issuerCityLine", nz(issuerCityLine));
-        m.put("issuerCountry", nz(issuerCountry));
-        m.put("issuerEmail", nz(issuerEmail));
-        m.put("issuerRegistry", nz(issuerRegistry));
-        m.put("legalNote", nz(legalNote));
-
-        StringBuilder legal = new StringBuilder();
-        if (hasIssuer) {
-            legal.append(issuerLegalName);
-            if (issuerTaxId != null && !issuerTaxId.isBlank()) {
-                legal.append(" · ").append(InvoiceLabel.TAX_ID_PREFIX.of(lang)).append(issuerTaxId);
-            }
-            if (issuerEmail != null && !issuerEmail.isBlank()) {
-                legal.append(" · ").append(issuerEmail);
-            }
-        }
-        legal.append(!legal.isEmpty() ? " · " : "").append(nz(d.number()));
-        m.put("footerLegal", legal.toString());
+        putIssuerBlock(m, locale, lang);
+        m.put("footerLegal", footerLegal(nz(d.number()), lang));
 
         String verifyUrl = d.hostedUrl() != null ? d.hostedUrl() : "";
         m.put("verifyUrl", verifyUrl);
@@ -549,12 +502,61 @@ public class InvoiceService {
         return m;
     }
 
-    /** Acorta un texto a {@code max} caracteres añadiendo "…" si lo supera. */
-    private static String ellipsis(String s, int max) {
-        if (s == null) {
+    /**
+     * Insignia de estado. Un pedido sin estado (no debería ocurrir) se queda SIN insignia en lugar de
+     * mostrar "pendiente": afirmar que no está cobrado cuando no lo sabemos sería peor que no decir nada.
+     */
+    private static String statusLabel(String statusName, boolean paid, String lang) {
+        if (statusName.isEmpty()) {
             return "";
         }
-        return s.length() > max ? s.substring(0, max).trim() + "…" : s;
+        return paid ? InvoiceLabel.PAID.of(lang) : InvoiceLabel.PENDING.of(lang);
+    }
+
+    /** Moneda de emisión normalizada a mayúsculas; USD cuando no se indica ninguna. */
+    private static String normalizeCurrency(String currency) {
+        return currency != null && !currency.isBlank() ? currency.toUpperCase(Locale.ROOT) : "USD";
+    }
+
+
+    /**
+     * Bloque fiscal del EMISOR, idéntico en la factura de pedidos y en la de planes. Solo se pinta si
+     * hay razón social configurada: los datos legales salen de la configuración del entorno y NUNCA se
+     * inventan; sin ellos la plantilla oculta el bloque entero.
+     */
+    private void putIssuerBlock(Map<String, Object> m, String locale, String lang) {
+        boolean es = locale == null || locale.toLowerCase(Locale.ROOT).startsWith("es");
+        m.put("hasIssuer", issuerLegalName != null && !issuerLegalName.isBlank());
+        m.put("labelIssuer", es ? "Emisor" : "Issuer");
+        m.put("labelBillTo", InvoiceLabel.BILL_TO.of(lang));
+        m.put("labelTaxId", InvoiceLabel.TAX_ID.of(lang));
+        m.put("issuerLegalName", nz(issuerLegalName));
+        m.put("issuerTaxId", nz(issuerTaxId));
+        m.put("issuerAddress", nz(issuerAddress));
+        m.put("issuerCityLine", nz(issuerCityLine));
+        m.put("issuerCountry", nz(issuerCountry));
+        m.put("issuerEmail", nz(issuerEmail));
+        m.put("issuerRegistry", nz(issuerRegistry));
+        m.put("legalNote", nz(legalNote));
+    }
+
+    /**
+     * Línea legal del pie: razón social · CIF · email · número del documento, con lo que esté
+     * configurado. El número va SIEMPRE, aunque no haya emisor: es lo que identifica la factura.
+     */
+    private String footerLegal(String documentNumber, String lang) {
+        StringBuilder legal = new StringBuilder();
+        if (issuerLegalName != null && !issuerLegalName.isBlank()) {
+            legal.append(issuerLegalName);
+            if (issuerTaxId != null && !issuerTaxId.isBlank()) {
+                legal.append(" · ").append(InvoiceLabel.TAX_ID_PREFIX.of(lang)).append(issuerTaxId);
+            }
+            if (issuerEmail != null && !issuerEmail.isBlank()) {
+                legal.append(" · ").append(issuerEmail);
+            }
+        }
+        legal.append(!legal.isEmpty() ? " · " : "").append(documentNumber);
+        return legal.toString();
     }
 
     /** Convierte céntimos USD canónicos a {@code currency} (2 decimales hacia arriba). */

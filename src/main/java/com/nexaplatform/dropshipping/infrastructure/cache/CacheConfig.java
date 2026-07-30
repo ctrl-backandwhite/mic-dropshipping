@@ -43,12 +43,6 @@ public class CacheConfig {
     public static final String CACHE_SEARCH = "search"; // resultados de /api/search por keyword+lang+page+size (TTL corto)
 
     /**
-     * Local-only fallback que se usa SI no hay Redis configurado (perfil dev /
-     * test sin docker). Caffeine corre dentro de la JVM, así que cada instancia
-     * tiene su propia copia — válido para desarrollo local pero NO para prod
-     * multi-instancia (esa coherencia la da {@link RedisCacheConfig}).
-     */
-    /**
      * Clave de caché que INCLUYE la moneda de display activa (X-Currency) además del método + args.
      * Imprescindible para los listados de productos: el precio mostrado depende de la moneda del usuario,
      * así que sin la moneda en la clave un usuario en EUR vería el precio cacheado del primer usuario
@@ -64,10 +58,17 @@ public class CacheConfig {
                 + Arrays.deepToString(params);
     }
 
-    // Cache manager por defecto en CUALQUIER perfil mientras no se active el cache distribuido
-    // (nexadrop.cache.distributed=false, el default). Antes estaba atado a perfiles concretos
-    // (local/dev/default/test) y dejaba a `pre` y `pro` SIN cache manager → 500 "Cannot find cache".
-    // Al depender de la propiedad y no del nombre del perfil, queda correcto para todos los entornos.
+    /**
+     * Cache manager por defecto en CUALQUIER perfil mientras no se active el caché distribuido
+     * ({@code nexadrop.cache.distributed=false}, el valor por defecto). Antes estaba atado a perfiles
+     * concretos (local/dev/default/test) y dejaba a {@code pre} y {@code pro} SIN cache manager → 500
+     * "Cannot find cache". Al depender de la propiedad y no del nombre del perfil queda correcto en
+     * todos los entornos.
+     *
+     * <p>Caffeine corre dentro de la JVM, así que cada instancia tiene su propia copia: vale para
+     * desarrollo y para una sola instancia, pero la coherencia multi-instancia la da
+     * {@link RedisCacheConfig}.
+     */
     @Bean
     @Primary
     @ConditionalOnProperty(prefix = "nexadrop.cache", name = "distributed", havingValue = "false",

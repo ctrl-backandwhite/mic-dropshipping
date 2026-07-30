@@ -42,8 +42,7 @@ class TokenCryptoServiceTest {
 
         String encrypted = svc.encrypt(plaintext);
 
-        assertThat(encrypted).startsWith("gcm:");
-        assertThat(encrypted).doesNotContain(plaintext);
+        assertThat(encrypted).startsWith("gcm:").doesNotContain(plaintext);
         assertThat(svc.isModern(encrypted)).isTrue();
     }
 

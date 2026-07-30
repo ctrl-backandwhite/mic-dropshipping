@@ -5,12 +5,14 @@ import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.domain.model.WalletTransaction;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.AffiliateIndexer;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -24,6 +26,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -43,8 +46,9 @@ class AffiliateProgramServiceTest {
     @Mock NotificationJpaRepositoryAdapter notificationRepo;
     @Mock NotificationsPublisher notificationsPublisher;
     @Mock WalletUseCase walletUseCase;
-    @Mock com.nexaplatform.dropshipping.infrastructure.integration.search.AffiliateIndexer affiliateIndexer;
+    @Mock AffiliateIndexer affiliateIndexer;
 
+    @InjectMocks
     AffiliateProgramService service;
 
     private final UUID affiliateId = UUID.randomUUID();
@@ -54,9 +58,6 @@ class AffiliateProgramServiceTest {
 
     @BeforeEach
     void setup() {
-        service = new AffiliateProgramService(affiliateRepo, codeRepo, attrRepo, conversionRepo, commissionRepo,
-                configRepo, payoutRepo, userRepository, passwordEncoder, notificationRepo, notificationsPublisher,
-                walletUseCase, affiliateIndexer);
         AffiliateProgramConfigEntity config = AffiliateProgramConfigEntity.builder()
                 .defaultPercent(new BigDecimal("10.000")).attributionWindowDays(30).returnPeriodDays(14)
                 .minPayoutCents(5000).currency("EUR").attributionModel("LAST_CLICK").build();
@@ -203,11 +204,11 @@ class AffiliateProgramServiceTest {
         when(affiliateRepo.findByUser_Id(affiliateUserId)).thenReturn(Optional.of(affiliate()));
         when(payoutRepo.existsByAffiliateIdAndStatus(affiliateId, "REQUESTED")).thenReturn(false);
         AffiliateCommissionEntity c = AffiliateCommissionEntity.builder().affiliateId(affiliateId)
-                .conversionId(UUID.randomUUID()).amountCents(1000).currency("EUR").percentage(java.math.BigDecimal.TEN)
+                .conversionId(UUID.randomUUID()).amountCents(1000).currency("EUR").percentage(BigDecimal.TEN)
                 .status("APPROVED").build();
         when(commissionRepo.findByAffiliateIdAndStatus(affiliateId, "APPROVED")).thenReturn(List.of(c));
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.requestPayout(affiliateUserId))
+        assertThatThrownBy(() -> service.requestPayout(affiliateUserId))
                 .isInstanceOf(BusinessException.class);
         verify(payoutRepo, never()).save(any());
     }

@@ -72,22 +72,10 @@ public class CheckoutPreviewService {
         int subtotalUsdCents = 0;
         BigDecimal subDispAcc = BigDecimal.ZERO;
         for (Line it : lines) {
-            if (it == null || it.productId() == null) {
+            Integer unitCents = unitPriceUsdCents(it);
+            if (unitCents == null) {
                 continue;
             }
-            ProductEntity p = productRepository.findById(it.productId()).orElse(null);
-            if (p == null) {
-                continue;
-            }
-            ProductVariantEntity v = it.variantId() == null ? null
-                    : p.getVariants().stream().filter(x -> it.variantId().equals(x.getId())).findFirst().orElse(null);
-            BigDecimal retail = pricingService.priceFor(p, v).retailUsd();
-            if (retail == null) {
-                continue;
-            }
-            // HALF_UP (céntimo más cercano) — el MISMO redondeo que el catálogo y que el pedido
-            // (OrderUseCaseImpl), para que catálogo == carrito == preview == cobro, sin descuadre de 1 cént.
-            int unitCents = retail.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
             int qty = Math.clamp(it.quantity(), 1, MAX_LINE_QUANTITY);
             subtotalUsdCents = Math.addExact(subtotalUsdCents, Math.multiplyExact(unitCents, qty));
             // Unidad en la moneda mostrada, redondeada a 2 dec., × cantidad (misma unidad que carrito/detalle).
@@ -117,6 +105,30 @@ public class CheckoutPreviewService {
 
         return new Preview(quote, subtotalUsdCents, discountUsdCents, totals.shippingCents(), totals.taxCents(),
                 totals.taxRateBps(), subDisp, discDisp, shipDisp, taxDisp, totalDisp, totals);
+    }
+
+    /**
+     * Precio unitario de la línea en céntimos USD, o {@code null} si la línea no es facturable: llegó
+     * vacía, el producto ya no existe o no tiene precio de venta. Devolver {@code null} (y no cero) es
+     * deliberado: una línea sin precio se OMITE del desglose, mientras que un cero sí sumaría al carrito.
+     */
+    private Integer unitPriceUsdCents(Line it) {
+        if (it == null || it.productId() == null) {
+            return null;
+        }
+        ProductEntity p = productRepository.findById(it.productId()).orElse(null);
+        if (p == null) {
+            return null;
+        }
+        ProductVariantEntity v = it.variantId() == null ? null
+                : p.getVariants().stream().filter(x -> it.variantId().equals(x.getId())).findFirst().orElse(null);
+        BigDecimal retail = pricingService.priceFor(p, v).retailUsd();
+        if (retail == null) {
+            return null;
+        }
+        // HALF_UP (céntimo más cercano) — el MISMO redondeo que el catálogo y que el pedido
+        // (OrderUseCaseImpl), para que catálogo == carrito == preview == cobro, sin descuadre de 1 cént.
+        return retail.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
     }
 
     private static BigDecimal usd(int cents) {

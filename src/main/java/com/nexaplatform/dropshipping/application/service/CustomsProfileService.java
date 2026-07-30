@@ -59,6 +59,15 @@ public class CustomsProfileService {
             return false;
         }
         CategoryCustomsProfileEntity profile = found.get();
+        // Las dos mitades se evalúan SIEMPRE (no se usa ||, que cortocircuitaría): la segunda también
+        // tiene huecos que rellenar aunque la primera ya haya tocado algo.
+        boolean touchedCustoms = applyCustomsDefaults(product, profile);
+        boolean touchedPackaging = applyPackagingDefaults(product, profile);
+        return touchedCustoms || touchedPackaging;
+    }
+
+    /** Partida arancelaria, material, uso declarado y tipo de batería: lo que exige la declaración. */
+    private static boolean applyCustomsDefaults(ProductEntity product, CategoryCustomsProfileEntity profile) {
         boolean touched = false;
         if (isBlank(product.getHsCode()) && !isBlank(profile.getHsCode())) {
             product.setHsCode(profile.getHsCode());
@@ -76,6 +85,12 @@ public class CustomsProfileService {
             product.setBatteryType(profile.getBatteryType());
             touched = true;
         }
+        return touched;
+    }
+
+    /** Medidas del paquete: sin ellas el transportista no puede cotizar el envío. */
+    private static boolean applyPackagingDefaults(ProductEntity product, CategoryCustomsProfileEntity profile) {
+        boolean touched = false;
         if (isEmpty(product.getLengthMm()) && !isEmpty(profile.getPackLengthMm())) {
             product.setLengthMm(profile.getPackLengthMm());
             touched = true;

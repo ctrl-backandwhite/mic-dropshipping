@@ -116,9 +116,10 @@ class PaymentWebhookRetryTest {
         UUID paymentId = UUID.randomUUID();
         // Un corte de base de datos en mitad de la confirmación.
         when(paymentRepository.findById(paymentId)).thenThrow(new IllegalStateException("connection reset"));
+        // El cuerpo se compone FUERA de la lambda para que dentro quede una sola llamada capaz de lanzar.
+        String event = STRIPE_PAID.formatted(paymentId);
 
-        assertThatThrownBy(() -> subject
-                .handleStripeEvent("payment_intent.succeeded", STRIPE_PAID.formatted(paymentId)))
+        assertThatThrownBy(() -> subject.handleStripeEvent("payment_intent.succeeded", event))
                 .isInstanceOf(WebhookProcessingException.class)
                 .hasMessageContaining("reintente");
     }
@@ -127,9 +128,9 @@ class PaymentWebhookRetryTest {
     void unFalloDeProcesadoAvisaAlResponsable() {
         UUID paymentId = UUID.randomUUID();
         when(paymentRepository.findById(paymentId)).thenThrow(new IllegalStateException("connection reset"));
+        String event = STRIPE_PAID.formatted(paymentId);
 
-        assertThatThrownBy(() -> subject
-                .handleStripeEvent("payment_intent.succeeded", STRIPE_PAID.formatted(paymentId)))
+        assertThatThrownBy(() -> subject.handleStripeEvent("payment_intent.succeeded", event))
                 .isInstanceOf(WebhookProcessingException.class);
 
         // Si el fallo persiste, los reintentos también fallan: alguien tiene que enterarse.

@@ -257,19 +257,17 @@ public class AdminCatalogController implements AdminCatalogApi {
         // single page regardless of the total number of products (scales to millions).
         StreamingResponseBody body = out -> {
             UUID after = null;
-            while (true) {
+            boolean hasMore = true;
+            while (hasMore) {
                 CatalogUseCase.ProductExportBatch page = catalogUseCase.exportBatchAfter(after, safeBatch);
-                if (page.items().isEmpty()) {
-                    break;
-                }
                 for (BulkProductDtoIn dto : page.items()) {
                     out.write(objectMapper.writeValueAsBytes(dto));
                     out.write('\n');
                 }
                 out.flush();
-                if (page.items().size() < safeBatch) {
-                    break;
-                }
+                // Una página incompleta (o vacía) es el fin del catálogo: la paginación por keyset devuelve
+                // siempre el tamaño pedido mientras queden productos.
+                hasMore = page.items().size() >= safeBatch;
                 after = page.lastId();
             }
         };
@@ -288,15 +286,11 @@ public class AdminCatalogController implements AdminCatalogApi {
                 new InputStreamReader(request.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                if (line.isBlank()) {
+                BulkProductDtoIn row = parseNdjsonRow(line, acc);
+                if (row == null) {
                     continue;
                 }
-                try {
-                    buffer.add(objectMapper.readValue(line, BulkProductDtoIn.class));
-                } catch (Exception ex) {
-                    acc.recordParseError(ex.getMessage());
-                    continue;
-                }
+                buffer.add(row);
                 if (buffer.size() >= safeBatch) {
                     acc.merge(catalogUseCase.bulkCreateProducts(buffer));
                     buffer.clear();
@@ -309,6 +303,23 @@ public class AdminCatalogController implements AdminCatalogApi {
             acc.merge(catalogUseCase.bulkCreateProducts(buffer));
         }
         return ResponseEntity.ok(acc.toResult());
+    }
+
+    /**
+     * Convierte una línea NDJSON en fila de carga. Devuelve {@code null} —y anota el error en el
+     * acumulador— si la línea está en blanco o no es JSON válido: una línea corrupta a mitad de un
+     * fichero de miles no puede abortar la importación entera, se cuenta como fallida y se sigue.
+     */
+    private BulkProductDtoIn parseNdjsonRow(String line, NdjsonImportAccumulator acc) {
+        if (line.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(line, BulkProductDtoIn.class);
+        } catch (Exception ex) {
+            acc.recordParseError(ex.getMessage());
+            return null;
+        }
     }
 
     /** Accumulates the per-batch results of an NDJSON import while keeping the error list bounded. */

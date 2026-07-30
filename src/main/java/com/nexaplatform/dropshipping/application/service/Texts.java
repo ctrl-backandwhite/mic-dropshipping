@@ -43,4 +43,26 @@ public final class Texts {
         String found = firstNonBlank(candidates);
         return found != null ? found : fallback;
     }
+
+    /**
+     * Quita las barras finales de una URL base, para poder concatenar rutas sin acabar con "//".
+     *
+     * <p>Se hace recorriendo hacia atrás y no con {@code replaceAll("/+$", "")}: ese patrón obliga al
+     * motor de expresiones regulares a reintentar desde cada posición cuando la cadena NO termina en
+     * barra, que es el caso normal. Aquí se leen sólo los caracteres finales.
+     *
+     * <p>Estaba repetido en doce sitios (almacenamiento, índices de búsqueda, conectores de tienda,
+     * facturas, OAuth), unos con regex y otros con su propio helper privado. Una sola versión evita que
+     * media docena de copias se separen con el tiempo.
+     */
+    public static String stripTrailingSlashes(String url) {
+        if (url == null) {
+            return "";
+        }
+        int end = url.length();
+        while (end > 0 && url.charAt(end - 1) == '/') {
+            end--;
+        }
+        return url.substring(0, end);
+    }
 }

@@ -119,7 +119,6 @@ public class DeviceSessionService {
         return s.length() > 400 ? s.substring(0, 400) : s;
     }
 
-    /** Etiqueta legible "Navegador · SO" a partir del User-Agent. */
     /**
      * Navegadores, EN ORDEN DE COMPROBACIÓN. El orden no es cosmético: Edge y Opera se anuncian también
      * como Chrome, y Chrome se anuncia además como Safari, así que el más específico va primero.

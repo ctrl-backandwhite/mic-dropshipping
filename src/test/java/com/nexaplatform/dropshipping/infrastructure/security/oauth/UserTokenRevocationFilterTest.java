@@ -15,12 +15,14 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import java.util.Date;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.mock;
 
 /**
  * Revocación en caliente de los tokens de usuario del SPA.
@@ -69,7 +71,7 @@ class UserTokenRevocationFilterTest {
 
         assertThat(res.getStatus()).isEqualTo(401);
         assertThat(res.getContentAsString()).contains("TOKEN_REVOKED");
-        verify(chain, never()).doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        verify(chain, never()).doFilter(any(), any());
     }
 
     @Test
@@ -79,7 +81,7 @@ class UserTokenRevocationFilterTest {
         filter.doFilterInternal(request("/api/me/orders", token("user-1", 9999L)), res, chain);
 
         assertThat(res.getStatus()).isEqualTo(200);
-        verify(chain).doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        verify(chain).doFilter(any(), any());
     }
 
     @Test
@@ -88,7 +90,7 @@ class UserTokenRevocationFilterTest {
         filter.doFilterInternal(request("/api/catalog/products", token("user-1", 1000L)), res, chain);
 
         verifyNoInteractions(revocationService);
-        verify(chain).doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        verify(chain).doFilter(any(), any());
     }
 
     @Test
@@ -96,9 +98,6 @@ class UserTokenRevocationFilterTest {
         filter.doFilterInternal(request("/api/me/orders", null), res, chain);
 
         verifyNoInteractions(revocationService);
-        verify(chain).doFilter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        verify(chain).doFilter(any(), any());
     }
-
-    private static org.mockito.ArgumentMatcher<String> any() { return s -> true; }
-    private static <T> T eq(T v) { return org.mockito.ArgumentMatchers.eq(v); }
 }

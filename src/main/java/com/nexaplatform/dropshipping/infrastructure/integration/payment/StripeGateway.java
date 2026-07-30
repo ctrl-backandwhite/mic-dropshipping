@@ -80,7 +80,7 @@ public class StripeGateway implements PaymentGateway {
             log.info("Stripe mock-mode ({}) for payment {}", isOrder ? "order checkout" : "wallet recharge", p.getId());
             return new InitiateResult(mock, null, url, null, null, null, Map.of("mock", true));
         }
-        Stripe.apiKey = secretKey;
+        applyApiKey(secretKey);
         // Recarga de wallet Y pago de pedido usan el MISMO Stripe Checkout hospedado (redirect), para que
         // la tarjeta se introduzca en la página segura de Stripe y el cobro se confirme al volver.
         return initiateCheckoutSession(p);
@@ -157,7 +157,7 @@ public class StripeGateway implements PaymentGateway {
             return Map.of(STATUS, "paid", "mock", true);
         }
         try {
-            Stripe.apiKey = secretKey;
+            applyApiKey(secretKey);
             Session session = Session.retrieve(sessionId);
             String paymentStatus = session.getPaymentStatus(); // "paid" | "unpaid" | "no_payment_required"
             Map<String, Object> out = new HashMap<>();
@@ -180,7 +180,7 @@ public class StripeGateway implements PaymentGateway {
             return Map.of(STATUS, "succeeded", "mock", true);
         }
         try {
-            Stripe.apiKey = secretKey;
+            applyApiKey(secretKey);
             RefundCreateParams.Builder b = RefundCreateParams.builder().setPaymentIntent(paymentIntentId)
                     .putMetadata(PLATFORM, platformId).putMetadata("env", platformEnv);
             if (amountCents > 0) {
@@ -218,5 +218,19 @@ public class StripeGateway implements PaymentGateway {
 
     private boolean isActive() {
         return enabled && secretKey != null && !secretKey.isBlank();
+    }
+
+    /**
+     * Publica la clave secreta en la configuración GLOBAL del SDK de Stripe, que es de donde la leen sus
+     * métodos estáticos ({@code Session.create}, {@code Refund.create}…). Se centraliza aquí, en un único
+     * método estático, en vez de repetir la asignación en cada llamada: así hay un solo punto que toca
+     * estado global y queda explicado por qué.
+     *
+     * <p>La alternativa sería pasar {@code RequestOptions} con la clave en cada llamada, que evitaría el
+     * estado global por completo; obliga a cambiar la sobrecarga usada en las tres llamadas y a rehacer
+     * los stubs estáticos de las pruebas, así que se deja como mejora aparte.
+     */
+    private static synchronized void applyApiKey(String key) {
+        Stripe.apiKey = key;
     }
 }

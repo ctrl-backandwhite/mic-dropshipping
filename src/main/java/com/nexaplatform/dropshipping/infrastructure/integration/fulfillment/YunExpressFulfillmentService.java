@@ -968,12 +968,23 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
                     response.path("code").asText(""), response.path("msg").asText(""));
             return new TrackingSnapshot(OrderStatus.FORWARDED, List.of());
         }
-        JsonNode result = response.path(RESULT);
-        JsonNode entry = result.isArray() ? (result.isEmpty() ? null : result.get(0)) : result;
+        JsonNode entry = firstTrackEntry(response.path(RESULT));
         if (entry == null) {
             return new TrackingSnapshot(OrderStatus.FORWARDED, List.of());
         }
         return toSnapshot(entry.path("track_Info").path("track_events"), countryCode);
+    }
+
+    /**
+     * Trazabilidad del envío consultado. YunExpress devuelve unas veces un array (una entrada por número
+     * consultado) y otras el objeto suelto; como aquí siempre se pregunta por UN número, se toma la
+     * primera entrada. Un array vacío es "sin trazabilidad todavía" → {@code null}.
+     */
+    private static JsonNode firstTrackEntry(JsonNode result) {
+        if (!result.isArray()) {
+            return result;
+        }
+        return result.isEmpty() ? null : result.get(0);
     }
 
     /**

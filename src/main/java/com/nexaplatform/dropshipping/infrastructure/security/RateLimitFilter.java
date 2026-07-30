@@ -119,8 +119,24 @@ public class RateLimitFilter extends OncePerRequestFilter {
      * El plan viene del claim `plan` del JWT del partner.
      */
     private RateRule ruleFor(String path, String plan) {
-        // Auth abuse-prevention buckets (per-IP). El login real es /api/auth/login (no /login):
-        // sin esta regla la fuerza bruta/credential-stuffing pasaba sin freno.
+        // El orden importa: primero las reglas de AUTH (las más restrictivas y las que frenan el abuso),
+        // luego las de partner por client_id y por último las públicas por IP, que son las más generosas.
+        // Si se invirtiera, una ruta de auth caería en el cubo público de 100/min y quedaría sin freno.
+        RateRule auth = authRule(path);
+        if (auth != null) {
+            return auth;
+        }
+        RateRule partner = partnerRule(path, plan);
+        if (partner != null) {
+            return partner;
+        }
+        return publicRule(path);
+    }
+
+    /** Cubos anti-abuso de autenticación, todos por IP. */
+    private RateRule authRule(String path) {
+        // El login real es /api/auth/login (no /login): sin esta regla la fuerza bruta/credential-stuffing
+        // pasaba sin freno.
         if (path.equals("/api/auth/login"))
             return new RateRule("auth.login.api", Scope.IP, 10, Duration.ofMinutes(1));
         if (path.equals("/api/auth/refresh"))
@@ -135,8 +151,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return new RateRule("auth.login", Scope.IP, 20, Duration.ofMinutes(1));
         if (path.equals("/oauth2/token"))
             return new RateRule("oauth.token", Scope.IP, 30, Duration.ofMinutes(1));
+        return null;
+    }
 
-        // Partner API per-client buckets — keyed by JWT subject (client_id), CAPACIDAD por plan.
+    /** Partner API per-client buckets — keyed by JWT subject (client_id), CAPACIDAD por plan. */
+    private RateRule partnerRule(String path, String plan) {
         long partnerCapacity = "paid".equalsIgnoreCase(plan) ? 5L : 1L;
         if (path.startsWith("/api/v1/partner/catalog"))
             return new RateRule("partner.catalog.read", Scope.PARTNER, partnerCapacity, Duration.ofMinutes(1));
@@ -144,7 +163,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return new RateRule("partner.orders.write", Scope.PARTNER, partnerCapacity, Duration.ofMinutes(1));
         if (path.startsWith("/api/v1/partner/shop"))
             return new RateRule("partner.shop.sync", Scope.PARTNER, partnerCapacity, Duration.ofMinutes(1));
+        return null;
+    }
 
+    /** Webhooks entrantes y API pública (SPA y desarrolladores): cubos por IP. */
+    private RateRule publicRule(String path) {
         // Inbound webhooks signed with HMAC — per shop connection (path segment).
         if (path.startsWith("/api/v1/integrations/shops/"))
             return new RateRule("inbound.shop", Scope.PATH_SEG_3, 240, Duration.ofMinutes(1));

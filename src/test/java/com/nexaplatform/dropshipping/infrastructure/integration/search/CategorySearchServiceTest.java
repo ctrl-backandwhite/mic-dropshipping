@@ -98,7 +98,7 @@ class CategorySearchServiceTest {
         ArgumentCaptor<HttpRequest> captor = ArgumentCaptor.forClass(HttpRequest.class);
         verify(httpClient).send(captor.capture(), any(HttpResponse.BodyHandler.class));
         HttpRequest req = captor.getValue();
-        assertThat(req.uri().toString()).isEqualTo("http://localhost:9400/categories/_search");
+        assertThat(req.uri()).hasToString("http://localhost:9400/categories/_search");
         // We cannot read the publisher body directly here; the empty-hits path is what matters.
         assertThat(req.method()).isEqualTo("POST");
     }

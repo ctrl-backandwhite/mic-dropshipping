@@ -9,6 +9,7 @@ import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.FulfillmentResult;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.TrackingSnapshot;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CainiaoZoneRepository;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -67,8 +68,9 @@ class YunExpressMockGuardTest {
     @Test
     void enProduccionNoSeInventaUnaGuia() {
         YunExpressFulfillmentService service = serviceOn("pro");
+        Order pedido = pedido();
 
-        assertThatThrownBy(() -> service.createShipment(pedido()))
+        assertThatThrownBy(() -> service.createShipment(pedido))
                 .isInstanceOf(FulfillmentFailure.class)
                 .hasMessageContaining("no se generan envíos simulados");
     }
@@ -76,18 +78,20 @@ class YunExpressMockGuardTest {
     @Test
     void enPreproduccionTampoco() {
         YunExpressFulfillmentService service = serviceOn("pre");
+        Order pedido = pedido();
 
-        assertThatThrownBy(() -> service.createShipment(pedido())).isInstanceOf(FulfillmentFailure.class);
+        assertThatThrownBy(() -> service.createShipment(pedido)).isInstanceOf(FulfillmentFailure.class);
     }
 
     @Test
     void esUnFalloTransitorioParaQueSeRecupereSolOAlVolverElServicio() {
         YunExpressFulfillmentService service = serviceOn("pro");
+        Order pedido = pedido();
 
         // Transitorio a propósito: si mañana se arreglan las credenciales, el envío debe salir sin que
         // nadie tenga que rehabilitarlo a mano.
-        assertThatThrownBy(() -> service.createShipment(pedido()))
-                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.type(FulfillmentFailure.class))
+        assertThatThrownBy(() -> service.createShipment(pedido))
+                .asInstanceOf(InstanceOfAssertFactories.type(FulfillmentFailure.class))
                 .matches(f -> !f.isPermanent());
     }
 

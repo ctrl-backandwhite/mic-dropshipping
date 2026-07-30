@@ -32,6 +32,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserR
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -94,14 +95,11 @@ class OrderUseCaseImplTest {
     @Mock
     com.nexaplatform.dropshipping.infrastructure.integration.search.OrderSearchService orderSearchService;
 
+    @InjectMocks
     OrderUseCaseImpl orderUseCase;
 
     @BeforeEach
     void setup() {
-        orderUseCase = new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository, userRepository,
-                shopConnectionRepository, userAddressRepository, webhooks, walletUseCase, notificationsPublisher,
-                pricingService, affiliateProgramService, stockService, paymentUseCase, orderEmailService, cainiao, checkoutTotalsService,
-                operatorCommissionService, orderIndexer, orderSearchService);
         // Por defecto, sin envío en los tests de billing (no altera el total = subtotal).
         lenient().when(cainiao.quote(any(), any(FulfillmentProvider.ParcelSpec.class)))
                 .thenReturn(ShippingQuote.unsupported("XX"));
@@ -204,7 +202,8 @@ class OrderUseCaseImplTest {
         var req = new CreateOrderRequest("EXT", new AddressInput("X", null, null, "L1", null, "C", null, "00000", "ES"),
                 null, List.of(new OrderItemInput(productId, null, 1)), null);
 
-        assertThatThrownBy(() -> orderUseCase.createOrder(UUID.randomUUID(), null, req))
+        UUID partnerAppId = UUID.randomUUID();
+        assertThatThrownBy(() -> orderUseCase.createOrder(partnerAppId, null, req))
                 .isInstanceOf(NotFoundException.class);
     }
 

@@ -76,11 +76,32 @@ public class AdminAcademyController {
         if (b.get(TITLE) != null) {
             e.setTitle(b.get(TITLE).toString());
         }
-        String slug = b.get("slug") != null && !b.get("slug").toString().isBlank() ? b.get("slug").toString()
-                : (isNew && e.getTitle() != null ? SLUG.slugify(e.getTitle()) : e.getSlug());
+        String slug = resolveSlug(e, b, isNew);
         if (slug != null) {
             e.setSlug(slug);
         }
+        applyOptionalFields(e, b);
+        applyLocaleLevelAndPublished(e, b, isNew);
+    }
+
+    /**
+     * Slug a aplicar, por orden de preferencia: el que llega en la petición; si es un alta, el derivado
+     * del título; si no, el que ya tenía. Ese orden es lo importante: en una edición sin slug NO se
+     * regenera a partir del título, para no romper la URL pública de un curso ya publicado.
+     */
+    private String resolveSlug(AcademyCourseEntity e, Map<String, Object> b, boolean isNew) {
+        Object requested = b.get("slug");
+        if (requested != null && !requested.toString().isBlank()) {
+            return requested.toString();
+        }
+        if (isNew && e.getTitle() != null) {
+            return SLUG.slugify(e.getTitle());
+        }
+        return e.getSlug();
+    }
+
+    /** Campos opcionales: se tocan sólo si la petición trae la clave, de modo que se puedan vaciar. */
+    private void applyOptionalFields(AcademyCourseEntity e, Map<String, Object> b) {
         if (b.containsKey(DESCRIPTION)) {
             e.setDescription(str(b.get(DESCRIPTION)));
         }
@@ -96,6 +117,10 @@ public class AdminAcademyController {
         if (b.containsKey(VIDEOURL)) {
             e.setVideoUrl(str(b.get(VIDEOURL)));
         }
+    }
+
+    /** Idioma, nivel y publicación; en un alta sin valor se cae a los defectos (es / BEGINNER). */
+    private void applyLocaleLevelAndPublished(AcademyCourseEntity e, Map<String, Object> b, boolean isNew) {
         if (b.get(LOCALE) != null) {
             e.setLocale(b.get(LOCALE).toString());
         } else if (isNew && e.getLocale() == null) {

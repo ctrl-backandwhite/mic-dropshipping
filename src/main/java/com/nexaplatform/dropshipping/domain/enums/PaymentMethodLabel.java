@@ -10,9 +10,9 @@ import java.util.Locale;
 public enum PaymentMethodLabel {
 
     CARD("Tarjeta", "Card", "Cartão", "银行卡", "Carte", "Karte", "Carta", "Kaart"),
-    PAYPAL("PayPal", "PayPal", "PayPal", "PayPal", "PayPal", "PayPal", "PayPal", "PayPal"),
+    PAYPAL("PayPal"),
     WALLET("Billetera", "Wallet", "Carteira", "钱包", "Portefeuille", "Geldbörse", "Portafoglio", "Portemonnee"),
-    USDT("USDT", "USDT", "USDT", "USDT", "USDT", "USDT", "USDT", "USDT");
+    USDT("USDT");
 
     private final String es;
     private final String en;
@@ -22,6 +22,15 @@ public enum PaymentMethodLabel {
     private final String de;
     private final String it;
     private final String nl;
+
+    /**
+     * Marcas y símbolos (PayPal, USDT): el mismo texto en los 8 idiomas. Tenerlo como constructor —en vez
+     * de repetir el literal ocho veces— deja escrito en el código que NO se traducen a propósito.
+     */
+    PaymentMethodLabel(String sameInEveryLanguage) {
+        this(sameInEveryLanguage, sameInEveryLanguage, sameInEveryLanguage, sameInEveryLanguage,
+                sameInEveryLanguage, sameInEveryLanguage, sameInEveryLanguage, sameInEveryLanguage);
+    }
 
     PaymentMethodLabel(String es, String en, String pt, String zh, String fr, String de, String it, String nl) {
         this.es = es;

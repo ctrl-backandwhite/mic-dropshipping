@@ -30,6 +30,29 @@ public final class ProductSeoMetadata {
     /** Ideogramas CJK. Precompilado: el patrón equivalente con {@code matches()} retrocede sobre todo el texto. */
     private static final Pattern CJK = Pattern.compile("[\\u3400-\\u4DBF\\u4E00-\\u9FFF\\uF900-\\uFAFF]");
 
+    /**
+     * Ideogramas y puntuación de ancho completo que hay que borrar del texto traducido.
+     *
+     * <p>Los cuantificadores de los patrones de limpieza son posesivos ({@code *+}): la clase que va
+     * detrás nunca es un espacio, así que retroceder no puede salvar una coincidencia y sí hace que un
+     * título largo lleno de espacios cueste tiempo cuadrático. Se precompilan porque esto corre por cada
+     * traducción de cada producto en las cargas masivas del catálogo.
+     */
+    private static final Pattern CJK_AND_FULLWIDTH = Pattern
+            .compile("[\\u3000-\\u303F\\u3400-\\u4DBF\\u4E00-\\u9FFF\\uF900-\\uFAFF\\uFF00-\\uFFEF]");
+
+    /** Dos separadores seguidos: lo que queda cuando se vacía el trozo que había entre ambos. */
+    private static final Pattern DUPLICATE_SEPARATOR = Pattern.compile("\\s*+([|·,;])\\s*+([|·,;])");
+
+    /** Separador que queda colgando al final del texto. */
+    private static final Pattern TRAILING_SEPARATOR = Pattern.compile("\\s*+([|·])\\s*+$");
+
+    /** Separador que queda colgando al principio del texto. */
+    private static final Pattern LEADING_SEPARATOR = Pattern.compile("^\\s*+([|·,;])\\s*+");
+
+    /** Espacios consecutivos, para dejar el texto con separación simple. */
+    private static final Pattern BLANKS = Pattern.compile("\\s++");
+
     private ProductSeoMetadata() {
     }
 
@@ -97,11 +120,11 @@ public final class ProductSeoMetadata {
         }
         String t = text;
         if (!zh) {
-            t = t.replaceAll("[\\u3000-\\u303F\\u3400-\\u4DBF\\u4E00-\\u9FFF\\uF900-\\uFAFF\\uFF00-\\uFFEF]", " ");
-            t = t.replaceAll("\\s*([|·,;])\\s*([|·,;])", " $1 "); // separadores duplicados
-            t = t.replaceAll("\\s*([|·])\\s*$", "");             // separador colgante final
-            t = t.replaceAll("^\\s*([|·,;])\\s*", "");           // separador colgante inicial
+            t = CJK_AND_FULLWIDTH.matcher(t).replaceAll(" ");
+            t = DUPLICATE_SEPARATOR.matcher(t).replaceAll(" $1 ");
+            t = TRAILING_SEPARATOR.matcher(t).replaceAll("");
+            t = LEADING_SEPARATOR.matcher(t).replaceAll("");
         }
-        return t.replaceAll("\\s+", " ").trim();
+        return BLANKS.matcher(t).replaceAll(" ").trim();
     }
 }

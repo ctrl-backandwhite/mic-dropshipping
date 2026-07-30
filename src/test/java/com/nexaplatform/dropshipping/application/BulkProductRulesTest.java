@@ -172,8 +172,9 @@ class BulkProductRulesTest {
     @Test
     void faltarUnAtributoObligatorioRechazaLaFilaDiciendoCualYDeQueCategoria() {
         BulkProductDtoIn r = row();
-        assertThatThrownBy(() -> BulkProductRules.assertRequiredAttributes(r,
-                List.of(attr("material", true)), "moda-relojes"))
+        List<CategoryAttributeSchemaEntity> schema = List.of(attr("material", true));
+
+        assertThatThrownBy(() -> BulkProductRules.assertRequiredAttributes(r, schema, "moda-relojes"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("material")
                 .hasMessageContaining("moda-relojes");
@@ -193,9 +194,9 @@ class BulkProductRulesTest {
         // Rellenar la clave con "" pasaría el filtro y dejaría la ficha igual de incompleta.
         BulkProductDtoIn r = row();
         r.setAttributes(List.of(given("material", "   ")));
+        List<CategoryAttributeSchemaEntity> schema = List.of(attr("material", true));
 
-        assertThatThrownBy(() -> BulkProductRules.assertRequiredAttributes(r,
-                List.of(attr("material", true)), "moda-relojes"))
+        assertThatThrownBy(() -> BulkProductRules.assertRequiredAttributes(r, schema, "moda-relojes"))
                 .isInstanceOf(BusinessException.class);
     }
 
@@ -226,8 +227,7 @@ class BulkProductRulesTest {
 
         String id = BulkProductRules.externalIdOf(r, "x".repeat(400), s -> s, 1234567890123L);
 
-        assertThat(id).hasSizeLessThanOrEqualTo(BulkProductRules.MAX_EXTERNAL_ID);
-        assertThat(id).startsWith("BULK-");
+        assertThat(id).hasSizeLessThanOrEqualTo(BulkProductRules.MAX_EXTERNAL_ID).startsWith("BULK-");
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.shop;
 
+import com.nexaplatform.dropshipping.application.service.Texts;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.domain.model.ShopConnection;
@@ -90,12 +91,13 @@ public class WooCommerceConnector implements ShopConnector {
         if (handle == null || handle.isBlank()) {
             return null;
         }
-        String h = handle.trim().replaceAll("/++$", "");
+        String h = Texts.stripTrailingSlashes(handle.trim());
         if (!h.startsWith("http://") && !h.startsWith("https://")) {
             h = "https://" + h;
         }
         return h;
     }
+
 
     private String truncate(String s) {
         if (s == null) {

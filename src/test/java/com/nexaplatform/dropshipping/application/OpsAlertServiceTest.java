@@ -143,9 +143,9 @@ class OpsAlertServiceTest {
         verify(emailQueue).enqueue(anyString(), subject.capture(), anyString(), vars.capture());
         String body = vars.getValue().get("body").toString();
 
-        assertThat(body).contains("no cumple las reglas del canal contratado");
         // El texto original se conserva, pero etiquetado y separado del mensaje en español.
-        assertThat(body).contains("Detalle técnico").contains("Order rule verification failed");
+        assertThat(body).contains("no cumple las reglas del canal contratado")
+                .contains("Detalle técnico").contains("Order rule verification failed");
         // El asunto identifica el PEDIDO, no la causa técnica truncada.
         assertThat(subject.getValue()).contains("NX-1").doesNotContain("Order rule verification");
     }

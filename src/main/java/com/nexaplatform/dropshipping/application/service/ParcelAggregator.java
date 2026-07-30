@@ -60,36 +60,49 @@ public final class ParcelAggregator {
         return new ParcelSpec(Math.max(1, weightGrams), maxLengthMm, maxWidthMm, totalHeightMm, withBattery);
     }
 
-    /** Peso a facturar por unidad: peso del paquete de la variante, luego neto, luego el del producto. */
+    /**
+     * Peso a facturar por unidad. El orden de preferencia es lo importante y va de lo más concreto a lo
+     * más general: peso del PAQUETE de la variante (lo que de verdad se factura), su peso neto, los dos
+     * equivalentes del producto y, si nada de eso hay, la variante más pesada del catálogo.
+     */
     public static int unitWeightGrams(ProductEntity product, ProductVariantEntity variant) {
-        if (variant != null) {
-            if (variant.getPackageWeightGrams() != null && variant.getPackageWeightGrams() > 0) {
-                return variant.getPackageWeightGrams();
-            }
-            if (variant.getWeightGrams() != null && variant.getWeightGrams() > 0) {
-                return variant.getWeightGrams();
-            }
+        int fromVariant = variant == null ? 0
+                : firstPositive(variant.getPackageWeightGrams(), variant.getWeightGrams());
+        if (fromVariant > 0) {
+            return fromVariant;
         }
-        if (product.getPackageWeightGrams() != null && product.getPackageWeightGrams() > 0) {
-            return product.getPackageWeightGrams();
-        }
-        if (product.getWeightGrams() != null && product.getWeightGrams() > 0) {
-            return product.getWeightGrams();
+        int fromProduct = firstPositive(product.getPackageWeightGrams(), product.getWeightGrams());
+        if (fromProduct > 0) {
+            return fromProduct;
         }
         // El peso del catálogo vive en las VARIANTES (la báscula es por SKU), no a nivel producto. Si aún
         // no hay variante elegida —vista previa del envío antes de escoger color/talla— se toma la más
         // pesada en vez del valor por defecto: es el dato real del producto y no infravalora el flete.
-        int heaviestVariant = 0;
-        if (product.getVariants() != null) {
-            for (ProductVariantEntity v : product.getVariants()) {
-                Integer grams = v.getPackageWeightGrams() != null && v.getPackageWeightGrams() > 0
-                        ? v.getPackageWeightGrams() : v.getWeightGrams();
-                if (grams != null && grams > heaviestVariant) {
-                    heaviestVariant = grams;
-                }
-            }
-        }
+        int heaviestVariant = heaviestVariantGrams(product);
         return heaviestVariant > 0 ? heaviestVariant : FALLBACK_WEIGHT_GRAMS;
+    }
+
+    /** Peso de la variante más pesada del producto, o 0 si ninguna lo tiene medido. */
+    private static int heaviestVariantGrams(ProductEntity product) {
+        if (product.getVariants() == null) {
+            return 0;
+        }
+        int heaviest = 0;
+        for (ProductVariantEntity v : product.getVariants()) {
+            heaviest = Math.max(heaviest, firstPositive(v.getPackageWeightGrams(), v.getWeightGrams()));
+        }
+        return heaviest;
+    }
+
+    /**
+     * El primero de los dos valores que sea estrictamente positivo, o 0 si ninguno lo es. Un 0 o un nulo
+     * significan "sin medir": las medidas y pesos del catálogo se siembran a cero cuando faltan.
+     */
+    private static int firstPositive(Integer preferred, Integer fallback) {
+        if (preferred != null && preferred > 0) {
+            return preferred;
+        }
+        return fallback != null && fallback > 0 ? fallback : 0;
     }
 
     /** ¿El producto lleva batería? Determina el {@code PackageType} de YunExpress (0 普货 / 1 带电). */
@@ -98,10 +111,8 @@ public final class ParcelAggregator {
         return type != null && !type.isBlank() && !"NONE".equalsIgnoreCase(type.trim());
     }
 
+    /** Medida del embalaje: manda la del producto (es la del paquete) y la variante solo suple. */
     private static int dimension(Integer productValue, Integer variantValue) {
-        if (productValue != null && productValue > 0) {
-            return productValue;
-        }
-        return variantValue != null && variantValue > 0 ? variantValue : 0;
+        return firstPositive(productValue, variantValue);
     }
 }

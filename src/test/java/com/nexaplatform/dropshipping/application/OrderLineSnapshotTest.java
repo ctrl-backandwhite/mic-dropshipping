@@ -319,8 +319,9 @@ class OrderLineSnapshotTest {
 
     @Test
     void unCarritoVacioNoCreaPedido() {
-        assertThatThrownBy(() -> subject.createOrder(null, null,
-                new CreateOrderRequest("EXT-1", address(), null, List.of(), null)))
+        CreateOrderRequest sinLineas = new CreateOrderRequest("EXT-1", address(), null, List.of(), null);
+
+        assertThatThrownBy(() -> subject.createOrder(null, null, sinLineas))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("at least one item");
     }

@@ -59,8 +59,7 @@ class OrderEmailServiceTest {
         verify(emailQueue).enqueue(eq("buyer@x.com"), isNull(), eq("Invoice NX-100"), eq("emails/invoice"),
                 varsCap.capture(), anyMap());
         Map<String, Object> vars = varsCap.getValue();
-        assertThat(vars).containsEntry("paymentMethod", "PayPal");
-        assertThat(vars).containsEntry("ctaLabel", "Ver pedido y factura");
+        assertThat(vars).containsEntry("paymentMethod", "PayPal").containsEntry("ctaLabel", "Ver pedido y factura");
     }
 
     @Test
@@ -183,11 +182,11 @@ class OrderEmailServiceTest {
         verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Reembolso procesado"), eq("emails/notification"),
                 varsCap.capture());
         List<String[]> details = (List<String[]>) varsCap.getValue().get("details");
-        assertThat(details).isNotNull();
         // Nº de pedido, importe y destino (tarjeta original) presentes en el bloque.
-        assertThat(details).anySatisfy(r -> assertThat(r[1]).isEqualTo("NX-401"));
-        assertThat(details).anySatisfy(r -> assertThat(r[1]).isEqualTo("27,80 €"));
-        assertThat(details).anySatisfy(r -> assertThat(r[1]).contains("Tarjeta original"));
+        assertThat(details).isNotNull()
+                .anySatisfy(r -> assertThat(r[1]).isEqualTo("NX-401"))
+                .anySatisfy(r -> assertThat(r[1]).isEqualTo("27,80 €"))
+                .anySatisfy(r -> assertThat(r[1]).contains("Tarjeta original"));
     }
 
     @Test

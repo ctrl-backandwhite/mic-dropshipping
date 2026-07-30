@@ -284,9 +284,20 @@ public class AffiliateProgramService {
         return codeRepo.save(c);
     }
 
+    /**
+     * Semilla legible del código de referido. El orden importa: se prefiere el nombre visible por ser
+     * lo que el afiliado reconoce en su enlace y solo se cae al email si no tiene ninguno; sin usuario
+     * queda el genérico {@code "ref"}.
+     */
+    private static String codeSeed(UserEntity u) {
+        if (u == null) {
+            return "ref";
+        }
+        return u.getDisplayName() == null ? u.getEmail() : u.getDisplayName();
+    }
+
     private String generateUniqueCode(UserEntity u) {
-        String base = (u == null ? "ref" : (u.getDisplayName() == null ? u.getEmail() : u.getDisplayName()))
-                .toLowerCase().replaceAll("[^a-z0-9]", "");
+        String base = codeSeed(u).toLowerCase().replaceAll("[^a-z0-9]", "");
         if (base.isBlank()) base = "ref";
         if (base.length() > 8) base = base.substring(0, 8);
         for (int i = 0; i < 12; i++) {
@@ -315,12 +326,13 @@ public class AffiliateProgramService {
             return Optional.empty();
         }
         Instant now = Instant.now();
-        var cfg = config();
+        AffiliateProgramConfigEntity cfg = config();
         // DROP-652: de-duplicate clicks — repeated clicks of the same code by the same visitor
         // within the dedup window refresh the existing attribution instead of inflating metrics.
         if (visitorToken != null && !visitorToken.isBlank()) {
             Instant since = now.minus(Duration.ofMinutes(Math.max(1, cfg.getClickDedupMinutes())));
-            var recent = attrRepo.findTopByVisitorTokenAndExpiresAtAfterOrderByClickedAtDesc(visitorToken, now);
+            Optional<AffiliateAttributionEntity> recent = attrRepo
+                    .findTopByVisitorTokenAndExpiresAtAfterOrderByClickedAtDesc(visitorToken, now);
             if (recent.isPresent() && rc.getId().equals(recent.get().getReferralCodeId())
                     && recent.get().getClickedAt() != null && recent.get().getClickedAt().isAfter(since)) {
                 return recent; // duplicate click within the window → no new attribution, no click bump
@@ -432,26 +444,14 @@ public class AffiliateProgramService {
                 .affiliateId(affiliate.getId()).referralCodeId(attr.getReferralCodeId()).referredUserId(userId)
                 .orderId(orderId).baseAmountCents(subtotalCents).currency(ccy).status("CONFIRMED").build());
 
-        var cfg = config();
+        AffiliateProgramConfigEntity cfg = config();
         BigDecimal pct = affiliate.getCommissionPercentOverride() != null
                 ? affiliate.getCommissionPercentOverride()
                 : cfg.getDefaultPercent();
         long amount = BigDecimal.valueOf(subtotalCents).multiply(pct).divide(BigDecimal.valueOf(100), 0,
                 RoundingMode.HALF_UP).longValue();
 
-        // DROP-652: cap on commission per affiliate within the period → flag for manual REVIEW
-        // instead of auto-approving when the limit is exceeded.
-        boolean review = false;
-        if (cfg.getMaxCommissionPeriodCents() > 0) {
-            Instant since = Instant.now().minus(Duration.ofDays(Math.max(1, cfg.getMaxPeriodDays())));
-            long periodSum = commissionRepo.findByAffiliateIdOrderByCreatedAtDesc(affiliate.getId()).stream()
-                    .filter(c -> c.getCreatedAt() != null && c.getCreatedAt().isAfter(since))
-                    .filter(c -> !REJECTED.equals(c.getStatus()))
-                    .mapToLong(AffiliateCommissionEntity::getAmountCents).sum();
-            if (periodSum + amount > cfg.getMaxCommissionPeriodCents()) {
-                review = true;
-            }
-        }
+        boolean review = exceedsPeriodCap(cfg, affiliate.getId(), amount);
         String status = review ? "REVIEW" : PENDING;
         commissionRepo.save(AffiliateCommissionEntity.builder().affiliateId(affiliate.getId())
                 .conversionId(conv.getId()).amountCents(amount).currency(ccy).percentage(pct).status(status)
@@ -465,7 +465,31 @@ public class AffiliateProgramService {
         log.info("::> [AFFILIATE] Conversion {} → commission {} {} ({}) for affiliate {}", conv.getId(), amount, ccy,
                 status, affiliate.getId());
 
-        // DROP-653: notify the affiliate (first sale / commission earned) and staff if flagged.
+        notifyConversion(affiliate, firstConversion, review);
+    }
+
+    /**
+     * DROP-652: ¿la comisión nueva pasa del tope acumulado del periodo? Si lo pasa, la comisión queda en
+     * REVIEW para revisión manual en vez de auto-aprobarse (freno anti-fraude).
+     *
+     * <p>Las RECHAZADAS no cuentan para el acumulado: si contaran, un afiliado marcado por fraude
+     * arrastraría su historial rechazado y nunca volvería a cobrar automáticamente. Un tope a cero
+     * significa "sin límite" y se cortocircuita sin consultar la base de datos.
+     */
+    private boolean exceedsPeriodCap(AffiliateProgramConfigEntity cfg, UUID affiliateId, long amount) {
+        if (cfg.getMaxCommissionPeriodCents() <= 0) {
+            return false;
+        }
+        Instant since = Instant.now().minus(Duration.ofDays(Math.max(1, cfg.getMaxPeriodDays())));
+        long periodSum = commissionRepo.findByAffiliateIdOrderByCreatedAtDesc(affiliateId).stream()
+                .filter(c -> c.getCreatedAt() != null && c.getCreatedAt().isAfter(since))
+                .filter(c -> !REJECTED.equals(c.getStatus()))
+                .mapToLong(AffiliateCommissionEntity::getAmountCents).sum();
+        return periodSum + amount > cfg.getMaxCommissionPeriodCents();
+    }
+
+    /** DROP-653: avisa al afiliado (primera venta / comisión nueva) y al staff si quedó en revisión. */
+    private void notifyConversion(AffiliateEntity affiliate, boolean firstConversion, boolean review) {
         UUID affUser = affiliate.getUser() != null ? affiliate.getUser().getId() : null;
         if (firstConversion) {
             notify(affUser, "AFFILIATE_FIRST_CONVERSION", "¡Tu primera venta referida!",
@@ -680,8 +704,11 @@ public class AffiliateProgramService {
     /** Admin direct settlement: creates an approved payout and executes it in one step. */
     @Transactional
     public long payoutApproved(UUID affiliateId, boolean force) {
-        AffiliateEntity affiliate = affiliateRepo.findById(affiliateId).orElseThrow(
-                () -> new NotFoundException(AFFILIATE_NOT_FOUND));
+        // Guard de existencia: 404 antes de tocar comisiones. No se guarda la entidad porque quien
+        // ejecuta el pago es approvePayout, que la relee por su cuenta.
+        if (affiliateRepo.findById(affiliateId).isEmpty()) {
+            throw new NotFoundException(AFFILIATE_NOT_FOUND);
+        }
         long approvedTotal = commissionRepo.findByAffiliateIdAndStatus(affiliateId, APPROVED).stream()
                 .mapToLong(AffiliateCommissionEntity::getAmountCents).sum();
         if (approvedTotal <= 0) {
@@ -730,32 +757,56 @@ public class AffiliateProgramService {
         }
         AffiliateEntity a = affiliateRepo.findByUser_Id(userId).orElseThrow(
                 () -> new NotFoundException(AFFILIATE_NOT_FOUND));
-        String iban = req.iban() == null ? null : req.iban().replaceAll("\\s", "").toUpperCase();
-        if (iban != null && !iban.isBlank() && !IbanValidator.isValid(iban)) {
+        String iban = normalizedIban(req.iban());
+        String email = normalizedPaypalEmail(req.paypalEmail());
+        mergePayoutProfile(a, req, iban, email);
+        affiliateRepo.save(a);
+    }
+
+    /** IBAN sin espacios y en mayúsculas; si viene con contenido y no valida, se rechaza la operación. */
+    private static String normalizedIban(String raw) {
+        String iban = raw == null ? null : raw.replaceAll("\\s", "").toUpperCase();
+        if (hasText(iban) && !IbanValidator.isValid(iban)) {
             throw new BusinessException("INVALID_IBAN", "IBAN no válido");
         }
-        String email = req.paypalEmail() == null ? null : req.paypalEmail().trim();
-        if (email != null && !email.isBlank() && !PAYOUT_EMAIL.matcher(email).matches()) {
+        return iban;
+    }
+
+    /** Email de PayPal recortado; si viene con contenido y no valida, se rechaza la operación. */
+    private static String normalizedPaypalEmail(String raw) {
+        String email = raw == null ? null : raw.trim();
+        if (hasText(email) && !PAYOUT_EMAIL.matcher(email).matches()) {
             throw new BusinessException("INVALID_EMAIL", "Email de PayPal no válido");
         }
-        // Semántica de MERGE (no reemplazo total): solo se actualiza el campo que llega con valor. Así, si el
-        // afiliado reguarda su perfil sin reteclear el IBAN (que se relee enmascarado), su IBAN NO se borra.
-        if (req.bankHolder() != null && !req.bankHolder().isBlank()) {
+        return email;
+    }
+
+    /**
+     * Semántica de MERGE (no reemplazo total): solo se actualiza el campo que llega con valor. Así, si el
+     * afiliado reguarda su perfil sin reteclear el IBAN (que se relee enmascarado), su IBAN NO se borra.
+     */
+    private static void mergePayoutProfile(AffiliateEntity a, PayoutProfileUpdateRequest req, String iban,
+            String email) {
+        if (hasText(req.bankHolder())) {
             a.setBankHolder(req.bankHolder().trim());
         }
-        if (iban != null && !iban.isBlank()) {
+        if (hasText(iban)) {
             a.setBankIban(iban);
         }
-        if (req.bic() != null && !req.bic().isBlank()) {
+        if (hasText(req.bic())) {
             a.setBankBic(req.bic().trim());
         }
-        if (email != null && !email.isBlank()) {
+        if (hasText(email)) {
             a.setPaypalEmail(email);
         }
         if (req.preferredMethod() != null && req.preferredMethod().matches("WALLET|BANK|PAYPAL")) {
             a.setPayoutMethod(req.preferredMethod());
         }
-        affiliateRepo.save(a);
+    }
+
+    /** Un campo "llega con valor" cuando no es nulo y no está en blanco: lo demás se ignora en el merge. */
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private static String maskIban(String iban) {

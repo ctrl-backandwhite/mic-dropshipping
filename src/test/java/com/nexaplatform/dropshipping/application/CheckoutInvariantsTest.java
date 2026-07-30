@@ -33,6 +33,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserR
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -109,18 +110,14 @@ class CheckoutInvariantsTest {
     @Mock
     OrderSearchService orderSearchService;
 
+    @InjectMocks
     private OrderUseCaseImpl subject;
 
     private final UUID userId = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private final UUID productId = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
     @BeforeEach
-    void buildSubject() {
-        subject = new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository,
-                userRepository, shopConnectionRepository, userAddressRepository, webhooks, walletUseCase,
-                notificationsPublisher, pricingService, affiliateProgramService, stockService, paymentUseCase,
-                orderEmailService, fulfillment, checkoutTotalsService, operatorCommissionService, orderIndexer,
-                orderSearchService);
+    void destinoSoportadoPorDefecto() {
         when(fulfillment.isSupported(anyString())).thenReturn(true);
     }
 
@@ -225,9 +222,9 @@ class CheckoutInvariantsTest {
     void unaDireccionGuardadaQueNoExisteNoCreaPedido() {
         UUID addressId = UUID.randomUUID();
         when(userAddressRepository.findById(addressId)).thenReturn(Optional.empty());
+        MeCheckoutDtoIn req = request("WALLET", addressId);
 
-        assertThatThrownBy(() -> subject.checkout(userId, request("WALLET", addressId), null))
-                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> subject.checkout(userId, req, null)).isInstanceOf(NotFoundException.class);
     }
 
     // ---------------------------------------------------------------- método de pago

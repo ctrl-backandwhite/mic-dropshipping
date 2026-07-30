@@ -62,7 +62,8 @@ class UserDetailsServiceTest {
     @Test
     void throws_when_unknown() {
         when(userRepository.findByEmail("missing@x.com")).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> new DropshippingUserDetailsService(userRepository).loadUserByUsername("missing@x.com"))
+        DropshippingUserDetailsService service = new DropshippingUserDetailsService(userRepository);
+        assertThatThrownBy(() -> service.loadUserByUsername("missing@x.com"))
                 .isInstanceOf(UsernameNotFoundException.class);
     }
 }

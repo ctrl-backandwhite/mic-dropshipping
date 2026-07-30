@@ -46,6 +46,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -111,12 +112,10 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             throw new BusinessException("Maximum recharge is $1,000,000 USD");
 
         // idempotency
-        if (idempotencyKey != null) {
-            var existing = paymentRepository.findByIdempotencyKey(idempotencyKey);
-            if (existing.isPresent()) {
-                log.info("Returning existing payment for idempotency-key={}", idempotencyKey);
-                return existing.get();
-            }
+        Optional<Payment> existing = existingByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent()) {
+            log.info("Returning existing payment for idempotency-key={}", idempotencyKey);
+            return existing.get();
         }
 
         if (userRepository.findById(userId).isEmpty())
@@ -128,7 +127,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         // liquida en USD y USDT en USDT. El saldo del wallet SIEMPRE se acredita en USD canónico.
         String displayCcy = currencyDisplay != null && !currencyDisplay.isBlank() ? currencyDisplay : "USD";
         boolean stripeEur = method == PaymentMethod.CARD && "EUR".equalsIgnoreCase(displayCcy);
-        String settlementCcy = method == PaymentMethod.USDT ? "USDT" : (stripeEur ? "EUR" : "USD");
+        String settlementCcy = settlementCurrencyFor(method, stripeEur);
         BigDecimal settlementAmount = rechargeSettlementAmount(settlementCcy, displayCcy, usdCents, amountDisplay);
 
         Payment p = Payment.builder().userId(userId).walletId(wallet.getId()).method(method)
@@ -138,17 +137,12 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         p = paymentRepository.save(p);
 
         PaymentGateway gw = resolveGateway(method);
-        var result = initiateOrAlert(gw, p.getId(), "recarga de saldo");
+        PaymentGateway.InitiateResult result = initiateOrAlert(gw, p.getId(), "recarga de saldo");
 
         p.setProvider(gw.providerName());
         p.setProviderRef(result.providerRef());
         p.setProviderResponse(result.raw() != null ? result.raw() : new HashMap<>());
-        if (result.cryptoAddress() != null) {
-            p.setCryptoAddress(result.cryptoAddress());
-            p.setCryptoChain(result.cryptoChain());
-            p.setQrUrl(result.qrUrl());
-            p.setCryptoExpiresAt(Instant.now().plus(Duration.ofMinutes(30)));
-        }
+        applyCryptoDetails(p, result);
         p.setStatus(PaymentStatus.REQUIRES_ACTION);
         p = paymentRepository.save(p);
 
@@ -157,18 +151,60 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
         // attach client metadata to provider_response so the controller can return it
         Map<String, Object> meta = new HashMap<>(p.getProviderResponse());
-        if (result.clientSecret() != null)
-            meta.put("clientSecret", result.clientSecret());
-        if (result.approveUrl() != null)
-            meta.put("approveUrl", result.approveUrl());
-        if (result.cryptoAddress() != null) {
-            meta.put("cryptoAddress", result.cryptoAddress());
-            meta.put("cryptoChain", result.cryptoChain());
-            meta.put("qrUrl", result.qrUrl());
-            meta.put("expiresAt", p.getCryptoExpiresAt() != null ? p.getCryptoExpiresAt().toString() : null);
-        }
+        putRedirectMetadata(meta, result);
+        putCryptoMetadata(meta, result, p.getCryptoExpiresAt());
         p.setProviderResponse(meta);
         return paymentRepository.save(p);
+    }
+
+    /**
+     * Moneda en la que se liquida el cobro. El orden de comprobación es el importante: USDT manda sobre
+     * todo lo demás (la cripto se liquida en su propia moneda); solo después se mira si Stripe puede
+     * cobrar en EUR. Cualquier otro caso liquida en USD, la divisa canónica del sistema.
+     */
+    private static String settlementCurrencyFor(PaymentMethod method, boolean stripeEur) {
+        if (method == PaymentMethod.USDT) {
+            return "USDT";
+        }
+        return stripeEur ? "EUR" : "USD";
+    }
+
+    /** Pago ya creado con esa Idempotency-Key, si lo hay. Sin clave no hay nada que reutilizar. */
+    private Optional<Payment> existingByIdempotencyKey(String idempotencyKey) {
+        return idempotencyKey == null ? Optional.empty() : paymentRepository.findByIdempotencyKey(idempotencyKey);
+    }
+
+    /** Fija en el pago la dirección cripto que devolvió la pasarela y su vencimiento (30 min). */
+    private static void applyCryptoDetails(Payment p, PaymentGateway.InitiateResult result) {
+        if (result.cryptoAddress() == null) {
+            return;
+        }
+        p.setCryptoAddress(result.cryptoAddress());
+        p.setCryptoChain(result.cryptoChain());
+        p.setQrUrl(result.qrUrl());
+        p.setCryptoExpiresAt(Instant.now().plus(Duration.ofMinutes(30)));
+    }
+
+    /** Datos que el front necesita para terminar el pago fuera de la app (secret de Stripe, URL de PayPal). */
+    private static void putRedirectMetadata(Map<String, Object> meta, PaymentGateway.InitiateResult result) {
+        if (result.clientSecret() != null) {
+            meta.put("clientSecret", result.clientSecret());
+        }
+        if (result.approveUrl() != null) {
+            meta.put("approveUrl", result.approveUrl());
+        }
+    }
+
+    /** Datos de la dirección cripto (solo USDT); {@code expiresAt} es el vencimiento ya fijado en el pago. */
+    private static void putCryptoMetadata(Map<String, Object> meta, PaymentGateway.InitiateResult result,
+            Instant expiresAt) {
+        if (result.cryptoAddress() == null) {
+            return;
+        }
+        meta.put("cryptoAddress", result.cryptoAddress());
+        meta.put("cryptoChain", result.cryptoChain());
+        meta.put("qrUrl", result.qrUrl());
+        meta.put("expiresAt", expiresAt != null ? expiresAt.toString() : null);
     }
 
     /**
@@ -255,36 +291,52 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
         boolean isOrderPayment = ORDER_PAYMENT.equals(p.getPurpose()) && p.getOrderId() != null;
         if (isOrderPayment) {
-            // El cobro externo (Stripe/PayPal/USDT) ya capturó el dinero. Marcamos
-            // la orden como PAID para que el FulfillmentService la recoja.
-            Order order = orderRepository.findById(p.getOrderId()).orElse(null);
-            if (order != null && (order.getStatus() == OrderStatus.PENDING
-                    || order.getStatus() == OrderStatus.AWAITING_PAYMENT)) {
-                order.setStatus(OrderStatus.PAID);
-                order = orderRepository.save(order);
-                // Venta concretada: descontamos el stock de las variantes compradas (opción 2). Se hace
-                // solo en esta transición (idempotente: una 2ª confirmación encuentra la orden ya PAID).
-                stockService.deductForOrder(order);
-            }
-            auditLogger.log("order_payment.succeeded", p.getUserEmail(), Map.of(PAYMENTID, p.getId(), ORDERID,
-                    p.getOrderId(), METHOD, p.getMethod(), AMOUNT_USD_CENTS, p.getAmountUsdCents()));
-            // Email de confirmación de pago + FACTURA al comprador.
-            if (order != null) {
-                String email = p.getUserEmail() != null ? p.getUserEmail()
-                        : userRepository.findById(p.getUserId()).map(u -> u.getEmail()).orElse(null);
-                String locale = userRepository.findById(p.getUserId()).map(u -> u.getLanguage()).orElse(null);
-                orderEmailService.paymentConfirmed(order, email, locale,
-                        p.getMethod() != null ? p.getMethod().name() : null, p.getSettlementCurrency());
-            }
+            settleOrderPayment(p);
         } else {
-            // Recarga de wallet: acreditar saldo.
-            String idempKey = "deposit-" + p.getId();
-            walletUseCase.deposit(p.getUserId(), p.getAmountUsdCents(), p.getId(), idempKey,
-                    "Wallet recharge via " + p.getMethod());
-            auditLogger.log("payment.succeeded", p.getUserEmail(),
-                    Map.of(PAYMENTID, p.getId(), METHOD, p.getMethod(), AMOUNT_USD_CENTS, p.getAmountUsdCents()));
+            creditWalletRecharge(p);
         }
         return p;
+    }
+
+    /**
+     * El cobro externo (Stripe/PayPal/USDT) ya capturó el dinero: marcamos la orden como PAID para que el
+     * FulfillmentService la recoja, descontamos existencias y enviamos la factura.
+     *
+     * <p>El paso a PAID solo se da desde PENDING/AWAITING_PAYMENT. Así una segunda confirmación (webhook
+     * duplicado o reproceso) encuentra la orden ya avanzada, no la hace retroceder y NO vuelve a descontar
+     * stock; el audit y el email, en cambio, se emiten aunque la orden ya estuviera pagada.
+     */
+    private void settleOrderPayment(Payment p) {
+        Order order = orderRepository.findById(p.getOrderId()).orElse(null);
+        if (order != null && (order.getStatus() == OrderStatus.PENDING
+                || order.getStatus() == OrderStatus.AWAITING_PAYMENT)) {
+            order.setStatus(OrderStatus.PAID);
+            order = orderRepository.save(order);
+            stockService.deductForOrder(order);
+        }
+        auditLogger.log("order_payment.succeeded", p.getUserEmail(), Map.of(PAYMENTID, p.getId(), ORDERID,
+                p.getOrderId(), METHOD, p.getMethod(), AMOUNT_USD_CENTS, p.getAmountUsdCents()));
+        if (order != null) {
+            sendPaymentConfirmedEmail(p, order);
+        }
+    }
+
+    /** Email de confirmación de pago + FACTURA al comprador. */
+    private void sendPaymentConfirmedEmail(Payment p, Order order) {
+        String email = p.getUserEmail() != null ? p.getUserEmail()
+                : userRepository.findById(p.getUserId()).map(u -> u.getEmail()).orElse(null);
+        String locale = userRepository.findById(p.getUserId()).map(u -> u.getLanguage()).orElse(null);
+        orderEmailService.paymentConfirmed(order, email, locale,
+                p.getMethod() != null ? p.getMethod().name() : null, p.getSettlementCurrency());
+    }
+
+    /** Recarga de wallet: acreditar saldo. */
+    private void creditWalletRecharge(Payment p) {
+        String idempKey = "deposit-" + p.getId();
+        walletUseCase.deposit(p.getUserId(), p.getAmountUsdCents(), p.getId(), idempKey,
+                "Wallet recharge via " + p.getMethod());
+        auditLogger.log("payment.succeeded", p.getUserEmail(),
+                Map.of(PAYMENTID, p.getId(), METHOD, p.getMethod(), AMOUNT_USD_CENTS, p.getAmountUsdCents()));
     }
 
     @Override
@@ -361,34 +413,9 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         Map<String, Object> result;
 
         if (p.getMethod() == PaymentMethod.PAYPAL) {
-            PaymentGateway gw = resolveGateway(PaymentMethod.PAYPAL);
-            if (!(gw instanceof PayPalGateway pp)) {
-                throw new BusinessException("PayPal gateway not configured");
-            }
-            String captureId = PayPalGateway.extractCaptureId(pr);
-            if (captureId == null) {
-                captureId = p.getProviderRef(); // fallback (mock)
-            }
-            result = pp.refund(captureId, amountCents);
-            String status = String.valueOf(result.getOrDefault(STATUS, ""));
-            boolean ok = "COMPLETED".equalsIgnoreCase(status) || "PENDING".equalsIgnoreCase(status)
-                    || Boolean.TRUE.equals(result.get("mock"));
-            if (!ok) {
-                throw new BusinessException("PayPal refund failed: " + status);
-            }
+            result = refundWithPayPal(p, pr, amountCents);
         } else if (p.getMethod() == PaymentMethod.CARD) {
-            PaymentGateway gw = resolveGateway(PaymentMethod.CARD);
-            if (!(gw instanceof StripeGateway sg)) {
-                throw new BusinessException("Stripe gateway not configured");
-            }
-            String paymentIntentId = String.valueOf(pr.getOrDefault("paymentIntent", p.getProviderRef()));
-            result = sg.refund(paymentIntentId, amountCents);
-            String status = String.valueOf(result.getOrDefault(STATUS, ""));
-            boolean ok = "succeeded".equalsIgnoreCase(status) || "pending".equalsIgnoreCase(status)
-                    || Boolean.TRUE.equals(result.get("mock"));
-            if (!ok) {
-                throw new BusinessException("Stripe refund failed: " + status);
-            }
+            result = refundWithStripe(p, pr, amountCents);
         } else {
             throw new BusinessException("Refund not supported for method: " + p.getMethod());
         }
@@ -402,6 +429,51 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         auditLogger.log("order_payment.refunded", p.getUserEmail(),
                 Map.of(PAYMENTID, p.getId(), ORDERID, orderId, METHOD, p.getMethod(), AMOUNTCENTS, amountCents));
         return p;
+    }
+
+    /**
+     * Devolución por PayPal. Se reembolsa sobre la CAPTURA, no sobre la orden: si la respuesta guardada no
+     * trae el id de captura (pagos simulados) se cae al providerRef. Un estado que no sea COMPLETED ni
+     * PENDING aborta con excepción para que el pago NO se marque como devuelto sin que PayPal lo confirme.
+     */
+    private Map<String, Object> refundWithPayPal(Payment p, Map<String, Object> providerResponse, long amountCents) {
+        PaymentGateway gw = resolveGateway(PaymentMethod.PAYPAL);
+        if (!(gw instanceof PayPalGateway pp)) {
+            throw new BusinessException("PayPal gateway not configured");
+        }
+        String captureId = PayPalGateway.extractCaptureId(providerResponse);
+        if (captureId == null) {
+            captureId = p.getProviderRef(); // fallback (mock)
+        }
+        Map<String, Object> result = pp.refund(captureId, amountCents);
+        String status = String.valueOf(result.getOrDefault(STATUS, ""));
+        boolean ok = "COMPLETED".equalsIgnoreCase(status) || "PENDING".equalsIgnoreCase(status)
+                || Boolean.TRUE.equals(result.get("mock"));
+        if (!ok) {
+            throw new BusinessException("PayPal refund failed: " + status);
+        }
+        return result;
+    }
+
+    /**
+     * Devolución por Stripe: se reembolsa el PaymentIntent guardado en la respuesta del proveedor (con el
+     * providerRef como respaldo). Igual que en PayPal, un estado distinto de succeeded/pending aborta para
+     * no dar por devuelto un dinero que Stripe no ha devuelto.
+     */
+    private Map<String, Object> refundWithStripe(Payment p, Map<String, Object> providerResponse, long amountCents) {
+        PaymentGateway gw = resolveGateway(PaymentMethod.CARD);
+        if (!(gw instanceof StripeGateway sg)) {
+            throw new BusinessException("Stripe gateway not configured");
+        }
+        String paymentIntentId = String.valueOf(providerResponse.getOrDefault("paymentIntent", p.getProviderRef()));
+        Map<String, Object> result = sg.refund(paymentIntentId, amountCents);
+        String status = String.valueOf(result.getOrDefault(STATUS, ""));
+        boolean ok = "succeeded".equalsIgnoreCase(status) || "pending".equalsIgnoreCase(status)
+                || Boolean.TRUE.equals(result.get("mock"));
+        if (!ok) {
+            throw new BusinessException("Stripe refund failed: " + status);
+        }
+        return result;
     }
 
     @Override
@@ -509,11 +581,9 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         if (method == null)
             throw new BusinessException("paymentMethod required");
 
-        if (idempotencyKey != null) {
-            var existing = paymentRepository.findByIdempotencyKey(idempotencyKey);
-            if (existing.isPresent())
-                return existing.get();
-        }
+        Optional<Payment> existing = existingByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent())
+            return existing.get();
 
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException("Order"));
         if (order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.REFUNDED) {
@@ -538,7 +608,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         // para que lo cobrado coincida EXACTAMENTE con lo que el cliente vio en el carrito.
         String displayCcy = CurrencyHolder.get();
         boolean stripeEur = method == PaymentMethod.CARD && "EUR".equalsIgnoreCase(displayCcy);
-        String settlementCcy = method == PaymentMethod.USDT ? "USDT" : (stripeEur ? "EUR" : "USD");
+        String settlementCcy = settlementCurrencyFor(method, stripeEur);
         BigDecimal settlementAmount = perLineSettlementAmount(order, settlementCcy);
 
         Payment p = Payment.builder().userId(payerUserId).walletId(wallet.getId()).method(method)
@@ -553,25 +623,16 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         p = paymentRepository.save(p);
 
         PaymentGateway gw = resolveGateway(method);
-        var result = initiateOrAlert(gw, p.getId(), "cobro del pedido");
+        PaymentGateway.InitiateResult result = initiateOrAlert(gw, p.getId(), "cobro del pedido");
 
         p.setProvider(gw.providerName());
         p.setProviderRef(result.providerRef());
         Map<String, Object> meta = result.raw() != null ? new HashMap<>(result.raw()) : new HashMap<>();
-        if (result.clientSecret() != null)
-            meta.put("clientSecret", result.clientSecret());
-        if (result.approveUrl() != null)
-            meta.put("approveUrl", result.approveUrl());
-        if (result.cryptoAddress() != null) {
-            meta.put("cryptoAddress", result.cryptoAddress());
-            meta.put("cryptoChain", result.cryptoChain());
-            meta.put("qrUrl", result.qrUrl());
-            p.setCryptoAddress(result.cryptoAddress());
-            p.setCryptoChain(result.cryptoChain());
-            p.setQrUrl(result.qrUrl());
-            p.setCryptoExpiresAt(Instant.now().plus(Duration.ofMinutes(30)));
-            meta.put("expiresAt", p.getCryptoExpiresAt().toString());
-        }
+        putRedirectMetadata(meta, result);
+        // El vencimiento se fija en el pago ANTES de copiarlo a la metadata: el front y el registro deben
+        // publicar exactamente el mismo instante, no dos "ahora + 30 min" calculados por separado.
+        applyCryptoDetails(p, result);
+        putCryptoMetadata(meta, result, p.getCryptoExpiresAt());
         p.setProviderResponse(meta);
         p.setStatus(PaymentStatus.REQUIRES_ACTION);
         p = paymentRepository.save(p);

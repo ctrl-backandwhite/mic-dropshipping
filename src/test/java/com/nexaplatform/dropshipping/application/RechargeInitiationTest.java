@@ -154,10 +154,14 @@ class RechargeInitiationTest {
 
     @Test
     void unImporteAceroONegativoNoCuentaComoImporte() {
+        // El importe negativo se construye FUERA de la lambda: dentro habría dos llamadas capaces de
+        // lanzar y un formato mal escrito daría el test por bueno sin ejercitar la validación.
+        BigDecimal negativo = new BigDecimal("-5");
+
         assertThatThrownBy(() -> subject.initiateRecharge(userId, PaymentMethod.CARD, 0L, "EUR",
                 BigDecimal.ZERO, "k1", null)).isInstanceOf(BusinessException.class);
         assertThatThrownBy(() -> subject.initiateRecharge(userId, PaymentMethod.CARD, -100L, "EUR",
-                new BigDecimal("-5"), "k1", null)).isInstanceOf(BusinessException.class);
+                negativo, "k1", null)).isInstanceOf(BusinessException.class);
     }
 
     // ---------------------------------------------------------------- límites

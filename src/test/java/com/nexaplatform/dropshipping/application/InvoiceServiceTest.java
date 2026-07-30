@@ -64,14 +64,12 @@ class InvoiceServiceTest {
         Map<String, Object> m = service.model(order("USD", item(1000, 2, "Camiseta"), item(550, 1, "Gorra")),
                 "es", "http://dl");
 
-        assertThat(m).containsEntry("subtotal", "$25.50");
-        assertThat(m).containsEntry("shipping", "$5.00");
-        assertThat(m).containsEntry("tax", "$2.10");
-        assertThat(m).containsEntry("total", "$32.60");
+        // País con nombre completo (ISO "ES" → "España").
+        assertThat(m).containsEntry("subtotal", "$25.50").containsEntry("shipping", "$5.00")
+                .containsEntry("tax", "$2.10").containsEntry("total", "$32.60")
+                .containsEntry("title", "Pago confirmado").containsEntry("shipCountry", "España");
         assertThat((String) m.get("labelTax")).startsWith("IVA");
-        assertThat(m).containsEntry("title", "Pago confirmado");
-        // País con nombre completo (ISO "ES" → "España"), QR de verificación y URL con el nº de pedido.
-        assertThat(m).containsEntry("shipCountry", "España");
+        // QR de verificación y URL con el nº de pedido.
         assertThat((String) m.get("qr")).startsWith("data:image/png;base64,");
         assertThat((String) m.get("verifyUrl")).contains("NX-100");
         @SuppressWarnings("unchecked")
@@ -86,8 +84,7 @@ class InvoiceServiceTest {
                 .thenAnswer(InvoiceServiceTest::display);
         Map<String, Object> m = service.model(order("USD", item(1000, 1, "Tee")), "en", "http://dl");
         assertThat((String) m.get("labelTax")).startsWith("VAT");
-        assertThat(m).containsEntry("title", "Payment confirmed");
-        assertThat(m).containsEntry("subject", "Invoice NX-100");
+        assertThat(m).containsEntry("title", "Payment confirmed").containsEntry("subject", "Invoice NX-100");
     }
 
     @Test
@@ -105,8 +102,7 @@ class InvoiceServiceTest {
         Map<String, Object> m = service.model(order("EUR", item(1000, 1, "Tee")), "es", "http://dl", "EUR");
 
         // subtotal 9.00 + envío 4.50 + impuesto 1.89 = 15.39
-        assertThat(m).containsEntry("subtotal", "€9.00");
-        assertThat(m).containsEntry("total", "€15.39");
+        assertThat(m).containsEntry("subtotal", "€9.00").containsEntry("total", "€15.39");
     }
 
     // ===== Fotos de producto en el EMAIL: adjuntas (cid:), no por URL remota =====

@@ -262,43 +262,55 @@ public class FulfillmentService {
         }
         List<OrderShipmentEntity> shipments = shipmentRepository.findByOrderIdOrderBySequenceNoAsc(o.getId());
         TrackingSnapshot snap = pollShipments(o, shipments);
-        List<OrderTrackingEventEntity> existing = trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId());
-        Set<String> seen = new HashSet<>();
-        for (OrderTrackingEventEntity e : existing) {
-            seen.add(e.getStatus() + "|" + e.getDescription());
-        }
-        // Notificación por cada cambio de estado del envío. El estado interno FORWARDED ("registrado en
-        // el carrier") NO se notifica. El PRIMER paso SHIPPED ("Recogido por el transportista") y el paso
-        // DELIVERED los notifican shipped()/delivered() en el use case al avanzar el OrderStatus, así que
-        // aquí solo notificamos los pasos intermedios SHIPPED (en tránsito, llegó al país, en reparto) para
-        // no duplicar.
-        boolean shippedSeen = existing.stream().anyMatch(e -> OrderStatus.SHIPPED.name().equals(e.getStatus()));
         // Con bultos, los eventos ya se guardaron etiquetados por guía en pollShipments; aquí solo se
         // decide a quién notificar. Sin bultos (pedidos anteriores al reparto) hay que guardarlos.
-        boolean alreadyPersisted = !shipments.isEmpty();
-        List<TrackingStep> toNotify = new ArrayList<>();
-        for (TrackingStep step : snap.steps()) {
-            String key = step.status().name() + "|" + step.description();
-            if (seen.add(key)) {
-                if (!alreadyPersisted) {
-                    appendEvent(o.getId(), step.status().name(), step.description(), step.location(),
-                            CARRIER_SOURCE, step.occurredAt());
-                }
-                if (step.status() == OrderStatus.SHIPPED) {
-                    if (shippedSeen) {
-                        toNotify.add(step); // paso intermedio → notificar
-                    } else {
-                        shippedSeen = true; // primer SHIPPED = "Recogido" → lo cubre shipped()
-                    }
-                }
-            }
-        }
+        List<TrackingStep> toNotify = collectNewSteps(o, snap, !shipments.isEmpty());
         o.setLastTrackedAt(Instant.now());
         o.setTrackingStatus(snap.currentStatus().name());
         OrderStatus current = o.getStatus();
         orderRepository.save(o);
         notifyTrackingSteps(o, toNotify);
         return new TrackingProgress(current, snap.currentStatus());
+    }
+
+    /**
+     * Recorre los pasos que devolvió el carrier, guarda los que aún no estén en el timeline y devuelve
+     * los que hay que notificar al comprador.
+     *
+     * <p>Notificamos cada cambio de estado del envío MENOS dos: el estado interno FORWARDED
+     * ("registrado en el carrier"), que no le dice nada al cliente, y el PRIMER paso SHIPPED
+     * ("Recogido por el transportista"), que —igual que DELIVERED— ya lo avisan shipped()/delivered()
+     * en el use case al avanzar el OrderStatus. Así solo salen de aquí los pasos intermedios (en
+     * tránsito, llegó al país, en reparto) y no se duplican correos.
+     *
+     * @param alreadyPersisted {@code true} cuando el pedido tiene bultos y {@code pollShipments} ya
+     *        guardó sus eventos etiquetados por guía; entonces aquí solo se decide a quién notificar.
+     */
+    private List<TrackingStep> collectNewSteps(Order o, TrackingSnapshot snap, boolean alreadyPersisted) {
+        List<OrderTrackingEventEntity> existing = trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId());
+        Set<String> seen = new HashSet<>();
+        for (OrderTrackingEventEntity e : existing) {
+            seen.add(e.getStatus() + "|" + e.getDescription());
+        }
+        boolean shippedSeen = existing.stream().anyMatch(e -> OrderStatus.SHIPPED.name().equals(e.getStatus()));
+        List<TrackingStep> toNotify = new ArrayList<>();
+        for (TrackingStep step : snap.steps()) {
+            if (!seen.add(step.status().name() + "|" + step.description())) {
+                continue;
+            }
+            if (!alreadyPersisted) {
+                appendEvent(o.getId(), step.status().name(), step.description(), step.location(),
+                        CARRIER_SOURCE, step.occurredAt());
+            }
+            if (step.status() == OrderStatus.SHIPPED) {
+                if (shippedSeen) {
+                    toNotify.add(step); // paso intermedio → notificar
+                } else {
+                    shippedSeen = true; // primer SHIPPED = "Recogido" → lo cubre shipped()
+                }
+            }
+        }
+        return toNotify;
     }
 
     /**
@@ -481,7 +493,7 @@ public class FulfillmentService {
         boolean changed = false;
         for (TrackingStep step : snap.steps()) {
             changed |= appendIfNew(o, step.status(), step.description(), step.location(), step.occurredAt(),
-                    "YUNEXPRESS");
+                    CARRIER_SOURCE);
         }
         if (changed) {
             o.setLastTrackedAt(Instant.now());

@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.security.oauth;
 
+import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.JWTParser;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -49,8 +50,10 @@ public class UserTokenRevocationFilter extends OncePerRequestFilter {
             return;
         }
         try {
-            var claims = JWTParser.parse(auth.substring(7)).getJWTClaimsSet();
+            JWTClaimsSet claims = JWTParser.parse(auth.substring(7)).getJWTClaimsSet();
             String sub = claims.getSubject();
+            // Nimbus expone el claim "iat" como java.util.Date y no ofrece accesor java.time; se convierte
+            // aquí mismo para que el resto del filtro trabaje solo con segundos de época.
             Date iat = claims.getIssueTime();
             if (sub != null && iat != null
                     && !revocationService.isStillValid(sub, iat.toInstant().getEpochSecond())) {

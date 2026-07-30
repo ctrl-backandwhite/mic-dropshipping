@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.infrastructure.security.oauth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomerSubscriptionEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CustomerSubscriptionRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -24,6 +25,7 @@ import org.springframework.security.oauth2.server.authorization.token.JwtEncodin
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 
 @Configuration
@@ -76,7 +78,13 @@ public class RegisteredClientConfig {
 
     /** Crea o actualiza el RegisteredClient. Idempotente — corrige TTL/plan en reinicio. */
     private void upsertPartnerClient(String clientId, String clientName, String rawSecret, String plan) {
-        var existing = repo.findByClientId(clientId);
+        // Sin secreto configurado no se siembra el cliente: registrarlo con un secreto vacío dejaría la
+        // API de partners abierta con una credencial trivial. Mejor no arrancar que arrancar inseguro.
+        if (rawSecret == null || rawSecret.isBlank()) {
+            throw new IllegalStateException("Falta nexadrop.oauth.partner-api.default-secret: no se puede "
+                    + "registrar el cliente OAuth " + clientId);
+        }
+        RegisteredClient existing = repo.findByClientId(clientId);
         String internalId = existing != null ? existing.getId() : UUID.randomUUID().toString();
         repo.save(RegisteredClient.withId(internalId).clientId(clientId).clientName(clientName)
                 .clientSecret(passwordEncoder.encode(rawSecret))
@@ -108,40 +116,47 @@ public class RegisteredClientConfig {
         return context -> {
             if (!"access_token".equals(context.getTokenType().getValue()))
                 return;
-            var settings = context.getRegisteredClient().getClientSettings();
-
-            String tier = SANDBOX;
-            String planCode = null;
-            UUID ownerUserId = null;
-
-            // (1) Override explícito
-            Object explicit = settings.getSetting("nexadrop.plan");
-            if (explicit != null && !explicit.toString().isBlank()) {
-                tier = explicit.toString();
-                planCode = "OVERRIDE";
-            } else {
-                // (2) Resolver desde suscripción del owner
-                Object owner = settings.getSetting("nexadrop.owner_user_id");
-                if (owner != null) {
-                    try {
-                        ownerUserId = UUID.fromString(owner.toString());
-                        var active = subsRepo.findActiveByUserId(ownerUserId);
-                        if (!active.isEmpty()) {
-                            var sub = active.get(0);
-                            planCode = sub.getPlan().getCode();
-                            tier = mapPlanCodeToTier(planCode);
-                        }
-                    } catch (IllegalArgumentException ignored) {
-                        /* UUID malformado, sandbox */ }
-                }
-            }
-
-            context.getClaims().claim("plan", tier);
-            if (planCode != null)
-                context.getClaims().claim("plan_code", planCode);
-            if (ownerUserId != null)
-                context.getClaims().claim("owner_user_id", ownerUserId.toString());
+            PartnerPlan plan = resolvePartnerPlan(context.getRegisteredClient().getClientSettings(), subsRepo);
+            context.getClaims().claim("plan", plan.tier());
+            if (plan.planCode() != null)
+                context.getClaims().claim("plan_code", plan.planCode());
+            if (plan.ownerUserId() != null)
+                context.getClaims().claim("owner_user_id", plan.ownerUserId().toString());
         };
+    }
+
+    /** Plan resuelto para el JWT del partner: tier de cuota, código de plan y dueño, si se conocen. */
+    private record PartnerPlan(String tier, String planCode, UUID ownerUserId) {
+    }
+
+    /**
+     * Resuelve el plan del partner por los tres caminos documentados en
+     * {@link #partnerPlanClaimCustomizer}, en ese orden. Todo lo que no encaje cae a {@link #SANDBOX}:
+     * ante la duda se da la cuota MÁS restrictiva, nunca la de pago.
+     */
+    private PartnerPlan resolvePartnerPlan(ClientSettings settings, CustomerSubscriptionRepository subsRepo) {
+        // (1) Override explícito
+        Object explicit = settings.getSetting("nexadrop.plan");
+        if (explicit != null && !explicit.toString().isBlank()) {
+            return new PartnerPlan(explicit.toString(), "OVERRIDE", null);
+        }
+        // (2) Resolver desde la suscripción del owner
+        Object owner = settings.getSetting("nexadrop.owner_user_id");
+        if (owner == null) {
+            return new PartnerPlan(SANDBOX, null, null);
+        }
+        UUID ownerUserId;
+        try {
+            ownerUserId = UUID.fromString(owner.toString());
+        } catch (IllegalArgumentException malformed) {
+            return new PartnerPlan(SANDBOX, null, null); // UUID malformado → sandbox, y sin claim de owner
+        }
+        List<CustomerSubscriptionEntity> active = subsRepo.findActiveByUserId(ownerUserId);
+        if (active.isEmpty()) {
+            return new PartnerPlan(SANDBOX, null, ownerUserId);
+        }
+        String planCode = active.get(0).getPlan().getCode();
+        return new PartnerPlan(mapPlanCodeToTier(planCode), planCode, ownerUserId);
     }
 
     private static String mapPlanCodeToTier(String planCode) {

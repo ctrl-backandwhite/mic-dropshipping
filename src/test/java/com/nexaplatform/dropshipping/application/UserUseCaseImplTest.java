@@ -105,8 +105,9 @@ class UserUseCaseImplTest {
     @DisplayName("register: rechaza email duplicado")
     void register_duplicate_email() {
         when(userRepository.existsByEmail("a@b.com")).thenReturn(true);
-        assertThatThrownBy(
-                () -> useCase.register(User.builder().email("a@b.com").language("es").build(), "Str0ngP@ssword!"))
+        User candidate = User.builder().email("a@b.com").language("es").build();
+
+        assertThatThrownBy(() -> useCase.register(candidate, "Str0ngP@ssword!"))
                 .isInstanceOf(ConflictException.class);
         verify(userRepository, never()).save(any());
     }
@@ -114,7 +115,9 @@ class UserUseCaseImplTest {
     @Test
     @DisplayName("register: rechaza contraseña débil sin guardar")
     void register_weak_password() {
-        assertThatThrownBy(() -> useCase.register(User.builder().email("a@b.com").language("es").build(), "weak"))
+        User candidate = User.builder().email("a@b.com").language("es").build();
+
+        assertThatThrownBy(() -> useCase.register(candidate, "weak"))
                 .isInstanceOf(BusinessException.class);
         verify(userRepository, never()).save(any());
     }

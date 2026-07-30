@@ -128,9 +128,10 @@ class StorefrontCatalogReadTest {
     @Test
     void unIdentificadorConFormaDeUuidPeroInexistenteTambienDaNoEncontrado() {
         UUID id = UUID.randomUUID();
+        String idAsText = id.toString();
         when(categoryRepository.findById(id)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.resolveCategory(id.toString())).isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> service.resolveCategory(idAsText)).isInstanceOf(NotFoundException.class);
     }
 
     // ---------------------------------------------------------------- migas de pan
