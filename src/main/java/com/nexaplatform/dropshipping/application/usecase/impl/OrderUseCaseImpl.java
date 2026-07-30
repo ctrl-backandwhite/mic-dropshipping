@@ -146,69 +146,106 @@ public class OrderUseCaseImpl implements OrderUseCase {
         int subtotal = 0;
         ParcelAggregator parcel = new ParcelAggregator();
         for (var itemReq : req.items()) {
-            // Cantidad dentro de un rango sano ANTES de calcular importes. Cierra el desbordamiento de
-            // enteros del cobro (unitCents * quantity) y rechaza cantidades ≤ 0 aunque el DTO no valide.
-            if (itemReq.quantity() <= 0 || itemReq.quantity() > MAX_LINE_QUANTITY) {
-                throw new BusinessException("INVALID_QUANTITY",
-                        "La cantidad por línea debe estar entre 1 y " + MAX_LINE_QUANTITY);
-            }
-            ProductEntity product = productRepository.findById(itemReq.productId())
-                    .orElseThrow(() -> new NotFoundException("Product not found: " + itemReq.productId()));
-            ProductVariantEntity variant = itemReq.variantId() == null
-                    ? null
-                    : variantRepository.findById(itemReq.variantId())
-                            // Variante inexistente (carrito obsoleto: el catálogo se re-importó y la variante
-                            // cambió de ID). Código específico + variantId en detail para que el checkout
-                            // identifique y quite del carrito la línea rota, en vez de un 404 genérico.
-                            .orElseThrow(() -> new NotFoundException("CART_ITEM_UNAVAILABLE",
-                                    List.of(itemReq.variantId().toString())));
-
-            // Dropshipping: NO rechazamos por stock. La plataforma no mantiene inventario propio; el
-            // proveedor abastece bajo demanda (stock efectivamente ilimitado), así que un pedido siempre
-            // se puede aceptar y el stock mostrado no se agota. El número de stock es solo informativo.
-
-            // DROP-637: charge the PRICED amount (raw supplier price → USD → margin), not the raw
-            // CNY value. The order currency is USD, so we bill retailUsd — the same figure the
-            // storefront showed — instead of the stored 14.90 CNY mis-billed as $14.90.
-            var priced = pricingService.priceFor(product, variant);
-            BigDecimal unitPrice = priced.retailUsd();
-            if (unitPrice == null) {
-                throw new BusinessException("Product " + product.getSlug() + " has no price");
-            }
-            // El precio de línea debe COINCIDIR con el precio que ve el usuario en el catálogo/carrito. El
-            // catálogo redondea a 2 decimales al céntimo MÁS CERCANO (HALF_UP, ver CurrencyRateService), así
-            // que el cobro usa el MISMO redondeo → catálogo == carrito == cobro, sin céntimos de más ni de menos.
-            int unitCents = unitPrice.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
-            int costCents = priced.costUsd() != null
-                    ? priced.costUsd().multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).intValue()
-                    : unitCents;
-            // DROP: coste en YUAN (CNY) congelado al crear la orden = precio del proveedor (variante o base),
-            // SIEMPRE en CNY (los productos se persisten solo en CNY). Base de la comisión del operador (15%).
-            BigDecimal cnyUnit = variant != null && variant.getPrice() != null ? variant.getPrice()
-                    : product.getBasePrice();
-            long costCnyCents = cnyUnit != null
-                    ? cnyUnit.multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).longValueExact()
-                    : 0L;
-            // multiplyExact: si el producto se saliera de rango (int), lanza en vez de envolver a un
-            // valor pequeño (que se cobraría de menos). Con MAX_LINE_QUANTITY nunca ocurre en la práctica.
-            int lineTotal = Math.multiplyExact(unitCents, itemReq.quantity());
-
-            order.getItems().add(OrderItem.builder().productId(product.getId())
-                    .variantId(variant != null ? variant.getId() : null).titleSnapshot(orderTitle(product, orderLang))
-                    .imageUrlSnapshot(variant != null && variant.getImageCdnUrl() != null
-                            && !variant.getImageCdnUrl().isBlank() ? variant.getImageCdnUrl()
-                            : variant != null && variant.getImageSourceUrl() != null
-                                    && !variant.getImageSourceUrl().isBlank() ? variant.getImageSourceUrl()
-                                    : product.getImages().isEmpty() ? null
-                                            : product.getImages().get(0).getSourceUrl())
-                    .skuSnapshot(variant != null ? variant.getSku() : null).unitPriceCents(unitCents)
-                    .costCents(costCents).costCnyCents(costCnyCents).quantity(itemReq.quantity())
-                    .lineTotalCents(lineTotal).build());
-
-            subtotal = Math.addExact(subtotal, lineTotal);
-            parcel.add(product, variant, itemReq.quantity());
+            OrderItem line = buildLine(itemReq, orderLang, parcel);
+            order.getItems().add(line);
+            subtotal = Math.addExact(subtotal, line.getLineTotalCents());
         }
 
+        applyTotals(order, userId, subtotal, parcel);
+
+        Order saved = orderRepository.save(order);
+        orderIndexer.indexOrder(saved.getId()); // auto-sync del índice al crear la orden
+        return saved;
+    }
+
+    /**
+     * Construye una línea del pedido a partir de lo pedido, congelando precio, coste y textos.
+     *
+     * <p>Todo lo que se guarda aquí es una FOTO del momento de la compra: si mañana cambia el precio, el
+     * título o la imagen del producto, la línea vendida sigue diciendo lo que se vendió.
+     */
+    private OrderItem buildLine(OrderItemInput itemReq, String orderLang,
+            ParcelAggregator parcel) {
+        // Cantidad dentro de un rango sano ANTES de calcular importes. Cierra el desbordamiento de
+        // enteros del cobro (unitCents * quantity) y rechaza cantidades ≤ 0 aunque el DTO no valide.
+        if (itemReq.quantity() <= 0 || itemReq.quantity() > MAX_LINE_QUANTITY) {
+            throw new BusinessException("INVALID_QUANTITY",
+                    "La cantidad por línea debe estar entre 1 y " + MAX_LINE_QUANTITY);
+        }
+        ProductEntity product = productRepository.findById(itemReq.productId())
+                .orElseThrow(() -> new NotFoundException("Product not found: " + itemReq.productId()));
+        ProductVariantEntity variant = itemReq.variantId() == null
+                ? null
+                : variantRepository.findById(itemReq.variantId())
+                        // Variante inexistente (carrito obsoleto: el catálogo se re-importó y la variante
+                        // cambió de ID). Código específico + variantId en detail para que el checkout
+                        // identifique y quite del carrito la línea rota, en vez de un 404 genérico.
+                        .orElseThrow(() -> new NotFoundException("CART_ITEM_UNAVAILABLE",
+                                List.of(itemReq.variantId().toString())));
+
+        // Dropshipping: NO rechazamos por stock. La plataforma no mantiene inventario propio; el
+        // proveedor abastece bajo demanda (stock efectivamente ilimitado), así que un pedido siempre
+        // se puede aceptar y el stock mostrado no se agota. El número de stock es solo informativo.
+
+        // DROP-637: charge the PRICED amount (raw supplier price → USD → margin), not the raw
+        // CNY value. The order currency is USD, so we bill retailUsd — the same figure the
+        // storefront showed — instead of the stored 14.90 CNY mis-billed as $14.90.
+        var priced = pricingService.priceFor(product, variant);
+        BigDecimal unitPrice = priced.retailUsd();
+        if (unitPrice == null) {
+            throw new BusinessException("Product " + product.getSlug() + " has no price");
+        }
+        // El precio de línea debe COINCIDIR con el precio que ve el usuario en el catálogo/carrito. El
+        // catálogo redondea a 2 decimales al céntimo MÁS CERCANO (HALF_UP, ver CurrencyRateService), así
+        // que el cobro usa el MISMO redondeo → catálogo == carrito == cobro, sin céntimos de más ni de menos.
+        int unitCents = unitPrice.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
+        int costCents = priced.costUsd() != null
+                ? priced.costUsd().multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).intValue()
+                : unitCents;
+        // DROP: coste en YUAN (CNY) congelado al crear la orden = precio del proveedor (variante o base),
+        // SIEMPRE en CNY (los productos se persisten solo en CNY). Base de la comisión del operador (15%).
+        BigDecimal cnyUnit = variant != null && variant.getPrice() != null ? variant.getPrice()
+                : product.getBasePrice();
+        long costCnyCents = cnyUnit != null
+                ? cnyUnit.multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).longValueExact()
+                : 0L;
+        // multiplyExact: si el producto se saliera de rango (int), lanza en vez de envolver a un
+        // valor pequeño (que se cobraría de menos). Con MAX_LINE_QUANTITY nunca ocurre en la práctica.
+        int lineTotal = Math.multiplyExact(unitCents, itemReq.quantity());
+
+        parcel.add(product, variant, itemReq.quantity());
+        return OrderItem.builder().productId(product.getId())
+                .variantId(variant != null ? variant.getId() : null).titleSnapshot(orderTitle(product, orderLang))
+                .imageUrlSnapshot(snapshotImage(product, variant))
+                .skuSnapshot(variant != null ? variant.getSku() : null).unitPriceCents(unitCents)
+                .costCents(costCents).costCnyCents(costCnyCents).quantity(itemReq.quantity())
+                .lineTotalCents(lineTotal).build();
+    }
+
+    /**
+     * Imagen que se congela en la línea. Prioriza la de la VARIANTE comprada —el color concreto que se
+     * pidió— ya espejada en nuestro almacenamiento, luego la de origen, y sólo si no hay ninguna cae a la
+     * primera del producto. Antes eran tres ternarios anidados y no había forma de leer el orden.
+     */
+    private static String snapshotImage(ProductEntity product, ProductVariantEntity variant) {
+        if (variant != null) {
+            if (variant.getImageCdnUrl() != null && !variant.getImageCdnUrl().isBlank()) {
+                return variant.getImageCdnUrl();
+            }
+            if (variant.getImageSourceUrl() != null && !variant.getImageSourceUrl().isBlank()) {
+                return variant.getImageSourceUrl();
+            }
+        }
+        return product.getImages().isEmpty() ? null : product.getImages().get(0).getSourceUrl();
+    }
+
+    /**
+     * Cierra los importes del pedido: envío por destino, descuento de referido, impuesto y despacho.
+     *
+     * <p>Se calculan con los MISMOS servicios que la vista previa del checkout para que lo mostrado
+     * coincida al céntimo con lo cobrado.
+     */
+    private void applyTotals(Order order, UUID userId, int subtotal, ParcelAggregator parcel) {
         // Envío: tarifa por destino del carrier. Si el país no está cubierto, el envío queda en 0 aquí
         // (el checkout del storefront bloquea antes el destino no soportado). El bulto se arma con el
         // MISMO agregador que la vista previa del checkout: peso, medidas del paquete y batería.
@@ -216,14 +253,12 @@ public class OrderUseCaseImpl implements OrderUseCase {
         int shippingCents = quote.supported() ? quote.amountUsdCents() : 0;
 
         // Descuento de referido para el COMPRADOR: 10% del subtotal de producto si tiene una atribución
-        // de afiliado viva (y no es su propio código). Idéntico cálculo que la vista previa del checkout
-        // (ShippingQuoteController) para que lo mostrado coincida al céntimo con lo cobrado. El envío y el
-        // IVA se calculan sobre (subtotal − descuento).
+        // de afiliado viva (y no es su propio código). El envío y el IVA se calculan sobre (subtotal −
+        // descuento).
         int discount = (int) affiliateProgramService.referralDiscountCents(userId, subtotal);
         int discountedSubtotal = subtotal - discount;
 
-        // Impuesto + despacho aduanero, en el MISMO servicio que usa la vista previa del checkout
-        // (CheckoutTotalsService) para que lo mostrado coincida al céntimo con lo cobrado. Incluye:
+        // Impuesto + despacho aduanero. Incluye:
         //  · IVA por estado/provincia (US/CA/BR) o tasa nacional, sobre (subtotal − descuento) + envío.
         //  · Recargo del despacho DDP del país (lo que el transportista cobra por adelantar el impuesto).
         //  · Recargo de despacho formal si el valor de los bienes supera el umbral de minimis del destino.
@@ -241,10 +276,6 @@ public class OrderUseCaseImpl implements OrderUseCase {
         order.setShippingCents(totals.shippingCents());
         order.setTaxCents(totals.taxCents());
         order.setTotalCents(totals.totalCents(discountedSubtotal));
-
-        Order saved = orderRepository.save(order);
-        orderIndexer.indexOrder(saved.getId()); // auto-sync del índice al crear la orden
-        return saved;
     }
 
     @Override
