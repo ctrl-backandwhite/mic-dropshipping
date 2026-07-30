@@ -6,7 +6,6 @@ import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CartQuoteItemIn;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CartQuoteOut;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.HistoryPoint;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.HomeSection;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImageSearchRequest;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImageSearchResult;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImportUrlRequest;
