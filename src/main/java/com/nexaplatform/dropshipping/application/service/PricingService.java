@@ -39,6 +39,13 @@ public class PricingService {
         // price from the representative (cheapest active) variant. A single-variant product
         // therefore prices exactly as its variant (delta 0%), and multi-variant products show
         // the "from" price that the customer can actually pay.
+        if (product == null) {
+            // representativeVariant ya contempla que el producto falte y devuelve null, pero tres líneas
+            // más abajo se leía product.getBasePrice() sin comprobarlo. Sin producto no hay nada que
+            // tarificar: se devuelve el mismo "sin precio" que un producto sin base_price, que las vistas
+            // ya saben pintar (nunca 0, que se leería como gratis).
+            return unpriced();
+        }
         ProductVariantEntity effective = variant != null ? variant : representativeVariant(product);
         BigDecimal supplierAmount = effective != null && effective.getPrice() != null
                 ? effective.getPrice()
@@ -79,6 +86,13 @@ public class PricingService {
                 displayFormatted, withMargin.appliedRule() != null ? withMargin.appliedRule().getId() : null,
                 withMargin.appliedPercentage(), baseUsd, ivaUsd, shippingUsd, baseFormatted, ivaFormatted,
                 shippingFormatted);
+    }
+
+    /** Resultado "no se puede tarificar": todos los importes a null, nunca 0. */
+    private PricedAmount unpriced() {
+        String displayCode = CurrencyHolder.get();
+        return new PricedAmount(null, null, null, displayCode, currencyService.symbolOf(displayCode),
+                null, null, null, null, null, null, null, null, null);
     }
 
     /** null → 0 (para sumar componentes de desglose cuando IVA/envío son 0 y la conversión devuelve null). */

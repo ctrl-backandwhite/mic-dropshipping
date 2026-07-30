@@ -137,6 +137,9 @@ public class ImageMirrorService {
                 variantRepository.markImageCdn(v.getId(), fetchAndStore(v.getImageSourceUrl()).url());
                 ok++;
             } catch (Exception e) {
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
                 log.debug("Mirror imagen de variante {} falló ({}): {}", v.getId(), v.getImageSourceUrl(), e.toString());
                 variantRepository.markImageFailed(v.getId(), Instant.now());
             }
@@ -146,6 +149,9 @@ public class ImageMirrorService {
                 variantValueRepository.markImageCdn(vv.getId(), fetchAndStore(vv.getImageSourceUrl()).url());
                 ok++;
             } catch (Exception e) {
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
                 log.debug("Mirror imagen de valor {} falló ({}): {}", vv.getId(), vv.getImageSourceUrl(), e.toString());
                 variantValueRepository.markImageFailed(vv.getId(), Instant.now());
             }
@@ -271,6 +277,9 @@ public class ImageMirrorService {
                 imageRepository.markMirrored(id, s.url(), s.bytes(), s.hash(), MirrorStatus.MIRRORED, Instant.now());
                 return true;
             } catch (Exception e) {
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
                 log.debug("Mirror falló imagen {} ({}): {}", id, candidate, e.toString());
             }
         }

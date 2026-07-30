@@ -481,6 +481,12 @@ public class UserUseCaseImpl implements UserUseCase {
     @Transactional
     public GoogleLoginOutcome resolveGoogleLogin(String email, String firstName, String lastName) {
         String normalized = normalizeEmail(email);
+        if (normalized == null || normalized.isBlank()) {
+            // GoogleOAuth2SuccessHandler ya rechaza el login cuando el proveedor no devuelve correo, pero
+            // este método no lo comprobaba y más abajo hace normalized.split("@") para el nombre visible:
+            // llegar aquí sin correo creaba una cuenta sin identidad o reventaba con NullPointerException.
+            throw new BusinessException("El proveedor no ha devuelto un correo con el que identificar la cuenta");
+        }
         Optional<User> existing = userRepository.findByEmail(normalized);
         if (existing.isPresent()) {
             User user = existing.get();
