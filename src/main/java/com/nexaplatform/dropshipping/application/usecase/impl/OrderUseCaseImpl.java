@@ -439,7 +439,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Override
     @Transactional
     public Order shipOrder(UUID id) {
-        Order o = orderRepository.findById(id).orElseThrow();
+        Order o = orderRepository.findById(id).orElseThrow(() -> new NotFoundException(ORDER_NOT_FOUND));
         // DROP-631: "Marcar en camino" is only valid once the order was forwarded to the supplier.
         if (o.getStatus() != OrderStatus.FORWARDED) {
             throw new BusinessException("Solo se puede marcar en camino un pedido enviado al proveedor");
@@ -454,7 +454,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Override
     @Transactional
     public Order deliverOrder(UUID id) {
-        Order o = orderRepository.findById(id).orElseThrow();
+        Order o = orderRepository.findById(id).orElseThrow(() -> new NotFoundException(ORDER_NOT_FOUND));
         // DROP-631: delivery only valid from "en camino" (SHIPPED).
         if (o.getStatus() != OrderStatus.SHIPPED) {
             throw new BusinessException("Solo se puede entregar un pedido que está en camino");
@@ -471,7 +471,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Override
     @Transactional
     public Order cancelOrder(UUID id) {
-        Order o = orderRepository.findById(id).orElseThrow();
+        Order o = orderRepository.findById(id).orElseThrow(() -> new NotFoundException(ORDER_NOT_FOUND));
         if (o.getStatus() == OrderStatus.CANCELLED) {
             return enrich(o); // idempotente
         }
@@ -496,7 +496,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Override
     @Transactional
     public Order refundOrder(UUID id) {
-        Order o = orderRepository.findById(id).orElseThrow();
+        Order o = orderRepository.findById(id).orElseThrow(() -> new NotFoundException(ORDER_NOT_FOUND));
         if (o.getStatus() == OrderStatus.REFUNDED) {
             return enrich(o); // idempotent
         }

@@ -25,6 +25,7 @@ import com.stripe.model.PaymentMethod;
 import com.stripe.model.checkout.Session;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,6 +67,10 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     private final CurrencyRateService currencyService;
     private final CountryTaxService countryTaxService;
     private final InvoiceService invoiceService;
+
+    /** URL pública del escaparate, para las vueltas de Stripe. La misma que usan los correos. */
+    @Value("${nexadrop.storefront.base-url:http://localhost:3003}")
+    private String storefrontBaseUrl;
 
     /*
      * Rollback de las operaciones que hablan con Stripe: declaran noRollbackFor = StripeException.class.
@@ -228,8 +233,13 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     public void expireFreeTrials() {
         Instant now = Instant.now();
         for (CustomerSubscription sub : customerSubscriptionRepository.findAll()) {
-            boolean free = "FREE".equalsIgnoreCase(sub.getPlanCode())
-                    || (sub.getPriceMonthly() <= 0 && sub.getPriceYearly() <= 0);
+            // El plan tiene que estar IDENTIFICADO para decidir. planCode y los precios los computa el
+            // mapper desde la relación `plan`: si no está cargada valen null y 0, y sin este control una
+            // suscripción DE PAGO con la relación suelta se tomaba por gratuita y se cancelaba sola,
+            // cortándole el servicio a alguien que está pagando. Ante la duda, no se toca.
+            boolean planKnown = sub.getPlanCode() != null && !sub.getPlanCode().isBlank();
+            boolean free = planKnown && ("FREE".equalsIgnoreCase(sub.getPlanCode())
+                    || (sub.getPriceMonthly() <= 0 && sub.getPriceYearly() <= 0));
             boolean active = sub.getStatus() == SubscriptionStatus.ACTIVE
                     || sub.getStatus() == SubscriptionStatus.TRIALING;
             boolean expired = sub.getCurrentPeriodEnd() != null && sub.getCurrentPeriodEnd().isBefore(now);
@@ -262,8 +272,13 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         String priceId = YEARLY.equalsIgnoreCase(period)
                 ? plan.getStripeYearlyPriceId()
                 : plan.getStripeMonthlyPriceId();
-        Session session = stripeService.createCheckoutSession("user@example.com", priceId,
-                "http://localhost:3003/billing/success", "http://localhost:3003/billing/cancel");
+        // El correo y las URL de retorno estaban CABLEADOS ("user@example.com" y localhost): en
+        // producción el recibo de Stripe se enviaba a una dirección falsa y, al terminar de pagar, el
+        // cliente acababa redirigido a una máquina que no existe. Se toman del usuario y de la URL
+        // configurada del escaparate, la misma que usan los correos.
+        String email = loadUser(userId).getEmail();
+        Session session = stripeService.createCheckoutSession(email, priceId,
+                storefrontBaseUrl + "/billing/success", storefrontBaseUrl + "/billing/cancel");
         return SubscribeResult.builder().checkoutUrl(session.getUrl()).sessionId(session.getId()).build();
     }
 

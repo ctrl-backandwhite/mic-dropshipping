@@ -289,7 +289,9 @@ public class CatalogStorefrontReadService {
                 .collect(Collectors.toMap(ProductEntity::getId, p -> p, (a, b) -> a));
         List<ProductSummaryView> all = productIds.stream().map(byId::get).filter(Objects::nonNull)
                 .map(p -> productMapper.toSummary(p, lang)).toList();
-        int from = Math.min(page * safe, all.size());
+        // (long) para que un ?page enorme no desborde el int y deje un índice negativo que revienta
+        // el subList con un 500.
+        int from = (int) Math.min((long) page * safe, all.size());
         int to = Math.min(from + safe, all.size());
         return PageResponse.from(new PageImpl<>(all.subList(from, to), pageable, all.size()));
     }

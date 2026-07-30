@@ -120,6 +120,9 @@ public class EmailQueueService {
         }
     }
 
+    /** Intentos de envío antes de rendirse. Un fallo de SMTP suele ser pasajero. */
+    private static final int MAX_SEND_ATTEMPTS = 5;
+
     @Scheduled(fixedDelay = 15_000)
     @Transactional
     public void dispatchPending() {
@@ -155,10 +158,20 @@ public class EmailQueueService {
                 email.setStatus("SENT");
                 email.setSentAt(Instant.now());
             } catch (Exception e) {
-                email.setStatus("FAILED");
-                email.setAttemptCount(email.getAttemptCount() + 1);
+                // El barrido sólo lee PENDING, así que marcar FAILED al primer tropiezo era rendirse
+                // para siempre: attemptCount no pasaba nunca de 1 y ningún correo fallido volvía a
+                // salir. Un SMTP que no responde suele estar de vuelta al minuto siguiente, así que la
+                // fila se queda PENDING hasta agotar los intentos y sólo entonces pasa a FAILED.
+                int attempts = email.getAttemptCount() + 1;
+                email.setAttemptCount(attempts);
                 email.setErrorMessage(e.getMessage());
-                log.warn("Email {} send failed: {}", email.getId(), e.getMessage());
+                if (attempts >= MAX_SEND_ATTEMPTS) {
+                    email.setStatus("FAILED");
+                    log.error("Email {} descartado tras {} intentos: {}", email.getId(), attempts, e.getMessage());
+                } else {
+                    log.warn("Email {} falló (intento {}/{}): {}", email.getId(), attempts, MAX_SEND_ATTEMPTS,
+                            e.getMessage());
+                }
             }
             repo.save(email);
         }

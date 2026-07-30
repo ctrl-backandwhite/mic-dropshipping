@@ -1635,7 +1635,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         for (BulkProductDtoIn.BulkSpec s : r.getSpecifications()) {
             if (Texts.has(s.getKey()) && Texts.has(s.getValue())) {
                 productSpecificationRepository.save(ProductSpecificationEntity.builder().product(p)
-                        .locale(Texts.firstNonBlankOr("es", s.getLocale()))
+                        .locale(Texts.firstNonBlankOr("es", s.getLocale()).trim().toLowerCase())
                         .specKey(s.getKey()).specValue(s.getValue())
                         .position(s.getPosition() != null ? s.getPosition() : fallbackPosition)
                         .createdAt(Instant.now()).build());

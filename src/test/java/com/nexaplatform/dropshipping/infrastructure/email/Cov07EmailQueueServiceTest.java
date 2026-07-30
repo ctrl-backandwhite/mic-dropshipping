@@ -169,7 +169,7 @@ class Cov07EmailQueueServiceTest {
     }
 
     @Test
-    void unFalloDeEnvioMarcaFailedYCuentaElIntentoSinPropagarLaExcepcion() {
+    void unFalloDeEnvioCuentaElIntentoYDejaLaFilaEnColaSinPropagarLaExcepcion() {
         OutboundEmailEntity email = pending("<p>x</p>", "emails/welcome", null, null);
         email.setAttemptCount(2);
         doThrow(new IllegalStateException("SMTP caído")).when(mailSender).send(any(MimeMessage.class));
@@ -177,7 +177,7 @@ class Cov07EmailQueueServiceTest {
         service.dispatchPending();
 
         // El barrido no puede reventar: la fila queda marcada para poder diagnosticar y reintentar.
-        assertThat(email.getStatus()).isEqualTo("FAILED");
+        assertThat(email.getStatus()).isEqualTo("PENDING");   // sigue en cola: se reintenta hasta 5 veces
         assertThat(email.getAttemptCount()).isEqualTo(3);
         assertThat(email.getErrorMessage()).isEqualTo("SMTP caído");
         assertThat(email.getSentAt()).isNull();
@@ -257,7 +257,7 @@ class Cov07EmailQueueServiceTest {
         service.dispatchPending();
 
         // setText(null) revienta dentro del try: el correo queda FAILED, pero el barrido continúa.
-        assertThat(email.getStatus()).isEqualTo("FAILED");
+        assertThat(email.getStatus()).isEqualTo("PENDING");   // sigue en cola: se reintenta hasta 5 veces
         assertThat(email.getAttemptCount()).isEqualTo(1);
     }
 

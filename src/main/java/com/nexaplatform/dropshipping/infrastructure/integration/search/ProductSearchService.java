@@ -31,33 +31,6 @@ public class ProductSearchService {
     @Value("${nexadrop.opensearch.products-index}")
     private String index;
 
-    public Map<String, Object> search(String keyword, String language, int page, int size) {
-        String field = "title" + capitalize(language == null ? "es" : language);
-        try {
-            SearchResponse<Map> response = client.search(SearchRequest.of(s -> s.index(index).from(page * size)
-                    .size(size)
-                    .query(withImageFilter(keyword, field))
-                    .sort(srt -> srt.field(f -> f.field("trendScore").order(SortOrder.Desc)))), Map.class);
-
-            List<Map<String, Object>> hits = response.hits().hits().stream().map(h -> {
-                Map<String, Object> doc = new HashMap<>(h.source());
-                doc.put("_id", h.id());
-                doc.put("_score", h.score());
-                return doc;
-            }).toList();
-
-            Map<String, Object> out = new HashMap<>();
-            out.put("items", hits);
-            out.put("total", response.hits().total() != null ? response.hits().total().value() : (long) hits.size());
-            out.put("page", page);
-            out.put("size", size);
-            return out;
-        } catch (IOException e) {
-            log.error("Search failed: {}", e.getMessage());
-            return Map.of("items", List.of(), "total", 0L, "page", page, "size", size);
-        }
-    }
-
     /**
      * Typed variant of {@link #search(String, String, int, int)} returning a
      * strongly-typed envelope instead of an ad-hoc {@code Map<String,Object>}.

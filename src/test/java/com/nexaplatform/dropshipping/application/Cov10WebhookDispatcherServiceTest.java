@@ -332,9 +332,12 @@ class Cov10WebhookDispatcherServiceTest {
 
         service.retryDueDeliveries();
 
-        // Si dos pasadas del scheduler se solapan, la marca PENDING evita que la misma entrega salga dos veces.
-        assertThat(d.getAttempt()).isEqualTo(2);
-        assertThat(d.getStatus()).isEqualTo("RETRY"); // el reintento falló (URL muerta) y se reprograma
+        // Si dos pasadas del planificador se solapan, la marca PENDING evita que la misma entrega salga
+        // dos veces. El reintento se dispara POR EL PROXY (self.attempt), no con this: con la
+        // autoinvocación corría síncrono dentro de la transacción del planificador y un suscriptor lento
+        // retrasaba a todos los demás vencidos.
+        assertThat(d.getStatus()).isEqualTo("PENDING");
+        assertThat(d.getNextRetryAt()).isNull();
     }
 
     /* ---------- utilidades ---------- */

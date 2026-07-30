@@ -342,7 +342,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Override
     @Transactional
     public Payment markFailed(UUID paymentId, String errorMessage, Map<String, Object> providerPayload) {
-        Payment p = paymentRepository.findById(paymentId).orElseThrow();
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
         p.setStatus(PaymentStatus.FAILED);
         p.setErrorMessage(errorMessage);
         Map<String, Object> merged = new HashMap<>(

@@ -188,7 +188,10 @@ public class WebhookDispatcherService {
             d.setStatus("PENDING");
             d.setNextRetryAt(null);
             deliveryRepository.save(d);
-            attempt(d.getId());
+            // POR EL PROXY, igual que en queue(): con `this` la autoinvocación se salta @Async y los
+            // reintentos corrían en serie dentro de la transacción del planificador, de modo que un
+            // suscriptor lento retrasaba a todos los demás vencidos.
+            self.attempt(d.getId());
         }
     }
 

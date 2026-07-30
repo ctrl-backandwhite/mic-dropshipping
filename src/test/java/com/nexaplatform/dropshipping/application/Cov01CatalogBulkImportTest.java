@@ -938,7 +938,10 @@ class Cov01CatalogBulkImportTest {
         assertThat(captor.getAllValues().get(0).getPosition()).isZero();
         assertThat(captor.getAllValues().get(0).getLocale()).isEqualTo("es");
         assertThat(captor.getAllValues().get(1).getPosition()).isEqualTo(2);
-        assertThat(captor.getAllValues().get(1).getLocale()).isEqualTo("EN");
+        // El idioma se normaliza a minúsculas: la consulta de la ficha compara con "=" contra "en" y
+        // Postgres distingue mayúsculas, así que guardarlo como "EN" hacía que esas especificaciones no
+        // se mostraran y el visitante cayera al respaldo, que mezcla todos los idiomas.
+        assertThat(captor.getAllValues().get(1).getLocale()).isEqualTo("en");
     }
 
     @Test
