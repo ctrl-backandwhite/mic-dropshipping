@@ -527,7 +527,10 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
         Payment p = Payment.builder().userId(payerUserId).walletId(wallet.getId()).method(method)
                 .status(PaymentStatus.PENDING).amountUsdCents(amountUsdCents)
-                .amountDisplay(BigDecimal.valueOf(amountUsdCents).movePointLeft(2))
+                // amountDisplay va emparejado con currencyDisplay: dejar aquí el importe en USD mientras
+                // la divisa dice EUR hacía que el pago declarase 10,87 € cuando a la pasarela iban 9,54 €.
+                // Lo cobrado siempre fue correcto; el dato publicado contradecía a la pasarela.
+                .amountDisplay(perLineSettlementAmount(order, displayCcy))
                 .currencyDisplay(displayCcy)
                 .settlementCurrency(settlementCcy).settlementAmount(settlementAmount).idempotencyKey(idempotencyKey)
                 .orderId(orderId).purpose("ORDER_PAYMENT").build();
