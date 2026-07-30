@@ -131,7 +131,8 @@ class CurrencyRateServiceTest {
 
     @Test
     void toUsd_unknown_source_throws_not_found() {
-        assertThatThrownBy(() -> service.toUsd(new BigDecimal("1"), "XXX")).isInstanceOf(NotFoundException.class);
+        BigDecimal uno = new BigDecimal("1");
+        assertThatThrownBy(() -> service.toUsd(uno, "XXX")).isInstanceOf(NotFoundException.class);
     }
 
     @Test

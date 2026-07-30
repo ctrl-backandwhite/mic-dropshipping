@@ -171,9 +171,16 @@ public class CategoryProductFiller {
 
     /** Immutable demo-category spec: theme metadata + product archetypes ({es, en, zh} each). */
     private static final class Cat {
-        final String slug, nameEs, nameEn, namePt, nameZh, icon, externalId;
+        final String slug;
+        final String nameEs;
+        final String nameEn;
+        final String namePt;
+        final String nameZh;
+        final String icon;
+        final String externalId;
         final int position;
-        final double basePrice, priceStep;
+        final double basePrice;
+        final double priceStep;
         final String[] images;
         final String[][] archs;
 

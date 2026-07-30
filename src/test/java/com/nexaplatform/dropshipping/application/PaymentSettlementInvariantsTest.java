@@ -92,6 +92,13 @@ class PaymentSettlementInvariantsTest {
     private final UUID otherUserId = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private final UUID orderId = UUID.fromString("33333333-3333-3333-3333-333333333333");
 
+    /**
+     * Identificador de pago fijo. Se declara aquí, y no dentro de cada helper, para que las lambdas de
+     * las aserciones contengan UNA sola llamada capaz de lanzar: con {@code p.getId()} dentro, un fallo
+     * al leer el identificador daría el test por bueno por la razón equivocada.
+     */
+    private final UUID paymentId = UUID.fromString("44444444-4444-4444-4444-444444444444");
+
     private PaymentUseCaseImpl useCase() {
         return useCase(List.of());
     }
@@ -105,14 +112,14 @@ class PaymentSettlementInvariantsTest {
 
     private Payment recharge(PaymentStatus status, String providerRef) {
         Payment p = new Payment();
-        p.setId(UUID.randomUUID());
+        p.setId(paymentId);
         p.setUserId(userId);
         p.setStatus(status);
         p.setMethod(PaymentMethod.CARD);
         p.setProviderRef(providerRef);
         p.setAmountUsdCents(2500L);
         p.setPurpose("RECHARGE");
-        when(paymentRepository.findById(p.getId())).thenReturn(Optional.of(p));
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(p));
         // JPA asigna el id al persistir; el mock hace lo mismo porque la auditoría lo mete en un Map.of,
         // que no admite valores nulos.
         when(paymentRepository.save(any())).thenAnswer(i -> {
@@ -228,7 +235,7 @@ class PaymentSettlementInvariantsTest {
         // Sin esta comprobación cualquiera inicia una recarga y la "confirma" sin pagar: dinero libre.
         Payment p = recharge(PaymentStatus.PENDING, realRef);
 
-        assertThatThrownBy(() -> subject.confirmMockRecharge(userId, p.getId()))
+        assertThatThrownBy(() -> subject.confirmMockRecharge(userId, paymentId))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("pasarela de pago real");
 
@@ -250,9 +257,9 @@ class PaymentSettlementInvariantsTest {
         // 404 y no 403: un 403 confirmaría al atacante que ese identificador de pago existe.
         Payment p = recharge(PaymentStatus.PENDING, "cs_mock_1");
 
-        assertThatThrownBy(() -> subject.confirmMockRecharge(otherUserId, p.getId()))
+        assertThatThrownBy(() -> subject.confirmMockRecharge(otherUserId, paymentId))
                 .isInstanceOf(NotFoundException.class);
-        assertThatThrownBy(() -> subject.confirmRecharge(otherUserId, p.getId()))
+        assertThatThrownBy(() -> subject.confirmRecharge(otherUserId, paymentId))
                 .isInstanceOf(NotFoundException.class);
 
         verify(walletUseCase, never()).deposit(any(), anyLong(), any(), anyString(), anyString());
@@ -275,7 +282,7 @@ class PaymentSettlementInvariantsTest {
         // Reembolsar un pago no cobrado saca dinero de la plataforma por algo que nunca entró.
         Payment p = orderPayment(PaymentStatus.valueOf(status), "pi_3Abc");
 
-        assertThatThrownBy(() -> subject.refundOrderPayment(orderId, p.getId(), 100L))
+        assertThatThrownBy(() -> subject.refundOrderPayment(orderId, paymentId, 100L))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("succeeded");
     }
@@ -285,7 +292,7 @@ class PaymentSettlementInvariantsTest {
         Payment p = orderPayment(PaymentStatus.SUCCEEDED, "usdt-tx");
         p.setMethod(PaymentMethod.USDT);
 
-        assertThatThrownBy(() -> subject.refundOrderPayment(orderId, p.getId(), 100L))
+        assertThatThrownBy(() -> subject.refundOrderPayment(orderId, paymentId, 100L))
                 .isInstanceOf(BusinessException.class);
 
         assertThat(p.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
@@ -296,9 +303,9 @@ class PaymentSettlementInvariantsTest {
         UUID foreignOrder = UUID.randomUUID();
         Payment p = orderPayment(PaymentStatus.SUCCEEDED, "pi_3Abc");
 
-        assertThatThrownBy(() -> subject.refundOrderPayment(foreignOrder, p.getId(), 100L))
+        assertThatThrownBy(() -> subject.refundOrderPayment(foreignOrder, paymentId, 100L))
                 .isInstanceOf(NotFoundException.class);
-        assertThatThrownBy(() -> subject.confirmOrderPayment(foreignOrder, p.getId()))
+        assertThatThrownBy(() -> subject.confirmOrderPayment(foreignOrder, paymentId))
                 .isInstanceOf(NotFoundException.class);
     }
 

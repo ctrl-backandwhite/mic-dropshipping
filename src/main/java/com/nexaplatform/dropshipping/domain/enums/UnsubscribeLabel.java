@@ -42,7 +42,14 @@ public enum UnsubscribeLabel {
     HOME_LABEL("Ir a NX036", "Go to NX036", "Ir para a NX036", "前往 NX036",
             "Aller sur NX036", "Zu NX036", "Vai su NX036", "Naar NX036");
 
-    private final String es, en, pt, zh, fr, de, it, nl;
+    private final String es;
+    private final String en;
+    private final String pt;
+    private final String zh;
+    private final String fr;
+    private final String de;
+    private final String it;
+    private final String nl;
 
     UnsubscribeLabel(String es, String en, String pt, String zh, String fr, String de, String it, String nl) {
         this.es = es; this.en = en; this.pt = pt; this.zh = zh; this.fr = fr; this.de = de; this.it = it; this.nl = nl;

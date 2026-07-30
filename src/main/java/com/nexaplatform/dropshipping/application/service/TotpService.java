@@ -253,7 +253,8 @@ public class TotpService {
 
     private static String base32(byte[] data) {
         StringBuilder sb = new StringBuilder();
-        int bits = 0, value = 0;
+        int bits = 0;
+        int value = 0;
         for (byte b : data) {
             value = (value << 8) | (b & 0xFF);
             bits += 8;
@@ -270,7 +271,8 @@ public class TotpService {
     private static byte[] base32Decode(String s) {
         s = s.toUpperCase().replaceAll("[^A-Z2-7]", "");
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        int bits = 0, value = 0;
+        int bits = 0;
+        int value = 0;
         for (char c : s.toCharArray()) {
             int idx = BASE32.indexOf(c);
             if (idx < 0)

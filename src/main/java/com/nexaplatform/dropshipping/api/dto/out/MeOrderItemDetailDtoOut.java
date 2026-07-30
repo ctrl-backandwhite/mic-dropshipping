@@ -56,9 +56,12 @@ public class MeOrderItemDetailDtoOut {
             }
         }
         if (title == null) {
-            title = i.getTitleSnapshot() != null
-                    ? i.getTitleSnapshot()
-                    : (i.getProduct() != null ? i.getProduct().getTitleZh() : null);
+            // La foto que guardó el pedido manda sobre el producto vivo: lo vendido no cambia porque
+            // alguien reedite la ficha después.
+            title = i.getTitleSnapshot();
+            if (title == null && i.getProduct() != null) {
+                title = i.getProduct().getTitleZh();
+            }
         }
         String variantName = (i.getVariant() != null) ? i.getVariant().getTitle() : null;
         // Prefer a live catalog image over the snapshot (often placeholder or empty).

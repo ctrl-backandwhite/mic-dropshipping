@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import com.nexaplatform.dropshipping.application.service.Texts;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.AddressInput;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.CreateOrderRequest;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.OrderItemInput;
@@ -742,9 +743,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
         Payment paid = paymentUseCase.listOrderPayments(o.getId()).stream()
                 .filter(p -> p.getStatus() == PaymentStatus.SUCCEEDED).findFirst().orElse(null);
         String method = paid != null && paid.getMethod() != null ? paid.getMethod().name() : WALLET;
-        String ccy = paid != null && paid.getSettlementCurrency() != null && !paid.getSettlementCurrency().isBlank()
-                ? paid.getSettlementCurrency()
-                : (o.getCurrency() != null ? o.getCurrency() : "USD");
+        // Se devuelve en la divisa en que se COBRÓ; si el pago no la fijó, la del pedido.
+        String ccy = Texts.firstNonBlankOr("USD",
+                paid != null ? paid.getSettlementCurrency() : null, o.getCurrency());
         userRepository.findById(o.getUserId()).ifPresent(u -> orderEmailService.refunded(
                 o, u.getEmail(), u.getLanguage(), toWallet, ccy, method));
     }

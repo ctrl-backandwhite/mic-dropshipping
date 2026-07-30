@@ -7,7 +7,6 @@ import com.nexaplatform.dropshipping.infrastructure.integration.currency.Currenc
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PaymentJpaRepositoryAdapter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import java.math.BigDecimal;
 import java.util.List;

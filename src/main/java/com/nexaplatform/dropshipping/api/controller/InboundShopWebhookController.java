@@ -91,9 +91,7 @@ public class InboundShopWebhookController implements InboundShopWebhookApi {
             externalId = "shop-" + shop.getId() + "-" + System.currentTimeMillis();
 
         // Items: aceptamos `items` o `line_items`.
-        JsonNode itemsNode = root.has("items")
-                ? root.get("items")
-                : root.has("line_items") ? root.get("line_items") : null;
+        JsonNode itemsNode = firstPresent(root, "items", "line_items");
         if (itemsNode == null || !itemsNode.isArray() || itemsNode.isEmpty()) {
             throw new IllegalArgumentException("Missing items / line_items");
         }
@@ -116,9 +114,7 @@ public class InboundShopWebhookController implements InboundShopWebhookApi {
         }
 
         // Address: `shippingAddress` o `shipping_address`.
-        JsonNode addr = root.has("shippingAddress")
-                ? root.get("shippingAddress")
-                : root.has("shipping_address") ? root.get("shipping_address") : null;
+        JsonNode addr = firstPresent(root, "shippingAddress", "shipping_address");
         if (addr == null) {
             // El contrato marca la dirección de envío como obligatoria (@NotNull). Dejar pasar el pedido sin
             // ella solo aplaza el fallo hasta que el transportista pide el destinatario, y para entonces ya
@@ -176,5 +172,18 @@ public class InboundShopWebhookController implements InboundShopWebhookApi {
             super("Unknown SKU: " + sku);
             this.sku = sku;
         }
+    }
+
+    /**
+     * Primer campo presente de entre varios nombres. Cada tienda manda la misma información con la clave
+     * en su propio estilo ({@code lineItems} o {@code line_items}), así que el consumidor acepta ambos.
+     */
+    private static JsonNode firstPresent(JsonNode root, String... names) {
+        for (String name : names) {
+            if (root.has(name)) {
+                return root.get(name);
+            }
+        }
+        return null;
     }
 }

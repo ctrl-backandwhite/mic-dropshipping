@@ -20,7 +20,6 @@ import com.nexaplatform.dropshipping.infrastructure.integration.payment.PaymentG
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PaymentJpaRepositoryAdapter;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mapstruct.factory.Mappers;
 import org.mockito.Mock;

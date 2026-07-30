@@ -191,7 +191,8 @@ class OrderUseCaseImplTest {
         var req = new CreateOrderRequest("EXT", new AddressInput("X", null, null, "L1", null, "C", null, "00000", "ES"),
                 null, List.of(new OrderItemInput(productId, null, 1)), null);
 
-        assertThatThrownBy(() -> orderUseCase.createOrder(UUID.randomUUID(), null, req))
+        UUID partnerAppId = UUID.randomUUID();
+        assertThatThrownBy(() -> orderUseCase.createOrder(partnerAppId, null, req))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("no price");
     }
 
@@ -337,7 +338,8 @@ class OrderUseCaseImplTest {
         order.setId(id);
         when(orderRepository.findById(id)).thenReturn(Optional.of(order));
 
-        assertThatThrownBy(() -> orderUseCase.cancelMyOrder(UUID.randomUUID(), id, true))
+        UUID otroUsuario = UUID.randomUUID();
+        assertThatThrownBy(() -> orderUseCase.cancelMyOrder(otroUsuario, id, true))
                 .isInstanceOf(NotFoundException.class);
     }
 

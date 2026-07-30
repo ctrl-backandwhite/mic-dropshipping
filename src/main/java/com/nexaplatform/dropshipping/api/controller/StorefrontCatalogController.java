@@ -489,7 +489,8 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         if (req == null || req.url() == null)
             throw new BusinessException("url is required");
         String[] parsed = parseExternalUrl(req.url());
-        String source = parsed[0], externalId = parsed[1];
+        String source = parsed[0];
+        String externalId = parsed[1];
         if (source == null || externalId == null) {
             return new ImportUrlResponse(false, null, null, null,
                     "Pegar una URL de 1688, taobao, aliexpress o ebay (ej. https://detail.1688.com/offer/<id>.html)");

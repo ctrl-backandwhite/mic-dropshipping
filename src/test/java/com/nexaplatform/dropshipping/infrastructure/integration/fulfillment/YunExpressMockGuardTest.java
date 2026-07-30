@@ -10,7 +10,6 @@ import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.Fulf
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.TrackingSnapshot;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CainiaoZoneRepository;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.test.util.ReflectionTestUtils;
 

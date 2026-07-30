@@ -247,8 +247,8 @@ public final class BulkProductFields {
                 p.getTranslations().add(existing);
             }
             existing.setTitle(tr.getTitle().trim());
-            String shortDesc = has(tr.getShortDescription()) ? tr.getShortDescription().trim()
-                    : (tr.getDescription() != null ? tr.getDescription().trim() : tr.getTitle().trim());
+            String shortDesc = Texts
+                    .firstNonBlankOr(tr.getTitle(), tr.getShortDescription(), tr.getDescription()).trim();
             existing.setShortDescription(
                     shortDesc.length() > MAX_SHORT_DESCRIPTION ? shortDesc.substring(0, MAX_SHORT_DESCRIPTION)
                             : shortDesc);

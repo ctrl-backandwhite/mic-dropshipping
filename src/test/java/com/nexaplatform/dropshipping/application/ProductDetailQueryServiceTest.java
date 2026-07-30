@@ -12,7 +12,6 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Produ
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductTagRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 

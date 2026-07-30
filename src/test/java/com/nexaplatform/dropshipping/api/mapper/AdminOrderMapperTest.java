@@ -5,7 +5,6 @@ import com.nexaplatform.dropshipping.domain.model.Order;
 import org.junit.jupiter.api.Test;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import org.junit.jupiter.api.BeforeEach;
-import org.mockito.Mockito;
 
 import java.math.BigDecimal;
 

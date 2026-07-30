@@ -619,7 +619,8 @@ public class DemoOperationsSeedRunner {
         String[] seasons = {"all_season", "summer", "winter", "spring"};
 
         List<ProductEntity> products = productRepository.findAll();
-        int aCount = 0, tCount = 0;
+        int aCount = 0;
+        int tCount = 0;
         for (ProductEntity p : products) {
             String slug = p.getCategory() != null ? p.getCategory().getSlug() : GENERAL;
             // attributes
@@ -657,7 +658,8 @@ public class DemoOperationsSeedRunner {
                 "HK", "AR", "CL", "CO", "PE", "PT", "NL", "PL", "SE", "NO"};
 
         List<SupplierEntity> suppliers = supplierRepository.findAll();
-        int zCount = 0, rCount = 0;
+        int zCount = 0;
+        int rCount = 0;
         for (SupplierEntity s : suppliers) {
             for (String c : countries) {
                 zoneRepository.save(ShippingZoneEntity.builder().supplier(s).countryCode(c).region(regionOf(c))

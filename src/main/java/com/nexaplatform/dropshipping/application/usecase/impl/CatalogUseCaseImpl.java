@@ -1110,7 +1110,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public BulkResultDtoOut bulkCreateProducts(
             List<BulkProductDtoIn> rows) {
-        int created = 0, failed = 0;
+        int created = 0;
+        int failed = 0;
         List<String> errors = new ArrayList<>();
         List<UUID> createdIds = new ArrayList<>();
         List<SupplierEntity> suppliers = supplierRepository.findAll();
@@ -1538,7 +1539,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             @CacheEvict(value = CACHE_CATEGORIES_FLAT, allEntries = true)})
     public BulkResultDtoOut bulkCreateCategories(
             List<BulkCategoryDtoIn> rows) {
-        int created = 0, failed = 0;
+        int created = 0;
+        int failed = 0;
         List<String> errors = new ArrayList<>();
         for (int i = 0; i < rows.size(); i++) {
             var r = rows.get(i);

@@ -162,15 +162,17 @@ class BulkProductRulesTest {
 
     @Test
     void unaCategoriaSinAtributosObligatoriosNoExigeNada() {
-        assertThatCode(() -> BulkProductRules.assertRequiredAttributes(row(), List.of(), "moda-relojes"))
+        BulkProductDtoIn r = row();
+        assertThatCode(() -> BulkProductRules.assertRequiredAttributes(r, List.of(), "moda-relojes"))
                 .doesNotThrowAnyException();
-        assertThatCode(() -> BulkProductRules.assertRequiredAttributes(row(),
+        assertThatCode(() -> BulkProductRules.assertRequiredAttributes(r,
                 List.of(attr("material", false)), "moda-relojes")).doesNotThrowAnyException();
     }
 
     @Test
     void faltarUnAtributoObligatorioRechazaLaFilaDiciendoCualYDeQueCategoria() {
-        assertThatThrownBy(() -> BulkProductRules.assertRequiredAttributes(row(),
+        BulkProductDtoIn r = row();
+        assertThatThrownBy(() -> BulkProductRules.assertRequiredAttributes(r,
                 List.of(attr("material", true)), "moda-relojes"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("material")
@@ -325,7 +327,8 @@ class BulkProductRulesTest {
 
     @Test
     void sinIdentificadorElMensajeDeFaltaDeImagenIdentificaPorElTitulo() {
-        assertThatThrownBy(() -> BulkProductRules.imageUrlsOf(row(), "Reloj de pulsera"))
+        BulkProductDtoIn r = row();
+        assertThatThrownBy(() -> BulkProductRules.imageUrlsOf(r, "Reloj de pulsera"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Reloj de pulsera");
     }

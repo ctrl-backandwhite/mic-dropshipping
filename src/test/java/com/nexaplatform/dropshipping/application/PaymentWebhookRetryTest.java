@@ -117,7 +117,7 @@ class PaymentWebhookRetryTest {
         // Un corte de base de datos en mitad de la confirmación.
         when(paymentRepository.findById(paymentId)).thenThrow(new IllegalStateException("connection reset"));
 
-        assertThatThrownBy(() -> useCase()
+        assertThatThrownBy(() -> subject
                 .handleStripeEvent("payment_intent.succeeded", STRIPE_PAID.formatted(paymentId)))
                 .isInstanceOf(WebhookProcessingException.class)
                 .hasMessageContaining("reintente");
@@ -128,7 +128,7 @@ class PaymentWebhookRetryTest {
         UUID paymentId = UUID.randomUUID();
         when(paymentRepository.findById(paymentId)).thenThrow(new IllegalStateException("connection reset"));
 
-        assertThatThrownBy(() -> useCase()
+        assertThatThrownBy(() -> subject
                 .handleStripeEvent("payment_intent.succeeded", STRIPE_PAID.formatted(paymentId)))
                 .isInstanceOf(WebhookProcessingException.class);
 
@@ -159,11 +159,11 @@ class PaymentWebhookRetryTest {
         // Reintentarlo no lo arreglaría nunca, y la pasarela acabaría desactivando el endpoint.
         when(paymentRepository.findByProviderAndProviderRef(anyString(), anyString())).thenReturn(Optional.empty());
 
-        assertThat(useCase().handlePayPalEvent(
+        assertThat(subject.handlePayPalEvent(
                 """
                         {"event_type":"PAYMENT.CAPTURE.COMPLETED","resource":{"id":"desconocido"}}"""))
                 .isEqualTo("no-match");
-        assertThat(useCase().handleCoinbaseEvent(
+        assertThat(subject.handleCoinbaseEvent(
                 """
                         {"event":{"type":"charge:confirmed","data":{"code":"desconocido"}}}"""))
                 .isEqualTo("no-match");
@@ -173,7 +173,7 @@ class PaymentWebhookRetryTest {
     void unEventoDeStripeSinPagoIdentificableSeDaPorAtendido() {
         when(paymentRepository.findByProviderAndProviderRef(anyString(), anyString())).thenReturn(Optional.empty());
 
-        assertThat(useCase().handleStripeEvent("payment_intent.succeeded",
+        assertThat(subject.handleStripeEvent("payment_intent.succeeded",
                 """
                         {"data":{"object":{"id":"pi_desconocido"}}}"""))
                 .isEqualTo("no-match");
@@ -188,7 +188,7 @@ class PaymentWebhookRetryTest {
         p.setMethod(PaymentMethod.CARD);
         when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(p));
 
-        assertThat(useCase().handleStripeEvent("payment_intent.created", STRIPE_PAID.formatted(paymentId)))
+        assertThat(subject.handleStripeEvent("payment_intent.created", STRIPE_PAID.formatted(paymentId)))
                 .isEqualTo("ok");
 
         assertThat(p.getStatus()).isEqualTo(PaymentStatus.PENDING);
@@ -200,7 +200,7 @@ class PaymentWebhookRetryTest {
         String payload = """
                 {"data":{"object":{"id":"sub_123","status":"active","current_period_end":1800000000}}}""";
 
-        assertThat(useCase().handleStripeEvent("customer.subscription.updated", payload)).isEqualTo("ok");
+        assertThat(subject.handleStripeEvent("customer.subscription.updated", payload)).isEqualTo("ok");
 
         verify(customerSubscriptionUseCase).syncFromStripe(anyString(), anyString(), any(), any());
         verify(partnerPlanSyncService).onSubscriptionEvent(anyString(), anyString(), anyString());
@@ -211,7 +211,7 @@ class PaymentWebhookRetryTest {
         String payload = """
                 {"data":{"object":{"id":"in_1","subscription":"sub_123"}}}""";
 
-        assertThat(useCase().handleStripeEvent("invoice.payment_failed", payload)).isEqualTo("ok");
+        assertThat(subject.handleStripeEvent("invoice.payment_failed", payload)).isEqualTo("ok");
 
         verify(subscriptionNotificationService).planPaymentFailed("sub_123");
     }

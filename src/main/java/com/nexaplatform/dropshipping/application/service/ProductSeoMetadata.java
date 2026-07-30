@@ -79,8 +79,7 @@ public final class ProductSeoMetadata {
 
     /** Descripción corta, o la larga, o el propio título; recortada donde Google recorta. */
     private static String metaDescriptionOf(ProductTranslationEntity tr, String title, boolean zh) {
-        String base = has(tr.getShortDescription()) ? tr.getShortDescription()
-                : (tr.getDescription() != null ? tr.getDescription() : title);
+        String base = Texts.firstNonBlankOr(title, tr.getShortDescription(), tr.getDescription());
         String metaDescription = sanitize(base, zh);
         if (metaDescription.length() > DESCRIPTION_MAX) {
             metaDescription = metaDescription.substring(0, DESCRIPTION_MAX - 3).trim() + "…";

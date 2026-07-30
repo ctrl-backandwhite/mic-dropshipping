@@ -36,7 +36,14 @@ public enum NewProductsEmailLabel {
             "Se désabonner des e-mails de nouveautés", "Neuheiten-E-Mails abbestellen",
             "Annulla l'iscrizione alle email sulle novità", "Uitschrijven voor nieuwe-producten-mails");
 
-    private final String es, en, pt, zh, fr, de, it, nl;
+    private final String es;
+    private final String en;
+    private final String pt;
+    private final String zh;
+    private final String fr;
+    private final String de;
+    private final String it;
+    private final String nl;
 
     NewProductsEmailLabel(String es, String en, String pt, String zh, String fr, String de, String it, String nl) {
         this.es = es; this.en = en; this.pt = pt; this.zh = zh; this.fr = fr; this.de = de; this.it = it; this.nl = nl;

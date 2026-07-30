@@ -228,7 +228,9 @@ class FulfillmentServiceTest {
         o.setUserId(UUID.randomUUID());
         when(orderRepository.findById(o.getId())).thenReturn(Optional.of(o));
 
-        assertThatThrownBy(() -> service.myTrackingView(UUID.randomUUID(), o.getId()))
+        UUID otroUsuario = UUID.randomUUID();
+        UUID pedidoId = o.getId();
+        assertThatThrownBy(() -> service.myTrackingView(otroUsuario, pedidoId))
                 .isInstanceOf(NotFoundException.class);
     }
 

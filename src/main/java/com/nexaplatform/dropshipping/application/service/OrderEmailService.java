@@ -56,8 +56,7 @@ public class OrderEmailService {
         }
         try {
             String orderUrl = baseUrl + ORDERS + o.getId();
-            String cur = invoiceCurrency != null && !invoiceCurrency.isBlank() ? invoiceCurrency
-                    : (o.getCurrency() != null ? o.getCurrency() : "USD");
+            String cur = Texts.firstNonBlankOr("USD", invoiceCurrency, o.getCurrency());
             Map<String, Object> vars = new HashMap<>(invoiceService.model(o, locale, orderUrl, cur));
             if (paymentMethod != null) {
                 // Mostramos el método traducido al idioma del usuario (Tarjeta/Billetera/…), no el código crudo.
@@ -125,8 +124,8 @@ public class OrderEmailService {
             return;
         }
         String lang = InvoiceLabel.lang(locale);
-        String cur = settlementCcy != null && !settlementCcy.isBlank() ? settlementCcy
-                : (o.getCurrency() != null ? o.getCurrency() : "USD");
+        // La divisa del correo es la que se LIQUIDÓ; si el cobro no la fijó, la del pedido.
+        String cur = Texts.firstNonBlankOr("USD", settlementCcy, o.getCurrency());
 
         List<String[]> details = new ArrayList<>();
         details.add(new String[] { OrderEmailLabel.REFUND_L_ORDER.of(lang), o.getOrderNumber() });
