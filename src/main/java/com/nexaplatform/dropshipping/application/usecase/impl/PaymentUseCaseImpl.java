@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.application.usecase.impl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.api.exception.WebhookProcessingException;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
 import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
@@ -748,8 +749,13 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 return "ok";
             }
 
-            if (paymentIdStr == null)
+            // String.valueOf(null) devuelve la CADENA "null", no null: sin este segundo control un evento
+            // sin metadata que además no casa con ningún pago se colaba hasta UUID.fromString("null") y
+            // reventaba. Antes daba igual porque el fallo se tragaba; ahora haría que Stripe reintentase
+            // tres días un evento que no va a casar nunca.
+            if (paymentIdStr == null || "null".equals(paymentIdStr) || paymentIdStr.isBlank()) {
                 return NO_MATCH;
+            }
             UUID paymentId = UUID.fromString(paymentIdStr);
             if ("payment_intent.succeeded".equals(eventType)) {
                 confirmSucceeded(paymentId, data);
@@ -757,9 +763,25 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 markFailed(paymentId, "Stripe: payment_failed", data);
             }
         } catch (Exception e) {
-            log.error("Stripe webhook processing failed: {}", e.getMessage(), e);
+            throw webhookFailure("stripe", eventType, e);
         }
         return "ok";
+    }
+
+    /**
+     * Un fallo procesando el evento NO puede saldarse con un 200.
+     *
+     * <p>Devolver "ok" le decía a la pasarela que el evento quedó atendido, así que no lo reintentaba
+     * nunca más: el cobro seguía hecho en su lado mientras aquí el pedido no pasaba a PAID o el saldo no
+     * se acreditaba, y del incidente solo quedaba una línea de log que nadie mira. Se avisa al
+     * responsable y se propaga para que el controlador responda 5xx y la pasarela reenvíe el evento
+     * —Stripe reintenta durante tres días—.
+     */
+    private WebhookProcessingException webhookFailure(String provider, String eventType, Exception cause) {
+        log.error("{} webhook processing failed for {}: {}", provider, eventType, cause.getMessage(), cause);
+        opsAlertService.paymentFailed(provider, "webhook " + eventType, "-",
+                cause.getMessage() != null ? cause.getMessage() : cause.toString());
+        return new WebhookProcessingException(provider, eventType, cause);
     }
 
     /** Convierte un valor JSON (Number/String/null) a epoch-segundos Long, o null. */
@@ -795,7 +817,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 markFailed(p.getId(), "PayPal: " + eventType, resource);
             }
         } catch (Exception e) {
-            log.error("PayPal webhook processing failed: {}", e.getMessage(), e);
+            throw webhookFailure("paypal", "-", e);
         }
         return "ok";
     }
@@ -819,7 +841,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 markFailed(p.getId(), "Coinbase: " + type, data);
             }
         } catch (Exception e) {
-            log.error("Coinbase webhook processing failed: {}", e.getMessage(), e);
+            throw webhookFailure("coinbase", "-", e);
         }
         return "ok";
     }
