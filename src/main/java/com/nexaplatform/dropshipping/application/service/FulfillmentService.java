@@ -48,6 +48,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class FulfillmentService {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String ORDER = "Order";
+
     /**
      * Origen que se graba en los eventos que produce el SONDEO del proveedor activo. Los pushes entrantes
      * escriben el suyo propio (`YUNEXPRESS` / `CAINIAO`), así que el timeline distingue de dónde vino cada
@@ -235,7 +238,7 @@ public class FulfillmentService {
      */
     @Transactional
     public void retryFulfillment(UUID orderId) {
-        Order o = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException("Order"));
+        Order o = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException(ORDER));
         o.setFulfillmentFailedAt(null);
         o.setFulfillmentNextAttemptAt(null);
         o.setFulfillmentAttempts(0);
@@ -396,9 +399,9 @@ public class FulfillmentService {
     /** Vista de tracking del pedido del usuario (valida propiedad). */
     @Transactional(readOnly = true)
     public TrackingView myTrackingView(UUID userId, UUID orderId) {
-        Order o = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException("Order"));
+        Order o = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException(ORDER));
         if (o.getUserId() == null || !o.getUserId().equals(userId)) {
-            throw new NotFoundException("Order");
+            throw new NotFoundException(ORDER);
         }
         return view(o);
     }
@@ -406,7 +409,7 @@ public class FulfillmentService {
     /** Vista de tracking para el admin. */
     @Transactional(readOnly = true)
     public TrackingView adminTrackingView(UUID orderId) {
-        Order o = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException("Order"));
+        Order o = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException(ORDER));
         return view(o);
     }
 

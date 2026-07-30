@@ -40,6 +40,13 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ShopConnectionUseCaseImpl implements ShopConnectionUseCase {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String CONNECTED = "CONNECTED";
+    private static final String ERROR = "ERROR";
+
+    /** Instancia compartida: SecureRandom es seguro entre hilos y re-sembrarlo por llamada solo cuesta. */
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
     private final ShopConnectionRepository shopRepository;
     private final ShopProductListingRepository listingRepository;
     private final TokenCryptoService tokenCrypto;
@@ -66,7 +73,7 @@ public class ShopConnectionUseCaseImpl implements ShopConnectionUseCase {
         String encoded = tokenCrypto.encrypt(model.getAccessTokenEnc());
         ShopConnection toPersist = model.withUserId(userId)
                 .withPlatform(model.getPlatform() != null ? model.getPlatform().toLowerCase() : null)
-                .withAccessTokenEnc(encoded).withStatus("CONNECTED").withMetadata(new HashMap<>());
+                .withAccessTokenEnc(encoded).withStatus(CONNECTED).withMetadata(new HashMap<>());
         ShopConnection saved = shopRepository.save(toPersist);
         saved.setListings(0);
         return saved;
@@ -84,12 +91,12 @@ public class ShopConnectionUseCaseImpl implements ShopConnectionUseCase {
         // DROP-693: real, observable sync. Previously a Shopify store could sit at 0 published products
         // with no reason and no log. Now we record WHY: no connector, no products, or the API error.
         if (connector.isEmpty()) {
-            s.setStatus("ERROR");
+            s.setStatus(ERROR);
             s.setLastSyncError(null);
             s.setLastSyncMessage("La integración con '" + s.getPlatform()
                     + "' aún no está disponible (Próximamente). No se publicó ningún producto.");
         } else if (listings.isEmpty()) {
-            s.setStatus("CONNECTED");
+            s.setStatus(CONNECTED);
             s.setLastSyncError(null);
             s.setLastSyncMessage("0 productos para sincronizar — añade productos a la tienda antes de sincronizar.");
         } else {
@@ -102,7 +109,7 @@ public class ShopConnectionUseCaseImpl implements ShopConnectionUseCase {
                 if (product == null) {
                     failed++;
                     String msg = "Producto no encontrado: " + listing.getProductId();
-                    listing.setStatus("ERROR");
+                    listing.setStatus(ERROR);
                     listing.setErrorMessage(msg);
                     if (firstError == null) {
                         firstError = msg;
@@ -116,7 +123,7 @@ public class ShopConnectionUseCaseImpl implements ShopConnectionUseCase {
                         listing.setErrorMessage(null);
                     } else {
                         failed++;
-                        listing.setStatus("ERROR");
+                        listing.setStatus(ERROR);
                         listing.setErrorMessage(r.error());
                         if (firstError == null) {
                             firstError = r.error();
@@ -126,7 +133,7 @@ public class ShopConnectionUseCaseImpl implements ShopConnectionUseCase {
                 listing.setLastPushedAt(Instant.now());
                 listingRepository.save(listing);
             }
-            s.setStatus(failed > 0 && ok == 0 ? "ERROR" : "CONNECTED");
+            s.setStatus(failed > 0 && ok == 0 ? ERROR : CONNECTED);
             s.setLastSyncError(firstError);
             s.setLastSyncMessage(ok + " publicados, " + failed + " con error.");
             log.info("Shop {} sync: {} ok, {} failed", id, ok, failed);
@@ -154,7 +161,7 @@ public class ShopConnectionUseCaseImpl implements ShopConnectionUseCase {
         ShopConnection s = require(userId, id);
         // 32 random bytes, URL-safe Base64 without padding -> ~43 chars.
         byte[] raw = new byte[32];
-        new SecureRandom().nextBytes(raw);
+        SECURE_RANDOM.nextBytes(raw);
         String secret = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
         if (s.getMetadata() == null)
             s.setMetadata(new HashMap<>());
@@ -176,10 +183,10 @@ public class ShopConnectionUseCaseImpl implements ShopConnectionUseCase {
         ProductEntity product = productRepository.findById(productId).orElse(null);
         if (connector.isEmpty()) {
             // DROP-701: honest failure instead of a fake "remote-xxxx" id.
-            listing.setStatus("ERROR");
+            listing.setStatus(ERROR);
             listing.setErrorMessage("La integración con '" + s.getPlatform() + "' aún no está disponible (Próximamente).");
         } else if (product == null) {
-            listing.setStatus("ERROR");
+            listing.setStatus(ERROR);
             listing.setErrorMessage("Producto no encontrado: " + productId);
         } else {
             ShopConnector.PushResult r = connector.get().push(s, decryptToken(s), product);
@@ -188,7 +195,7 @@ public class ShopConnectionUseCaseImpl implements ShopConnectionUseCase {
                 listing.setRemoteProductId(r.remoteProductId());
                 listing.setErrorMessage(null);
             } else {
-                listing.setStatus("ERROR");
+                listing.setStatus(ERROR);
                 listing.setErrorMessage(r.error());
             }
         }

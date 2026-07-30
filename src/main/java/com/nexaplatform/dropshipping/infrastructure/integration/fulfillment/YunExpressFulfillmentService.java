@@ -69,6 +69,11 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class YunExpressFulfillmentService implements FulfillmentProvider {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String SHIPPED = "SHIPPED";
+    private static final String SUCCESS = "success";
+    private static final String RESULT = "result";
+
     /** Nombre de cara al cliente (sin exponer marca del carrier), igual que hacía Cainiao. */
     private static final String CARRIER_NAME = "Standard Shipping";
 
@@ -285,12 +290,12 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         }
         try {
             JsonNode response = client.get(PATH_PRICE_TRIAL, query, Duration.ofSeconds(quoteTimeoutSeconds));
-            if (!response.path("success").asBoolean(false)) {
+            if (!response.path(SUCCESS).asBoolean(false)) {
                 log.warn("YunExpress: sin tarifa para {} ({} g) -> {} {}", countryCode, chargeableGrams,
                         response.path("code").asText(""), response.path("msg").asText(""));
                 return null;
             }
-            List<RateOption> options = parseRates(response.path("result"));
+            List<RateOption> options = parseRates(response.path(RESULT));
             return options.stream().min(Comparator.comparing(RateOption::amount)).orElse(null);
         } catch (RuntimeException e) {
             log.warn("YunExpress: fallo simulando tarifa para {} -> {}", countryCode, e.getMessage());
@@ -358,7 +363,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     public List<SupportedCountry> logisticsProducts() {
         JsonNode response = client.get(PATH_PRODUCTS, Map.of());
         List<SupportedCountry> out = new ArrayList<>();
-        JsonNode list = response.has("detail") ? response.path("detail") : response.path("result").path("list");
+        JsonNode list = response.has("detail") ? response.path("detail") : response.path(RESULT).path("list");
         for (JsonNode item : list) {
             out.add(new SupportedCountry(item.path("product_code").asText(""),
                     item.path("product_name").asText("")));
@@ -473,12 +478,12 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         } catch (RuntimeException e) {
             throw FulfillmentFailure.of(e);
         }
-        if (!response.path("success").asBoolean(false)) {
+        if (!response.path(SUCCESS).asBoolean(false)) {
             throw FulfillmentFailure.from("YunExpress rechazó el bulto " + sequenceNo + " del pedido "
                     + order.getOrderNumber() + ": " + response.path("code").asText("")
                     + " " + response.path("msg").asText(""));
         }
-        JsonNode result = response.path("result");
+        JsonNode result = response.path(RESULT);
         String waybill = result.path("waybill_number").asText("");
         if (waybill.isBlank()) {
             throw new FulfillmentFailure(FulfillmentFailure.Kind.TRANSIENT,
@@ -699,13 +704,13 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
             // Red, timeout o 5xx: no sabemos si el envío llegó a crearse, así que se reintenta.
             throw FulfillmentFailure.of(e);
         }
-        if (!response.path("success").asBoolean(false)) {
+        if (!response.path(SUCCESS).asBoolean(false)) {
             // Aquí el carrier SÍ contestó: el código dice si el problema se arregla con el tiempo o si
             // hace falta que alguien cambie el canal, el peso o la declaración.
             throw FulfillmentFailure.from("YunExpress rechazó el envío del pedido " + order.getOrderNumber()
                     + ": " + response.path("code").asText("") + " " + response.path("msg").asText(""));
         }
-        JsonNode result = response.path("result");
+        JsonNode result = response.path(RESULT);
         String waybill = result.path("waybill_number").asText("");
         if (waybill.isBlank()) {
             throw new FulfillmentFailure(FulfillmentFailure.Kind.TRANSIENT,
@@ -733,7 +738,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
                 List.of(waybillNumber), trackingSubscribeType, List.of("Y"));
         try {
             JsonNode response = client.post(PATH_SUBSCRIBE, payload);
-            if (!response.path("success").asBoolean(false)) {
+            if (!response.path(SUCCESS).asBoolean(false)) {
                 log.warn("YunExpress: no se pudo suscribir la guía {} al push -> {} {}", waybillNumber,
                         response.path("code").asText(""), response.path("msg").asText(""));
             }
@@ -885,11 +890,11 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
      */
     public String labelFor(String orderNumber) {
         JsonNode response = client.get(PATH_LABEL, Map.of("order_number", orderNumber));
-        if (!response.path("success").asBoolean(false)) {
+        if (!response.path(SUCCESS).asBoolean(false)) {
             throw new IllegalStateException("YunExpress no devolvió etiqueta para " + orderNumber + ": "
                     + response.path("code").asText("") + " " + response.path("msg").asText(""));
         }
-        JsonNode result = response.path("result");
+        JsonNode result = response.path(RESULT);
         if (result.isArray() && !result.isEmpty()) {
             result = result.get(0);
         }
@@ -909,7 +914,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     /** Anula la guía en YunExpress (solo posible antes de que el envío entre en almacén). */
     public boolean cancelShipment(String waybillNumber) {
         JsonNode response = client.post(PATH_CANCEL, new YunExpressRequests.CancelShipment(waybillNumber));
-        boolean ok = response.path("success").asBoolean(false);
+        boolean ok = response.path(SUCCESS).asBoolean(false);
         if (!ok) {
             log.warn("YunExpress: no se pudo anular la guía {} -> {} {}", waybillNumber,
                     response.path("code").asText(""), response.path("msg").asText(""));
@@ -937,10 +942,10 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
 
         String[][] plan = {
                 { "FORWARDED", "Envío registrado", "Shenzhen, CN" },
-                { "SHIPPED", "Recogido por el transportista", "Shenzhen, CN" },
-                { "SHIPPED", "En tránsito internacional", "Hub internacional" },
-                { "SHIPPED", "Llegó al país de destino", country },
-                { "SHIPPED", "En reparto", "Centro de distribución local" },
+                { SHIPPED, "Recogido por el transportista", "Shenzhen, CN" },
+                { SHIPPED, "En tránsito internacional", "Hub internacional" },
+                { SHIPPED, "Llegó al país de destino", country },
+                { SHIPPED, "En reparto", "Centro de distribución local" },
                 { "DELIVERED", "Entregado al destinatario", country },
         };
         List<TrackingStep> steps = new ArrayList<>();
@@ -958,12 +963,12 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
      */
     private TrackingSnapshot realTrack(String trackingNumber, String countryCode) {
         JsonNode response = client.get(PATH_TRACK, Map.of("order_number", trackingNumber));
-        if (!response.path("success").asBoolean(false)) {
+        if (!response.path(SUCCESS).asBoolean(false)) {
             log.warn("YunExpress: sin trazabilidad para {} -> {} {}", trackingNumber,
                     response.path("code").asText(""), response.path("msg").asText(""));
             return new TrackingSnapshot(OrderStatus.FORWARDED, List.of());
         }
-        JsonNode result = response.path("result");
+        JsonNode result = response.path(RESULT);
         JsonNode entry = result.isArray() ? (result.isEmpty() ? null : result.get(0)) : result;
         if (entry == null) {
             return new TrackingSnapshot(OrderStatus.FORWARDED, List.of());

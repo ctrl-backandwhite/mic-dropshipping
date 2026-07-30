@@ -26,6 +26,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class EmailDispatchConsumer {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String BODYHTML = "bodyHtml";
+    private static final String TITLE = "title";
+
     private final ObjectMapper objectMapper;
     private final EmailQueueService emailQueue;
     private final UserRepository userRepository;
@@ -40,7 +44,7 @@ public class EmailDispatchConsumer {
         try {
             JsonNode n = objectMapper.valueToTree(record.value());
             String email = text(n, "userEmail");
-            String title = text(n, "title");
+            String title = text(n, TITLE);
             if (email == null || email.isBlank() || title == null || title.isBlank()) {
                 return; // not an email-bearing notification
             }
@@ -50,9 +54,9 @@ public class EmailDispatchConsumer {
                 return;
             }
             Map<String, Object> vars = new HashMap<>();
-            vars.put("title", title);
+            vars.put(TITLE, title);
             vars.put("body", text(n, "body"));
-            vars.put("bodyHtml", text(n, "bodyHtml"));
+            vars.put(BODYHTML, text(n, BODYHTML));
             vars.put("ctaUrl", absolute(text(n, "ctaUrl")));
             vars.put("ctaLabel", text(n, "ctaLabel"));
             vars.put("preheader", text(n, "preheader"));
@@ -68,15 +72,15 @@ public class EmailDispatchConsumer {
         try {
             JsonNode n = objectMapper.valueToTree(record.value());
             String subject = text(n, "subject");
-            String bodyHtml = text(n, "bodyHtml");
+            String bodyHtml = text(n, BODYHTML);
             if (subject == null || bodyHtml == null) {
                 return;
             }
             int sent = 0;
             for (NewsletterSubscriberEntity sub : subscriberRepository.findByStatus("SUBSCRIBED")) {
                 Map<String, Object> vars = new HashMap<>();
-                vars.put("title", subject);
-                vars.put("bodyHtml", bodyHtml);
+                vars.put(TITLE, subject);
+                vars.put(BODYHTML, bodyHtml);
                 vars.put("unsubscribeUrl", baseUrl + "/newsletter/unsubscribe?token=" + sub.getToken());
                 vars.put("footerNote", "Recibes este correo porque te suscribiste al boletín de NX036.");
                 emailQueue.enqueue(sub.getEmail(), subject, "emails/notification", vars);

@@ -43,6 +43,10 @@ import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CAC
 @RequiredArgsConstructor
 public class AdminProductGroupController {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String DESCRIPTION = "description";
+    private static final String ACTIVE = "active";
+
     private final ProductGroupRepository groupRepository;
     private final ProductGroupMemberRepository memberRepository;
     private final ProductRepository productRepository;
@@ -146,12 +150,12 @@ public class AdminProductGroupController {
         if (b.get("name") != null) {
             e.setName(b.get("name").toString().trim());
         }
-        if (b.containsKey("description")) {
-            e.setDescription(b.get("description") != null && !b.get("description").toString().isBlank()
-                    ? b.get("description").toString() : null);
+        if (b.containsKey(DESCRIPTION)) {
+            e.setDescription(b.get(DESCRIPTION) != null && !b.get(DESCRIPTION).toString().isBlank()
+                    ? b.get(DESCRIPTION).toString() : null);
         }
-        if (b.get("active") != null) {
-            e.setActive(Boolean.parseBoolean(b.get("active").toString()));
+        if (b.get(ACTIVE) != null) {
+            e.setActive(Boolean.parseBoolean(b.get(ACTIVE).toString()));
         }
     }
 
@@ -159,8 +163,8 @@ public class AdminProductGroupController {
         Map<String, Object> m = new HashMap<>();
         m.put("id", e.getId());
         m.put("name", e.getName());
-        m.put("description", e.getDescription());
-        m.put("active", e.isActive());
+        m.put(DESCRIPTION, e.getDescription());
+        m.put(ACTIVE, e.isActive());
         m.put("memberCount", memberRepository.countByIdGroupId(e.getId()));
         return m;
     }

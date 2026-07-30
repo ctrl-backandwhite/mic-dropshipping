@@ -93,7 +93,7 @@ public class ImageMirrorService {
                 //     listamos las claves reales del bucket y reencolamos las que falten.
                 Set<String> keys = storage.listKeys();
                 if (!keys.isEmpty()) {
-                    String base = storage.publicUrl().replaceAll("/+$", "") + "/";
+                    String base = storage.publicUrl().replaceAll("/++$", "") + "/";
                     int missing = 0;
                     for (ProductImageEntity img : imageRepository
                             .findByMirrorStatusAndCdnUrlStartingWith(MirrorStatus.MIRRORED, base)) {
@@ -127,7 +127,7 @@ public class ImageMirrorService {
         if (!storage.isReady()) {
             return;
         }
-        String prefix = storage.publicUrl().replaceAll("/+$", "") + "%";
+        String prefix = storage.publicUrl().replaceAll("/++$", "") + "%";
         PageRequest top = PageRequest.of(0, Math.max(1, limit));
         int ok = 0;
         for (ProductVariantEntity v : variantRepository.findNeedingImageMirror(prefix, top)) {
@@ -173,7 +173,12 @@ public class ImageMirrorService {
                     ok++;
                     mirroredImageIds.add(pending.get(i).getId());
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ex) {
+                // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
+                // interrupción deja al pool sin enterarse de que le han pedido parar.
+                if (ex instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
                 // el fallo individual ya se marca FAILED dentro de mirrorOne
             }
         }
@@ -208,7 +213,12 @@ public class ImageMirrorService {
                 if (Boolean.TRUE.equals(futures.get(i).get())) {
                     mirroredImageIds.add(imgs.get(i).getId());
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ex) {
+                // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
+                // interrupción deja al pool sin enterarse de que le han pedido parar.
+                if (ex instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
                 // el fallo individual ya se marca FAILED dentro de mirrorOne
             }
         }

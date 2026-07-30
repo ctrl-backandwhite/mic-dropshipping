@@ -15,6 +15,9 @@ import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWrite
 @Configuration
 public class DefaultSecurityConfig {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String LOGIN = "/login";
+
     @Value("${nexadrop.storefront.base-url}")
     private String frontBaseUrl;
 
@@ -45,7 +48,7 @@ public class DefaultSecurityConfig {
                         .frameOptions(fo -> fo.deny())
                         .referrerPolicy(r -> r.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER)))
                 .authorizeHttpRequests(reg -> reg
-                        .requestMatchers("/", "/login", "/login/**", "/register", "/activate", "/activate/**",
+                        .requestMatchers("/", LOGIN, "/login/**", "/register", "/activate", "/activate/**",
                                 "/password-reset", "/password-reset/**", "/error", "/.well-known/**", "/oauth2/**",
                                 "/userinfo", "/actuator/health", "/actuator/info",
                                 // Public storefront catalog + signed inbound webhooks + payment callbacks.
@@ -56,8 +59,8 @@ public class DefaultSecurityConfig {
                         .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/v3/api-docs.yaml", "/v3/api-docs.yaml/**",
                                 "/swagger-ui.html", "/swagger-ui/**", "/swagger-resources/**", "/webjars/**")
                         .hasAnyAuthority("ROLE_ADMIN", "ROLE_OPERATOR").anyRequest().authenticated())
-                .formLogin(form -> form.loginPage("/login").permitAll())
-                .oauth2Login(oauth -> oauth.loginPage("/login")
+                .formLogin(form -> form.loginPage(LOGIN).permitAll())
+                .oauth2Login(oauth -> oauth.loginPage(LOGIN)
                         // GitHub (no-OIDC) usa nuestro user service para resolver el email verificado;
                         // Google (OIDC) sigue con el OidcUserService por defecto.
                         .userInfoEndpoint(userInfo -> userInfo.userService(githubOAuth2UserService))

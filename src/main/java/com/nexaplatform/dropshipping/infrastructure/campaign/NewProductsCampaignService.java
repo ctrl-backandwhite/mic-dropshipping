@@ -38,6 +38,9 @@ import java.util.UUID;
 @Service
 public class NewProductsCampaignService {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String TITLE = "title";
+
     private static final Logger log = LoggerFactory.getLogger(NewProductsCampaignService.class);
     private static final String TEMPLATE = "emails/new-products";
     private static final int PRODUCTS_PER_CATEGORY = 3;
@@ -111,7 +114,7 @@ public class NewProductsCampaignService {
                 continue;
             }
             Map<String, Object> vars = new HashMap<>();
-            vars.put("title", NewProductsEmailLabel.TITLE.of(lang));
+            vars.put(TITLE, NewProductsEmailLabel.TITLE.of(lang));
             vars.put("intro", NewProductsEmailLabel.INTRO.of(lang));
             vars.put("categories", categories);
             vars.put("ctaUrl", ctaUrl);
@@ -150,7 +153,7 @@ public class NewProductsCampaignService {
                 .map(u -> unsubscribeUrl(u.getId(), language))
                 .orElse(storefrontBaseUrl + "/account/email-preferences");
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", NewProductsEmailLabel.TITLE.of(language));
+        vars.put(TITLE, NewProductsEmailLabel.TITLE.of(language));
         vars.put("intro", NewProductsEmailLabel.INTRO.of(language));
         vars.put("categories", categories);
         vars.put("ctaUrl", storefrontBaseUrl + "/catalog?sort=newest");
@@ -174,7 +177,7 @@ public class NewProductsCampaignService {
             List<Map<String, Object>> products = new ArrayList<>();
             for (ProductSummaryView p : page.items()) {
                 Map<String, Object> item = new HashMap<>();
-                item.put("title", p.title());
+                item.put(TITLE, p.title());
                 item.put("price", p.displayFormatted());
                 item.put("image", p.mainImage());
                 products.add(item);

@@ -52,6 +52,11 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class InvoiceService {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String EMAILS_INVOICE = "emails/invoice";
+    private static final String BODYBG = "bodyBg";
+    private static final String TITLE = "title";
+
     private final TemplateEngine templateEngine;
     private final CurrencyRateService currencyRateService;
     private final PaymentJpaRepositoryAdapter paymentRepository;
@@ -154,7 +159,7 @@ public class InvoiceService {
                 BigDecimal unit = conv(it.getUnitPriceCents(), cur);
                 BigDecimal lineDisp = unit.multiply(BigDecimal.valueOf(it.getQuantity()));
                 subtotalDisp = subtotalDisp.add(lineDisp);
-                items.add(Map.of("title", it.getTitleSnapshot() != null ? it.getTitleSnapshot() : "—", "sku",
+                items.add(Map.of(TITLE, it.getTitleSnapshot() != null ? it.getTitleSnapshot() : "—", "sku",
                         it.getSkuSnapshot() != null ? it.getSkuSnapshot() : "", "variant",
                         it.getVariantName() != null ? it.getVariantName() : "", "qty", it.getQuantity(), "unit",
                         fmt(unit, cur), "lineTotal", fmt(lineDisp, cur), "image",
@@ -194,7 +199,7 @@ public class InvoiceService {
         // ocultar lo propio del email y dejar un documento de factura limpio y profesional.
         m.put("pdf", false);
         m.put("subject", InvoiceLabel.INVOICE.of(lang) + " " + o.getOrderNumber());
-        m.put("title", InvoiceLabel.TITLE_PAID.of(lang));
+        m.put(TITLE, InvoiceLabel.TITLE_PAID.of(lang));
         m.put("icon", "circle-check"); // icono FontAwesome (PNG inline por CID) junto al saludo del email
         m.put("intro", InvoiceLabel.INTRO.of(lang));
         m.put("preheader", InvoiceLabel.INVOICE.of(lang) + " " + o.getOrderNumber());
@@ -267,14 +272,14 @@ public class InvoiceService {
         m.put("footerLegal", legal.toString());
 
         // QR de verificación: codifica la URL pública de verificación de esta factura.
-        String base = verifyBaseUrl != null ? verifyBaseUrl.replaceAll("/+$", "") : "";
+        String base = verifyBaseUrl != null ? verifyBaseUrl.replaceAll("/++$", "") : "";
         String verifyUrl = base + "/api/v1/invoices/" + o.getOrderNumber() + "/verify";
         m.put("verifyUrl", verifyUrl);
         m.put("qr", qrDataUri(verifyUrl));
         m.put("labelVerify", InvoiceLabel.VERIFY.of(lang));
         m.put("verifyNote", InvoiceLabel.VERIFY_NOTE.of(lang));
         // Color del lienzo (fuera del cuadro): lavanda en el email; el PDF lo sobreescribe a blanco.
-        m.put("bodyBg", "#F4F1FB");
+        m.put(BODYBG, "#F4F1FB");
         m.put("ctaUrl", downloadUrl);
         m.put("ctaLabel", InvoiceLabel.CTA_DOWNLOAD.of(lang));
         m.put("footer", "NX036 Dropshipping · " + InvoiceLabel.RECEIPT_NOTE.of(lang));
@@ -290,7 +295,7 @@ public class InvoiceService {
     public String renderHtml(Order o, String locale, String downloadUrl, String currency) {
         Context ctx = new Context();
         model(o, locale, downloadUrl, currency).forEach(ctx::setVariable);
-        return templateEngine.process("emails/invoice", ctx);
+        return templateEngine.process(EMAILS_INVOICE, ctx);
     }
 
     /**
@@ -366,13 +371,13 @@ public class InvoiceService {
         // El PDF es un documento descargable → lienzo BLANCO (no el lavanda del email). Sin CTA.
         // embedImages=true: incrusta cada imagen en base64 (openhtmltopdf no puede descargarla del storage).
         Map<String, Object> m = model(o, locale, null, currency, true);
-        m.put("bodyBg", "#ffffff");
+        m.put(BODYBG, "#ffffff");
         m.put("pdf", true); // documento de factura: sin saludo de email ni CTA
         // El nombre del producto se muestra COMPLETO (la celda hace wrap); antes se truncaba a 40
         // caracteres pero la factura debe llevar la descripción íntegra del artículo.
         Context ctx = new Context();
         m.forEach(ctx::setVariable);
-        String html = templateEngine.process("emails/invoice", ctx);
+        String html = templateEngine.process(EMAILS_INVOICE, ctx);
         try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
             PdfRendererBuilder builder = new PdfRendererBuilder();
             builder.useFastMode();
@@ -401,7 +406,7 @@ public class InvoiceService {
         Map<String, Object> m = planModel(d, locale);
         Context ctx = new Context();
         m.forEach(ctx::setVariable);
-        String html = templateEngine.process("emails/invoice", ctx);
+        String html = templateEngine.process(EMAILS_INVOICE, ctx);
         try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
             PdfRendererBuilder builder = new PdfRendererBuilder();
             builder.useFastMode();
@@ -435,16 +440,16 @@ public class InvoiceService {
                     + dOnly.format(Instant.ofEpochSecond(d.periodEnd()).atZone(ZoneId.systemDefault()));
         }
         List<Map<String, Object>> items = new ArrayList<>();
-        items.add(Map.of("title", d.lineDescription() != null ? d.lineDescription() : "—", "sku", "", "variant", period,
+        items.add(Map.of(TITLE, d.lineDescription() != null ? d.lineDescription() : "—", "sku", "", "variant", period,
                 "qty", 1, "unit", fmt(subtotal, cur), "lineTotal", fmt(subtotal, cur), "image", ""));
 
         Instant when = d.created() != null ? Instant.ofEpochSecond(d.created()) : Instant.now();
 
         Map<String, Object> m = new HashMap<>();
         m.put("pdf", true);
-        m.put("bodyBg", "#ffffff");
+        m.put(BODYBG, "#ffffff");
         m.put("subject", InvoiceLabel.INVOICE.of(lang) + " " + nz(d.number()));
-        m.put("title", InvoiceLabel.TITLE_PAID.of(lang));
+        m.put(TITLE, InvoiceLabel.TITLE_PAID.of(lang));
         m.put("icon", "circle-check");
         m.put("intro", InvoiceLabel.INTRO.of(lang));
         m.put("preheader", InvoiceLabel.INVOICE.of(lang) + " " + nz(d.number()));

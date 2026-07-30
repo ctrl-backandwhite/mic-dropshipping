@@ -33,6 +33,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AdminMentorsController {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String USEREMAIL = "userEmail";
+    private static final String TIMEZONE = "timezone";
+    private static final String HEADLINE = "headline";
+    private static final String ACTIVE = "active";
+
     private final MentorProfileJpaRepositoryAdapter repository;
     private final UserRepository userRepository;
 
@@ -45,7 +51,7 @@ public class AdminMentorsController {
     @PostMapping
     @Transactional
     public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> body) {
-        String email = body.get("userEmail") != null ? body.get("userEmail").toString().trim() : null;
+        String email = body.get(USEREMAIL) != null ? body.get(USEREMAIL).toString().trim() : null;
         if (email == null || email.isEmpty()) {
             throw new BusinessException("userEmail es obligatorio (el mentor se asocia a un usuario existente).");
         }
@@ -79,15 +85,15 @@ public class AdminMentorsController {
 
     @SuppressWarnings("unchecked")
     private void apply(MentorProfileEntity e, Map<String, Object> b) {
-        if (b.get("headline") != null) {
-            e.setHeadline(b.get("headline").toString());
+        if (b.get(HEADLINE) != null) {
+            e.setHeadline(b.get(HEADLINE).toString());
         }
         if (b.containsKey("bio")) {
             e.setBio(b.get("bio") != null && !b.get("bio").toString().isBlank() ? b.get("bio").toString() : null);
         }
-        if (b.containsKey("timezone")) {
-            e.setTimezone(b.get("timezone") != null && !b.get("timezone").toString().isBlank()
-                    ? b.get("timezone").toString() : null);
+        if (b.containsKey(TIMEZONE)) {
+            e.setTimezone(b.get(TIMEZONE) != null && !b.get(TIMEZONE).toString().isBlank()
+                    ? b.get(TIMEZONE).toString() : null);
         }
         if (b.get("hourlyRateUsd") instanceof Number n) {
             e.setHourlyRateUsdCents((int) Math.round(n.doubleValue() * 100));
@@ -102,8 +108,8 @@ public class AdminMentorsController {
             e.setLanguages(l.stream().map(Object::toString).map(String::trim).filter(s -> !s.isEmpty())
                     .collect(Collectors.toCollection(ArrayList::new)));
         }
-        if (b.get("active") != null) {
-            e.setActive(Boolean.parseBoolean(b.get("active").toString()));
+        if (b.get(ACTIVE) != null) {
+            e.setActive(Boolean.parseBoolean(b.get(ACTIVE).toString()));
         }
     }
 
@@ -111,16 +117,16 @@ public class AdminMentorsController {
         var u = e.getUser();
         Map<String, Object> m = new HashMap<>();
         m.put("id", e.getId());
-        m.put("userEmail", u != null ? u.getEmail() : null);
+        m.put(USEREMAIL, u != null ? u.getEmail() : null);
         m.put("name", u != null && u.getDisplayName() != null ? u.getDisplayName() : (u != null ? u.getEmail() : ""));
         m.put("avatarUrl", u != null ? u.getAvatarUrl() : null);
-        m.put("headline", e.getHeadline() != null ? e.getHeadline() : "");
+        m.put(HEADLINE, e.getHeadline() != null ? e.getHeadline() : "");
         m.put("bio", e.getBio() != null ? e.getBio() : "");
-        m.put("timezone", e.getTimezone() != null ? e.getTimezone() : "");
+        m.put(TIMEZONE, e.getTimezone() != null ? e.getTimezone() : "");
         m.put("hourlyRateUsd", e.getHourlyRateUsdCents() / 100.0);
         m.put("expertise", e.getExpertise() != null ? e.getExpertise() : List.of());
         m.put("languages", e.getLanguages() != null ? e.getLanguages() : List.of());
-        m.put("active", e.isActive());
+        m.put(ACTIVE, e.isActive());
         return m;
     }
 }

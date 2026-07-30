@@ -56,6 +56,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class StorefrontCatalogController implements StorefrontCatalogApi {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String NEWEST = "newest";
+
     private final CatalogUseCase catalogUseCase;
     private final CatalogStorefrontReadService storefrontRead;
     private final ProductDetailQueryService productDetailQuery;
@@ -214,7 +217,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     @Override
     public PageResponse<ProductSummaryView> newest(int page, int size, String lang) {
-        return storefrontRead.productList(page, size, lang, null, null, null, null, null, "newest");
+        return storefrontRead.productList(page, size, lang, null, null, null, null, null, NEWEST);
     }
 
     @Override
@@ -435,7 +438,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     public HomeSectionsResponse homeSections(String lang, int perSection) {
         Pageable p = PageRequest.of(0, Math.min(perSection, 24));
         var trending = catalogUseCase.listBestsellers(null, p, lang).getContent();
-        var newest = storefrontRead.productList(0, perSection, lang, null, null, null, null, null, "newest").items();
+        var newest = storefrontRead.productList(0, perSection, lang, null, null, null, null, null, NEWEST).items();
         var topSales = storefrontRead.productList(0, perSection, lang, null, null, null, null, null, "sales").items();
         // Filtrado en BD por hasVideo=true (antes traía 500 y filtraba en memoria: con el catálogo repoblado
         // los productos con vídeo caían fuera del lote y la sección salía vacía). Reutiliza el pageable ya
@@ -445,7 +448,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
         List<HomeSection> sections = new ArrayList<>();
         sections.add(new HomeSection("trending", "Trending Now", trending));
-        sections.add(new HomeSection("newest", "New Arrivals", newest));
+        sections.add(new HomeSection(NEWEST, "New Arrivals", newest));
         sections.add(new HomeSection("video", "Video Products", video));
         sections.add(new HomeSection("top_selling", "Top Selling", topSales));
 

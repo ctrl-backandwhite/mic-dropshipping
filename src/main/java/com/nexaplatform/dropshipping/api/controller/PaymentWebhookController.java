@@ -29,6 +29,9 @@ import java.util.HexFormat;
 @RequiredArgsConstructor
 public class PaymentWebhookController implements PaymentWebhookApi {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String BAD_SIGNATURE = "bad signature";
+
     private final PaymentUseCase paymentUseCase;
     /** Aviso al responsable si la pasarela deja de poder confirmar cobros. */
     private final OpsAlertService opsAlertService;
@@ -58,7 +61,7 @@ public class PaymentWebhookController implements PaymentWebhookApi {
         try {
             event = Webhook.constructEvent(payload, sig, stripeWebhookSecret);
         } catch (SignatureVerificationException e) {
-            return ResponseEntity.status(400).body("bad signature");
+            return ResponseEntity.status(400).body(BAD_SIGNATURE);
         }
         log.info("Stripe webhook: {}", event.getType());
         return ResponseEntity.ok(paymentUseCase.handleStripeEvent(event.getType(), payload));
@@ -67,7 +70,7 @@ public class PaymentWebhookController implements PaymentWebhookApi {
     @Override
     public ResponseEntity<String> paypal(String payload, String sig) {
         if (!verifyHmac(payload, sig, paypalWebhookSecret)) {
-            return ResponseEntity.status(400).body("bad signature");
+            return ResponseEntity.status(400).body(BAD_SIGNATURE);
         }
         return ResponseEntity.ok(paymentUseCase.handlePayPalEvent(payload));
     }
@@ -75,7 +78,7 @@ public class PaymentWebhookController implements PaymentWebhookApi {
     @Override
     public ResponseEntity<String> coinbase(String payload, String sig) {
         if (!verifyHmac(payload, sig, coinbaseWebhookSecret)) {
-            return ResponseEntity.status(400).body("bad signature");
+            return ResponseEntity.status(400).body(BAD_SIGNATURE);
         }
         return ResponseEntity.ok(paymentUseCase.handleCoinbaseEvent(payload));
     }

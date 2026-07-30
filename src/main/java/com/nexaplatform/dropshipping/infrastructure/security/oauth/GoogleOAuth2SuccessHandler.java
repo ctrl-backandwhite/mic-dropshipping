@@ -40,7 +40,7 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
     public GoogleOAuth2SuccessHandler(UserUseCase userUseCase, UserTokenService userTokenService, String frontBaseUrl) {
         this.userUseCase = userUseCase;
         this.userTokenService = userTokenService;
-        this.frontBaseUrl = frontBaseUrl == null ? "" : frontBaseUrl.replaceAll("/+$", "");
+        this.frontBaseUrl = frontBaseUrl == null ? "" : frontBaseUrl.replaceAll("/++$", "");
     }
 
     @Override

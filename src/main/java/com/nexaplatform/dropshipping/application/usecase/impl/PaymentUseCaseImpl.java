@@ -64,6 +64,21 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PaymentUseCaseImpl implements PaymentUseCase {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String AMOUNT_USD_CENTS = "amount_usd_cents";
+    private static final String ORDER_PAYMENT = "ORDER_PAYMENT";
+    private static final String MOCK_CONFIRM = "mock_confirm";
+    private static final String PAYPAL_MOCK = "paypal_mock_";
+    private static final String AMOUNTCENTS = "amountCents";
+    private static final String PAYMENTID = "paymentId";
+    private static final String NO_MATCH = "no-match";
+    private static final String PI_MOCK = "pi_mock_";
+    private static final String CS_MOCK = "cs_mock_";
+    private static final String PAYMENT = "Payment";
+    private static final String ORDERID = "orderId";
+    private static final String METHOD = "method";
+    private static final String STATUS = "status";
+
     private final List<PaymentGateway> gateways;
     private final PaymentRepository paymentRepository;
     private final PaymentJpaRepositoryAdapter paymentJpaRepositoryAdapter;
@@ -137,7 +152,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         p = paymentRepository.save(p);
 
         auditLogger.log("payment.initiate", p.getUserEmail(),
-                Map.of("paymentId", p.getId(), "method", method, "amount_usd_cents", usdCents));
+                Map.of(PAYMENTID, p.getId(), METHOD, method, AMOUNT_USD_CENTS, usdCents));
 
         // attach client metadata to provider_response so the controller can return it
         Map<String, Object> meta = new HashMap<>(p.getProviderResponse());
@@ -225,7 +240,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Override
     @Transactional
     public Payment confirmSucceeded(UUID paymentId, Map<String, Object> providerPayload) {
-        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException("Payment"));
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
         if (p.getStatus() == PaymentStatus.SUCCEEDED)
             return p;
 
@@ -237,7 +252,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         p.setProviderResponse(merged);
         p = paymentRepository.save(p);
 
-        boolean isOrderPayment = "ORDER_PAYMENT".equals(p.getPurpose()) && p.getOrderId() != null;
+        boolean isOrderPayment = ORDER_PAYMENT.equals(p.getPurpose()) && p.getOrderId() != null;
         if (isOrderPayment) {
             // El cobro externo (Stripe/PayPal/USDT) ya capturó el dinero. Marcamos
             // la orden como PAID para que el FulfillmentService la recoja.
@@ -250,8 +265,8 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 // solo en esta transición (idempotente: una 2ª confirmación encuentra la orden ya PAID).
                 stockService.deductForOrder(order);
             }
-            auditLogger.log("order_payment.succeeded", p.getUserEmail(), Map.of("paymentId", p.getId(), "orderId",
-                    p.getOrderId(), "method", p.getMethod(), "amount_usd_cents", p.getAmountUsdCents()));
+            auditLogger.log("order_payment.succeeded", p.getUserEmail(), Map.of(PAYMENTID, p.getId(), ORDERID,
+                    p.getOrderId(), METHOD, p.getMethod(), AMOUNT_USD_CENTS, p.getAmountUsdCents()));
             // Email de confirmación de pago + FACTURA al comprador.
             if (order != null) {
                 String email = p.getUserEmail() != null ? p.getUserEmail()
@@ -266,7 +281,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             walletUseCase.deposit(p.getUserId(), p.getAmountUsdCents(), p.getId(), idempKey,
                     "Wallet recharge via " + p.getMethod());
             auditLogger.log("payment.succeeded", p.getUserEmail(),
-                    Map.of("paymentId", p.getId(), "method", p.getMethod(), "amount_usd_cents", p.getAmountUsdCents()));
+                    Map.of(PAYMENTID, p.getId(), METHOD, p.getMethod(), AMOUNT_USD_CENTS, p.getAmountUsdCents()));
         }
         return p;
     }
@@ -287,7 +302,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Override
     @Transactional
     public Payment capturePayPal(UUID paymentId) {
-        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException("Payment"));
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
         if (p.getMethod() != PaymentMethod.PAYPAL)
             throw new BusinessException("Not a PayPal payment");
         PaymentGateway gw = resolveGateway(PaymentMethod.PAYPAL);
@@ -295,7 +310,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             throw new BusinessException("PayPal gateway not configured");
         }
         Map<String, Object> resp = pp.capture(p.getProviderRef());
-        String status = String.valueOf(resp.getOrDefault("status", ""));
+        String status = String.valueOf(resp.getOrDefault(STATUS, ""));
         if ("COMPLETED".equalsIgnoreCase(status) || Boolean.TRUE.equals(resp.get("mock"))) {
             return confirmSucceeded(p.getId(), resp);
         }
@@ -311,9 +326,9 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         }
         // Proveedor deshabilitado / mock-mode: el providerRef lleva el prefijo sintético.
         String ref = p.getProviderRef() != null ? p.getProviderRef() : "";
-        boolean mock = ref.startsWith("cs_mock_") || ref.startsWith("paypal_mock_") || ref.startsWith("pi_mock_");
+        boolean mock = ref.startsWith(CS_MOCK) || ref.startsWith(PAYPAL_MOCK) || ref.startsWith(PI_MOCK);
         if (mock) {
-            return confirmSucceeded(p.getId(), Map.of("mock_confirm", true, "orderId", orderId.toString()));
+            return confirmSucceeded(p.getId(), Map.of(MOCK_CONFIRM, true, ORDERID, orderId.toString()));
         }
         if (p.getMethod() == PaymentMethod.PAYPAL) {
             // El comprador ya aprobó la orden en PayPal; capturamos del lado servidor.
@@ -325,7 +340,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 throw new BusinessException("Stripe gateway not configured");
             }
             Map<String, Object> resp = sg.retrieveCheckoutSession(p.getProviderRef());
-            String status = String.valueOf(resp.getOrDefault("status", ""));
+            String status = String.valueOf(resp.getOrDefault(STATUS, ""));
             if ("paid".equals(status) || Boolean.TRUE.equals(resp.get("mock"))) {
                 return confirmSucceeded(p.getId(), resp);
             }
@@ -354,7 +369,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 captureId = p.getProviderRef(); // fallback (mock)
             }
             result = pp.refund(captureId, amountCents);
-            String status = String.valueOf(result.getOrDefault("status", ""));
+            String status = String.valueOf(result.getOrDefault(STATUS, ""));
             boolean ok = "COMPLETED".equalsIgnoreCase(status) || "PENDING".equalsIgnoreCase(status)
                     || Boolean.TRUE.equals(result.get("mock"));
             if (!ok) {
@@ -367,7 +382,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             }
             String paymentIntentId = String.valueOf(pr.getOrDefault("paymentIntent", p.getProviderRef()));
             result = sg.refund(paymentIntentId, amountCents);
-            String status = String.valueOf(result.getOrDefault("status", ""));
+            String status = String.valueOf(result.getOrDefault(STATUS, ""));
             boolean ok = "succeeded".equalsIgnoreCase(status) || "pending".equalsIgnoreCase(status)
                     || Boolean.TRUE.equals(result.get("mock"));
             if (!ok) {
@@ -384,17 +399,17 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         p.setProviderResponse(merged);
         p = paymentRepository.save(p);
         auditLogger.log("order_payment.refunded", p.getUserEmail(),
-                Map.of("paymentId", p.getId(), "orderId", orderId, "method", p.getMethod(), "amountCents", amountCents));
+                Map.of(PAYMENTID, p.getId(), ORDERID, orderId, METHOD, p.getMethod(), AMOUNTCENTS, amountCents));
         return p;
     }
 
     @Override
     @Transactional
     public Payment confirmMockRecharge(UUID userId, UUID paymentId) {
-        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException("Payment"));
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
         // Propietario: no permitir confirmar el pago de otro usuario (no filtramos pagos ajenos → 404).
         if (p.getUserId() == null || !p.getUserId().equals(userId)) {
-            throw new NotFoundException("Payment");
+            throw new NotFoundException(PAYMENT);
         }
         // SEGURIDAD: esta vía "mock" acredita el saldo SIN pasar por la pasarela real. Debe aceptar EXCLUSIVAMENTE
         // pagos sintéticos de mock-mode (providerRef con prefijo *_mock_). Un checkout REAL de Stripe/PayPal
@@ -402,29 +417,29 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         // usuario iniciaría una recarga y la "confirmaría" gratis (dinero libre en producción). El pago real se
         // confirma solo con confirmRecharge, que verifica el estado en la pasarela.
         String ref = p.getProviderRef() != null ? p.getProviderRef() : "";
-        boolean mock = ref.startsWith("cs_mock_") || ref.startsWith("paypal_mock_") || ref.startsWith("pi_mock_");
+        boolean mock = ref.startsWith(CS_MOCK) || ref.startsWith(PAYPAL_MOCK) || ref.startsWith(PI_MOCK);
         if (!mock) {
             throw new BusinessException("PAYMENT_REQUIRES_REAL_CONFIRMATION",
                     "Esta recarga debe completarse en la pasarela de pago real");
         }
-        return confirmSucceeded(p.getId(), Map.of("mock_confirm", true));
+        return confirmSucceeded(p.getId(), Map.of(MOCK_CONFIRM, true));
     }
 
     @Override
     @Transactional
     public Payment confirmRecharge(UUID userId, UUID paymentId) {
-        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException("Payment"));
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
         if (p.getUserId() == null || !p.getUserId().equals(userId)) {
-            throw new NotFoundException("Payment"); // no filtramos pagos ajenos
+            throw new NotFoundException(PAYMENT); // no filtramos pagos ajenos
         }
         if (p.getStatus() == PaymentStatus.SUCCEEDED) {
             return p; // idempotente: el wallet ya se acreditó
         }
         // Proveedor deshabilitado / mock-mode: el providerRef lleva un prefijo sintético.
         String ref = p.getProviderRef() != null ? p.getProviderRef() : "";
-        boolean mock = ref.startsWith("cs_mock_") || ref.startsWith("paypal_mock_") || ref.startsWith("pi_mock_");
+        boolean mock = ref.startsWith(CS_MOCK) || ref.startsWith(PAYPAL_MOCK) || ref.startsWith(PI_MOCK);
         if (mock) {
-            return confirmSucceeded(p.getId(), Map.of("mock_confirm", true));
+            return confirmSucceeded(p.getId(), Map.of(MOCK_CONFIRM, true));
         }
         if (p.getMethod() == PaymentMethod.PAYPAL) {
             return capturePayPal(p.getId()); // el usuario ya aprobó en PayPal; capturamos del lado servidor
@@ -435,7 +450,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 throw new BusinessException("Stripe gateway not configured");
             }
             Map<String, Object> resp = sg.retrieveCheckoutSession(p.getProviderRef());
-            String status = String.valueOf(resp.getOrDefault("status", ""));
+            String status = String.valueOf(resp.getOrDefault(STATUS, ""));
             if ("paid".equals(status) || Boolean.TRUE.equals(resp.get("mock"))) {
                 return confirmSucceeded(p.getId(), resp); // acredita el wallet (branch no-order)
             }
@@ -447,7 +462,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Override
     @Transactional(readOnly = true)
     public Payment find(UUID id) {
-        return paymentRepository.findById(id).orElseThrow(() -> new NotFoundException("Payment"));
+        return paymentRepository.findById(id).orElseThrow(() -> new NotFoundException(PAYMENT));
     }
 
     @Override
@@ -480,7 +495,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
     /** Fetches the managed entity for the gateway call (gateways read the persisted id + user). */
     private PaymentEntity managedEntity(UUID paymentId) {
-        return paymentJpaRepositoryAdapter.findById(paymentId).orElseThrow(() -> new NotFoundException("Payment"));
+        return paymentJpaRepositoryAdapter.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
     }
 
     /* ============================================================
@@ -533,7 +548,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 .amountDisplay(perLineSettlementAmount(order, displayCcy))
                 .currencyDisplay(displayCcy)
                 .settlementCurrency(settlementCcy).settlementAmount(settlementAmount).idempotencyKey(idempotencyKey)
-                .orderId(orderId).purpose("ORDER_PAYMENT").build();
+                .orderId(orderId).purpose(ORDER_PAYMENT).build();
         p = paymentRepository.save(p);
 
         PaymentGateway gw = resolveGateway(method);
@@ -561,7 +576,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         p = paymentRepository.save(p);
 
         auditLogger.log("order_payment.initiate", p.getUserEmail(),
-                Map.of("orderId", orderId, "paymentId", p.getId(), "method", method, "amountCents", amountUsdCents));
+                Map.of(ORDERID, orderId, PAYMENTID, p.getId(), METHOD, method, AMOUNTCENTS, amountUsdCents));
         return p;
     }
 
@@ -607,7 +622,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 .status(PaymentStatus.SUCCEEDED).amountUsdCents(amountUsdCents)
                 .amountDisplay(BigDecimal.valueOf(amountUsdCents).movePointLeft(2)).currencyDisplay("USD")
                 .settlementCurrency("USD").provider("wallet").idempotencyKey(idempotencyKey).orderId(orderId)
-                .purpose("ORDER_PAYMENT")
+                .purpose(ORDER_PAYMENT)
                 .providerResponse(Map.of("walletId", wallet.getId().toString(), "settled", "atomic")).build();
         p = paymentRepository.save(p);
 
@@ -616,7 +631,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         order = orderRepository.save(order);
 
         auditLogger.log("order_payment.wallet", p.getUserEmail(),
-                Map.of("orderId", orderId, "paymentId", p.getId(), "amountCents", amountUsdCents));
+                Map.of(ORDERID, orderId, PAYMENTID, p.getId(), AMOUNTCENTS, amountUsdCents));
         // Email de confirmación de pago + FACTURA (pago con saldo del wallet).
         String email = userRepository.findById(payerUserId).map(u -> u.getEmail()).orElse(null);
         String locale = userRepository.findById(payerUserId).map(u -> u.getLanguage()).orElse(null);
@@ -666,9 +681,9 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Override
     @Transactional(readOnly = true)
     public Payment getOrderPayment(UUID orderId, UUID paymentId) {
-        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException("Payment"));
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
         if (p.getOrderId() != null && !p.getOrderId().equals(orderId)) {
-            throw new NotFoundException("Payment");
+            throw new NotFoundException(PAYMENT);
         }
         return p;
     }
@@ -676,22 +691,22 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Override
     @Transactional
     public Payment confirmMockOrderPayment(UUID orderId, UUID paymentId) {
-        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException("Payment"));
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
         // El pago debe corresponder a la orden indicada (evita confirmar un pago de otra orden).
         if (p.getOrderId() == null || !p.getOrderId().equals(orderId)) {
-            throw new NotFoundException("Payment");
+            throw new NotFoundException(PAYMENT);
         }
         // SEGURIDAD (idéntico a confirmMockRecharge): esta vía marca la orden como PAGADA SIN pasar por la
         // pasarela real. Solo se admite para pagos sintéticos de mock-mode (providerRef *_mock_). Un checkout
         // REAL de Stripe/PayPal (cs_test_/cs_live_/pi_...) no cobrado NUNCA se confirma aquí; de lo contrario
         // cualquiera crearía una orden con tarjeta y la marcaría PAGADA gratis (y se enviaría la mercancía).
         String ref = p.getProviderRef() != null ? p.getProviderRef() : "";
-        boolean mock = ref.startsWith("cs_mock_") || ref.startsWith("paypal_mock_") || ref.startsWith("pi_mock_");
+        boolean mock = ref.startsWith(CS_MOCK) || ref.startsWith(PAYPAL_MOCK) || ref.startsWith(PI_MOCK);
         if (!mock) {
             throw new BusinessException("PAYMENT_REQUIRES_REAL_CONFIRMATION",
                     "Este pago debe completarse en la pasarela de pago real");
         }
-        return confirmSucceeded(p.getId(), Map.of("mock_confirm", true, "orderId", orderId.toString()));
+        return confirmSucceeded(p.getId(), Map.of(MOCK_CONFIRM, true, ORDERID, orderId.toString()));
     }
 
     /* ============================================================
@@ -707,7 +722,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             Map<String, Object> data = (Map<String, Object>) ((Map<String, Object>) root.get("data")).get("object");
             String intentId = String.valueOf(data.get("id"));
             Map<String, Object> meta = (Map<String, Object>) data.getOrDefault("metadata", Map.of());
-            String paymentIdStr = meta != null ? String.valueOf(meta.get("paymentId")) : null;
+            String paymentIdStr = meta != null ? String.valueOf(meta.get(PAYMENTID)) : null;
             if (paymentIdStr == null || "null".equals(paymentIdStr)) {
                 Payment p = paymentRepository.findByProviderAndProviderRef("stripe", intentId).orElse(null);
                 if (p != null)
@@ -717,7 +732,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             if ("customer.subscription.created".equals(eventType) || "customer.subscription.updated".equals(eventType)
                     || "customer.subscription.deleted".equals(eventType)) {
                 String stripeSubId = String.valueOf(data.get("id"));
-                String stripeStatus = String.valueOf(data.get("status"));
+                String stripeStatus = String.valueOf(data.get(STATUS));
                 // Sincroniza la CustomerSubscription local (estado, fin de periodo, cancelación) + el tier
                 // del partner. Cubre renovación, fallo de cobro (PAST_DUE) y cancelación desde Stripe.
                 customerSubscriptionUseCase.syncFromStripe(stripeSubId, stripeStatus,
@@ -734,7 +749,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             }
 
             if (paymentIdStr == null)
-                return "no-match";
+                return NO_MATCH;
             UUID paymentId = UUID.fromString(paymentIdStr);
             if ("payment_intent.succeeded".equals(eventType)) {
                 confirmSucceeded(paymentId, data);
@@ -773,7 +788,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             String orderId = String.valueOf(resource.get("id"));
             Payment p = paymentRepository.findByProviderAndProviderRef("paypal", orderId).orElse(null);
             if (p == null)
-                return "no-match";
+                return NO_MATCH;
             if (eventType != null && eventType.contains("CAPTURE.COMPLETED")) {
                 confirmSucceeded(p.getId(), resource);
             } else if (eventType != null && eventType.contains("DENIED")) {
@@ -797,7 +812,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             String chargeCode = String.valueOf(data.get("code"));
             Payment p = paymentRepository.findByProviderAndProviderRef("coinbase", chargeCode).orElse(null);
             if (p == null)
-                return "no-match";
+                return NO_MATCH;
             if ("charge:confirmed".equals(type)) {
                 confirmSucceeded(p.getId(), data);
             } else if ("charge:failed".equals(type) || "charge:delayed".equals(type)) {

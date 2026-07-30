@@ -119,9 +119,13 @@ public class InboundShopWebhookController implements InboundShopWebhookApi {
         JsonNode addr = root.has("shippingAddress")
                 ? root.get("shippingAddress")
                 : root.has("shipping_address") ? root.get("shipping_address") : null;
-        AddressInput shipping = addr == null
-                ? null
-                : new AddressInput(text(addr, "fullName", "name"), text(addr, "phone"), text(addr, "email"),
+        if (addr == null) {
+            // El contrato marca la dirección de envío como obligatoria (@NotNull). Dejar pasar el pedido sin
+            // ella solo aplaza el fallo hasta que el transportista pide el destinatario, y para entonces ya
+            // está cobrado. Se rechaza aquí, con un mensaje que dice qué falta.
+            throw new IllegalArgumentException("Missing shippingAddress / shipping_address");
+        }
+        AddressInput shipping = new AddressInput(text(addr, "fullName", "name"), text(addr, "phone"), text(addr, "email"),
                         text(addr, "line1", "address1"), text(addr, "line2", "address2"), text(addr, "city"),
                         text(addr, "state", "region", "province"), text(addr, "postalCode", "zip"),
                         text(addr, "country", "country_code"));

@@ -1,6 +1,5 @@
 package com.nexaplatform.dropshipping.domain.enums;
 
-import java.util.Locale;
 
 /**
  * Textos de los emails transaccionales del pedido (despachado, entregado, reembolso, actualización de

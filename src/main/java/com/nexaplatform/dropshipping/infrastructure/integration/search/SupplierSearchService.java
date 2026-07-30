@@ -41,7 +41,7 @@ public class SupplierSearchService {
             @Value("${nexadrop.opensearch.uris:http://localhost:9400}") String uris,
             @Value("${nexadrop.opensearch.suppliers-index:suppliers}") String index) {
         this.objectMapper = objectMapper;
-        String base = uris.split(",")[0].trim().replaceAll("/+$", "");
+        String base = uris.split(",")[0].trim().replaceAll("/++$", "");
         this.searchUrl = base + "/" + index + "/_search";
     }
 
@@ -101,6 +101,11 @@ public class SupplierSearchService {
             }
             return Optional.of(new IndexedPage(rows, total));
         } catch (Exception e) {
+            // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
+            // interrupción deja al pool sin enterarse de que le han pedido parar.
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             log.warn("Supplier index page read failed, falling back to DB: {}", e.getMessage());
             return Optional.empty();
         }
@@ -142,6 +147,11 @@ public class SupplierSearchService {
             rows.sort(Comparator.comparing(r -> r.name() == null ? "" : r.name(), String.CASE_INSENSITIVE_ORDER));
             return rows.isEmpty() ? Optional.empty() : Optional.of(rows);
         } catch (Exception e) {
+            // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
+            // interrupción deja al pool sin enterarse de que le han pedido parar.
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             log.warn("Supplier index read failed, falling back to DB: {}", e.getMessage());
             return Optional.empty();
         }

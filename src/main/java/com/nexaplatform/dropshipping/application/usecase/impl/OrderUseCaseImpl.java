@@ -74,6 +74,10 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OrderUseCaseImpl implements OrderUseCase {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String ORDER_NOT_FOUND = "Order not found";
+    private static final String WALLET = "WALLET";
+
     private static final SecureRandom RNG = new SecureRandom();
 
     /**
@@ -334,7 +338,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Override
     @Transactional(readOnly = true)
     public Order getAdminOrderDetail(UUID id, String lang) {
-        Order o = orderRepository.findById(id).orElseThrow(() -> new NotFoundException("Order not found"));
+        Order o = orderRepository.findById(id).orElseThrow(() -> new NotFoundException(ORDER_NOT_FOUND));
         // DROP-632: localise the line titles for the admin's language (the admin detail used
         // to fall through to the raw Chinese snapshot) and consolidate the duplicated
         // base/variant lines into a single resolved-SKU line.
@@ -381,7 +385,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Override
     @Transactional
     public Order forwardOrder(UUID id) {
-        Order o = orderRepository.findById(id).orElseThrow(() -> new NotFoundException("Order not found"));
+        Order o = orderRepository.findById(id).orElseThrow(() -> new NotFoundException(ORDER_NOT_FOUND));
         if (o.getStatus() == OrderStatus.PENDING || o.getStatus() == OrderStatus.AWAITING_PAYMENT
                 || o.getStatus() == OrderStatus.PAID) {
             o.setStatus(OrderStatus.FORWARDED);
@@ -479,9 +483,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // Los mensajes son un fallback técnico (en inglés, para logs); el texto que ve el usuario lo
         // localiza el front a partir del CODE devuelto, en su idioma de navegación.
         Order o = orderRepository.findById(orderId)
-                .orElseThrow(() -> new NotFoundException("ORDER_NOT_FOUND", "Order not found"));
+                .orElseThrow(() -> new NotFoundException("ORDER_NOT_FOUND", ORDER_NOT_FOUND));
         if (o.getUserId() == null || !o.getUserId().equals(userId)) {
-            throw new NotFoundException("ORDER_NOT_FOUND", "Order not found"); // no filtramos pedidos ajenos
+            throw new NotFoundException("ORDER_NOT_FOUND", ORDER_NOT_FOUND); // no filtramos pedidos ajenos
         }
         if (o.getStatus() != OrderStatus.PAID) {
             // Ya avanzó (enviado a proveedor/en camino/entregado) o ya está cancelado/reembolsado.
@@ -604,9 +608,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // DROP-549: only charge the wallet when the requested method is WALLET.
         // For CARD/PAYPAL/USDT the order stays PENDING and the client follows up
         // with /me/orders/{id}/payment-intent for the external flow.
-        String method = req.getPaymentMethod() == null ? "WALLET" : req.getPaymentMethod().toUpperCase();
+        String method = req.getPaymentMethod() == null ? WALLET : req.getPaymentMethod().toUpperCase();
         Order o = orderRepository.findById(created.getId()).orElseThrow();
-        if ("WALLET".equals(method)) {
+        if (WALLET.equals(method)) {
             long charge = (long) created.getTotalCents();
             String idemKey = idem != null ? idem : ("checkout-" + created.getId());
             walletUseCase.charge(userId, charge, created.getId(), idemKey, "Order " + created.getOrderNumber());
@@ -631,7 +635,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // La comisión del afiliado se calcula sobre el importe de PRODUCTO que paga el cliente = subtotal
         // − descuento de referido (lo realmente cobrado por el producto, sin envío ni IVA).
         if (!reused) {
-            long commissionBase = o.getSubtotalCents() - o.getDiscountCents();
+            long commissionBase = (long) o.getSubtotalCents() - o.getDiscountCents();
             affiliateProgramService.onOrderPlaced(o.getId(), userId, commissionBase, o.getCurrency());
         }
 
@@ -650,7 +654,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
             }
             // Pago con saldo del wallet: la orden ya queda PAID → email de confirmación + FACTURA.
             if (paidOrder.getStatus() == OrderStatus.PAID) {
-                orderEmailService.paymentConfirmed(paidOrder, u.getEmail(), u.getLanguage(), "WALLET");
+                orderEmailService.paymentConfirmed(paidOrder, u.getEmail(), u.getLanguage(), WALLET);
             }
         });
 
@@ -706,7 +710,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         }
         Payment paid = paymentUseCase.listOrderPayments(o.getId()).stream()
                 .filter(p -> p.getStatus() == PaymentStatus.SUCCEEDED).findFirst().orElse(null);
-        String method = paid != null && paid.getMethod() != null ? paid.getMethod().name() : "WALLET";
+        String method = paid != null && paid.getMethod() != null ? paid.getMethod().name() : WALLET;
         String ccy = paid != null && paid.getSettlementCurrency() != null && !paid.getSettlementCurrency().isBlank()
                 ? paid.getSettlementCurrency()
                 : (o.getCurrency() != null ? o.getCurrency() : "USD");

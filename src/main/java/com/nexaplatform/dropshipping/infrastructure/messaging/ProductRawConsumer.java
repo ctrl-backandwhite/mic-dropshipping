@@ -33,6 +33,11 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ProductRawConsumer {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String EXTERNAL_ID = "external_id";
+    private static final String POSITION = "position";
+    private static final String SOURCE = "source";
+
     private final CatalogUseCase catalogService;
     private final ObjectMapper objectMapper;
 
@@ -40,14 +45,14 @@ public class ProductRawConsumer {
     public void onProductRaw(Object payload) {
         try {
             JsonNode root = objectMapper.valueToTree(payload);
-            log.info("Received raw product: {}/{}", textOrNull(root, "source"), textOrNull(root, "external_id"));
+            log.info("Received raw product: {}/{}", textOrNull(root, SOURCE), textOrNull(root, EXTERNAL_ID));
 
             UUID supplierId = null;
             JsonNode supplierNode = root.get("supplier");
             if (supplierNode != null && !supplierNode.isNull()) {
                 SupplierEntity supplier = catalogService
-                        .upsertSupplier(new IngestSupplierRequest(textOrNull(supplierNode, "source"),
-                                textOrNull(supplierNode, "external_id"), textOrNull(supplierNode, "name"),
+                        .upsertSupplier(new IngestSupplierRequest(textOrNull(supplierNode, SOURCE),
+                                textOrNull(supplierNode, EXTERNAL_ID), textOrNull(supplierNode, "name"),
                                 textOrNull(supplierNode, "name_zh"), textOrNull(supplierNode, "country"),
                                 textOrNull(supplierNode, "city"), bdOrNull(supplierNode, "rating"),
                                 intOrNull(supplierNode, "years_active"), boolOrFalse(supplierNode, "verified"),
@@ -55,8 +60,8 @@ public class ProductRawConsumer {
                 supplierId = supplier.getId();
             }
 
-            IngestProductRequest req = new IngestProductRequest(textOrNull(root, "source"),
-                    textOrNull(root, "external_id"), textOrNull(root, "title_zh"),
+            IngestProductRequest req = new IngestProductRequest(textOrNull(root, SOURCE),
+                    textOrNull(root, EXTERNAL_ID), textOrNull(root, "title_zh"),
                     textOrNull(root, "short_description_zh"), textOrNull(root, "description_zh"),
                     textOrNull(root, "brand"), intOrNull(root, "moq"), bdOrNull(root, "base_price"),
                     textOrNull(root, "currency"), intOrNull(root, "weight_grams"), intOrNull(root, "monthly_sales"),
@@ -79,7 +84,7 @@ public class ProductRawConsumer {
             String url = textOrNull(n, "source_url");
             if (url == null || url.isBlank())
                 continue;
-            out.add(new IngestImage(url, intOrZero(n, "position"), textOrNull(n, "role")));
+            out.add(new IngestImage(url, intOrZero(n, POSITION), textOrNull(n, "role")));
         }
         return out;
     }
@@ -93,11 +98,11 @@ public class ProductRawConsumer {
             JsonNode vals = n.get("values");
             if (vals != null && vals.isArray()) {
                 for (JsonNode v : vals) {
-                    values.add(new IngestVariantValue(textOrNull(v, "value_zh"), intOrZero(v, "position"),
+                    values.add(new IngestVariantValue(textOrNull(v, "value_zh"), intOrZero(v, POSITION),
                             textOrNull(v, "image_source_url")));
                 }
             }
-            out.add(new IngestVariantOption(textOrNull(n, "name_zh"), intOrZero(n, "position"), values));
+            out.add(new IngestVariantOption(textOrNull(n, "name_zh"), intOrZero(n, POSITION), values));
         }
         return out;
     }
@@ -116,7 +121,7 @@ public class ProductRawConsumer {
                     opts.put(e.getKey(), e.getValue().asText());
                 }
             }
-            out.add(new IngestVariant(textOrNull(n, "external_id"), textOrNull(n, "sku"), textOrNull(n, "title"),
+            out.add(new IngestVariant(textOrNull(n, EXTERNAL_ID), textOrNull(n, "sku"), textOrNull(n, "title"),
                     bdOrNull(n, "price"), intOrNull(n, "stock"), textOrNull(n, "image_source_url"), opts));
         }
         return out;

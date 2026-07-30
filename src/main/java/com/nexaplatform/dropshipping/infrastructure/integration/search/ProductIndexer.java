@@ -29,6 +29,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ProductIndexer {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String STANDARD = "standard";
+
     private final OpenSearchClient client;
     private final ProductRepository productRepository;
 
@@ -46,10 +49,10 @@ public class ProductIndexer {
                             .properties("source", Property.of(p -> p.keyword(k -> k)))
                             .properties("categoryId", Property.of(p -> p.keyword(k -> k)))
                             .properties("status", Property.of(p -> p.keyword(k -> k)))
-                            .properties("titleZh", Property.of(p -> p.text(t -> t.analyzer("standard"))))
-                            .properties("titleEs", Property.of(p -> p.text(t -> t.analyzer("standard"))))
-                            .properties("titleEn", Property.of(p -> p.text(t -> t.analyzer("standard"))))
-                            .properties("titlePt", Property.of(p -> p.text(t -> t.analyzer("standard"))))
+                            .properties("titleZh", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                            .properties("titleEs", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                            .properties("titleEn", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                            .properties("titlePt", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
                             .properties("description", Property.of(p -> p.text(t -> t)))
                             .properties("basePrice", Property.of(p -> p.scaledFloat(sf -> sf.scalingFactor(10000.0))))
                             .properties("trendScore", Property.of(p -> p.float_(f -> f)))
@@ -63,6 +66,9 @@ public class ProductIndexer {
     }
 
     @KafkaListener(topics = NexaTopics.PRODUCT_INGESTED, groupId = "nexadrop-search-indexer")
+    // La transacción tiene que abrirse AQUÍ: indexProduct se llama en la misma clase y su propia
+    // anotación no pasa por el proxy de Spring, así que el indexado corría sin sesión JPA.
+    @Transactional(readOnly = true)
     public void onProductIngested(ProductIngestedEvent event) {
         indexProduct(event.productId());
     }

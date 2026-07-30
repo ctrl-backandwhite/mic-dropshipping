@@ -76,6 +76,11 @@ public class WooCommerceConnector implements ShopConnector {
             log.warn("WooCommerce push failed ({}): {}", res.statusCode(), truncate(res.body()));
             return PushResult.fail("WooCommerce respondió " + res.statusCode() + ": " + truncate(res.body()));
         } catch (Exception ex) {
+            // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
+            // interrupción deja al pool sin enterarse de que le han pedido parar.
+            if (ex instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             log.warn("WooCommerce push error for shop {}: {}", shop.getId(), ex.getMessage());
             return PushResult.fail("No se pudo conectar con WooCommerce: " + ex.getMessage());
         }
@@ -85,7 +90,7 @@ public class WooCommerceConnector implements ShopConnector {
         if (handle == null || handle.isBlank()) {
             return null;
         }
-        String h = handle.trim().replaceAll("/+$", "");
+        String h = handle.trim().replaceAll("/++$", "");
         if (!h.startsWith("http://") && !h.startsWith("https://")) {
             h = "https://" + h;
         }

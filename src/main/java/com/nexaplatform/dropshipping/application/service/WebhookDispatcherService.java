@@ -7,6 +7,8 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.WebhookSu
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.WebhookDeliveryRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.WebhookSubscriptionRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -42,6 +44,13 @@ public class WebhookDispatcherService {
 
     private static final int MAX_ATTEMPTS = 5;
     private static final long[] BACKOFF_SECONDS = {60, 300, 1800, 7200, 28800};
+
+    // Auto-referencia POR EL PROXY: attempt() es @Async y llamarlo con this lo ejecutaba en el hilo que
+    // publica el evento —síncrono y bloqueante, justo lo contrario del "fire-and-forget" que promete—.
+    // La autoinvocación no pasa por el proxy, así que ni @Async ni @Transactional se aplicaban.
+    @Autowired
+    @Lazy
+    private WebhookDispatcherService self;
 
     private final WebhookSubscriptionRepository subscriptionRepository;
     private final WebhookDeliveryRepository deliveryRepository;
@@ -110,7 +119,7 @@ public class WebhookDispatcherService {
                     .eventType(eventType).eventId(eventId).payload(envelope).signature(signature)
                     .targetUrl(s.getTargetUrl()).status("PENDING").attempt(0).nextRetryAt(Instant.now()).build());
             // Fire-and-forget; the scheduler also picks up PENDING/RETRY rows so we never lose a delivery.
-            attempt(d.getId());
+            self.attempt(d.getId());
         } catch (Exception e) {
             log.warn("Failed to queue webhook delivery for {}: {}", s.getTargetUrl(), e.getMessage());
         }
@@ -143,6 +152,11 @@ public class WebhookDispatcherService {
                 scheduleRetry(d);
             }
         } catch (Exception e) {
+            // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
+            // interrupción deja al pool sin enterarse de que le han pedido parar.
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             d.setResponseBody("dispatch error: " + e.getClass().getSimpleName() + ": " + e.getMessage());
             scheduleRetry(d);
         }

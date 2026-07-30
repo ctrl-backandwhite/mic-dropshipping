@@ -21,10 +21,10 @@ import java.util.regex.Pattern;
 @Component
 public class PasswordPolicy {
 
-    private static final Pattern UPPER = Pattern.compile(".*[A-Z].*");
-    private static final Pattern LOWER = Pattern.compile(".*[a-z].*");
-    private static final Pattern DIGIT = Pattern.compile(".*\\d.*");
-    private static final Pattern SYMBOL = Pattern.compile(".*[^A-Za-z0-9].*");
+    private static final Pattern UPPER = Pattern.compile("[A-Z]");
+    private static final Pattern LOWER = Pattern.compile("[a-z]");
+    private static final Pattern DIGIT = Pattern.compile("\\d");
+    private static final Pattern SYMBOL = Pattern.compile("[^A-Za-z0-9]");
 
     private static final Set<String> COMMON = Set.of("password", "password1", "password123", "password1234", "passw0rd",
             "qwerty", "qwerty123", "12345678", "123456789", "1234567890", "letmein", "welcome", "admin",
@@ -37,16 +37,16 @@ public class PasswordPolicy {
         if (password.length() > 128) {
             throw new BusinessException("Password must be at most 128 characters long");
         }
-        if (!UPPER.matcher(password).matches()) {
+        if (!UPPER.matcher(password).find()) {
             throw new BusinessException("Password must contain at least one uppercase letter");
         }
-        if (!LOWER.matcher(password).matches()) {
+        if (!LOWER.matcher(password).find()) {
             throw new BusinessException("Password must contain at least one lowercase letter");
         }
-        if (!DIGIT.matcher(password).matches()) {
+        if (!DIGIT.matcher(password).find()) {
             throw new BusinessException("Password must contain at least one digit");
         }
-        if (!SYMBOL.matcher(password).matches()) {
+        if (!SYMBOL.matcher(password).find()) {
             throw new BusinessException("Password must contain at least one symbol");
         }
         if (COMMON.contains(password.toLowerCase())) {

@@ -56,6 +56,16 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserUseCaseImpl implements UserUseCase {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String EMAILS_WELCOME = "emails/welcome";
+    private static final String CIRCLE_CHECK = "circle-check";
+    private static final String FOOTERNOTE = "footerNote";
+    private static final String BODYHTML = "bodyHtml";
+    private static final String CTALABEL = "ctaLabel";
+    private static final String USERID = "userId";
+    private static final String CTAURL = "ctaUrl";
+    private static final String TITLE = "title";
+
     public static final int MAX_FAILED_LOGINS = 5;
     public static final int LOCKOUT_MINUTES = 15;
     public static final int ACTIVATION_TTL_HOURS = 24;
@@ -110,15 +120,15 @@ public class UserUseCaseImpl implements UserUseCase {
         User saved = userRepository.save(user);
 
         String confirmLang = InvoiceLabel.lang(saved.getLanguage());
-        emailQueueService.enqueue(email, AuthEmailLabel.CONFIRM_SUBJECT.of(confirmLang), "emails/welcome",
-                Map.of("title", AuthEmailLabel.CONFIRM_TITLE.of(confirmLang),
-                        "bodyHtml", AuthEmailLabel.CONFIRM_BODY.of(confirmLang, saved.getDisplayName()),
-                        "ctaLabel", AuthEmailLabel.CONFIRM_CTA.of(confirmLang),
-                        "ctaUrl", storefrontBaseUrl + "/activate?code=" + activationCode,
-                        "icon", "circle-check",
-                        "footerNote", OrderEmailLabel.AUTO_NOTE.of(confirmLang)));
+        emailQueueService.enqueue(email, AuthEmailLabel.CONFIRM_SUBJECT.of(confirmLang), EMAILS_WELCOME,
+                Map.of(TITLE, AuthEmailLabel.CONFIRM_TITLE.of(confirmLang),
+                        BODYHTML, AuthEmailLabel.CONFIRM_BODY.of(confirmLang, saved.getDisplayName()),
+                        CTALABEL, AuthEmailLabel.CONFIRM_CTA.of(confirmLang),
+                        CTAURL, storefrontBaseUrl + "/activate?code=" + activationCode,
+                        "icon", CIRCLE_CHECK,
+                        FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(confirmLang)));
 
-        auditLogger.log("auth.register", email, Map.of("userId", saved.getId(), "role", saved.getRole().name()));
+        auditLogger.log("auth.register", email, Map.of(USERID, saved.getId(), "role", saved.getRole().name()));
         return saved;
     }
 
@@ -154,7 +164,7 @@ public class UserUseCaseImpl implements UserUseCase {
         user.setActivationCode(null);
         user.setActivationCodeExpiresAt(null);
         User saved = userRepository.update(user);
-        auditLogger.log("auth.activate", saved.getEmail(), Map.of("userId", saved.getId()));
+        auditLogger.log("auth.activate", saved.getEmail(), Map.of(USERID, saved.getId()));
         return saved;
     }
 
@@ -199,13 +209,13 @@ public class UserUseCaseImpl implements UserUseCase {
             String lang = InvoiceLabel.lang(u.getLanguage());
             String when = LOGIN_DATE_FMT.format(Instant.now());
             String body = AuthEmailLabel.LOGIN_BODY.of(lang, u.getDisplayName()).replace("{date}", when);
-            emailQueueService.enqueue(normalized, AuthEmailLabel.LOGIN_SUBJECT.of(lang), "emails/welcome",
-                    Map.of("title", AuthEmailLabel.LOGIN_TITLE.of(lang),
-                            "bodyHtml", body,
-                            "ctaLabel", AuthEmailLabel.LOGIN_CTA.of(lang),
-                            "ctaUrl", storefrontBaseUrl + "/password-reset",
-                            "icon", "circle-check",
-                            "footerNote", OrderEmailLabel.AUTO_NOTE.of(lang)));
+            emailQueueService.enqueue(normalized, AuthEmailLabel.LOGIN_SUBJECT.of(lang), EMAILS_WELCOME,
+                    Map.of(TITLE, AuthEmailLabel.LOGIN_TITLE.of(lang),
+                            BODYHTML, body,
+                            CTALABEL, AuthEmailLabel.LOGIN_CTA.of(lang),
+                            CTAURL, storefrontBaseUrl + "/password-reset",
+                            "icon", CIRCLE_CHECK,
+                            FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(lang)));
         });
         auditLogger.log("auth.login_notify", normalized, Map.of());
     }
@@ -225,13 +235,13 @@ public class UserUseCaseImpl implements UserUseCase {
             resetTokenRepository.save(PasswordResetTokenEntity.builder().user(managed).tokenHash(hash)
                     .expiresAt(Instant.now().plus(RESET_TTL_MINUTES, ChronoUnit.MINUTES)).build());
             String resetLang = InvoiceLabel.lang(user.getLanguage());
-            emailQueueService.enqueue(normalized, AuthEmailLabel.RESET_SUBJECT.of(resetLang), "emails/welcome",
-                    Map.of("title", AuthEmailLabel.RESET_TITLE.of(resetLang),
-                            "bodyHtml", AuthEmailLabel.RESET_BODY.of(resetLang, user.getDisplayName()),
-                            "ctaLabel", AuthEmailLabel.RESET_CTA.of(resetLang),
-                            "ctaUrl", storefrontBaseUrl + "/password-reset?token=" + raw,
-                            "icon", "circle-check",
-                            "footerNote", OrderEmailLabel.AUTO_NOTE.of(resetLang)));
+            emailQueueService.enqueue(normalized, AuthEmailLabel.RESET_SUBJECT.of(resetLang), EMAILS_WELCOME,
+                    Map.of(TITLE, AuthEmailLabel.RESET_TITLE.of(resetLang),
+                            BODYHTML, AuthEmailLabel.RESET_BODY.of(resetLang, user.getDisplayName()),
+                            CTALABEL, AuthEmailLabel.RESET_CTA.of(resetLang),
+                            CTAURL, storefrontBaseUrl + "/password-reset?token=" + raw,
+                            "icon", CIRCLE_CHECK,
+                            FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(resetLang)));
         });
         auditLogger.log("auth.password_reset.request", normalized, Map.of());
     }
@@ -256,7 +266,7 @@ public class UserUseCaseImpl implements UserUseCase {
         prt.setConsumedAt(Instant.now());
         userRepository.update(user);
         resetTokenRepository.save(prt);
-        auditLogger.log("auth.password_reset.confirm", user.getEmail(), Map.of("userId", user.getId()));
+        auditLogger.log("auth.password_reset.confirm", user.getEmail(), Map.of(USERID, user.getId()));
     }
 
     @Override
@@ -265,7 +275,7 @@ public class UserUseCaseImpl implements UserUseCase {
         passwordPolicy.validate(newPassword);
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.update(user);
-        auditLogger.log("auth.password_change", user.getEmail(), Map.of("userId", user.getId()));
+        auditLogger.log("auth.password_change", user.getEmail(), Map.of(USERID, user.getId()));
     }
 
     /* ============ Account deletion (soft delete) ============ */
@@ -281,11 +291,11 @@ public class UserUseCaseImpl implements UserUseCase {
         userRepository.update(user);
         emailQueueService.enqueue(user.getEmail(),
                 "Confirma la eliminación de tu cuenta — NX036 Dropshipping", "emails/account-deletion-code",
-                Map.of("title", "Confirma la eliminación de tu cuenta",
+                Map.of(TITLE, "Confirma la eliminación de tu cuenta",
                         "displayName", user.getDisplayName() != null ? user.getDisplayName() : "",
                         "code", code,
-                        "footerNote", OrderEmailLabel.AUTO_NOTE.of(InvoiceLabel.lang(user.getLanguage()))));
-        auditLogger.log("auth.account.delete.request", user.getEmail(), Map.of("userId", userId));
+                        FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(InvoiceLabel.lang(user.getLanguage()))));
+        auditLogger.log("auth.account.delete.request", user.getEmail(), Map.of(USERID, userId));
     }
 
     @Override
@@ -306,7 +316,7 @@ public class UserUseCaseImpl implements UserUseCase {
         user.setDeletionCode(null);
         user.setDeletionCodeExpiresAt(null);
         userRepository.update(user);
-        auditLogger.log("auth.account.delete", user.getEmail(), Map.of("userId", userId));
+        auditLogger.log("auth.account.delete", user.getEmail(), Map.of(USERID, userId));
     }
 
     /* ============ Lookups ============ */
@@ -494,7 +504,7 @@ public class UserUseCaseImpl implements UserUseCase {
                 .language("es")
                 .build();
         User saved = userRepository.save(user);
-        auditLogger.log("auth.google.register", normalized, Map.of("userId", saved.getId()));
+        auditLogger.log("auth.google.register", normalized, Map.of(USERID, saved.getId()));
         log.info("::> [GOOGLE-OAUTH2] New user registered userId={}", saved.getId());
         return new GoogleLoginOutcome(saved, false, normalized);
     }
@@ -506,7 +516,7 @@ public class UserUseCaseImpl implements UserUseCase {
         if (!user.isGoogleLinked()) {
             user.setGoogleLinked(true);
             userRepository.save(user);
-            auditLogger.log("auth.google.link", user.getEmail(), Map.of("userId", id));
+            auditLogger.log("auth.google.link", user.getEmail(), Map.of(USERID, id));
             log.info("::> [GOOGLE-OAUTH2] Google identity linked to account userId={}", id);
         }
     }
@@ -517,7 +527,7 @@ public class UserUseCaseImpl implements UserUseCase {
     public void adminResetPassword(UUID id) {
         User user = findById(id);
         requestPasswordReset(user.getEmail());
-        auditLogger.log("auth.admin.password_reset", user.getEmail(), Map.of("userId", id));
+        auditLogger.log("auth.admin.password_reset", user.getEmail(), Map.of(USERID, id));
     }
 
     @Override
@@ -528,7 +538,7 @@ public class UserUseCaseImpl implements UserUseCase {
             throw new BusinessException("No se puede eliminar una cuenta de administrador");
         }
         userRepository.delete(id);
-        auditLogger.log("auth.admin.delete", user.getEmail(), Map.of("userId", id));
+        auditLogger.log("auth.admin.delete", user.getEmail(), Map.of(USERID, id));
     }
 
     @Override
@@ -556,14 +566,14 @@ public class UserUseCaseImpl implements UserUseCase {
                 .build();
         User saved = userRepository.save(user);
         String inviteLang = InvoiceLabel.lang(saved.getLanguage());
-        emailQueueService.enqueue(normalized, AuthEmailLabel.INVITE_SUBJECT.of(inviteLang), "emails/welcome",
-                Map.of("title", AuthEmailLabel.INVITE_TITLE.of(inviteLang),
-                        "bodyHtml", AuthEmailLabel.INVITE_BODY.of(inviteLang, ""),
-                        "ctaLabel", AuthEmailLabel.INVITE_CTA.of(inviteLang),
-                        "ctaUrl", storefrontBaseUrl + "/activate?code=" + activationCode,
-                        "icon", "circle-check",
-                        "footerNote", OrderEmailLabel.AUTO_NOTE.of(inviteLang)));
-        auditLogger.log("auth.admin.invite", normalized, Map.of("userId", saved.getId(), "role", r.name()));
+        emailQueueService.enqueue(normalized, AuthEmailLabel.INVITE_SUBJECT.of(inviteLang), EMAILS_WELCOME,
+                Map.of(TITLE, AuthEmailLabel.INVITE_TITLE.of(inviteLang),
+                        BODYHTML, AuthEmailLabel.INVITE_BODY.of(inviteLang, ""),
+                        CTALABEL, AuthEmailLabel.INVITE_CTA.of(inviteLang),
+                        CTAURL, storefrontBaseUrl + "/activate?code=" + activationCode,
+                        "icon", CIRCLE_CHECK,
+                        FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(inviteLang)));
+        auditLogger.log("auth.admin.invite", normalized, Map.of(USERID, saved.getId(), "role", r.name()));
         return saved;
     }
 

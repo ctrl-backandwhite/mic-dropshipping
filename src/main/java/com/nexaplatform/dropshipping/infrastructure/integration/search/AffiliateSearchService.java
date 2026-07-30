@@ -35,7 +35,7 @@ public class AffiliateSearchService {
             @Value("${nexadrop.opensearch.uris:http://localhost:9400}") String uris,
             @Value("${nexadrop.opensearch.affiliates-index:affiliates}") String index) {
         this.objectMapper = objectMapper;
-        String base = uris.split(",")[0].trim().replaceAll("/+$", "");
+        String base = uris.split(",")[0].trim().replaceAll("/++$", "");
         this.searchUrl = base + "/" + index + "/_search";
     }
 
@@ -81,6 +81,11 @@ public class AffiliateSearchService {
             }
             return ids.isEmpty() ? Optional.empty() : Optional.of(new IdPage(ids, total));
         } catch (Exception e) {
+            // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
+            // interrupción deja al pool sin enterarse de que le han pedido parar.
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             log.warn("Affiliate index page read failed, falling back to DB: {}", e.getMessage());
             return Optional.empty();
         }

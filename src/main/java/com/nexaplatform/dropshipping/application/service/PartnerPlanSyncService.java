@@ -30,6 +30,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PartnerPlanSyncService {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String SANDBOX = "sandbox";
+
     private final CustomerSubscriptionRepository subsRepo;
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
@@ -38,11 +41,11 @@ public class PartnerPlanSyncService {
     /** Mapeo plan.code → tier (debe estar alineado con partnerPlanClaimCustomizer). */
     private static String mapPlanCodeToTier(String planCode) {
         if (planCode == null)
-            return "sandbox";
+            return SANDBOX;
         return switch (planCode.toUpperCase()) {
-            case "FREE" -> "sandbox";
+            case "FREE" -> SANDBOX;
             case "STARTER", "PRO", "ENTERPRISE" -> "paid";
-            default -> "sandbox";
+            default -> SANDBOX;
         };
     }
 
@@ -53,7 +56,7 @@ public class PartnerPlanSyncService {
     @Transactional
     public void syncForUser(UUID userId) {
         List<CustomerSubscriptionEntity> active = subsRepo.findActiveByUserId(userId);
-        String tier = active.isEmpty() ? "sandbox" : mapPlanCodeToTier(active.get(0).getPlan().getCode());
+        String tier = active.isEmpty() ? SANDBOX : mapPlanCodeToTier(active.get(0).getPlan().getCode());
         int updated = updateClientSettings(userId, tier, active.isEmpty() ? null : active.get(0).getPlan().getCode());
         log.info("Plan sync user={} tier={} clients_updated={}", userId, tier, updated);
     }

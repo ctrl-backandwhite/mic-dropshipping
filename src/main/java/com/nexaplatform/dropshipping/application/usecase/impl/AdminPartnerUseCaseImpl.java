@@ -41,6 +41,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AdminPartnerUseCaseImpl implements AdminPartnerUseCase {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String CREATED_AT = "created_at";
+
     private static final SecureRandom RNG = new SecureRandom();
 
     private final JdbcTemplate jdbc;
@@ -137,7 +140,7 @@ public class AdminPartnerUseCaseImpl implements AdminPartnerUseCase {
                 (rs, rowNum) -> AdminPartnerWebhook.builder().id(rs.getObject("id"))
                         .partnerAppId(rs.getObject("partner_app_id")).eventType(rs.getString("event_type"))
                         .status(rs.getString("status")).attemptCount(getInteger(rs, "attempt_count"))
-                        .responseCode(getInteger(rs, "response_code")).createdAt(getInstant(rs, "created_at")).build());
+                        .responseCode(getInteger(rs, "response_code")).createdAt(getInstant(rs, CREATED_AT)).build());
     }
 
     @Override
@@ -149,7 +152,7 @@ public class AdminPartnerUseCaseImpl implements AdminPartnerUseCase {
                 (rs, rowNum) -> AdminPartnerApp.builder().id(rs.getObject("id")).name(rs.getString("name"))
                         .description(rs.getString("description")).clientId(rs.getString("client_id"))
                         .scopes(rs.getString("scopes")).webhookUrl(rs.getString("webhook_url"))
-                        .active(getBoolean(rs, "active")).createdAt(getInstant(rs, "created_at")).build());
+                        .active(getBoolean(rs, "active")).createdAt(getInstant(rs, CREATED_AT)).build());
     }
 
     @Override
@@ -161,7 +164,7 @@ public class AdminPartnerUseCaseImpl implements AdminPartnerUseCase {
                 (rs, rowNum) -> AdminShopConnection.builder().id(rs.getObject("id"))
                         .partnerAppId(rs.getObject("partner_app_id")).platform(rs.getString("platform"))
                         .shopHandle(rs.getString("shop_handle")).active(getBoolean(rs, "active"))
-                        .createdAt(getInstant(rs, "created_at")).build());
+                        .createdAt(getInstant(rs, CREATED_AT)).build());
     }
 
     private static Integer getInteger(ResultSet rs, String column) throws SQLException {

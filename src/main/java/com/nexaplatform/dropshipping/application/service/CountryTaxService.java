@@ -61,6 +61,8 @@ public class CountryTaxService {
     }
 
     /** Igual que {@link #taxCentsFor(String, int)} pero resolviendo la tasa por región (estado/provincia). */
+    // Abre la lectura aquí: rateBpsFor es autoinvocación y su @Transactional no se aplica.
+    @Transactional(readOnly = true)
     public int taxCentsFor(String country, String region, int taxableBaseCents) {
         int bps = rateBpsFor(country, region);
         if (bps <= 0 || taxableBaseCents <= 0) {

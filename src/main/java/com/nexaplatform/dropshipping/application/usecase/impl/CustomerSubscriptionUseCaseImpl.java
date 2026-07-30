@@ -51,6 +51,10 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseCase {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String MONTHLY = "MONTHLY";
+    private static final String YEARLY = "YEARLY";
+
     private final CustomerSubscriptionRepository customerSubscriptionRepository;
     private final CustomerSubscriptionUpdateMapper customerSubscriptionUpdateMapper;
     private final SubscriptionPlanRepository planRepository;
@@ -144,8 +148,8 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
             return null;
         }
         return switch (period.trim().toUpperCase()) {
-            case "MONTH", "MONTHLY" -> "MONTHLY";
-            case "YEAR", "YEARLY" -> "YEARLY";
+            case "MONTH", MONTHLY -> MONTHLY;
+            case "YEAR", YEARLY -> YEARLY;
             default -> period.toUpperCase();
         };
     }
@@ -161,12 +165,12 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
             return startFreeTrial(userId, plan, now);
         }
 
-        Instant end = "YEARLY".equalsIgnoreCase(billingPeriod)
+        Instant end = YEARLY.equalsIgnoreCase(billingPeriod)
                 ? now.plus(365, ChronoUnit.DAYS)
                 : now.plus(30, ChronoUnit.DAYS);
         CustomerSubscription model = CustomerSubscription.builder().userId(userId).planId(plan.getId())
                 .status(SubscriptionStatus.ACTIVE)
-                .billingPeriod(billingPeriod == null ? "MONTHLY" : billingPeriod.toUpperCase()).currentPeriodStart(now)
+                .billingPeriod(billingPeriod == null ? MONTHLY : billingPeriod.toUpperCase()).currentPeriodStart(now)
                 .currentPeriodEnd(end).build();
         return customerSubscriptionRepository.save(model);
     }
@@ -186,7 +190,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         }
         Instant trialEnd = now.atZone(ZoneOffset.UTC).plusMonths(1).toInstant();
         CustomerSubscription model = CustomerSubscription.builder().userId(userId).planId(plan.getId())
-                .status(SubscriptionStatus.ACTIVE).billingPeriod("MONTHLY").currentPeriodStart(now)
+                .status(SubscriptionStatus.ACTIVE).billingPeriod(MONTHLY).currentPeriodStart(now)
                 .currentPeriodEnd(trialEnd).build();
         CustomerSubscription saved = customerSubscriptionRepository.save(model);
         user.setFreeTrialUsed(true);
@@ -244,7 +248,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
                     .build();
         }
 
-        String priceId = "YEARLY".equalsIgnoreCase(period)
+        String priceId = YEARLY.equalsIgnoreCase(period)
                 ? plan.getStripeYearlyPriceId()
                 : plan.getStripeMonthlyPriceId();
         var session = stripeService.createCheckoutSession("user@example.com", priceId,
@@ -392,8 +396,8 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     public SubscribeOutcome subscribeWithSavedCard(UUID userId, String planCode, String period) throws Exception {
         requireStripe();
         SubscriptionPlanEntity plan = getPlanEntityByCode(planCode);
-        String billingPeriod = "YEARLY".equalsIgnoreCase(period) ? "YEARLY" : "MONTHLY";
-        int cnyCents = "YEARLY".equals(billingPeriod) ? plan.getPriceYearlyCents() : plan.getPriceMonthlyCents();
+        String billingPeriod = YEARLY.equalsIgnoreCase(period) ? YEARLY : MONTHLY;
+        int cnyCents = YEARLY.equals(billingPeriod) ? plan.getPriceYearlyCents() : plan.getPriceMonthlyCents();
 
         // Plan gratis: suscripción ACTIVE directa, sin pasar por Stripe.
         if (cnyCents <= 0) {

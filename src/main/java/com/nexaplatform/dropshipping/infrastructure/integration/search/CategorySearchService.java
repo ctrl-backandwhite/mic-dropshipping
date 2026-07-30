@@ -39,7 +39,7 @@ public class CategorySearchService {
             @Value("${nexadrop.opensearch.uris:http://localhost:9400}") String uris,
             @Value("${nexadrop.opensearch.categories-index:categories}") String index) {
         this.objectMapper = objectMapper;
-        String base = uris.split(",")[0].trim().replaceAll("/+$", "");
+        String base = uris.split(",")[0].trim().replaceAll("/++$", "");
         this.searchUrl = base + "/" + index + "/_search";
     }
 
@@ -83,6 +83,11 @@ public class CategorySearchService {
             }
             return rows.isEmpty() ? Optional.empty() : Optional.of(rows);
         } catch (Exception e) {
+            // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
+            // interrupción deja al pool sin enterarse de que le han pedido parar.
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             log.warn("Category index read failed, falling back to DB: {}", e.getMessage());
             return Optional.empty();
         }

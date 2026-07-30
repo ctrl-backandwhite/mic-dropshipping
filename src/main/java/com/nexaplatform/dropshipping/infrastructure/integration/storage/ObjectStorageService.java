@@ -96,7 +96,7 @@ public class ObjectStorageService {
                 .stream(new ByteArrayInputStream(data), data.length, -1)
                 .contentType(contentType != null && !contentType.isBlank() ? contentType : "application/octet-stream")
                 .build());
-        return publicUrl.replaceAll("/+$", "") + "/" + key;
+        return publicUrl.replaceAll("/++$", "") + "/" + key;
     }
 
     /** Descarga los bytes de un objeto por su clave (usa el endpoint INTERNO, alcanzable por el backend). */
@@ -116,7 +116,7 @@ public class ObjectStorageService {
         if (client == null || url == null || url.isBlank() || publicUrl == null || publicUrl.isBlank()) {
             return null;
         }
-        String base = publicUrl.replaceAll("/+$", "") + "/";
+        String base = publicUrl.replaceAll("/++$", "") + "/";
         if (!url.startsWith(base)) {
             return null; // URL externa (p.ej. alicdn) o de otro host: no está en nuestro bucket
         }

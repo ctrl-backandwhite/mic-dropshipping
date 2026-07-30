@@ -81,7 +81,7 @@ public class CategoryProductFiller {
             int deficit = (int) (TARGET_PER_CATEGORY - have);
             for (int i = 0; i < deficit; i++) {
                 int seq = (int) have + i + 1;
-                SupplierEntity sup = suppliers.get((Math.abs(c.slug.hashCode()) + i) % suppliers.size());
+                SupplierEntity sup = suppliers.get(Math.floorMod(c.slug.hashCode() + i, suppliers.size()));
                 createProduct(c, cat.getId(), sup.getId(), seq, i);
                 created++;
             }
@@ -112,7 +112,7 @@ public class CategoryProductFiller {
         int monthlySales = 400 + (i * 37) % 4600;
         BigDecimal rating = BigDecimal.valueOf(Math.min(4.9, 4.2 + (i % 8) * 0.1)).setScale(1, RoundingMode.HALF_UP);
         int reviewCount = 60 + (i * 53) % 2400;
-        BigDecimal repurchase = BigDecimal.valueOf(12 + (i % 22));
+        BigDecimal repurchase = BigDecimal.valueOf(12L + (i % 22));
 
         String externalId = "GEN-" + c.slug + "-" + String.format("%03d", seq);
         String[] imgUrls = c.images;

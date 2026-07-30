@@ -41,6 +41,29 @@ import java.util.*;
 @RequiredArgsConstructor
 public class DemoOperationsSeedRunner {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String PARTNERS_NX036_LOCAL = "@partners.nx036.local";
+    private static final String CONSUMER_ELECTRONICS = "consumer-electronics";
+    private static final String BEAUTY_PERSONAL_CARE = "beauty-personal-care";
+    private static final String DEMO_NX036_LOCAL = "@demo.nx036.local";
+    private static final String FASHION_APPAREL = "fashion-apparel";
+    private static final String SPORTS_OUTDOORS = "sports-outdoors";
+    private static final String INTERMEDIATE = "INTERMEDIATE";
+    private static final String HOME_KITCHEN = "home-kitchen";
+    private static final String LOS_ANGELES = "Los Angeles";
+    private static final String MAR_A_P_REZ = "María Pérez";
+    private static final String JESUS_FINOL = "Jesus Finol";
+    private static final String WOOCOMMERCE = "WooCommerce";
+    private static final String TOYS_GIFTS = "toys-gifts";
+    private static final String LIANG_CHEN = "Liang Chen";
+    private static final String BEGINNER = "BEGINNER";
+    private static final String NEW_YORK = "New York";
+    private static final String SHOPIFY = "Shopify";
+    private static final String GENERAL = "general";
+    private static final String TORONTO = "Toronto";
+    private static final String LONDON = "London";
+    private static final String MADRID = "Madrid";
+
     /**
      * Contraseña de las cuentas de demostración.
      *
@@ -127,9 +150,9 @@ public class DemoOperationsSeedRunner {
 
         // demo-only users (skip the canonical admin/partner/operator/customer demo accounts)
         List<UserEntity> demoCustomers = customers.stream()
-                .filter(u -> u.getEmail() != null && u.getEmail().contains("@demo.nx036.local")).toList();
+                .filter(u -> u.getEmail() != null && u.getEmail().contains(DEMO_NX036_LOCAL)).toList();
         List<UserEntity> demoPartners = partners.stream()
-                .filter(u -> u.getEmail() != null && u.getEmail().contains("@partners.nx036.local")).toList();
+                .filter(u -> u.getEmail() != null && u.getEmail().contains(PARTNERS_NX036_LOCAL)).toList();
 
         if (addressRepository.count() < 50)
             seedAddressesFor(demoCustomers, demoPartners);
@@ -174,8 +197,8 @@ public class DemoOperationsSeedRunner {
     }
 
     private static int countDemo(List<UserEntity> us) {
-        return (int) us.stream().filter(u -> u.getEmail() != null && u.getEmail().contains("@demo.nx036.local")
-                || u.getEmail() != null && u.getEmail().contains("@partners.nx036.local")).count();
+        return (int) us.stream().filter(u -> u.getEmail() != null && u.getEmail().contains(DEMO_NX036_LOCAL)
+                || u.getEmail() != null && u.getEmail().contains(PARTNERS_NX036_LOCAL)).count();
     }
 
     private static List<UserEntity> mergeDistinct(List<UserEntity> a, List<UserEntity> b) {
@@ -211,7 +234,7 @@ public class DemoOperationsSeedRunner {
         for (int i = 0; i < Math.min(n, persons.length); i++) {
             String[] p = persons[i];
             String slug = slugify(p[0] + p[1]) + (i + 1);
-            String email = (slug + "@demo.nx036.local").toLowerCase();
+            String email = (slug + DEMO_NX036_LOCAL).toLowerCase();
             if (userRepository.existsByEmail(email))
                 continue;
             String language = languageForCountry(p[2]);
@@ -227,21 +250,21 @@ public class DemoOperationsSeedRunner {
     }
 
     private List<UserEntity> seedPartners(int n) {
-        String[][] shops = {{"trendypicks-mx", "TrendyPicks MX", "MX", "Shopify"},
-                {"madrid-essentials", "Madrid Essentials", "ES", "Shopify"},
-                {"bcn-stylebox", "Barcelona StyleBox", "ES", "WooCommerce"},
-                {"saopaulo-deals", "São Paulo Deals", "BR", "WooCommerce"},
-                {"buenosaires-mart", "BA Mart", "AR", "Shopify"}, {"london-trends", "London Trends", "GB", "Shopify"},
-                {"berlin-uptown", "Berlin Uptown", "DE", "WooCommerce"}, {"paris-pop", "Paris Pop", "FR", "Shopify"},
-                {"toronto-vault", "Toronto Vault", "CA", "Shopify"},
+        String[][] shops = {{"trendypicks-mx", "TrendyPicks MX", "MX", SHOPIFY},
+                {"madrid-essentials", "Madrid Essentials", "ES", SHOPIFY},
+                {"bcn-stylebox", "Barcelona StyleBox", "ES", WOOCOMMERCE},
+                {"saopaulo-deals", "São Paulo Deals", "BR", WOOCOMMERCE},
+                {"buenosaires-mart", "BA Mart", "AR", SHOPIFY}, {"london-trends", "London Trends", "GB", SHOPIFY},
+                {"berlin-uptown", "Berlin Uptown", "DE", WOOCOMMERCE}, {"paris-pop", "Paris Pop", "FR", SHOPIFY},
+                {"toronto-vault", "Toronto Vault", "CA", SHOPIFY},
                 {"miami-imports", "Miami Imports", "US", "BigCommerce"},
-                {"lisbon-loop", "Lisbon Loop", "PT", "WooCommerce"}, {"tokyo-curated", "Tokyo Curated", "JP", "Custom"},
+                {"lisbon-loop", "Lisbon Loop", "PT", WOOCOMMERCE}, {"tokyo-curated", "Tokyo Curated", "JP", "Custom"},
                 {"seoul-aesthetic", "Seoul Aesthetic", "KR", "Cafe24"},
-                {"sydney-supply", "Sydney Supply", "AU", "Shopify"}, {"dubai-prime", "Dubai Prime", "AE", "Shopify"},};
+                {"sydney-supply", "Sydney Supply", "AU", SHOPIFY}, {"dubai-prime", "Dubai Prime", "AE", SHOPIFY},};
         List<UserEntity> out = new ArrayList<>();
         for (int i = 0; i < Math.min(n, shops.length); i++) {
             String[] s = shops[i];
-            String email = s[0] + "@partners.nx036.local";
+            String email = s[0] + PARTNERS_NX036_LOCAL;
             if (userRepository.existsByEmail(email))
                 continue;
             UserEntity u = UserEntity.builder().email(email).passwordHash(passwordEncoder.encode(demoPassword()))
@@ -289,7 +312,7 @@ public class DemoOperationsSeedRunner {
             String city = cities[rnd.nextInt(cities.length)];
             UserAddressEntity a = UserAddressEntity.builder().user(u).label(labels[i % labels.length])
                     .fullName(u.getDisplayName() != null ? u.getDisplayName() : u.getEmail())
-                    .phone("+" + (10 + rnd.nextInt(89)) + " " + (100000000L + Math.abs(rnd.nextLong()) % 900000000L))
+                    .phone("+" + (10 + rnd.nextInt(89)) + " " + (100000000L + Math.floorMod(rnd.nextLong(), 900000000L)))
                     .line1(streetFor(u.getCountry()) + " " + (1 + rnd.nextInt(450)))
                     .line2(rnd.nextInt(3) == 0 ? "Piso " + (1 + rnd.nextInt(8)) + (char) ('A' + rnd.nextInt(5)) : null)
                     .city(city).state(stateFor(u.getCountry(), city)).postalCode(postalFor(u.getCountry()))
@@ -404,17 +427,17 @@ public class DemoOperationsSeedRunner {
         Instant placed = o.getPlacedAt();
         o.setStatus(target);
         switch (target) {
-            case FORWARDED -> o.setForwardedAt(placed.plus(1 + rnd.nextInt(2), ChronoUnit.HOURS));
+            case FORWARDED -> o.setForwardedAt(placed.plus(1L + rnd.nextInt(2), ChronoUnit.HOURS));
             case SHIPPED -> {
-                o.setForwardedAt(placed.plus(1 + rnd.nextInt(2), ChronoUnit.HOURS));
-                o.setShippedAt(placed.plus(1 + rnd.nextInt(3), ChronoUnit.DAYS));
+                o.setForwardedAt(placed.plus(1L + rnd.nextInt(2), ChronoUnit.HOURS));
+                o.setShippedAt(placed.plus(1L + rnd.nextInt(3), ChronoUnit.DAYS));
             }
             case DELIVERED -> {
-                o.setForwardedAt(placed.plus(1 + rnd.nextInt(2), ChronoUnit.HOURS));
-                o.setShippedAt(placed.plus(1 + rnd.nextInt(3), ChronoUnit.DAYS));
-                o.setDeliveredAt(placed.plus(5 + rnd.nextInt(10), ChronoUnit.DAYS));
+                o.setForwardedAt(placed.plus(1L + rnd.nextInt(2), ChronoUnit.HOURS));
+                o.setShippedAt(placed.plus(1L + rnd.nextInt(3), ChronoUnit.DAYS));
+                o.setDeliveredAt(placed.plus(5L + rnd.nextInt(10), ChronoUnit.DAYS));
             }
-            case CANCELLED -> o.setCancelledAt(placed.plus(2 + rnd.nextInt(24), ChronoUnit.HOURS));
+            case CANCELLED -> o.setCancelledAt(placed.plus(2L + rnd.nextInt(24), ChronoUnit.HOURS));
             default -> {
                 /* PENDING / AWAITING_PAYMENT / PAID — no extra timestamps */ }
         }
@@ -455,8 +478,8 @@ public class DemoOperationsSeedRunner {
                     // DROP-634: usamos el formato canónico MONTHLY/YEARLY (igual que el
                     // use case real) para que el frontend lo traduzca siempre vía i18n.
                     .status(st).billingPeriod(i % 2 == 0 ? "MONTHLY" : "YEARLY")
-                    .currentPeriodStart(now.minus(15 + rnd.nextInt(30), ChronoUnit.DAYS))
-                    .currentPeriodEnd(now.plus(15 + rnd.nextInt(30), ChronoUnit.DAYS))
+                    .currentPeriodStart(now.minus(15L + rnd.nextInt(30), ChronoUnit.DAYS))
+                    .currentPeriodEnd(now.plus(15L + rnd.nextInt(30), ChronoUnit.DAYS))
                     .canceledAt(st == SubscriptionStatus.CANCELED ? now.minus(5, ChronoUnit.DAYS) : null)
                     .trialEndsAt(st == SubscriptionStatus.TRIALING ? now.plus(7, ChronoUnit.DAYS) : null).build();
             subscriptionRepository.save(s);
@@ -479,9 +502,9 @@ public class DemoOperationsSeedRunner {
             rules.add(rule(PriceRuleScope.GLOBAL, null, MarginType.PERCENTAGE, "35.00", 100,
                     "Margen global por defecto (35%)"));
         }
-        Map<String, BigDecimal> catMargins = Map.of("consumer-electronics", new BigDecimal("28.00"), "fashion-apparel",
-                new BigDecimal("45.00"), "home-kitchen", new BigDecimal("38.00"), "beauty-personal-care",
-                new BigDecimal("52.00"), "sports-outdoors", new BigDecimal("40.00"), "toys-gifts",
+        Map<String, BigDecimal> catMargins = Map.of(CONSUMER_ELECTRONICS, new BigDecimal("28.00"), FASHION_APPAREL,
+                new BigDecimal("45.00"), HOME_KITCHEN, new BigDecimal("38.00"), BEAUTY_PERSONAL_CARE,
+                new BigDecimal("52.00"), SPORTS_OUTDOORS, new BigDecimal("40.00"), TOYS_GIFTS,
                 new BigDecimal("48.00"));
         catMargins.forEach((slug, value) -> categoryRepository.findBySlug(slug).ifPresent(cat -> {
             // Prefer a localized name from translations; fall back to the zh column then the slug.
@@ -538,11 +561,11 @@ public class DemoOperationsSeedRunner {
     }
 
     private List<String[]> specsFor(ProductEntity p, String lang) {
-        String category = p.getCategory() != null ? p.getCategory().getSlug() : "general";
+        String category = p.getCategory() != null ? p.getCategory().getSlug() : GENERAL;
         boolean es = "es".equals(lang);
         List<String[]> out = new ArrayList<>();
         out.add(new String[]{es ? "Marca" : "Brand", p.getBrand() != null ? p.getBrand() : "NX036 Generic"});
-        out.add(new String[]{es ? "Material" : "Material", materialFor(category)});
+        out.add(new String[]{"Material", materialFor(category)});
         out.add(new String[]{es ? "Modelo" : "Model", p.getExternalId()});
         out.add(new String[]{es ? "País de origen" : "Country of origin", "CN"});
         out.add(new String[]{es ? "Peso neto" : "Net weight",
@@ -550,18 +573,18 @@ public class DemoOperationsSeedRunner {
         out.add(new String[]{es ? "Garantía" : "Warranty", (3 + rnd.nextInt(22)) + (es ? " meses" : " months")});
         out.add(new String[]{es ? "Lead time del proveedor" : "Supplier lead time",
                 (2 + rnd.nextInt(8)) + (es ? " días" : " days")});
-        if ("consumer-electronics".equals(category)) {
+        if (CONSUMER_ELECTRONICS.equals(category)) {
             out.add(new String[]{es ? "Voltaje" : "Voltage", "100-240V AC, 50/60Hz"});
             out.add(new String[]{es ? "Certificaciones" : "Certifications", "CE, FCC, RoHS"});
             out.add(new String[]{es ? "Conectividad" : "Connectivity", "Bluetooth 5.3 · USB-C"});
-        } else if ("fashion-apparel".equals(category)) {
+        } else if (FASHION_APPAREL.equals(category)) {
             out.add(new String[]{es ? "Composición" : "Composition", "Cotton 80% / Polyester 20%"});
             out.add(new String[]{es ? "Cuidado" : "Care",
                     es ? "Lavar a 30°C, no plancha directa" : "Machine wash 30°C"});
-        } else if ("beauty-personal-care".equals(category)) {
+        } else if (BEAUTY_PERSONAL_CARE.equals(category)) {
             out.add(new String[]{es ? "Tipo de piel" : "Skin type", es ? "Todo tipo" : "All types"});
             out.add(new String[]{es ? "Caducidad" : "Shelf life", "24 " + (es ? "meses" : "months")});
-        } else if ("home-kitchen".equals(category)) {
+        } else if (HOME_KITCHEN.equals(category)) {
             out.add(new String[]{es ? "Apto para lavavajillas" : "Dishwasher safe", es ? "Sí" : "Yes"});
         }
         return out;
@@ -569,12 +592,12 @@ public class DemoOperationsSeedRunner {
 
     private String materialFor(String slug) {
         return switch (slug) {
-            case "consumer-electronics" -> "ABS + Aluminum";
-            case "fashion-apparel" -> "Cotton blend";
-            case "home-kitchen" -> "Stainless steel 304";
-            case "beauty-personal-care" -> "Silicone + ABS";
-            case "sports-outdoors" -> "Polyester ripstop";
-            case "toys-gifts" -> "Food-grade ABS";
+            case CONSUMER_ELECTRONICS -> "ABS + Aluminum";
+            case FASHION_APPAREL -> "Cotton blend";
+            case HOME_KITCHEN -> "Stainless steel 304";
+            case BEAUTY_PERSONAL_CARE -> "Silicone + ABS";
+            case SPORTS_OUTDOORS -> "Polyester ripstop";
+            case TOYS_GIFTS -> "Food-grade ABS";
             default -> "Mixed";
         };
     }
@@ -582,12 +605,12 @@ public class DemoOperationsSeedRunner {
     /* ============================== attributes + tags ============================== */
 
     private void seedAttributesAndTags() {
-        String[][] catTagPool = {{"consumer-electronics", "wireless,bluetooth,tech,gadget,charger,smart"},
-                {"fashion-apparel", "unisex,casual,streetwear,trending,summer,winter"},
-                {"home-kitchen", "kitchen,storage,eco,decor,organizer,minimalist"},
-                {"beauty-personal-care", "skincare,beauty,cruelty-free,vegan,korean,kbeauty"},
-                {"sports-outdoors", "fitness,outdoor,camping,gym,hiking,yoga"},
-                {"toys-gifts", "kids,educational,gift,creative,steam,age3+"},};
+        String[][] catTagPool = {{CONSUMER_ELECTRONICS, "wireless,bluetooth,tech,gadget,charger,smart"},
+                {FASHION_APPAREL, "unisex,casual,streetwear,trending,summer,winter"},
+                {HOME_KITCHEN, "kitchen,storage,eco,decor,organizer,minimalist"},
+                {BEAUTY_PERSONAL_CARE, "skincare,beauty,cruelty-free,vegan,korean,kbeauty"},
+                {SPORTS_OUTDOORS, "fitness,outdoor,camping,gym,hiking,yoga"},
+                {TOYS_GIFTS, "kids,educational,gift,creative,steam,age3+"},};
         Map<String, String[]> tagsByCat = new HashMap<>();
         for (String[] e : catTagPool)
             tagsByCat.put(e[0], e[1].split(","));
@@ -598,7 +621,7 @@ public class DemoOperationsSeedRunner {
         List<ProductEntity> products = productRepository.findAll();
         int aCount = 0, tCount = 0;
         for (ProductEntity p : products) {
-            String slug = p.getCategory() != null ? p.getCategory().getSlug() : "general";
+            String slug = p.getCategory() != null ? p.getCategory().getSlug() : GENERAL;
             // attributes
             attrRepository.save(ProductAttributeEntity.builder().product(p).attrKey("brand")
                     .attrValue(p.getBrand() != null ? p.getBrand() : "NX036").build());
@@ -692,14 +715,14 @@ public class DemoOperationsSeedRunner {
                 p.setPackageWeightGrams(p.getWeightGrams() + 80 + rnd.nextInt(220));
             }
             if (p.getCertifications() == null || p.getCertifications().isEmpty()) {
-                String slug = p.getCategory() != null ? p.getCategory().getSlug() : "general";
+                String slug = p.getCategory() != null ? p.getCategory().getSlug() : GENERAL;
                 p.setCertifications(switch (slug) {
-                    case "consumer-electronics" -> List.of("CE", "FCC", "RoHS");
-                    case "fashion-apparel" -> List.of("OEKO-TEX");
-                    case "beauty-personal-care" -> List.of("ISO 22716", "GMP");
-                    case "home-kitchen" -> List.of("FDA", "LFGB");
-                    case "sports-outdoors" -> List.of("CE");
-                    case "toys-gifts" -> List.of("EN71", "ASTM F963", "CPSIA");
+                    case CONSUMER_ELECTRONICS -> List.of("CE", "FCC", "RoHS");
+                    case FASHION_APPAREL -> List.of("OEKO-TEX");
+                    case BEAUTY_PERSONAL_CARE -> List.of("ISO 22716", "GMP");
+                    case HOME_KITCHEN -> List.of("FDA", "LFGB");
+                    case SPORTS_OUTDOORS -> List.of("CE");
+                    case TOYS_GIFTS -> List.of("EN71", "ASTM F963", "CPSIA");
                     default -> List.of();
                 });
             }
@@ -814,9 +837,9 @@ public class DemoOperationsSeedRunner {
 
     private void seedAgents() {
         Object[][] agents = {
-                {"Liang Chen", "STRATEGIC", "10 years sourcing electronics from Shenzhen", List.of("en", "zh", "es"),
+                {LIANG_CHEN, "STRATEGIC", "10 years sourcing electronics from Shenzhen", List.of("en", "zh", "es"),
                         98.2, 4.7, 4.9, 412},
-                {"María Pérez", "SENIOR", "Fashion & beauty supplier discovery", List.of("es", "en"), 94.8, 7.2, 4.8,
+                {MAR_A_P_REZ, "SENIOR", "Fashion & beauty supplier discovery", List.of("es", "en"), 94.8, 7.2, 4.8,
                         268},
                 {"Ravi Sharma", "SENIOR", "Tools, hardware and auto parts negotiator", List.of("en", "hi"), 92.1, 8.0,
                         4.7, 192},
@@ -843,28 +866,28 @@ public class DemoOperationsSeedRunner {
     private void seedCourses() {
         Object[][] courses = {
                 {"intro-dropshipping", "Intro al Dropshipping en NX036", "Pilares del negocio y primeros 30 días.",
-                        "Jesus Finol", 45, "es", "BEGINNER"},
+                        JESUS_FINOL, 45, "es", BEGINNER},
                 {"sourcing-china", "Sourcing efectivo en China", "Cómo evaluar fábricas y MOQs realistas.",
-                        "Liang Chen", 60, "es", "INTERMEDIATE"},
+                        LIANG_CHEN, 60, "es", INTERMEDIATE},
                 {"shopify-integration", "Integración Shopify paso a paso", "Conecta tu tienda y publica 50 productos.",
-                        "María Pérez", 40, "es", "BEGINNER"},
+                        MAR_A_P_REZ, 40, "es", BEGINNER},
                 {"winning-products", "Hallar Winning Products", "Uso de Intelligence + Ad Trends.", "Tom Wilson", 35,
-                        "es", "INTERMEDIATE"},
+                        "es", INTERMEDIATE},
                 {"shipping-fundamentals", "Logística internacional 101", "STANDARD vs EXPRESS vs AIR vs SEA.",
-                        "Sofía Almeida", 30, "es", "BEGINNER"},
+                        "Sofía Almeida", 30, "es", BEGINNER},
                 {"pod-mastery", "Print On Demand desde cero", "Editor, mockups, IA y fulfillment POD.", "Lin Zhao", 50,
-                        "es", "INTERMEDIATE"},
+                        "es", INTERMEDIATE},
                 {"branding-odm", "ODM y branding para tu marca", "Cuándo invertir en custom packaging.",
                         "Camille Dubois", 40, "es", "ADVANCED"},
                 {"intro-en", "Intro to dropshipping on NX036", "Business pillars and your first 30 days.",
-                        "Jesus Finol", 45, "en", "BEGINNER"},
-                {"sourcing-en", "Effective sourcing from China", "Evaluate factories and realistic MOQs.", "Liang Chen",
-                        60, "en", "INTERMEDIATE"},
+                        JESUS_FINOL, 45, "en", BEGINNER},
+                {"sourcing-en", "Effective sourcing from China", "Evaluate factories and realistic MOQs.", LIANG_CHEN,
+                        60, "en", INTERMEDIATE},
                 {"shopify-en", "Shopify integration step by step", "Connect your shop and publish 50 products.",
-                        "María Pérez", 40, "en", "BEGINNER"},
-                {"intro-pt", "Introdução ao Dropshipping", "Pilares do negócio e os primeiros 30 dias.", "Jesus Finol",
-                        45, "pt", "BEGINNER"},
-                {"intro-zh", "代发货入门", "业务基础与首个 30 天行动计划。", "Jesus Finol", 45, "zh", "BEGINNER"},};
+                        MAR_A_P_REZ, 40, "en", BEGINNER},
+                {"intro-pt", "Introdução ao Dropshipping", "Pilares do negócio e os primeiros 30 dias.", JESUS_FINOL,
+                        45, "pt", BEGINNER},
+                {"intro-zh", "代发货入门", "业务基础与首个 30 天行动计划。", JESUS_FINOL, 45, "zh", BEGINNER},};
         for (Object[] c : courses) {
             String slug = (String) c[0];
             courseRepo.save(AcademyCourseEntity
@@ -916,11 +939,11 @@ public class DemoOperationsSeedRunner {
 
     private void seedWarehouses() {
         Object[][] whs = {{"CN-SHZ", "Shenzhen Hub", "CN", "Shenzhen"}, {"CN-YIW", "Yiwu Hub", "CN", "Yiwu"},
-                {"US-LAX", "Los Angeles", "US", "Los Angeles"}, {"US-NYC", "New York", "US", "New York"},
-                {"DE-FRA", "Frankfurt", "DE", "Frankfurt"}, {"GB-LON", "London", "GB", "London"},
+                {"US-LAX", LOS_ANGELES, "US", LOS_ANGELES}, {"US-NYC", NEW_YORK, "US", NEW_YORK},
+                {"DE-FRA", "Frankfurt", "DE", "Frankfurt"}, {"GB-LON", LONDON, "GB", LONDON},
                 {"PL-WAW", "Warsaw", "PL", "Warsaw"}, {"JP-TYO", "Tokyo", "JP", "Tokyo"},
-                {"ES-MAD", "Madrid", "ES", "Madrid"}, {"MY-KUL", "Kuala Lumpur", "MY", "Kuala Lumpur"},
-                {"MX-MEX", "Mexico City", "MX", "Mexico City"}, {"CA-YYZ", "Toronto", "CA", "Toronto"},};
+                {"ES-MAD", MADRID, "ES", MADRID}, {"MY-KUL", "Kuala Lumpur", "MY", "Kuala Lumpur"},
+                {"MX-MEX", "Mexico City", "MX", "Mexico City"}, {"CA-YYZ", TORONTO, "CA", TORONTO},};
         List<WarehouseEntity> saved = new ArrayList<>();
         for (Object[] w : whs) {
             saved.add(warehouseRepo.save(WarehouseEntity
@@ -1069,9 +1092,9 @@ public class DemoOperationsSeedRunner {
 
     private static String[] citiesFor(String country) {
         if (country == null)
-            return new String[]{"Madrid"};
+            return new String[]{MADRID};
         return switch (country) {
-            case "ES" -> new String[]{"Madrid", "Barcelona", "Valencia", "Sevilla", "Málaga"};
+            case "ES" -> new String[]{MADRID, "Barcelona", "Valencia", "Sevilla", "Málaga"};
             case "MX" -> new String[]{"Ciudad de México", "Guadalajara", "Monterrey", "Puebla", "Cancún"};
             case "AR" -> new String[]{"Buenos Aires", "Córdoba", "Rosario", "Mendoza"};
             case "CO" -> new String[]{"Bogotá", "Medellín", "Cali", "Cartagena"};
@@ -1079,9 +1102,9 @@ public class DemoOperationsSeedRunner {
             case "PE" -> new String[]{"Lima", "Arequipa", "Trujillo", "Cusco"};
             case "BR" -> new String[]{"São Paulo", "Rio de Janeiro", "Brasília", "Salvador", "Porto Alegre"};
             case "PT" -> new String[]{"Lisboa", "Porto", "Coimbra"};
-            case "US" -> new String[]{"New York", "Los Angeles", "Chicago", "Houston", "Miami"};
-            case "GB" -> new String[]{"London", "Manchester", "Edinburgh", "Bristol"};
-            case "CA" -> new String[]{"Toronto", "Vancouver", "Montreal"};
+            case "US" -> new String[]{NEW_YORK, LOS_ANGELES, "Chicago", "Houston", "Miami"};
+            case "GB" -> new String[]{LONDON, "Manchester", "Edinburgh", "Bristol"};
+            case "CA" -> new String[]{TORONTO, "Vancouver", "Montreal"};
             case "AU" -> new String[]{"Sydney", "Melbourne", "Brisbane", "Perth"};
             case "NZ" -> new String[]{"Auckland", "Wellington"};
             case "IE" -> new String[]{"Dublin", "Cork", "Galway"};
@@ -1105,7 +1128,7 @@ public class DemoOperationsSeedRunner {
     private String stateFor(String country, String city) {
         return switch (country == null ? "" : country) {
             case "ES" -> switch (city) {
-                case "Madrid" -> "Madrid";
+                case MADRID -> MADRID;
                 case "Barcelona" -> "Cataluña";
                 case "Valencia" -> "Comunidad Valenciana";
                 case "Sevilla", "Málaga" -> "Andalucía";

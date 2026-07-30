@@ -35,6 +35,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OrderIndexer {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String STANDARD = "standard";
+
     private final OpenSearchClient client;
     private final OrderRepository orderRepository;
     private final OrderSearchService orderSearchService;
@@ -51,9 +54,9 @@ public class OrderIndexer {
             client.indices().create(CreateIndexRequest.of(b -> b.index(index)
                     .mappings(TypeMapping.of(tm -> tm.properties("status", Property.of(p -> p.keyword(k -> k)))
                             .properties("sortTs", Property.of(p -> p.date(d -> d)))
-                            .properties("orderNumber", Property.of(p -> p.text(t -> t.analyzer("standard"))))
-                            .properties("externalOrderId", Property.of(p -> p.text(t -> t.analyzer("standard"))))
-                            .properties("shippingName", Property.of(p -> p.text(t -> t.analyzer("standard"))))))));
+                            .properties("orderNumber", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                            .properties("externalOrderId", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                            .properties("shippingName", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))))));
             log.info("Created OpenSearch index '{}'", index);
         } catch (OpenSearchException | IOException e) {
             log.error("Failed to ensure OpenSearch order index: {}", e.getMessage());

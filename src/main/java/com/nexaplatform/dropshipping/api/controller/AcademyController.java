@@ -2,7 +2,6 @@ package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.AcademyApi;
 import com.nexaplatform.dropshipping.api.dto.in.BookingDtoIn;
-import com.nexaplatform.dropshipping.api.dto.out.AffiliateDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.BookingDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CourseDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.EnrollmentDtoOut;

@@ -31,6 +31,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class OrderEmailService {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String ORDERS = "/orders/";
+    private static final String BR = "<br/>";
+
     private final EmailQueueService emailQueue;
     private final InvoiceService invoiceService;
 
@@ -51,7 +55,7 @@ public class OrderEmailService {
             return;
         }
         try {
-            String orderUrl = baseUrl + "/orders/" + o.getId();
+            String orderUrl = baseUrl + ORDERS + o.getId();
             String cur = invoiceCurrency != null && !invoiceCurrency.isBlank() ? invoiceCurrency
                     : (o.getCurrency() != null ? o.getCurrency() : "USD");
             Map<String, Object> vars = new HashMap<>(invoiceService.model(o, locale, orderUrl, cur));
@@ -81,7 +85,7 @@ public class OrderEmailService {
         String lang = InvoiceLabel.lang(locale);
         StringBuilder body = new StringBuilder(OrderEmailLabel.SHIPPED_BODY.of(lang, o.getOrderNumber()));
         if (!blank(o.getTrackingNumber())) {
-            body.append("<br/>").append(OrderEmailLabel.TRACKING_NUMBER.of(lang)).append("<strong>")
+            body.append(BR).append(OrderEmailLabel.TRACKING_NUMBER.of(lang)).append("<strong>")
                     .append(o.getTrackingNumber()).append("</strong>");
             if (!blank(o.getCarrier())) {
                 body.append(" (").append(o.getCarrier()).append(")");
@@ -171,7 +175,7 @@ public class OrderEmailService {
     /** Importe reembolsado ya formateado en la moneda cobrada (= exactamente lo que se devuelve). */
     private String refundAmount(Order o, String locale, String cur) {
         try {
-            Object total = invoiceService.model(o, locale, baseUrl + "/orders/" + o.getId(), cur).get("total");
+            Object total = invoiceService.model(o, locale, baseUrl + ORDERS + o.getId(), cur).get("total");
             return total != null ? String.valueOf(total) : null;
         } catch (RuntimeException e) {
             log.warn("refund amount formatting failed for {}: {}", o.getOrderNumber(), e.getMessage());
@@ -193,10 +197,10 @@ public class OrderEmailService {
         StringBuilder body = new StringBuilder(
                 OrderEmailLabel.TRACK_BODY.of(lang, o.getOrderNumber()).replace("{state}", state));
         if (!blank(location)) {
-            body.append("<br/>").append(OrderEmailLabel.LOCATION.of(lang)).append(localizeLocation(location, locale));
+            body.append(BR).append(OrderEmailLabel.LOCATION.of(lang)).append(localizeLocation(location, locale));
         }
         if (!blank(o.getTrackingNumber())) {
-            body.append("<br/>").append(OrderEmailLabel.TRACKING_NUMBER.of(lang)).append("<strong>")
+            body.append(BR).append(OrderEmailLabel.TRACKING_NUMBER.of(lang)).append("<strong>")
                     .append(o.getTrackingNumber()).append("</strong>");
         }
         notify(email, OrderEmailLabel.TRACK_TITLE.of(lang), body.toString(),
@@ -219,7 +223,7 @@ public class OrderEmailService {
                 vars.put("details", details); // bloque etiqueta/valor con el resumen (pedido/reembolso)
             }
             vars.put("preheader", title);
-            vars.put("ctaUrl", baseUrl + "/orders/" + o.getId());
+            vars.put("ctaUrl", baseUrl + ORDERS + o.getId());
             vars.put("ctaLabel", ctaLabel);
             vars.put("footer", "NX036 Dropshipping");
             vars.put("footerNote", OrderEmailLabel.AUTO_NOTE.of(lang)); // pie en el idioma del usuario

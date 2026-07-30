@@ -46,6 +46,13 @@ import java.util.Map;
 @Configuration
 public class OpenApiConfig {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String PER_CLIENT_ID = "per client_id";
+    private static final String APPLIESTO = "appliesTo";
+    private static final String PERMINUTE = "perMinute";
+    private static final String PERDAY = "perDay";
+    private static final String SCOPE = "scope";
+
     @Value("${nexadrop.oauth.issuer:http://localhost:8080}")
     private String issuer;
 
@@ -56,10 +63,10 @@ public class OpenApiConfig {
     public OpenAPI nexaDropOpenAPI() {
         OpenAPI api = buildOpenAPI();
         api.addExtension("x-rate-limit", Map.of("policies", List.of(
-                Map.of("scope", "catalog.read", "perMinute", 600, "perDay", 50000, "appliesTo", "per client_id"),
-                Map.of("scope", "orders.write", "perMinute", 120, "perDay", 10000, "appliesTo", "per client_id"),
-                Map.of("scope", "shop.sync", "perMinute", 60, "perDay", 5000, "appliesTo", "per client_id"),
-                Map.of("scope", "storefront", "perMinute", 60, "perDay", 5000, "appliesTo", "per IP")), "headers",
+                Map.of(SCOPE, "catalog.read", PERMINUTE, 600, PERDAY, 50000, APPLIESTO, PER_CLIENT_ID),
+                Map.of(SCOPE, "orders.write", PERMINUTE, 120, PERDAY, 10000, APPLIESTO, PER_CLIENT_ID),
+                Map.of(SCOPE, "shop.sync", PERMINUTE, 60, PERDAY, 5000, APPLIESTO, PER_CLIENT_ID),
+                Map.of(SCOPE, "storefront", PERMINUTE, 60, PERDAY, 5000, APPLIESTO, "per IP")), "headers",
                 List.of("RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "Retry-After")));
         return api;
     }

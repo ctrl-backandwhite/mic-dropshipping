@@ -36,6 +36,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CategoryIndexer {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String STANDARD = "standard";
+
     private final OpenSearchClient client;
     private final CategoryRepository categoryRepository;
     private final CategorySearchService categorySearchService;
@@ -56,10 +59,10 @@ public class CategoryIndexer {
                             .properties("active", Property.of(p -> p.boolean_(bo -> bo)))
                             .properties("level", Property.of(p -> p.integer(i -> i)))
                             .properties("position", Property.of(p -> p.integer(i -> i)))
-                            .properties("nameEs", Property.of(p -> p.text(t -> t.analyzer("standard"))))
-                            .properties("nameEn", Property.of(p -> p.text(t -> t.analyzer("standard"))))
-                            .properties("namePt", Property.of(p -> p.text(t -> t.analyzer("standard"))))
-                            .properties("nameZh", Property.of(p -> p.text(t -> t.analyzer("standard"))))))));
+                            .properties("nameEs", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                            .properties("nameEn", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                            .properties("namePt", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                            .properties("nameZh", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))))));
             log.info("Created OpenSearch index '{}'", index);
         } catch (OpenSearchException | IOException e) {
             log.error("Failed to ensure OpenSearch category index: {}", e.getMessage());

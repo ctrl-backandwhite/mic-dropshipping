@@ -35,7 +35,7 @@ public class WalletSearchService {
             @Value("${nexadrop.opensearch.uris:http://localhost:9400}") String uris,
             @Value("${nexadrop.opensearch.wallets-index:wallets}") String index) {
         this.objectMapper = objectMapper;
-        String base = uris.split(",")[0].trim().replaceAll("/+$", "");
+        String base = uris.split(",")[0].trim().replaceAll("/++$", "");
         this.searchUrl = base + "/" + index + "/_search";
     }
 
@@ -85,6 +85,11 @@ public class WalletSearchService {
             }
             return ids.isEmpty() ? Optional.empty() : Optional.of(new IdPage(ids, total));
         } catch (Exception e) {
+            // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
+            // interrupción deja al pool sin enterarse de que le han pedido parar.
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             log.warn("Wallet index page read failed, falling back to DB: {}", e.getMessage());
             return Optional.empty();
         }

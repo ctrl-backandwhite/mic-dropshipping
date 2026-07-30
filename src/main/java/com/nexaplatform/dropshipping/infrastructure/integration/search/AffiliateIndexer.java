@@ -35,6 +35,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AffiliateIndexer {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String STANDARD = "standard";
+
     private final OpenSearchClient client;
     private final AffiliateJpaRepositoryAdapter affiliateRepo;
     private final AffiliateSearchService affiliateSearchService;
@@ -51,9 +54,9 @@ public class AffiliateIndexer {
             client.indices().create(CreateIndexRequest.of(b -> b.index(index)
                     .mappings(TypeMapping.of(tm -> tm.properties("status", Property.of(p -> p.keyword(k -> k)))
                             .properties("createdAt", Property.of(p -> p.date(d -> d)))
-                            .properties("name", Property.of(p -> p.text(t -> t.analyzer("standard"))))
-                            .properties("email", Property.of(p -> p.text(t -> t.analyzer("standard"))))
-                            .properties("code", Property.of(p -> p.text(t -> t.analyzer("standard"))))))));
+                            .properties("name", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                            .properties("email", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                            .properties("code", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))))));
             log.info("Created OpenSearch index '{}'", index);
         } catch (OpenSearchException | IOException e) {
             log.error("Failed to ensure OpenSearch affiliate index: {}", e.getMessage());

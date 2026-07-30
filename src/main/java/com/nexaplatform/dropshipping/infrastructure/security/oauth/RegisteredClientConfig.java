@@ -29,6 +29,9 @@ import java.util.UUID;
 @Configuration
 public class RegisteredClientConfig {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String SANDBOX = "sandbox";
+
     @Value("${nexadrop.oauth.partner-api.default-secret}")
     private String partnerSecret;
 
@@ -64,7 +67,7 @@ public class RegisteredClientConfig {
 
         // Free / sandbox tier — 1 req/min. UPSERT: re-aplicamos settings y TTL si ya existe.
         upsertPartnerClient("demo-partner", "Demo Partner — Sandbox / Free (server-to-server)", partnerSecret,
-                "sandbox");
+                SANDBOX);
 
         // Paid tier — 5 req/min.
         upsertPartnerClient("demo-partner-paid", "Demo Partner — Paid (server-to-server)", partnerSecret + "-paid",
@@ -91,7 +94,7 @@ public class RegisteredClientConfig {
      *   1. Setting explícito `nexadrop.plan` en RegisteredClient (override manual)
      *   2. Suscripción ACTIVE/TRIALING del owner_user_id linkeado (vía setting
      *      `nexadrop.owner_user_id`) → mapeo de plan.code a tier
-     *   3. "sandbox" por defecto
+     *   3. SANDBOX por defecto
      *
      * Mapeo plan.code → tier:
      *   FREE → sandbox
@@ -107,7 +110,7 @@ public class RegisteredClientConfig {
                 return;
             var settings = context.getRegisteredClient().getClientSettings();
 
-            String tier = "sandbox";
+            String tier = SANDBOX;
             String planCode = null;
             UUID ownerUserId = null;
 
@@ -143,11 +146,11 @@ public class RegisteredClientConfig {
 
     private static String mapPlanCodeToTier(String planCode) {
         if (planCode == null)
-            return "sandbox";
+            return SANDBOX;
         return switch (planCode.toUpperCase()) {
-            case "FREE" -> "sandbox";
+            case "FREE" -> SANDBOX;
             case "STARTER", "PRO", "ENTERPRISE" -> "paid";
-            default -> "sandbox";
+            default -> SANDBOX;
         };
     }
 

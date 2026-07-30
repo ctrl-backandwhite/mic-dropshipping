@@ -43,6 +43,8 @@ public class PlanLimitService {
     }
 
     /** Lanza {@link BusinessException} si añadir uno más superaría el límite del plan. */
+    // Abre la lectura aquí: limitFor es autoinvocación y su @Transactional no se aplica.
+    @Transactional(readOnly = true)
     public void assertWithinLimit(UUID userId, String featureKey, long currentCount) {
         long limit = limitFor(userId, featureKey);
         if (limit >= 0 && currentCount >= limit) {

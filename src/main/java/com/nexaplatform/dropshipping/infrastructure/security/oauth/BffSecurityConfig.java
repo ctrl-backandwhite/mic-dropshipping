@@ -27,6 +27,10 @@ import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWrite
 @Configuration
 public class BffSecurityConfig {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String API_CONTACT = "/api/contact";
+    private static final String ADMIN = "ADMIN";
+
     /**
      * Decoder DEDICADO a la cadena de usuario (distinto del de partner). Sobre la validación
      * estándar (firma RSA + exp/nbf + issuer) añade dos controles que blindan el login:
@@ -76,7 +80,7 @@ public class BffSecurityConfig {
 
         http.securityMatcher("/api/admin/**", "/api/me/**", "/api/auth/**", "/api/webhooks/**",
                 // Endpoints públicos del SPA (antes agrupados bajo /api/storefront/**, ahora sin ese segmento).
-                "/api/catalog/**", "/api/billing/**", "/api/contact", "/api/contact/**", "/api/newsletter/**",
+                "/api/catalog/**", "/api/billing/**", API_CONTACT, "/api/contact/**", "/api/newsletter/**",
                 "/api/affiliate/**", "/api/search", "/api/search/**", "/api/shipping/**", "/api/currency/**",
                 "/api/languages", "/api/languages/**", "/api/warehouses", "/api/warehouses/**", "/api/academy/**",
                 "/api/mentors", "/api/mentors/**", "/api/pod/**", "/api/campaigns/**")
@@ -97,9 +101,9 @@ public class BffSecurityConfig {
                         // El estimado de margen/ganancia es SOLO para ADMIN (ni USER ni OPERATOR/soporte).
                         // Debe ir ANTES del permitAll general de GET del catálogo público.
                         .requestMatchers(HttpMethod.GET, "/api/catalog/products/*/margin-estimate")
-                        .hasRole("ADMIN")
+                        .hasRole(ADMIN)
                         // GET públicos de navegación (antes GET /api/storefront/**), enumerados por base.
-                        .requestMatchers(HttpMethod.GET, "/api/catalog/**", "/api/billing/**", "/api/contact",
+                        .requestMatchers(HttpMethod.GET, "/api/catalog/**", "/api/billing/**", API_CONTACT,
                                 "/api/contact/**", "/api/newsletter/**", "/api/affiliate/**", "/api/search",
                                 "/api/search/**", "/api/shipping/**", "/api/currency/**", "/api/languages",
                                 "/api/languages/**", "/api/warehouses", "/api/warehouses/**", "/api/academy/**",
@@ -119,13 +123,13 @@ public class BffSecurityConfig {
                         // Baja/alta de correos de campaña por enlace de un clic (token HMAC, sin login).
                         .requestMatchers(HttpMethod.GET, "/api/campaigns/unsubscribe", "/api/campaigns/resubscribe")
                         .permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/contact").permitAll()
+                        .requestMatchers(HttpMethod.POST, API_CONTACT).permitAll()
                         // OPERATOR (soporte) SOLO puede: procesar órdenes y ver sus propias ganancias/historial.
                         // Todo lo demás del admin (pricing/márgenes, dashboard/estadísticas, catálogo, usuarios,
                         // monedas, impuestos, partners, billing, afiliados…) es EXCLUSIVO de ADMIN.
-                        .requestMatchers("/api/admin/orders/**").hasAnyRole("ADMIN", "OPERATOR")
-                        .requestMatchers("/api/admin/operator/**").hasAnyRole("ADMIN", "OPERATOR")
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/orders/**").hasAnyRole(ADMIN, "OPERATOR")
+                        .requestMatchers("/api/admin/operator/**").hasAnyRole(ADMIN, "OPERATOR")
+                        .requestMatchers("/api/admin/**").hasRole(ADMIN)
                         // /api/me is the auth-bootstrap probe — it must succeed even when
                         // unauthenticated (the controller returns null), otherwise the SPA
                         // sees a noisy 401 on every cold load before login.

@@ -27,6 +27,9 @@ import java.util.Map;
 @Component
 public class GithubOAuth2UserService implements OAuth2UserService<OAuth2UserRequest, OAuth2User> {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String EMAIL = "email";
+
     private static final String GITHUB = "github";
     private static final String EMAILS_URL = "https://api.github.com/user/emails";
 
@@ -42,8 +45,8 @@ public class GithubOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
 
         Map<String, Object> attributes = new HashMap<>(user.getAttributes());
         EmailInfo resolved = resolveEmail(userRequest.getAccessToken().getTokenValue(),
-                (String) attributes.get("email"));
-        attributes.put("email", resolved == null ? null : resolved.email());
+                (String) attributes.get(EMAIL));
+        attributes.put(EMAIL, resolved == null ? null : resolved.email());
         attributes.put("email_verified", resolved != null && resolved.verified());
 
         String nameAttributeKey = userRequest.getClientRegistration().getProviderDetails()
@@ -61,12 +64,12 @@ public class GithubOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
         if (emails != null) {
             for (Map<String, Object> entry : emails) {
                 if (Boolean.TRUE.equals(entry.get("primary")) && Boolean.TRUE.equals(entry.get("verified"))) {
-                    return new EmailInfo((String) entry.get("email"), true);
+                    return new EmailInfo((String) entry.get(EMAIL), true);
                 }
             }
             for (Map<String, Object> entry : emails) {
                 if (Boolean.TRUE.equals(entry.get("verified"))) {
-                    return new EmailInfo((String) entry.get("email"), true);
+                    return new EmailInfo((String) entry.get(EMAIL), true);
                 }
             }
         }
