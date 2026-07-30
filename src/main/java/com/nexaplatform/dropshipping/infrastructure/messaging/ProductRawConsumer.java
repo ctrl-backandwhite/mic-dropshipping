@@ -45,6 +45,12 @@ public class ProductRawConsumer {
     public void onProductRaw(Object payload) {
         try {
             JsonNode root = objectMapper.valueToTree(payload);
+            if (root == null || root.isNull()) {
+                // valueToTree(null) devuelve null: un mensaje vacío en el topic tumbaba al consumidor con
+                // NullPointerException en la primera lectura, y el offset no avanzaba.
+                log.warn("Raw product message with empty payload, skipped");
+                return;
+            }
             log.info("Received raw product: {}/{}", textOrNull(root, SOURCE), textOrNull(root, EXTERNAL_ID));
 
             UUID supplierId = null;

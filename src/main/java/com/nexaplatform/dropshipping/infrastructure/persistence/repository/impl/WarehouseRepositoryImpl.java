@@ -28,6 +28,17 @@ public class WarehouseRepositoryImpl implements WarehouseRepository {
         return warehouseEntityMapper.toDomain(entity);
     }
 
+    /**
+     * Actualiza un almacén ya existente. Sin este método se caía al {@code default} de
+     * {@link com.nexaplatform.dropshipping.domain.repository.BaseRepository}, que devuelve {@code null}
+     * SIN escribir nada: editar un almacén desde el admin no guardaba y el caso de uso devolvía null.
+     * La entidad ya lleva id, así que {@code save} de JPA hace merge.
+     */
+    @Override
+    public Warehouse update(Warehouse model) {
+        return save(model);
+    }
+
     @Override
     public List<Warehouse> findActive() {
         return warehouseEntityMapper.toDomainList(warehouseJpaRepositoryAdapter.findByActiveTrueOrderByCountryAsc());

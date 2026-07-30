@@ -56,6 +56,7 @@ public class CountryTaxService {
     }
 
     /** Impuesto en céntimos sobre {@code taxableBaseCents} (subtotal + envío), redondeado HALF_UP. */
+    @Transactional(readOnly = true)
     public int taxCentsFor(String country, int taxableBaseCents) {
         return taxCentsFor(country, null, taxableBaseCents);
     }
