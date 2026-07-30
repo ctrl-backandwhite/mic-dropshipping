@@ -8,6 +8,7 @@ import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.api.mapper.ProductListFilters;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
 import com.nexaplatform.dropshipping.application.service.ProductDetailQueryService;
 import com.nexaplatform.dropshipping.application.service.MarginService;
@@ -185,8 +186,10 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
             String sort, Boolean verified) {
         // El filtro de verificación es SOLO para admin: si el que consulta no es admin, se ignora.
         Boolean verifiedFilter = SecurityUtils.isAdmin() ? verified : null;
-        return storefrontRead.productListFull(page, size, lang, q, categoryId, supplierId, minPrice, maxPrice, shipFrom,
-                freeShipping, selfPickup, hasVideo, minRating, inventoryMin, certification, sort, verifiedFilter);
+        return storefrontRead.productListFull(page, size, lang,
+                new ProductListFilters(q, categoryId, supplierId, minPrice, maxPrice, shipFrom, freeShipping,
+                        selfPickup, hasVideo, minRating, inventoryMin, certification, verifiedFilter),
+                sort);
     }
 
     @Override

@@ -215,10 +215,21 @@ public class CatalogStorefrontReadService {
     // reflejaría" por moneda).
     @Cacheable(value = CACHE_PRODUCT_LIST, keyGenerator = "currencyAwareKeyGenerator")
     @Transactional(readOnly = true)
-    public PageResponse<ProductSummaryView> productListFull(int page, int size, String lang, String q, UUID categoryId,
-            UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping,
-            Boolean selfPickup, Boolean hasVideo, Integer minRating, Integer inventoryMin, String certification,
-            String sort, Boolean verified) {
+    public PageResponse<ProductSummaryView> productListFull(int page, int size, String lang,
+            ProductListFilters filters, String sort) {
+        String q = filters.q();
+        UUID categoryId = filters.categoryId();
+        UUID supplierId = filters.supplierId();
+        BigDecimal minPrice = filters.minPrice();
+        BigDecimal maxPrice = filters.maxPrice();
+        String shipFrom = filters.shipFrom();
+        Boolean freeShipping = filters.freeShipping();
+        Boolean selfPickup = filters.selfPickup();
+        Boolean hasVideo = filters.hasVideo();
+        Integer minRating = filters.minRating();
+        Integer inventoryMin = filters.inventoryMin();
+        String certification = filters.certification();
+        Boolean verified = filters.verified();
 
         int safeSize = Math.min(size, 100);
         Sort sortSpec = sortFor(sort);
@@ -302,8 +313,8 @@ public class CatalogStorefrontReadService {
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productList(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String sort) {
-        return productListFull(page, size, lang, q, categoryId, supplierId, minPrice, maxPrice, null, null, null, null,
-                null, null, null, sort, null);
+        return productListFull(page, size, lang,
+                ProductListFilters.basic(q, categoryId, supplierId, minPrice, maxPrice), sort);
     }
 
     /* ============================ helpers ============================ */

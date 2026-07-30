@@ -8,6 +8,7 @@ import com.nexaplatform.dropshipping.api.controller.StorefrontCatalogController.
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
+import com.nexaplatform.dropshipping.api.mapper.ProductListFilters;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import lombok.RequiredArgsConstructor;
@@ -45,8 +46,10 @@ public class PartnerCatalogController implements PartnerCatalogApi {
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping,
             Boolean selfPickup, Boolean hasVideo, Integer minRating, Integer inventoryMin, String certification,
             String sort) {
-        return storefrontRead.productListFull(page, size, lang, q, categoryId, supplierId, minPrice, maxPrice, shipFrom,
-                freeShipping, selfPickup, hasVideo, minRating, inventoryMin, certification, sort, null);
+        return storefrontRead.productListFull(page, size, lang,
+                new ProductListFilters(q, categoryId, supplierId, minPrice, maxPrice, shipFrom, freeShipping,
+                        selfPickup, hasVideo, minRating, inventoryMin, certification, null),
+                sort);
     }
 
     @Override
