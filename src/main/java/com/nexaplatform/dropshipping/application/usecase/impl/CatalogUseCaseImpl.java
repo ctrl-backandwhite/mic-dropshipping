@@ -1329,7 +1329,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // Flat children without JPA cascade are removed first; the mapped collections
         // (images/variants/translations/variantOptions) cascade on the entity delete.
         for (String table : PRODUCT_CHILD_TABLES) {
-            jdbcTemplate.update("DELETE FROM " + table + " WHERE product_id = ?", id);
+            // NOSONAR java:S2077 — lo único concatenado es el nombre de tabla, que sale de la constante
+            // PRODUCT_CHILD_TABLES del propio código; el valor va como parámetro.
+            jdbcTemplate.update("DELETE FROM " + table + " WHERE product_id = ?", id); // NOSONAR
         }
         productJpaRepository.delete(p);
         productIndexer.deleteFromIndex(id);
@@ -1459,7 +1461,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             productJpaRepository.findFirstByExternalId(externalId).ifPresent(existing -> {
                 UUID exId = existing.getId();
                 for (String table : PRODUCT_CHILD_TABLES) {
-                    jdbcTemplate.update("DELETE FROM " + table + " WHERE product_id = ?", exId);
+                    // NOSONAR java:S2077 — nombre de tabla de una constante del código; valor parametrizado.
+                    jdbcTemplate.update("DELETE FROM " + table + " WHERE product_id = ?", exId); // NOSONAR
                 }
             });
         }

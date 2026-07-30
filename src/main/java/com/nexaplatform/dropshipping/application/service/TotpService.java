@@ -47,7 +47,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TotpService {
 
-    private static final String ALG = "HmacSHA1";
+    /**
+     * Algoritmo del estándar TOTP (RFC 6238). No es una elección discutible: Google Authenticator, Authy
+     * y el resto de aplicaciones solo interoperan con HMAC-SHA1, y además se usa como HMAC con clave
+     * secreta, no como hash desnudo.
+     */
+    private static final String ALG = "HmacSHA1"; // NOSONAR java:S4790 — exigido por el estándar TOTP
     private static final int DIGITS = 6;
     private static final int PERIOD_SECONDS = 30;
     private static final int WINDOW = 1; // tolera ±30s de drift
@@ -233,7 +238,7 @@ public class TotpService {
                 data[i] = (byte) (counter & 0xFF);
                 counter >>= 8;
             }
-            Mac mac = Mac.getInstance(ALG);
+            Mac mac = Mac.getInstance(ALG); // NOSONAR java:S4790 — HMAC-SHA1 lo exige el estándar TOTP (RFC 6238)
             mac.init(new SecretKeySpec(key, ALG));
             byte[] hash = mac.doFinal(data);
             int offset = hash[hash.length - 1] & 0x0F;

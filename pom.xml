@@ -23,6 +23,15 @@
              SONAR_TOKEN (en CI viene del secret del repositorio). -->
         <sonar.projectKey>ctrl-backandwhite_mic-dropshipping</sonar.projectKey>
         <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+        <!-- Fuera de la medición de cobertura: código que NO se ejecuta en producción. Los seeds de
+             demostración están desactivados por defecto y su única función es poblar entornos de prueba;
+             cubrirlos con tests no aporta garantía, solo maquilla el porcentaje. -->
+        <sonar.coverage.exclusions>
+            **/infrastructure/seed/**,
+            **/config/**,
+            **/configuration/**,
+            **/*Application.java
+        </sonar.coverage.exclusions>
         <java.version>21</java.version>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>

@@ -97,7 +97,10 @@ public class TranslationService {
 
     private static String sha1(String s) {
         try {
-            MessageDigest md = MessageDigest.getInstance("SHA-1");
+            // NOSONAR java:S4790 — SHA-1 aquí solo genera la CLAVE DE CACHÉ de una traducción; no
+            // protege nada. Una colisión devolvería una traducción cacheada distinta, no un problema
+            // de seguridad.
+            MessageDigest md = MessageDigest.getInstance("SHA-1"); // NOSONAR
             return HexFormat.of().formatHex(md.digest(s.getBytes()));
         } catch (Exception e) {
             return Integer.toHexString(s.hashCode());

@@ -101,7 +101,12 @@ public class DemoOperationsSeedRunner {
     private final SupplierRepository supplierRepository;
     private final PasswordEncoder passwordEncoder;
 
-    private final Random rnd = new Random(424242L);
+    /**
+     * Generador con semilla FIJA a propósito: los datos de demostración deben salir iguales en cada
+     * arranque para que las capturas y las pruebas manuales sean reproducibles. No interviene en nada
+     * criptográfico —la contraseña de las cuentas usa UUID.randomUUID(), que sí es seguro—.
+     */
+    private final Random rnd = new Random(424242L); // NOSONAR java:S2245 — datos de demo, no seguridad
 
     @EventListener(ApplicationReadyEvent.class)
     @Transactional

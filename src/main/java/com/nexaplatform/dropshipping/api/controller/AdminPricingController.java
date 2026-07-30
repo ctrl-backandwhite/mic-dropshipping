@@ -143,9 +143,11 @@ public class AdminPricingController implements AdminPricingApi {
             return Map.of();
         }
         String placeholders = ids.stream().map(x -> "?").collect(Collectors.joining(","));
-        String sql = String.format(sqlTemplate, placeholders);
+        // NOSONAR java:S2077 — no hay concatenación de datos: el formato solo inserta marcadores "?" y
+        // los valores viajan como parámetros del PreparedStatement (ids.toArray()).
+        String sql = String.format(sqlTemplate, placeholders); // NOSONAR
         Map<UUID, String> out = new HashMap<>();
-        jdbcTemplate.query(sql, rs -> {
+        jdbcTemplate.query(sql, rs -> { // NOSONAR java:S2077 — solo se interpolan marcadores "?"; los valores van parametrizados
             out.put(UUID.fromString(rs.getString(1)), rs.getString(2));
         }, ids.toArray());
         return out;

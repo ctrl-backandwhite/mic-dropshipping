@@ -30,10 +30,15 @@ public class DefaultSecurityConfig {
             GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler,
             GithubOAuth2UserService githubOAuth2UserService) throws Exception {
         http.cors(Customizer.withDefaults())
-                .csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                // Aquí CSRF está ACTIVO (esta cadena sí tiene formulario y sesión); solo se exceptúan
+                // rutas concretas. La cookie va sin HttpOnly a propósito: el patrón de doble envío exige
+                // que el navegador lea el token por JavaScript para reenviarlo en la cabecera. Es el
+                // token CSRF, no la sesión: la de sesión sí es HttpOnly.
+                // NOSONAR java:S4502 java:S3330 — CSRF habilitado; cookie legible por diseño del patrón.
+                .csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()) // NOSONAR
                         // CSRF off for: OAuth2 token, OAuth callbacks, actuator, public storefront API,
                         // inbound webhooks (signed HMAC), Stripe / PayPal payment callbacks.
-                        .ignoringRequestMatchers("/oauth2/token", "/login/oauth2/code/**", "/actuator/**",
+                        .ignoringRequestMatchers("/oauth2/token", "/login/oauth2/code/**", "/actuator/**", // NOSONAR java:S4502 — rutas sin sesión: OAuth2, callbacks y webhooks con firma propia
                                 "/api/v1/rate-limits/**", "/api/v1/invoices/**", "/api/v1/integrations/**", "/api/webhooks/**"))
                 .headers(h -> h
                         .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31536000))

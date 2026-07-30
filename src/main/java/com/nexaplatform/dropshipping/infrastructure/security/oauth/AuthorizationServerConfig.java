@@ -36,7 +36,8 @@ public class AuthorizationServerConfig {
         http.securityMatcher(authServerConfigurer.getEndpointsMatcher())
                 .with(authServerConfigurer, c -> c.oidc(Customizer.withDefaults()))
                 .authorizeHttpRequests(reg -> reg.anyRequest().authenticated())
-                .csrf(csrf -> csrf.ignoringRequestMatchers(authServerConfigurer.getEndpointsMatcher()))
+                // NOSONAR java:S4502 — endpoints OAuth2 (token, JWKS): los llama el cliente con credenciales propias, no el navegador con cookies.
+                .csrf(csrf -> csrf.ignoringRequestMatchers(authServerConfigurer.getEndpointsMatcher())) // NOSONAR java:S4502 — endpoints OAuth2 llamados por el cliente con credenciales propias
                 .exceptionHandling(
                         ex -> ex.defaultAuthenticationEntryPointFor(new LoginUrlAuthenticationEntryPoint("/login"),
                                 new MediaTypeRequestMatcher(MediaType.TEXT_HTML)));

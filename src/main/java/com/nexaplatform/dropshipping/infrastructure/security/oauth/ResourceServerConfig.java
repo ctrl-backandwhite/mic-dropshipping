@@ -44,7 +44,8 @@ public class ResourceServerConfig {
         NimbusJwtDecoder decoder = (NimbusJwtDecoder) OAuth2AuthorizationServerConfiguration.jwtDecoder(jwkSource);
         decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(issuer));
 
-        http.securityMatcher("/api/v1/partner/**").csrf(csrf -> csrf.disable()).cors(Customizer.withDefaults())
+        http.securityMatcher("/api/v1/partner/**")// NOSONAR java:S4502 — API de partners con token Bearer: sin cookies de sesión, CSRF no aplica.
+                .csrf(csrf -> csrf.disable()).cors(Customizer.withDefaults()) // NOSONAR java:S4502 — API de partners con Bearer
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(revocationFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(reg -> reg.requestMatchers("/api/v1/partner/catalog/**")
