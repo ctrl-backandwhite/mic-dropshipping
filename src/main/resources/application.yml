@@ -292,16 +292,6 @@ nexadrop:
     platform-id: ${STRIPE_PLATFORM_ID:nexadrop-dropshipping}
     platform-env: ${STRIPE_PLATFORM_ENV:dev}
 
-  demo-seed:
-    # Datos de demostración. Por defecto DESACTIVADO: el catálogo y las operaciones son reales, y un seed
-    # que se encendiera solo crearía usuarios y pedidos falsos en un entorno productivo.
-    enabled: ${DEMO_SEED_ENABLED:false}
-    # Contraseña de las cuentas de demo. Vacía = se genera una aleatoria por arranque y se registra en el
-    # log. NUNCA volver a poner una literal en el código: quedaría publicada en el repositorio.
-    password: ${DEMO_SEED_PASSWORD:}
-  # Per-category catalog top-up (CategoryProductFiller). Disable in deployments that load real data.
-  catalog-fill:
-    enabled: ${CATALOG_FILL_ENABLED:true}
 
   currency:
     access-key: ${NEXADROP_CURRENCY_ACCESS_KEY:}
