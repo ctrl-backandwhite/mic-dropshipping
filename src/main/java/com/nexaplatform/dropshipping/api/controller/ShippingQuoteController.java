@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.api.controller;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
 import com.nexaplatform.dropshipping.application.service.CountryTaxService;
+import com.nexaplatform.dropshipping.application.service.CheckoutPreviewService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.ShippingQuoteService;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
@@ -40,13 +41,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ShippingQuoteController {
 
+    private final CheckoutPreviewService checkoutPreview;
+    /** Los usan los endpoints de cobertura y regiones, que son consultas directas sin cálculo. */
     private final ShippingQuoteService shippingQuoteService;
     private final CountryTaxService countryTaxService;
-    private final CheckoutTotalsService checkoutTotalsService;
     private final PricingService pricingService;
     private final CurrencyRateService currencyService;
-    private final ProductRepository productRepository;
-    private final AffiliateProgramService affiliateProgramService;
 
     /** UUID del usuario autenticado, o null si el nombre no es un UUID (p. ej. tokens de sistema). */
     private static UUID parseUserId(String name) {
@@ -89,86 +89,29 @@ public class ShippingQuoteController {
     @Transactional(readOnly = true)
     public ResponseEntity<QuoteResponse> quote(@RequestBody QuoteRequest req, Authentication auth) {
         List<QuoteItem> items = req.items() == null ? List.of() : req.items();
-        List<ShippingQuoteService.Line> lines = items.stream()
-                .map(i -> new ShippingQuoteService.Line(i.productId(), i.variantId(), i.quantity())).toList();
-        ShippingQuote q = shippingQuoteService.quote(req.country(), lines);
-
-        String code = pricingService.displayCurrencyCode();
-
-        // Subtotal en CÉNTIMOS USD (canónico, para el descuento y la base del IVA), y subtotal en la
-        // MONEDA MOSTRADA calculado POR LÍNEA (unidad convertida y redondeada a 2 dec. × cantidad, sumado),
-        // EXACTAMENTE igual que el carrito (/cart-quote), el detalle del pedido, la lista y la factura. Así
-        // el desglose cuadra al céntimo en TODAS las vistas (antes el preview convertía el subtotal de una
-        // sola vez → "round(total)" ≠ "round(unidad)×qty" del resto, y salía 1 cént. de diferencia).
-        int subtotalUsdCents = 0;
-        BigDecimal subDispAcc = BigDecimal.ZERO;
-        for (QuoteItem it : items) {
-            if (it == null || it.productId() == null) {
-                continue;
-            }
-            ProductEntity p = productRepository.findById(it.productId()).orElse(null);
-            if (p == null) {
-                continue;
-            }
-            ProductVariantEntity v = it.variantId() == null ? null
-                    : p.getVariants().stream().filter(x -> it.variantId().equals(x.getId())).findFirst().orElse(null);
-            BigDecimal retail = pricingService.priceFor(p, v).retailUsd();
-            if (retail == null) {
-                continue;
-            }
-            // HALF_UP (céntimo más cercano) — el MISMO redondeo que el catálogo y que el pedido
-            // (OrderUseCaseImpl), para que catálogo == carrito == preview == cobro, sin descuadre de 1 cént.
-            int unitCents = retail.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
-            // Cantidad acotada al MISMO máximo que el checkout (OrderUseCaseImpl.MAX_LINE_QUANTITY = 100.000)
-            // y aritmética con desbordamiento controlado: sin esto, una cantidad enorme desbordaba el int y
-            // la base del IVA salía negativa → IVA 0 en el preview (incoherente con el cobro real).
-            int qty = Math.min(Math.max(1, it.quantity()), 100_000);
-            subtotalUsdCents = Math.addExact(subtotalUsdCents, Math.multiplyExact(unitCents, qty));
-            // Unidad en la moneda mostrada, redondeada a 2 dec., × cantidad (misma unidad que carrito/detalle).
-            subDispAcc = subDispAcc.add(currencyService.usdToDisplay(usd(unitCents)).multiply(BigDecimal.valueOf(qty)));
-        }
-
-        // Descuento de referido del COMPRADOR (10% del subtotal de producto) si tiene atribución de
-        // afiliado viva y NO es su propio código. Mismo cálculo que el pedido (AffiliateProgramService),
-        // para que el total mostrado coincida al céntimo con lo que se cobra. Anónimo → sin descuento.
         UUID userId = auth != null ? parseUserId(auth.getName()) : null;
-        int discountUsdCents = (int) affiliateProgramService.referralDiscountCents(userId, subtotalUsdCents);
-        int discountedSubtotalUsdCents = subtotalUsdCents - discountUsdCents;
+        CheckoutPreviewService.Preview preview = checkoutPreview.compute(req.country(), req.region(),
+                items.stream().map(i -> new CheckoutPreviewService.Line(i.productId(), i.variantId(), i.quantity()))
+                        .toList(),
+                userId);
 
-        int shippingBaseUsdCents = q.supported() ? q.amountUsdCents() : 0;
-        // Impuesto + despacho aduanero por el MISMO servicio que usa el cobro (CheckoutTotalsService), para
-        // que el desglose mostrado coincida al céntimo con el pedido: IVA por región/país sobre
-        // (subtotal − descuento) + envío, más el recargo del despacho DDP del destino y, si el valor de los
-        // bienes supera el umbral de minimis del país, el recargo por despacho formal.
-        CheckoutTotalsService.CheckoutTotals totals = checkoutTotalsService.compute(req.country(), req.region(),
-                discountedSubtotalUsdCents, shippingBaseUsdCents);
-        int shippingUsdCents = totals.shippingCents();
-        int taxRateBps = totals.taxRateBps();
-        int taxUsdCents = totals.taxCents();
-        // Importes en la moneda activa: cada componente convertido y REDONDEADO a 2 decimales; el total
-        // es la SUMA de esos componentes redondeados (igual que el detalle del pedido), para que el
-        // desglose cuadre exactamente en pantalla (subtotal − descuento + envío + IVA = total) y coincida
-        // con el pedido.
-        BigDecimal subDisp = subDispAcc.setScale(2, RoundingMode.HALF_UP);
-        BigDecimal discDisp = currencyService.usdToDisplay(usd(discountUsdCents)).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal shipDisp = currencyService.usdToDisplay(usd(shippingUsdCents)).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal taxDisp = currencyService.usdToDisplay(usd(taxUsdCents)).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal totalDisp = subDisp.subtract(discDisp).add(shipDisp).add(taxDisp);
-
+        ShippingQuote q = preview.quote();
+        String code = pricingService.displayCurrencyCode();
         // amountUsdCents = envío TOTAL (tarifa + recargo de despacho), que es lo que se cobrará. Si se
         // devolviera la tarifa sin recargo, el front pintaría un envío distinto del facturado.
-        QuoteResponse body = new QuoteResponse(q.supported(), q.countryCode(), shippingUsdCents, q.carrier(),
-                q.serviceName(), q.etaMinDays(), q.etaMaxDays(), q.zone(), taxRateBps,
-                currencyService.formatDisplay(shipDisp, code),
-                currencyService.formatDisplay(taxDisp, code),
-                currencyService.formatDisplay(totalDisp, code),
-                discountUsdCents,
-                currencyService.formatDisplay(discDisp, code),
-                totals.customs().deMinimisExceeded(), totals.blocked(), totals.customs().taxMode().name());
+        QuoteResponse body = new QuoteResponse(q.supported(), q.countryCode(), preview.shippingUsdCents(),
+                q.carrier(), q.serviceName(), q.etaMinDays(), q.etaMaxDays(), q.zone(), preview.taxRateBps(),
+                currencyService.formatDisplay(preview.shippingDisplay(), code),
+                currencyService.formatDisplay(preview.taxDisplay(), code),
+                currencyService.formatDisplay(preview.totalDisplay(), code),
+                preview.discountUsdCents(),
+                currencyService.formatDisplay(preview.discountDisplay(), code),
+                preview.totals().customs().deMinimisExceeded(), preview.totals().blocked(),
+                preview.totals().customs().taxMode().name());
         return ResponseEntity.ok(body);
     }
 
-    @Operation(summary = "Países a los que se puede enviar (cobertura real de Cainiao)")
+    @Operation(summary = "Países a los que se puede enviar (cobertura real del transportista)")
     @GetMapping("/countries")
     public ResponseEntity<List<SupportedCountry>> supportedCountries() {
         return ResponseEntity.ok(shippingQuoteService.supportedCountries());
