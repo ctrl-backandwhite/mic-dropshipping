@@ -59,11 +59,34 @@ public abstract class AdminOrderMapper {
      */
     protected String totalFormatted(Order order) {
         String ccy = CurrencyHolder.get();
-        BigDecimal total = enDivisa(order.getSubtotalCents(), ccy)
+        BigDecimal total = subtotalEnDivisa(order, ccy)
                 .add(enDivisa(order.getShippingCents(), ccy))
                 .add(enDivisa(order.getTaxCents(), ccy))
                 .subtract(enDivisa(order.getDiscountCents(), ccy));
         return currencyRateService.formatDisplay(total, ccy);
+    }
+
+    /**
+     * Subtotal como lo suma el cliente: precio unitario convertido y multiplicado por la cantidad, línea
+     * a línea. NO se convierte el subtotal de una vez.
+     *
+     * <p>Parece lo mismo y no lo es. Con el pedido de la certificación —4 unidades de 16,98 USD a
+     * 0,87717— la unidad convertida da 14,89 € y cuatro son 59,56 €, que es lo que el cliente vio y pagó;
+     * convertir los 67,92 USD de golpe da 59,58 €. Dos céntimos que llegaban hasta el total del panel:
+     * 76,68 € frente a los 76,66 € cobrados.
+     *
+     * <p>Si la ficha llega sin las líneas cargadas se cae al subtotal del pedido, que es lo mejor
+     * disponible entonces.
+     */
+    private BigDecimal subtotalEnDivisa(Order order, String ccy) {
+        if (order.getItems() == null || order.getItems().isEmpty()) {
+            return enDivisa(order.getSubtotalCents(), ccy);
+        }
+        BigDecimal suma = BigDecimal.ZERO;
+        for (OrderItem item : order.getItems()) {
+            suma = suma.add(enDivisa(item.getUnitPriceCents(), ccy).multiply(BigDecimal.valueOf(item.getQuantity())));
+        }
+        return suma;
     }
 
     /** Un importe en céntimos USD, convertido a la divisa del panel y redondeado a su céntimo. */
