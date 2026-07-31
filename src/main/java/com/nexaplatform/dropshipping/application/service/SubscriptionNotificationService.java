@@ -82,8 +82,8 @@ public class SubscriptionNotificationService {
                     + "actualiza tu método de pago. Volveremos a intentar el cobro automáticamente.");
             vars.put("ctaUrl", baseUrl + "/profile");
             vars.put("ctaLabel", "Revisar mi método de pago");
-            vars.put("footer", "NX036 Dropshipping");
-            emailQueue.enqueue(email, "Problema con el pago de tu plan — NX036 Dropshipping", "emails/notification",
+            vars.put("footer", "NX036 LTD");
+            emailQueue.enqueue(email, "Problema con el pago de tu plan — NX036 LTD", "emails/notification",
                     vars);
         } catch (RuntimeException e) {
             log.warn("::> [BILLING] no se pudo encolar el email de pago fallido user={}: {}", userId, e.getMessage());

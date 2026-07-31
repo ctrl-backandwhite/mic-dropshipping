@@ -300,7 +300,7 @@ public class UserUseCaseImpl implements UserUseCase {
         user.setDeletionCodeExpiresAt(Instant.now().plus(DELETION_CODE_TTL_MINUTES, ChronoUnit.MINUTES));
         userRepository.update(user);
         emailQueueService.enqueue(user.getEmail(),
-                "Confirma la eliminación de tu cuenta — NX036 Dropshipping", "emails/account-deletion-code",
+                "Confirma la eliminación de tu cuenta — NX036 LTD", "emails/account-deletion-code",
                 Map.of(TITLE, "Confirma la eliminación de tu cuenta",
                         "displayName", user.getDisplayName() != null ? user.getDisplayName() : "",
                         "code", code,

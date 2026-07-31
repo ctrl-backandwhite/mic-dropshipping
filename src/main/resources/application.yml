@@ -229,7 +229,7 @@ nexadrop:
     legal-note: ${INVOICE_LEGAL_NOTE:}              # Nota legal al pie (opcional)
   email:
     from: ${EMAIL_FROM:noreply@nexadrop.local}          # Remitente por defecto (transaccional/auth): no-reply@
-    from-name: ${EMAIL_FROM_NAME:NX036 Dropshipping}
+    from-name: ${EMAIL_FROM_NAME:NX036 LTD}
     from-billing: ${EMAIL_FROM_BILLING:${EMAIL_FROM:noreply@nexadrop.local}}  # Facturas/recibos: billing@
     from-support: ${EMAIL_FROM_SUPPORT:${EMAIL_FROM:noreply@nexadrop.local}}  # Acuse de contacto: support@
     unsubscribe-secret: ${EMAIL_UNSUBSCRIBE_SECRET:dev-unsubscribe-secret-change-me}  # firma HMAC del enlace de baja (sin login)
