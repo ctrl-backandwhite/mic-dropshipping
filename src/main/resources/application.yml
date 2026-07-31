@@ -390,5 +390,5 @@ logging:
   # para que una caída no llene el buzón justo cuando hay que leerlo.
   alerts:
     enabled: ${ALERTS_ENABLED:true}
-    email: ${ALERTS_EMAIL:jfinol02@gmail.com}
+    email: ${ALERTS_EMAIL:support@nx036.com}   # Buzón de la empresa, NUNCA un correo personal
     cooldown-minutes: ${ALERTS_COOLDOWN_MINUTES:30}

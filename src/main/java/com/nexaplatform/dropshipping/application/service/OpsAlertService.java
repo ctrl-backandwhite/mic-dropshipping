@@ -59,7 +59,13 @@ public class OpsAlertService {
 
     private final EmailQueueService emailQueue;
 
-    @Value("${nexadrop.alerts.email:jfinol02@gmail.com}")
+    /**
+     * A dónde van los avisos de incidencia (envío no creado, cobro fallido). El valor por defecto era un
+     * correo PERSONAL escrito en el código, que se publica con cada copia del repositorio y ata las
+     * alertas de producción a la cuenta de una persona concreta: el día que esa persona no esté, las
+     * incidencias dejan de leerse sin que nadie se entere. Se configura por entorno.
+     */
+    @Value("${nexadrop.alerts.email:support@nx036.com}")
     private String alertEmail;
     @Value("${nexadrop.alerts.enabled:true}")
     private boolean enabled;
