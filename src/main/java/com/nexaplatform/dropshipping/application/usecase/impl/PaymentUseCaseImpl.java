@@ -6,6 +6,7 @@ import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.api.exception.WebhookProcessingException;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
 import com.nexaplatform.dropshipping.application.service.OpsAlertService;
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
 import com.nexaplatform.dropshipping.application.service.StockService;
@@ -94,6 +95,8 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     private final ObjectMapper objectMapper;
     private final OrderEmailService orderEmailService;
     private final CurrencyRateService currencyRateService;
+    /** La cuenta del pedido, compartida con el checkout, la ficha del cliente y el panel. */
+    private final OrderAmounts orderAmounts;
     private final StockService stockService;
     /** Avisos al responsable cuando una pasarela deja de cobrar. */
     private final OpsAlertService opsAlertService;
@@ -675,24 +678,15 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
      * céntimos de convertir el total una sola vez.
      */
     private BigDecimal perLineSettlementAmount(Order order, String ccy) {
+        // USDT cobra el total canónico en dólares tal cual, sin conversión.
         if ("USDT".equalsIgnoreCase(ccy)) {
             return BigDecimal.valueOf(order.getTotalCents()).movePointLeft(2);
         }
-        BigDecimal sum = BigDecimal.ZERO;
-        for (OrderItem it : order.getItems()) {
-            BigDecimal usdUnit = BigDecimal.valueOf(it.getUnitPriceCents()).movePointLeft(2);
-            BigDecimal unit = currencyRateService.usdTo(usdUnit, ccy);
-            sum = sum.add(unit.multiply(BigDecimal.valueOf(it.getQuantity())));
-        }
-        BigDecimal ship = currencyRateService.usdTo(BigDecimal.valueOf(order.getShippingCents()).movePointLeft(2), ccy);
-        BigDecimal tax = currencyRateService.usdTo(BigDecimal.valueOf(order.getTaxCents()).movePointLeft(2), ccy);
-        // El descuento de referido SE RESTA, igual que en el resumen del checkout y en totalCents del
-        // pedido. Faltaba aquí: el cliente veía 58,83 € en pantalla y la pasarela le pedía 63,29 €, la
-        // diferencia exacta del descuento. Cobrar por encima de lo anunciado no es un descuadre de
-        // céntimos: es cobrar de más.
-        BigDecimal discount = currencyRateService.usdTo(
-                BigDecimal.valueOf(order.getDiscountCents()).movePointLeft(2), ccy);
-        return sum.add(ship).add(tax).subtract(discount);
+        // La cuenta la hace OrderAmounts, que es donde vive para todos: el resumen del checkout, la ficha
+        // del cliente, el panel y este cobro. Cuando cada uno la hacía por su cuenta se desviaron, y aquí
+        // faltaba restar el descuento de referido: al cliente se le cobraba el descuento que se le acababa
+        // de enseñar en pantalla.
+        return orderAmounts.totalOf(order, ccy);
     }
 
     @Override

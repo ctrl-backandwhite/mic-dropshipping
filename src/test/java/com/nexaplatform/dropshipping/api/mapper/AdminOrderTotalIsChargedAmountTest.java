@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
@@ -50,10 +51,12 @@ class AdminOrderTotalIsChargedAmountTest {
         // instanciarla a mano obligaría a implementar todos los métodos de mapeo.
         mapper = new AdminOrderMapperImpl();
         mapper.setCurrencyRateService(currencyRateService);
+        mapper.setOrderAmounts(new OrderAmounts(currencyRateService));
         CurrencyHolder.set("EUR");
 
         when(currencyRateService.usdTo(any(BigDecimal.class), anyString()))
                 .thenAnswer(inv -> inv.<BigDecimal>getArgument(0).multiply(USD_A_EUR));
+        when(currencyRateService.decimalsOf(anyString())).thenReturn(2);
         when(currencyRateService.formatDisplay(any(BigDecimal.class), anyString()))
                 .thenAnswer(inv -> inv.<BigDecimal>getArgument(0).setScale(2, RoundingMode.HALF_UP) + " €");
     }

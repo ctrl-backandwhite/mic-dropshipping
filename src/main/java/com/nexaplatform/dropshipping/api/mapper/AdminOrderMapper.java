@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.api.dto.out.AdminOrderDetailDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminOrderLineDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminOrderRowDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MeOrderRowDtoOut;
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
@@ -45,56 +46,26 @@ public abstract class AdminOrderMapper {
         this.currencyRateService = currencyRateService;
     }
 
+    /** La cuenta del pedido, compartida con el checkout, la ficha del cliente y el cobro. */
+    protected OrderAmounts orderAmounts;
+
+    @Autowired
+    protected void setOrderAmounts(OrderAmounts orderAmounts) {
+        this.orderAmounts = orderAmounts;
+    }
+
     /**
-     * Total del pedido tal y como se le cobró al cliente, en la divisa activa del panel.
+     * Total del pedido en la divisa activa del panel, tal y como se le cobró al cliente.
      *
-     * <p>Se suman los tres componentes ya convertidos y redondeados —subtotal, envío e impuestos— y no
-     * el total canónico en USD de una vez. Parece lo mismo y no lo es: con el pedido de la certificación
-     * (7,14 + 6,25 + 2,81 = 16,20 USD a 0,87717) convertir de una vez da 14,21 € y sumar los componentes
-     * da 14,20 €, que es lo que el cliente vio en su ficha y lo que pagó. El panel desde el que se
-     * atiende una reclamación tiene que enseñar exactamente esa cifra.
-     *
-     * <p>Se parte de {@code subtotalCents} y no de las líneas: la ficha del panel no siempre las trae
-     * cargadas, y recorrerlas daba cero cuando faltaban.
+     * <p>La cuenta la hace {@link OrderAmounts}, la misma que el resumen del checkout, la ficha del
+     * cliente y el importe que se manda a cobrar. Aquí se recomponía aparte y el panel llegó a enseñar
+     * 76,68 € donde se habían cobrado 76,66 €: convertía el subtotal de una vez, mientras el cliente
+     * convierte el precio unitario y lo multiplica por la cantidad.
      */
     protected String totalFormatted(Order order) {
         String ccy = CurrencyHolder.get();
-        BigDecimal total = subtotalEnDivisa(order, ccy)
-                .add(enDivisa(order.getShippingCents(), ccy))
-                .add(enDivisa(order.getTaxCents(), ccy))
-                .subtract(enDivisa(order.getDiscountCents(), ccy));
-        return currencyRateService.formatDisplay(total, ccy);
+        return currencyRateService.formatDisplay(orderAmounts.totalOf(order, ccy), ccy);
     }
-
-    /**
-     * Subtotal como lo suma el cliente: precio unitario convertido y multiplicado por la cantidad, línea
-     * a línea. NO se convierte el subtotal de una vez.
-     *
-     * <p>Parece lo mismo y no lo es. Con el pedido de la certificación —4 unidades de 16,98 USD a
-     * 0,87717— la unidad convertida da 14,89 € y cuatro son 59,56 €, que es lo que el cliente vio y pagó;
-     * convertir los 67,92 USD de golpe da 59,58 €. Dos céntimos que llegaban hasta el total del panel:
-     * 76,68 € frente a los 76,66 € cobrados.
-     *
-     * <p>Si la ficha llega sin las líneas cargadas se cae al subtotal del pedido, que es lo mejor
-     * disponible entonces.
-     */
-    private BigDecimal subtotalEnDivisa(Order order, String ccy) {
-        if (order.getItems() == null || order.getItems().isEmpty()) {
-            return enDivisa(order.getSubtotalCents(), ccy);
-        }
-        BigDecimal suma = BigDecimal.ZERO;
-        for (OrderItem item : order.getItems()) {
-            suma = suma.add(enDivisa(item.getUnitPriceCents(), ccy).multiply(BigDecimal.valueOf(item.getQuantity())));
-        }
-        return suma;
-    }
-
-    /** Un importe en céntimos USD, convertido a la divisa del panel y redondeado a su céntimo. */
-    private BigDecimal enDivisa(int cents, String ccy) {
-        return currencyRateService.usdTo(BigDecimal.valueOf(cents).movePointLeft(2), ccy)
-                .setScale(2, RoundingMode.HALF_UP);
-    }
-
 
     @Mapping(target = "id", source = "id")
     @Mapping(target = "orderNumber", source = "orderNumber")

@@ -4,6 +4,7 @@ import com.nexaplatform.dropshipping.api.dto.out.MeOrderAddressDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MeOrderDetailDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MeOrderItemDetailDtoOut;
 import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
@@ -33,6 +34,8 @@ import java.util.UUID;
 public class MeOrderDtoMapper {
 
     private final CurrencyRateService currencyRateService;
+    /** La cuenta del pedido, compartida con el checkout, el cobro y el panel. */
+    private final OrderAmounts orderAmounts;
     private final PaymentJpaRepositoryAdapter paymentRepository;
 
     /**
@@ -58,30 +61,22 @@ public class MeOrderDtoMapper {
         }
         String ccy = CurrencyHolder.get();
 
-        BigDecimal subtotal = BigDecimal.ZERO;
+        // El desglose lo calcula OrderAmounts, la misma cuenta que el resumen del checkout, el importe que
+        // se cobra y el panel. Aquí se hacía aparte, y de las cuatro copias tres acabaron desviándose.
+        OrderAmounts.Breakdown amounts = orderAmounts.of(model, ccy);
+        BigDecimal subtotal = amounts.subtotal();
+        BigDecimal shipping = amounts.shipping();
+        BigDecimal tax = amounts.tax();
+        BigDecimal discount = amounts.discount();
+        BigDecimal total = amounts.total();
+
+        // Las líneas de la ficha repiten la misma conversión por unidad para poder enseñarlas una a una.
         List<MeOrderItemDetailDtoOut> items = new ArrayList<>();
-        // Igual que formatOrderTotal: un pedido sin líneas cargadas no puede romper la ficha (la lista
-        // ya lo tolera, y ver un pedido sin líneas es mejor que un 500 al abrirlo).
         for (OrderItem item : model.getItems() == null ? List.<OrderItem>of() : model.getItems()) {
-            BigDecimal usdUnit = BigDecimal.valueOf(item.getUnitPriceCents()).movePointLeft(2);
-            BigDecimal unit = currencyRateService.usdTo(usdUnit, ccy);
-            BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(item.getQuantity()));
-            subtotal = subtotal.add(lineTotal);
-            items.add(toItemDetail(item, unit, lineTotal, ccy));
+            BigDecimal unit = currencyRateService.usdTo(
+                    BigDecimal.valueOf(item.getUnitPriceCents()).movePointLeft(2), ccy);
+            items.add(toItemDetail(item, unit, unit.multiply(BigDecimal.valueOf(item.getQuantity())), ccy));
         }
-        BigDecimal shipping = currencyRateService.usdTo(BigDecimal.valueOf(model.getShippingCents()).movePointLeft(2),
-                ccy);
-        BigDecimal tax = currencyRateService.usdTo(BigDecimal.valueOf(model.getTaxCents()).movePointLeft(2), ccy);
-        BigDecimal discount = currencyRateService.usdTo(BigDecimal.valueOf(model.getDiscountCents()).movePointLeft(2),
-                ccy);
-        // Total = subtotal − DESCUENTO + envío + IVA, con los componentes YA redondeados a 2 decimales,
-        // para que el desglose mostrado cuadre exactamente y coincida con el resumen del checkout y con
-        // lo COBRADO (total_cents del pedido ya resta el descuento).
-        subtotal = subtotal.setScale(2, RoundingMode.HALF_UP);
-        shipping = shipping.setScale(2, RoundingMode.HALF_UP);
-        tax = tax.setScale(2, RoundingMode.HALF_UP);
-        discount = discount.setScale(2, RoundingMode.HALF_UP);
-        BigDecimal total = subtotal.subtract(discount).add(shipping).add(tax);
         // Pedido ya pagado: mostramos EXACTAMENTE lo cobrado (settlement), no la re-conversión a la tasa
         // actual. Escalamos el desglose por settlement/total (la conversión es lineal) para que cuadre.
         BigDecimal settle = settlementTotal(model.getId(), ccy);

@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
@@ -103,11 +104,12 @@ class OrderChargeMatchesShownTotalTest {
         subject = new PaymentUseCaseImpl(List.of(tarjeta), paymentRepository, paymentJpaRepositoryAdapter, userRepository,
                 orderRepository, walletUseCase, auditLogger, mock(PartnerPlanSyncService.class),
                 mock(CustomerSubscriptionUseCase.class), mock(SubscriptionNotificationService.class),
-                new ObjectMapper(), mock(OrderEmailService.class), currencyRateService, mock(StockService.class),
+                new ObjectMapper(), mock(OrderEmailService.class), currencyRateService, new OrderAmounts(currencyRateService), mock(StockService.class),
                 mock(OpsAlertService.class));
 
         when(currencyRateService.usdTo(any(BigDecimal.class), anyString()))
                 .thenAnswer(inv -> inv.<BigDecimal>getArgument(0).multiply(USD_A_EUR));
+        when(currencyRateService.decimalsOf(anyString())).thenReturn(2);
 
         UserEntity user = new UserEntity();
         user.setId(userId);
@@ -160,10 +162,10 @@ class OrderChargeMatchesShownTotalTest {
         verify(paymentRepository, atLeastOnce()).save(captor.capture());
         BigDecimal cobrado = captor.getValue().getSettlementAmount().setScale(2, RoundingMode.HALF_UP);
 
-        // 67,08 USD × 0,87717 = 58,84 €. Sin restar el descuento salían 63,30 €.
-        BigDecimal esperado = BigDecimal.valueOf(TOTAL).movePointLeft(2).multiply(USD_A_EUR)
-                .setScale(2, RoundingMode.HALF_UP);
-        assertThat(cobrado).isEqualByComparingTo(esperado);
+        // 44,67 (3 × 14,89) − 4,46 + 8,41 + 10,21 = 58,83 €, que es la cifra que el cliente leyó en el
+        // resumen del checkout. Convertir el total canónico de una vez daría 58,84: un céntimo que no es
+        // el que se le enseñó. Sin restar el descuento salían 63,29 €.
+        assertThat(cobrado).isEqualByComparingTo(new BigDecimal("58.83"));
     }
 
     @Test
@@ -187,10 +189,8 @@ class OrderChargeMatchesShownTotalTest {
 
         ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
         verify(paymentRepository, atLeastOnce()).save(captor.capture());
-        BigDecimal esperado = BigDecimal.valueOf(SUBTOTAL + ENVIO + IMPUESTOS).movePointLeft(2)
-                .multiply(USD_A_EUR).setScale(2, RoundingMode.HALF_UP);
-
+        // 44,67 + 8,41 + 10,21 = 63,29 €, la misma cuenta sin el descuento.
         assertThat(captor.getValue().getSettlementAmount().setScale(2, RoundingMode.HALF_UP))
-                .isEqualByComparingTo(esperado);
+                .isEqualByComparingTo(new BigDecimal("63.29"));
     }
 }

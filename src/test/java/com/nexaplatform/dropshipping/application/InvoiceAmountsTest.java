@@ -60,6 +60,7 @@ class InvoiceAmountsTest {
         CurrencyRateService currency = mock(CurrencyRateService.class);
         // 1:1 para que las cuentas del test se lean solas; la conversión tiene sus propios tests.
         when(currency.usdTo(any(BigDecimal.class), anyString())).thenAnswer(i -> i.getArgument(0));
+        when(currency.decimalsOf(anyString())).thenReturn(2);
         when(currency.formatDisplay(any(), anyString()))
                 .thenAnswer(i -> i.getArgument(0, BigDecimal.class).toPlainString());
 

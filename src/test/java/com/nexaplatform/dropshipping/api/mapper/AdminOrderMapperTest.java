@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.api.dto.out.AdminOrderDetailDtoOut;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import org.junit.jupiter.api.Test;
@@ -34,8 +35,10 @@ class AdminOrderMapperTest {
         mapper = new AdminOrderMapperImpl();
         CurrencyRateService currency = mock(CurrencyRateService.class);
         lenient().when(currency.usdTo(any(BigDecimal.class), anyString())).thenAnswer(i -> i.getArgument(0));
+        lenient().when(currency.decimalsOf(anyString())).thenReturn(2);
         lenient().when(currency.formatDisplay(any(BigDecimal.class), anyString())).thenReturn("0,00 €");
         mapper.currencyRateService = currency;
+        mapper.orderAmounts = new OrderAmounts(currency);
     }
 
     @Test

@@ -103,6 +103,11 @@ public class CurrencyRateService {
      * Lo dice la propia JDK a partir de la ISO 4217; para un código que no reconozca se asumen 2, que es
      * lo más común y lo que se hacía antes para todas.
      */
+    /** Decimales que admite una moneda, para quien necesite redondear igual que las conversiones. */
+    public int decimalsOf(String code) {
+        return fractionDigits(code);
+    }
+
     private static int fractionDigits(String code) {
         if (code == null || code.isBlank()) {
             return 2;

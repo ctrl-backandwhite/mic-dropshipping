@@ -93,6 +93,7 @@ class InvoiceServiceTest {
                 .thenAnswer(InvoiceServiceTest::display);
         // Cada importe (línea, envío, impuesto) se convierte con usdTo; devolvemos valores deterministas.
         when(currencyRateService.usdTo(new BigDecimal("10.00"), "EUR")).thenReturn(new BigDecimal("9.00"));
+
         when(currencyRateService.usdTo(new BigDecimal("5.00"), "EUR")).thenReturn(new BigDecimal("4.50"));
         when(currencyRateService.usdTo(new BigDecimal("2.10"), "EUR")).thenReturn(new BigDecimal("1.89"));
         // El descuento de referido (v86) también se convierte: sin este stub el mock devuelve null y el
