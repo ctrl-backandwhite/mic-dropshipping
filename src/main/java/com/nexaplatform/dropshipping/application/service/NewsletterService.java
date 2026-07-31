@@ -8,6 +8,9 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.Newslette
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.NewsletterCampaignRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.NewsletterSubscriberRepository;
 import lombok.RequiredArgsConstructor;
+import com.nexaplatform.dropshipping.infrastructure.email.EmailQueueService;
+import org.springframework.beans.factory.annotation.Value;
+import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,10 +31,16 @@ public class NewsletterService {
 
     // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
     private static final String SUBSCRIBED = "SUBSCRIBED";
+    /** Alta pedida pero aún sin confirmar desde el buzón. A estos NO se les envía nada. */
+    private static final String PENDING = "PENDING";
 
     private final NewsletterSubscriberRepository subscriberRepo;
     private final NewsletterCampaignRepository campaignRepo;
     private final EventPublisher eventPublisher;
+    private final EmailQueueService emailQueueService;
+
+    @Value("${nexadrop.storefront.base-url:http://localhost:3003}")
+    private String storefrontBaseUrl;
 
     /** Resultado de suscribir: el estado final y si el correo YA estaba suscrito (para el aviso al usuario). */
     public record SubscribeResult(String status, boolean alreadySubscribed) {
@@ -47,18 +56,58 @@ public class NewsletterService {
         // Idempotente: un mismo correo NUNCA crea filas duplicadas (además del UNIQUE(email) en BD). Si ya
         // estaba suscrito, lo indicamos para que el front muestre "ya estabas suscrito" en vez de "gracias".
         boolean alreadySubscribed = sub != null && SUBSCRIBED.equals(sub.getStatus());
+        if (alreadySubscribed) {
+            return new SubscribeResult(SUBSCRIBED, true);
+        }
+        // DOBLE OPT-IN: el alta nace PENDIENTE y sólo pasa a SUBSCRIBED cuando alguien pulsa el enlace
+        // que llega a ese buzón. Antes bastaba con escribir una dirección en el formulario, de modo que
+        // cualquiera podía dar de alta el correo de otra persona; y ante una reclamación no había forma
+        // de demostrar que el titular hubiera consentido nada. El clic en su propio correo es esa prueba.
         if (sub == null) {
-            sub = NewsletterSubscriberEntity.builder().email(normalized).userId(userId).status(SUBSCRIBED)
+            sub = NewsletterSubscriberEntity.builder().email(normalized).userId(userId).status(PENDING)
                     .token(UUID.randomUUID().toString().replace("-", "")).source(source != null ? source : "storefront")
                     .build();
         } else {
-            sub.setStatus(SUBSCRIBED);
+            sub.setStatus(PENDING);
             if (userId != null) {
                 sub.setUserId(userId);
             }
         }
         NewsletterSubscriberEntity saved = subscriberRepo.save(sub);
-        return new SubscribeResult(saved.getStatus(), alreadySubscribed);
+        sendConfirmation(saved);
+        return new SubscribeResult(saved.getStatus(), false);
+    }
+
+    /**
+     * Confirma el alta con el testigo que viajó en el correo. Es el momento en que el consentimiento
+     * queda acreditado: quien pulsa tiene acceso al buzón, que es lo que no podía saberse al pedirlo.
+     */
+    @Transactional
+    public boolean confirm(String token) {
+        return subscriberRepo.findByToken(token).map(s -> {
+            if (SUBSCRIBED.equals(s.getStatus())) {
+                return true; // pulsar dos veces el enlace no puede fallar
+            }
+            s.setStatus(SUBSCRIBED);
+            s.setConfirmedAt(Instant.now());
+            subscriberRepo.save(s);
+            return true;
+        }).orElse(false);
+    }
+
+    /** El correo con el enlace de confirmación. Nunca tumba el alta: la fila pendiente ya está guardada. */
+    private void sendConfirmation(NewsletterSubscriberEntity sub) {
+        try {
+            emailQueueService.enqueue(sub.getEmail(), "Confirma tu suscripción · NX036", "emails/welcome",
+                    Map.of("title", "Un último paso",
+                            "bodyHtml", "Pulsa el botón para confirmar que quieres recibir nuestras novedades."
+                                    + " Si no has sido tú, ignora este correo: sin confirmar no te escribiremos.",
+                            "ctaLabel", "Confirmar suscripción",
+                            "ctaUrl", storefrontBaseUrl + "/newsletter/confirm?token=" + sub.getToken(),
+                            "icon", "circle-check"));
+        } catch (RuntimeException e) {
+            log.warn("::> [NEWSLETTER] No se pudo enviar la confirmación a un alta pendiente: {}", e.getMessage());
+        }
     }
 
     @Transactional

@@ -193,3 +193,9 @@ databaseChangeLog:
       file: db/changelog/schema-v91-fulfillment-retry.sql
   - include:
       file: db/changelog/schema-v92-order-shipments.sql
+  - include:
+      file: db/changelog/schema-v93-review-source.sql
+  - include:
+      file: db/changelog/schema-v94-terms-acceptance.sql
+  - include:
+      file: db/changelog/schema-v95-newsletter-double-optin.sql

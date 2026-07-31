@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.entity;
 
+import com.nexaplatform.dropshipping.domain.enums.ReviewSource;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -52,6 +53,16 @@ public class ProductReviewEntity extends BaseEntity {
     @Column(nullable = false)
     @Builder.Default
     private boolean approved = true;
+
+    /**
+     * De dónde sale la reseña. Por defecto SUPPLIER: si alguien añade un camino nuevo y olvida fijarlo,
+     * la reseña se presenta como importada, que es el lado seguro. Lo contrario —dar por propia una
+     * reseña ajena— es justo lo que la normativa de consumo sanciona.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 16, nullable = false)
+    @Builder.Default
+    private ReviewSource source = ReviewSource.SUPPLIER;
 
     @Column(length = 8)
     private String language;

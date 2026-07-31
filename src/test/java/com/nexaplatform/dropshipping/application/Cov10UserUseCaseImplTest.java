@@ -77,7 +77,9 @@ class Cov10UserUseCaseImplTest {
     void setUp() throws Exception {
         jwtRevocationService = mock(JwtRevocationService.class);
         useCase = new UserUseCaseImpl(userRepository, resetTokenRepository, userJpaRepository, encoder, policy,
-                emailQueueService, auditLogger, userUpdateMapper, jwtRevocationService);
+                emailQueueService, auditLogger, userUpdateMapper,
+                mock(com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserAddressRepository.class),
+                jwtRevocationService);
         Field baseUrl = UserUseCaseImpl.class.getDeclaredField("storefrontBaseUrl");
         baseUrl.setAccessible(true);
         baseUrl.set(useCase, "https://tienda.example");

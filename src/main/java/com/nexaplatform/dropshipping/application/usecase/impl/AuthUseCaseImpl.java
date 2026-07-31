@@ -1,5 +1,7 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import java.time.Instant;
+
 import com.nexaplatform.dropshipping.api.dto.in.ActivateDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.ChangePasswordDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.DeleteAccountConfirmDtoIn;
@@ -58,7 +60,18 @@ public class AuthUseCaseImpl implements AuthUseCase {
 
     @Override
     public RegisterDtoOut register(RegisterDtoIn req) {
-        User user = userUseCase.register(mapper.toDomain(req), req.getPassword());
+        User model = mapper.toDomain(req);
+        // La constancia se sella en el SERVIDOR, con su reloj. Si la fecha viniera del cliente, la
+        // prueba de la aceptación valdría exactamente lo que valga el reloj de quien la envía.
+        Instant now = Instant.now();
+        if (Boolean.TRUE.equals(req.getAcceptedTerms())) {
+            model.setTermsAcceptedAt(now);
+            model.setTermsAcceptedVersion(req.getAcceptedTermsVersion());
+        }
+        if (Boolean.TRUE.equals(req.getMarketingOptIn())) {
+            model.setMarketingOptInAt(now);
+        }
+        User user = userUseCase.register(model, req.getPassword());
         return RegisterDtoOut.builder().userId(user.getId()).message("Account created. Check your email to activate.")
                 .build();
     }

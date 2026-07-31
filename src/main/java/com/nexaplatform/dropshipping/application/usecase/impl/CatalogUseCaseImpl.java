@@ -27,6 +27,7 @@ import com.nexaplatform.dropshipping.application.service.ProductSeoMetadata;
 import com.nexaplatform.dropshipping.application.service.Texts;
 import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.domain.enums.ReviewSource;
 import com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontMapper;
@@ -1634,7 +1635,13 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 .title(rv.getTitle())
                 .body(rv.getBody())
                 .tags(rv.getTags() != null ? String.join(",", rv.getTags()) : null)
-                .verifiedPurchase(Boolean.TRUE.equals(rv.getVerifiedPurchase()))
+                // Una reseña que llega en la carga del catálogo NO puede marcarse como compra verificada,
+                // diga lo que diga el fichero de origen: no hay ninguna compra en esta tienda detrás de
+                // ella. Afirmar lo contrario está en la lista negra de prácticas desleales de la
+                // Directiva Omnibus, que se sanciona sin necesidad de probar que alguien fue engañado.
+                // El distintivo se gana en ProductReviewUseCase, cuando escribe quien sí compró.
+                .verifiedPurchase(false)
+                .source(ReviewSource.SUPPLIER)
                 .approved(true)
                 .language(Texts.has(rv.getLanguage()) ? rv.getLanguage().trim().toLowerCase() : "es")
                 .build();

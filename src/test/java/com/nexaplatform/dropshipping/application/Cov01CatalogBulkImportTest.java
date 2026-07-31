@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application;
 
+import com.nexaplatform.dropshipping.domain.enums.ReviewSource;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestPriceTier;
@@ -884,7 +885,11 @@ class Cov01CatalogBulkImportTest {
         assertThat(captor.getValue().getRating()).isEqualTo((short) 5);
         assertThat(captor.getValue().getLanguage()).isEqualTo("en");
         assertThat(captor.getValue().getTags()).isEqualTo("calidad,envío");
-        assertThat(captor.getValue().isVerifiedPurchase()).isTrue();
+        // Aunque el fichero de carga diga que la reseña es de compra verificada, NO se marca: no hay
+        // ninguna compra en esta tienda detrás de ella. Presentarla como tal está en la lista negra de
+        // prácticas desleales de la Directiva Omnibus.
+        assertThat(captor.getValue().isVerifiedPurchase()).isFalse();
+        assertThat(captor.getValue().getSource()).isEqualTo(ReviewSource.SUPPLIER);
     }
 
     @Test

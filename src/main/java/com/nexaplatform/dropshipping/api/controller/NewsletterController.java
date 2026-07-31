@@ -25,6 +25,12 @@ public class NewsletterController {
         return ResponseEntity.ok(Map.of("status", result.status(), "alreadySubscribed", result.alreadySubscribed()));
     }
 
+    /** El enlace del correo. Va por GET porque se abre desde el propio mensaje, con un clic. */
+    @GetMapping("/confirm")
+    public ResponseEntity<Map<String, Object>> confirm(@RequestParam String token) {
+        return ResponseEntity.ok(Map.of("confirmed", newsletterService.confirm(token)));
+    }
+
     @PostMapping("/unsubscribe")
     public ResponseEntity<Map<String, Object>> unsubscribe(@RequestBody Map<String, String> body) {
         boolean ok = newsletterService.unsubscribe(body.get("token"));

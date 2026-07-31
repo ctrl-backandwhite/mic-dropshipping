@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.domain.model;
 
+import com.nexaplatform.dropshipping.domain.enums.ReviewSource;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -34,6 +35,7 @@ public class ProductReview {
     private List<String> tags;
     private int helpfulCount;
     private boolean verifiedPurchase;
+    private ReviewSource source;
     private boolean approved;
     private String language;
     private Instant createdAt;
