@@ -686,7 +686,13 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         }
         BigDecimal ship = currencyRateService.usdTo(BigDecimal.valueOf(order.getShippingCents()).movePointLeft(2), ccy);
         BigDecimal tax = currencyRateService.usdTo(BigDecimal.valueOf(order.getTaxCents()).movePointLeft(2), ccy);
-        return sum.add(ship).add(tax);
+        // El descuento de referido SE RESTA, igual que en el resumen del checkout y en totalCents del
+        // pedido. Faltaba aquí: el cliente veía 58,83 € en pantalla y la pasarela le pedía 63,29 €, la
+        // diferencia exacta del descuento. Cobrar por encima de lo anunciado no es un descuadre de
+        // céntimos: es cobrar de más.
+        BigDecimal discount = currencyRateService.usdTo(
+                BigDecimal.valueOf(order.getDiscountCents()).movePointLeft(2), ccy);
+        return sum.add(ship).add(tax).subtract(discount);
     }
 
     @Override
