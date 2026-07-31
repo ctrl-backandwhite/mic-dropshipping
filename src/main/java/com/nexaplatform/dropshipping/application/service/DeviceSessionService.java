@@ -11,6 +11,7 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.regex.Pattern;
 import java.util.Map;
 import java.time.Duration;
 import java.time.Instant;
@@ -29,6 +30,8 @@ import java.util.UUID;
 public class DeviceSessionService {
 
     public static final String COOKIE = "nx_device";
+    /** Forma del identificador de dispositivo: UUID sin guiones, tal y como se genera. */
+    private static final Pattern DEVICE_TOKEN = Pattern.compile("[0-9a-f]{32}");
 
     private final UserSessionRepository repository;
 
@@ -86,13 +89,22 @@ public class DeviceSessionService {
 
     /* ===== helpers ===== */
 
+    /**
+     * Identificador de dispositivo que trae el navegador.
+     *
+     * <p>Se acepta sólo si tiene la forma que generamos —32 dígitos hexadecimales, un UUID sin guiones—.
+     * El valor lo controla el cliente y acaba reescrito en la cabecera {@code Set-Cookie}: cualquier otra
+     * cosa se descarta y se emite un identificador nuevo, así que por ahí no puede colarse un salto de
+     * línea que parta la respuesta en dos.
+     */
     private String readCookie(HttpServletRequest req) {
         if (req.getCookies() == null) {
             return null;
         }
         for (Cookie c : req.getCookies()) {
             if (COOKIE.equals(c.getName())) {
-                return c.getValue();
+                String value = c.getValue();
+                return value != null && DEVICE_TOKEN.matcher(value).matches() ? value : null;
             }
         }
         return null;
