@@ -17,10 +17,10 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Affil
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.AffiliateReferralCodeRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.NotificationJpaRepositoryAdapter;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -56,18 +56,11 @@ class AffiliatePayoutProfileTest {
     @Mock WalletUseCase walletUseCase;
     @Mock AffiliateIndexer affiliateIndexer;
 
-    AffiliateProgramService service;
+    @InjectMocks AffiliateProgramService service;
 
     private final UUID userId = UUID.randomUUID();
     private static final String STORED_HASH = "hashed-password";
     private static final String VALID_IBAN = "ES9121000418450200051332";
-
-    @BeforeEach
-    void setup() {
-        service = new AffiliateProgramService(affiliateRepo, codeRepo, attrRepo, conversionRepo, commissionRepo,
-                configRepo, payoutRepo, userRepository, passwordEncoder, notificationRepo, notificationsPublisher,
-                walletUseCase, affiliateIndexer);
-    }
 
     private UserEntity user() {
         UserEntity u = new UserEntity();

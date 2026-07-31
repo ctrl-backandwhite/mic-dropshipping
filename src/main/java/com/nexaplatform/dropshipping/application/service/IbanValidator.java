@@ -13,7 +13,7 @@ public final class IbanValidator {
             return false;
         }
         String iban = raw.replaceAll("\\s", "").toUpperCase();
-        if (iban.length() < 15 || iban.length() > 34 || !iban.matches("[A-Z]{2}[0-9]{2}[A-Z0-9]+")) {
+        if (iban.length() < 15 || iban.length() > 34 || !iban.matches("[A-Z]{2}\\d{2}[A-Z0-9]+")) {
             return false;
         }
         String rearranged = iban.substring(4) + iban.substring(0, 4);

@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.List;
 
@@ -38,7 +39,7 @@ public class GlobalExceptionHandler {
         // mensaje en el idioma de la petición (LocaleHolder); si no, el mensaje original de la excepción.
         String localized = ErrorCode.localize(code, LocaleHolder.get());
         return ApiResponseDtoOut.builder().code(code).message(localized != null ? localized : message)
-                .details(details).timestamp(ZonedDateTime.now()).build();
+                .details(details).timestamp(ZonedDateTime.now(ZoneOffset.UTC)).build();
     }
 
     // ---------------- Domain hierarchy ----------------
@@ -115,6 +116,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleNotReadable(HttpMessageNotReadableException ex) {
+        // El cliente solo recibe "JSON inválido" (no se le filtra el detalle interno), pero sin dejar
+        // rastro en el log un cuerpo que Jackson no sabe leer es indiagnosticable desde fuera.
+        log.warn("::> [API] Cuerpo de petición ilegible: {}", ex.getMostSpecificCause().getMessage());
         return new ResponseEntity<>(body("VE004", "El contenido enviado no es un JSON válido. Revisa el formato.",
                 List.of()), HttpStatus.BAD_REQUEST);
     }
@@ -151,6 +155,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleMethodNotAllowed(HttpRequestMethodNotSupportedException ex) {
         return new ResponseEntity<>(body("ME001", ex.getMessage(), List.of()), HttpStatus.METHOD_NOT_ALLOWED);
+    }
+
+    /**
+     * Parámetros que la aplicación rechaza por inválidos (p.ej. {@code size=-1} o {@code page=-1}, que
+     * hacen fallar a {@code PageRequest}). Es culpa de la PETICIÓN, no del servidor: devolverlos como 500
+     * ensuciaba los logs de errores reales y daba a cualquiera una forma trivial de provocar fallos.
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponseDtoOut<?>> handleIllegalArgument(IllegalArgumentException ex) {
+        log.warn("::> [API] Parámetro inválido: {}", ex.getMessage());
+        return new ResponseEntity<>(body("VE005", "Parámetros de la petición inválidos.",
+                List.of(ex.getMessage() == null ? "" : ex.getMessage())), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(Exception.class)

@@ -1,6 +1,8 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.storage;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.URI;
 
@@ -17,25 +19,36 @@ class ImageMirrorSecurityTest {
 
     // ---- Anti-SSRF ----
 
-    @Test
-    void rejects_loopback_and_metadata_and_private_ips() {
-        assertThatThrownBy(() -> ImageMirrorService.assertPublicHttpUrl(URI.create("http://127.0.0.1/x.jpg")))
-                .isInstanceOf(SecurityException.class);
-        // 169.254.169.254 = endpoint de metadata del cloud (link-local)
-        assertThatThrownBy(() -> ImageMirrorService.assertPublicHttpUrl(URI.create("http://169.254.169.254/latest/meta-data")))
-                .isInstanceOf(SecurityException.class);
-        assertThatThrownBy(() -> ImageMirrorService.assertPublicHttpUrl(URI.create("http://10.0.0.5/x.jpg")))
-                .isInstanceOf(SecurityException.class);
-        assertThatThrownBy(() -> ImageMirrorService.assertPublicHttpUrl(URI.create("http://192.168.1.10/x.jpg")))
-                .isInstanceOf(SecurityException.class);
+    /**
+     * Destinos que un atacante usaría para que el servidor le lea algo de dentro de la red. La URL se
+     * construye FUERA de la lambda: dentro habría dos llamadas capaces de lanzar y un fallo al analizar
+     * la dirección daría el test por bueno sin haber ejercitado la comprobación.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "http://127.0.0.1/x.jpg",
+            "http://169.254.169.254/latest/meta-data",   // endpoint de metadata del cloud (link-local)
+            "http://10.0.0.5/x.jpg",
+            "http://192.168.1.10/x.jpg"
+    })
+    void rejects_loopback_and_metadata_and_private_ips(String url) {
+        URI uri = URI.create(url);
+        // Se exige que el mensaje señale el HOST rechazado, no sólo que salte una excepción: así se
+        // distingue este rechazo del de esquema. Sin ese matiz, una URL descartada por otro motivo daría
+        // el test por bueno sin haber llegado a resolver la dirección, que es la comprobación anti-SSRF.
+        assertThatThrownBy(() -> ImageMirrorService.assertPublicHttpUrl(uri))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining(uri.getHost());
     }
 
-    @Test
-    void rejects_non_http_schemes() {
-        assertThatThrownBy(() -> ImageMirrorService.assertPublicHttpUrl(URI.create("file:///etc/passwd")))
-                .isInstanceOf(SecurityException.class);
-        assertThatThrownBy(() -> ImageMirrorService.assertPublicHttpUrl(URI.create("gopher://x/")))
-                .isInstanceOf(SecurityException.class);
+    @ParameterizedTest
+    @ValueSource(strings = {"file:///etc/passwd", "gopher://x/"})
+    void rejects_non_http_schemes(String url) {
+        URI uri = URI.create(url);
+        // Aquí el mensaje debe señalar el ESQUEMA: es lo que separa este caso del rechazo por IP interna.
+        assertThatThrownBy(() -> ImageMirrorService.assertPublicHttpUrl(uri))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining(uri.getScheme());
     }
 
     @Test

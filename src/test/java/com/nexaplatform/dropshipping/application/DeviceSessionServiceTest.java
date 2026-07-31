@@ -7,6 +7,8 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
@@ -245,5 +247,49 @@ class DeviceSessionServiceTest {
         HttpServletRequest req = requestWith("tok", "Chrome", "1.1.1.1");
 
         assertThat(service.isRevoked(req)).isFalse();
+    }
+
+    /**
+     * Nombre legible del dispositivo, que es lo que el usuario ve al revisar sus sesiones abiertas para
+     * decidir cuál revocar. El ORDEN de comprobación importa y por eso se prueba caso a caso: Edge y
+     * Opera se anuncian también como Chrome, Chrome se anuncia además como Safari, y el identificador de
+     * iPhone y iPad contiene "Mac OS X" —mirarlo después de macOS etiquetaría todos los móviles de Apple
+     * como ordenadores—. Antes eran dos cadenas de cinco ternarios anidados.
+     */
+    @ParameterizedTest
+    @CsvSource({
+            "'Mozilla/5.0 (Windows NT 10.0) AppleWebKit Chrome/120 Safari/537 Edg/120', 'Edge · Windows'",
+            "'Mozilla/5.0 (Windows NT 10.0) Chrome/120 Safari/537 OPR/106',             'Opera · Windows'",
+            "'Mozilla/5.0 (Windows NT 10.0) Chrome/120 Safari/537',                     'Chrome · Windows'",
+            "'Mozilla/5.0 (X11; Linux x86_64) Firefox/121',                             'Firefox · Linux'",
+            "'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) Safari/605',                'Safari · macOS'",
+            "'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Safari/604',       'Safari · iOS'",
+            "'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) Safari/604',                'Safari · iOS'",
+            "'Mozilla/5.0 (Linux; Android 14) Chrome/120 Safari/537',                   'Chrome · Android'",
+            "'algo-que-no-reconocemos/1.0',                                             'Navegador'"
+    })
+    void recordLogin_nombraElDispositivoSegunElOrdenDeComprobacion(String userAgent, String expected) {
+        HttpServletRequest req = requestWith(null, userAgent, "9.9.9.9");
+        when(req.getHeader("X-Forwarded-For")).thenReturn(null);
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.recordLogin(UUID.randomUUID(), req, mock(HttpServletResponse.class));
+
+        ArgumentCaptor<UserSessionEntity> captor = ArgumentCaptor.forClass(UserSessionEntity.class);
+        verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getDevice()).isEqualTo(expected);
+    }
+
+    @Test
+    void recordLogin_sinIdentificadorDelNavegadorElDispositivoSeMarcaComoDesconocido() {
+        HttpServletRequest req = requestWith(null, null, "9.9.9.9");
+        when(req.getHeader("X-Forwarded-For")).thenReturn(null);
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.recordLogin(UUID.randomUUID(), req, mock(HttpServletResponse.class));
+
+        ArgumentCaptor<UserSessionEntity> captor = ArgumentCaptor.forClass(UserSessionEntity.class);
+        verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getDevice()).isEqualTo("Dispositivo desconocido");
     }
 }

@@ -47,7 +47,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TotpService {
 
-    private static final String ALG = "HmacSHA1";
+    /**
+     * Algoritmo del estándar TOTP (RFC 6238). No es una elección discutible: Google Authenticator, Authy
+     * y el resto de aplicaciones solo interoperan con HMAC-SHA1, y además se usa como HMAC con clave
+     * secreta, no como hash desnudo.
+     */
+    private static final String ALG = "HmacSHA1"; // NOSONAR java:S4790 — exigido por el estándar TOTP
     private static final int DIGITS = 6;
     private static final int PERIOD_SECONDS = 30;
     private static final int WINDOW = 1; // tolera ±30s de drift
@@ -80,7 +85,7 @@ public class TotpService {
         if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
             throw new BusinessException("Invalid password");
         }
-        disable(userId);
+        deleteSecret(userId);
     }
 
     /**
@@ -182,6 +187,15 @@ public class TotpService {
 
     @Transactional
     public void disable(UUID userId) {
+        deleteSecret(userId);
+    }
+
+    /**
+     * Borrado del secreto SIN anotar: es al que llama {@link #disableWithPassword}, que ya está dentro de
+     * su transacción. Una llamada dentro de la misma instancia no pasa por el proxy de Spring, de modo que
+     * el {@code @Transactional} del método público no se aplicaría a la llamada interna.
+     */
+    private void deleteSecret(UUID userId) {
         repo.deleteById(userId);
     }
 
@@ -233,7 +247,7 @@ public class TotpService {
                 data[i] = (byte) (counter & 0xFF);
                 counter >>= 8;
             }
-            Mac mac = Mac.getInstance(ALG);
+            Mac mac = Mac.getInstance(ALG); // NOSONAR java:S4790 — HMAC-SHA1 lo exige el estándar TOTP (RFC 6238)
             mac.init(new SecretKeySpec(key, ALG));
             byte[] hash = mac.doFinal(data);
             int offset = hash[hash.length - 1] & 0x0F;
@@ -248,7 +262,8 @@ public class TotpService {
 
     private static String base32(byte[] data) {
         StringBuilder sb = new StringBuilder();
-        int bits = 0, value = 0;
+        int bits = 0;
+        int value = 0;
         for (byte b : data) {
             value = (value << 8) | (b & 0xFF);
             bits += 8;
@@ -265,7 +280,8 @@ public class TotpService {
     private static byte[] base32Decode(String s) {
         s = s.toUpperCase().replaceAll("[^A-Z2-7]", "");
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        int bits = 0, value = 0;
+        int bits = 0;
+        int value = 0;
         for (char c : s.toCharArray()) {
             int idx = BASE32.indexOf(c);
             if (idx < 0)

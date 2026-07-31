@@ -136,7 +136,8 @@ class WarehouseUseCaseImplTest {
         UUID id = UUID.randomUUID();
         when(warehouseRepository.getById(id)).thenReturn(null);
 
-        assertThatThrownBy(() -> useCase.update(id, Warehouse.builder().build()))
+        Warehouse cambios = Warehouse.builder().build();
+        assertThatThrownBy(() -> useCase.update(id, cambios))
                 .isInstanceOf(NotFoundException.class);
         verify(warehouseRepository, never()).update(any());
     }

@@ -31,38 +31,14 @@ public class ProductSearchService {
     @Value("${nexadrop.opensearch.products-index}")
     private String index;
 
-    public Map<String, Object> search(String keyword, String language, int page, int size) {
-        String field = "title" + capitalize(language == null ? "es" : language);
-        try {
-            SearchResponse<Map> response = client.search(SearchRequest.of(s -> s.index(index).from(page * size)
-                    .size(size)
-                    .query(withImageFilter(keyword, field))
-                    .sort(srt -> srt.field(f -> f.field("trendScore").order(SortOrder.Desc)))), Map.class);
-
-            List<Map<String, Object>> hits = response.hits().hits().stream().map(h -> {
-                Map<String, Object> doc = new HashMap<>(h.source());
-                doc.put("_id", h.id());
-                doc.put("_score", h.score());
-                return doc;
-            }).toList();
-
-            Map<String, Object> out = new HashMap<>();
-            out.put("items", hits);
-            out.put("total", response.hits().total() != null ? response.hits().total().value() : (long) hits.size());
-            out.put("page", page);
-            out.put("size", size);
-            return out;
-        } catch (IOException e) {
-            log.error("Search failed: {}", e.getMessage());
-            return Map.of("items", List.of(), "total", 0L, "page", page, "size", size);
-        }
-    }
-
     /**
-     * Typed variant of {@link #search(String, String, int, int)} returning a
-     * strongly-typed envelope instead of an ad-hoc {@code Map<String,Object>}.
-     * Preserves the identical JSON contract ({@code items, total, page, size};
-     * each hit flattens its source document plus {@code _id}/{@code _score}).
+     * Búsqueda de productos en el índice, con envoltorio tipado.
+     *
+     * <p>Aquí convivía un {@code search(...)} que devolvía un {@code Map<String,Object>} suelto y al que
+     * ya no llamaba nadie. Estaba borrado y se ha ido con él: a diferencia de éste, NO acotaba page ni
+     * size, así que reexponerlo habría reintroducido el 500 por parámetro inválido que se corrigió aquí.
+     * El contrato JSON es el mismo ({@code items, total, page, size}; cada resultado con su documento
+     * más {@code _id}/{@code _score}).
      */
     // Caché de resultados de búsqueda (TTL 60s): la búsqueda es el punto caliente de OpenSearch bajo carga
     // y las consultas populares se repiten. Clave = keyword+idioma+page+size. NO depende de la moneda (los
@@ -70,10 +46,12 @@ public class ProductSearchService {
     @Cacheable(value = CACHE_SEARCH, key = "#keyword + ':' + #language + ':' + #page + ':' + #size",
             condition = "#keyword != null && !#keyword.isBlank()")
     public SearchResultDtoOut searchTyped(String keyword, String language, int page, int size) {
-        // Cap the page size to protect the search backend (was enforced in the controller).
-        size = Math.min(size, 100);
-        final int pageSize = size;
-        final int fromOffset = page * size;
+        // Se acota el tamaño por arriba para proteger al motor de búsqueda y también POR ABAJO: un
+        // `size` o `page` negativos llegaban tal cual a OpenSearch, que respondía con un error y salía
+        // como 500. Un parámetro inválido no debe convertirse en un fallo del servidor ni dar a
+        // cualquiera una forma trivial de provocarlos.
+        final int pageSize = Math.clamp(size, 1, 100);
+        final int fromOffset = Math.max(0, page) * pageSize;
         String field = "title" + capitalize(language == null ? "es" : language);
         try {
             SearchResponse<Map> response = client.search(SearchRequest.of(s -> s.index(index).from(fromOffset)

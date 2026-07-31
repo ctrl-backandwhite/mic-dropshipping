@@ -25,6 +25,15 @@ public class AdminOrderRowDtoOut {
     int shippingCents;
     int totalCents;
     String currency;
+    /**
+     * Total del pedido ya FORMATEADO por el backend en la divisa activa del admin.
+     *
+     * <p>El listado convertía {@code totalCents} en el navegador y mostraba un céntimo menos de lo
+     * cobrado (9,53 € frente a 9,54 €): el cobro se calcula sumando las líneas convertidas y reconvertir
+     * el total entero no da lo mismo. Un descuadre así entre lo que ve el admin y lo que pagó el cliente
+     * hace impresentable cualquier cuadre de caja.
+     */
+    String totalFormatted;
     int itemCount;
     Instant placedAt;
     Instant forwardedAt;

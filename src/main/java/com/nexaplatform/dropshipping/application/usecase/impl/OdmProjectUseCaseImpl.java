@@ -75,6 +75,16 @@ public class OdmProjectUseCaseImpl implements OdmProjectUseCase {
     @Override
     @Transactional(readOnly = true)
     public OdmProject getById(UUID userId, UUID id) {
+        return requireOwned(userId, id);
+    }
+
+    /**
+     * Proyecto del usuario o 404, sin anotación transaccional: lo usan las escrituras de esta misma
+     * clase. Llamando a {@link #getById(UUID, UUID)} con {@code this} la autoinvocación no pasa por el
+     * proxy y su {@code @Transactional} nunca llegaba a aplicarse; la transacción la abre el método
+     * público de entrada.
+     */
+    private OdmProject requireOwned(UUID userId, UUID id) {
         OdmProject p = odmProjectRepository.getById(id);
         if (Objects.isNull(p) || !userId.equals(p.getUserId())) {
             throw new NotFoundException("ODM project");
@@ -85,7 +95,7 @@ public class OdmProjectUseCaseImpl implements OdmProjectUseCase {
     @Override
     @Transactional
     public OdmProject update(UUID userId, UUID id, OdmProject changes) {
-        OdmProject p = getById(userId, id);
+        OdmProject p = requireOwned(userId, id);
         if (changes.getTitle() != null && !changes.getTitle().isBlank()) {
             p.setTitle(changes.getTitle());
         }
@@ -101,7 +111,7 @@ public class OdmProjectUseCaseImpl implements OdmProjectUseCase {
     @Override
     @Transactional
     public void delete(UUID userId, UUID id) {
-        getById(userId, id);
+        requireOwned(userId, id);
         odmProjectRepository.delete(id);
         log.info("::> [ODM] Project deleted id={}", id);
     }

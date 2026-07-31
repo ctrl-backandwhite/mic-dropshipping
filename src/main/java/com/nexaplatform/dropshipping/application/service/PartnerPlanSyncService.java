@@ -30,6 +30,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PartnerPlanSyncService {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String SANDBOX = "sandbox";
+
     private final CustomerSubscriptionRepository subsRepo;
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
@@ -38,11 +41,11 @@ public class PartnerPlanSyncService {
     /** Mapeo plan.code → tier (debe estar alineado con partnerPlanClaimCustomizer). */
     private static String mapPlanCodeToTier(String planCode) {
         if (planCode == null)
-            return "sandbox";
+            return SANDBOX;
         return switch (planCode.toUpperCase()) {
-            case "FREE" -> "sandbox";
+            case "FREE" -> SANDBOX;
             case "STARTER", "PRO", "ENTERPRISE" -> "paid";
-            default -> "sandbox";
+            default -> SANDBOX;
         };
     }
 
@@ -52,8 +55,18 @@ public class PartnerPlanSyncService {
      */
     @Transactional
     public void syncForUser(UUID userId) {
+        doSyncForUser(userId);
+    }
+
+    /**
+     * Cuerpo de la sincronización, sin anotar: lo llama también el webhook, que ya está dentro de su
+     * transacción. Invocarlo con {@code this.syncForUser(...)} se saltaba el proxy de Spring, así que
+     * aquella {@code @Transactional} no llegaba a aplicarse (java:S6809); ahora la anotación queda solo
+     * en los puntos de entrada públicos, que es donde de verdad actúa.
+     */
+    private void doSyncForUser(UUID userId) {
         List<CustomerSubscriptionEntity> active = subsRepo.findActiveByUserId(userId);
-        String tier = active.isEmpty() ? "sandbox" : mapPlanCodeToTier(active.get(0).getPlan().getCode());
+        String tier = active.isEmpty() ? SANDBOX : mapPlanCodeToTier(active.get(0).getPlan().getCode());
         int updated = updateClientSettings(userId, tier, active.isEmpty() ? null : active.get(0).getPlan().getCode());
         log.info("Plan sync user={} tier={} clients_updated={}", userId, tier, updated);
     }
@@ -61,12 +74,12 @@ public class PartnerPlanSyncService {
     /** Llamado por el webhook de Stripe. Resuelve el userId via stripe_subscription_id. */
     @Transactional
     public void onSubscriptionEvent(String stripeSubscriptionId, String stripeStatus, String eventType) {
-        var sub = subsRepo.findByStripeSubscriptionId(stripeSubscriptionId).orElse(null);
+        CustomerSubscriptionEntity sub = subsRepo.findByStripeSubscriptionId(stripeSubscriptionId).orElse(null);
         if (sub == null) {
             log.warn("Stripe subscription event {} for unknown stripe_id={}", eventType, stripeSubscriptionId);
             return;
         }
-        syncForUser(sub.getUser().getId());
+        doSyncForUser(sub.getUser().getId());
     }
 
     /**

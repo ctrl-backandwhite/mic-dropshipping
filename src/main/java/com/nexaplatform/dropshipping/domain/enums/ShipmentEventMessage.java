@@ -8,66 +8,53 @@ package com.nexaplatform.dropshipping.domain.enums;
  */
 public enum ShipmentEventMessage {
 
-    REGISTERED("Envío registrado", "Shipment registered", "Envio registado", "已登记发货",
-            "Expédition enregistrée", "Sendung registriert", "Spedizione registrata", "Zending geregistreerd"),
-    PICKED_UP("Recogido por el transportista", "Picked up by the carrier", "Recolhido pela transportadora",
-            "承运商已取件", "Pris en charge par le transporteur", "Vom Spediteur abgeholt",
-            "Ritirato dal corriere", "Opgehaald door de vervoerder"),
-    IN_TRANSIT("En tránsito internacional", "In international transit", "Em trânsito internacional", "国际运输中",
-            "En transit international", "Im internationalen Transit", "In transito internazionale",
-            "In internationaal transport"),
-    ARRIVED_COUNTRY("Llegó al país de destino", "Arrived in destination country", "Chegou ao país de destino",
-            "已到达目的地国家", "Arrivé dans le pays de destination", "Im Zielland angekommen",
-            "Arrivato nel paese di destinazione", "Aangekomen in land van bestemming"),
-    OUT_FOR_DELIVERY("En reparto", "Out for delivery", "Saiu para entrega", "正在派送", "En cours de livraison",
-            "In Zustellung", "In consegna", "Onderweg voor bezorging"),
-    DELIVERED("Entregado al destinatario", "Delivered to the recipient", "Entregue ao destinatário", "已送达收件人",
-            "Livré au destinataire", "An den Empfänger geliefert", "Consegnato al destinatario",
-            "Bezorgd bij de ontvanger");
+    REGISTERED(new Translations("Envío registrado", "Shipment registered", "Envio registado", "已登记发货",
+            "Expédition enregistrée", "Sendung registriert", "Spedizione registrata", "Zending geregistreerd")),
+    PICKED_UP(new Translations("Recogido por el transportista", "Picked up by the carrier",
+            "Recolhido pela transportadora", "承运商已取件", "Pris en charge par le transporteur",
+            "Vom Spediteur abgeholt", "Ritirato dal corriere", "Opgehaald door de vervoerder")),
+    IN_TRANSIT(new Translations("En tránsito internacional", "In international transit",
+            "Em trânsito internacional", "国际运输中", "En transit international", "Im internationalen Transit",
+            "In transito internazionale", "In internationaal transport")),
+    ARRIVED_COUNTRY(new Translations("Llegó al país de destino", "Arrived in destination country",
+            "Chegou ao país de destino", "已到达目的地国家", "Arrivé dans le pays de destination",
+            "Im Zielland angekommen", "Arrivato nel paese di destinazione", "Aangekomen in land van bestemming")),
+    OUT_FOR_DELIVERY(new Translations("En reparto", "Out for delivery", "Saiu para entrega", "正在派送",
+            "En cours de livraison", "In Zustellung", "In consegna", "Onderweg voor bezorging")),
+    DELIVERED(new Translations("Entregado al destinatario", "Delivered to the recipient", "Entregue ao destinatário",
+            "已送达收件人", "Livré au destinataire", "An den Empfänger geliefert", "Consegnato al destinatario",
+            "Bezorgd bij de ontvanger"));
 
-    private final String es;
-    private final String en;
-    private final String pt;
-    private final String zh;
-    private final String fr;
-    private final String de;
-    private final String it;
-    private final String nl;
+    /**
+     * Las ocho traducciones de un mensaje. Van agrupadas porque como parámetros sueltos del constructor
+     * eran ocho String seguidos: colar el texto alemán en el hueco del italiano no da error de
+     * compilación y el correo sale en otro idioma sin que nadie se entere.
+     */
+    private record Translations(String es, String en, String pt, String zh, String fr, String de, String it,
+            String nl) {
 
-    ShipmentEventMessage(String es, String en, String pt, String zh, String fr, String de, String it, String nl) {
-        this.es = es;
-        this.en = en;
-        this.pt = pt;
-        this.zh = zh;
-        this.fr = fr;
-        this.de = de;
-        this.it = it;
-        this.nl = nl;
+        String of(String lang) {
+            return switch (lang == null ? "es" : lang) {
+                case "en" -> en;
+                case "pt" -> pt;
+                case "zh" -> zh;
+                case "fr" -> fr;
+                case "de" -> de;
+                case "it" -> it;
+                case "nl" -> nl;
+                default -> es;
+            };
+        }
+    }
+
+    private final Translations translations;
+
+    ShipmentEventMessage(Translations translations) {
+        this.translations = translations;
     }
 
     public String es() {
-        return es;
-    }
-
-    private String of(String lang) {
-        switch (lang == null ? "es" : lang) {
-            case "en":
-                return en;
-            case "pt":
-                return pt;
-            case "zh":
-                return zh;
-            case "fr":
-                return fr;
-            case "de":
-                return de;
-            case "it":
-                return it;
-            case "nl":
-                return nl;
-            default:
-                return es;
-        }
+        return translations.es();
     }
 
     /**
@@ -79,8 +66,8 @@ public enum ShipmentEventMessage {
             return null;
         }
         for (ShipmentEventMessage m : values()) {
-            if (m.es.equalsIgnoreCase(spanishDescription.trim())) {
-                return m.of(lang);
+            if (m.translations.es().equalsIgnoreCase(spanishDescription.trim())) {
+                return m.translations.of(lang);
             }
         }
         return spanishDescription;

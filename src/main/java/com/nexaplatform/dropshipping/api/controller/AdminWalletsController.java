@@ -67,7 +67,7 @@ public class AdminWalletsController implements AdminWalletsApi {
         List<AdminWalletTxRowDtoOut> items = adminWalletMapper
                 .toTxRows(walletUseCase.adminTransactions(walletId, page, capped));
         long total = walletUseCase.countWalletTransactions(walletId);
-        var pageable = PageRequest.of(page, capped);
+        PageRequest pageable = PageRequest.of(page, capped);
         return ResponseEntity.ok(PageResponse.from(new PageImpl<>(items, pageable, total)));
     }
 
@@ -76,7 +76,7 @@ public class AdminWalletsController implements AdminWalletsApi {
             int size) {
         WalletUseCase.WalletPage p = walletUseCase.pageAdminWallets(q, status, currency, page, size);
         List<AdminWalletRowDtoOut> items = adminWalletMapper.toRows(p.items());
-        var pageable = PageRequest.of(Math.max(0, p.page()), Math.max(1, p.size()));
+        PageRequest pageable = PageRequest.of(Math.max(0, p.page()), Math.max(1, p.size()));
         return ResponseEntity.ok(PageResponse.from(new PageImpl<>(items, pageable, p.total())));
     }
 }

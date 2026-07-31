@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.domain.enums;
 
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -10,49 +11,37 @@ import java.util.Locale;
 public enum PaymentMethodLabel {
 
     CARD("Tarjeta", "Card", "Cartão", "银行卡", "Carte", "Karte", "Carta", "Kaart"),
-    PAYPAL("PayPal", "PayPal", "PayPal", "PayPal", "PayPal", "PayPal", "PayPal", "PayPal"),
+    PAYPAL("PayPal"),
     WALLET("Billetera", "Wallet", "Carteira", "钱包", "Portefeuille", "Geldbörse", "Portafoglio", "Portemonnee"),
-    USDT("USDT", "USDT", "USDT", "USDT", "USDT", "USDT", "USDT", "USDT");
+    USDT("USDT");
 
-    private final String es;
-    private final String en;
-    private final String pt;
-    private final String zh;
-    private final String fr;
-    private final String de;
-    private final String it;
-    private final String nl;
+    /**
+     * Los 8 idiomas soportados EN EL ORDEN en que se declaran los textos de cada constante. El primero
+     * (español) es además el que se usa cuando el idioma pedido no está en la lista.
+     */
+    private static final List<String> LANGUAGES = List.of("es", "en", "pt", "zh", "fr", "de", "it", "nl");
 
-    PaymentMethodLabel(String es, String en, String pt, String zh, String fr, String de, String it, String nl) {
-        this.es = es;
-        this.en = en;
-        this.pt = pt;
-        this.zh = zh;
-        this.fr = fr;
-        this.de = de;
-        this.it = it;
-        this.nl = nl;
+    /** Un texto por idioma, alineado posicionalmente con {@link #LANGUAGES}. */
+    private final List<String> byLanguage;
+
+    /**
+     * Un texto por idioma en el orden de {@link #LANGUAGES}, o UNO SOLO cuando es una marca o símbolo
+     * (PayPal, USDT) que se escribe igual en todos: así queda escrito en el código que NO se traduce a
+     * propósito, en vez de repetir el literal ocho veces.
+     *
+     * <p>El caso de un único texto se resuelve al leer y no aquí porque el constructor de un enum se
+     * ejecuta ANTES de que existan sus campos estáticos: {@code LANGUAGES} todavía no está disponible.
+     */
+    PaymentMethodLabel(String... translations) {
+        this.byLanguage = List.of(translations);
     }
 
     private String forLang(String lang) {
-        switch (lang) {
-            case "en":
-                return en;
-            case "pt":
-                return pt;
-            case "zh":
-                return zh;
-            case "fr":
-                return fr;
-            case "de":
-                return de;
-            case "it":
-                return it;
-            case "nl":
-                return nl;
-            default:
-                return es;
+        if (byLanguage.size() == 1) {
+            return byLanguage.get(0);
         }
+        int i = LANGUAGES.indexOf(lang);
+        return byLanguage.get(i < 0 ? 0 : i);
     }
 
     /**

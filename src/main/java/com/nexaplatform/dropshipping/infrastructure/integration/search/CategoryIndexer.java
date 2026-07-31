@@ -7,7 +7,6 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.opensearch.client.opensearch.OpenSearchClient;
-import org.opensearch.client.opensearch._types.OpenSearchException;
 import org.opensearch.client.opensearch._types.mapping.Property;
 import org.opensearch.client.opensearch._types.mapping.TypeMapping;
 import org.opensearch.client.opensearch.core.IndexRequest;
@@ -36,6 +35,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CategoryIndexer {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String STANDARD = "standard";
+
     private final OpenSearchClient client;
     private final CategoryRepository categoryRepository;
     private final CategorySearchService categorySearchService;
@@ -56,12 +58,16 @@ public class CategoryIndexer {
                             .properties("active", Property.of(p -> p.boolean_(bo -> bo)))
                             .properties("level", Property.of(p -> p.integer(i -> i)))
                             .properties("position", Property.of(p -> p.integer(i -> i)))
-                            .properties("nameEs", Property.of(p -> p.text(t -> t.analyzer("standard"))))
-                            .properties("nameEn", Property.of(p -> p.text(t -> t.analyzer("standard"))))
-                            .properties("namePt", Property.of(p -> p.text(t -> t.analyzer("standard"))))
-                            .properties("nameZh", Property.of(p -> p.text(t -> t.analyzer("standard"))))))));
+                            .properties("nameEs", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                            .properties("nameEn", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                            .properties("namePt", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                            .properties("nameZh", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))))));
             log.info("Created OpenSearch index '{}'", index);
-        } catch (OpenSearchException | IOException e) {
+        } catch (RuntimeException | IOException e) {
+            // RuntimeException y no sólo OpenSearchException: esto corre en @PostConstruct, así que
+            // cualquier fallo del cliente que no fuera exactamente esa excepción (una URL mal formada, un
+            // certificado, un timeout envuelto) abortaba el ARRANQUE de la aplicación entera. Un buscador
+            // caído degrada la búsqueda; nunca debe impedir vender.
             log.error("Failed to ensure OpenSearch category index: {}", e.getMessage());
         }
     }
@@ -79,7 +85,7 @@ public class CategoryIndexer {
             // Optional = empty index or OpenSearch down → (re)build it from the DB.
             if (categorySearchService.listFromIndex(null).isEmpty()) {
                 log.info("Category index '{}' empty/unavailable on startup → reindexing", index);
-                reindexAll();
+                doReindexAll();
             }
         } catch (Exception e) {
             log.warn("Category index warm-up skipped: {}", e.getMessage());
@@ -98,6 +104,15 @@ public class CategoryIndexer {
     /** Re-indexes every category. Returns the number indexed. */
     @Transactional(readOnly = true)
     public int reindexAll() {
+        return doReindexAll();
+    }
+
+    /**
+     * Cuerpo del reindexado, sin anotar: el arranque lo llama desde {@code warmUpOnStartup}, que ya abre
+     * su propia transacción de lectura. Una llamada por {@code this.reindexAll()} no pasa por el proxy de
+     * Spring y su {@code @Transactional} nunca llegaba a aplicarse (java:S6809).
+     */
+    private int doReindexAll() {
         int[] n = { 0 };
         categoryRepository.findAll().forEach(c -> {
             indexEntity(c);

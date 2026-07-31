@@ -28,31 +28,26 @@ public class MentorProfileUseCaseImpl implements MentorProfileUseCase {
     @Override
     @Transactional(readOnly = true)
     public List<MentorProfile> listActive() {
-        // DROP-575: filter "fake" mentors seeded from the system accounts (NX036
-        // Admin, NX036 Operator, NX036 Customer, NX036 Partner) and partner
-        // companies (e.g. "Demo Partner — Sandbox"). They are not real mentors —
-        // they leaked in when the table was populated. We hide them from the
-        // public listing until the team decides whether to delete them from the
-        // dataset or create real mentors.
-        return mentorProfileRepository.findActive().stream().filter(m -> {
-            String name = m.getDisplayName() != null ? m.getDisplayName() : "";
-            String email = m.getEmail() != null ? m.getEmail().toLowerCase() : "";
-            if (name.startsWith("NX036 ")) {
-                return false;
-            }
-            if (email.startsWith("admin@") || email.startsWith("operator@") || email.startsWith("customer@")
-                    || email.startsWith("partner@")) {
-                return false;
-            }
-            if (email.endsWith("@partners.nx036.local")) {
-                return false;
-            }
-            // DROP-667: QA/test accounts must not surface as public mentors.
-            if (name.toUpperCase().startsWith("QA ") || email.contains("qa-") || email.endsWith("@example.com")) {
-                return false;
-            }
-            return true;
-        }).toList();
+        return mentorProfileRepository.findActive().stream().filter(MentorProfileUseCaseImpl::isPublicMentor).toList();
+    }
+
+    /**
+     * DROP-575: filtra los mentores "falsos" sembrados desde las cuentas de sistema (NX036 Admin, NX036
+     * Operator, NX036 Customer, NX036 Partner) y desde las empresas partner (p. ej. "Demo Partner —
+     * Sandbox"). No son mentores reales: se colaron al poblar la tabla. Se ocultan del listado público
+     * hasta que el equipo decida si se borran del dataset o se crean mentores de verdad.
+     *
+     * <p>DROP-667: las cuentas de QA/prueba tampoco pueden salir como mentores públicos.
+     */
+    private static boolean isPublicMentor(MentorProfile m) {
+        String name = m.getDisplayName() != null ? m.getDisplayName() : "";
+        String email = m.getEmail() != null ? m.getEmail().toLowerCase() : "";
+        if (name.startsWith("NX036 ") || name.toUpperCase().startsWith("QA ")) {
+            return false;
+        }
+        return !email.startsWith("admin@") && !email.startsWith("operator@") && !email.startsWith("customer@")
+                && !email.startsWith("partner@") && !email.endsWith("@partners.nx036.local")
+                && !email.contains("qa-") && !email.endsWith("@example.com");
     }
 
     @Override

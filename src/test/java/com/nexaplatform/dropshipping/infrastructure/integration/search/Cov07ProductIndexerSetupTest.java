@@ -1,0 +1,198 @@
+package com.nexaplatform.dropshipping.infrastructure.integration.search;
+
+import com.nexaplatform.dropshipping.infrastructure.messaging.ProductIngestedEvent;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.opensearch.client.opensearch.OpenSearchClient;
+import org.opensearch.client.opensearch.core.DeleteByQueryRequest;
+import org.opensearch.client.opensearch.core.IndexRequest;
+import org.opensearch.client.opensearch.core.IndexResponse;
+import org.opensearch.client.opensearch.indices.CreateIndexRequest;
+import org.opensearch.client.opensearch.indices.CreateIndexResponse;
+import org.opensearch.client.opensearch.indices.ExistsRequest;
+import org.opensearch.client.opensearch.indices.OpenSearchIndicesClient;
+import org.opensearch.client.transport.endpoints.BooleanResponse;
+import org.opensearch.client.util.ObjectBuilder;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Function;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * Puesta a punto del índice de productos: creación idempotente del índice, consumo del evento de
+ * Kafka y purga previa del reindexado (sin ella un producto borrado seguía saliendo en la búsqueda).
+ */
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
+class Cov07ProductIndexerSetupTest {
+
+    private static final String INDEX = "products";
+
+    @Mock
+    OpenSearchClient client;
+    @Mock
+    OpenSearchIndicesClient indices;
+    @Mock
+    ProductRepository productRepository;
+
+    @InjectMocks
+    ProductIndexer indexer;
+
+    @BeforeEach
+    void setUp() {
+        ReflectionTestUtils.setField(indexer, "index", INDEX);
+        when(client.indices()).thenReturn(indices);
+    }
+
+    @Test
+    void siElIndiceYaExisteNoSeRecrea() throws IOException {
+        when(indices.exists(existsFn())).thenReturn(new BooleanResponse(true));
+
+        indexer.ensureIndex();
+
+        // Recrearlo borraría el catálogo indexado y dejaría la búsqueda vacía hasta el siguiente reindex.
+        verify(indices, never()).create(any(CreateIndexRequest.class));
+    }
+
+    @Test
+    void siNoExisteSeCreaConElMapeoDeBusqueda() throws IOException {
+        when(indices.exists(existsFn())).thenReturn(new BooleanResponse(false));
+        when(indices.create(any(CreateIndexRequest.class))).thenReturn(mock(CreateIndexResponse.class));
+
+        indexer.ensureIndex();
+
+        ArgumentCaptor<CreateIndexRequest> captor = ArgumentCaptor.forClass(CreateIndexRequest.class);
+        verify(indices).create(captor.capture());
+        assertThat(captor.getValue().index()).isEqualTo(INDEX);
+        assertThat(captor.getValue().mappings().properties()).containsKeys("slug", "source", "categoryId", "status",
+                "titleZh", "titleEs", "titleEn", "titlePt", "basePrice", "trendScore", "monthlySales", "rating",
+                "supplierId");
+    }
+
+    @Test
+    void unFalloDeOpenSearchAlAsegurarElIndiceNoTumbaElArranque() throws IOException {
+        when(indices.exists(existsFn())).thenThrow(new IOException("opensearch caído"));
+
+        assertThatCode(() -> indexer.ensureIndex()).doesNotThrowAnyException();
+    }
+
+    @Test
+    void elEventoDeIngestaIndexaElProductoQueTraeElEvento() throws IOException {
+        ProductEntity p = product();
+        when(productRepository.findWithDetailsById(p.getId())).thenReturn(Optional.of(p));
+        when(client.index(any(IndexRequest.class))).thenReturn(mock(IndexResponse.class));
+
+        indexer.onProductIngested(new ProductIngestedEvent(p.getId(), "camisa-lino", "1688", "EXT-1"));
+
+        verify(client).index(any(IndexRequest.class));
+    }
+
+    @Test
+    void elReindexadoPurgaElIndiceAntesDeReconstruirlo() throws IOException {
+        ProductEntity p = product();
+        when(productRepository.findAll()).thenReturn(List.of(p));
+        when(productRepository.findWithDetailsById(p.getId())).thenReturn(Optional.of(p));
+        when(client.index(any(IndexRequest.class))).thenReturn(mock(IndexResponse.class));
+
+        assertThat(indexer.reindexAll()).isEqualTo(1);
+
+        // Sin la purga, un producto ya borrado de la BD seguiría apareciendo en la búsqueda.
+        InOrder order = inOrder(client);
+        order.verify(client).deleteByQuery(deleteByQueryFn());
+        order.verify(client).index(any(IndexRequest.class));
+    }
+
+    @Test
+    void siLaPurgaFallaElReindexadoSigueAdelante() throws IOException {
+        ProductEntity p = product();
+        when(client.deleteByQuery(deleteByQueryFn())).thenThrow(new IOException("opensearch caído"));
+        when(productRepository.findAll()).thenReturn(List.of(p));
+        when(productRepository.findWithDetailsById(p.getId())).thenReturn(Optional.of(p));
+        when(client.index(any(IndexRequest.class))).thenReturn(mock(IndexResponse.class));
+
+        assertThat(indexer.reindexAll()).isEqualTo(1);
+        verify(client).index(any(IndexRequest.class));
+    }
+
+    @Test
+    void elIdiomaDeCadaTraduccionDaNombreASuCampoEnElDocumento() throws IOException {
+        ProductEntity p = product();
+        p.getTranslations().add(translation("pt", "Camisa de linho", "resumo"));
+        when(productRepository.findWithDetailsById(p.getId())).thenReturn(Optional.of(p));
+        when(client.index(any(IndexRequest.class))).thenReturn(mock(IndexResponse.class));
+
+        indexer.indexProduct(p.getId());
+
+        ArgumentCaptor<IndexRequest<Map<String, Object>>> captor = captor();
+        verify(client).index(captor.capture());
+        // El mapeo declara titlePt/titleEs/…: si no se capitalizara el idioma, el campo no existiría.
+        assertThat(captor.getValue().document()).containsEntry("titlePt", "Camisa de linho")
+                .containsEntry("descriptionPt", "resumo");
+    }
+
+    @Test
+    void unProductoSinImagenesNoDeclaraImagenPrincipal() throws IOException {
+        ProductEntity p = product();
+        when(productRepository.findWithDetailsById(p.getId())).thenReturn(Optional.of(p));
+        when(client.index(any(IndexRequest.class))).thenReturn(mock(IndexResponse.class));
+
+        indexer.indexProduct(p.getId());
+
+        ArgumentCaptor<IndexRequest<Map<String, Object>>> captor = captor();
+        verify(client).index(captor.capture());
+        assertThat(captor.getValue().document()).containsEntry("hasImage", false)
+                .doesNotContainKey("mainImage");
+    }
+
+    /* ==================== helpers ==================== */
+
+    private static ProductEntity product() {
+        ProductEntity p = ProductEntity.builder().slug("camisa-lino").source("1688").externalId("EXT-1")
+                .titleZh("亚麻衬衫").build();
+        p.setId(UUID.randomUUID());
+        return p;
+    }
+
+    private static ProductTranslationEntity translation(String language, String title, String shortDescription) {
+        return ProductTranslationEntity.builder().language(language).title(title)
+                .shortDescription(shortDescription).build();
+    }
+
+    /** Matcher para el overload de lambda (el otro recibe la petición ya construida). */
+    private static Function<ExistsRequest.Builder, ObjectBuilder<ExistsRequest>> existsFn() {
+        return any();
+    }
+
+    private static Function<DeleteByQueryRequest.Builder, ObjectBuilder<DeleteByQueryRequest>> deleteByQueryFn() {
+        return any();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ArgumentCaptor<IndexRequest<Map<String, Object>>> captor() {
+        return ArgumentCaptor.forClass(IndexRequest.class);
+    }
+}

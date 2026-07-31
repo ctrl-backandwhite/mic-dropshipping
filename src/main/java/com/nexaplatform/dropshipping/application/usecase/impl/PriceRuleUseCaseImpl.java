@@ -60,6 +60,15 @@ public class PriceRuleUseCaseImpl implements PriceRuleUseCase {
     @Override
     @Transactional(readOnly = true)
     public PriceRule getById(UUID id) {
+        return requireById(id);
+    }
+
+    /**
+     * Carga la regla o lanza 404. Sin anotar a propósito: es la que usan las mutaciones de esta misma clase.
+     * Llamar al método público desde dentro se salta el proxy de Spring, así que su {@code @Transactional} no
+     * llegaría a aplicarse (java:S6809); la anotación queda solo en el punto de entrada.
+     */
+    private PriceRule requireById(UUID id) {
         PriceRule model = priceRuleRepository.getById(id);
         if (Objects.isNull(model)) {
             throw new NotFoundException("Price rule not found: " + id);
@@ -74,7 +83,7 @@ public class PriceRuleUseCaseImpl implements PriceRuleUseCase {
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public PriceRule update(PriceRule model, UUID id) {
-        PriceRule existing = getById(id);
+        PriceRule existing = requireById(id);
         priceRuleUpdateMapper.updateFromModel(model, existing);
         PriceRule saved = priceRuleRepository.update(existing);
         marginService.invalidateCache();
@@ -89,7 +98,7 @@ public class PriceRuleUseCaseImpl implements PriceRuleUseCase {
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public PriceRule toggle(UUID id) {
-        PriceRule existing = getById(id);
+        PriceRule existing = requireById(id);
         existing.setActive(!existing.isActive());
         PriceRule saved = priceRuleRepository.update(existing);
         marginService.invalidateCache();
@@ -104,7 +113,7 @@ public class PriceRuleUseCaseImpl implements PriceRuleUseCase {
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public PriceRule setActive(UUID id, boolean active) {
-        PriceRule existing = getById(id);
+        PriceRule existing = requireById(id);
         existing.setActive(active);
         PriceRule saved = priceRuleRepository.update(existing);
         marginService.invalidateCache();
@@ -119,7 +128,7 @@ public class PriceRuleUseCaseImpl implements PriceRuleUseCase {
             @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
     public void delete(UUID id) {
-        getById(id);
+        requireById(id);
         priceRuleRepository.delete(id);
         marginService.invalidateCache();
         log.info("::> [PRICING] Price rule deleted id={}", id);

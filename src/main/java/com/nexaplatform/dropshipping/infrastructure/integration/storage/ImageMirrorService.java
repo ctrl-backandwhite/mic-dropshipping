@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.storage;
 
+import com.nexaplatform.dropshipping.application.service.Texts;
 import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
@@ -17,6 +18,8 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.net.UnknownHostException;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -31,6 +34,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -80,42 +84,57 @@ public class ImageMirrorService {
         if (!mirrorEnabled || !storage.isReady()) {
             return;
         }
-        // Auto-heal (1 vez/arranque): si hay cdn_url de otro entorno (p.ej. localhost tras cambiar a
-        // un MinIO nuevo) o muertos, se reencolan a PENDING para re-espejar con la URL pública vigente.
         if (!healedStaleUrls) {
-            try {
-                // (a) cdn_url de otro entorno/dominio o nulo → reencolar.
-                int n = imageRepository.requeueNotMirrored(storage.publicUrl() + "%");
-                if (n > 0) {
-                    log.info("Mirror auto-heal: {} imágenes con cdn_url no-vigente reencoladas a PENDING", n);
-                }
-                // (b) cdn_url con nuestro dominio pero cuyo OBJETO ya no existe (p.ej. MinIO reseteado):
-                //     listamos las claves reales del bucket y reencolamos las que falten.
-                Set<String> keys = storage.listKeys();
-                if (!keys.isEmpty()) {
-                    String base = storage.publicUrl().replaceAll("/+$", "") + "/";
-                    int missing = 0;
-                    for (ProductImageEntity img : imageRepository
-                            .findByMirrorStatusAndCdnUrlStartingWith(MirrorStatus.MIRRORED, base)) {
-                        String cdn = img.getCdnUrl();
-                        String key = cdn.length() > base.length() ? cdn.substring(base.length()) : "";
-                        if (!keys.contains(key)) {
-                            imageRepository.markStatus(img.getId(), MirrorStatus.PENDING);
-                            missing++;
-                        }
-                    }
-                    if (missing > 0) {
-                        log.info("Mirror auto-heal: {} imágenes MIRRORED con objeto inexistente reencoladas", missing);
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("Mirror auto-heal falló: {}", e.getMessage());
-            }
-            healedStaleUrls = true;
+            healStaleCdnUrls();
+            healedStaleUrls = true; // se marca aunque falle: es un saneo oportunista, no puede bloquear el job
         }
         mirrorPendingBatch(mirrorBatch);
         mirrorVariantImagesBatch(mirrorBatch);
     }
+
+    /**
+     * Auto-heal (1 vez/arranque): si hay cdn_url de otro entorno (p.ej. localhost tras cambiar a un MinIO
+     * nuevo) o muertos, se reencolan a PENDING para re-espejar con la URL pública vigente.
+     */
+    private void healStaleCdnUrls() {
+        try {
+            // (a) cdn_url de otro entorno/dominio o nulo → reencolar.
+            int n = imageRepository.requeueNotMirrored(storage.publicUrl() + "%");
+            if (n > 0) {
+                log.info("Mirror auto-heal: {} imágenes con cdn_url no-vigente reencoladas a PENDING", n);
+            }
+            requeueMirroredWithoutObject();
+        } catch (Exception e) {
+            log.warn("Mirror auto-heal falló: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * (b) cdn_url con nuestro dominio pero cuyo OBJETO ya no existe (p.ej. MinIO reseteado): listamos las
+     * claves reales del bucket y reencolamos las que falten. Si el listado viene vacío no se toca nada: un
+     * bucket que no responde no puede confundirse con un bucket sin objetos y reencolarlo TODO.
+     */
+    private void requeueMirroredWithoutObject() {
+        Set<String> keys = storage.listKeys();
+        if (keys.isEmpty()) {
+            return;
+        }
+        String base = Texts.stripTrailingSlashes(storage.publicUrl()) + "/";
+        int missing = 0;
+        for (ProductImageEntity img : imageRepository
+                .findByMirrorStatusAndCdnUrlStartingWith(MirrorStatus.MIRRORED, base)) {
+            String cdn = img.getCdnUrl();
+            String key = cdn.length() > base.length() ? cdn.substring(base.length()) : "";
+            if (!keys.contains(key)) {
+                imageRepository.markStatus(img.getId(), MirrorStatus.PENDING);
+                missing++;
+            }
+        }
+        if (missing > 0) {
+            log.info("Mirror auto-heal: {} imágenes MIRRORED con objeto inexistente reencoladas", missing);
+        }
+    }
+
 
     /**
      * Espeja a storage las imágenes de las VARIANTES y de los VALORES de eje (p.ej. la foto de cada
@@ -127,7 +146,16 @@ public class ImageMirrorService {
         if (!storage.isReady()) {
             return;
         }
-        String prefix = storage.publicUrl().replaceAll("/+$", "") + "%";
+        // publicUrl() habla con el almacenamiento y puede fallar. Estaba fuera de todo try, así que un
+        // almacenamiento caído no dejaba «cero imágenes espejadas» sino la excepción subiendo por el
+        // planificador y ese ciclo entero perdido, incluidas las tareas que van detrás.
+        String prefix;
+        try {
+            prefix = Texts.stripTrailingSlashes(storage.publicUrl()) + "%";
+        } catch (RuntimeException e) {
+            log.warn("Mirror de imágenes de variante omitido: el almacenamiento no responde ({})", e.toString());
+            return;
+        }
         PageRequest top = PageRequest.of(0, Math.max(1, limit));
         int ok = 0;
         for (ProductVariantEntity v : variantRepository.findNeedingImageMirror(prefix, top)) {
@@ -135,6 +163,9 @@ public class ImageMirrorService {
                 variantRepository.markImageCdn(v.getId(), fetchAndStore(v.getImageSourceUrl()).url());
                 ok++;
             } catch (Exception e) {
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
                 log.debug("Mirror imagen de variante {} falló ({}): {}", v.getId(), v.getImageSourceUrl(), e.toString());
                 variantRepository.markImageFailed(v.getId(), Instant.now());
             }
@@ -144,6 +175,9 @@ public class ImageMirrorService {
                 variantValueRepository.markImageCdn(vv.getId(), fetchAndStore(vv.getImageSourceUrl()).url());
                 ok++;
             } catch (Exception e) {
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
                 log.debug("Mirror imagen de valor {} falló ({}): {}", vv.getId(), vv.getImageSourceUrl(), e.toString());
                 variantValueRepository.markImageFailed(vv.getId(), Instant.now());
             }
@@ -173,8 +207,12 @@ public class ImageMirrorService {
                     ok++;
                     mirroredImageIds.add(pending.get(i).getId());
                 }
-            } catch (Exception ignored) {
-                // el fallo individual ya se marca FAILED dentro de mirrorOne
+            } catch (InterruptedException ex) {
+                // Tragarse la interrupción deja al pool sin enterarse de que le han pedido parar.
+                Thread.currentThread().interrupt();
+            } catch (ExecutionException ex) {
+                log.debug("Mirror falló imagen {}: {}", pending.get(i).getId(), ex.toString());
+                // el estado FAILED de la imagen ya se marca dentro de mirrorOne
             }
         }
         // Reindexar en OpenSearch los productos cuyas imágenes acaban de espejarse: su flag hasImage pasa a
@@ -208,8 +246,12 @@ public class ImageMirrorService {
                 if (Boolean.TRUE.equals(futures.get(i).get())) {
                     mirroredImageIds.add(imgs.get(i).getId());
                 }
-            } catch (Exception ignored) {
-                // el fallo individual ya se marca FAILED dentro de mirrorOne
+            } catch (InterruptedException ex) {
+                // Tragarse la interrupción deja al pool sin enterarse de que le han pedido parar.
+                Thread.currentThread().interrupt();
+            } catch (ExecutionException ex) {
+                log.debug("Mirror falló imagen {}: {}", imgs.get(i).getId(), ex.toString());
+                // el estado FAILED de la imagen ya se marca dentro de mirrorOne
             }
         }
         reindexAffectedProducts(mirroredImageIds);
@@ -259,6 +301,9 @@ public class ImageMirrorService {
                 imageRepository.markMirrored(id, s.url(), s.bytes(), s.hash(), MirrorStatus.MIRRORED, Instant.now());
                 return true;
             } catch (Exception e) {
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
                 log.debug("Mirror falló imagen {} ({}): {}", id, candidate, e.toString());
             }
         }
@@ -299,7 +344,7 @@ public class ImageMirrorService {
      *       origen mienta en el header) se descarta y NUNCA entra al bucket → no se puede servir ni ejecutar.</li>
      * </ul>
      */
-    private Stored fetchAndStore(String src) throws Exception {
+    private Stored fetchAndStore(String src) throws IOException, InterruptedException {
         HttpResponse<byte[]> res = fetchFollowingRedirects(src.trim(), 5);
         byte[] data = res.body();
         if (res.statusCode() / 100 != 2 || data == null || data.length == 0) {
@@ -313,7 +358,8 @@ public class ImageMirrorService {
     }
 
     /** Sigue redirects MANUALMENTE (máx {@code maxHops}), validando cada URL contra SSRF antes de pedirla. */
-    private HttpResponse<byte[]> fetchFollowingRedirects(String url, int maxHops) throws Exception {
+    private HttpResponse<byte[]> fetchFollowingRedirects(String url, int maxHops)
+            throws IOException, InterruptedException {
         String current = url;
         for (int hop = 0; hop <= maxHops; hop++) {
             URI uri = URI.create(current);
@@ -335,7 +381,7 @@ public class ImageMirrorService {
     }
 
     /** Anti-SSRF: rechaza esquemas no http(s) y hosts que resuelvan a IP no enrutable públicamente. */
-    static void assertPublicHttpUrl(URI uri) throws Exception {
+    static void assertPublicHttpUrl(URI uri) throws UnknownHostException {
         String scheme = uri.getScheme();
         if (scheme == null || !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))) {
             throw new SecurityException("Esquema no permitido para descarga de imagen: " + scheme);

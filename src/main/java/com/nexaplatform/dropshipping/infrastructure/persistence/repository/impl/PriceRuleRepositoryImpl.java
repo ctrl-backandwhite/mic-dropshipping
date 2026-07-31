@@ -29,6 +29,16 @@ public class PriceRuleRepositoryImpl implements PriceRuleRepository {
         return priceRuleEntityMapper.toDomain(entity);
     }
 
+    /**
+     * Alta en lote. Sin este método se caía al {@code default} del puerto, que devuelve 0 sin escribir:
+     * el sembrado de reglas de precio creía haberlas insertado y no insertaba ninguna.
+     */
+    @Override
+    public int saveAll(List<PriceRule> models) {
+        models.forEach(this::save);
+        return models.size();
+    }
+
     @Override
     public List<PriceRule> findAll() {
         return priceRuleEntityMapper.toDomainList(priceRuleJpaRepositoryAdapter.findAllByOrderByPositionAsc());

@@ -30,6 +30,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 /**
  * Unit tests for {@link CustomerSubscriptionUseCaseImpl}. Mockito drives the ports:
@@ -128,7 +129,7 @@ class CustomerSubscriptionUseCaseImplTest {
         planEntity.setId(planId);
         when(planRepository.findByCode("pro")).thenReturn(Optional.of(planEntity));
         when(userRepository.findById(userId)).thenReturn(Optional.of(
-                org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity.class)));
+                mock(com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity.class)));
         when(stripeService.isEnabled()).thenReturn(false);
         var saved = CustomerSubscription.builder().id(subId).planId(planId).userId(userId)
                 .status(SubscriptionStatus.ACTIVE).build();

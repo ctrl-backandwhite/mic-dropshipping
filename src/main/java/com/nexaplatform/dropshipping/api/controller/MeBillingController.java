@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.controller;
 
+import com.stripe.exception.StripeException;
 import com.nexaplatform.dropshipping.api.MeBillingApi;
 import com.nexaplatform.dropshipping.api.dto.in.SubscribeDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BillingConfigDtoOut;
@@ -39,14 +40,14 @@ public class MeBillingController implements MeBillingApi {
     }
 
     @Override
-    public ResponseEntity<SetupIntentDtoOut> createSetupIntent(Authentication auth) throws Exception {
+    public ResponseEntity<SetupIntentDtoOut> createSetupIntent(Authentication auth) throws StripeException {
         UUID userId = UUID.fromString(auth.getName());
         return ResponseEntity.ok(SetupIntentDtoOut.builder()
                 .clientSecret(useCase.createSetupIntentSecret(userId)).build());
     }
 
     @Override
-    public ResponseEntity<List<PaymentMethodDtoOut>> listPaymentMethods(Authentication auth) throws Exception {
+    public ResponseEntity<List<PaymentMethodDtoOut>> listPaymentMethods(Authentication auth) throws StripeException {
         UUID userId = UUID.fromString(auth.getName());
         List<PaymentMethodDtoOut> out = useCase.listCards(userId).stream()
                 .map(c -> PaymentMethodDtoOut.builder().id(c.id()).brand(c.brand()).last4(c.last4())
@@ -56,19 +57,19 @@ public class MeBillingController implements MeBillingApi {
     }
 
     @Override
-    public ResponseEntity<Void> setDefault(Authentication auth, String id) throws Exception {
+    public ResponseEntity<Void> setDefault(Authentication auth, String id) throws StripeException {
         useCase.setDefaultCard(UUID.fromString(auth.getName()), id);
         return ResponseEntity.noContent().build();
     }
 
     @Override
-    public ResponseEntity<Void> delete(Authentication auth, String id) throws Exception {
+    public ResponseEntity<Void> delete(Authentication auth, String id) throws StripeException {
         useCase.deleteCard(UUID.fromString(auth.getName()), id);
         return ResponseEntity.noContent().build();
     }
 
     @Override
-    public ResponseEntity<SubscribeStatusDtoOut> subscribe(Authentication auth, SubscribeDtoIn req) throws Exception {
+    public ResponseEntity<SubscribeStatusDtoOut> subscribe(Authentication auth, SubscribeDtoIn req) throws StripeException {
         CustomerSubscriptionUseCase.SubscribeOutcome outcome = useCase
                 .subscribeWithSavedCard(UUID.fromString(auth.getName()), req.getPlanCode(), req.getPeriod());
         return ResponseEntity.ok(SubscribeStatusDtoOut.builder().subscriptionId(outcome.subscriptionId())
@@ -88,13 +89,13 @@ public class MeBillingController implements MeBillingApi {
     }
 
     @Override
-    public ResponseEntity<Void> cancelSubscription(Authentication auth) throws Exception {
+    public ResponseEntity<Void> cancelSubscription(Authentication auth) throws StripeException {
         useCase.cancelMySubscription(UUID.fromString(auth.getName()));
         return ResponseEntity.noContent().build();
     }
 
     @Override
-    public ResponseEntity<List<BillingInvoiceDtoOut>> invoices(Authentication auth) throws Exception {
+    public ResponseEntity<List<BillingInvoiceDtoOut>> invoices(Authentication auth) throws StripeException {
         List<BillingInvoiceDtoOut> out = useCase.listInvoices(UUID.fromString(auth.getName())).stream()
                 .map(i -> BillingInvoiceDtoOut.builder().number(i.number()).total(i.total()).currency(i.currency())
                         .status(i.status()).created(i.created()).pdfUrl(i.pdfUrl()).hostedUrl(i.hostedUrl()).build())

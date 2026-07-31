@@ -9,6 +9,7 @@ import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
+import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.usecase.impl.PaymentUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
 import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
@@ -38,6 +39,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentUseCaseImplTest {
@@ -73,7 +75,7 @@ class PaymentUseCaseImplTest {
         return new PaymentUseCaseImpl(List.<PaymentGateway>of(), paymentRepository, paymentJpaRepositoryAdapter,
                 userRepository, orderRepository, walletUseCase, auditLogger, partnerPlanSyncService,
                 customerSubscriptionUseCase, subscriptionNotificationService, new ObjectMapper(), orderEmailService,
-                currencyRateService, stockService);
+                currencyRateService, stockService, mock(OpsAlertService.class));
     }
 
     @Test

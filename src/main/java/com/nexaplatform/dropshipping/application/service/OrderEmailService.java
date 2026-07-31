@@ -31,6 +31,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class OrderEmailService {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String ORDERS = "/orders/";
+    private static final String BR = "<br/>";
+
     private final EmailQueueService emailQueue;
     private final InvoiceService invoiceService;
 
@@ -51,9 +55,8 @@ public class OrderEmailService {
             return;
         }
         try {
-            String orderUrl = baseUrl + "/orders/" + o.getId();
-            String cur = invoiceCurrency != null && !invoiceCurrency.isBlank() ? invoiceCurrency
-                    : (o.getCurrency() != null ? o.getCurrency() : "USD");
+            String orderUrl = baseUrl + ORDERS + o.getId();
+            String cur = Texts.firstNonBlankOr("USD", invoiceCurrency, o.getCurrency());
             Map<String, Object> vars = new HashMap<>(invoiceService.model(o, locale, orderUrl, cur));
             if (paymentMethod != null) {
                 // Mostramos el método traducido al idioma del usuario (Tarjeta/Billetera/…), no el código crudo.
@@ -81,14 +84,14 @@ public class OrderEmailService {
         String lang = InvoiceLabel.lang(locale);
         StringBuilder body = new StringBuilder(OrderEmailLabel.SHIPPED_BODY.of(lang, o.getOrderNumber()));
         if (!blank(o.getTrackingNumber())) {
-            body.append("<br/>").append(OrderEmailLabel.TRACKING_NUMBER.of(lang)).append("<strong>")
+            body.append(BR).append(OrderEmailLabel.TRACKING_NUMBER.of(lang)).append("<strong>")
                     .append(o.getTrackingNumber()).append("</strong>");
             if (!blank(o.getCarrier())) {
                 body.append(" (").append(o.getCarrier()).append(")");
             }
         }
-        notify(email, OrderEmailLabel.SHIPPED_TITLE.of(lang), body.toString(),
-                OrderEmailLabel.CTA_TRACK.of(lang), o, "truck-fast", lang);
+        notify(email, o, new Notice(OrderEmailLabel.SHIPPED_TITLE.of(lang), body.toString(),
+                OrderEmailLabel.CTA_TRACK.of(lang), "truck-fast", lang));
     }
 
     /** Pedido entregado. */
@@ -97,9 +100,9 @@ public class OrderEmailService {
             return;
         }
         String lang = InvoiceLabel.lang(locale);
-        notify(email, OrderEmailLabel.DELIVERED_TITLE.of(lang),
+        notify(email, o, new Notice(OrderEmailLabel.DELIVERED_TITLE.of(lang),
                 OrderEmailLabel.DELIVERED_BODY.of(lang, o.getOrderNumber()),
-                OrderEmailLabel.CTA_VIEW_ORDER.of(lang), o, "box-open", lang);
+                OrderEmailLabel.CTA_VIEW_ORDER.of(lang), "box-open", lang));
     }
 
     /** Reembolso procesado. Retrocompat: reembolso al método original, moneda del pedido. */
@@ -121,12 +124,12 @@ public class OrderEmailService {
             return;
         }
         String lang = InvoiceLabel.lang(locale);
-        String cur = settlementCcy != null && !settlementCcy.isBlank() ? settlementCcy
-                : (o.getCurrency() != null ? o.getCurrency() : "USD");
+        // La divisa del correo es la que se LIQUIDÓ; si el cobro no la fijó, la del pedido.
+        String cur = Texts.firstNonBlankOr("USD", settlementCcy, o.getCurrency());
 
         List<String[]> details = new ArrayList<>();
         details.add(new String[] { OrderEmailLabel.REFUND_L_ORDER.of(lang), o.getOrderNumber() });
-        String date = refundDate(o, locale);
+        String date = refundDate(o);
         if (!blank(date)) {
             details.add(new String[] { OrderEmailLabel.REFUND_L_DATE.of(lang), date });
         }
@@ -141,9 +144,9 @@ public class OrderEmailService {
         details.add(new String[] { OrderEmailLabel.REFUND_L_DEST.of(lang),
                 refundDestination(lang, toWallet, paymentMethod) });
 
-        notify(email, OrderEmailLabel.REFUNDED_TITLE.of(lang),
+        notify(email, o, new Notice(OrderEmailLabel.REFUNDED_TITLE.of(lang),
                 OrderEmailLabel.REFUNDED_BODY.of(lang, o.getOrderNumber()),
-                OrderEmailLabel.CTA_VIEW_ORDER.of(lang), o, "money-bill-transfer", lang, details);
+                OrderEmailLabel.CTA_VIEW_ORDER.of(lang), "money-bill-transfer", lang, details));
     }
 
     /** Texto del destino del reembolso: billetera (inmediato) o el método original (tarjeta/PayPal). */
@@ -163,7 +166,7 @@ public class OrderEmailService {
     }
 
     /** Fecha del reembolso (cancelledAt, o ahora) formateada según la factura. */
-    private String refundDate(Order o, String locale) {
+    private String refundDate(Order o) {
         Instant when = o.getCancelledAt() != null ? o.getCancelledAt() : Instant.now();
         return invoiceService.formatDate(when);
     }
@@ -171,7 +174,7 @@ public class OrderEmailService {
     /** Importe reembolsado ya formateado en la moneda cobrada (= exactamente lo que se devuelve). */
     private String refundAmount(Order o, String locale, String cur) {
         try {
-            Object total = invoiceService.model(o, locale, baseUrl + "/orders/" + o.getId(), cur).get("total");
+            Object total = invoiceService.model(o, locale, baseUrl + ORDERS + o.getId(), cur).get("total");
             return total != null ? String.valueOf(total) : null;
         } catch (RuntimeException e) {
             log.warn("refund amount formatting failed for {}: {}", o.getOrderNumber(), e.getMessage());
@@ -193,39 +196,48 @@ public class OrderEmailService {
         StringBuilder body = new StringBuilder(
                 OrderEmailLabel.TRACK_BODY.of(lang, o.getOrderNumber()).replace("{state}", state));
         if (!blank(location)) {
-            body.append("<br/>").append(OrderEmailLabel.LOCATION.of(lang)).append(localizeLocation(location, locale));
+            body.append(BR).append(OrderEmailLabel.LOCATION.of(lang)).append(localizeLocation(location, locale));
         }
         if (!blank(o.getTrackingNumber())) {
-            body.append("<br/>").append(OrderEmailLabel.TRACKING_NUMBER.of(lang)).append("<strong>")
+            body.append(BR).append(OrderEmailLabel.TRACKING_NUMBER.of(lang)).append("<strong>")
                     .append(o.getTrackingNumber()).append("</strong>");
         }
-        notify(email, OrderEmailLabel.TRACK_TITLE.of(lang), body.toString(),
-                OrderEmailLabel.CTA_TRACK.of(lang), o, "truck-fast", lang);
+        notify(email, o, new Notice(OrderEmailLabel.TRACK_TITLE.of(lang), body.toString(),
+                OrderEmailLabel.CTA_TRACK.of(lang), "truck-fast", lang));
     }
 
-    private void notify(String email, String title, String bodyHtml, String ctaLabel, Order o, String icon,
-            String lang) {
-        notify(email, title, bodyHtml, ctaLabel, o, icon, lang, null);
+    /**
+     * Contenido variable de un aviso de pedido. Va agrupado en un record porque los textos viajan
+     * siempre juntos y todos son String: sueltos eran ocho parámetros consecutivos del mismo tipo, con
+     * lo que intercambiar dos por error compilaba igual y el fallo solo se veía en el correo enviado.
+     */
+    private record Notice(String title, String bodyHtml, String ctaLabel, String icon, String lang,
+            List<String[]> details) {
+
+        /** Aviso sin bloque de detalle (envío, entrega y tracking); solo el reembolso lo lleva. */
+        Notice(String title, String bodyHtml, String ctaLabel, String icon, String lang) {
+            this(title, bodyHtml, ctaLabel, icon, lang, null);
+        }
     }
 
-    private void notify(String email, String title, String bodyHtml, String ctaLabel, Order o, String icon,
-            String lang, List<String[]> details) {
+    private void notify(String email, Order o, Notice notice) {
         try {
             Map<String, Object> vars = new HashMap<>();
-            vars.put("title", title);
-            vars.put("icon", icon); // nombre del icono FontAwesome (PNG inline por CID); null = sin icono
-            vars.put("bodyHtml", bodyHtml);
-            if (details != null && !details.isEmpty()) {
-                vars.put("details", details); // bloque etiqueta/valor con el resumen (pedido/reembolso)
+            vars.put("title", notice.title());
+            // nombre del icono FontAwesome (PNG inline por CID); null = sin icono
+            vars.put("icon", notice.icon());
+            vars.put("bodyHtml", notice.bodyHtml());
+            if (notice.details() != null && !notice.details().isEmpty()) {
+                vars.put("details", notice.details()); // bloque etiqueta/valor con el resumen (pedido/reembolso)
             }
-            vars.put("preheader", title);
-            vars.put("ctaUrl", baseUrl + "/orders/" + o.getId());
-            vars.put("ctaLabel", ctaLabel);
+            vars.put("preheader", notice.title());
+            vars.put("ctaUrl", baseUrl + ORDERS + o.getId());
+            vars.put("ctaLabel", notice.ctaLabel());
             vars.put("footer", "NX036 Dropshipping");
-            vars.put("footerNote", OrderEmailLabel.AUTO_NOTE.of(lang)); // pie en el idioma del usuario
-            emailQueue.enqueue(email, title, "emails/notification", vars);
+            vars.put("footerNote", OrderEmailLabel.AUTO_NOTE.of(notice.lang())); // pie en el idioma del usuario
+            emailQueue.enqueue(email, notice.title(), "emails/notification", vars);
         } catch (RuntimeException e) {
-            log.warn("order email '{}' failed for {}: {}", title, o.getOrderNumber(), e.getMessage());
+            log.warn("order email '{}' failed for {}: {}", notice.title(), o.getOrderNumber(), e.getMessage());
         }
     }
 

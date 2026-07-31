@@ -1,5 +1,8 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import java.util.Locale;
+import com.nexaplatform.dropshipping.domain.model.CustomerSubscription;
+import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.usecase.SourcingUseCase;
@@ -10,6 +13,7 @@ import com.nexaplatform.dropshipping.domain.repository.SourcingAgentRepository;
 import com.nexaplatform.dropshipping.domain.repository.SourcingQuoteRepository;
 import com.nexaplatform.dropshipping.domain.repository.SourcingRequestRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +22,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Sourcing use case: orchestrates sourcing requests, the agents marketplace and
@@ -26,13 +32,18 @@ import java.util.UUID;
  * SourcingService} (and originally in {@code SourcingController}), preserving its
  * behavior, exception messages and per-user ownership checks.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SourcingUseCaseImpl implements SourcingUseCase {
 
+    /** Código de mercado de Amazon: se repite en la detección, el patrón y la normalización del ASIN. */
+    private static final String SRC_AMAZON = "amazon";
+
     private final SourcingRequestRepository sourcingRequestRepository;
     private final SourcingQuoteRepository sourcingQuoteRepository;
     private final SourcingAgentRepository sourcingAgentRepository;
+    private final CustomerSubscriptionUseCase customerSubscriptionUseCase;
 
     /* ---------- requests ---------- */
 
@@ -49,7 +60,10 @@ public class SourcingUseCaseImpl implements SourcingUseCase {
         // Plan quota — DROP-36: Free 0/5, Plus 30, Prime 60 per 30-day window.
         long used = sourcingRequestRepository.countByUserIdAndCreatedAtAfter(userId,
                 Instant.now().minus(30, ChronoUnit.DAYS));
-        String plan = "FREE"; // simplified: tied to subscription, default FREE=5
+        // El plan estaba CABLEADO a "FREE", así que las ramas PLUS y PRIME eran código muerto y todos
+        // los clientes —incluidos los de pago— recibían la cuota gratuita de 5. Ahora sale de la
+        // suscripción vigente; sin suscripción activa se aplica la gratuita, que es lo correcto.
+        String plan = currentPlanCode(userId);
         int quota = switch (plan) {
             case "PLUS" -> 30;
             case "PRIME" -> 60;
@@ -66,7 +80,6 @@ public class SourcingUseCaseImpl implements SourcingUseCase {
         }
         // Detect source from URL.
         String src = null;
-        String ext = null;
         if (low.contains("1688.com"))
             src = "1688";
         else if (low.contains("taobao.com"))
@@ -76,14 +89,14 @@ public class SourcingUseCaseImpl implements SourcingUseCase {
         else if (low.contains("ebay.com"))
             src = "ebay";
         else if (low.contains("amazon."))
-            src = "amazon";
+            src = SRC_AMAZON;
         if (src == null) {
             throw new BusinessException(
                     "Marketplace no soportado. Usa 1688, Taobao, AliExpress, eBay o Amazon.");
         }
 
         SourcingRequest model = SourcingRequest.builder().userId(userId).sourceUrl(url.trim()).source(src)
-                .externalId(ext)
+                .externalId(externalIdFrom(src, url.trim()))
                 .status("PENDING").titleHint(titleHint).notes(notes).planQuota(plan).build();
         return withQuotesCount(sourcingRequestRepository.save(model));
     }
@@ -202,5 +215,56 @@ public class SourcingUseCaseImpl implements SourcingUseCase {
         long count = sourcingQuoteRepository.findByRequestIdOrderByPriceUsdCentsAsc(r.getId()).size();
         r.setQuotesCount(count);
         return r;
+    }
+
+    /**
+     * Código del plan vigente del usuario, o {@code "FREE"} si no tiene ninguno activo. Un fallo
+     * consultando la suscripción no puede impedir pedir sourcing: se degrada a la cuota gratuita.
+     */
+    private String currentPlanCode(UUID userId) {
+        try {
+            CustomerSubscription sub = customerSubscriptionUseCase.currentSubscription(userId);
+            return sub != null && sub.getPlanCode() != null ? sub.getPlanCode().toUpperCase(Locale.ROOT) : "FREE";
+        } catch (RuntimeException e) {
+            log.warn("No se pudo resolver el plan de {} para la cuota de sourcing: {}", userId, e.getMessage());
+            return "FREE";
+        }
+    }
+
+    /** Identificador del producto dentro de la URL de cada mercado (la URL llega tal cual la pegó el usuario). */
+    private static final Pattern OFFER_1688 = Pattern.compile("/offer/(\\d+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern ITEM_ID_QUERY = Pattern.compile("[?&]id=(\\d+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern ITEM_ALIEXPRESS = Pattern.compile("/item/(?:[^/]*?-)?(\\d+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern ITEM_EBAY = Pattern.compile("/itm/(?:[^/]+/)?(\\d+)", Pattern.CASE_INSENSITIVE);
+    // El patrón ya es CASE_INSENSITIVE, así que "A-Z" dentro de la clase sobraba (java:S5869).
+    private static final Pattern ASIN_AMAZON = Pattern.compile("/(?:dp|gp/product)/([a-z0-9]{10})",
+            Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Referencia del producto dentro de la URL, para poder reconocer dos peticiones sobre el mismo
+     * artículo. Antes se guardaba una variable que nunca se asignaba, así que el campo llegaba
+     * siempre vacío a la base de datos y la referencia se perdía.
+     *
+     * @return el identificador, o {@code null} si esa URL no lo lleva (sigue siendo una petición válida:
+     *         el equipo de compras trabaja con la URL).
+     */
+    private String externalIdFrom(String source, String url) {
+        Pattern pattern = switch (source) {
+            case "1688" -> OFFER_1688;
+            case "taobao" -> ITEM_ID_QUERY;
+            case "aliexpress" -> ITEM_ALIEXPRESS;
+            case "ebay" -> ITEM_EBAY;
+            case SRC_AMAZON -> ASIN_AMAZON;
+            default -> null;
+        };
+        if (pattern == null) {
+            return null;
+        }
+        Matcher m = pattern.matcher(url);
+        if (!m.find()) {
+            return null;
+        }
+        // El ASIN de Amazon es canónicamente en mayúsculas; los demás mercados usan identificadores numéricos.
+        return SRC_AMAZON.equals(source) ? m.group(1).toUpperCase(Locale.ROOT) : m.group(1);
     }
 }

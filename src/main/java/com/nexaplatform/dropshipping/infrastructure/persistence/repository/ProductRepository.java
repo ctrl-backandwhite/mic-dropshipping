@@ -135,6 +135,10 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
                                 AND (LOWER(a.attrValue) LIKE CONCAT('%', CAST(:needle AS string), '%')
                                      OR LOWER(a.attrKey) LIKE CONCAT('%', CAST(:needle AS string), '%'))))
             """)
+    // Un parámetro por filtro es una exigencia de Spring Data: cada :nombre de la consulta se enlaza con un
+    // argumento del método. Agruparlos en un record obligaría a reescribir la consulta con expresiones SpEL
+    // y a tocar el binding de nulos (los CAST de arriba), que es justo lo que rompía la búsqueda en DROP-556.
+    @SuppressWarnings("java:S107")
     Page<ProductEntity> searchStorefront(@Param("status") ProductStatus status, @Param("needle") String needle,
             @Param("categoryId") UUID categoryId, @Param("supplierId") UUID supplierId,
             @Param("minPrice") BigDecimal minPrice, @Param("maxPrice") BigDecimal maxPrice,

@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.search;
 
+import com.nexaplatform.dropshipping.application.service.Texts;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +30,15 @@ import java.util.UUID;
 @Slf4j
 @Service
 public class SupplierSearchService {
+    /** Tope de resultados por página: por encima, la consulta la paga el índice sin que nadie la lea. */
+    private static final int MAX_PAGE_SIZE = 100;
+    /**
+     * Tope de desplazamiento. OpenSearch rechaza from+size por encima de index.max_result_window
+     * (10.000 por defecto), así que pedir la página un millón devolvía un error del índice y una caída
+     * silenciosa a base de datos en vez de una página vacía.
+     */
+    private static final int MAX_FROM = 10_000;
+
 
     /** Max suppliers pulled from the index in one shot (the catalog has at most a few thousand). */
     private static final int MAX = 10_000;
@@ -41,9 +51,10 @@ public class SupplierSearchService {
             @Value("${nexadrop.opensearch.uris:http://localhost:9400}") String uris,
             @Value("${nexadrop.opensearch.suppliers-index:suppliers}") String index) {
         this.objectMapper = objectMapper;
-        String base = uris.split(",")[0].trim().replaceAll("/+$", "");
-        this.searchUrl = base + "/" + index + "/_search";
+        // Sólo el primer nodo de la lista: este cliente no hace balanceo, apunta a uno.
+        this.searchUrl = Texts.stripTrailingSlashes(uris.split(",")[0].trim()) + "/" + index + "/_search";
     }
+
 
     /** A flattened supplier row read from the OpenSearch index (everything the listing needs). */
     public record IndexedSupplier(UUID id, String externalId, String name, String nameZh, String country, String city,
@@ -75,8 +86,12 @@ public class SupplierSearchService {
             }
             String query = must.isEmpty() ? "{\"match_all\":{}}"
                     : "{\"bool\":{\"must\":[" + String.join(",", must) + "]}}";
-            int from = Math.max(0, page) * size;
-            String body = "{\"track_total_hits\":true,\"from\":" + from + ",\"size\":" + size + ",\"query\":" + query
+            // page y size llegan del cliente: se acotan los DOS. Con size=0 salía una página vacía con
+            // total>0 (el listado parecía roto) y un page enorme desbordaba el int hasta un from negativo,
+            // que OpenSearch rechaza con 400 y aquí acababa en caída a base de datos.
+            int pageSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
+            int from = (int) Math.min((long) Math.max(0, page) * pageSize, MAX_FROM);
+            String body = "{\"track_total_hits\":true,\"from\":" + from + ",\"size\":" + pageSize + ",\"query\":" + query
                     + ",\"sort\":[{\"createdAt\":{\"order\":\"desc\"}}]}";
             HttpRequest req = HttpRequest.newBuilder(URI.create(searchUrl)).timeout(Duration.ofSeconds(10))
                     .header("Content-Type", "application/json")
@@ -101,6 +116,11 @@ public class SupplierSearchService {
             }
             return Optional.of(new IndexedPage(rows, total));
         } catch (Exception e) {
+            // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
+            // interrupción deja al pool sin enterarse de que le han pedido parar.
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             log.warn("Supplier index page read failed, falling back to DB: {}", e.getMessage());
             return Optional.empty();
         }
@@ -142,6 +162,11 @@ public class SupplierSearchService {
             rows.sort(Comparator.comparing(r -> r.name() == null ? "" : r.name(), String.CASE_INSENSITIVE_ORDER));
             return rows.isEmpty() ? Optional.empty() : Optional.of(rows);
         } catch (Exception e) {
+            // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
+            // interrupción deja al pool sin enterarse de que le han pedido parar.
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             log.warn("Supplier index read failed, falling back to DB: {}", e.getMessage());
             return Optional.empty();
         }

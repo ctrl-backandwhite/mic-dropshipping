@@ -65,13 +65,13 @@ public class EmailQueueService {
 
     @Transactional
     public OutboundEmailEntity enqueue(String to, String subject, String template, Map<String, Object> vars) {
-        return enqueue(to, null, subject, template, vars);
+        return doEnqueue(to, null, subject, template, vars, Map.of());
     }
 
     @Transactional
     public OutboundEmailEntity enqueue(String to, String replyTo, String subject, String template,
             Map<String, Object> vars) {
-        return enqueue(to, replyTo, subject, template, vars, Map.of());
+        return doEnqueue(to, replyTo, subject, template, vars, Map.of());
     }
 
     /**
@@ -83,6 +83,17 @@ public class EmailQueueService {
      */
     @Transactional
     public OutboundEmailEntity enqueue(String to, String replyTo, String subject, String template,
+            Map<String, Object> vars, Map<String, String> inlineImages) {
+        return doEnqueue(to, replyTo, subject, template, vars, inlineImages);
+    }
+
+    /**
+     * Cuerpo compartido por las tres sobrecargas. Encadenarlas con {@code this} dejaba el
+     * {@code @Transactional} de las variantes cortas sin efecto (el proxy de Spring no intercepta la
+     * autoinvocación); ahora la transacción se abre en la sobrecarga por la que se entra y aquí solo
+     * se escribe.
+     */
+    private OutboundEmailEntity doEnqueue(String to, String replyTo, String subject, String template,
             Map<String, Object> vars, Map<String, String> inlineImages) {
         Context ctx = new Context();
         vars.forEach(ctx::setVariable);
@@ -120,6 +131,9 @@ public class EmailQueueService {
         }
     }
 
+    /** Intentos de envío antes de rendirse. Un fallo de SMTP suele ser pasajero. */
+    private static final int MAX_SEND_ATTEMPTS = 5;
+
     @Scheduled(fixedDelay = 15_000)
     @Transactional
     public void dispatchPending() {
@@ -155,10 +169,20 @@ public class EmailQueueService {
                 email.setStatus("SENT");
                 email.setSentAt(Instant.now());
             } catch (Exception e) {
-                email.setStatus("FAILED");
-                email.setAttemptCount(email.getAttemptCount() + 1);
+                // El barrido sólo lee PENDING, así que marcar FAILED al primer tropiezo era rendirse
+                // para siempre: attemptCount no pasaba nunca de 1 y ningún correo fallido volvía a
+                // salir. Un SMTP que no responde suele estar de vuelta al minuto siguiente, así que la
+                // fila se queda PENDING hasta agotar los intentos y sólo entonces pasa a FAILED.
+                int attempts = email.getAttemptCount() + 1;
+                email.setAttemptCount(attempts);
                 email.setErrorMessage(e.getMessage());
-                log.warn("Email {} send failed: {}", email.getId(), e.getMessage());
+                if (attempts >= MAX_SEND_ATTEMPTS) {
+                    email.setStatus("FAILED");
+                    log.error("Email {} descartado tras {} intentos: {}", email.getId(), attempts, e.getMessage());
+                } else {
+                    log.warn("Email {} falló (intento {}/{}): {}", email.getId(), attempts, MAX_SEND_ATTEMPTS,
+                            e.getMessage());
+                }
             }
             repo.save(email);
         }

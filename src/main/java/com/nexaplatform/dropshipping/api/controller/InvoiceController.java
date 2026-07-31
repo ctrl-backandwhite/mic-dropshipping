@@ -8,6 +8,7 @@ import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.User;
 import com.nexaplatform.dropshipping.domain.repository.UserRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PaymentJpaRepositoryAdapter;
+import com.stripe.exception.StripeException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -64,7 +65,7 @@ public class InvoiceController {
     @Operation(summary = "Descargar la factura (PDF) de un plan del usuario autenticado (mismo diseño que pedidos)")
     @GetMapping("/api/me/billing/invoices/{number}/invoice.pdf")
     public ResponseEntity<byte[]> myPlanInvoice(Authentication auth, @PathVariable String number,
-            @RequestParam(required = false) String lang) throws Exception {
+            @RequestParam(required = false) String lang) throws StripeException {
         UUID userId = UUID.fromString(auth.getName());
         String resolved = resolveLang(lang, userId);
         byte[] bytes = customerSubscriptionUseCase.renderInvoicePdf(userId, number, resolved);

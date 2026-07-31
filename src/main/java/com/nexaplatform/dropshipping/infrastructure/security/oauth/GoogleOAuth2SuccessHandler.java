@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.security.oauth;
 
+import com.nexaplatform.dropshipping.application.service.Texts;
 import com.nexaplatform.dropshipping.application.usecase.GoogleLoginOutcome;
 import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
 import com.nexaplatform.dropshipping.domain.model.User;
@@ -40,8 +41,9 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
     public GoogleOAuth2SuccessHandler(UserUseCase userUseCase, UserTokenService userTokenService, String frontBaseUrl) {
         this.userUseCase = userUseCase;
         this.userTokenService = userTokenService;
-        this.frontBaseUrl = frontBaseUrl == null ? "" : frontBaseUrl.replaceAll("/+$", "");
+        this.frontBaseUrl = frontBaseUrl == null ? "" : Texts.stripTrailingSlashes(frontBaseUrl);
     }
+
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,

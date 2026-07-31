@@ -5,7 +5,6 @@ import com.nexaplatform.dropshipping.api.dto.out.PartnerApiKeyCreatedDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.PartnerApiKeyDtoOut;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -35,8 +34,8 @@ public interface PartnerApiKeysApi {
             The JWT issued with these credentials will carry a `plan` claim that mirrors
             the user's active subscription (FREE→sandbox, STARTER/PRO/ENTERPRISE→paid).
             """)
-    @ApiResponses({@ApiResponse(responseCode = "201", description = "Credentials created"),
-            @ApiResponse(responseCode = "400", description = "Invalid scopes or quota exceeded")})
+    @ApiResponse(responseCode = "201", description = "Credentials created")
+    @ApiResponse(responseCode = "400", description = "Invalid scopes or quota exceeded")
     @PostMapping
     ResponseEntity<PartnerApiKeyCreatedDtoOut> create(Authentication auth,
             @Valid @RequestBody PartnerApiKeyCreateDtoIn req);

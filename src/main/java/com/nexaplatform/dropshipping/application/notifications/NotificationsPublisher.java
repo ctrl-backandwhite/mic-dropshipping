@@ -31,6 +31,10 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class NotificationsPublisher {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String ORDERNUMBER = "orderNumber";
+    private static final String ORDER = "Order";
+
     private final EventPublisher events;
 
     /* ============== Órdenes ============== */
@@ -39,27 +43,27 @@ public class NotificationsPublisher {
     public void orderPlaced(UUID userId, String userEmail, String orderNumber, String displayTotal, String currency,
             String locale) {
         Map<String, Object> body = base("ORDER_PLACED", userId, userEmail, locale);
-        body.put("orderNumber", orderNumber);
+        body.put(ORDERNUMBER, orderNumber);
         body.put("totalDisplay", displayTotal);
         body.put("currency", currency);
-        events.publish(NexaTopics.NOTIFICATIONS_ORDER_PLACED, "Order", orderNumber, userId.toString(), body);
+        events.publish(NexaTopics.NOTIFICATIONS_ORDER_PLACED, ORDER, orderNumber, keyOf(userId, userEmail), body);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void orderShipped(UUID userId, String userEmail, String orderNumber, String carrier, String trackingNumber,
             String locale) {
         Map<String, Object> body = base("ORDER_SHIPPED", userId, userEmail, locale);
-        body.put("orderNumber", orderNumber);
+        body.put(ORDERNUMBER, orderNumber);
         body.put("carrier", carrier);
         body.put("trackingNumber", trackingNumber);
-        events.publish(NexaTopics.NOTIFICATIONS_ORDER_SHIPPED, "Order", orderNumber, userId.toString(), body);
+        events.publish(NexaTopics.NOTIFICATIONS_ORDER_SHIPPED, ORDER, orderNumber, keyOf(userId, userEmail), body);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void orderDelivered(UUID userId, String userEmail, String orderNumber, String locale) {
         Map<String, Object> body = base("ORDER_DELIVERED", userId, userEmail, locale);
-        body.put("orderNumber", orderNumber);
-        events.publish(NexaTopics.NOTIFICATIONS_ORDER_DELIVERED, "Order", orderNumber, userId.toString(), body);
+        body.put(ORDERNUMBER, orderNumber);
+        events.publish(NexaTopics.NOTIFICATIONS_ORDER_DELIVERED, ORDER, orderNumber, keyOf(userId, userEmail), body);
     }
 
     /* ============== Wallet ============== */
@@ -69,15 +73,17 @@ public class NotificationsPublisher {
         Map<String, Object> body = base("WALLET_RECHARGED", userId, userEmail, locale);
         body.put("amountUsdCents", amountUsdCents);
         body.put("method", method);
-        events.publish(NexaTopics.NOTIFICATIONS_WALLET_RECHARGED, "Wallet", userId.toString(), userId.toString(), body);
+        events.publish(NexaTopics.NOTIFICATIONS_WALLET_RECHARGED, "Wallet", keyOf(userId, userEmail),
+                keyOf(userId, userEmail), body);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void walletCharged(UUID userId, String userEmail, long amountUsdCents, String orderNumber, String locale) {
         Map<String, Object> body = base("WALLET_CHARGED", userId, userEmail, locale);
         body.put("amountUsdCents", amountUsdCents);
-        body.put("orderNumber", orderNumber);
-        events.publish(NexaTopics.NOTIFICATIONS_WALLET_CHARGED, "Wallet", userId.toString(), userId.toString(), body);
+        body.put(ORDERNUMBER, orderNumber);
+        events.publish(NexaTopics.NOTIFICATIONS_WALLET_CHARGED, "Wallet", keyOf(userId, userEmail),
+                keyOf(userId, userEmail), body);
     }
 
     /* ============== Auth ============== */
@@ -116,5 +122,14 @@ public class NotificationsPublisher {
         body.put("emittedAt", Instant.now().toString());
         body.put("source", "nx036-dropshipping");
         return body;
+    }
+
+    /**
+     * Clave de partición del evento. El identificador de usuario puede faltar (compra de invitado,
+     * operación disparada por el sistema); en ese caso se usa el correo, como ya hacían las
+     * notificaciones de autenticación. Antes se llamaba a toString() sin más y reventaba con NPE.
+     */
+    private static String keyOf(UUID userId, String userEmail) {
+        return userId != null ? userId.toString() : userEmail;
     }
 }

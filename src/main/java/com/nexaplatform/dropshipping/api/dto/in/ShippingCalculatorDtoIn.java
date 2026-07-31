@@ -29,7 +29,10 @@ public class ShippingCalculatorDtoIn {
 
     /** Effective quantity, preferring {@code quantity}, then {@code qty}, min 1. */
     public int effectiveQty() {
-        int q = quantity != null ? quantity : (qty != null ? qty : 1);
-        return Math.max(1, q);
+        // El cliente puede mandar el campo con cualquiera de los dos nombres; manda el explícito.
+        if (quantity != null) {
+            return Math.max(1, quantity);
+        }
+        return qty != null ? Math.max(1, qty) : 1;
     }
 }

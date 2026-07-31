@@ -42,6 +42,15 @@ public class SubscriptionPlanUseCaseImpl implements SubscriptionPlanUseCase {
     @Override
     @Transactional(readOnly = true)
     public SubscriptionPlan getById(UUID id) {
+        return requireById(id);
+    }
+
+    /**
+     * Carga el plan o lanza 404. Sin anotar a propósito: es la que usan {@code update} y {@code delete}.
+     * Llamar al método público desde dentro se salta el proxy de Spring y su {@code @Transactional} no
+     * llegaría a aplicarse (java:S6809); la anotación queda solo en el punto de entrada.
+     */
+    private SubscriptionPlan requireById(UUID id) {
         SubscriptionPlan model = subscriptionPlanRepository.getById(id);
         if (Objects.isNull(model)) {
             throw new NotFoundException("Subscription plan not found: " + id);
@@ -52,7 +61,7 @@ public class SubscriptionPlanUseCaseImpl implements SubscriptionPlanUseCase {
     @Override
     @Transactional
     public SubscriptionPlan update(SubscriptionPlan model, UUID id) {
-        SubscriptionPlan existing = getById(id);
+        SubscriptionPlan existing = requireById(id);
         subscriptionPlanUpdateMapper.updateFromModel(model, existing);
         log.debug("::> [BILLING] Updating plan id={}", id);
         return subscriptionPlanRepository.update(existing);
@@ -61,7 +70,7 @@ public class SubscriptionPlanUseCaseImpl implements SubscriptionPlanUseCase {
     @Override
     @Transactional
     public void delete(UUID id) {
-        getById(id);
+        requireById(id);
         log.debug("::> [BILLING] Deleting plan id={}", id);
         subscriptionPlanRepository.delete(id);
     }

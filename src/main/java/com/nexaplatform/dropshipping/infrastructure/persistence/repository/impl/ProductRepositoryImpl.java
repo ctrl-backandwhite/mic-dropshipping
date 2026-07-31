@@ -28,7 +28,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -137,15 +136,6 @@ public class ProductRepositoryImpl implements ProductRepository {
         return productEntityMapper.toDomainList(productJpaRepositoryAdapter.findAllById(ids));
     }
 
-    @Override
-    public Page<Product> searchStorefront(ProductStatus status, String needle, UUID categoryId, UUID supplierId,
-            BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping, Boolean selfPickup,
-            Boolean hasVideo, BigDecimal minRating, Integer minInv, Pageable pageable) {
-        return productJpaRepositoryAdapter.searchStorefront(status, needle, categoryId, supplierId, minPrice, maxPrice,
-                shipFrom, freeShipping, selfPickup, hasVideo, minRating, minInv, pageable)
-                .map(productEntityMapper::toDomain);
-    }
-
     /* ------------------ persistence-only helpers ------------------ */
 
     /** Maps the entity to domain and attaches the price-tier ladder from its own table. */
@@ -174,12 +164,16 @@ public class ProductRepositoryImpl implements ProductRepository {
         // variantOptions, translations) se resuelven abajo porque requieren
         // lookups de repositorio o reconstrucción de sub-entidades.
         productEntityMapper.updateEntity(entity, model);
+        // Un id que no existe es un error de datos, no «sin relación»: con orElse(null) el producto se
+        // guardaba sin proveedor ni categoría y quedaba fuera del escaparate sin que nadie se enterara.
         entity.setSupplier(model.getSupplierId() == null
                 ? null
-                : supplierJpaRepositoryAdapter.findById(model.getSupplierId()).orElse(null));
+                : supplierJpaRepositoryAdapter.findById(model.getSupplierId())
+                        .orElseThrow(() -> new NotFoundException("Supplier")));
         entity.setCategory(model.getCategoryId() == null
                 ? null
-                : categoryJpaRepositoryAdapter.findById(model.getCategoryId()).orElse(null));
+                : categoryJpaRepositoryAdapter.findById(model.getCategoryId())
+                        .orElseThrow(() -> new NotFoundException("Category")));
         rebuildImages(entity, model);
         rebuildVariantOptions(entity, model);
         rebuildVariants(entity, model);

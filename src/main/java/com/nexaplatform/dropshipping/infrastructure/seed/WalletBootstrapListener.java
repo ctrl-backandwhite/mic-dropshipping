@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.seed;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +23,7 @@ public class WalletBootstrapListener {
     @Transactional
     public void ensureWallets(ApplicationReadyEvent event) {
         int created = 0;
-        for (var u : userRepository.findAll()) {
+        for (UserEntity u : userRepository.findAll()) {
             try {
                 walletUseCase.getOrCreate(u.getId());
                 created++;

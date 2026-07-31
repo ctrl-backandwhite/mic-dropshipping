@@ -51,6 +51,12 @@ import java.util.List;
 @RequiredArgsConstructor
 public class StripeService {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String SUBSCRIPTION = "subscription";
+    private static final String PLAN_CODE = "plan_code";
+    private static final String PLATFORM = "platform";
+    private static final String PURPOSE = "purpose";
+
     @Value("${nexadrop.stripe.enabled:false}")
     private boolean enabled;
 
@@ -76,7 +82,14 @@ public class StripeService {
     @Value("${nexadrop.stripe.platform-env:dev}")
     private String platformEnv;
 
+    /**
+     * {@code Stripe.apiKey} es un campo ESTÁTICO GLOBAL del SDK de Stripe: no hay forma de configurar la
+     * clave por instancia. Se escribe desde aquí porque este es el único punto donde ya está resuelta la
+     * configuración del entorno (@Value) y antes de que se atienda ninguna petición. De ahí la excepción
+     * a java:S2696 ("no escribir campos estáticos desde un método de instancia").
+     */
     @PostConstruct
+    @SuppressWarnings("java:S2696")
     public void init() {
         if (enabled && secretKey != null && !secretKey.isBlank()) {
             Stripe.apiKey = secretKey;
@@ -104,11 +117,11 @@ public class StripeService {
                 .setSuccessUrl(successUrl + "?session_id={CHECKOUT_SESSION_ID}").setCancelUrl(cancelUrl)
                 .setCustomerEmail(customerEmail)
                 .addLineItem(SessionCreateParams.LineItem.builder().setPrice(stripePriceId).setQuantity(1L).build())
-                .putMetadata("platform", platformId).putMetadata("env", platformEnv)
-                .putMetadata("purpose", "subscription")
+                .putMetadata(PLATFORM, platformId).putMetadata("env", platformEnv)
+                .putMetadata(PURPOSE, SUBSCRIPTION)
                 .setSubscriptionData(SessionCreateParams.SubscriptionData.builder()
-                        .putMetadata("platform", platformId).putMetadata("env", platformEnv)
-                        .putMetadata("purpose", "subscription").build())
+                        .putMetadata(PLATFORM, platformId).putMetadata("env", platformEnv)
+                        .putMetadata(PURPOSE, SUBSCRIPTION).build())
                 .build();
         return Session.create(params);
     }
@@ -124,7 +137,7 @@ public class StripeService {
             return Customer.retrieve(existingCustomerId);
         }
         CustomerCreateParams params = CustomerCreateParams.builder().setEmail(email)
-                .putMetadata("platform", platformId).putMetadata("env", platformEnv)
+                .putMetadata(PLATFORM, platformId).putMetadata("env", platformEnv)
                 .putMetadata("user_id", userId).build();
         return Customer.create(params);
     }
@@ -132,7 +145,7 @@ public class StripeService {
     /** Crea un SetupIntent para guardar una tarjeta con Stripe Elements; devuelve su client_secret. */
     public SetupIntent createSetupIntent(String customerId) throws StripeException {
         SetupIntentCreateParams params = SetupIntentCreateParams.builder().setCustomer(customerId)
-                .addPaymentMethodType("card").putMetadata("platform", platformId)
+                .addPaymentMethodType("card").putMetadata(PLATFORM, platformId)
                 .putMetadata("env", platformEnv).build();
         return SetupIntent.create(params);
     }
@@ -202,7 +215,7 @@ public class StripeService {
                 .setLookupKey(key).setTransferLookupKey(true)
                 .setRecurring(PriceCreateParams.Recurring.builder().setInterval(interval).build())
                 .setProductData(PriceCreateParams.ProductData.builder().setName(planName + " — " + period).build())
-                .putMetadata("platform", platformId).putMetadata("plan_code", planCode).build();
+                .putMetadata(PLATFORM, platformId).putMetadata(PLAN_CODE, planCode).build();
         return Price.create(params).getId();
     }
 
@@ -224,7 +237,7 @@ public class StripeService {
         TaxRateCreateParams.Builder b = TaxRateCreateParams.builder()
                 .setDisplayName("IVA" + (country != null && !country.isBlank() ? " " + country.toUpperCase() : ""))
                 .setPercentage(BigDecimal.valueOf(bps).movePointLeft(2)).setInclusive(false)
-                .putMetadata("nx_tag", tag).putMetadata("platform", platformId);
+                .putMetadata("nx_tag", tag).putMetadata(PLATFORM, platformId);
         if (country != null && country.trim().length() == 2) {
             b.setCountry(country.trim().toUpperCase());
         }
@@ -243,8 +256,8 @@ public class StripeService {
                 .addItem(SubscriptionCreateParams.Item.builder().setPrice(priceId).build())
                 .setProrationBehavior(SubscriptionCreateParams.ProrationBehavior.CREATE_PRORATIONS)
                 .setPaymentBehavior(SubscriptionCreateParams.PaymentBehavior.ERROR_IF_INCOMPLETE)
-                .putMetadata("platform", platformId).putMetadata("env", platformEnv)
-                .putMetadata("purpose", "subscription").putMetadata("plan_code", planCode)
+                .putMetadata(PLATFORM, platformId).putMetadata("env", platformEnv)
+                .putMetadata(PURPOSE, SUBSCRIPTION).putMetadata(PLAN_CODE, planCode)
                 .putMetadata("user_id", userId).putMetadata("subscription_id", localSubscriptionId);
         if (defaultPaymentMethodId != null && !defaultPaymentMethodId.isBlank()) {
             b.setDefaultPaymentMethod(defaultPaymentMethodId);
@@ -263,7 +276,7 @@ public class StripeService {
         return toResult(sub.update(SubscriptionUpdateParams.builder()
                 .addItem(SubscriptionUpdateParams.Item.builder().setId(itemId).setPrice(newPriceId).build())
                 .setProrationBehavior(SubscriptionUpdateParams.ProrationBehavior.CREATE_PRORATIONS)
-                .putMetadata("plan_code", planCode).build()));
+                .putMetadata(PLAN_CODE, planCode).build()));
     }
 
     /** Cancela una suscripción: al final del periodo (atPeriodEnd=true) o de inmediato. */

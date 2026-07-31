@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.infrastructure.security.jwk;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.JwkKeyEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.JwkKeyRepository;
 import com.nexaplatform.dropshipping.infrastructure.security.crypto.TokenCryptoService;
+import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.JWKSource;
@@ -25,7 +26,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -96,9 +96,9 @@ public class JwkKeyService {
     }
 
     public JWKSet loadJwkSet() {
-        List<RSAKey> keys = jwkKeyRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toRsaKey)
-                .collect(Collectors.toList());
-        return new JWKSet(keys.stream().map(k -> (com.nimbusds.jose.jwk.JWK) k).toList());
+        List<JWK> keys = jwkKeyRepository.findAllByOrderByCreatedAtDesc().stream()
+                .map(entity -> (JWK) toRsaKey(entity)).toList();
+        return new JWKSet(keys);
     }
 
     private RSAKey toRsaKey(JwkKeyEntity entity) {

@@ -1,6 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.campaign;
 
-import com.nexaplatform.dropshipping.api.controller.StorefrontCatalogController.CategoryView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
 import com.nexaplatform.dropshipping.domain.enums.NewProductsEmailLabel;
@@ -38,8 +38,17 @@ import java.util.UUID;
 @Service
 public class NewProductsCampaignService {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String TITLE = "title";
+
     private static final Logger log = LoggerFactory.getLogger(NewProductsCampaignService.class);
     private static final String TEMPLATE = "emails/new-products";
+    /**
+     * Plantilla del envío de PRUEBA. Es la misma pieza con otro nombre porque la campaña se deduplica
+     * por (destinatario, plantilla, día): mandar la prueba con el nombre real dejaba al destinatario
+     * marcado como «ya recibido» y el barrido de ese día se lo saltaba.
+     */
+    private static final String TEMPLATE_TEST = "emails/new-products-test";
     private static final int PRODUCTS_PER_CATEGORY = 3;
 
     private final ProductRepository productRepository;
@@ -100,27 +109,9 @@ public class NewProductsCampaignService {
         Map<String, List<Map<String, Object>>> categoriesByLang = new HashMap<>();
         int sent = 0;
         for (UserEntity user : audience) {
-            if (outboundEmailRepository.existsByToAddressAndTemplateAndCreatedAtGreaterThanEqual(
-                    user.getEmail(), TEMPLATE, since)) {
-                continue;
+            if (enqueueIfDue(user, since, ctaUrl, categoryIds, categoriesByLang)) {
+                sent++;
             }
-            String lang = normalizeLang(user.getLanguage());
-            List<Map<String, Object>> categories = categoriesByLang.computeIfAbsent(lang,
-                    l -> buildCategories(categoryIds, l));
-            if (categories.isEmpty()) {
-                continue;
-            }
-            Map<String, Object> vars = new HashMap<>();
-            vars.put("title", NewProductsEmailLabel.TITLE.of(lang));
-            vars.put("intro", NewProductsEmailLabel.INTRO.of(lang));
-            vars.put("categories", categories);
-            vars.put("ctaUrl", ctaUrl);
-            vars.put("ctaLabel", NewProductsEmailLabel.CTA.of(lang));
-            vars.put("footerNote", NewProductsEmailLabel.FOOTER.of(lang));
-            vars.put("unsubscribeUrl", unsubscribeUrl(user.getId(), lang));
-            vars.put("unsubscribeLabel", NewProductsEmailLabel.UNSUBSCRIBE.of(lang));
-            emailQueue.enqueue(user.getEmail(), NewProductsEmailLabel.SUBJECT.of(lang), TEMPLATE, vars);
-            sent++;
         }
         if (sent > 0) {
             log.info("New-products campaign: {} emails enqueued (countries={}, categories={})", sent, countries,
@@ -150,7 +141,7 @@ public class NewProductsCampaignService {
                 .map(u -> unsubscribeUrl(u.getId(), language))
                 .orElse(storefrontBaseUrl + "/account/email-preferences");
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", NewProductsEmailLabel.TITLE.of(language));
+        vars.put(TITLE, NewProductsEmailLabel.TITLE.of(language));
         vars.put("intro", NewProductsEmailLabel.INTRO.of(language));
         vars.put("categories", categories);
         vars.put("ctaUrl", storefrontBaseUrl + "/catalog?sort=newest");
@@ -158,7 +149,41 @@ public class NewProductsCampaignService {
         vars.put("footerNote", NewProductsEmailLabel.FOOTER.of(language));
         vars.put("unsubscribeUrl", unsubscribeUrl);
         vars.put("unsubscribeLabel", NewProductsEmailLabel.UNSUBSCRIBE.of(language));
-        emailQueue.enqueue(email, NewProductsEmailLabel.SUBJECT.of(language), TEMPLATE, vars);
+        emailQueue.enqueue(email, NewProductsEmailLabel.SUBJECT.of(language), TEMPLATE_TEST, vars);
+        return true;
+    }
+
+    /**
+     * Encola la campaña para UN usuario, si le toca. No le toca cuando ya recibió esta plantilla hoy
+     * (deduplicación: como máximo un correo al día) o cuando en su idioma no hay contenido que enseñar
+     * — preferimos no enviar nada antes que un correo vacío.
+     *
+     * @param categoriesByLang caché por idioma dentro de la misma tanda: el modelo de categorías es caro
+     *        (una consulta de productos por categoría) y se repite para todos los usuarios de un idioma.
+     * @return true si el correo se encoló.
+     */
+    private boolean enqueueIfDue(UserEntity user, Instant since, String ctaUrl, List<UUID> categoryIds,
+            Map<String, List<Map<String, Object>>> categoriesByLang) {
+        if (outboundEmailRepository.existsByToAddressAndTemplateAndCreatedAtGreaterThanEqual(
+                user.getEmail(), TEMPLATE, since)) {
+            return false;
+        }
+        String lang = normalizeLang(user.getLanguage());
+        List<Map<String, Object>> categories = categoriesByLang.computeIfAbsent(lang,
+                l -> buildCategories(categoryIds, l));
+        if (categories.isEmpty()) {
+            return false;
+        }
+        Map<String, Object> vars = new HashMap<>();
+        vars.put(TITLE, NewProductsEmailLabel.TITLE.of(lang));
+        vars.put("intro", NewProductsEmailLabel.INTRO.of(lang));
+        vars.put("categories", categories);
+        vars.put("ctaUrl", ctaUrl);
+        vars.put("ctaLabel", NewProductsEmailLabel.CTA.of(lang));
+        vars.put("footerNote", NewProductsEmailLabel.FOOTER.of(lang));
+        vars.put("unsubscribeUrl", unsubscribeUrl(user.getId(), lang));
+        vars.put("unsubscribeLabel", NewProductsEmailLabel.UNSUBSCRIBE.of(lang));
+        emailQueue.enqueue(user.getEmail(), NewProductsEmailLabel.SUBJECT.of(lang), TEMPLATE, vars);
         return true;
     }
 
@@ -174,7 +199,7 @@ public class NewProductsCampaignService {
             List<Map<String, Object>> products = new ArrayList<>();
             for (ProductSummaryView p : page.items()) {
                 Map<String, Object> item = new HashMap<>();
-                item.put("title", p.title());
+                item.put(TITLE, p.title());
                 item.put("price", p.displayFormatted());
                 item.put("image", p.mainImage());
                 products.add(item);

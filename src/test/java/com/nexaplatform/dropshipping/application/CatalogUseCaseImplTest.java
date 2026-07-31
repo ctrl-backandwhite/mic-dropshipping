@@ -5,26 +5,31 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontMapper;
 import com.nexaplatform.dropshipping.api.mapper.ProductBulkExportMapper;
+import com.nexaplatform.dropshipping.application.service.CustomsProfileService;
 import com.nexaplatform.dropshipping.application.usecase.impl.CatalogUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
+import com.nexaplatform.dropshipping.infrastructure.integration.storage.ImageMirrorService;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Category1688MappingRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryAttributeSchemaRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductImageRepository;
 import com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductAttributeRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductReviewJpaRepositoryAdapter;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductSpecificationRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.VariantValueRepository;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -53,6 +58,8 @@ class CatalogUseCaseImplTest {
     SupplierRepository supplierRepository;
     @Mock
     CategoryRepository categoryRepository;
+    @Mock
+    CustomsProfileService customsProfileService;
     @Mock
     ProductPriceTierRepository priceTierRepository;
     @Mock
@@ -84,17 +91,18 @@ class CatalogUseCaseImplTest {
     @Mock
     ProductBulkExportMapper bulkExportMapper;
     @Mock
-    com.nexaplatform.dropshipping.infrastructure.integration.storage.ImageMirrorService imageMirrorService;
+    ImageMirrorService imageMirrorService;
+    @Mock
+    Category1688MappingRepository category1688MappingRepository;
+    @Mock
+    CategoryAttributeSchemaRepository categoryAttributeSchemaRepository;
+    @Mock
+    ProductReviewJpaRepositoryAdapter productReviewJpaRepositoryAdapter;
 
+    // Con @InjectMocks los colaboradores se pasan por el constructor por tipo: añadir uno nuevo al
+    // caso de uso ya no obliga a retocar esta lista de argumentos.
+    @InjectMocks
     CatalogUseCaseImpl useCase;
-
-    @BeforeEach
-    void setup() {
-        useCase = new CatalogUseCaseImpl(productRepository, supplierRepository, categoryRepository, priceTierRepository,
-                imageRepository, objectStorage, productJpaRepository, productMapper, catalogStorefrontMapper, kafkaTemplate,
-                variantRepository, productIndexer, categoryIndexer, productAttributeRepository,
-                productSpecificationRepository, variantValueRepository, jdbcTemplate, bulkExportMapper, imageMirrorService);
-    }
 
     @Test
     void upsertSupplier_creates_when_missing() {

@@ -75,7 +75,8 @@ class AcademyEnrollmentUseCaseImplTest {
         UUID id = UUID.randomUUID();
         when(academyEnrollmentRepository.getById(id)).thenReturn(null);
 
-        assertThatThrownBy(() -> useCase.updateProgress(id, Map.of("progressPct", 10)))
+        Map<String, Number> progreso = Map.of("progressPct", 10);
+        assertThatThrownBy(() -> useCase.updateProgress(id, progreso))
                 .isInstanceOf(NotFoundException.class);
     }
 }

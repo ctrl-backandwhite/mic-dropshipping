@@ -2,10 +2,6 @@ package com.nexaplatform.dropshipping.infrastructure.cache;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Bean;
@@ -14,9 +10,14 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
-import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.JacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
+import tools.jackson.databind.DefaultTyping;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 
 import java.time.Duration;
 import java.util.Map;
@@ -66,7 +67,7 @@ public class RedisCacheConfig {
 
     private RedisCacheConfiguration baseConfig(Duration ttl) {
         ObjectMapper mapper = redisObjectMapper();
-        Jackson2JsonRedisSerializer<Object> valueSerializer = new Jackson2JsonRedisSerializer<>(mapper, Object.class);
+        JacksonJsonRedisSerializer<Object> valueSerializer = new JacksonJsonRedisSerializer<>(mapper, Object.class);
         return RedisCacheConfiguration.defaultCacheConfig().entryTtl(ttl).disableCachingNullValues()
                 .computePrefixWith(name -> "nx036:cache:" + name + ":")
                 .serializeKeysWith(
@@ -74,12 +75,12 @@ public class RedisCacheConfig {
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(valueSerializer));
     }
 
-    /** ObjectMapper preparado para preservar tipos al deserializar JSON desde Redis. */
+    /**
+     * ObjectMapper preparado para preservar tipos al deserializar JSON desde Redis. Es el de Jackson 3
+     * ({@code tools.jackson}): el serializador Jackson 2 de Spring Data Redis está marcado para
+     * eliminación y el soporte de {@code java.time} ya viene integrado, así que sobra registrar módulo.
+     */
     private ObjectMapper redisObjectMapper() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.registerModule(new JavaTimeModule());
-        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        mapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
         // Default-typing controlado: imprescindible para deserializar polimórficos
         // sin abrir el vector de gadget chains.
         // ⚠️ BUG CONOCIDO (caché distribuida Redis DESACTIVADA por defecto): este typing no round-trip-ea
@@ -88,8 +89,13 @@ public class RedisCacheConfig {
         // nexadrop.cache.distributed=true hasta arreglar el serializador (p.ej. serializador por-tipo por
         // caché, o excluir del typing el campo source del hit). El Caffeine L1 (default) NO tiene este
         // problema porque guarda el objeto en memoria sin serializar a JSON.
-        mapper.activateDefaultTyping(BasicPolymorphicTypeValidator.builder().allowIfBaseType(Object.class).build(),
-                ObjectMapper.DefaultTyping.NON_FINAL);
-        return mapper;
+        return JsonMapper.builder()
+                .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .changeDefaultVisibility(vc -> vc.withVisibility(PropertyAccessor.ALL,
+                        JsonAutoDetect.Visibility.ANY))
+                .activateDefaultTyping(
+                        BasicPolymorphicTypeValidator.builder().allowIfBaseType(Object.class).build(),
+                        DefaultTyping.NON_FINAL)
+                .build();
     }
 }

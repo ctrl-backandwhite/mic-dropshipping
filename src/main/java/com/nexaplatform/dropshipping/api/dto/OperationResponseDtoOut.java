@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.With;
 
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.List;
 
@@ -35,16 +36,16 @@ public class OperationResponseDtoOut {
 
     public static OperationResponseDtoOut ok(String message) {
         return OperationResponseDtoOut.builder().code("OK").message(message).details(List.of())
-                .dateTime(ZonedDateTime.now()).build();
+                .dateTime(ZonedDateTime.now(ZoneOffset.UTC)).build();
     }
 
     public static OperationResponseDtoOut ok(String code, String message) {
         return OperationResponseDtoOut.builder().code(code).message(message).details(List.of())
-                .dateTime(ZonedDateTime.now()).build();
+                .dateTime(ZonedDateTime.now(ZoneOffset.UTC)).build();
     }
 
     public static OperationResponseDtoOut error(String code, String message, List<String> details) {
         return OperationResponseDtoOut.builder().code(code).message(message)
-                .details(details != null ? details : List.of()).dateTime(ZonedDateTime.now()).build();
+                .details(details != null ? details : List.of()).dateTime(ZonedDateTime.now(ZoneOffset.UTC)).build();
     }
 }

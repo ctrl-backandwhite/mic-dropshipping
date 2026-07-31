@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.shop;
 
+import com.nexaplatform.dropshipping.application.service.Texts;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.domain.model.ShopConnection;
@@ -52,7 +53,12 @@ public class WooCommerceConnector implements ShopConnector {
             return PushResult.fail("URL de tienda inválida: se esperaba la URL base de WordPress (https://mi-tienda.com).");
         }
         try {
-            String title = product.getTitleZh() != null ? product.getTitleZh() : product.getSlug();
+            // Map.of no admite nulos: un producto sin título NI slug reventaba con un NPE que el catch
+            // genérico convertía en «No se pudo conectar con WooCommerce: null», despistando sobre la causa.
+            String title = Texts.firstNonBlank(product.getTitleZh(), product.getSlug());
+            if (title == null) {
+                return PushResult.fail("El producto no tiene título ni identificador: complétalo antes de publicarlo.");
+            }
             BigDecimal price = product.getBasePrice() != null ? product.getBasePrice() : BigDecimal.ZERO;
             Map<String, Object> body = Map.of(
                     "name", title,
@@ -76,6 +82,11 @@ public class WooCommerceConnector implements ShopConnector {
             log.warn("WooCommerce push failed ({}): {}", res.statusCode(), truncate(res.body()));
             return PushResult.fail("WooCommerce respondió " + res.statusCode() + ": " + truncate(res.body()));
         } catch (Exception ex) {
+            // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
+            // interrupción deja al pool sin enterarse de que le han pedido parar.
+            if (ex instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             log.warn("WooCommerce push error for shop {}: {}", shop.getId(), ex.getMessage());
             return PushResult.fail("No se pudo conectar con WooCommerce: " + ex.getMessage());
         }
@@ -85,12 +96,13 @@ public class WooCommerceConnector implements ShopConnector {
         if (handle == null || handle.isBlank()) {
             return null;
         }
-        String h = handle.trim().replaceAll("/+$", "");
+        String h = Texts.stripTrailingSlashes(handle.trim());
         if (!h.startsWith("http://") && !h.startsWith("https://")) {
             h = "https://" + h;
         }
         return h;
     }
+
 
     private String truncate(String s) {
         if (s == null) {

@@ -57,13 +57,25 @@ public final class CurrencySymbols {
 
     /** Símbolo conocido para el código, o el propio código si no está mapeado. */
     public static String symbolFor(String code) {
-        String[] m = META.get(code == null ? "" : code.toUpperCase());
-        return m != null ? m[0] : (code == null ? "$" : code.toUpperCase());
+        return metaOrCode(code, 0, "$");
     }
 
     /** Nombre conocido para el código, o el propio código si no está mapeado. */
     public static String nameFor(String code) {
-        String[] m = META.get(code == null ? "" : code.toUpperCase());
-        return m != null ? m[1] : (code == null ? "" : code.toUpperCase());
+        return metaOrCode(code, 1, "");
+    }
+
+    /**
+     * Dato de la tabla para ese código. Si la divisa no está mapeada se devuelve el propio código, que al
+     * menos es información —mejor "SEK 120" que un símbolo inventado—, y si ni siquiera hay código, el
+     * valor de reserva que corresponda.
+     */
+    private static String metaOrCode(String code, int field, String noCodeFallback) {
+        String normalized = code == null ? "" : code.toUpperCase();
+        String[] meta = META.get(normalized);
+        if (meta != null) {
+            return meta[field];
+        }
+        return code == null ? noCodeFallback : normalized;
     }
 }

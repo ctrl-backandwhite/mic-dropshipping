@@ -17,9 +17,9 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Affil
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.AffiliateReferralCodeRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.NotificationJpaRepositoryAdapter;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -58,19 +58,15 @@ class AffiliateApprovePayoutTest {
     @Mock WalletUseCase walletUseCase;
     @Mock AffiliateIndexer affiliateIndexer;
 
+    // Con @InjectMocks los colaboradores se pasan por el constructor por tipo: añadir uno nuevo al
+    // servicio ya no obliga a retocar esta lista de argumentos.
+    @InjectMocks
     AffiliateProgramService service;
 
     private final UUID userId = UUID.randomUUID();
     private final UUID affiliateId = UUID.randomUUID();
     private final UUID payoutId = UUID.randomUUID();
     private final UUID adminId = UUID.randomUUID();
-
-    @BeforeEach
-    void setup() {
-        service = new AffiliateProgramService(affiliateRepo, codeRepo, attrRepo, conversionRepo, commissionRepo,
-                configRepo, payoutRepo, userRepository, passwordEncoder, notificationRepo, notificationsPublisher,
-                walletUseCase, affiliateIndexer);
-    }
 
     private UserEntity user() {
         UserEntity u = new UserEntity();

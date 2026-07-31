@@ -50,7 +50,7 @@ public class StoreLanguageController {
         if (code == null || code.isEmpty()) {
             throw new BusinessException("code es obligatorio");
         }
-        var e = repository.findByCodeIgnoreCase(code).orElseGet(StoreLanguageEntity::new);
+        StoreLanguageEntity e = repository.findByCodeIgnoreCase(code).orElseGet(StoreLanguageEntity::new);
         e.setCode(code);
         if (body.get("label") != null) {
             e.setLabel(body.get("label").toString());

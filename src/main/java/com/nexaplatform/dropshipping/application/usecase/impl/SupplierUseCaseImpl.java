@@ -83,10 +83,23 @@ public class SupplierUseCaseImpl implements SupplierUseCase {
         double r = rating.doubleValue();
         long onTimePct = Math.round(Math.min(99.5, 60 + r * 8)); // r=4.0 -> 92, r=5.0 -> 99
         double defectRate = Math.round((5.0 - r) * 80) / 100.0; // r=5.0 -> 0.0, r=4.0 -> 0.8
-        int responseHours = r >= 4.7 ? 4 : (r >= 4.3 ? 12 : 24);
-        int leadTimeDays = r >= 4.7 ? 3 : (r >= 4.3 ? 7 : 14);
+        // Tramos por valoración: excelente (>= 4,7), buena (>= 4,3) y el resto.
+        int responseHours = byRating(r, 4, 12, 24);
+        int leadTimeDays = byRating(r, 3, 7, 14);
         return s.withOnTimePct(onTimePct).withDefectRate(defectRate).withResponseHours(responseHours)
                 .withLeadTimeDays(leadTimeDays);
+    }
+
+    /**
+     * Valor según el tramo en que cae la valoración del proveedor: excelente (>= 4,7), buena (>= 4,3) o
+     * el resto. Los umbrales son los mismos para todos los indicadores, así que vivir en un solo sitio
+     * evita que se desincronicen.
+     */
+    private static int byRating(double rating, int excellent, int good, int rest) {
+        if (rating >= 4.7) {
+            return excellent;
+        }
+        return rating >= 4.3 ? good : rest;
     }
 
     /** Reconstruye el modelo de dominio desde una fila del índice OpenSearch (sin tocar la BD). */

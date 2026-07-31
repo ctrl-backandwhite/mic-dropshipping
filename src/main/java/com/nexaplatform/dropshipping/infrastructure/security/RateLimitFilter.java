@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.security;
 
+import com.nimbusds.jwt.JWTClaimsSet;
 import com.nexaplatform.dropshipping.infrastructure.security.ratelimit.BucketFactory;
 import com.nimbusds.jwt.JWTParser;
 import io.github.bucket4j.Bandwidth;
@@ -49,12 +50,16 @@ import java.util.concurrent.TimeUnit;
 @Order(Ordered.HIGHEST_PRECEDENCE + 20)
 public class RateLimitFilter extends OncePerRequestFilter {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String PER_CLIENT_ID_JWT_SUB = "per client_id (JWT sub)";
+    private static final String SANDBOX = "sandbox";
+    private static final String PER_IP = "per IP";
+
     // Plan 300k: factory inyectable. Por defecto in-memory (suficiente para
     // local/dev y para una sola instancia). En prod multi-instancia se
     // sustituye por DistributedBucketFactory (Bucket4j sobre Redis) y todas
     // las réplicas comparten el mismo bucket → cuota global consistente.
-    @Autowired
-    private BucketFactory bucketFactory;
+    private final BucketFactory bucketFactory;
 
     // Nº de proxies de confianza por delante (LB/edge). La IP real del cliente es la que
     // añade el proxy de confianza al final de X-Forwarded-For; los valores que el cliente
@@ -64,14 +69,28 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
+    /**
+     * Inyección por constructor (java:S6813). Va anotado porque hay un segundo constructor: con más de uno
+     * y ninguno marcado, Spring elegiría el vacío y el filtro se quedaría sin la factoría compartida.
+     */
+    @Autowired
+    public RateLimitFilter(BucketFactory bucketFactory) {
+        this.bucketFactory = bucketFactory;
+    }
+
+    /** Sin factoría: cada instancia lleva sus propios cubos en memoria. Lo usan las pruebas del filtro. */
+    public RateLimitFilter() {
+        this(null);
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
         String path = req.getRequestURI();
-        // El plan se lee del JWT (claim `plan`); por defecto "sandbox" para
+        // El plan se lee del JWT (claim `plan`); por defecto SANDBOX para
         // requests no-partner o JWT sin claim.
         JwtInfo info = bearerInfo(req).orElse(null);
-        String plan = info != null ? info.plan() : "sandbox";
+        String plan = info != null ? info.plan() : SANDBOX;
 
         RateRule rule = ruleFor(path, plan);
         if (rule == null) {
@@ -114,8 +133,24 @@ public class RateLimitFilter extends OncePerRequestFilter {
      * El plan viene del claim `plan` del JWT del partner.
      */
     private RateRule ruleFor(String path, String plan) {
-        // Auth abuse-prevention buckets (per-IP). El login real es /api/auth/login (no /login):
-        // sin esta regla la fuerza bruta/credential-stuffing pasaba sin freno.
+        // El orden importa: primero las reglas de AUTH (las más restrictivas y las que frenan el abuso),
+        // luego las de partner por client_id y por último las públicas por IP, que son las más generosas.
+        // Si se invirtiera, una ruta de auth caería en el cubo público de 100/min y quedaría sin freno.
+        RateRule auth = authRule(path);
+        if (auth != null) {
+            return auth;
+        }
+        RateRule partner = partnerRule(path, plan);
+        if (partner != null) {
+            return partner;
+        }
+        return publicRule(path);
+    }
+
+    /** Cubos anti-abuso de autenticación, todos por IP. */
+    private RateRule authRule(String path) {
+        // El login real es /api/auth/login (no /login): sin esta regla la fuerza bruta/credential-stuffing
+        // pasaba sin freno.
         if (path.equals("/api/auth/login"))
             return new RateRule("auth.login.api", Scope.IP, 10, Duration.ofMinutes(1));
         if (path.equals("/api/auth/refresh"))
@@ -130,8 +165,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return new RateRule("auth.login", Scope.IP, 20, Duration.ofMinutes(1));
         if (path.equals("/oauth2/token"))
             return new RateRule("oauth.token", Scope.IP, 30, Duration.ofMinutes(1));
+        return null;
+    }
 
-        // Partner API per-client buckets — keyed by JWT subject (client_id), CAPACIDAD por plan.
+    /** Partner API per-client buckets — keyed by JWT subject (client_id), CAPACIDAD por plan. */
+    private RateRule partnerRule(String path, String plan) {
         long partnerCapacity = "paid".equalsIgnoreCase(plan) ? 5L : 1L;
         if (path.startsWith("/api/v1/partner/catalog"))
             return new RateRule("partner.catalog.read", Scope.PARTNER, partnerCapacity, Duration.ofMinutes(1));
@@ -139,7 +177,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return new RateRule("partner.orders.write", Scope.PARTNER, partnerCapacity, Duration.ofMinutes(1));
         if (path.startsWith("/api/v1/partner/shop"))
             return new RateRule("partner.shop.sync", Scope.PARTNER, partnerCapacity, Duration.ofMinutes(1));
+        return null;
+    }
 
+    /** Webhooks entrantes y API pública (SPA y desarrolladores): cubos por IP. */
+    private RateRule publicRule(String path) {
         // Inbound webhooks signed with HMAC — per shop connection (path segment).
         if (path.startsWith("/api/v1/integrations/shops/"))
             return new RateRule("inbound.shop", Scope.PATH_SEG_3, 240, Duration.ofMinutes(1));
@@ -182,10 +224,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (auth == null || !auth.startsWith("Bearer "))
             return Optional.empty();
         try {
-            var claims = JWTParser.parse(auth.substring(7)).getJWTClaimsSet();
+            JWTClaimsSet claims = JWTParser.parse(auth.substring(7)).getJWTClaimsSet();
             String sub = claims.getSubject();
             String plan = claims.getStringClaim("plan");
-            return Optional.of(new JwtInfo(sub, plan != null ? plan : "sandbox"));
+            return Optional.of(new JwtInfo(sub, plan != null ? plan : SANDBOX));
         } catch (Exception e) {
             return Optional.empty();
         }
@@ -196,6 +238,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (xff == null || xff.isBlank())
             return req.getRemoteAddr();
         String[] parts = xff.split(",");
+        // Una cabecera de solo comas (",", ",,,") deja el array VACÍO: split descarta los trozos vacíos
+        // finales. Sin este corte, el acceso por índice lanzaba ArrayIndexOutOfBoundsException dentro del
+        // filtro que limita las peticiones. Hoy Tomcat rechaza antes esa cabecera, pero depender de eso
+        // deja el fallo a merced de la configuración de proxies.
+        if (parts.length == 0) {
+            return req.getRemoteAddr();
+        }
         // Tomamos la IP que añadió el proxy de confianza (a `trustedProxyCount` desde el final),
         // NO la primera, que el cliente puede falsificar para evadir el rate limit por IP.
         int idx = parts.length - Math.max(1, trustedProxyCount);
@@ -210,19 +259,19 @@ public class RateLimitFilter extends OncePerRequestFilter {
      * Las cuotas partner.* dependen del plan del JWT (`plan` claim).
      */
     public List<Map<String, Object>> policies() {
-        return List.of(planTiered("partner.catalog.read", "/api/v1/partner/catalog/**", "per client_id (JWT sub)"),
-                planTiered("partner.orders.write", "/api/v1/partner/orders/**", "per client_id (JWT sub)"),
-                planTiered("partner.shop.sync", "/api/v1/partner/shop/**", "per client_id (JWT sub)"),
+        return List.of(planTiered("partner.catalog.read", "/api/v1/partner/catalog/**", PER_CLIENT_ID_JWT_SUB),
+                planTiered("partner.orders.write", "/api/v1/partner/orders/**", PER_CLIENT_ID_JWT_SUB),
+                planTiered("partner.shop.sync", "/api/v1/partner/shop/**", PER_CLIENT_ID_JWT_SUB),
                 policy("inbound.shop", "/api/v1/integrations/shops/{id}/**", "per shopConnection id", 240, "1m"),
-                policy("storefront", "/api/v1/rate-limits, /api/v1/invoices", "per IP", 60, "1m"),
-                policy("storefront.web", "/api/catalog/**, /api/search, ... (navegación pública)", "per IP", 100, "1m"),
-                policy("oauth.token", "/oauth2/token", "per IP", 30, "1m"),
-                policy("auth.login", "/login", "per IP", 20, "1m"),
-                policy("auth.login.api", "/api/auth/login", "per IP", 10, "1m"),
-                policy("auth.refresh", "/api/auth/refresh", "per IP", 30, "1m"),
-                policy("auth.register", "/api/auth/register", "per IP", 5, "1h"),
-                policy("auth.reset.req", "/api/auth/password-reset/request", "per IP", 20, "1h"),
-                policy("auth.reset.conf", "/api/auth/password-reset/confirm", "per IP", 5, "1h"));
+                policy("storefront", "/api/v1/rate-limits, /api/v1/invoices", PER_IP, 60, "1m"),
+                policy("storefront.web", "/api/catalog/**, /api/search, ... (navegación pública)", PER_IP, 100, "1m"),
+                policy("oauth.token", "/oauth2/token", PER_IP, 30, "1m"),
+                policy("auth.login", "/login", PER_IP, 20, "1m"),
+                policy("auth.login.api", "/api/auth/login", PER_IP, 10, "1m"),
+                policy("auth.refresh", "/api/auth/refresh", PER_IP, 30, "1m"),
+                policy("auth.register", "/api/auth/register", PER_IP, 5, "1h"),
+                policy("auth.reset.req", "/api/auth/password-reset/request", PER_IP, 20, "1h"),
+                policy("auth.reset.conf", "/api/auth/password-reset/confirm", PER_IP, 5, "1h"));
     }
 
     private static Map<String, Object> policy(String name, String path, String scope, int capacity, String period) {
@@ -232,7 +281,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     /** Política partner con cuota diferenciada por plan (sandbox vs paid). */
     private static Map<String, Object> planTiered(String name, String path, String scope) {
         return Map.of("name", name, "path", path, "scope", scope, "period", "1m", "tiers",
-                Map.of("sandbox", 1, "paid", 5));
+                Map.of(SANDBOX, 1, "paid", 5));
     }
 
     private enum Scope {

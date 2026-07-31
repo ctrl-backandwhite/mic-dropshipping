@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api;
 
+import com.stripe.exception.StripeException;
 import com.nexaplatform.dropshipping.api.dto.in.SubscribeDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BillingPlanDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SubscribeDtoOut;
@@ -33,5 +34,5 @@ public interface BillingApi {
     @ApiResponse(responseCode = "200", description = "Checkout started")
     @PostMapping("/subscribe")
     ResponseEntity<SubscribeDtoOut> subscribe(@AuthenticationPrincipal UserDetails principal,
-            @Valid @RequestBody SubscribeDtoIn req) throws Exception;
+            @Valid @RequestBody SubscribeDtoIn req) throws StripeException;
 }

@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository.impl;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierEntity;
 import com.nexaplatform.dropshipping.domain.model.Supplier;
 import com.nexaplatform.dropshipping.domain.repository.SupplierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.SupplierEntityMapper;
@@ -24,7 +25,7 @@ public class SupplierRepositoryImpl implements SupplierRepository {
 
     @Override
     public Supplier save(Supplier model) {
-        var entity = supplierJpaRepositoryAdapter.save(supplierEntityMapper.toEntity(model));
+        SupplierEntity entity = supplierJpaRepositoryAdapter.save(supplierEntityMapper.toEntity(model));
         return supplierEntityMapper.toDomain(entity);
     }
 

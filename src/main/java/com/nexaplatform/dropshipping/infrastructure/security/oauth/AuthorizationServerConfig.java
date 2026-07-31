@@ -30,13 +30,14 @@ public class AuthorizationServerConfig {
 
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE)
-    public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) {
         OAuth2AuthorizationServerConfigurer authServerConfigurer = new OAuth2AuthorizationServerConfigurer();
 
         http.securityMatcher(authServerConfigurer.getEndpointsMatcher())
                 .with(authServerConfigurer, c -> c.oidc(Customizer.withDefaults()))
                 .authorizeHttpRequests(reg -> reg.anyRequest().authenticated())
-                .csrf(csrf -> csrf.ignoringRequestMatchers(authServerConfigurer.getEndpointsMatcher()))
+                // NOSONAR java:S4502 — endpoints OAuth2 (token, JWKS): los llama el cliente con credenciales propias, no el navegador con cookies.
+                .csrf(csrf -> csrf.ignoringRequestMatchers(authServerConfigurer.getEndpointsMatcher())) // NOSONAR java:S4502 — endpoints OAuth2 llamados por el cliente con credenciales propias
                 .exceptionHandling(
                         ex -> ex.defaultAuthenticationEntryPointFor(new LoginUrlAuthenticationEntryPoint("/login"),
                                 new MediaTypeRequestMatcher(MediaType.TEXT_HTML)));
@@ -60,16 +61,14 @@ public class AuthorizationServerConfig {
     }
 
     /**
-     * Encoder para firmar los JWT de USUARIO (access/refresh) que emite el login por token.
-     * Usa el mismo JWKSource RSA rotado por {@code JwkKeyService}, de modo que el mismo
-     * {@link JwtDecoder} valida tanto los tokens de partner como los de usuario.
-     */
-    /**
-     * Encoder que firma los JWT (tokens de USUARIO y del flujo OAuth2 client_credentials). Usa una
-     * {@link JWKSource} que expone SOLO la clave activa: así el {@code JwtGenerator} del Authorization
-     * Server —que no fija el {@code kid} en la cabecera— tiene una única clave candidata y no falla con
-     * "multiple keys for the signing algorithm [null]" cuando hay claves rotadas en el {@code JWKSource}
-     * de validación. Los tokens de usuario, que además fijan el {@code kid} activo, siguen funcionando.
+     * Encoder que firma los JWT de USUARIO (access/refresh del login por token) y los del flujo OAuth2
+     * client_credentials. Usa el {@code JwkKeyService} —el mismo material RSA rotado que valida el
+     * {@link JwtDecoder}, de ahí que un único decoder sirva para tokens de partner y de usuario—, pero
+     * a través de una {@link JWKSource} que expone SOLO la clave activa: así el {@code JwtGenerator} del
+     * Authorization Server —que no fija el {@code kid} en la cabecera— tiene una única clave candidata y
+     * no falla con "multiple keys for the signing algorithm [null]" cuando hay claves rotadas en el
+     * {@code JWKSource} de validación. Los tokens de usuario, que además fijan el {@code kid} activo,
+     * siguen funcionando.
      */
     @Bean
     public JwtEncoder jwtEncoder(JwkKeyService jwkKeyService) {
@@ -84,7 +83,7 @@ public class AuthorizationServerConfig {
     @Bean
     public AuthenticationManager authenticationManager(
             AuthenticationConfiguration cfg)
-            throws Exception {
+ {
         return cfg.getAuthenticationManager();
     }
 }

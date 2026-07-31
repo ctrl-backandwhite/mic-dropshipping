@@ -1,11 +1,11 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
-import com.nexaplatform.dropshipping.api.controller.StorefrontCatalogController.CategoryBreadcrumb;
-import com.nexaplatform.dropshipping.api.controller.StorefrontCatalogController.CategoryView;
-import com.nexaplatform.dropshipping.api.controller.StorefrontCatalogController.SupplierView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.VariantView;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.SupplierSearchService;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.SupplierSearchService.IndexedSupplier;
-import com.nexaplatform.dropshipping.api.controller.StorefrontCatalogController.VariantView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
@@ -27,7 +27,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORIES_FLAT;
@@ -52,7 +52,7 @@ import java.util.stream.Collectors;
  * identical shapes without one controller injecting the other (the partner→storefront
  * controller dependency is replaced by this shared collaborator + the CatalogUseCase).
  */
-@Component
+@Service
 @RequiredArgsConstructor
 public class CatalogStorefrontReadService {
 
@@ -152,7 +152,7 @@ public class CatalogStorefrontReadService {
     public PageResponse<ProductSummaryView> productsByCategory(String idOrSlug, int page, int size, String lang,
             String sort) {
         UUID categoryId = resolveCategory(idOrSlug).getId();
-        return productList(page, size, lang, null, categoryId, null, null, null, sort);
+        return listing(page, size, lang, ProductListFilters.basic(null, categoryId, null, null, null), sort);
     }
 
     /* ============================ Suppliers ============================ */
@@ -182,7 +182,7 @@ public class CatalogStorefrontReadService {
             + "+ ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get()")
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productsBySupplier(UUID id, int page, int size, String lang, String sort) {
-        return productList(page, size, lang, null, null, id, null, null, sort);
+        return listing(page, size, lang, ProductListFilters.basic(null, null, id, null, null), sort);
     }
 
     /* ============================ Variants ============================ */
@@ -215,10 +215,32 @@ public class CatalogStorefrontReadService {
     // reflejaría" por moneda).
     @Cacheable(value = CACHE_PRODUCT_LIST, keyGenerator = "currencyAwareKeyGenerator")
     @Transactional(readOnly = true)
-    public PageResponse<ProductSummaryView> productListFull(int page, int size, String lang, String q, UUID categoryId,
-            UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping,
-            Boolean selfPickup, Boolean hasVideo, Integer minRating, Integer inventoryMin, String certification,
-            String sort, Boolean verified) {
+    public PageResponse<ProductSummaryView> productListFull(int page, int size, String lang,
+            ProductListFilters filters, String sort) {
+        return listing(page, size, lang, filters, sort);
+    }
+
+    /**
+     * El listado real. Va sin anotaciones a propósito: es el punto al que llaman los demás métodos de
+     * esta misma clase. La autoinvocación NO pasa por el proxy de Spring, así que el {@code @Cacheable}
+     * y el {@code @Transactional} del método invocado nunca se aplicaban; con el cuerpo aquí, esas
+     * anotaciones quedan solo donde de verdad actúan: el método público por el que entra la petición.
+     */
+    private PageResponse<ProductSummaryView> listing(int page, int size, String lang, ProductListFilters filters,
+            String sort) {
+        String q = filters.q();
+        UUID categoryId = filters.categoryId();
+        UUID supplierId = filters.supplierId();
+        BigDecimal minPrice = filters.minPrice();
+        BigDecimal maxPrice = filters.maxPrice();
+        String shipFrom = filters.shipFrom();
+        Boolean freeShipping = filters.freeShipping();
+        Boolean selfPickup = filters.selfPickup();
+        Boolean hasVideo = filters.hasVideo();
+        Integer minRating = filters.minRating();
+        Integer inventoryMin = filters.inventoryMin();
+        String certification = filters.certification();
+        Boolean verified = filters.verified();
 
         int safeSize = Math.min(size, 100);
         Sort sortSpec = sortFor(sort);
@@ -251,7 +273,9 @@ public class CatalogStorefrontReadService {
                     .map(p -> productMapper.toSummary(p, lang))
                     .filter(v -> withinPrice(v.displayPrice(), minPrice, maxPrice)).toList();
             int total = all.size();
-            int from = Math.min(page * safeSize, total);
+            // (long) para que un ?page enorme no desborde el int: el índice salía negativo y el subList
+            // respondía 500 en vez de una página vacía.
+            int from = (int) Math.min((long) page * safeSize, total);
             int to = Math.min(from + safeSize, total);
             return PageResponse.from(new PageImpl<>(all.subList(from, to), pageable, total));
         }
@@ -278,7 +302,9 @@ public class CatalogStorefrontReadService {
                 .collect(Collectors.toMap(ProductEntity::getId, p -> p, (a, b) -> a));
         List<ProductSummaryView> all = productIds.stream().map(byId::get).filter(Objects::nonNull)
                 .map(p -> productMapper.toSummary(p, lang)).toList();
-        int from = Math.min(page * safe, all.size());
+        // (long) para que un ?page enorme no desborde el int y deje un índice negativo que revienta
+        // el subList con un 500.
+        int from = (int) Math.min((long) page * safe, all.size());
         int to = Math.min(from + safe, all.size());
         return PageResponse.from(new PageImpl<>(all.subList(from, to), pageable, all.size()));
     }
@@ -294,16 +320,20 @@ public class CatalogStorefrontReadService {
         return (min == null || price.compareTo(min) >= 0) && (max == null || price.compareTo(max) <= 0);
     }
 
-    // @Transactional imprescindible: este método delega en productListFull() por self-invocation (misma
-    // clase), y en la self-invocation NO se aplica el proxy @Transactional de productListFull. Sin la
-    // transacción aquí, el mapeo a summary (que carga translations LAZY) falla con LazyInitializationException
-    // "no session" (p.ej. GET /catalog/products/newest daba 500). Con esta anotación la sesión sigue abierta.
+    // @Transactional imprescindible: sin la transacción aquí, el mapeo a summary (que carga translations
+    // LAZY) falla con LazyInitializationException "no session" (p.ej. GET /catalog/products/newest daba
+    // 500). Con esta anotación la sesión sigue abierta mientras se construye la página.
+    //
+    // Versión con los filtros sueltos de {@link #productListFull}, que es la que los agrupa en
+    // ProductListFilters. Sobrevive porque la usan llamadores (controlador del escaparate y sus tests)
+    // que se migrarán aparte; de ahí que se silencie S107 en vez de partir la firma por la mitad.
+    @SuppressWarnings("java:S107")
     @Cacheable(value = CACHE_PRODUCT_LIST, keyGenerator = "currencyAwareKeyGenerator")
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productList(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String sort) {
-        return productListFull(page, size, lang, q, categoryId, supplierId, minPrice, maxPrice, null, null, null, null,
-                null, null, null, sort, null);
+        return listing(page, size, lang, ProductListFilters.basic(q, categoryId, supplierId, minPrice, maxPrice),
+                sort);
     }
 
     /* ============================ helpers ============================ */
@@ -358,7 +388,16 @@ public class CatalogStorefrontReadService {
         };
     }
 
+    /**
+     * Nombre de la categoría en el idioma pedido, con el chino como respaldo.
+     *
+     * <p>El idioma se comprueba aquí: hoy no llega nulo porque el parámetro de la petición tiene valor
+     * por defecto, pero eso es una casualidad de una capa que este método no controla.
+     */
     public static String translatedName(CategoryEntity c, String lang) {
+        if (lang == null || c.getTranslations() == null) {
+            return c.getNameZh();
+        }
         return c.getTranslations().stream().filter(t -> lang.equalsIgnoreCase(t.getLanguage()))
                 .map(CategoryTranslationEntity::getName).findFirst().orElse(c.getNameZh());
     }

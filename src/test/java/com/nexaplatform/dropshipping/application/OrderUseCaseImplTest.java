@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application;
 
+import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.AddressInput;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.CreateOrderRequest;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.OrderItemInput;
@@ -32,6 +33,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserR
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -94,16 +96,14 @@ class OrderUseCaseImplTest {
     @Mock
     com.nexaplatform.dropshipping.infrastructure.integration.search.OrderSearchService orderSearchService;
 
+    @InjectMocks
     OrderUseCaseImpl orderUseCase;
 
     @BeforeEach
     void setup() {
-        orderUseCase = new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository, userRepository,
-                shopConnectionRepository, userAddressRepository, webhooks, walletUseCase, notificationsPublisher,
-                pricingService, affiliateProgramService, stockService, paymentUseCase, orderEmailService, cainiao, checkoutTotalsService,
-                operatorCommissionService, orderIndexer, orderSearchService);
         // Por defecto, sin envío en los tests de billing (no altera el total = subtotal).
-        lenient().when(cainiao.quote(any(), anyInt())).thenReturn(ShippingQuote.unsupported("XX"));
+        lenient().when(cainiao.quote(any(), any(FulfillmentProvider.ParcelSpec.class)))
+                .thenReturn(ShippingQuote.unsupported("XX"));
         // Por defecto, sin impuesto ni recargo de despacho: total = subtotal + envío, como en los
         // tests de billing existentes. El envío devuelto es el mismo que entra (sin handling fee).
         lenient().when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt()))
@@ -130,7 +130,7 @@ class OrderUseCaseImplTest {
     @Test
     void create_order_with_two_items_computes_totals() {
         UUID productId = UUID.randomUUID();
-        ProductEntity product = ProductEntity.builder().basePrice(new BigDecimal("12.50")).moq(1).titleZh("Widget")
+        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).basePrice(new BigDecimal("12.50")).moq(1).titleZh("Widget")
                 .build();
         product.setId(productId);
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
@@ -158,7 +158,7 @@ class OrderUseCaseImplTest {
     @Test
     void create_order_rejected_when_destination_blocks_over_threshold() {
         UUID productId = UUID.randomUUID();
-        ProductEntity product = ProductEntity.builder().basePrice(new BigDecimal("12.50")).moq(1).titleZh("Widget")
+        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).basePrice(new BigDecimal("12.50")).moq(1).titleZh("Widget")
                 .build();
         product.setId(productId);
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
@@ -182,7 +182,7 @@ class OrderUseCaseImplTest {
     @Test
     void create_order_fails_if_product_has_no_price() {
         UUID productId = UUID.randomUUID();
-        ProductEntity product = ProductEntity.builder().titleZh("noprice").moq(1).build();
+        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).titleZh("noprice").moq(1).build();
         product.setId(productId);
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
         when(pricingService.priceFor(any(), any())).thenReturn(priced(null));
@@ -190,7 +190,8 @@ class OrderUseCaseImplTest {
         var req = new CreateOrderRequest("EXT", new AddressInput("X", null, null, "L1", null, "C", null, "00000", "ES"),
                 null, List.of(new OrderItemInput(productId, null, 1)), null);
 
-        assertThatThrownBy(() -> orderUseCase.createOrder(UUID.randomUUID(), null, req))
+        UUID partnerAppId = UUID.randomUUID();
+        assertThatThrownBy(() -> orderUseCase.createOrder(partnerAppId, null, req))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("no price");
     }
 
@@ -202,7 +203,8 @@ class OrderUseCaseImplTest {
         var req = new CreateOrderRequest("EXT", new AddressInput("X", null, null, "L1", null, "C", null, "00000", "ES"),
                 null, List.of(new OrderItemInput(productId, null, 1)), null);
 
-        assertThatThrownBy(() -> orderUseCase.createOrder(UUID.randomUUID(), null, req))
+        UUID partnerAppId = UUID.randomUUID();
+        assertThatThrownBy(() -> orderUseCase.createOrder(partnerAppId, null, req))
                 .isInstanceOf(NotFoundException.class);
     }
 
@@ -210,7 +212,7 @@ class OrderUseCaseImplTest {
     void variant_price_overrides_product_price() {
         UUID productId = UUID.randomUUID();
         UUID variantId = UUID.randomUUID();
-        ProductEntity product = ProductEntity.builder().basePrice(new BigDecimal("10")).moq(1).titleZh("p").build();
+        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).basePrice(new BigDecimal("10")).moq(1).titleZh("p").build();
         product.setId(productId);
         ProductVariantEntity variant = ProductVariantEntity.builder().price(new BigDecimal("15")).sku("V1").stock(10)
                 .active(true).build();
@@ -235,7 +237,7 @@ class OrderUseCaseImplTest {
         // para que el front identifique y quite la línea rota.
         UUID productId = UUID.randomUUID();
         UUID staleVariantId = UUID.randomUUID();
-        ProductEntity product = ProductEntity.builder().basePrice(new BigDecimal("10")).moq(1).titleZh("p").build();
+        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).basePrice(new BigDecimal("10")).moq(1).titleZh("p").build();
         product.setId(productId);
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
         when(variantRepository.findById(staleVariantId)).thenReturn(Optional.empty());
@@ -261,8 +263,8 @@ class OrderUseCaseImplTest {
         orderUseCase.forwardOrder(id);
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.FORWARDED);
-        org.mockito.Mockito.verify(orderRepository).save(order);
-        org.mockito.Mockito.verify(webhooks).publish(org.mockito.ArgumentMatchers.eq("order.forwarded"),
+        verify(orderRepository).save(order);
+        verify(webhooks).publish(org.mockito.ArgumentMatchers.eq("order.forwarded"),
                 org.mockito.ArgumentMatchers.eq(id.toString()), org.mockito.ArgumentMatchers.any());
     }
 
@@ -279,7 +281,7 @@ class OrderUseCaseImplTest {
         orderUseCase.refundOrder(id);
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
-        org.mockito.Mockito.verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer),
+        verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer),
                 org.mockito.ArgumentMatchers.eq(2500L), org.mockito.ArgumentMatchers.eq(id),
                 org.mockito.ArgumentMatchers.eq("refund-" + id), org.mockito.ArgumentMatchers.anyString());
     }
@@ -299,7 +301,7 @@ class OrderUseCaseImplTest {
         orderUseCase.cancelMyOrder(buyer, id, true); // reembolso a la wallet (inmediato)
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-        org.mockito.Mockito.verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer),
+        verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer),
                 org.mockito.ArgumentMatchers.eq(1500L), org.mockito.ArgumentMatchers.eq(id),
                 org.mockito.ArgumentMatchers.eq("cancel-" + id), org.mockito.ArgumentMatchers.anyString());
     }
@@ -323,8 +325,8 @@ class OrderUseCaseImplTest {
         orderUseCase.cancelMyOrder(buyer, id, false); // reembolso al método original (tarjeta → Stripe)
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-        org.mockito.Mockito.verify(paymentUseCase).refundOrderPayment(id, paymentId, 0);
-        org.mockito.Mockito.verify(walletUseCase, org.mockito.Mockito.never()).deposit(any(), org.mockito
+        verify(paymentUseCase).refundOrderPayment(id, paymentId, 0);
+        verify(walletUseCase, never()).deposit(any(), org.mockito
                 .ArgumentMatchers.anyLong(), any(), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString());
     }
@@ -336,7 +338,8 @@ class OrderUseCaseImplTest {
         order.setId(id);
         when(orderRepository.findById(id)).thenReturn(Optional.of(order));
 
-        assertThatThrownBy(() -> orderUseCase.cancelMyOrder(UUID.randomUUID(), id, true))
+        UUID otroUsuario = UUID.randomUUID();
+        assertThatThrownBy(() -> orderUseCase.cancelMyOrder(otroUsuario, id, true))
                 .isInstanceOf(NotFoundException.class);
     }
 
@@ -367,7 +370,7 @@ class OrderUseCaseImplTest {
         orderUseCase.cancelOrder(id);
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-        org.mockito.Mockito.verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer),
+        verify(walletUseCase).deposit(org.mockito.ArgumentMatchers.eq(buyer),
                 org.mockito.ArgumentMatchers.eq(3000L), org.mockito.ArgumentMatchers.eq(id),
                 org.mockito.ArgumentMatchers.eq("cancel-" + id), org.mockito.ArgumentMatchers.anyString());
     }

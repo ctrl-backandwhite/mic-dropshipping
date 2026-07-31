@@ -26,6 +26,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
 
 @ExtendWith(MockitoExtension.class)
 class OrderEmailServiceTest {
@@ -58,8 +59,7 @@ class OrderEmailServiceTest {
         verify(emailQueue).enqueue(eq("buyer@x.com"), isNull(), eq("Invoice NX-100"), eq("emails/invoice"),
                 varsCap.capture(), anyMap());
         Map<String, Object> vars = varsCap.getValue();
-        assertThat(vars).containsEntry("paymentMethod", "PayPal");
-        assertThat(vars).containsEntry("ctaLabel", "Ver pedido y factura");
+        assertThat(vars).containsEntry("paymentMethod", "PayPal").containsEntry("ctaLabel", "Ver pedido y factura");
     }
 
     @Test
@@ -182,11 +182,11 @@ class OrderEmailServiceTest {
         verify(emailQueue).enqueue(eq("buyer@x.com"), eq("Reembolso procesado"), eq("emails/notification"),
                 varsCap.capture());
         List<String[]> details = (List<String[]>) varsCap.getValue().get("details");
-        assertThat(details).isNotNull();
         // Nº de pedido, importe y destino (tarjeta original) presentes en el bloque.
-        assertThat(details).anySatisfy(r -> assertThat(r[1]).isEqualTo("NX-401"));
-        assertThat(details).anySatisfy(r -> assertThat(r[1]).isEqualTo("27,80 €"));
-        assertThat(details).anySatisfy(r -> assertThat(r[1]).contains("Tarjeta original"));
+        assertThat(details).isNotNull()
+                .anySatisfy(r -> assertThat(r[1]).isEqualTo("NX-401"))
+                .anySatisfy(r -> assertThat(r[1]).isEqualTo("27,80 €"))
+                .anySatisfy(r -> assertThat(r[1]).contains("Tarjeta original"));
     }
 
     @Test
@@ -223,7 +223,7 @@ class OrderEmailServiceTest {
     @Test
     void trackingUpdate_swallowsEnqueueFailureWithoutBreakingFlow() {
         Order o = order("NX-500", "TRK-9", null, "USD");
-        org.mockito.Mockito.doThrow(new RuntimeException("queue down"))
+        doThrow(new RuntimeException("queue down"))
                 .when(emailQueue).enqueue(any(), any(), any(), anyMap());
 
         assertThatCode(() -> service.trackingUpdate(o, "buyer@x.com", "es", "En tránsito", "Madrid"))

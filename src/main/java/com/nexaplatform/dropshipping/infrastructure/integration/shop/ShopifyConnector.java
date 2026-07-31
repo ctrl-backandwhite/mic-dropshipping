@@ -75,6 +75,11 @@ public class ShopifyConnector implements ShopConnector {
             log.warn("Shopify push failed ({}): {}", res.statusCode(), truncate(res.body()));
             return PushResult.fail("Shopify respondió " + res.statusCode() + ": " + truncate(res.body()));
         } catch (Exception ex) {
+            // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
+            // interrupción deja al pool sin enterarse de que le han pedido parar.
+            if (ex instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             log.warn("Shopify push error for shop {}: {}", shop.getId(), ex.getMessage());
             return PushResult.fail("No se pudo conectar con Shopify: " + ex.getMessage());
         }

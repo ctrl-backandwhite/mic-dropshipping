@@ -17,12 +17,12 @@ import java.util.Date;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
 class JwtRevocationFilterTest {
@@ -41,11 +41,11 @@ class JwtRevocationFilterTest {
     @BeforeEach
     void setUp() {
         res = new MockHttpServletResponse();
-        chain = org.mockito.Mockito.mock(FilterChain.class);
+        chain = mock(FilterChain.class);
     }
 
     /** Builds an unsigned JWT carrying the given subject and issued-at instant. */
-    private String token(String sub, long iatEpochSeconds) throws Exception {
+    private String token(String sub, long iatEpochSeconds) {
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
                 .subject(sub)
                 .issueTime(new Date(iatEpochSeconds * 1000L))
@@ -65,7 +65,7 @@ class JwtRevocationFilterTest {
     void rejects_revoked_token_with_401_and_does_not_continue_chain() throws Exception {
         long iat = 1_000L;
         MockHttpServletRequest req = partnerRequest(token("client-1", iat));
-        when(revocationService.isStillValid(eq("client-1"), eq(iat))).thenReturn(false);
+        when(revocationService.isStillValid("client-1", iat)).thenReturn(false);
 
         filter.doFilter(req, res, chain);
 
@@ -80,7 +80,7 @@ class JwtRevocationFilterTest {
     void continues_chain_when_token_still_valid() throws Exception {
         long iat = 2_000L;
         MockHttpServletRequest req = partnerRequest(token("client-2", iat));
-        when(revocationService.isStillValid(eq("client-2"), eq(iat))).thenReturn(true);
+        when(revocationService.isStillValid("client-2", iat)).thenReturn(true);
 
         filter.doFilter(req, res, chain);
 

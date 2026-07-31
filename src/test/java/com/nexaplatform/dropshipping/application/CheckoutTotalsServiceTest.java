@@ -1,6 +1,6 @@
 package com.nexaplatform.dropshipping.application;
 
-import com.nexaplatform.dropshipping.application.service.CainiaoTaxService;
+import com.nexaplatform.dropshipping.application.service.CountryTaxService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService.CheckoutTotals;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
@@ -26,14 +26,14 @@ import static org.mockito.Mockito.when;
 class CheckoutTotalsServiceTest {
 
     @Mock
-    CainiaoTaxService taxService;
+    CountryTaxService taxService;
     @Mock
     CustomsValuationService customsValuationService;
     @InjectMocks
     CheckoutTotalsService service;
 
     private void givenTax(int rateBps, int taxCents) {
-        when(taxService.rateBpsFor(any(), any(), anyInt())).thenReturn(rateBps);
+        when(taxService.rateBpsFor(any(), any())).thenReturn(rateBps);
         when(taxService.taxCentsFor(any(), any(), anyInt())).thenReturn(taxCents);
     }
 

@@ -6,7 +6,6 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.opensearch.client.opensearch.OpenSearchClient;
-import org.opensearch.client.opensearch._types.OpenSearchException;
 import org.opensearch.client.opensearch._types.mapping.Property;
 import org.opensearch.client.opensearch._types.mapping.TypeMapping;
 import org.opensearch.client.opensearch.core.IndexRequest;
@@ -54,7 +53,11 @@ public class WalletIndexer {
                             .properties("userEmail", Property.of(p -> p.text(t -> t.analyzer("standard"))))
                             .properties("userName", Property.of(p -> p.text(t -> t.analyzer("standard"))))))));
             log.info("Created OpenSearch index '{}'", index);
-        } catch (OpenSearchException | IOException e) {
+        } catch (RuntimeException | IOException e) {
+            // RuntimeException y no sólo OpenSearchException: esto corre en @PostConstruct, así que
+            // cualquier fallo del cliente que no fuera exactamente esa excepción (una URL mal formada, un
+            // certificado, un timeout envuelto) abortaba el ARRANQUE de la aplicación entera. Un buscador
+            // caído degrada la búsqueda; nunca debe impedir vender.
             log.error("Failed to ensure OpenSearch wallet index: {}", e.getMessage());
         }
     }
@@ -65,7 +68,7 @@ public class WalletIndexer {
         try {
             if (walletSearchService.pageIds(null, null, null, 0, 1).isEmpty()) {
                 log.info("Wallet index '{}' empty/unavailable on startup → reindexing", index);
-                reindexAll();
+                doReindexAll();
             }
         } catch (Exception e) {
             log.warn("Wallet index warm-up skipped: {}", e.getMessage());
@@ -80,22 +83,49 @@ public class WalletIndexer {
         }
     }
 
-    /** Re-indexes every wallet. Returns the number indexed. */
+    /**
+     * Re-indexes every wallet. Returns the number actually indexed.
+     *
+     * <p>Se cuentan los que el índice aceptó, no los intentados: con OpenSearch caído todas las
+     * escrituras fallan en silencio (son best-effort) y el administrador leía «reindexed N» con el
+     * índice vacío, que es la peor respuesta posible para la pantalla desde la que se lanza esto.
+     */
     @Transactional(readOnly = true)
     public int reindexAll() {
-        int[] n = { 0 };
-        walletRepository.findAll().forEach(w -> {
-            indexWallet(w);
-            n[0]++;
-        });
-        log.info("::> [REINDEX] reindexed {} wallets into '{}'", n[0], index);
-        return n[0];
+        return doReindexAll();
     }
 
-    /** Indexes (or refreshes) a single wallet. Best-effort; never breaks the write path. */
-    public void indexWallet(Wallet w) {
+    /**
+     * Cuerpo del reindexado, sin anotar: el arranque lo llama desde {@code warmUpOnStartup}, que ya abre
+     * su propia transacción de lectura. Una llamada por {@code this.reindexAll()} no pasa por el proxy de
+     * Spring y su {@code @Transactional} nunca llegaba a aplicarse (java:S6809).
+     */
+    private int doReindexAll() {
+        int[] indexed = { 0 };
+        int[] failed = { 0 };
+        walletRepository.findAll().forEach(w -> {
+            if (indexWallet(w)) {
+                indexed[0]++;
+            } else {
+                failed[0]++;
+            }
+        });
+        if (failed[0] > 0) {
+            log.warn("::> [REINDEX] {} wallets indexed into '{}', {} failed", indexed[0], index, failed[0]);
+        } else {
+            log.info("::> [REINDEX] reindexed {} wallets into '{}'", indexed[0], index);
+        }
+        return indexed[0];
+    }
+
+    /**
+     * Indexes (or refreshes) a single wallet. Best-effort; never breaks the write path.
+     *
+     * @return true si el índice aceptó el documento.
+     */
+    public boolean indexWallet(Wallet w) {
         if (w == null || w.getId() == null) {
-            return;
+            return false;
         }
         Map<String, Object> doc = new HashMap<>();
         doc.put("id", w.getId().toString());
@@ -106,8 +136,10 @@ public class WalletIndexer {
         doc.put("createdAt", w.getCreatedAt() != null ? w.getCreatedAt().toString() : null);
         try {
             client.index(IndexRequest.of(b -> b.index(index).id(w.getId().toString()).document(doc)));
+            return true;
         } catch (Exception e) {
             log.error("Index failed for wallet {}: {}", w.getId(), e.getMessage());
+            return false;
         }
     }
 }

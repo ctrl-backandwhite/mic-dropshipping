@@ -7,6 +7,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -16,7 +17,6 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class CurrencyRateServiceTest {
@@ -24,18 +24,17 @@ class CurrencyRateServiceTest {
     @Mock
     private CurrencyRateRepository repository;
 
+    @InjectMocks
     private CurrencyRateService service;
 
     private static CurrencyRateEntity rate(String code, String symbol, String locale, String rateVsUsd,
             boolean active) {
-        CurrencyRateEntity e = CurrencyRateEntity.builder().code(code).name(code).symbol(symbol).locale(locale)
+        return CurrencyRateEntity.builder().code(code).name(code).symbol(symbol).locale(locale)
                 .rateVsUsd(new BigDecimal(rateVsUsd)).active(active).build();
-        return e;
     }
 
     @BeforeEach
     void setUp() {
-        service = new CurrencyRateService(repository);
         // @PostConstruct.warm() is NOT invoked under plain Mockito; the cache is empty and
         // cacheStamp = Instant.EPOCH, so the first public read triggers ensureFresh() -> refreshCache().
         lenient().when(repository.findAll()).thenReturn(List.of(
@@ -132,7 +131,8 @@ class CurrencyRateServiceTest {
 
     @Test
     void toUsd_unknown_source_throws_not_found() {
-        assertThatThrownBy(() -> service.toUsd(new BigDecimal("1"), "XXX")).isInstanceOf(NotFoundException.class);
+        BigDecimal uno = new BigDecimal("1");
+        assertThatThrownBy(() -> service.toUsd(uno, "XXX")).isInstanceOf(NotFoundException.class);
     }
 
     @Test

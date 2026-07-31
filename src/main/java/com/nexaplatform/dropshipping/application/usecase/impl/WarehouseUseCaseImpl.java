@@ -50,6 +50,16 @@ public class WarehouseUseCaseImpl implements WarehouseUseCase {
     @Override
     @Transactional(readOnly = true)
     public Warehouse getById(UUID id) {
+        return requireWarehouse(id);
+    }
+
+    /**
+     * Búsqueda con 404, sin anotar a propósito: es lo que llaman {@code update} y {@code delete}, que ya
+     * corren dentro de su propia transacción. Llamarse a sí mismo por {@code this.getById(...)} se salta el
+     * proxy de Spring, así que aquella {@code @Transactional} nunca se aplicaba (java:S6809); con la
+     * anotación solo en el punto de entrada público queda donde de verdad actúa.
+     */
+    private Warehouse requireWarehouse(UUID id) {
         Warehouse w = warehouseRepository.getById(id);
         if (w == null) {
             throw new NotFoundException("Almacén no encontrado");
@@ -69,7 +79,7 @@ public class WarehouseUseCaseImpl implements WarehouseUseCase {
     @Override
     @Transactional
     public Warehouse update(UUID id, Warehouse model) {
-        Warehouse existing = getById(id);
+        Warehouse existing = requireWarehouse(id);
         if (model.getCode() != null && codeTaken(model.getCode(), id)) {
             throw new ConflictException("Ya existe un almacén con código " + model.getCode());
         }
@@ -88,7 +98,7 @@ public class WarehouseUseCaseImpl implements WarehouseUseCase {
     @Override
     @Transactional
     public void delete(UUID id) {
-        getById(id);
+        requireWarehouse(id);
         warehouseRepository.delete(id);
     }
 

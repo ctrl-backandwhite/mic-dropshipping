@@ -7,7 +7,6 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.opensearch.client.opensearch.OpenSearchClient;
-import org.opensearch.client.opensearch._types.OpenSearchException;
 import org.opensearch.client.opensearch._types.mapping.Property;
 import org.opensearch.client.opensearch._types.mapping.TypeMapping;
 import org.opensearch.client.opensearch.core.IndexRequest;
@@ -35,6 +34,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AffiliateIndexer {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String STANDARD = "standard";
+
     private final OpenSearchClient client;
     private final AffiliateJpaRepositoryAdapter affiliateRepo;
     private final AffiliateSearchService affiliateSearchService;
@@ -51,11 +53,15 @@ public class AffiliateIndexer {
             client.indices().create(CreateIndexRequest.of(b -> b.index(index)
                     .mappings(TypeMapping.of(tm -> tm.properties("status", Property.of(p -> p.keyword(k -> k)))
                             .properties("createdAt", Property.of(p -> p.date(d -> d)))
-                            .properties("name", Property.of(p -> p.text(t -> t.analyzer("standard"))))
-                            .properties("email", Property.of(p -> p.text(t -> t.analyzer("standard"))))
-                            .properties("code", Property.of(p -> p.text(t -> t.analyzer("standard"))))))));
+                            .properties("name", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                            .properties("email", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))
+                            .properties("code", Property.of(p -> p.text(t -> t.analyzer(STANDARD))))))));
             log.info("Created OpenSearch index '{}'", index);
-        } catch (OpenSearchException | IOException e) {
+        } catch (RuntimeException | IOException e) {
+            // RuntimeException y no sólo OpenSearchException: esto corre en @PostConstruct, así que
+            // cualquier fallo del cliente que no fuera exactamente esa excepción (una URL mal formada, un
+            // certificado, un timeout envuelto) abortaba el ARRANQUE de la aplicación entera. Un buscador
+            // caído degrada la búsqueda; nunca debe impedir vender.
             log.error("Failed to ensure OpenSearch affiliate index: {}", e.getMessage());
         }
     }
@@ -66,7 +72,7 @@ public class AffiliateIndexer {
         try {
             if (affiliateSearchService.pageIds(null, null, 0, 1).isEmpty()) {
                 log.info("Affiliate index '{}' empty/unavailable on startup → reindexing", index);
-                reindexAll();
+                doReindexAll();
             }
         } catch (Exception e) {
             log.warn("Affiliate index warm-up skipped: {}", e.getMessage());
@@ -84,6 +90,15 @@ public class AffiliateIndexer {
     /** Re-indexes every affiliate. Returns the number indexed. */
     @Transactional(readOnly = true)
     public int reindexAll() {
+        return doReindexAll();
+    }
+
+    /**
+     * Cuerpo del reindexado. Sin anotar: el arranque lo invoca desde dentro de la misma clase, y esa
+     * autoinvocación se salta el proxy de Spring, con lo que el {@code @Transactional} del método público
+     * no llegaría a aplicarse (java:S6809). La anotación se queda en el punto de entrada.
+     */
+    private int doReindexAll() {
         int[] n = { 0 };
         affiliateRepo.findAll().forEach(a -> {
             indexAffiliate(a);

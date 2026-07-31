@@ -8,53 +8,45 @@ package com.nexaplatform.dropshipping.domain.enums;
  */
 public enum WalletTxMessage {
 
-    RECHARGE("Recarga con {method}", "Recharge via {method}", "Recarga com {method}", "通过{method}充值",
-            "Recharge par {method}", "Aufladung per {method}", "Ricarica con {method}", "Opwaardering via {method}"),
-    REFUND("Reembolso del pedido {order}", "Refund for order {order}", "Reembolso do pedido {order}",
+    RECHARGE(new Translations("Recarga con {method}", "Recharge via {method}", "Recarga com {method}",
+            "通过{method}充值", "Recharge par {method}", "Aufladung per {method}", "Ricarica con {method}",
+            "Opwaardering via {method}")),
+    REFUND(new Translations("Reembolso del pedido {order}", "Refund for order {order}", "Reembolso do pedido {order}",
             "订单 {order} 的退款", "Remboursement de la commande {order}", "Rückerstattung für Bestellung {order}",
-            "Rimborso dell'ordine {order}", "Terugbetaling voor bestelling {order}"),
-    ORDER_PAYMENT("Pedido {order}", "Order {order}", "Pedido {order}", "订单 {order}", "Commande {order}",
-            "Bestellung {order}", "Ordine {order}", "Bestelling {order}");
+            "Rimborso dell'ordine {order}", "Terugbetaling voor bestelling {order}")),
+    ORDER_PAYMENT(new Translations("Pedido {order}", "Order {order}", "Pedido {order}", "订单 {order}",
+            "Commande {order}", "Bestellung {order}", "Ordine {order}", "Bestelling {order}"));
 
-    private final String es;
-    private final String en;
-    private final String pt;
-    private final String zh;
-    private final String fr;
-    private final String de;
-    private final String it;
-    private final String nl;
+    private final Translations translations;
 
-    WalletTxMessage(String es, String en, String pt, String zh, String fr, String de, String it, String nl) {
-        this.es = es;
-        this.en = en;
-        this.pt = pt;
-        this.zh = zh;
-        this.fr = fr;
-        this.de = de;
-        this.it = it;
-        this.nl = nl;
+    WalletTxMessage(Translations translations) {
+        this.translations = translations;
+    }
+
+    /**
+     * Las ocho traducciones de un movimiento, juntas en un solo valor: así el constructor del enum recibe un
+     * parámetro en vez de ocho sueltos, donde cualquier idioma desplazado pasaba inadvertido.
+     */
+    public record Translations(String es, String en, String pt, String zh, String fr, String de, String it,
+            String nl) {
+
+        /** Plantilla traducida para el idioma (2 letras); si no se reconoce, devuelve el español. */
+        public String of(String lang) {
+            return switch (lang == null ? "es" : lang) {
+                case "en" -> en;
+                case "pt" -> pt;
+                case "zh" -> zh;
+                case "fr" -> fr;
+                case "de" -> de;
+                case "it" -> it;
+                case "nl" -> nl;
+                default -> es;
+            };
+        }
     }
 
     /** Plantilla traducida para el idioma (2 letras); si no se reconoce, devuelve el español. */
     public String of(String lang) {
-        switch (lang == null ? "es" : lang) {
-            case "en":
-                return en;
-            case "pt":
-                return pt;
-            case "zh":
-                return zh;
-            case "fr":
-                return fr;
-            case "de":
-                return de;
-            case "it":
-                return it;
-            case "nl":
-                return nl;
-            default:
-                return es;
-        }
+        return translations.of(lang);
     }
 }

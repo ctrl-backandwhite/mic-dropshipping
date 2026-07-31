@@ -52,7 +52,7 @@ public class MeWalletController implements MeWalletApi {
         List<MeWalletTxDtoOut> items = meWalletDtoMapper
                 .toTxDtoOutList(walletUseCase.getMyTransactions(userId, page, capped));
         long total = walletUseCase.countMyTransactions(userId);
-        var pageable = PageRequest.of(page, capped);
+        PageRequest pageable = PageRequest.of(page, capped);
         return ResponseEntity.ok(PageResponse.from(new PageImpl<>(items, pageable, total)));
     }
 

@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import com.stripe.exception.StripeException;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.mapper.CustomerSubscriptionUpdateMapper;
@@ -21,8 +22,10 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Subsc
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
 import com.stripe.model.Customer;
 import com.stripe.model.PaymentMethod;
+import com.stripe.model.checkout.Session;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +54,10 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseCase {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String MONTHLY = "MONTHLY";
+    private static final String YEARLY = "YEARLY";
+
     private final CustomerSubscriptionRepository customerSubscriptionRepository;
     private final CustomerSubscriptionUpdateMapper customerSubscriptionUpdateMapper;
     private final SubscriptionPlanRepository planRepository;
@@ -60,6 +67,19 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     private final CurrencyRateService currencyService;
     private final CountryTaxService countryTaxService;
     private final InvoiceService invoiceService;
+
+    /** URL pública del escaparate, para las vueltas de Stripe. La misma que usan los correos. */
+    @Value("${nexadrop.storefront.base-url:http://localhost:3003}")
+    private String storefrontBaseUrl;
+
+    /*
+     * Rollback de las operaciones que hablan con Stripe: declaran noRollbackFor = StripeException.class.
+     * Coincide con lo que Spring hace por defecto ante una excepción COMPROBADA, pero aquí es una
+     * decisión y no un descuido: lo que se escribe antes de llamar a Stripe (el customerId del usuario,
+     * la fila INCOMPLETE de la suscripción) es el espejo local de algo que YA existe en su plataforma.
+     * Deshacerlo dejaría los dos lados desincronizados y el siguiente intento crearía un Customer o una
+     * suscripción duplicados en Stripe, que es un daño peor que quedarse con una fila a medias.
+     */
 
     @Override
     @Transactional
@@ -78,6 +98,15 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     @Override
     @Transactional(readOnly = true)
     public CustomerSubscription getById(UUID id) {
+        return requireById(id);
+    }
+
+    /**
+     * Cuerpo sin anotar de {@link #getById(UUID)}, que es al que llaman los métodos de esta clase: una
+     * llamada interna no pasa por el proxy de Spring, así que su {@code @Transactional} nunca se aplicaría.
+     * La transacción la abre el método público de entrada.
+     */
+    private CustomerSubscription requireById(UUID id) {
         CustomerSubscription model = customerSubscriptionRepository.getById(id);
         if (Objects.isNull(model)) {
             throw new NotFoundException("Subscription not found: " + id);
@@ -88,7 +117,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     @Override
     @Transactional
     public CustomerSubscription update(CustomerSubscription model, UUID id) {
-        CustomerSubscription existing = getById(id);
+        CustomerSubscription existing = requireById(id);
         customerSubscriptionUpdateMapper.updateFromModel(model, existing);
         CustomerSubscription saved = customerSubscriptionRepository.update(existing);
         log.info("::> [BILLING] Subscription updated id={}", id);
@@ -98,7 +127,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     @Override
     @Transactional
     public void delete(UUID id) {
-        getById(id);
+        requireById(id);
         customerSubscriptionRepository.delete(id);
         log.info("::> [BILLING] Subscription deleted id={}", id);
     }
@@ -144,8 +173,8 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
             return null;
         }
         return switch (period.trim().toUpperCase()) {
-            case "MONTH", "MONTHLY" -> "MONTHLY";
-            case "YEAR", "YEARLY" -> "YEARLY";
+            case "MONTH", MONTHLY -> MONTHLY;
+            case "YEAR", YEARLY -> YEARLY;
             default -> period.toUpperCase();
         };
     }
@@ -153,6 +182,11 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     @Override
     @Transactional
     public CustomerSubscription createSubscription(UUID userId, String planCode, String billingPeriod) {
+        return newSubscription(userId, planCode, billingPeriod);
+    }
+
+    /** Cuerpo sin anotar de {@link #createSubscription}: es al que llaman los flujos de esta clase. */
+    private CustomerSubscription newSubscription(UUID userId, String planCode, String billingPeriod) {
         SubscriptionPlanEntity plan = getPlanEntityByCode(planCode);
         Instant now = Instant.now();
 
@@ -161,12 +195,12 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
             return startFreeTrial(userId, plan, now);
         }
 
-        Instant end = "YEARLY".equalsIgnoreCase(billingPeriod)
+        Instant end = YEARLY.equalsIgnoreCase(billingPeriod)
                 ? now.plus(365, ChronoUnit.DAYS)
                 : now.plus(30, ChronoUnit.DAYS);
         CustomerSubscription model = CustomerSubscription.builder().userId(userId).planId(plan.getId())
                 .status(SubscriptionStatus.ACTIVE)
-                .billingPeriod(billingPeriod == null ? "MONTHLY" : billingPeriod.toUpperCase()).currentPeriodStart(now)
+                .billingPeriod(billingPeriod == null ? MONTHLY : billingPeriod.toUpperCase()).currentPeriodStart(now)
                 .currentPeriodEnd(end).build();
         return customerSubscriptionRepository.save(model);
     }
@@ -186,7 +220,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         }
         Instant trialEnd = now.atZone(ZoneOffset.UTC).plusMonths(1).toInstant();
         CustomerSubscription model = CustomerSubscription.builder().userId(userId).planId(plan.getId())
-                .status(SubscriptionStatus.ACTIVE).billingPeriod("MONTHLY").currentPeriodStart(now)
+                .status(SubscriptionStatus.ACTIVE).billingPeriod(MONTHLY).currentPeriodStart(now)
                 .currentPeriodEnd(trialEnd).build();
         CustomerSubscription saved = customerSubscriptionRepository.save(model);
         user.setFreeTrialUsed(true);
@@ -213,8 +247,13 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     public void expireFreeTrials() {
         Instant now = Instant.now();
         for (CustomerSubscription sub : customerSubscriptionRepository.findAll()) {
-            boolean free = "FREE".equalsIgnoreCase(sub.getPlanCode())
-                    || (sub.getPriceMonthly() <= 0 && sub.getPriceYearly() <= 0);
+            // El plan tiene que estar IDENTIFICADO para decidir. planCode y los precios los computa el
+            // mapper desde la relación `plan`: si no está cargada valen null y 0, y sin este control una
+            // suscripción DE PAGO con la relación suelta se tomaba por gratuita y se cancelaba sola,
+            // cortándole el servicio a alguien que está pagando. Ante la duda, no se toca.
+            boolean planKnown = sub.getPlanCode() != null && !sub.getPlanCode().isBlank();
+            boolean free = planKnown && ("FREE".equalsIgnoreCase(sub.getPlanCode())
+                    || (sub.getPriceMonthly() <= 0 && sub.getPriceYearly() <= 0));
             boolean active = sub.getStatus() == SubscriptionStatus.ACTIVE
                     || sub.getStatus() == SubscriptionStatus.TRIALING;
             boolean expired = sub.getCurrentPeriodEnd() != null && sub.getCurrentPeriodEnd().isBefore(now);
@@ -234,21 +273,26 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     }
 
     @Override
-    @Transactional
-    public SubscribeResult subscribe(UUID userId, String planCode, String period) throws Exception {
+    @Transactional(noRollbackFor = StripeException.class)
+    public SubscribeResult subscribe(UUID userId, String planCode, String period) throws StripeException {
         SubscriptionPlanEntity plan = getPlanEntityByCode(planCode);
 
         if (!stripeService.isEnabled()) {
-            CustomerSubscription sub = createSubscription(userId, planCode, period);
+            CustomerSubscription sub = newSubscription(userId, planCode, period);
             return SubscribeResult.builder().checkoutUrl("/billing/success?dev=1").sessionId(sub.getId().toString())
                     .build();
         }
 
-        String priceId = "YEARLY".equalsIgnoreCase(period)
+        String priceId = YEARLY.equalsIgnoreCase(period)
                 ? plan.getStripeYearlyPriceId()
                 : plan.getStripeMonthlyPriceId();
-        var session = stripeService.createCheckoutSession("user@example.com", priceId,
-                "http://localhost:3003/billing/success", "http://localhost:3003/billing/cancel");
+        // El correo y las URL de retorno estaban CABLEADOS ("user@example.com" y localhost): en
+        // producción el recibo de Stripe se enviaba a una dirección falsa y, al terminar de pagar, el
+        // cliente acababa redirigido a una máquina que no existe. Se toman del usuario y de la URL
+        // configurada del escaparate, la misma que usan los correos.
+        String email = loadUser(userId).getEmail();
+        Session session = stripeService.createCheckoutSession(email, priceId,
+                storefrontBaseUrl + "/billing/success", storefrontBaseUrl + "/billing/cancel");
         return SubscribeResult.builder().checkoutUrl(session.getUrl()).sessionId(session.getId()).build();
     }
 
@@ -305,16 +349,16 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     }
 
     @Override
-    @Transactional
-    public String createSetupIntentSecret(UUID userId) throws Exception {
+    @Transactional(noRollbackFor = StripeException.class)
+    public String createSetupIntentSecret(UUID userId) throws StripeException {
         requireStripe();
         String customerId = resolveStripeCustomerId(userId);
         return stripeService.createSetupIntent(customerId).getClientSecret();
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public List<CardInfo> listCards(UUID userId) throws Exception {
+    @Transactional(readOnly = true, noRollbackFor = StripeException.class)
+    public List<CardInfo> listCards(UUID userId) throws StripeException {
         requireStripe();
         UserEntity user = loadUser(userId);
         String customerId = user.getStripeCustomerId();
@@ -326,8 +370,8 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     }
 
     @Override
-    @Transactional
-    public void setDefaultCard(UUID userId, String paymentMethodId) throws Exception {
+    @Transactional(noRollbackFor = StripeException.class)
+    public void setDefaultCard(UUID userId, String paymentMethodId) throws StripeException {
         requireStripe();
         String customerId = resolveStripeCustomerId(userId);
         assertCardBelongsToCustomer(customerId, paymentMethodId);
@@ -335,8 +379,8 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     }
 
     @Override
-    @Transactional
-    public void deleteCard(UUID userId, String paymentMethodId) throws Exception {
+    @Transactional(noRollbackFor = StripeException.class)
+    public void deleteCard(UUID userId, String paymentMethodId) throws StripeException {
         requireStripe();
         String customerId = resolveStripeCustomerId(userId);
         assertCardBelongsToCustomer(customerId, paymentMethodId);
@@ -355,7 +399,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     }
 
     /** Devuelve el customerId de Stripe del usuario; lo crea y persiste de forma perezosa si no lo tiene. */
-    private String resolveStripeCustomerId(UUID userId) throws Exception {
+    private String resolveStripeCustomerId(UUID userId) throws StripeException {
         UserEntity user = loadUser(userId);
         if (user.getStripeCustomerId() != null && !user.getStripeCustomerId().isBlank()) {
             return user.getStripeCustomerId();
@@ -368,7 +412,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     }
 
     /** Evita que un usuario manipule (default/borrado) una tarjeta que no es de su Customer. */
-    private void assertCardBelongsToCustomer(String customerId, String paymentMethodId) throws Exception {
+    private void assertCardBelongsToCustomer(String customerId, String paymentMethodId) throws StripeException {
         boolean owned = stripeService.listCards(customerId).stream()
                 .anyMatch(pm -> pm.getId().equals(paymentMethodId));
         if (!owned) {
@@ -388,16 +432,16 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     // =============================================================================================
 
     @Override
-    @Transactional
-    public SubscribeOutcome subscribeWithSavedCard(UUID userId, String planCode, String period) throws Exception {
+    @Transactional(noRollbackFor = StripeException.class)
+    public SubscribeOutcome subscribeWithSavedCard(UUID userId, String planCode, String period) throws StripeException {
         requireStripe();
         SubscriptionPlanEntity plan = getPlanEntityByCode(planCode);
-        String billingPeriod = "YEARLY".equalsIgnoreCase(period) ? "YEARLY" : "MONTHLY";
-        int cnyCents = "YEARLY".equals(billingPeriod) ? plan.getPriceYearlyCents() : plan.getPriceMonthlyCents();
+        String billingPeriod = YEARLY.equalsIgnoreCase(period) ? YEARLY : MONTHLY;
+        int cnyCents = YEARLY.equals(billingPeriod) ? plan.getPriceYearlyCents() : plan.getPriceMonthlyCents();
 
         // Plan gratis: suscripción ACTIVE directa, sin pasar por Stripe.
         if (cnyCents <= 0) {
-            CustomerSubscription free = createSubscription(userId, planCode, billingPeriod);
+            CustomerSubscription free = newSubscription(userId, planCode, billingPeriod);
             return new SubscribeOutcome(free.getId().toString(), "active");
         }
 
@@ -424,9 +468,37 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         String src = plan.getCurrency() != null && !plan.getCurrency().isBlank() ? plan.getCurrency() : "CNY";
         BigDecimal cny = BigDecimal.valueOf(cnyCents).movePointLeft(2);
         BigDecimal usdAmount = currencyService.toUsd(cny, src);
-        // Moneda e importe de COBRO del plan: MISMA regla que checkout/recarga y COINCIDE con el precio
-        // MOSTRADO (BillingController redondea a entero en la divisa activa). EUR si la web está en EUR;
-        // USD si está en USD; cualquier otra divisa, su equivalente en USD.
+        StripeCharge charge = chargeFor(usdAmount);
+        String priceId = stripeService.ensureRecurringPrice(planCode, billingPeriod, charge.cents(),
+                charge.currency(), plan.getName());
+
+        // Fila local (INCOMPLETE) para pasar su id como metadata a Stripe; se actualiza con el resultado.
+        CustomerSubscription local = customerSubscriptionRepository.save(CustomerSubscription.builder().userId(userId)
+                .planId(plan.getId()).status(SubscriptionStatus.INCOMPLETE).billingPeriod(billingPeriod)
+                .stripeCustomerId(customerId).build());
+
+        StripeService.SubResult res = stripeService.createSubscription(customerId, priceId, defaultPm, taxRateId,
+                planCode, userId.toString(), local.getId().toString());
+
+        customerSubscriptionRepository.save(local.withStripeSubscriptionId(res.id())
+                .withStatus(mapStripeStatus(res.status()))
+                .withCurrentPeriodStart(res.periodStart() != null ? Instant.ofEpochSecond(res.periodStart()) : null)
+                .withCurrentPeriodEnd(res.periodEnd() != null ? Instant.ofEpochSecond(res.periodEnd()) : null));
+        log.info("::> [BILLING] Subscribed user={} plan={} status={}", userId, planCode, res.status());
+        return new SubscribeOutcome(res.id(), res.status());
+    }
+
+    /** Moneda e importe (en la subunidad de esa moneda) con los que se cobra el plan en Stripe. */
+    private record StripeCharge(String currency, long cents) {
+    }
+
+    /**
+     * Moneda e importe de COBRO del plan a partir de su precio en USD canónico: MISMA regla que el
+     * checkout y la recarga, y COINCIDE con el precio MOSTRADO —BillingController lo redondea a entero en
+     * la divisa activa—. EUR si la web está en EUR; USD si está en USD; y con cualquier otra divisa se
+     * muestra el precio en ella pero se cobra su equivalente en USD.
+     */
+    private StripeCharge chargeFor(BigDecimal usdAmount) {
         String displayCode = CurrencyHolder.get();
         String chargeCurrency;
         long chargeCents;
@@ -447,28 +519,17 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         if (chargeCents <= 0) {
             chargeCents = 1; // Stripe exige importe > 0
         }
-        String priceId = stripeService.ensureRecurringPrice(planCode, billingPeriod, chargeCents, chargeCurrency,
-                plan.getName());
-
-        // Fila local (INCOMPLETE) para pasar su id como metadata a Stripe; se actualiza con el resultado.
-        CustomerSubscription local = customerSubscriptionRepository.save(CustomerSubscription.builder().userId(userId)
-                .planId(plan.getId()).status(SubscriptionStatus.INCOMPLETE).billingPeriod(billingPeriod)
-                .stripeCustomerId(customerId).build());
-
-        StripeService.SubResult res = stripeService.createSubscription(customerId, priceId, defaultPm, taxRateId,
-                planCode, userId.toString(), local.getId().toString());
-
-        customerSubscriptionRepository.save(local.withStripeSubscriptionId(res.id())
-                .withStatus(mapStripeStatus(res.status()))
-                .withCurrentPeriodStart(res.periodStart() != null ? Instant.ofEpochSecond(res.periodStart()) : null)
-                .withCurrentPeriodEnd(res.periodEnd() != null ? Instant.ofEpochSecond(res.periodEnd()) : null));
-        log.info("::> [BILLING] Subscribed user={} plan={} status={}", userId, planCode, res.status());
-        return new SubscribeOutcome(res.id(), res.status());
+        return new StripeCharge(chargeCurrency, chargeCents);
     }
 
     @Override
     @Transactional(readOnly = true)
     public CustomerSubscription currentSubscription(UUID userId) {
+        return latestNonCanceled(userId);
+    }
+
+    /** Cuerpo sin anotar de {@link #currentSubscription(UUID)}: es al que llaman los flujos internos. */
+    private CustomerSubscription latestNonCanceled(UUID userId) {
         return customerSubscriptionRepository.findByUserId(userId).stream()
                 .filter(s -> s.getStatus() != SubscriptionStatus.CANCELED)
                 .max(Comparator.comparing(CustomerSubscription::getCreatedAt,
@@ -477,9 +538,9 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     }
 
     @Override
-    @Transactional
-    public void cancelMySubscription(UUID userId) throws Exception {
-        CustomerSubscription sub = currentSubscription(userId);
+    @Transactional(noRollbackFor = StripeException.class)
+    public void cancelMySubscription(UUID userId) throws StripeException {
+        CustomerSubscription sub = latestNonCanceled(userId);
         if (sub == null) {
             throw new NotFoundException("No tienes una suscripción activa");
         }
@@ -495,8 +556,8 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public List<InvoiceView> listInvoices(UUID userId) throws Exception {
+    @Transactional(readOnly = true, noRollbackFor = StripeException.class)
+    public List<InvoiceView> listInvoices(UUID userId) throws StripeException {
         if (!stripeService.isEnabled()) {
             return List.of();
         }
@@ -511,8 +572,8 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public byte[] renderInvoicePdf(UUID userId, String number, String locale) throws Exception {
+    @Transactional(readOnly = true, noRollbackFor = StripeException.class)
+    public byte[] renderInvoicePdf(UUID userId, String number, String locale) throws StripeException {
         requireStripe();
         String customerId = loadUser(userId).getStripeCustomerId();
         if (customerId == null || customerId.isBlank()) {

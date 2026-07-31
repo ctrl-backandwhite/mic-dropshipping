@@ -30,6 +30,11 @@ import java.util.Map;
 @Component
 public class StripeGateway implements PaymentGateway {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String PLATFORM = "platform";
+    private static final String STATUS = "status";
+    private static final String ERROR = "error";
+
     @Value("${nexadrop.stripe.enabled:false}")
     private boolean enabled;
 
@@ -75,7 +80,7 @@ public class StripeGateway implements PaymentGateway {
             log.info("Stripe mock-mode ({}) for payment {}", isOrder ? "order checkout" : "wallet recharge", p.getId());
             return new InitiateResult(mock, null, url, null, null, null, Map.of("mock", true));
         }
-        Stripe.apiKey = secretKey;
+        applyApiKey(secretKey);
         // Recarga de wallet Y pago de pedido usan el MISMO Stripe Checkout hospedado (redirect), para que
         // la tarjeta se introduzca en la página segura de Stripe y el cobro se confirme al volver.
         return initiateCheckoutSession(p);
@@ -104,7 +109,7 @@ public class StripeGateway implements PaymentGateway {
             long chargeCents = chargeCents(p);
 
             SessionCreateParams.PaymentIntentData.Builder piData = SessionCreateParams.PaymentIntentData.builder()
-                    .putMetadata("platform", platformId).putMetadata("env", platformEnv)
+                    .putMetadata(PLATFORM, platformId).putMetadata("env", platformEnv)
                     .putMetadata("paymentId", p.getId().toString()).setDescription(description);
             SessionCreateParams.Builder builder = SessionCreateParams.builder()
                     .setMode(SessionCreateParams.Mode.PAYMENT)
@@ -117,7 +122,7 @@ public class StripeGateway implements PaymentGateway {
                                     .build())
                             .build())
                     // Metadata en la sesión y en el PaymentIntent resultante → viaja al cargo/recibo.
-                    .putMetadata("platform", platformId).putMetadata("env", platformEnv)
+                    .putMetadata(PLATFORM, platformId).putMetadata("env", platformEnv)
                     .putMetadata("paymentId", p.getId().toString());
             if (isOrder) {
                 builder.putMetadata("orderId", p.getOrderId().toString());
@@ -149,20 +154,20 @@ public class StripeGateway implements PaymentGateway {
      */
     public Map<String, Object> retrieveCheckoutSession(String sessionId) {
         if (!isActive()) {
-            return Map.of("status", "paid", "mock", true);
+            return Map.of(STATUS, "paid", "mock", true);
         }
         try {
-            Stripe.apiKey = secretKey;
+            applyApiKey(secretKey);
             Session session = Session.retrieve(sessionId);
             String paymentStatus = session.getPaymentStatus(); // "paid" | "unpaid" | "no_payment_required"
             Map<String, Object> out = new HashMap<>();
-            out.put("status", "paid".equals(paymentStatus) ? "paid" : paymentStatus);
+            out.put(STATUS, "paid".equals(paymentStatus) ? "paid" : paymentStatus);
             out.put("payment_status", paymentStatus);
             out.put("paymentIntent", session.getPaymentIntent());
             return out;
         } catch (StripeException e) {
             log.error("Stripe session retrieve failed for {}", sessionId, e);
-            return Map.of("status", "error", "error", e.getMessage());
+            return Map.of(STATUS, ERROR, ERROR, e.getMessage());
         }
     }
 
@@ -172,29 +177,29 @@ public class StripeGateway implements PaymentGateway {
      */
     public Map<String, Object> refund(String paymentIntentId, long amountCents) {
         if (!isActive()) {
-            return Map.of("status", "succeeded", "mock", true);
+            return Map.of(STATUS, "succeeded", "mock", true);
         }
         try {
-            Stripe.apiKey = secretKey;
+            applyApiKey(secretKey);
             RefundCreateParams.Builder b = RefundCreateParams.builder().setPaymentIntent(paymentIntentId)
-                    .putMetadata("platform", platformId).putMetadata("env", platformEnv);
+                    .putMetadata(PLATFORM, platformId).putMetadata("env", platformEnv);
             if (amountCents > 0) {
                 b.setAmount(amountCents);
             }
             Refund refund = Refund.create(b.build());
             Map<String, Object> out = new HashMap<>();
             out.put("id", refund.getId());
-            out.put("status", refund.getStatus());
+            out.put(STATUS, refund.getStatus());
             return out;
         } catch (StripeException e) {
             log.error("Stripe refund failed for PI {}", paymentIntentId, e);
-            return Map.of("status", "failed", "error", e.getMessage());
+            return Map.of(STATUS, "failed", ERROR, e.getMessage());
         }
     }
 
     @Override
     public ConfirmResult confirm(PaymentEntity p, Map<String, Object> providerPayload) {
-        String status = String.valueOf(providerPayload.getOrDefault("status", ""));
+        String status = String.valueOf(providerPayload.getOrDefault(STATUS, ""));
         boolean ok = "succeeded".equals(status) || "paid".equals(status);
         return new ConfirmResult(ok, ok ? null : "Stripe status: " + status, providerPayload);
     }
@@ -213,5 +218,19 @@ public class StripeGateway implements PaymentGateway {
 
     private boolean isActive() {
         return enabled && secretKey != null && !secretKey.isBlank();
+    }
+
+    /**
+     * Publica la clave secreta en la configuración GLOBAL del SDK de Stripe, que es de donde la leen sus
+     * métodos estáticos ({@code Session.create}, {@code Refund.create}…). Se centraliza aquí, en un único
+     * método estático, en vez de repetir la asignación en cada llamada: así hay un solo punto que toca
+     * estado global y queda explicado por qué.
+     *
+     * <p>La alternativa sería pasar {@code RequestOptions} con la clave en cada llamada, que evitaría el
+     * estado global por completo; obliga a cambiar la sobrecarga usada en las tres llamadas y a rehacer
+     * los stubs estáticos de las pruebas, así que se deja como mejora aparte.
+     */
+    private static synchronized void applyApiKey(String key) {
+        Stripe.apiKey = key;
     }
 }

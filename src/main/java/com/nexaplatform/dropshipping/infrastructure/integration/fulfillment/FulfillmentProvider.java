@@ -14,7 +14,7 @@ import java.util.List;
  * <p>Abstrae al transportista para poder conmutar de proveedor sin tocar los consumidores
  * ({@code FulfillmentService}, {@code OrderUseCaseImpl}, {@code ShippingQuoteService},
  * {@code ShippingQuoteController}). La implementación activa hoy es {@link YunExpressFulfillmentService}
- * (única del tipo). {@code CainiaoFulfillmentService} queda fuera del flujo (no implementa este puerto).
+ * (única del tipo).
  */
 public interface FulfillmentProvider {
 
@@ -22,8 +22,18 @@ public interface FulfillmentProvider {
     record SupportedCountry(String countryCode, String countryName) {
     }
 
-    /** Resultado de crear el envío: transportista + nº de seguimiento + referencia + ETA máx (días). */
-    record FulfillmentResult(String carrier, String trackingNumber, String fulfillmentRef, int etaMaxDays) {
+    /**
+     * Resultado de crear el envío de UN bulto: transportista, nº de seguimiento, referencia (guía) y ETA
+     * máx en días. {@code sequenceNo} indica qué bulto del pedido es (1..N) y {@code weightGrams} /
+     * {@code declaredValueCents} lo que finalmente viajó en él, que es lo que se enseña al cliente.
+     */
+    record FulfillmentResult(String carrier, String trackingNumber, String fulfillmentRef, int etaMaxDays,
+            int sequenceNo, int weightGrams, int declaredValueCents, String productCode) {
+
+        /** Bulto único de un pedido que no hizo falta repartir. */
+        public FulfillmentResult(String carrier, String trackingNumber, String fulfillmentRef, int etaMaxDays) {
+            this(carrier, trackingNumber, fulfillmentRef, etaMaxDays, 1, 0, 0, null);
+        }
     }
 
     /** Un paso de la línea temporal de tracking. */
@@ -34,17 +44,63 @@ public interface FulfillmentProvider {
     record TrackingSnapshot(OrderStatus currentStatus, List<TrackingStep> steps) {
     }
 
+    /**
+     * Bulto a cotizar. Es lo que el transportista necesita para tarificar: peso real, dimensiones del
+     * paquete —de las que sale el peso VOLUMÉTRICO— y si lleva batería, que en YunExpress es el
+     * {@code PackageType} (0 = 普货 carga general, 1 = 带电 con batería) y cambia de canal y de tarifa.
+     *
+     * <p>Las dimensiones van en milímetros para no perder precisión con las medidas de catálogo; el
+     * proveedor las convierte a la unidad de su API (YunExpress las quiere en cm enteros).
+     */
+    record ParcelSpec(int weightGrams, int lengthMm, int widthMm, int heightMm, boolean withBattery) {
+
+        /** Bulto del que solo se conoce el peso (sin dimensiones ni batería declarada). */
+        public static ParcelSpec ofWeight(int weightGrams) {
+            return new ParcelSpec(weightGrams, 0, 0, 0, false);
+        }
+
+        /** ¿Tenemos las tres medidas para calcular volumen? */
+        public boolean hasDimensions() {
+            return lengthMm > 0 && widthMm > 0 && heightMm > 0;
+        }
+
+        /** Volumen del bulto en cm³ (0 si falta alguna medida). */
+        public double volumeCm3() {
+            return hasDimensions() ? (lengthMm / 10.0) * (widthMm / 10.0) * (heightMm / 10.0) : 0.0;
+        }
+    }
+
     /** ¿El proveedor envía a este país? */
     boolean isSupported(String countryCode);
 
     /** Países cubiertos (habilitados), ordenados por nombre. */
     List<SupportedCountry> supportedCountries();
 
-    /** Cotiza el envío a un destino para un peso total (gramos); {@link ShippingQuote#unsupported} si no cubre. */
-    ShippingQuote quote(String countryCode, int totalWeightGrams);
+    /** Cotiza el envío de un bulto a un destino; {@link ShippingQuote#unsupported} si no cubre. */
+    ShippingQuote quote(String countryCode, ParcelSpec parcel);
 
-    /** Crea el envío al despachar el pedido (devuelve carrier + nº de seguimiento + referencia). */
-    FulfillmentResult createShipment(Order order);
+    /**
+     * Cotización solo por peso, sin dimensiones ni batería. Se factura por el peso real, así que el
+     * importe puede quedarse corto frente al repeso del transportista en un bulto voluminoso: usar la
+     * sobrecarga con {@link ParcelSpec} siempre que se conozcan las medidas.
+     */
+    default ShippingQuote quote(String countryCode, int totalWeightGrams) {
+        return quote(countryCode, ParcelSpec.ofWeight(totalWeightGrams));
+    }
+
+    /**
+     * Crea TODOS los envíos que necesita el pedido: uno por bulto.
+     *
+     * <p>Un pedido no siempre cabe en un paquete —cada canal impone peso y valor máximos—, así que se
+     * reparte y cada bulto viaja con su propia guía.
+     *
+     * <p>Aquí había además un {@code createShipment(Order)} de un solo envío, y era una trampa: devolvía
+     * el resultado con el constructor de cuatro argumentos, así que peso, valor declarado y canal se
+     * quedaban a cero. Un proveedor que sólo implementara ese método guardaba envíos sin los datos que se
+     * le enseñan al cliente y que la aduana necesita. Ahora el contrato es uno solo, y quien no sepa
+     * repartir devuelve una lista de un elemento —con sus datos completos.
+     */
+    List<FulfillmentResult> createShipments(Order order);
 
     /** Consulta el tracking del envío (estado actual + pasos). */
     TrackingSnapshot track(String trackingNumber, Instant forwardedAt, String countryCode);

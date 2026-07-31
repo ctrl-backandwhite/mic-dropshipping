@@ -135,26 +135,44 @@ public class ProductBulkExportMapper {
         List<String> values = new ArrayList<>();
         Map<String, String> valueImages = new LinkedHashMap<>();
         Map<String, Map<String, String>> valueTranslations = new LinkedHashMap<>();
-        for (VariantValueEntity v : safe(o.getValues()).stream()
-                .sorted(Comparator.comparingInt(VariantValueEntity::getPosition)).toList()) {
-            String value = v.getValue() != null ? v.getValue() : v.getValueZh();
+        for (VariantValueEntity v : sortedValues(o)) {
+            String value = displayValue(v);
             values.add(value);
             if (v.getImageSourceUrl() != null && value != null) {
                 valueImages.put(value, v.getImageSourceUrl());
             }
+            // El mapa de traducciones se indexa por el valor en CHINO, que es la clave estable del
+            // proveedor y la que usa el importador para reencontrarlo al reimportar.
             String key = v.getValueZh() != null ? v.getValueZh() : value;
-            Map<String, String> tr = new LinkedHashMap<>();
-            for (VariantValueTranslationEntity t : safe(v.getTranslations())) {
-                if (t.getLanguage() != null) {
-                    tr.put(t.getLanguage(), t.getValue());
-                }
-            }
+            Map<String, String> tr = translationsByLanguage(v);
             if (!tr.isEmpty() && key != null) {
                 valueTranslations.put(key, tr);
             }
         }
+        // Los mapas vacíos se exportan como ausentes para que el JSON no se llene de objetos vacíos.
         return new BulkAxis(o.getName() != null ? o.getName() : o.getNameZh(), values,
                 valueImages.isEmpty() ? null : valueImages, valueTranslations.isEmpty() ? null : valueTranslations);
+    }
+
+    /** Valores del eje en el orden de carga (posición), que es el mismo orden en el que están en 1688. */
+    private List<VariantValueEntity> sortedValues(VariantOptionEntity o) {
+        return safe(o.getValues()).stream().sorted(Comparator.comparingInt(VariantValueEntity::getPosition)).toList();
+    }
+
+    /** Texto mostrable del valor: el traducido si lo hay, si no el chino original. */
+    private static String displayValue(VariantValueEntity v) {
+        return v.getValue() != null ? v.getValue() : v.getValueZh();
+    }
+
+    /** Traducciones del valor indexadas por idioma; las que no declaran idioma no se pueden exportar. */
+    private Map<String, String> translationsByLanguage(VariantValueEntity v) {
+        Map<String, String> tr = new LinkedHashMap<>();
+        for (VariantValueTranslationEntity t : safe(v.getTranslations())) {
+            if (t.getLanguage() != null) {
+                tr.put(t.getLanguage(), t.getValue());
+            }
+        }
+        return tr;
     }
 
     private BulkVariant variant(ProductVariantEntity v) {

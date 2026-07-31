@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.service;
 
+import com.nexaplatform.dropshipping.application.service.MarginService.PriceWithMargin;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
@@ -7,6 +8,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVa
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Comparator;
@@ -39,13 +41,37 @@ public class PricingService {
         // price from the representative (cheapest active) variant. A single-variant product
         // therefore prices exactly as its variant (delta 0%), and multi-variant products show
         // the "from" price that the customer can actually pay.
+        if (product == null) {
+            // representativeVariant ya contempla que el producto falte y devuelve null, pero tres líneas
+            // más abajo se leía product.getBasePrice() sin comprobarlo. Sin producto no hay nada que
+            // tarificar: se devuelve el mismo "sin precio" que un producto sin base_price, que las vistas
+            // ya saben pintar (nunca 0, que se leería como gratis).
+            return unpriced();
+        }
         ProductVariantEntity effective = variant != null ? variant : representativeVariant(product);
         BigDecimal supplierAmount = effective != null && effective.getPrice() != null
                 ? effective.getPrice()
                 : product.getBasePrice();
+        return priceForSupplierAmount(product, effective, supplierAmount);
+    }
+
+    /**
+     * Tarifica un importe de proveedor concreto con las reglas del producto: margen sobre la base, y
+     * después IVA y envío SIN margen.
+     *
+     * <p>Existe para que los tramos por cantidad pasen por AQUÍ y no por su propia cuenta. Los tramos
+     * calculaban coste → USD → margen y se quedaban ahí, sin IVA ni envío: la ficha anunciaba «2+ →
+     * 1,99 $» y al pagar se cobraban 3,57 $ por unidad. Con una sola fórmula, lo que se enseña y lo que
+     * se cobra no pueden separarse otra vez.
+     */
+    public PricedAmount priceForSupplierAmount(ProductEntity product, ProductVariantEntity effective,
+            BigDecimal supplierAmount) {
+        if (product == null) {
+            return unpriced();
+        }
         String sourceCurrency = product.getCurrency() != null ? product.getCurrency() : "CNY";
         BigDecimal costUsd = supplierAmount != null ? currencyService.toUsd(supplierAmount, sourceCurrency) : null;
-        var withMargin = marginService.apply(costUsd, product, effective);
+        PriceWithMargin withMargin = marginService.apply(costUsd, product, effective);
         // Base CON margen (el margen SOLO se aplica al precio base). El IVA y el envío se suman DESPUÉS,
         // sin margen (decisión del usuario). Ambos vienen en CNY (misma moneda que base) y se convierten a USD.
         BigDecimal retailBaseUsd = withMargin.retailUsd();
@@ -81,6 +107,13 @@ public class PricingService {
                 shippingFormatted);
     }
 
+    /** Resultado "no se puede tarificar": todos los importes a null, nunca 0. */
+    private PricedAmount unpriced() {
+        String displayCode = CurrencyHolder.get();
+        return new PricedAmount(null, null, null, displayCode, currencyService.symbolOf(displayCode),
+                null, null, null, null, null, null, null, null, null);
+    }
+
     /** null → 0 (para sumar componentes de desglose cuando IVA/envío son 0 y la conversión devuelve null). */
     private static BigDecimal nz(BigDecimal v) {
         return v == null ? BigDecimal.ZERO : v;
@@ -101,7 +134,7 @@ public class PricingService {
             return null;
         }
         try {
-            var variants = product.getVariants();
+            List<ProductVariantEntity> variants = product.getVariants();
             if (variants == null || variants.isEmpty()) {
                 return null;
             }

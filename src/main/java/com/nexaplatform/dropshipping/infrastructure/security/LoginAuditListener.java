@@ -36,12 +36,15 @@ public class LoginAuditListener {
      */
     @EventListener
     public void onInteractiveSuccess(InteractiveAuthenticationSuccessEvent event) {
+        // El evento siempre lleva su Authentication (es el "source" del ApplicationEvent, que nunca es
+        // nulo), así que el único caso a distinguir es el login social: ahí el email va en los atributos
+        // del proveedor y el "name" es el identificador de la cuenta remota, no un correo.
         Authentication auth = event.getAuthentication();
-        String email = null;
+        String email;
         if (auth instanceof OAuth2AuthenticationToken oauth && oauth.getPrincipal() instanceof OAuth2User u) {
             Object attr = u.getAttributes().get("email");
             email = attr != null ? attr.toString() : null;
-        } else if (auth != null) {
+        } else {
             email = auth.getName();
         }
         if (email != null && email.contains("@")) {

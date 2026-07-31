@@ -60,7 +60,9 @@ public class MeOrderDtoMapper {
 
         BigDecimal subtotal = BigDecimal.ZERO;
         List<MeOrderItemDetailDtoOut> items = new ArrayList<>();
-        for (OrderItem item : model.getItems()) {
+        // Igual que formatOrderTotal: un pedido sin líneas cargadas no puede romper la ficha (la lista
+        // ya lo tolera, y ver un pedido sin líneas es mejor que un 500 al abrirlo).
+        for (OrderItem item : model.getItems() == null ? List.<OrderItem>of() : model.getItems()) {
             BigDecimal usdUnit = BigDecimal.valueOf(item.getUnitPriceCents()).movePointLeft(2);
             BigDecimal unit = currencyRateService.usdTo(usdUnit, ccy);
             BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(item.getQuantity()));
@@ -102,7 +104,10 @@ public class MeOrderDtoMapper {
                 .totalFormatted(currencyRateService.formatDisplay(total, ccy))
                 .discountFormatted(currencyRateService.formatDisplay(discount, ccy))
                 .shippingAddress(shippingAddress(model)).billingAddress(billingAddress(model)).notes(model.getNotes())
-                .trackingCarrier(null).trackingNumber(null).placedAt(model.getPlacedAt()).shippedAt(model.getShippedAt())
+                // Transportista y nº de seguimiento reales: la ficha del pedido los muestra en cuanto el
+                // envío existe, sin obligar al comprador a abrir el bloque de seguimiento para verlos.
+                .trackingCarrier(model.getCarrier()).trackingNumber(model.getTrackingNumber())
+                .placedAt(model.getPlacedAt()).shippedAt(model.getShippedAt())
                 .deliveredAt(model.getDeliveredAt()).cancelledAt(model.getCancelledAt()).items(items).build();
     }
 

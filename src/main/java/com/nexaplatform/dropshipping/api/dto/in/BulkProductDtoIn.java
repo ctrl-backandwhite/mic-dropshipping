@@ -116,8 +116,18 @@ public class BulkProductDtoIn {
     private Integer heightMm;
     /** País de origen (COO), código ISO-2 (ej. CN). */
     private String countryOfOrigin;
-    /** Código arancelario HS. */
+    /** Código arancelario HS. Si no viene, se hereda del perfil aduanero de la categoría. */
     private String hsCode;
+    /** Material declarado en aduana ({@code InvoicePart}/材质), en inglés. Por defecto, el de la categoría. */
+    private String customsMaterial;
+    /** Uso declarado en aduana ({@code InvoiceUsage}/用途), en inglés. Por defecto, el de la categoría. */
+    private String customsUsage;
+    /**
+     * Batería del artículo: NONE, BUILT_IN (dentro del aparato) o WITH_EQUIPMENT (incluida y acoplada).
+     * Determina el {@code PackageType} del transportista y, con él, el canal y la tarifa. Por defecto,
+     * el de la categoría. Las baterías SUELTAS no se pueden cargar (prohibición aérea).
+     */
+    private String batteryType;
     /** Certificaciones (CE, RoHS, FDA…). */
     private List<String> certifications;
     /** País/almacén de despacho, código ISO-2. */

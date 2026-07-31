@@ -79,7 +79,7 @@ class GoogleOAuth2SuccessHandlerTest {
     void new_or_linked_account_issues_tokens_and_redirects_to_callback_fragment() throws Exception {
         UUID userId = UUID.randomUUID();
         User user = user(userId, "jane@gmail.com");
-        when(userUseCase.resolveGoogleLogin(eq("jane@gmail.com"), eq("Jane"), eq("Doe")))
+        when(userUseCase.resolveGoogleLogin("jane@gmail.com", "Jane", "Doe"))
                 .thenReturn(new GoogleLoginOutcome(user, false, "jane@gmail.com"));
         when(userTokenService.issue(eq(userId), eq("jane@gmail.com"), eq("USER"), any()))
                 .thenReturn(new UserTokenService.Tokens("ACCESS-T", "REFRESH-T", 3600L));

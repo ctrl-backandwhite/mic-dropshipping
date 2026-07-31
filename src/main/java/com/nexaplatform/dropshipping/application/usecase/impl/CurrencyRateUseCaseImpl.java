@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CurrencyRateEntity;
 import com.nexaplatform.dropshipping.application.usecase.CurrencyRateUseCase;
 import com.nexaplatform.dropshipping.domain.model.CurrencyRate;
 import com.nexaplatform.dropshipping.domain.model.CurrencySyncResult;
@@ -76,7 +77,7 @@ public class CurrencyRateUseCaseImpl implements CurrencyRateUseCase {
     @Override
     @Transactional
     public CurrencyRate updateRate(String code, BigDecimal rateVsUsd, Boolean active) {
-        var updated = currencyRateService.overrideRate(code, rateVsUsd);
+        CurrencyRateEntity updated = currencyRateService.overrideRate(code, rateVsUsd);
         if (active != null) {
             updated = currencyRateService.setActive(code, active);
         }

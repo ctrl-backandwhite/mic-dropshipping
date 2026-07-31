@@ -25,5 +25,6 @@ public interface UserRepository extends BaseRepository<User, User, UUID> {
     boolean existsByEmail(String email);
 
     /** All users, newest first, used by the admin listing. */
+    @Override
     List<User> findAll();
 }

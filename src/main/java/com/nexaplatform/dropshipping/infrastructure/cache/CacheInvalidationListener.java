@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.cache;
 
+import org.springframework.cache.Cache;
 import com.nexaplatform.dropshipping.infrastructure.messaging.NexaTopics;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,7 +37,7 @@ public class CacheInvalidationListener {
             log.warn("Cache invalidation event without 'cache' field: {}", event);
             return;
         }
-        var cache = cacheManager.getCache(cacheName.toString());
+        Cache cache = cacheManager.getCache(cacheName.toString());
         if (cache == null) {
             log.debug("Unknown cache '{}', skipping invalidation", cacheName);
             return;

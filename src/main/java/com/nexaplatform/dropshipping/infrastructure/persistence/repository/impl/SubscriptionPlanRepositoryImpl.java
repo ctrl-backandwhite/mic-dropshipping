@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository.impl;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SubscriptionPlanEntity;
 import com.nexaplatform.dropshipping.domain.model.SubscriptionPlan;
 import com.nexaplatform.dropshipping.domain.repository.SubscriptionPlanRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.SubscriptionPlanEntityMapper;
@@ -23,7 +24,7 @@ public class SubscriptionPlanRepositoryImpl implements SubscriptionPlanRepositor
 
     @Override
     public SubscriptionPlan save(SubscriptionPlan model) {
-        var entity = subscriptionPlanJpaRepositoryAdapter.save(subscriptionPlanEntityMapper.toEntity(model));
+        SubscriptionPlanEntity entity = subscriptionPlanJpaRepositoryAdapter.save(subscriptionPlanEntityMapper.toEntity(model));
         return subscriptionPlanEntityMapper.toDomain(entity);
     }
 
