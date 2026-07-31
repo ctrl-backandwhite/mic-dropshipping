@@ -1,7 +1,10 @@
 package com.nexaplatform.dropshipping.application;
 
+import com.nexaplatform.dropshipping.application.service.PublicHttpUrl;
 import com.nexaplatform.dropshipping.application.service.PartnerWebhookDispatcherService;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -29,6 +32,18 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class PartnerWebhookDispatcherServiceTest {
+
+    @BeforeAll
+    static void permitirDestinosLocales() {
+        // Estos casos llaman a un servidor de pruebas en 127.0.0.1, que la protección anti-SSRF rechaza
+        // por diseño. Se abre aquí y se cierra al terminar, para no dejarlo abierto a otros tests.
+        PublicHttpUrl.allowPrivateTargets(true);
+    }
+
+    @AfterAll
+    static void restaurarProteccion() {
+        PublicHttpUrl.allowPrivateTargets(false);
+    }
 
     @Mock
     JdbcTemplate jdbc;

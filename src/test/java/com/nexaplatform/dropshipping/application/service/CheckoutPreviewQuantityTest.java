@@ -50,6 +50,7 @@ class CheckoutPreviewQuantityTest {
         ProductEntity product = mock(ProductEntity.class, RETURNS_DEEP_STUBS);
         lenient().when(products.findById(productId)).thenReturn(Optional.of(product));
         lenient().when(pricing.priceFor(any(), any()).retailUsd()).thenReturn(new BigDecimal(retailUsd));
+        lenient().when(pricing.priceFor(any(), any()).displayAmount()).thenReturn(new BigDecimal(retailUsd));
         lenient().when(currency.usdToDisplay(any(BigDecimal.class))).thenReturn(new BigDecimal(retailUsd));
         lenient().when(affiliate.referralDiscountCents(any(), anyLong())).thenReturn(0L);
         lenient().when(currency.usdTo(any(BigDecimal.class), anyString())).thenReturn(BigDecimal.ZERO);
@@ -95,5 +96,27 @@ class CheckoutPreviewQuantityTest {
         assertThat(service.compute("ES", null,
                 List.of(new CheckoutPreviewService.Line(productId, null, 4)), null).subtotalUsdCents())
                 .isEqualTo(1000);
+    }
+
+    @Test
+    void elImporteMostradoSaleDelPrecioDeLaFichaYNoDeConvertirElCanonico() {
+        // La ficha compone el precio en la moneda del cliente —base, IVA y envío convertidos y
+        // redondeados por separado—; el canónico los suma en dólares y convierte al final. Difieren en un
+        // céntimo, y multiplicado por la cantidad el resumen del checkout dejaba de cuadrar: sumaba
+        // 39,67 € mientras el total decía 39,65 €.
+        ProductEntity product = mock(ProductEntity.class, RETURNS_DEEP_STUBS);
+        lenient().when(products.findById(productId)).thenReturn(Optional.of(product));
+        lenient().when(pricing.priceFor(any(), any()).retailUsd()).thenReturn(new BigDecimal("17.03"));
+        lenient().when(pricing.priceFor(any(), any()).displayAmount()).thenReturn(new BigDecimal("14.79"));
+        lenient().when(currency.usdToDisplay(any(BigDecimal.class))).thenReturn(new BigDecimal("14.78"));
+        lenient().when(affiliate.referralDiscountCents(any(), anyLong())).thenReturn(0L);
+        lenient().when(currency.usdTo(any(BigDecimal.class), anyString())).thenReturn(BigDecimal.ZERO);
+        lenient().when(currency.decimalsOf(anyString())).thenReturn(2);
+
+        CheckoutPreviewService.Preview preview = service.compute("ES", null,
+                List.of(new CheckoutPreviewService.Line(productId, null, 2)), null);
+
+        // 14,79 × 2 = 29,58, el mismo subtotal que enseña el carrito. Con el canónico saldría 29,56.
+        assertThat(preview.subtotalDisplay()).isEqualByComparingTo("29.58");
     }
 }

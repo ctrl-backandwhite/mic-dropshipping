@@ -266,7 +266,7 @@ public class FulfillmentService {
         // decide a quién notificar. Sin bultos (pedidos anteriores al reparto) hay que guardarlos.
         List<TrackingStep> toNotify = collectNewSteps(o, snap, !shipments.isEmpty());
         o.setLastTrackedAt(Instant.now());
-        o.setTrackingStatus(snap.currentStatus().name());
+        advanceTrackingStatus(o, snap.currentStatus());
         OrderStatus current = o.getStatus();
         orderRepository.save(o);
         notifyTrackingSteps(o, toNotify);
@@ -508,6 +508,19 @@ public class FulfillmentService {
             o.setLastTrackedAt(Instant.now());
             orderRepository.save(o);
             log.info("YunExpress push: timeline actualizado para pedido {}", o.getOrderNumber());
+        } else if (!snap.steps().isEmpty()) {
+            // Todos los pasos venían repetidos: normal, el transportista reenvía.
+            log.debug("YunExpress push: pedido {} sin novedades ({} pasos ya conocidos)",
+                    o.getOrderNumber(), snap.steps().size());
+        } else if (events.isArray() && !events.isEmpty()) {
+            // Esto NO es normal: el push trae eventos y no hemos sacado ni un paso de ellos. Pasa cuando
+            // el transportista cambia el nombre de un campo o manda códigos que no reconocemos. Sin este
+            // aviso el push se acepta con un 200, no se guarda nada y nadie se entera de que el
+            // seguimiento se quedó congelado.
+            log.warn("YunExpress push: pedido {} traía {} eventos y ninguno se ha podido interpretar"
+                    + " — ¿ha cambiado el formato del proveedor?", o.getOrderNumber(), events.size());
+        } else {
+            log.warn("YunExpress push: pedido {} recibido sin eventos", o.getOrderNumber());
         }
     }
 
@@ -563,8 +576,48 @@ public class FulfillmentService {
             return false;
         }
         appendEvent(o.getId(), status.name(), desc, location, source, when);
-        o.setTrackingStatus(status.name());
+        advanceTrackingStatus(o, status);
         return true;
+    }
+
+    /**
+     * Mueve el estado de seguimiento SOLO hacia adelante.
+     *
+     * <p>Sin esto el estado retrocedía por dos caminos distintos, y los dos se han visto de verdad. El
+     * sondeo periódico escribía lo que dijera el carrier en ese momento, así que un pedido ya marcado
+     * ENTREGADO por un push volvía a "en tránsito" en cuanto el proveedor tardaba en consolidar el
+     * último evento en su API. Y en un push con varios eventos el estado quedaba en el ÚLTIMO del
+     * array, que no tiene por qué ser el más avanzado: basta con que YunExpress los mande desordenados
+     * —cosa que hace, porque los agrupa por nodo y no por hora— para que un pedido entregado se quede
+     * anunciando la salida del almacén.
+     *
+     * <p>Ver a un pedido desandar el camino es de las cosas que más desconfianza generan en el
+     * comprador, y además dispara avisos que ya se habían mandado.
+     *
+     * <p>Los estados fuera de la escala de avance ({@code progress() < 0}: cancelado, reembolsado) sí se
+     * aplican siempre. No son un paso atrás sino un desenlace distinto, y perder esa información sería
+     * peor que perder el orden.
+     */
+    private void advanceTrackingStatus(Order o, OrderStatus candidate) {
+        if (candidate == null) {
+            return;
+        }
+        OrderStatus actual = parseTrackingStatus(o.getTrackingStatus());
+        if (actual == null || candidate.progress() < 0 || candidate.progress() > actual.progress()) {
+            o.setTrackingStatus(candidate.name());
+        }
+    }
+
+    /** El estado guardado, o null si está vacío o es un valor que ya no existe en el enum. */
+    private static OrderStatus parseTrackingStatus(String stored) {
+        if (stored == null || stored.isBlank()) {
+            return null;
+        }
+        try {
+            return OrderStatus.valueOf(stored);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     /** El proveedor activo, cuando es YunExpress (única implementación cableada hoy). */

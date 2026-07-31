@@ -78,8 +78,15 @@ public class CheckoutPreviewService {
             }
             int qty = Math.clamp(it.quantity(), 1, MAX_LINE_QUANTITY);
             subtotalUsdCents = Math.addExact(subtotalUsdCents, Math.multiplyExact(unitCents, qty));
-            // Unidad en la moneda mostrada, redondeada a 2 dec., × cantidad (misma unidad que carrito/detalle).
-            subDispAcc = subDispAcc.add(currencyService.usdToDisplay(usd(unitCents)).multiply(BigDecimal.valueOf(qty)));
+            // El importe que se ENSEÑA sale del precio de la ficha (displayAmount), no de convertir el
+            // canónico en dólares. Los dos caminos difieren en un céntimo: la ficha compone el precio en
+            // la moneda del cliente —base, IVA y envío convertidos y redondeados por separado— mientras
+            // que el canónico los suma en dólares y convierte al final. Con el resumen del checkout
+            // sumando 39,67 € y el total diciendo 39,65 €, el cliente ve unas cuentas que no cuadran.
+            BigDecimal unitDisplay = unitPriceDisplay(it);
+            if (unitDisplay != null) {
+                subDispAcc = subDispAcc.add(unitDisplay.multiply(BigDecimal.valueOf(qty)));
+            }
         }
 
         // Descuento de referido del COMPRADOR (10% del subtotal de producto) si tiene atribución de
@@ -129,6 +136,24 @@ public class CheckoutPreviewService {
         // HALF_UP (céntimo más cercano) — el MISMO redondeo que el catálogo y que el pedido
         // (OrderUseCaseImpl), para que catálogo == carrito == preview == cobro, sin descuadre de 1 cént.
         return retail.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
+    }
+
+    /**
+     * Precio unitario EN LA MONEDA DEL CLIENTE, el mismo que pinta la ficha y el carrito. Se pide a
+     * {@code PricingService} en lugar de convertir el canónico para que el resumen del checkout sume
+     * exactamente lo que el cliente tiene delante.
+     */
+    private BigDecimal unitPriceDisplay(Line it) {
+        if (it == null || it.productId() == null) {
+            return null;
+        }
+        ProductEntity p = productRepository.findById(it.productId()).orElse(null);
+        if (p == null) {
+            return null;
+        }
+        ProductVariantEntity v = it.variantId() == null ? null
+                : p.getVariants().stream().filter(x -> it.variantId().equals(x.getId())).findFirst().orElse(null);
+        return pricingService.priceFor(p, v).displayAmount();
     }
 
     private static BigDecimal usd(int cents) {

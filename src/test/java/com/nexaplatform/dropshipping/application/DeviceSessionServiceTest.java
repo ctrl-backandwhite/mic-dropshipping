@@ -44,6 +44,14 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class DeviceSessionServiceTest {
 
+    /* Identificadores de dispositivo con la forma real: UUID sin guiones. El servicio descarta
+     * cualquier otra cosa, porque el valor lo controla el cliente y acaba en la cabecera Set-Cookie. */
+    private static final String TOKEN_EXISTENTE = "a1b2c3d4e5f60718293a4b5c6d7e8f90";
+    private static final String TOKEN_OTRO = "9988776655443322110011223344aabb";
+    private static final String TOKEN_UNO = "0123456789abcdef0123456789abcdef";
+    private static final String TOKEN_AJENO = "0f1e2d3c4b5a69788796a5b4c3d2e1f0";
+    private static final String TOKEN_ACTUAL = "ffeeddccbbaa00998877665544332211";
+
     @Mock
     UserSessionRepository repository;
 
@@ -95,12 +103,12 @@ class DeviceSessionServiceTest {
     @Test
     void recordLogin_reusesExistingOwnedRowKeepingTokenAndClearingRevoked() {
         UUID userId = UUID.randomUUID();
-        UserSessionEntity existing = session(UUID.randomUUID(), userId, "tok-existing",
+        UserSessionEntity existing = session(UUID.randomUUID(), userId, TOKEN_EXISTENTE,
                 Instant.now().minusSeconds(3600), Instant.now());
-        HttpServletRequest req = requestWith("tok-existing", "Mozilla/5.0 (iPhone) Safari", "2.2.2.2");
+        HttpServletRequest req = requestWith(TOKEN_EXISTENTE, "Mozilla/5.0 (iPhone) Safari", "2.2.2.2");
         when(req.getHeader("X-Forwarded-For")).thenReturn(null);
         HttpServletResponse res = mock(HttpServletResponse.class);
-        when(repository.findByDeviceToken("tok-existing")).thenReturn(Optional.of(existing));
+        when(repository.findByDeviceToken(TOKEN_EXISTENTE)).thenReturn(Optional.of(existing));
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.recordLogin(userId, req, res);
@@ -109,22 +117,22 @@ class DeviceSessionServiceTest {
         verify(repository).save(captor.capture());
         UserSessionEntity saved = captor.getValue();
         assertThat(saved).isSameAs(existing);
-        assertThat(saved.getDeviceToken()).isEqualTo("tok-existing");
+        assertThat(saved.getDeviceToken()).isEqualTo(TOKEN_EXISTENTE);
         assertThat(saved.getRevokedAt()).isNull();
         assertThat(saved.getDevice()).isEqualTo("Safari · iOS");
-        verify(res).addHeader(eq("Set-Cookie"), contains("tok-existing"));
+        verify(res).addHeader(eq("Set-Cookie"), contains(TOKEN_EXISTENTE));
     }
 
     @Test
     void recordLogin_rotatesTokenWhenCookieBelongsToAnotherUser() {
         UUID userId = UUID.randomUUID();
         UUID otherUser = UUID.randomUUID();
-        UserSessionEntity foreign = session(UUID.randomUUID(), otherUser, "tok-foreign",
+        UserSessionEntity foreign = session(UUID.randomUUID(), otherUser, TOKEN_AJENO,
                 Instant.now(), null);
-        HttpServletRequest req = requestWith("tok-foreign", "Mozilla/5.0 (Android) Chrome", "3.3.3.3");
+        HttpServletRequest req = requestWith(TOKEN_AJENO, "Mozilla/5.0 (Android) Chrome", "3.3.3.3");
         when(req.getHeader("X-Forwarded-For")).thenReturn(null);
         HttpServletResponse res = mock(HttpServletResponse.class);
-        when(repository.findByDeviceToken("tok-foreign")).thenReturn(Optional.of(foreign));
+        when(repository.findByDeviceToken(TOKEN_AJENO)).thenReturn(Optional.of(foreign));
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.recordLogin(userId, req, res);
@@ -134,7 +142,7 @@ class DeviceSessionServiceTest {
         UserSessionEntity saved = captor.getValue();
         // a fresh row for the current user with a rotated token (not the foreign one)
         assertThat(saved.getUserId()).isEqualTo(userId);
-        assertThat(saved.getDeviceToken()).isNotEqualTo("tok-foreign");
+        assertThat(saved.getDeviceToken()).isNotEqualTo(TOKEN_AJENO);
         assertThat(saved).isNotSameAs(foreign);
     }
 
@@ -158,11 +166,11 @@ class DeviceSessionServiceTest {
         UUID userId = UUID.randomUUID();
         UUID currentId = UUID.randomUUID();
         UUID otherId = UUID.randomUUID();
-        UserSessionEntity current = session(currentId, userId, "tok-current", Instant.now(), null);
-        UserSessionEntity other = session(otherId, userId, "tok-other", Instant.now().minusSeconds(60), null);
+        UserSessionEntity current = session(currentId, userId, TOKEN_ACTUAL, Instant.now(), null);
+        UserSessionEntity other = session(otherId, userId, TOKEN_OTRO, Instant.now().minusSeconds(60), null);
         when(repository.findByUserIdAndRevokedAtIsNullOrderByLastSeenAtDesc(userId))
                 .thenReturn(List.of(current, other));
-        HttpServletRequest req = requestWith("tok-current", "Chrome", "1.1.1.1");
+        HttpServletRequest req = requestWith(TOKEN_ACTUAL, "Chrome", "1.1.1.1");
 
         List<DeviceSessionService.SessionView> views = service.list(userId, req);
 
@@ -176,7 +184,7 @@ class DeviceSessionServiceTest {
     @Test
     void list_marksNoneCurrentWhenNoDeviceCookie() {
         UUID userId = UUID.randomUUID();
-        UserSessionEntity s = session(UUID.randomUUID(), userId, "tok", Instant.now(), null);
+        UserSessionEntity s = session(UUID.randomUUID(), userId, TOKEN_UNO, Instant.now(), null);
         when(repository.findByUserIdAndRevokedAtIsNullOrderByLastSeenAtDesc(userId)).thenReturn(List.of(s));
         HttpServletRequest req = requestWith(null, "Chrome", "1.1.1.1");
 
@@ -190,7 +198,7 @@ class DeviceSessionServiceTest {
     void revoke_setsRevokedAtAndSavesWhenSessionBelongsToUser() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
-        UserSessionEntity owned = session(sessionId, userId, "tok", Instant.now(), null);
+        UserSessionEntity owned = session(sessionId, userId, TOKEN_UNO, Instant.now(), null);
         when(repository.findById(sessionId)).thenReturn(Optional.of(owned));
 
         service.revoke(userId, sessionId);
@@ -203,7 +211,7 @@ class DeviceSessionServiceTest {
     void revoke_noOpWhenSessionBelongsToAnotherUser() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
-        UserSessionEntity foreign = session(sessionId, UUID.randomUUID(), "tok", Instant.now(), null);
+        UserSessionEntity foreign = session(sessionId, UUID.randomUUID(), TOKEN_UNO, Instant.now(), null);
         when(repository.findById(sessionId)).thenReturn(Optional.of(foreign));
 
         service.revoke(userId, sessionId);
@@ -233,18 +241,18 @@ class DeviceSessionServiceTest {
 
     @Test
     void isRevoked_trueWhenSessionForCookieIsRevoked() {
-        UserSessionEntity revoked = session(UUID.randomUUID(), UUID.randomUUID(), "tok", Instant.now(), Instant.now());
-        when(repository.findByDeviceToken("tok")).thenReturn(Optional.of(revoked));
-        HttpServletRequest req = requestWith("tok", "Chrome", "1.1.1.1");
+        UserSessionEntity revoked = session(UUID.randomUUID(), UUID.randomUUID(), TOKEN_UNO, Instant.now(), Instant.now());
+        when(repository.findByDeviceToken(TOKEN_UNO)).thenReturn(Optional.of(revoked));
+        HttpServletRequest req = requestWith(TOKEN_UNO, "Chrome", "1.1.1.1");
 
         assertThat(service.isRevoked(req)).isTrue();
     }
 
     @Test
     void isRevoked_falseWhenSessionForCookieIsActive() {
-        UserSessionEntity active = session(UUID.randomUUID(), UUID.randomUUID(), "tok", Instant.now(), null);
-        when(repository.findByDeviceToken("tok")).thenReturn(Optional.of(active));
-        HttpServletRequest req = requestWith("tok", "Chrome", "1.1.1.1");
+        UserSessionEntity active = session(UUID.randomUUID(), UUID.randomUUID(), TOKEN_UNO, Instant.now(), null);
+        when(repository.findByDeviceToken(TOKEN_UNO)).thenReturn(Optional.of(active));
+        HttpServletRequest req = requestWith(TOKEN_UNO, "Chrome", "1.1.1.1");
 
         assertThat(service.isRevoked(req)).isFalse();
     }

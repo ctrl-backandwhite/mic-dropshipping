@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.nexaplatform.dropshipping.application.service.PublicHttpUrl;
 import com.nexaplatform.dropshipping.application.service.PartnerWebhookDispatcherService;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.WebhookDeliveryEntity;
@@ -9,6 +10,8 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.WebhookSu
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.WebhookDeliveryRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.WebhookSubscriptionRepository;
 import com.sun.net.httpserver.HttpServer;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,6 +55,18 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class Cov10WebhookDispatcherServiceTest {
+
+    @BeforeAll
+    static void permitirDestinosLocales() {
+        // Estos casos llaman a un servidor de pruebas en 127.0.0.1, que la protección anti-SSRF rechaza
+        // por diseño. Se abre aquí y se cierra al terminar, para no dejarlo abierto a otros tests.
+        PublicHttpUrl.allowPrivateTargets(true);
+    }
+
+    @AfterAll
+    static void restaurarProteccion() {
+        PublicHttpUrl.allowPrivateTargets(false);
+    }
 
     @Mock
     WebhookSubscriptionRepository subscriptionRepository;

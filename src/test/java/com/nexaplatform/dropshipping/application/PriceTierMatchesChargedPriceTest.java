@@ -100,4 +100,16 @@ class PriceTierMatchesChargedPriceTest {
     void unTramoDeUnProductoQueYaNoExisteNoRevienta() {
         assertThat(pricingService.priceForSupplierAmount(null, null, COSTE_CNY).displayAmount()).isNull();
     }
+
+    @Test
+    void elPrecioQueSeEnsenaEsElCanonicoConvertido() {
+        // Componer el precio en la moneda del cliente (base, IVA y envío convertidos por separado) y
+        // componerlo en dólares dan resultados que difieren en un céntimo. Con eso el escaparate
+        // anunciaba 14,79 € mientras el pedido se cobraba a 14,78 €. El precio mostrado se deriva del
+        // canónico, que es el que se guarda y se cobra.
+        PricedAmount priced = pricingService.priceFor(product, null);
+
+        assertThat(priced.displayAmount())
+                .isEqualByComparingTo(currencyRateService.usdToDisplay(priced.retailUsd()));
+    }
 }
