@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
@@ -50,10 +51,12 @@ class AdminOrderTotalIsChargedAmountTest {
         // instanciarla a mano obligaría a implementar todos los métodos de mapeo.
         mapper = new AdminOrderMapperImpl();
         mapper.setCurrencyRateService(currencyRateService);
+        mapper.setOrderAmounts(new OrderAmounts(currencyRateService));
         CurrencyHolder.set("EUR");
 
         when(currencyRateService.usdTo(any(BigDecimal.class), anyString()))
                 .thenAnswer(inv -> inv.<BigDecimal>getArgument(0).multiply(USD_A_EUR));
+        when(currencyRateService.decimalsOf(anyString())).thenReturn(2);
         when(currencyRateService.formatDisplay(any(BigDecimal.class), anyString()))
                 .thenAnswer(inv -> inv.<BigDecimal>getArgument(0).setScale(2, RoundingMode.HALF_UP) + " €");
     }
@@ -82,6 +85,20 @@ class AdminOrderTotalIsChargedAmountTest {
         pedido.setItems(null);
 
         assertThat(mapper.totalFormatted(pedido)).isEqualTo("14.20 €");
+    }
+
+    @Test
+    void elSubtotalSeSumaLineaALineaComoLoHaceElCliente() {
+        // 4 uds de 16,98 USD: la unidad convertida da 14,89 € y cuatro son 59,56 €, lo que el cliente vio
+        // y pagó. Convertir los 67,92 USD de una vez daba 59,58 € y el total del panel se iba a 76,68 €
+        // frente a los 76,66 € cobrados.
+        Order pedido = Order.builder()
+                .subtotalCents(6792).shippingCents(1112).taxCents(1517).discountCents(679).totalCents(8742)
+                .currency("USD")
+                .items(List.of(OrderItem.builder().unitPriceCents(1698).quantity(4).build()))
+                .build();
+
+        assertThat(mapper.totalFormatted(pedido)).isEqualTo("76.66 €");
     }
 
     @Test

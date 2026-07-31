@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
@@ -99,7 +100,7 @@ class RechargeInitiationTest {
         subject = new PaymentUseCaseImpl(List.of(gateway), paymentRepository, paymentJpaRepositoryAdapter,
                 userRepository, orderRepository, walletUseCase, auditLogger, partnerPlanSyncService,
                 customerSubscriptionUseCase, subscriptionNotificationService, new ObjectMapper(), orderEmailService,
-                currencyRateService, stockService, opsAlertService);
+                currencyRateService, new OrderAmounts(currencyRateService), stockService, opsAlertService);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(mock(UserEntity.class)));
         Wallet w = new Wallet();

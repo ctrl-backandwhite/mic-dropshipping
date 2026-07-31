@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
@@ -120,7 +121,7 @@ class Cov09PaymentGatewayFlowsTest {
     private PaymentUseCaseImpl useCase(List<PaymentGateway> gateways) {
         return new PaymentUseCaseImpl(gateways, paymentRepository, paymentJpaRepositoryAdapter, userRepository,
                 orderRepository, walletUseCase, auditLogger, partnerPlanSyncService, customerSubscriptionUseCase,
-                subscriptionNotificationService, new ObjectMapper(), orderEmailService, currencyRateService,
+                subscriptionNotificationService, new ObjectMapper(), orderEmailService, currencyRateService, new OrderAmounts(currencyRateService),
                 stockService, opsAlertService);
     }
 

@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
@@ -100,7 +101,7 @@ class Cov09PaymentRechargeTest {
         subject = new PaymentUseCaseImpl(List.of(gateway), paymentRepository, paymentJpaRepositoryAdapter,
                 userRepository, orderRepository, walletUseCase, auditLogger, partnerPlanSyncService,
                 customerSubscriptionUseCase, subscriptionNotificationService, new ObjectMapper(), orderEmailService,
-                currencyRateService, stockService, opsAlertService);
+                currencyRateService, new OrderAmounts(currencyRateService), stockService, opsAlertService);
     }
 
     /** Usuario existente, wallet disponible y pasarela que abre el cobro sin incidencias. */
@@ -261,6 +262,7 @@ class Cov09PaymentRechargeTest {
         happyPath();
         when(currencyRateService.toUsd(new BigDecimal("50.00"), "EUR")).thenReturn(new BigDecimal("55.00"));
         when(currencyRateService.usdTo(new BigDecimal("55.00"), "USDT")).thenReturn(new BigDecimal("55.00"));
+        when(currencyRateService.decimalsOf(anyString())).thenReturn(2);
 
         Payment p = subject.initiateRecharge(userId, PaymentMethod.USDT, null, "EUR", new BigDecimal("50.00"), "k1",
                 "TRON");

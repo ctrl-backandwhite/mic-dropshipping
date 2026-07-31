@@ -53,6 +53,7 @@ class CheckoutPreviewQuantityTest {
         lenient().when(currency.usdToDisplay(any(BigDecimal.class))).thenReturn(new BigDecimal(retailUsd));
         lenient().when(affiliate.referralDiscountCents(any(), anyLong())).thenReturn(0L);
         lenient().when(currency.usdTo(any(BigDecimal.class), anyString())).thenReturn(BigDecimal.ZERO);
+        lenient().when(currency.decimalsOf(anyString())).thenReturn(2);
     }
 
     @Test
