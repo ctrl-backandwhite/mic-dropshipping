@@ -89,13 +89,17 @@ public class PricingService {
         BigDecimal displayBase = currencyService.usdToDisplay(baseUsd);
         BigDecimal displayIva = currencyService.usdToDisplay(ivaUsd);
         BigDecimal displayShip = currencyService.usdToDisplay(shippingUsd);
-        BigDecimal displayTotal = displayBase == null ? null
-                : displayBase.add(nz(displayIva)).add(nz(displayShip));
-        // Cobro canónico en USD = suma de los componentes redondeados a céntimo USD (HALF_UP) → en USD el
-        // display == cobro, y para otras divisas el pedido (que cobra en USD) usa exactamente esta cifra.
+        // Cobro canónico en dólares: base, IVA y envío redondeados al céntimo y sumados. Es la cifra que
+        // guarda el pedido y con la que se cobra.
         BigDecimal retailUsd = baseUsd == null ? null
                 : baseUsd.setScale(2, RoundingMode.HALF_UP).add(ivaUsd.setScale(2, RoundingMode.HALF_UP))
                         .add(shippingUsd.setScale(2, RoundingMode.HALF_UP));
+        // Y el precio que se ENSEÑA es ese mismo importe convertido, no la suma de los tres componentes
+        // convertidos por separado. Parece equivalente y no lo es: componer en euros y componer en
+        // dólares dan resultados que difieren en un céntimo, y con eso el escaparate anunciaba 14,79 €
+        // mientras el pedido se cobraba a 14,78 €. Derivándolo del canónico, lo que se enseña ES lo que
+        // se cobra, en cualquier moneda y sin más cuentas de por medio.
+        BigDecimal displayTotal = currencyService.usdToDisplay(retailUsd);
         // El string formateado lo produce el BACKEND (locale de la moneda en BD); el frontend solo pinta.
         String displayFormatted = currencyService.formatDisplay(displayTotal, displayCode);
         String baseFormatted = currencyService.formatDisplay(displayBase, displayCode);
