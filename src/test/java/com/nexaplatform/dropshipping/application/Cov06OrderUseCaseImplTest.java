@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application;
 
+import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.AddressInput;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.CreateOrderRequest;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.OrderItemInput;
@@ -695,7 +696,7 @@ class Cov06OrderUseCaseImplTest {
     }
 
     private static ProductEntity producto(String precioCny) {
-        ProductEntity p = ProductEntity.builder().slug("chaqueta").titleZh("蓝色外套").moq(1)
+        ProductEntity p = ProductEntity.builder().status(ProductStatus.ACTIVE).slug("chaqueta").titleZh("蓝色外套").moq(1)
                 .basePrice(new BigDecimal(precioCny)).images(new ArrayList<>()).translations(new ArrayList<>())
                 .build();
         p.setId(UUID.randomUUID());

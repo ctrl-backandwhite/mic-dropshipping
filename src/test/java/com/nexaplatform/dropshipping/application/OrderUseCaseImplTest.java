@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application;
 
+import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.AddressInput;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.CreateOrderRequest;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.OrderItemInput;
@@ -129,7 +130,7 @@ class OrderUseCaseImplTest {
     @Test
     void create_order_with_two_items_computes_totals() {
         UUID productId = UUID.randomUUID();
-        ProductEntity product = ProductEntity.builder().basePrice(new BigDecimal("12.50")).moq(1).titleZh("Widget")
+        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).basePrice(new BigDecimal("12.50")).moq(1).titleZh("Widget")
                 .build();
         product.setId(productId);
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
@@ -157,7 +158,7 @@ class OrderUseCaseImplTest {
     @Test
     void create_order_rejected_when_destination_blocks_over_threshold() {
         UUID productId = UUID.randomUUID();
-        ProductEntity product = ProductEntity.builder().basePrice(new BigDecimal("12.50")).moq(1).titleZh("Widget")
+        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).basePrice(new BigDecimal("12.50")).moq(1).titleZh("Widget")
                 .build();
         product.setId(productId);
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
@@ -181,7 +182,7 @@ class OrderUseCaseImplTest {
     @Test
     void create_order_fails_if_product_has_no_price() {
         UUID productId = UUID.randomUUID();
-        ProductEntity product = ProductEntity.builder().titleZh("noprice").moq(1).build();
+        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).titleZh("noprice").moq(1).build();
         product.setId(productId);
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
         when(pricingService.priceFor(any(), any())).thenReturn(priced(null));
@@ -211,7 +212,7 @@ class OrderUseCaseImplTest {
     void variant_price_overrides_product_price() {
         UUID productId = UUID.randomUUID();
         UUID variantId = UUID.randomUUID();
-        ProductEntity product = ProductEntity.builder().basePrice(new BigDecimal("10")).moq(1).titleZh("p").build();
+        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).basePrice(new BigDecimal("10")).moq(1).titleZh("p").build();
         product.setId(productId);
         ProductVariantEntity variant = ProductVariantEntity.builder().price(new BigDecimal("15")).sku("V1").stock(10)
                 .active(true).build();
@@ -236,7 +237,7 @@ class OrderUseCaseImplTest {
         // para que el front identifique y quite la línea rota.
         UUID productId = UUID.randomUUID();
         UUID staleVariantId = UUID.randomUUID();
-        ProductEntity product = ProductEntity.builder().basePrice(new BigDecimal("10")).moq(1).titleZh("p").build();
+        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE).basePrice(new BigDecimal("10")).moq(1).titleZh("p").build();
         product.setId(productId);
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
         when(variantRepository.findById(staleVariantId)).thenReturn(Optional.empty());

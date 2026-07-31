@@ -48,16 +48,28 @@ public abstract class AdminOrderMapper {
     /**
      * Total del pedido tal y como se le cobró al cliente, en la divisa activa del panel.
      *
-     * <p>Se convierte {@code totalCents} —el importe que se cobró y que consta en el pedido— en vez de
-     * recomponerlo sumando líneas, envío e impuestos. Recalcularlo redondeaba cada componente por
-     * separado y el panel acababa enseñando 14,21 € donde el cliente había pagado 14,20 €: un céntimo
-     * de diferencia justo en la pantalla desde la que se atiende una reclamación.
+     * <p>Se suman los tres componentes ya convertidos y redondeados —subtotal, envío e impuestos— y no
+     * el total canónico en USD de una vez. Parece lo mismo y no lo es: con el pedido de la certificación
+     * (7,14 + 6,25 + 2,81 = 16,20 USD a 0,87717) convertir de una vez da 14,21 € y sumar los componentes
+     * da 14,20 €, que es lo que el cliente vio en su ficha y lo que pagó. El panel desde el que se
+     * atiende una reclamación tiene que enseñar exactamente esa cifra.
+     *
+     * <p>Se parte de {@code subtotalCents} y no de las líneas: la ficha del panel no siempre las trae
+     * cargadas, y recorrerlas daba cero cuando faltaban.
      */
     protected String totalFormatted(Order order) {
         String ccy = CurrencyHolder.get();
-        BigDecimal charged = BigDecimal.valueOf(order.getTotalCents()).movePointLeft(2);
-        return currencyRateService.formatDisplay(
-                currencyRateService.usdTo(charged, ccy).setScale(2, RoundingMode.HALF_UP), ccy);
+        BigDecimal total = enDivisa(order.getSubtotalCents(), ccy)
+                .add(enDivisa(order.getShippingCents(), ccy))
+                .add(enDivisa(order.getTaxCents(), ccy))
+                .subtract(enDivisa(order.getDiscountCents(), ccy));
+        return currencyRateService.formatDisplay(total, ccy);
+    }
+
+    /** Un importe en céntimos USD, convertido a la divisa del panel y redondeado a su céntimo. */
+    private BigDecimal enDivisa(int cents, String ccy) {
+        return currencyRateService.usdTo(BigDecimal.valueOf(cents).movePointLeft(2), ccy)
+                .setScale(2, RoundingMode.HALF_UP);
     }
 
 

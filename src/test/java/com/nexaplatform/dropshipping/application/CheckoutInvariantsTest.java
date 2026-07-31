@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application;
 
+import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.api.dto.in.MeCheckoutDtoIn;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.AddressInput;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
@@ -30,6 +31,8 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Produ
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopConnectionRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserAddressRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -147,6 +150,7 @@ class CheckoutInvariantsTest {
         p.setSlug("reloj");
         p.setBasePrice(new BigDecimal("70.00"));
         p.setImages(new ArrayList<>());
+        p.setStatus(ProductStatus.ACTIVE);
         when(productRepository.findById(productId)).thenReturn(Optional.of(p));
         when(pricingService.priceFor(any(), any())).thenReturn(new PricingService.PricedAmount(
                 new BigDecimal("10.00"), new BigDecimal("40.00"), null, "USD", "$", null, null, null,
@@ -173,6 +177,29 @@ class CheckoutInvariantsTest {
         user.setEmail("cliente@example.com");
         user.setLanguage("es");
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+    }
+
+    // ---------------------------------------------------------------- producto retirado
+
+    @ParameterizedTest
+    @EnumSource(value = ProductStatus.class, names = "ACTIVE", mode = EnumSource.Mode.EXCLUDE)
+    void unProductoRetiradoDelCatalogoNoSePuedeComprar(ProductStatus retirado) {
+        // El carrito vive en el navegador del cliente: añade hoy, el administrador lo pausa o lo archiva
+        // mañana —el proveedor lo dio de baja, se agotó, no puede venderse— y el cliente termina la
+        // compra la semana que viene. Sin esta comprobación el pedido se aceptaba y se COBRABA, con el
+        // escaparate sin enseñar ya el producto.
+        happyPath(4000);
+        ProductEntity p = productRepository.findById(productId).orElseThrow();
+        p.setStatus(retirado);
+        MeCheckoutDtoIn req = request("WALLET", null);
+        req.setShippingAddressInline(address("ES"));
+
+        assertThatThrownBy(() -> subject.checkout(userId, req, null))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getCode()).isEqualTo("PRODUCT_UNAVAILABLE"));
+
+        verify(orderRepository, never()).save(any());
+        verify(walletUseCase, never()).charge(any(), anyLong(), any(), anyString(), anyString());
     }
 
     // ---------------------------------------------------------------- destino

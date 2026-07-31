@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application;
 
+import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.AddressInput;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.CreateOrderRequest;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.OrderItemInput;
@@ -125,6 +126,7 @@ class OrderLineSnapshotTest {
         p.setSlug("reloj-hombre");
         p.setBasePrice(new BigDecimal("70.00"));
         p.setImages(new ArrayList<>());
+        p.setStatus(ProductStatus.ACTIVE);
         when(productRepository.findById(productId)).thenReturn(Optional.of(p));
         return p;
     }

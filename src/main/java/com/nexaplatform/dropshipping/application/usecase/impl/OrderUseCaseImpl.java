@@ -26,6 +26,7 @@ import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
+import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
@@ -188,6 +189,16 @@ public class OrderUseCaseImpl implements OrderUseCase {
         }
         ProductEntity product = productRepository.findById(itemReq.productId())
                 .orElseThrow(() -> new NotFoundException("Product not found: " + itemReq.productId()));
+        // Un producto retirado no se vende, aunque la línea siga en un carrito viejo. El carrito vive en
+        // el navegador del cliente: añade hoy, el administrador pausa o archiva mañana —porque el
+        // proveedor lo dio de baja, porque se agotó o porque no puede venderse— y el cliente compra la
+        // semana que viene. Sin esta comprobación el pedido se aceptaba y se cobraba igual, y el
+        // escaparate ni siquiera enseñaba ya el producto.
+        if (product.getStatus() != ProductStatus.ACTIVE) {
+            throw new BusinessException("PRODUCT_UNAVAILABLE",
+                    "«" + orderTitle(product, orderLang) + "» ya no está disponible. Quítalo del carrito"
+                            + " para continuar.");
+        }
         ProductVariantEntity variant = itemReq.variantId() == null
                 ? null
                 : variantRepository.findById(itemReq.variantId())

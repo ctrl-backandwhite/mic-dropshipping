@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.mapper;
 
+import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.PriceTierView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
@@ -85,7 +86,7 @@ class Cov05ProductMapperTest {
     }
 
     private ProductEntity product() {
-        ProductEntity p = ProductEntity.builder().slug("vestido-rojo").source("1688").externalId("1").titleZh("连衣裙")
+        ProductEntity p = ProductEntity.builder().status(ProductStatus.ACTIVE).slug("vestido-rojo").source("1688").externalId("1").titleZh("连衣裙")
                 .shortDescriptionZh("短").descriptionZh("长").basePrice(new BigDecimal("12.50")).currency("CNY")
                 .build();
         p.setId(UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd"));

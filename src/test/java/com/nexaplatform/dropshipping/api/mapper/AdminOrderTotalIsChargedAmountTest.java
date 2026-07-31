@@ -36,8 +36,8 @@ import static org.mockito.Mockito.when;
 @DisplayName("El total del pedido en el panel es el importe cobrado")
 class AdminOrderTotalIsChargedAmountTest {
 
-    /** Tasa USD→EUR del día en que se detectó, la que produce el descuadre por redondeo. */
-    private static final BigDecimal USD_A_EUR = new BigDecimal("0.876543");
+    /** Tasa USD→EUR real del entorno: la que destapa el descuadre de un céntimo. */
+    private static final BigDecimal USD_A_EUR = new BigDecimal("0.87717");
 
     @Mock
     private CurrencyRateService currencyRateService;
@@ -64,22 +64,33 @@ class AdminOrderTotalIsChargedAmountTest {
     }
 
     @Test
-    void elTotalEsElImporteCobradoYNoLaSumaRecalculada() {
+    void elTotalDelPanelEsElMismoQueVeYPagaElCliente() {
         Order pedido = pedidoDeLaCertificacion();
 
         String mostrado = mapper.totalFormatted(pedido);
 
-        // 1.620 céntimos USD → 14,20 €. Sumar los componentes redondeados por separado daba 14,21 €.
+        // 6,26 + 5,48 + 2,46 = 14,20 €, la cifra de la ficha del cliente y del cargo. Convertir el total
+        // canónico (16,20 USD × 0,87717 = 14,2101) de una sola vez daría 14,21 €: un céntimo de más justo
+        // en la pantalla desde la que se atiende una reclamación.
         assertThat(mostrado).isEqualTo("14.20 €");
     }
 
     @Test
     void unPedidoSinLineasCargadasSigueMostrandoSuTotal() {
-        // La ficha del panel no siempre trae las líneas; recalculando, el total salía a cero.
+        // La ficha del panel no siempre trae las líneas cargadas; recorriéndolas, el total salía a cero.
         Order pedido = pedidoDeLaCertificacion();
         pedido.setItems(null);
 
         assertThat(mapper.totalFormatted(pedido)).isEqualTo("14.20 €");
+    }
+
+    @Test
+    void elDescuentoDeReferidoSeRestaDelTotal() {
+        Order pedido = pedidoDeLaCertificacion();
+        pedido.setDiscountCents(100);
+
+        // 14,20 − 0,88 (1,00 USD convertido) = 13,32 €.
+        assertThat(mapper.totalFormatted(pedido)).isEqualTo("13.32 €");
     }
 
     /** El pedido NX-1785433008-4345: 2 uds a 3,57 $ + 6,25 $ de envío + 2,81 $ de impuestos. */
