@@ -79,15 +79,45 @@ public class CurrencyRateService {
     public BigDecimal usdTo(BigDecimal amountUsd, String targetCode) {
         if (amountUsd == null)
             return null;
-        // Precio final al cliente: 2 decimales al céntimo MÁS CERCANO (HALF_UP). Antes se redondeaba
-        // siempre hacia arriba (UP), lo que inflaba montos exactos en el round-trip de moneda (30 CNY →
-        // USD → 30.01 CNY). Con HALF_UP un monto exacto de origen se muestra exacto. Aplica a la moneda
-        // mostrada y a la de cobro (mismo cálculo → catálogo == carrito == cobro).
+        // Precio final al cliente, redondeado a la unidad MÁS PEQUEÑA QUE EXISTE en esa moneda y al valor
+        // más cercano (HALF_UP). Antes se redondeaba siempre hacia arriba (UP), lo que inflaba montos
+        // exactos en el round-trip de moneda (30 CNY → USD → 30.01 CNY); con HALF_UP un monto exacto de
+        // origen se muestra exacto.
+        //
+        // Y antes se fijaban siempre 2 decimales, tuviera la moneda o no. El yen y el peso chileno no
+        // tienen céntimos: el importe se guardaba como 2775,53 ¥ y al pintarlo salía «2.776 ¥», así que
+        // el cliente veía 2.776 ¥ la unidad y 11.102 ¥ por cuatro —dos yenes que no cuadran por más que
+        // multiplique—. Redondeando aquí a los decimales reales de la moneda, lo que se enseña coincide
+        // con lo que suma.
+        int decimales = fractionDigits(targetCode);
         if ("USD".equalsIgnoreCase(targetCode)) {
-            return amountUsd.setScale(2, RoundingMode.HALF_UP);
+            return amountUsd.setScale(decimales, RoundingMode.HALF_UP);
         }
-        return find(targetCode).map(r -> amountUsd.multiply(r.getRateVsUsd()).setScale(2, RoundingMode.HALF_UP))
-                .orElse(amountUsd.setScale(2, RoundingMode.HALF_UP));
+        return find(targetCode)
+                .map(r -> amountUsd.multiply(r.getRateVsUsd()).setScale(decimales, RoundingMode.HALF_UP))
+                .orElse(amountUsd.setScale(decimales, RoundingMode.HALF_UP));
+    }
+
+    /**
+     * Decimales que admite una moneda: 0 en yen o peso chileno, 2 en la mayoría, 3 en el dinar kuwaití.
+     * Lo dice la propia JDK a partir de la ISO 4217; para un código que no reconozca se asumen 2, que es
+     * lo más común y lo que se hacía antes para todas.
+     */
+    /** Decimales que admite una moneda, para quien necesite redondear igual que las conversiones. */
+    public int decimalsOf(String code) {
+        return fractionDigits(code);
+    }
+
+    private static int fractionDigits(String code) {
+        if (code == null || code.isBlank()) {
+            return 2;
+        }
+        try {
+            int digits = Currency.getInstance(code.toUpperCase(Locale.ROOT)).getDefaultFractionDigits();
+            return digits >= 0 ? digits : 2;
+        } catch (IllegalArgumentException e) {
+            return 2;
+        }
     }
 
     /** Convert an amount in any source currency to USD (used at order creation to fix USD canonical). */

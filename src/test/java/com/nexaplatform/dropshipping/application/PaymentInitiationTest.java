@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
@@ -106,7 +107,7 @@ class PaymentInitiationTest {
     private PaymentUseCaseImpl useCase() {
         return new PaymentUseCaseImpl(List.of(gateway), paymentRepository, paymentJpaRepositoryAdapter, userRepository,
                 orderRepository, walletUseCase, auditLogger, partnerPlanSyncService, customerSubscriptionUseCase,
-                subscriptionNotificationService, new ObjectMapper(), orderEmailService, currencyRateService,
+                subscriptionNotificationService, new ObjectMapper(), orderEmailService, currencyRateService, new OrderAmounts(currencyRateService),
                 stockService, opsAlertService);
     }
 
@@ -134,7 +135,8 @@ class PaymentInitiationTest {
         w.setId(UUID.randomUUID());
         when(walletUseCase.getOrCreate(userId)).thenReturn(w);
         when(currencyRateService.usdTo(any(BigDecimal.class), anyString()))
-                .thenAnswer(i -> i.getArgument(0));            // 1:1 para que las cuentas se lean solas
+                .thenAnswer(i -> i.getArgument(0));
+        when(currencyRateService.decimalsOf(anyString())).thenReturn(2);            // 1:1 para que las cuentas se lean solas
         when(paymentRepository.save(any())).thenAnswer(i -> {
             Payment p = i.getArgument(0);
             if (p.getId() == null) {

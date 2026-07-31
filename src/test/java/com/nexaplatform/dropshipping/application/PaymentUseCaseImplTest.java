@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.api.dto.out.OrderPaymentDtoOut;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.api.mapper.OrderPaymentDtoMapper;
@@ -35,6 +36,8 @@ import com.nexaplatform.dropshipping.application.usecase.RechargeOptions;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -75,7 +78,7 @@ class PaymentUseCaseImplTest {
         return new PaymentUseCaseImpl(List.<PaymentGateway>of(), paymentRepository, paymentJpaRepositoryAdapter,
                 userRepository, orderRepository, walletUseCase, auditLogger, partnerPlanSyncService,
                 customerSubscriptionUseCase, subscriptionNotificationService, new ObjectMapper(), orderEmailService,
-                currencyRateService, stockService, mock(OpsAlertService.class));
+                currencyRateService, new OrderAmounts(currencyRateService), stockService, mock(OpsAlertService.class));
     }
 
     @Test
@@ -127,6 +130,7 @@ class PaymentUseCaseImplTest {
         when(currencyRateService.symbolOf("COP")).thenReturn("$");
         when(currencyRateService.usdTo(any(), eq("COP")))
                 .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).multiply(new BigDecimal("4123.45")));
+        lenient().when(currencyRateService.decimalsOf(anyString())).thenReturn(2);
         when(currencyRateService.formatDisplay(any(), eq("COP")))
                 .thenAnswer(inv -> inv.getArgument(0) + " COP");
 

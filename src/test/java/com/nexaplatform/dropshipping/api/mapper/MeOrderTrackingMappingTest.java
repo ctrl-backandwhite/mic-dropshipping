@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.api.dto.out.MeOrderDetailDtoOut;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
@@ -35,9 +36,10 @@ class MeOrderTrackingMappingTest {
         CurrencyRateService currency = mock(CurrencyRateService.class);
         PaymentJpaRepositoryAdapter payments = mock(PaymentJpaRepositoryAdapter.class);
         lenient().when(currency.usdTo(any(BigDecimal.class), anyString())).thenAnswer(i -> i.getArgument(0));
+        lenient().when(currency.decimalsOf(anyString())).thenReturn(2);
         lenient().when(currency.formatDisplay(any(BigDecimal.class), anyString())).thenReturn("$0.00");
         lenient().when(payments.findByOrderIdOrderByCreatedAtDesc(any(UUID.class))).thenReturn(List.of());
-        mapper = new MeOrderDtoMapper(currency, payments);
+        mapper = new MeOrderDtoMapper(currency, new OrderAmounts(currency), payments);
     }
 
     private static Order despachado() {

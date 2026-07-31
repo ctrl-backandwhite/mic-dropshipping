@@ -7,22 +7,27 @@ ignore:
   #
   # Sin versión corregida publicada: 2.25.4 es la última que hay, así que no se puede cerrar subiendo.
   #
-  # Y no puede darse aquí. El fallo está en MapMessage.asJson(), que emite NaN/Infinity en vez de JSON
-  # válido, y para alcanzarlo hace falta registrar un MapMessage con valores no finitos usando
-  # JsonTemplateLayout (o cualquier layout que use el resolver `message`) de log4j-core. En este
-  # proyecto:
-  #   1. log4j-core está SOLO en scope test (llega por spring-kafka-test > kafka-server): no viaja en
-  #      el artefacto de producción.
-  #   2. La aplicación registra con Logback (src/main/resources/logback-spring.xml).
-  #   3. Ni JsonTemplateLayout ni MapMessage aparecen en el código.
-  #   4. log4j-api entra en compile únicamente como fachada, y log4j-to-slf4j —el puente que pone
-  #      Spring Boot— redirige a slf4j/Logback todo lo que la use.
+  # De dónde viene: spring-boot-starter-webflux → spring-boot-starter → spring-boot-starter-logging →
+  # log4j-to-slf4j → log4j-api. Es decir, log4j-api SÍ viaja en el artefacto de producción (está en
+  # BOOT-INF/lib del jar) y la clase afectada, MapMessage, va dentro. No es una dependencia de tests.
+  #
+  # Por qué aun así no puede darse aquí. El fallo es que MapMessage.asJson() emite NaN o Infinity en
+  # lugar de JSON válido, y para que eso llegue a un log hacen falta dos cosas que este proyecto no
+  # tiene:
+  #   1. Un layout que invoque asJson() —JsonTemplateLayout o cualquier otro que use el resolver
+  #      `message`—. Todos viven en log4j-core, que NO está en el jar de producción: solo entra en
+  #      scope test, por spring-kafka-test → kafka-server.
+  #   2. Registrar un MapMessage con valores de coma flotante no finitos. No se usa MapMessage en
+  #      ninguna parte del código.
+  # log4j-api entra únicamente como fachada, y log4j-to-slf4j —el puente que pone Spring Boot— desvía
+  # a slf4j/Logback todo lo que la use; el registro real lo hace Logback (logback-spring.xml).
   #
   # Caduca el 29-oct-2026: para entonces hay que comprobar si ya existe una 2.25.5+ y quitar esta
   # entrada, en vez de arrastrarla indefinidamente.
   SNYK-JAVA-ORGAPACHELOGGINGLOG4J-17954276:
     - '*':
         reason: >-
-          Sin parche disponible y no alcanzable: log4j-core solo está en scope test, la aplicación
-          registra con Logback y no se usan JsonTemplateLayout ni MapMessage. Revisar el 29-oct-2026.
+          Sin parche disponible y no alcanzable: el layout que invoca MapMessage.asJson() está en
+          log4j-core, que no viaja en el artefacto de producción (solo scope test); la aplicación
+          registra con Logback y no se usa MapMessage en el código. Revisar el 29-oct-2026.
         expires: 2026-10-29T00:00:00.000Z
