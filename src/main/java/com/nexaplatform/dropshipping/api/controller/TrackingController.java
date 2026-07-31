@@ -7,6 +7,7 @@ import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.Fulf
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +27,7 @@ import java.util.UUID;
 @Tag(name = "Order Tracking", description = "Timeline de seguimiento del envío")
 @RestController
 @RequiredArgsConstructor
+@Slf4j
 public class TrackingController {
 
     private final FulfillmentService fulfillmentService;
@@ -66,7 +68,26 @@ public class TrackingController {
     @PostMapping("/api/admin/orders/{id}/retry-fulfillment")
     public ResponseEntity<TrackingView> retryFulfillment(@PathVariable UUID id) {
         fulfillmentService.retryFulfillment(id);
-        syncScheduler.syncOrderById(id);
+        // El refresco del seguimiento es un extra: sirve para que el admin vea el estado al instante. Si
+        // el transportista no contesta NO puede tumbar la respuesta, porque el reintento ya está hecho y
+        // devolver un 500 sobre una operación que ha funcionado invita a pulsar otra vez — y cada
+        // pulsación relanza el envío, o sea guías de más pagadas en el carrier. Se ha visto: justo
+        // después de crear una guía, YunExpress responde 503 a la consulta de trazabilidad.
+        refreshQuietly(id);
         return ResponseEntity.ok(fulfillmentService.adminTrackingView(id));
+    }
+
+    /**
+     * Sincroniza con el transportista sin dejar que un fallo suyo llegue al cliente de la API. Lo que
+     * se devuelve entonces es el último estado conocido, que es exactamente lo que el admin necesita
+     * ver; el sondeo periódico lo pondrá al día por su cuenta.
+     */
+    private void refreshQuietly(UUID id) {
+        try {
+            syncScheduler.syncOrderById(id);
+        } catch (RuntimeException e) {
+            log.warn("::> [TRACKING] Reintento hecho, pero no se pudo refrescar el seguimiento pedido={} causa={}",
+                    id, e.getMessage());
+        }
     }
 }
