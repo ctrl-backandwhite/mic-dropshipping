@@ -159,6 +159,9 @@ public class WebhookDispatcherService {
 
         try {
             String body = objectMapper.writeValueAsString(d.getPayload());
+            // La dirección la registra quien crea la suscripción: se comprueba que apunta a Internet
+            // antes de llamarla, para que un webhook no sirva de puerta a la red interna.
+            PublicHttpUrl.assertPublic(URI.create(d.getTargetUrl()));
             HttpRequest req = HttpRequest.newBuilder().uri(URI.create(d.getTargetUrl())).timeout(Duration.ofSeconds(10))
                     .header("Content-Type", "application/json").header("X-NX036-Signature", d.getSignature())
                     .header("X-NX036-Event", d.getEventType()).header("X-NX036-Event-Id", d.getEventId())

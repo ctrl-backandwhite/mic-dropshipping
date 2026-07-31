@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.storage;
 
+import com.nexaplatform.dropshipping.application.service.PublicHttpUrl;
 import com.nexaplatform.dropshipping.application.service.Texts;
 import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
@@ -380,31 +381,13 @@ public class ImageMirrorService {
         throw new IllegalStateException("Demasiados redirects para " + url);
     }
 
-    /** Anti-SSRF: rechaza esquemas no http(s) y hosts que resuelvan a IP no enrutable públicamente. */
+    /**
+     * Anti-SSRF. Delega en {@link PublicHttpUrl}, que es donde vive esta comprobación para todo el que
+     * llama a una dirección que ha registrado un tercero: aquí las imágenes del proveedor, y en los
+     * despachadores de webhooks las direcciones de los partners.
+     */
     static void assertPublicHttpUrl(URI uri) throws UnknownHostException {
-        String scheme = uri.getScheme();
-        if (scheme == null || !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))) {
-            throw new SecurityException("Esquema no permitido para descarga de imagen: " + scheme);
-        }
-        String host = uri.getHost();
-        if (host == null || host.isBlank()) {
-            throw new SecurityException("URL de imagen sin host");
-        }
-        for (InetAddress addr : InetAddress.getAllByName(host)) {
-            if (addr.isLoopbackAddress() || addr.isAnyLocalAddress() || addr.isLinkLocalAddress()
-                    || addr.isSiteLocalAddress() || addr.isMulticastAddress()) {
-                throw new SecurityException("Host resuelve a IP no pública (posible SSRF): "
-                        + host + " → " + addr.getHostAddress());
-            }
-            byte[] b = addr.getAddress();
-            if (b.length == 4) { // rangos privados no cubiertos por isSiteLocalAddress
-                int o0 = b[0] & 0xff;
-                int o1 = b[1] & 0xff;
-                if (o0 == 100 && o1 >= 64 && o1 <= 127) { // CGNAT 100.64.0.0/10
-                    throw new SecurityException("Host en rango CGNAT (posible SSRF): " + addr.getHostAddress());
-                }
-            }
-        }
+        PublicHttpUrl.assertPublic(uri);
     }
 
     /**

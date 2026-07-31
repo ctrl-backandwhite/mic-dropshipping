@@ -106,6 +106,11 @@ public class PartnerWebhookDispatcherService {
         String eventType = (String) row.get("event_type");
         int attempt = (row.get("attempt_count") == null ? 0 : ((Number) row.get("attempt_count")).intValue()) + 1;
         try {
+            // La dirección la registra el partner: hay que comprobar que apunta a Internet ANTES de
+            // llamarla. Sin esto, apuntando a 169.254.169.254 o a un servicio interno el servidor hace la
+            // petición desde dentro de la red, y como el cuerpo de la respuesta se guarda en el registro
+            // de entregas, el partner podría leer lo que conteste.
+            PublicHttpUrl.assertPublic(URI.create(url));
             String signature = WebhookDispatcherService.sign(payload, secret != null ? secret : "");
             HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(10))
                     .header("Content-Type", "application/json").header("X-NX036-Signature", signature)
