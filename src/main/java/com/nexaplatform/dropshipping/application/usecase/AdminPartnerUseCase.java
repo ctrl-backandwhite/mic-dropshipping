@@ -7,6 +7,7 @@ import com.nexaplatform.dropshipping.domain.model.AdminShopConnection;
 import com.nexaplatform.dropshipping.domain.model.AdminPartnerWebhook;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Use-case port for the Admin Partners read projections. Pure reads: each method
@@ -27,8 +28,8 @@ public interface AdminPartnerUseCase {
     /** Lists shop connections. */
     List<AdminShopConnection> listShopConnections();
 
-    /** Creates an OAuth2 client (client_credentials); returns the plaintext secret once. */
-    AdminOAuthClientCreated createOAuthClient(String name, List<String> scopes);
+    /** Creates an OAuth2 client (client_credentials) + su partner_app (owner); returns the plaintext secret once. */
+    AdminOAuthClientCreated createOAuthClient(String name, List<String> scopes, UUID ownerUserId);
 
     /** Rotates an OAuth2 client's secret; returns the new plaintext secret once. */
     AdminOAuthClientCreated rotateSecret(String clientId);

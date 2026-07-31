@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.usecase.PodDesignUseCase;
 import com.nexaplatform.dropshipping.domain.model.PodAiResult;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -65,7 +67,7 @@ public class PodDesignUseCaseImpl implements PodDesignUseCase {
             "https://images.unsplash.com/photo-1503341960582-b45751874cf0?w=600" };
 
     private static String mockupFor(Object key) {
-        return MOCKUPS[Math.floorMod(java.util.Objects.hashCode(key), MOCKUPS.length)];
+        return MOCKUPS[Math.floorMod(Objects.hashCode(key), MOCKUPS.length)];
     }
 
     @Override
@@ -152,7 +154,7 @@ public class PodDesignUseCaseImpl implements PodDesignUseCase {
             title = p.getTitleZh();
         String image = null;
         if (p.getImages() != null && !p.getImages().isEmpty()) {
-            var img = p.getImages().get(0);
+            ProductImageEntity img = p.getImages().get(0);
             image = img.getCdnUrl() != null && !img.getCdnUrl().isBlank() ? img.getCdnUrl() : img.getSourceUrl();
         }
         return PodBlankProduct.builder().id(p.getId()).slug(p.getSlug()).title(title).mainImage(image)

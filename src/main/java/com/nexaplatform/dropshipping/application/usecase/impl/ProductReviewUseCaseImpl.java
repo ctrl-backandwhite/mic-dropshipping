@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.usecase.ProductReviewUseCase;
 import com.nexaplatform.dropshipping.domain.model.ProductReview;
@@ -66,9 +67,9 @@ public class ProductReviewUseCaseImpl implements ProductReviewUseCase {
     @Override
     @Transactional
     public ProductReview create(UUID productId, ProductReview review) {
-        var product = productRepo.findById(productId).orElseThrow(() -> new NotFoundException("Product"));
-        short rating = (short) Math.max(1, Math.min(5, review.getRating()));
-        var entity = ProductReviewEntity.builder()
+        ProductEntity product = productRepo.findById(productId).orElseThrow(() -> new NotFoundException("Product"));
+        short rating = (short) Math.clamp(review.getRating(), 1, 5);
+        ProductReviewEntity entity = ProductReviewEntity.builder()
                 .product(product)
                 .authorName(review.getAuthorName() != null && !review.getAuthorName().isBlank()
                         ? review.getAuthorName() : "Anónimo")
@@ -76,7 +77,7 @@ public class ProductReviewUseCaseImpl implements ProductReviewUseCase {
                 .language(review.getLanguage() != null && !review.getLanguage().isBlank()
                         ? review.getLanguage().toLowerCase() : "es")
                 .helpfulCount(0).verifiedPurchase(false).approved(true).build();
-        var saved = reviewJpa.save(entity);
+        ProductReviewEntity saved = reviewJpa.save(entity);
 
         // Recalcular media y contador del producto (solo reseñas aprobadas).
         Map<Integer, Long> dist = productReviewRepository.ratingDistribution(productId);

@@ -49,6 +49,11 @@ public class OutboxDispatcher {
                 future.get(); // bloquea hasta ack; el ack y el commit van juntos
                 sentIds.add(e.getId());
             } catch (Exception ex) {
+                // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
+                // interrupción deja al pool sin enterarse de que le han pedido parar.
+                if (ex instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
                 e.setAttempts(e.getAttempts() + 1);
                 e.setLastError(ex.getClass().getSimpleName() + ": " + ex.getMessage());
                 if (e.getAttempts() >= MAX_ATTEMPTS) {
@@ -56,7 +61,7 @@ public class OutboxDispatcher {
                     log.error("Outbox event {} permanently FAILED after {} attempts: {}", e.getId(), e.getAttempts(),
                             ex.getMessage());
                 } else {
-                    long backoffSec = (long) Math.min(3600, 30L * Math.pow(2, e.getAttempts() - 1));
+                    long backoffSec = (long) Math.min(3600, 30L * Math.pow(2, e.getAttempts() - 1.0));
                     e.setNextAttemptAt(Instant.now().plus(Duration.ofSeconds(backoffSec)));
                     log.warn("Outbox event {} attempt {} failed; retry in {}s", e.getId(), e.getAttempts(), backoffSec);
                 }

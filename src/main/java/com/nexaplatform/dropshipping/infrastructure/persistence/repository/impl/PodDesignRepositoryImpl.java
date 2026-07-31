@@ -40,6 +40,17 @@ public class PodDesignRepositoryImpl implements PodDesignRepository {
         return podDesignEntityMapper.toDomain(saved);
     }
 
+    /**
+     * Actualiza un diseño existente. Sin este método se caía al {@code default} de
+     * {@link com.nexaplatform.dropshipping.domain.repository.BaseRepository}, que devuelve {@code null}
+     * SIN escribir nada: guardar los cambios de un diseño no persistía y el caso de uso devolvía null.
+     * La entidad ya lleva id, así que {@code save} de JPA hace merge.
+     */
+    @Override
+    public PodDesign update(PodDesign model) {
+        return save(model);
+    }
+
     @Override
     public List<PodDesign> findByUserId(UUID userId) {
         return podDesignEntityMapper

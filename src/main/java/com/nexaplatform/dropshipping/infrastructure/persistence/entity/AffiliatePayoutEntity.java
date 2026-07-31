@@ -50,4 +50,17 @@ public class AffiliatePayoutEntity extends BaseEntity {
 
     @Column(name = "processed_at")
     private Instant processedAt;
+
+    @Column(name = "dest_holder", length = 160)
+    private String destHolder;
+    @Column(name = "dest_iban", length = 40)
+    private String destIban;
+    @Column(name = "dest_bic", length = 16)
+    private String destBic;
+    @Column(name = "dest_paypal_email", length = 200)
+    private String destPaypalEmail;
+    @Column(name = "paid_reference", length = 200)
+    private String paidReference;
+    @Column(name = "paid_by", columnDefinition = "uuid")
+    private UUID paidBy;
 }

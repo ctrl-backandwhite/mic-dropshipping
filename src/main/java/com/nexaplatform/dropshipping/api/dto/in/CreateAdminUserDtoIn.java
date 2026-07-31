@@ -25,8 +25,8 @@ public class CreateAdminUserDtoIn {
     private String email;
 
     @NotBlank
-    @Size(min = 12, max = 128)
-    @Schema(description = "Account password (min 12 chars)")
+    @Size(min = 8, max = 128)
+    @Schema(description = "Account password (min 8 chars)")
     private String password;
 
     @NotBlank

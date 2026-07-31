@@ -48,6 +48,6 @@ public class ShippingUseCaseImpl implements ShippingUseCase {
     }
 
     private static BigDecimal money(double d) {
-        return new BigDecimal(d).setScale(2, RoundingMode.HALF_UP);
+        return BigDecimal.valueOf(d).setScale(2, RoundingMode.HALF_UP);
     }
 }

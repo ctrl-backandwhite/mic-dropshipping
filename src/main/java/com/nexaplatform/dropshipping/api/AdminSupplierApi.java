@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api;
 
+import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AdminSupplierUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.AdminSupplierDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminSupplierToggleDtoOut;
@@ -13,8 +14,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 
-import java.util.List;
 import java.util.UUID;
 
 /**
@@ -25,9 +26,11 @@ import java.util.UUID;
 @Tag(name = "Admin Suppliers")
 public interface AdminSupplierApi {
 
-    @Operation(summary = "List suppliers for the admin panel")
+    @Operation(summary = "List suppliers for the admin panel (paginated, most-recent-first)")
     @GetMapping
-    ResponseEntity<List<AdminSupplierDtoOut>> list();
+    ResponseEntity<PageResponse<AdminSupplierDtoOut>> list(@RequestParam(required = false) String q,
+            @RequestParam(required = false) String country, @RequestParam(required = false) Boolean verified,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size);
 
     @Operation(summary = "Toggle the verified flag of a supplier")
     @PostMapping("/{id}/verify")

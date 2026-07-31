@@ -19,6 +19,30 @@
 
     <properties>
         <sonar.organization>ctrl-backandwhite</sonar.organization>
+        <!-- Proyecto en SonarQube Cloud. El TOKEN nunca va aquí: se pasa por la variable de entorno
+             SONAR_TOKEN (en CI viene del secret del repositorio). -->
+        <sonar.projectKey>ctrl-backandwhite_mic-dropshipping</sonar.projectKey>
+        <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+        <!-- Fuera de la medición de cobertura: código que NO se ejecuta en producción. Los seeds de
+             demostración están desactivados por defecto y su única función es poblar entornos de prueba;
+             cubrirlos con tests no aporta garantía, solo maquilla el porcentaje. -->
+        <sonar.coverage.exclusions>
+            **/infrastructure/seed/**,
+            **/config/**,
+            **/configuration/**,
+            **/*Application.java
+        </sonar.coverage.exclusions>
+        <!-- La regla de "tareas pendientes" no es aplicable aquí: el código se documenta en castellano y
+             la palabra española "todo" ("todo el catálogo", "todo error sale en el idioma del usuario")
+             se confunde con el marcador de tarea sin terminar. Se revisaron los 30 avisos uno a uno el
+             30-jul-2026 y ninguno señalaba trabajo pendiente. Reescribir los comentarios para esquivar
+             una palabra corriente del idioma empeoraría la documentación. Esta misma explicación hace
+             saltar la regla en el propio pom (xml:S1135), por eso la exclusión cubre también el XML. -->
+        <sonar.issue.ignore.multicriteria>esTodo,esTodoXml</sonar.issue.ignore.multicriteria>
+        <sonar.issue.ignore.multicriteria.esTodo.ruleKey>java:S1135</sonar.issue.ignore.multicriteria.esTodo.ruleKey>
+        <sonar.issue.ignore.multicriteria.esTodo.resourceKey>**/*.java</sonar.issue.ignore.multicriteria.esTodo.resourceKey>
+        <sonar.issue.ignore.multicriteria.esTodoXml.ruleKey>xml:S1135</sonar.issue.ignore.multicriteria.esTodoXml.ruleKey>
+        <sonar.issue.ignore.multicriteria.esTodoXml.resourceKey>**/pom.xml</sonar.issue.ignore.multicriteria.esTodoXml.resourceKey>
         <java.version>21</java.version>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
@@ -34,6 +58,26 @@
         <resilience4j.version>2.3.0</resilience4j.version>
         <thumbnailator.version>0.4.20</thumbnailator.version>
         <liquibase.version>4.31.1</liquibase.version>
+
+        <!-- ============ Versiones forzadas por seguridad (Snyk, 30-jul-2026) ============
+             Estas propiedades las define el parent de Spring Boot; subirlas aquí actualiza la
+             dependencia transitiva sin tocar el árbol. Cada una arregla vulnerabilidades reales
+             del escaneo: se indica cuántas y de qué gravedad. -->
+        <!-- 12 vulnerabilidades (11 altas) repartidas por netty-codec-http/http2/http3/dns/compression. -->
+        <netty.version>4.2.16.Final</netty.version>
+        <!-- 5 altas en tomcat-embed-core: es el servidor que atiende TODAS las peticiones. -->
+        <tomcat.version>11.0.23</tomcat.version>
+        <!-- Jackson 3 (tools.jackson) es el que serializa toda la API en Spring Boot 4: 1 alta. -->
+        <jackson-bom.version>3.1.5</jackson-bom.version>
+        <!-- Jackson 2 sigue en el árbol por dependencias de terceros: 3 altas. Son properties distintas
+             en el parent (jackson-bom = 3.x, jackson-2-bom = 2.x); confundirlas rompe la resolución. -->
+        <jackson-2-bom.version>2.21.5</jackson-2-bom.version>
+        <!-- 1 alta en logback-core. -->
+        <logback.version>1.5.36</logback.version>
+        <!-- 1 alta en el driver de PostgreSQL. -->
+        <postgresql.version>42.7.12</postgresql.version>
+        <!-- 1 alta en httpcore5-h2. -->
+        <httpcore5.version>5.4.3</httpcore5.version>
     </properties>
 
     <dependencies>
@@ -112,6 +156,18 @@
             <version>1.0.10</version>
         </dependency>
 
+        <!-- Código QR de verificación de la factura (se incrusta como PNG en el PDF). -->
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>core</artifactId>
+            <version>3.5.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>javase</artifactId>
+            <version>3.5.3</version>
+        </dependency>
+
         <!-- ============ Mail ============ -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -146,10 +202,20 @@
         <!-- ============ Object storage (MinIO / S3) ============ -->
         <!-- Mirror de imágenes/multimedia de producto: descargamos de 1688 y servimos desde nuestro
              bucket (MinIO en local/dev, S3 compatible en prod) para no depender del hotlink de alicdn. -->
+        <!-- 8.6.0: la 8.5.17 arrastraba una vulnerabilidad alta (Snyk, 30-jul-2026). -->
         <dependency>
             <groupId>io.minio</groupId>
             <artifactId>minio</artifactId>
-            <version>8.5.17</version>
+            <version>8.6.0</version>
+        </dependency>
+        <!-- MinIO 8.6.0 salta a OkHttp 5, que es multiplataforma: el artefacto `okhttp` es solo el
+             descriptor y las clases de JVM viven en `okhttp-jvm`. Maven no lee los metadatos de módulo
+             de Gradle, así que sin esta línea el classpath se queda sin okhttp3.MediaType y cualquier
+             subida a S3/MinIO revienta con ClassNotFoundException en ejecución. -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp-jvm</artifactId>
+            <version>5.1.0</version>
         </dependency>
 
         <!-- ============ Image processing ============ -->
@@ -256,6 +322,18 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Boot 4 movió los test slices a módulos propios: @DataJpaTest/@AutoConfigureTestDatabase
+             viven en spring-boot-data-jpa-test y @ServiceConnection en spring-boot-testcontainers. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-data-jpa-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-test</artifactId>
@@ -302,6 +380,47 @@
                 <version>1.20.4</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <!-- Seguridad: openhtmltopdf-pdfbox 1.0.10 arrastra PDFBox 2.0.24 (2021), con CVEs conocidos
+                 en 2.0.x antiguas. Solo GENERAMOS PDFs desde nuestras plantillas (no parseamos PDF externo),
+                 así que el riesgo es bajo, pero forzamos la última 2.0.x (API compatible) para incorporar
+                 los parches. -->
+            <dependency>
+                <groupId>org.apache.pdfbox</groupId>
+                <artifactId>pdfbox</artifactId>
+                <version>2.0.35</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.pdfbox</groupId>
+                <artifactId>fontbox</artifactId>
+                <version>2.0.35</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.pdfbox</groupId>
+                <artifactId>xmpbox</artifactId>
+                <version>2.0.35</version>
+            </dependency>
+
+            <!-- ============ Versiones forzadas por seguridad (Snyk, 30-jul-2026) ============
+                 Transitivas que no cuelgan de ninguna propiedad del parent: se fijan aquí. -->
+            <!-- 4 altas en Bouncy Castle, que es quien cifra los pushes del transportista y los tokens
+                 guardados de las tiendas conectadas. -->
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>1.84</version>
+            </dependency>
+            <!-- 1 alta: consumo de recursos sin límite al parsear JSON; entra por el cliente de OpenSearch. -->
+            <dependency>
+                <groupId>org.eclipse.parsson</groupId>
+                <artifactId>parsson</artifactId>
+                <version>1.1.8</version>
+            </dependency>
+            <!-- 1 alta en la compresión LZ4 que usa el cliente de Kafka. -->
+            <dependency>
+                <groupId>at.yawk.lz4</groupId>
+                <artifactId>lz4-java</artifactId>
+                <version>1.11.1</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -385,6 +504,31 @@
                         <phase>verify</phase>
                         <goals>
                             <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Tests de integración (*IT.java) con Testcontainers: corren en integration-test/verify,
+                 separados de los unit (*Test.java) que ejecuta surefire. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <includes>
+                        <include>**/*IT.java</include>
+                    </includes>
+                    <!-- docker-java de Testcontainers usa por defecto la API 1.32; los daemons
+                         modernos exigen >=1.44. docker-java lee la versión de la system property
+                         'api.version' (no del env DOCKER_API_VERSION), así que la fijamos aquí. -->
+                    <systemPropertyVariables>
+                        <api.version>1.44</api.version>
+                    </systemPropertyVariables>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
                         </goals>
                     </execution>
                 </executions>

@@ -15,9 +15,17 @@ import java.util.UUID;
 public interface ProductImageRepository extends JpaRepository<ProductImageEntity, UUID> {
     List<ProductImageEntity> findByProductIdOrderByPositionAsc(UUID productId);
 
-    List<ProductImageEntity> findTop100ByMirrorStatusOrderByCreatedAtAsc(MirrorStatus status);
+    /** Newest-first: lo recién importado se espeja primero → aparece antes en el escaparate durante la carga. */
+    List<ProductImageEntity> findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus status);
 
     long countByMirrorStatus(MirrorStatus status);
+
+    /** IDs de producto de un conjunto de imágenes — para reindexar en OpenSearch tras espejarlas. */
+    @Query("SELECT DISTINCT i.product.id FROM ProductImageEntity i WHERE i.id IN :imageIds")
+    List<UUID> findProductIdsByImageIds(@Param("imageIds") List<UUID> imageIds);
+
+    /** Imágenes en un estado de un conjunto de productos — para espejar YA lo recién importado. */
+    List<ProductImageEntity> findByProductIdInAndMirrorStatus(List<UUID> productIds, MirrorStatus status);
 
     /** Imágenes MIRRORED cuyo cdn_url empieza por el prefijo dado (nuestro storage) — para verificar objetos. */
     List<ProductImageEntity> findByMirrorStatusAndCdnUrlStartingWith(MirrorStatus status, String cdnUrlPrefix);

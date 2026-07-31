@@ -15,28 +15,41 @@ import java.util.Map;
  */
 public interface BaseCrudOperations<I, O, K> {
 
+    /**
+     * Los métodos de ESCRITURA no traen implementación por defecto que finja haber funcionado. Antes
+     * devolvían {@code null} / {@code 0} / no hacían nada, así que un adaptador que se olvidara de
+     * implementarlos perdía la escritura en silencio y el fallo aparecía mucho después y en otro sitio.
+     * Pasó con almacenes, diseños POD y el sembrado de reglas de precio. Ahora el olvido se nota en la
+     * primera llamada. Las CONSULTAS sí conservan un valor neutro: ahí no hay nada que perder.
+     *
+     * @throws UnsupportedOperationException si el implementador no lo sobreescribe
+     */
     default O save(I model) {
-        return null;
+        throw new UnsupportedOperationException(getClass().getName() + " no implementa save().");
     }
 
+    /** @throws UnsupportedOperationException si el implementador no lo sobreescribe. Ver {@link #save}. */
     default int saveAll(List<I> models) {
-        return 0;
+        throw new UnsupportedOperationException(getClass().getName() + " no implementa saveAll().");
     }
 
     default List<O> findAll() {
         return Collections.emptyList();
     }
 
+    /** @throws UnsupportedOperationException si el implementador no lo sobreescribe. Ver {@link #save}. */
     default int updateAll(List<I> models) {
-        return 0;
+        throw new UnsupportedOperationException(getClass().getName() + " no implementa updateAll().");
     }
 
+    /** @throws UnsupportedOperationException si el implementador no lo sobreescribe. Ver {@link #save}. */
     default void delete(K id) {
-        // no-op by default
+        throw new UnsupportedOperationException(getClass().getName() + " no implementa delete().");
     }
 
+    /** @throws UnsupportedOperationException si el implementador no lo sobreescribe. Ver {@link #save}. */
     default void deleteAll(List<K> ids) {
-        // no-op by default
+        throw new UnsupportedOperationException(getClass().getName() + " no implementa deleteAll().");
     }
 
     default O getById(K id) {

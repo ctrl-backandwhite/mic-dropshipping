@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.controller;
 
+import com.nexaplatform.dropshipping.application.service.NewsletterService.SubscribeResult;
 import com.nexaplatform.dropshipping.application.service.NewsletterService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -11,7 +12,7 @@ import java.util.UUID;
 
 /** Public newsletter subscribe / unsubscribe. */
 @RestController
-@RequestMapping("/api/storefront/newsletter")
+@RequestMapping("/api/newsletter")
 @RequiredArgsConstructor
 public class NewsletterController {
 
@@ -20,8 +21,8 @@ public class NewsletterController {
     @PostMapping("/subscribe")
     public ResponseEntity<Map<String, Object>> subscribe(@RequestBody Map<String, String> body, Authentication auth) {
         UUID userId = auth != null && auth.getName() != null ? safeUuid(auth.getName()) : null;
-        var sub = newsletterService.subscribe(body.get("email"), userId, "storefront");
-        return ResponseEntity.ok(Map.of("status", sub.getStatus()));
+        SubscribeResult result = newsletterService.subscribe(body.get("email"), userId, "storefront");
+        return ResponseEntity.ok(Map.of("status", result.status(), "alreadySubscribed", result.alreadySubscribed()));
     }
 
     @PostMapping("/unsubscribe")

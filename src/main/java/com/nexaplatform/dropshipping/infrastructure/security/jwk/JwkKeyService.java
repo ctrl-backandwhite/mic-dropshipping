@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.infrastructure.security.jwk;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.JwkKeyEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.JwkKeyRepository;
 import com.nexaplatform.dropshipping.infrastructure.security.crypto.TokenCryptoService;
+import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.JWKSource;
@@ -25,7 +26,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -78,10 +78,27 @@ public class JwkKeyService {
                 .orElseThrow(() -> new IllegalStateException("No active JWK key available to sign tokens"));
     }
 
+    /**
+     * {@link JWKSource} de FIRMA: expone SOLO la clave activa (con su privada). Lo usa el encoder del
+     * Authorization Server, cuyo {@code JwtGenerator} no fija el {@code kid} en la cabecera; al haber una
+     * única clave candidata el selector no falla. La validación sigue usando {@link #asJwkSource()} (todas
+     * las claves), así que los tokens firmados con claves ya rotadas se siguen validando.
+     */
+    public JWKSource<SecurityContext> signingJwkSource() {
+        return (jwkSelector, context) -> jwkSelector.select(activeJwkSet());
+    }
+
+    /** JWKSet con únicamente la clave ACTIVA (incluye la privada), para firmar. */
+    public JWKSet activeJwkSet() {
+        JwkKeyEntity active = jwkKeyRepository.findAllByActiveTrueOrderByCreatedAtDesc().stream().findFirst()
+                .orElseThrow(() -> new IllegalStateException("No active JWK key available to sign tokens"));
+        return new JWKSet(toRsaKey(active));
+    }
+
     public JWKSet loadJwkSet() {
-        List<RSAKey> keys = jwkKeyRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toRsaKey)
-                .collect(Collectors.toList());
-        return new JWKSet(keys.stream().map(k -> (com.nimbusds.jose.jwk.JWK) k).toList());
+        List<JWK> keys = jwkKeyRepository.findAllByOrderByCreatedAtDesc().stream()
+                .map(entity -> (JWK) toRsaKey(entity)).toList();
+        return new JWKSet(keys);
     }
 
     private RSAKey toRsaKey(JwkKeyEntity entity) {

@@ -29,7 +29,7 @@ public class StoreLanguageController {
     private final StoreLanguageRepository repository;
 
     /** Público: idiomas activos, ordenados (los que el comprador puede elegir y en los que hay contenido). */
-    @GetMapping("/api/storefront/languages")
+    @GetMapping("/api/languages")
     @Transactional(readOnly = true)
     public List<StoreLanguageDtoOut> publicLanguages() {
         return repository.findByActiveTrueOrderByPositionAsc().stream().map(this::toDto).toList();
@@ -50,7 +50,7 @@ public class StoreLanguageController {
         if (code == null || code.isEmpty()) {
             throw new BusinessException("code es obligatorio");
         }
-        var e = repository.findByCodeIgnoreCase(code).orElseGet(StoreLanguageEntity::new);
+        StoreLanguageEntity e = repository.findByCodeIgnoreCase(code).orElseGet(StoreLanguageEntity::new);
         e.setCode(code);
         if (body.get("label") != null) {
             e.setLabel(body.get("label").toString());

@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.controller;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.NewsletterCampaignEntity;
 import com.nexaplatform.dropshipping.application.service.NewsletterService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -28,7 +29,7 @@ public class AdminNewsletterController {
 
     @PostMapping("/send")
     public ResponseEntity<Map<String, Object>> send(@RequestBody Map<String, String> body) {
-        var c = newsletterService.send(body.get("subject"), body.get("bodyHtml"));
+        NewsletterCampaignEntity c = newsletterService.send(body.get("subject"), body.get("bodyHtml"));
         return ResponseEntity.ok(Map.of("id", c.getId(), "recipients", c.getRecipients()));
     }
 }

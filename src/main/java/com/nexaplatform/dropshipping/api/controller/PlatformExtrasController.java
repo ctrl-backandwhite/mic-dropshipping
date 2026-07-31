@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.PlatformExtrasApi;
+import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.dto.in.OdmProjectCreateDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.OdmStatusUpdateDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.PodAiGenerateDtoIn;
@@ -15,7 +16,9 @@ import com.nexaplatform.dropshipping.api.dto.out.PodAiGenerateDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.PodBlankProductDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.PodDesignDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.ShippingRateDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.SupportReplyDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SupportTicketDtoOut;
+import com.nexaplatform.dropshipping.domain.model.SupportTicketReply;
 import com.nexaplatform.dropshipping.api.dto.out.UnreadCountDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.WarehouseDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.WarehouseStockDtoOut;
@@ -32,11 +35,13 @@ import com.nexaplatform.dropshipping.application.usecase.ShippingUseCase;
 import com.nexaplatform.dropshipping.application.usecase.SupportTicketUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WarehouseUseCase;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -97,9 +102,9 @@ public class PlatformExtrasController implements PlatformExtrasApi {
     }
 
     @Override
-    public org.springframework.http.ResponseEntity<Void> deleteDesign(Authentication auth, UUID id) {
+    public ResponseEntity<Void> deleteDesign(Authentication auth, UUID id) {
         podUseCase.deleteDesign(UUID.fromString(auth.getName()), id);
-        return org.springframework.http.ResponseEntity.noContent().build();
+        return ResponseEntity.noContent().build();
     }
 
     /* ============================== DROP-7 ODM/OEM ============================== */
@@ -135,9 +140,9 @@ public class PlatformExtrasController implements PlatformExtrasApi {
     }
 
     @Override
-    public org.springframework.http.ResponseEntity<Void> deleteOdm(Authentication auth, UUID id) {
+    public ResponseEntity<Void> deleteOdm(Authentication auth, UUID id) {
         odmUseCase.delete(UUID.fromString(auth.getName()), id);
-        return org.springframework.http.ResponseEntity.noContent().build();
+        return ResponseEntity.noContent().build();
     }
 
     /* ============================== DROP-11 Tickets ============================== */
@@ -162,11 +167,82 @@ public class PlatformExtrasController implements PlatformExtrasApi {
         return ticketMapper.toDtoOut(ticketUseCase.resolve(id, req.getResolution()));
     }
 
+    @Override
+    public List<SupportReplyDtoOut> myTicketReplies(Authentication auth, UUID id) {
+        return toReplyDtos(ticketUseCase.listReplies(id, UUID.fromString(auth.getName()), false));
+    }
+
+    @Override
+    public SupportReplyDtoOut myTicketReply(Authentication auth, UUID id, Map<String, String> body) {
+        return toReplyDto(ticketUseCase.addReply(id, UUID.fromString(auth.getName()), false, body.get("body")));
+    }
+
+    @Override
+    public List<SupportReplyDtoOut> adminTicketReplies(UUID id) {
+        return toReplyDtos(ticketUseCase.listReplies(id, null, true));
+    }
+
+    @Override
+    public SupportReplyDtoOut adminTicketReply(Authentication auth, UUID id, Map<String, String> body) {
+        return toReplyDto(ticketUseCase.addReply(id, UUID.fromString(auth.getName()), true, body.get("body")));
+    }
+
+    private static List<SupportReplyDtoOut> toReplyDtos(List<SupportTicketReply> replies) {
+        return replies.stream().map(PlatformExtrasController::toReplyDto).toList();
+    }
+
+    private static SupportReplyDtoOut toReplyDto(SupportTicketReply r) {
+        return SupportReplyDtoOut.builder().id(r.id()).fromSupport(r.fromSupport()).body(r.body())
+                .createdAt(r.createdAt()).build();
+    }
+
     /* ============================== DROP-11 Notifications ============================== */
 
     @Override
-    public List<PlatformNotificationDtoOut> notifications(Authentication auth) {
-        return notificationMapper.toDtoOutList(notificationUseCase.myNotifications(UUID.fromString(auth.getName())));
+    public List<PlatformNotificationDtoOut> notifications(Authentication auth, String folder) {
+        NotificationUseCase.Folder f;
+        try {
+            f = NotificationUseCase.Folder.valueOf(folder == null ? "INBOX" : folder.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            f = NotificationUseCase.Folder.INBOX;
+        }
+        return notificationMapper.toDtoOutList(notificationUseCase.myNotifications(UUID.fromString(auth.getName()), f));
+    }
+
+    @Override
+    public void archiveNotification(Authentication auth, UUID id) {
+        notificationUseCase.archive(id, UUID.fromString(auth.getName()));
+    }
+
+    @Override
+    public void unarchiveNotification(Authentication auth, UUID id) {
+        notificationUseCase.unarchive(id, UUID.fromString(auth.getName()));
+    }
+
+    @Override
+    public void trashNotification(Authentication auth, UUID id) {
+        notificationUseCase.moveToTrash(id, UUID.fromString(auth.getName()));
+    }
+
+    @Override
+    public void restoreNotification(Authentication auth, UUID id) {
+        notificationUseCase.restore(id, UUID.fromString(auth.getName()));
+    }
+
+    @Override
+    public void deleteNotificationPermanently(Authentication auth, UUID id) {
+        notificationUseCase.deletePermanently(id, UUID.fromString(auth.getName()));
+    }
+
+    @Override
+    public void setNotificationStatus(Authentication auth, UUID id, String value) {
+        NotificationUseCase.Status s;
+        try {
+            s = NotificationUseCase.Status.valueOf(value == null ? "RECEIVED" : value.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException("Estado de notificación no válido: " + value);
+        }
+        notificationUseCase.setStatus(id, UUID.fromString(auth.getName()), s);
     }
 
     @Override
@@ -175,8 +251,8 @@ public class PlatformExtrasController implements PlatformExtrasApi {
     }
 
     @Override
-    public void markRead(UUID id) {
-        notificationUseCase.markRead(id);
+    public void markRead(Authentication auth, UUID id) {
+        notificationUseCase.markRead(id, UUID.fromString(auth.getName()));
     }
 
     @Override

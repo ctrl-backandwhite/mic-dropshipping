@@ -56,9 +56,8 @@ public class HttpCacheFilter extends OncePerRequestFilter {
     }
 
     private boolean isPublicReadable(String path) {
-        return path.startsWith("/api/storefront/catalog/") || path.startsWith("/api/storefront/categories")
-                || path.startsWith("/api/storefront/suppliers") || path.startsWith("/api/storefront/warehouses")
-                || path.startsWith("/api/v1/storefront/");
+        return path.startsWith("/api/catalog/") || path.startsWith("/api/warehouses")
+                || path.startsWith("/api/v1/rate-limits");
     }
 
     private String cacheControlFor(String path) {
@@ -74,6 +73,11 @@ public class HttpCacheFilter extends OncePerRequestFilter {
         // no cambió, o 200 con el precio nuevo en cuanto cambia. Así el cambio es inmediato todo el tiempo.
         if (path.contains("/products/") || path.endsWith("/products")) {
             return "no-cache, must-revalidate";
+        }
+        // Home (secciones/trending/novedades): al cargar catálogo el admin espera verlo casi al instante.
+        // TTL muy corto + ETag → el cambio aparece en ≤5s sin recomputar la home en cada request.
+        if (path.contains("/home")) {
+            return "public, max-age=5, stale-while-revalidate=30";
         }
         return "public, max-age=30, stale-while-revalidate=120";
     }

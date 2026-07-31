@@ -46,13 +46,14 @@ class AuditLoggerTest {
 
         assertThat(appender.list).hasSize(1);
         String msg = appender.list.get(0).getFormattedMessage();
-        assertThat(msg).contains("event=auth.login_ok");
-        assertThat(msg).contains("principal=alice@example.com");
-        assertThat(msg).contains("userId=abc");
-        assertThat(msg).doesNotContain("S3cret!");
-        assertThat(msg).doesNotContain("Bearer xyz");
-        // newlines replaced with spaces
-        assertThat(msg).contains("note=ok with with newlines".substring(0, 12));
+        assertThat(msg)
+                .contains("event=auth.login_ok")
+                .contains("principal=alice@example.com")
+                .contains("userId=abc")
+                .doesNotContain("S3cret!")
+                .doesNotContain("Bearer xyz")
+                // los saltos de línea se sustituyen por espacios
+                .contains("note=ok with");
     }
 
     @Test

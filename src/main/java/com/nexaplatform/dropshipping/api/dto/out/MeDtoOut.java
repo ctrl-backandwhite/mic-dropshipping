@@ -34,6 +34,18 @@ public class MeDtoOut {
     @Schema(description = "Display name")
     private String displayName;
 
+    @Schema(description = "First name / nombre de pila")
+    private String firstName;
+
+    @Schema(description = "First surname / primer apellido")
+    private String lastName1;
+
+    @Schema(description = "Second surname / segundo apellido")
+    private String lastName2;
+
+    @Schema(description = "Full name (firstName + apellidos concatenados; fallback a displayName)")
+    private String fullName;
+
     @Schema(description = "Company name")
     private String companyName;
 

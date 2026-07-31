@@ -3,10 +3,16 @@ package com.nexaplatform.dropshipping.application.usecase.impl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.api.exception.WebhookProcessingException;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
+import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
+import com.nexaplatform.dropshipping.application.service.StockService;
+import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
+import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
+import com.nexaplatform.dropshipping.application.usecase.RechargeOptions;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
@@ -32,11 +38,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -56,6 +66,21 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PaymentUseCaseImpl implements PaymentUseCase {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String AMOUNT_USD_CENTS = "amount_usd_cents";
+    private static final String ORDER_PAYMENT = "ORDER_PAYMENT";
+    private static final String MOCK_CONFIRM = "mock_confirm";
+    private static final String PAYPAL_MOCK = "paypal_mock_";
+    private static final String AMOUNTCENTS = "amountCents";
+    private static final String PAYMENTID = "paymentId";
+    private static final String NO_MATCH = "no-match";
+    private static final String PI_MOCK = "pi_mock_";
+    private static final String CS_MOCK = "cs_mock_";
+    private static final String PAYMENT = "Payment";
+    private static final String ORDERID = "orderId";
+    private static final String METHOD = "method";
+    private static final String STATUS = "status";
+
     private final List<PaymentGateway> gateways;
     private final PaymentRepository paymentRepository;
     private final PaymentJpaRepositoryAdapter paymentJpaRepositoryAdapter;
@@ -64,76 +89,209 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     private final WalletUseCase walletUseCase;
     private final AuditLogger auditLogger;
     private final PartnerPlanSyncService partnerPlanSyncService;
+    private final CustomerSubscriptionUseCase customerSubscriptionUseCase;
+    private final SubscriptionNotificationService subscriptionNotificationService;
     private final ObjectMapper objectMapper;
     private final OrderEmailService orderEmailService;
     private final CurrencyRateService currencyRateService;
+    private final StockService stockService;
+    /** Avisos al responsable cuando una pasarela deja de cobrar. */
+    private final OpsAlertService opsAlertService;
 
     @Override
     @Transactional
-    public Payment initiateRecharge(UUID userId, PaymentMethod method, long amountUsdCents, String currencyDisplay,
+    public Payment initiateRecharge(UUID userId, PaymentMethod method, Long amountUsdCents, String currencyDisplay,
             BigDecimal amountDisplay, String idempotencyKey, String cryptoChain) {
-        if (amountUsdCents < 100)
+        // El importe canónico en USD se calcula EN EL BACKUP a partir de lo que el usuario introdujo en su
+        // divisa activa (amountDisplay + currencyDisplay). Solo se usa amountUsdCents del cliente como
+        // fallback si no llega importe en divisa (compatibilidad hacia atrás).
+        long usdCents = resolveRechargeUsdCents(amountUsdCents, currencyDisplay, amountDisplay);
+        if (usdCents < 100)
             throw new BusinessException("Minimum recharge is $1.00 USD");
-        if (amountUsdCents > 1_000_000_00L)
+        if (usdCents > 1_000_000_00L)
             throw new BusinessException("Maximum recharge is $1,000,000 USD");
 
         // idempotency
-        if (idempotencyKey != null) {
-            var existing = paymentRepository.findByIdempotencyKey(idempotencyKey);
-            if (existing.isPresent()) {
-                log.info("Returning existing payment for idempotency-key={}", idempotencyKey);
-                return existing.get();
-            }
+        Optional<Payment> existing = existingByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent()) {
+            log.info("Returning existing payment for idempotency-key={}", idempotencyKey);
+            return existing.get();
         }
 
         if (userRepository.findById(userId).isEmpty())
             throw new NotFoundException("User");
         Wallet wallet = walletUseCase.getOrCreate(userId);
 
+        // Moneda de cobro de la recarga: MISMA lógica que el checkout. Con Stripe (CARD) se cobra en EUR si
+        // el usuario trabaja la web en EUR; en cualquier otra divisa se cobra el equivalente en USD. PayPal
+        // liquida en USD y USDT en USDT. El saldo del wallet SIEMPRE se acredita en USD canónico.
+        String displayCcy = currencyDisplay != null && !currencyDisplay.isBlank() ? currencyDisplay : "USD";
+        boolean stripeEur = method == PaymentMethod.CARD && "EUR".equalsIgnoreCase(displayCcy);
+        String settlementCcy = settlementCurrencyFor(method, stripeEur);
+        BigDecimal settlementAmount = rechargeSettlementAmount(settlementCcy, displayCcy, usdCents, amountDisplay);
+
         Payment p = Payment.builder().userId(userId).walletId(wallet.getId()).method(method)
                 .status(PaymentStatus.PENDING).amountDisplay(amountDisplay).currencyDisplay(currencyDisplay)
-                .amountUsdCents(amountUsdCents).settlementCurrency(method == PaymentMethod.USDT ? "USDT" : "USD")
+                .amountUsdCents(usdCents).settlementCurrency(settlementCcy).settlementAmount(settlementAmount)
                 .idempotencyKey(idempotencyKey).build();
         p = paymentRepository.save(p);
 
         PaymentGateway gw = resolveGateway(method);
-        var result = gw.initiate(managedEntity(p.getId()));
+        PaymentGateway.InitiateResult result = initiateOrAlert(gw, p.getId(), "recarga de saldo");
 
         p.setProvider(gw.providerName());
         p.setProviderRef(result.providerRef());
         p.setProviderResponse(result.raw() != null ? result.raw() : new HashMap<>());
-        if (result.cryptoAddress() != null) {
-            p.setCryptoAddress(result.cryptoAddress());
-            p.setCryptoChain(result.cryptoChain());
-            p.setQrUrl(result.qrUrl());
-            p.setCryptoExpiresAt(Instant.now().plus(Duration.ofMinutes(30)));
-        }
+        applyCryptoDetails(p, result);
         p.setStatus(PaymentStatus.REQUIRES_ACTION);
         p = paymentRepository.save(p);
 
         auditLogger.log("payment.initiate", p.getUserEmail(),
-                Map.of("paymentId", p.getId(), "method", method, "amount_usd_cents", amountUsdCents));
+                Map.of(PAYMENTID, p.getId(), METHOD, method, AMOUNT_USD_CENTS, usdCents));
 
         // attach client metadata to provider_response so the controller can return it
         Map<String, Object> meta = new HashMap<>(p.getProviderResponse());
-        if (result.clientSecret() != null)
-            meta.put("clientSecret", result.clientSecret());
-        if (result.approveUrl() != null)
-            meta.put("approveUrl", result.approveUrl());
-        if (result.cryptoAddress() != null) {
-            meta.put("cryptoAddress", result.cryptoAddress());
-            meta.put("cryptoChain", result.cryptoChain());
-            meta.put("qrUrl", result.qrUrl());
-            meta.put("expiresAt", p.getCryptoExpiresAt() != null ? p.getCryptoExpiresAt().toString() : null);
-        }
+        putRedirectMetadata(meta, result);
+        putCryptoMetadata(meta, result, p.getCryptoExpiresAt());
         p.setProviderResponse(meta);
         return paymentRepository.save(p);
+    }
+
+    /**
+     * Moneda en la que se liquida el cobro. El orden de comprobación es el importante: USDT manda sobre
+     * todo lo demás (la cripto se liquida en su propia moneda); solo después se mira si Stripe puede
+     * cobrar en EUR. Cualquier otro caso liquida en USD, la divisa canónica del sistema.
+     */
+    private static String settlementCurrencyFor(PaymentMethod method, boolean stripeEur) {
+        if (method == PaymentMethod.USDT) {
+            return "USDT";
+        }
+        return stripeEur ? "EUR" : "USD";
+    }
+
+    /** Pago ya creado con esa Idempotency-Key, si lo hay. Sin clave no hay nada que reutilizar. */
+    private Optional<Payment> existingByIdempotencyKey(String idempotencyKey) {
+        return idempotencyKey == null ? Optional.empty() : paymentRepository.findByIdempotencyKey(idempotencyKey);
+    }
+
+    /** Fija en el pago la dirección cripto que devolvió la pasarela y su vencimiento (30 min). */
+    private static void applyCryptoDetails(Payment p, PaymentGateway.InitiateResult result) {
+        if (result.cryptoAddress() == null) {
+            return;
+        }
+        p.setCryptoAddress(result.cryptoAddress());
+        p.setCryptoChain(result.cryptoChain());
+        p.setQrUrl(result.qrUrl());
+        p.setCryptoExpiresAt(Instant.now().plus(Duration.ofMinutes(30)));
+    }
+
+    /** Datos que el front necesita para terminar el pago fuera de la app (secret de Stripe, URL de PayPal). */
+    private static void putRedirectMetadata(Map<String, Object> meta, PaymentGateway.InitiateResult result) {
+        if (result.clientSecret() != null) {
+            meta.put("clientSecret", result.clientSecret());
+        }
+        if (result.approveUrl() != null) {
+            meta.put("approveUrl", result.approveUrl());
+        }
+    }
+
+    /** Datos de la dirección cripto (solo USDT); {@code expiresAt} es el vencimiento ya fijado en el pago. */
+    private static void putCryptoMetadata(Map<String, Object> meta, PaymentGateway.InitiateResult result,
+            Instant expiresAt) {
+        if (result.cryptoAddress() == null) {
+            return;
+        }
+        meta.put("cryptoAddress", result.cryptoAddress());
+        meta.put("cryptoChain", result.cryptoChain());
+        meta.put("qrUrl", result.qrUrl());
+        meta.put("expiresAt", expiresAt != null ? expiresAt.toString() : null);
+    }
+
+    /**
+     * Importe a cobrar de la recarga en la moneda de liquidación:
+     * <ul>
+     *   <li>USD → el USD canónico (amountUsdCents / 100).</li>
+     *   <li>Liquidación == divisa que ve el usuario (EUR) y viene su importe → se cobra EXACTAMENTE lo que
+     *       introdujo, sin reconvertir (evita desfases de céntimos).</li>
+     *   <li>En otro caso → se convierte el USD canónico a la moneda de liquidación con la tasa del día.</li>
+     * </ul>
+     */
+    private BigDecimal rechargeSettlementAmount(String settlementCcy, String displayCcy, long amountUsdCents,
+            BigDecimal amountDisplay) {
+        BigDecimal usd = BigDecimal.valueOf(amountUsdCents).movePointLeft(2);
+        if ("USD".equalsIgnoreCase(settlementCcy)) {
+            return usd;
+        }
+        if (amountDisplay != null && settlementCcy.equalsIgnoreCase(displayCcy)) {
+            return amountDisplay;
+        }
+        return currencyRateService.usdTo(usd, settlementCcy);
+    }
+
+    /** Importes base de recarga (en USD) sobre los que se generan los presets de cada divisa. */
+    private static final int[] RECHARGE_PRESETS_USD = { 10, 25, 50, 100, 250, 500 };
+
+    /**
+     * Importe canónico en USD (céntimos) de la recarga. Se calcula EN EL BACKEND a partir de lo que el
+     * usuario introdujo en su divisa activa; solo se cae al {@code amountUsdCents} del cliente si no llega
+     * importe en divisa (compatibilidad).
+     */
+    private long resolveRechargeUsdCents(Long amountUsdCents, String currencyDisplay, BigDecimal amountDisplay) {
+        if (amountDisplay != null && amountDisplay.signum() > 0) {
+            String ccy = currencyDisplay != null && !currencyDisplay.isBlank() ? currencyDisplay : "USD";
+            return currencyRateService.toUsd(amountDisplay, ccy).movePointRight(2)
+                    .setScale(0, RoundingMode.HALF_UP).longValueExact();
+        }
+        if (amountUsdCents != null && amountUsdCents > 0) {
+            return amountUsdCents;
+        }
+        throw new BusinessException("Recharge amount is required");
+    }
+
+    @Override
+    public RechargeOptions rechargeOptions(String currency) {
+        String ccy = currency != null && !currency.isBlank() ? currency.toUpperCase(Locale.ROOT) : "USD";
+        // EUR/USD conservan los importes estándar (10/25/50/…); el resto se convierten y se REDONDEAN a un
+        // número "bonito" (2 cifras significativas) para no mostrar cantidades como 41 234 o 353 217.
+        boolean standard = "USD".equals(ccy) || "EUR".equals(ccy);
+        List<RechargeOptions.Preset> presets = new ArrayList<>(RECHARGE_PRESETS_USD.length);
+        for (int base : RECHARGE_PRESETS_USD) {
+            BigDecimal amount = standard ? BigDecimal.valueOf(base)
+                    : niceRound(currencyRateService.usdTo(BigDecimal.valueOf(base), ccy));
+            presets.add(new RechargeOptions.Preset(amount, currencyRateService.formatDisplay(amount, ccy)));
+        }
+        return new RechargeOptions(ccy, currencyRateService.symbolOf(ccy), presets);
+    }
+
+    /** Redondea a 2 cifras significativas (41 234 → 41 000; 1 490 → 1 500; 306 → 310). */
+    private static BigDecimal niceRound(BigDecimal value) {
+        if (value == null || value.signum() <= 0) {
+            return BigDecimal.ZERO;
+        }
+        double d = value.doubleValue();
+        int magnitude = (int) Math.floor(Math.log10(d)); // p.ej. 41234 → 4
+        BigDecimal step = BigDecimal.TEN.pow(Math.max(0, magnitude - 1)); // 2 cifras significativas
+        return value.divide(step, 0, RoundingMode.HALF_UP).multiply(step);
     }
 
     @Override
     @Transactional
     public Payment confirmSucceeded(UUID paymentId, Map<String, Object> providerPayload) {
-        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException("Payment"));
+        return doConfirmSucceeded(paymentId, providerPayload);
+    }
+
+    /**
+     * Cuerpo de la confirmación, deliberadamente sin anotar.
+     *
+     * <p>Aquí dentro (webhooks, captura de PayPal, confirmación de un pago mock…) se llamaba a
+     * {@code this.confirmSucceeded(...)}: una invocación directa NO pasa por el proxy de Spring, así que
+     * la {@code @Transactional} del método invocado nunca se aplicaba —era una promesa que nadie cumplía
+     * (java:S6809)—. Con la anotación solo en el punto de entrada público, la transacción está donde de
+     * verdad actúa y el resto del cobro entra por aquí. Mismo criterio en el resto de métodos {@code do…}
+     * y en {@link #requireOrderPayment(UUID, UUID)} de esta clase.
+     */
+    private Payment doConfirmSucceeded(UUID paymentId, Map<String, Object> providerPayload) {
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
         if (p.getStatus() == PaymentStatus.SUCCEEDED)
             return p;
 
@@ -145,41 +303,64 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         p.setProviderResponse(merged);
         p = paymentRepository.save(p);
 
-        boolean isOrderPayment = "ORDER_PAYMENT".equals(p.getPurpose()) && p.getOrderId() != null;
+        boolean isOrderPayment = ORDER_PAYMENT.equals(p.getPurpose()) && p.getOrderId() != null;
         if (isOrderPayment) {
-            // El cobro externo (Stripe/PayPal/USDT) ya capturó el dinero. Marcamos
-            // la orden como PAID para que el FulfillmentService la recoja.
-            Order order = orderRepository.findById(p.getOrderId()).orElse(null);
-            if (order != null && (order.getStatus() == OrderStatus.PENDING
-                    || order.getStatus() == OrderStatus.AWAITING_PAYMENT)) {
-                order.setStatus(OrderStatus.PAID);
-                order = orderRepository.save(order);
-            }
-            auditLogger.log("order_payment.succeeded", p.getUserEmail(), Map.of("paymentId", p.getId(), "orderId",
-                    p.getOrderId(), "method", p.getMethod(), "amount_usd_cents", p.getAmountUsdCents()));
-            // Email de confirmación de pago + FACTURA al comprador.
-            if (order != null) {
-                String email = p.getUserEmail() != null ? p.getUserEmail()
-                        : userRepository.findById(p.getUserId()).map(u -> u.getEmail()).orElse(null);
-                String locale = userRepository.findById(p.getUserId()).map(u -> u.getLanguage()).orElse(null);
-                orderEmailService.paymentConfirmed(order, email, locale,
-                        p.getMethod() != null ? p.getMethod().name() : null, p.getSettlementCurrency());
-            }
+            settleOrderPayment(p);
         } else {
-            // Recarga de wallet: acreditar saldo.
-            String idempKey = "deposit-" + p.getId();
-            walletUseCase.deposit(p.getUserId(), p.getAmountUsdCents(), p.getId(), idempKey,
-                    "Wallet recharge via " + p.getMethod());
-            auditLogger.log("payment.succeeded", p.getUserEmail(),
-                    Map.of("paymentId", p.getId(), "method", p.getMethod(), "amount_usd_cents", p.getAmountUsdCents()));
+            creditWalletRecharge(p);
         }
         return p;
+    }
+
+    /**
+     * El cobro externo (Stripe/PayPal/USDT) ya capturó el dinero: marcamos la orden como PAID para que el
+     * FulfillmentService la recoja, descontamos existencias y enviamos la factura.
+     *
+     * <p>El paso a PAID solo se da desde PENDING/AWAITING_PAYMENT. Así una segunda confirmación (webhook
+     * duplicado o reproceso) encuentra la orden ya avanzada, no la hace retroceder y NO vuelve a descontar
+     * stock; el audit y el email, en cambio, se emiten aunque la orden ya estuviera pagada.
+     */
+    private void settleOrderPayment(Payment p) {
+        Order order = orderRepository.findById(p.getOrderId()).orElse(null);
+        if (order != null && (order.getStatus() == OrderStatus.PENDING
+                || order.getStatus() == OrderStatus.AWAITING_PAYMENT)) {
+            order.setStatus(OrderStatus.PAID);
+            order = orderRepository.save(order);
+            stockService.deductForOrder(order);
+        }
+        auditLogger.log("order_payment.succeeded", p.getUserEmail(), Map.of(PAYMENTID, p.getId(), ORDERID,
+                p.getOrderId(), METHOD, p.getMethod(), AMOUNT_USD_CENTS, p.getAmountUsdCents()));
+        if (order != null) {
+            sendPaymentConfirmedEmail(p, order);
+        }
+    }
+
+    /** Email de confirmación de pago + FACTURA al comprador. */
+    private void sendPaymentConfirmedEmail(Payment p, Order order) {
+        String email = p.getUserEmail() != null ? p.getUserEmail()
+                : userRepository.findById(p.getUserId()).map(u -> u.getEmail()).orElse(null);
+        String locale = userRepository.findById(p.getUserId()).map(u -> u.getLanguage()).orElse(null);
+        orderEmailService.paymentConfirmed(order, email, locale,
+                p.getMethod() != null ? p.getMethod().name() : null, p.getSettlementCurrency());
+    }
+
+    /** Recarga de wallet: acreditar saldo. */
+    private void creditWalletRecharge(Payment p) {
+        String idempKey = "deposit-" + p.getId();
+        walletUseCase.deposit(p.getUserId(), p.getAmountUsdCents(), p.getId(), idempKey,
+                "Wallet recharge via " + p.getMethod());
+        auditLogger.log("payment.succeeded", p.getUserEmail(),
+                Map.of(PAYMENTID, p.getId(), METHOD, p.getMethod(), AMOUNT_USD_CENTS, p.getAmountUsdCents()));
     }
 
     @Override
     @Transactional
     public Payment markFailed(UUID paymentId, String errorMessage, Map<String, Object> providerPayload) {
-        Payment p = paymentRepository.findById(paymentId).orElseThrow();
+        return doMarkFailed(paymentId, errorMessage, providerPayload);
+    }
+
+    private Payment doMarkFailed(UUID paymentId, String errorMessage, Map<String, Object> providerPayload) {
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
         p.setStatus(PaymentStatus.FAILED);
         p.setErrorMessage(errorMessage);
         Map<String, Object> merged = new HashMap<>(
@@ -192,7 +373,11 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Override
     @Transactional
     public Payment capturePayPal(UUID paymentId) {
-        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException("Payment"));
+        return doCapturePayPal(paymentId);
+    }
+
+    private Payment doCapturePayPal(UUID paymentId) {
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
         if (p.getMethod() != PaymentMethod.PAYPAL)
             throw new BusinessException("Not a PayPal payment");
         PaymentGateway gw = resolveGateway(PaymentMethod.PAYPAL);
@@ -200,29 +385,29 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             throw new BusinessException("PayPal gateway not configured");
         }
         Map<String, Object> resp = pp.capture(p.getProviderRef());
-        String status = String.valueOf(resp.getOrDefault("status", ""));
+        String status = String.valueOf(resp.getOrDefault(STATUS, ""));
         if ("COMPLETED".equalsIgnoreCase(status) || Boolean.TRUE.equals(resp.get("mock"))) {
-            return confirmSucceeded(p.getId(), resp);
+            return doConfirmSucceeded(p.getId(), resp);
         }
-        return markFailed(p.getId(), "PayPal capture returned " + status, resp);
+        return doMarkFailed(p.getId(), "PayPal capture returned " + status, resp);
     }
 
     @Override
     @Transactional
     public Payment confirmOrderPayment(UUID orderId, UUID paymentId) {
-        Payment p = getOrderPayment(orderId, paymentId);
+        Payment p = requireOrderPayment(orderId, paymentId);
         if (p.getStatus() == PaymentStatus.SUCCEEDED) {
             return p; // idempotente
         }
         // Proveedor deshabilitado / mock-mode: el providerRef lleva el prefijo sintético.
         String ref = p.getProviderRef() != null ? p.getProviderRef() : "";
-        boolean mock = ref.startsWith("cs_mock_") || ref.startsWith("paypal_mock_") || ref.startsWith("pi_mock_");
+        boolean mock = ref.startsWith(CS_MOCK) || ref.startsWith(PAYPAL_MOCK) || ref.startsWith(PI_MOCK);
         if (mock) {
-            return confirmSucceeded(p.getId(), Map.of("mock_confirm", true, "orderId", orderId.toString()));
+            return doConfirmSucceeded(p.getId(), Map.of(MOCK_CONFIRM, true, ORDERID, orderId.toString()));
         }
         if (p.getMethod() == PaymentMethod.PAYPAL) {
             // El comprador ya aprobó la orden en PayPal; capturamos del lado servidor.
-            return capturePayPal(p.getId());
+            return doCapturePayPal(p.getId());
         }
         if (p.getMethod() == PaymentMethod.CARD) {
             PaymentGateway gw = resolveGateway(PaymentMethod.CARD);
@@ -230,11 +415,11 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 throw new BusinessException("Stripe gateway not configured");
             }
             Map<String, Object> resp = sg.retrieveCheckoutSession(p.getProviderRef());
-            String status = String.valueOf(resp.getOrDefault("status", ""));
+            String status = String.valueOf(resp.getOrDefault(STATUS, ""));
             if ("paid".equals(status) || Boolean.TRUE.equals(resp.get("mock"))) {
-                return confirmSucceeded(p.getId(), resp);
+                return doConfirmSucceeded(p.getId(), resp);
             }
-            return markFailed(p.getId(), "Stripe session status: " + status, resp);
+            return doMarkFailed(p.getId(), "Stripe session status: " + status, resp);
         }
         throw new BusinessException("Confirm not supported for method: " + p.getMethod());
     }
@@ -242,7 +427,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Override
     @Transactional
     public Payment refundOrderPayment(UUID orderId, UUID paymentId, long amountCents) {
-        Payment p = getOrderPayment(orderId, paymentId);
+        Payment p = requireOrderPayment(orderId, paymentId);
         if (p.getStatus() != PaymentStatus.SUCCEEDED) {
             throw new BusinessException("Only a succeeded payment can be refunded (status=" + p.getStatus() + ")");
         }
@@ -250,34 +435,9 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         Map<String, Object> result;
 
         if (p.getMethod() == PaymentMethod.PAYPAL) {
-            PaymentGateway gw = resolveGateway(PaymentMethod.PAYPAL);
-            if (!(gw instanceof PayPalGateway pp)) {
-                throw new BusinessException("PayPal gateway not configured");
-            }
-            String captureId = PayPalGateway.extractCaptureId(pr);
-            if (captureId == null) {
-                captureId = p.getProviderRef(); // fallback (mock)
-            }
-            result = pp.refund(captureId, amountCents);
-            String status = String.valueOf(result.getOrDefault("status", ""));
-            boolean ok = "COMPLETED".equalsIgnoreCase(status) || "PENDING".equalsIgnoreCase(status)
-                    || Boolean.TRUE.equals(result.get("mock"));
-            if (!ok) {
-                throw new BusinessException("PayPal refund failed: " + status);
-            }
+            result = refundWithPayPal(p, pr, amountCents);
         } else if (p.getMethod() == PaymentMethod.CARD) {
-            PaymentGateway gw = resolveGateway(PaymentMethod.CARD);
-            if (!(gw instanceof StripeGateway sg)) {
-                throw new BusinessException("Stripe gateway not configured");
-            }
-            String paymentIntentId = String.valueOf(pr.getOrDefault("paymentIntent", p.getProviderRef()));
-            result = sg.refund(paymentIntentId, amountCents);
-            String status = String.valueOf(result.getOrDefault("status", ""));
-            boolean ok = "succeeded".equalsIgnoreCase(status) || "pending".equalsIgnoreCase(status)
-                    || Boolean.TRUE.equals(result.get("mock"));
-            if (!ok) {
-                throw new BusinessException("Stripe refund failed: " + status);
-            }
+            result = refundWithStripe(p, pr, amountCents);
         } else {
             throw new BusinessException("Refund not supported for method: " + p.getMethod());
         }
@@ -289,20 +449,115 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         p.setProviderResponse(merged);
         p = paymentRepository.save(p);
         auditLogger.log("order_payment.refunded", p.getUserEmail(),
-                Map.of("paymentId", p.getId(), "orderId", orderId, "method", p.getMethod(), "amountCents", amountCents));
+                Map.of(PAYMENTID, p.getId(), ORDERID, orderId, METHOD, p.getMethod(), AMOUNTCENTS, amountCents));
         return p;
+    }
+
+    /**
+     * Devolución por PayPal. Se reembolsa sobre la CAPTURA, no sobre la orden: si la respuesta guardada no
+     * trae el id de captura (pagos simulados) se cae al providerRef. Un estado que no sea COMPLETED ni
+     * PENDING aborta con excepción para que el pago NO se marque como devuelto sin que PayPal lo confirme.
+     */
+    private Map<String, Object> refundWithPayPal(Payment p, Map<String, Object> providerResponse, long amountCents) {
+        PaymentGateway gw = resolveGateway(PaymentMethod.PAYPAL);
+        if (!(gw instanceof PayPalGateway pp)) {
+            throw new BusinessException("PayPal gateway not configured");
+        }
+        String captureId = PayPalGateway.extractCaptureId(providerResponse);
+        if (captureId == null) {
+            captureId = p.getProviderRef(); // fallback (mock)
+        }
+        Map<String, Object> result = pp.refund(captureId, amountCents);
+        String status = String.valueOf(result.getOrDefault(STATUS, ""));
+        boolean ok = "COMPLETED".equalsIgnoreCase(status) || "PENDING".equalsIgnoreCase(status)
+                || Boolean.TRUE.equals(result.get("mock"));
+        if (!ok) {
+            throw new BusinessException("PayPal refund failed: " + status);
+        }
+        return result;
+    }
+
+    /**
+     * Devolución por Stripe: se reembolsa el PaymentIntent guardado en la respuesta del proveedor (con el
+     * providerRef como respaldo). Igual que en PayPal, un estado distinto de succeeded/pending aborta para
+     * no dar por devuelto un dinero que Stripe no ha devuelto.
+     */
+    private Map<String, Object> refundWithStripe(Payment p, Map<String, Object> providerResponse, long amountCents) {
+        PaymentGateway gw = resolveGateway(PaymentMethod.CARD);
+        if (!(gw instanceof StripeGateway sg)) {
+            throw new BusinessException("Stripe gateway not configured");
+        }
+        String paymentIntentId = String.valueOf(providerResponse.getOrDefault("paymentIntent", p.getProviderRef()));
+        Map<String, Object> result = sg.refund(paymentIntentId, amountCents);
+        String status = String.valueOf(result.getOrDefault(STATUS, ""));
+        boolean ok = "succeeded".equalsIgnoreCase(status) || "pending".equalsIgnoreCase(status)
+                || Boolean.TRUE.equals(result.get("mock"));
+        if (!ok) {
+            throw new BusinessException("Stripe refund failed: " + status);
+        }
+        return result;
     }
 
     @Override
     @Transactional
     public Payment confirmMockRecharge(UUID userId, UUID paymentId) {
-        return confirmSucceeded(paymentId, Map.of("mock_confirm", true));
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
+        // Propietario: no permitir confirmar el pago de otro usuario (no filtramos pagos ajenos → 404).
+        if (p.getUserId() == null || !p.getUserId().equals(userId)) {
+            throw new NotFoundException(PAYMENT);
+        }
+        // SEGURIDAD: esta vía "mock" acredita el saldo SIN pasar por la pasarela real. Debe aceptar EXCLUSIVAMENTE
+        // pagos sintéticos de mock-mode (providerRef con prefijo *_mock_). Un checkout REAL de Stripe/PayPal
+        // (cs_test_/cs_live_/pi_...) que aún no se ha cobrado NUNCA se acredita aquí; de lo contrario cualquier
+        // usuario iniciaría una recarga y la "confirmaría" gratis (dinero libre en producción). El pago real se
+        // confirma solo con confirmRecharge, que verifica el estado en la pasarela.
+        String ref = p.getProviderRef() != null ? p.getProviderRef() : "";
+        boolean mock = ref.startsWith(CS_MOCK) || ref.startsWith(PAYPAL_MOCK) || ref.startsWith(PI_MOCK);
+        if (!mock) {
+            throw new BusinessException("PAYMENT_REQUIRES_REAL_CONFIRMATION",
+                    "Esta recarga debe completarse en la pasarela de pago real");
+        }
+        return doConfirmSucceeded(p.getId(), Map.of(MOCK_CONFIRM, true));
+    }
+
+    @Override
+    @Transactional
+    public Payment confirmRecharge(UUID userId, UUID paymentId) {
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
+        if (p.getUserId() == null || !p.getUserId().equals(userId)) {
+            throw new NotFoundException(PAYMENT); // no filtramos pagos ajenos
+        }
+        if (p.getStatus() == PaymentStatus.SUCCEEDED) {
+            return p; // idempotente: el wallet ya se acreditó
+        }
+        // Proveedor deshabilitado / mock-mode: el providerRef lleva un prefijo sintético.
+        String ref = p.getProviderRef() != null ? p.getProviderRef() : "";
+        boolean mock = ref.startsWith(CS_MOCK) || ref.startsWith(PAYPAL_MOCK) || ref.startsWith(PI_MOCK);
+        if (mock) {
+            return doConfirmSucceeded(p.getId(), Map.of(MOCK_CONFIRM, true));
+        }
+        if (p.getMethod() == PaymentMethod.PAYPAL) {
+            return doCapturePayPal(p.getId()); // el usuario ya aprobó en PayPal; capturamos del lado servidor
+        }
+        if (p.getMethod() == PaymentMethod.CARD) {
+            PaymentGateway gw = resolveGateway(PaymentMethod.CARD);
+            if (!(gw instanceof StripeGateway sg)) {
+                throw new BusinessException("Stripe gateway not configured");
+            }
+            Map<String, Object> resp = sg.retrieveCheckoutSession(p.getProviderRef());
+            String status = String.valueOf(resp.getOrDefault(STATUS, ""));
+            if ("paid".equals(status) || Boolean.TRUE.equals(resp.get("mock"))) {
+                return doConfirmSucceeded(p.getId(), resp); // acredita el wallet (branch no-order)
+            }
+            throw new BusinessException("Payment not completed (status " + status + ")");
+        }
+        throw new BusinessException("Unsupported method for recharge confirm");
     }
 
     @Override
     @Transactional(readOnly = true)
     public Payment find(UUID id) {
-        return paymentRepository.findById(id).orElseThrow(() -> new NotFoundException("Payment"));
+        return paymentRepository.findById(id).orElseThrow(() -> new NotFoundException(PAYMENT));
     }
 
     @Override
@@ -316,9 +571,26 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 .orElseThrow(() -> new BusinessException("No gateway for method: " + method));
     }
 
+    /**
+     * Arranca el pago en la pasarela y, si falla, avisa al responsable antes de propagar el error.
+     *
+     * <p>Un fallo aquí no lo puede resolver el cliente: significa que ese método de pago no está
+     * cobrando. Sin aviso, solo se detecta cuando alguien reclama o mirando los logs, y mientras tanto
+     * se pierden ventas. El error se relanza tal cual para que el flujo de pago siga comportándose igual.
+     */
+    private PaymentGateway.InitiateResult initiateOrAlert(PaymentGateway gw, UUID paymentId, String operation) {
+        try {
+            return gw.initiate(managedEntity(paymentId));
+        } catch (RuntimeException e) {
+            opsAlertService.paymentFailed(gw.providerName(), operation, paymentId.toString(),
+                    e.getMessage() != null ? e.getMessage() : e.toString());
+            throw e;
+        }
+    }
+
     /** Fetches the managed entity for the gateway call (gateways read the persisted id + user). */
     private PaymentEntity managedEntity(UUID paymentId) {
-        return paymentJpaRepositoryAdapter.findById(paymentId).orElseThrow(() -> new NotFoundException("Payment"));
+        return paymentJpaRepositoryAdapter.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
     }
 
     /* ============================================================
@@ -328,14 +600,16 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Override
     @Transactional
     public Payment initiateOrderPayment(UUID orderId, UUID userId, PaymentMethod method, String idempotencyKey) {
+        return doInitiateOrderPayment(orderId, userId, method, idempotencyKey);
+    }
+
+    private Payment doInitiateOrderPayment(UUID orderId, UUID userId, PaymentMethod method, String idempotencyKey) {
         if (method == null)
             throw new BusinessException("paymentMethod required");
 
-        if (idempotencyKey != null) {
-            var existing = paymentRepository.findByIdempotencyKey(idempotencyKey);
-            if (existing.isPresent())
-                return existing.get();
-        }
+        Optional<Payment> existing = existingByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent())
+            return existing.get();
 
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException("Order"));
         if (order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.REFUNDED) {
@@ -360,43 +634,37 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         // para que lo cobrado coincida EXACTAMENTE con lo que el cliente vio en el carrito.
         String displayCcy = CurrencyHolder.get();
         boolean stripeEur = method == PaymentMethod.CARD && "EUR".equalsIgnoreCase(displayCcy);
-        String settlementCcy = method == PaymentMethod.USDT ? "USDT" : (stripeEur ? "EUR" : "USD");
+        String settlementCcy = settlementCurrencyFor(method, stripeEur);
         BigDecimal settlementAmount = perLineSettlementAmount(order, settlementCcy);
 
         Payment p = Payment.builder().userId(payerUserId).walletId(wallet.getId()).method(method)
                 .status(PaymentStatus.PENDING).amountUsdCents(amountUsdCents)
-                .amountDisplay(BigDecimal.valueOf(amountUsdCents).movePointLeft(2))
+                // amountDisplay va emparejado con currencyDisplay: dejar aquí el importe en USD mientras
+                // la divisa dice EUR hacía que el pago declarase 10,87 € cuando a la pasarela iban 9,54 €.
+                // Lo cobrado siempre fue correcto; el dato publicado contradecía a la pasarela.
+                .amountDisplay(perLineSettlementAmount(order, displayCcy))
                 .currencyDisplay(displayCcy)
                 .settlementCurrency(settlementCcy).settlementAmount(settlementAmount).idempotencyKey(idempotencyKey)
-                .orderId(orderId).purpose("ORDER_PAYMENT").build();
+                .orderId(orderId).purpose(ORDER_PAYMENT).build();
         p = paymentRepository.save(p);
 
         PaymentGateway gw = resolveGateway(method);
-        var result = gw.initiate(managedEntity(p.getId()));
+        PaymentGateway.InitiateResult result = initiateOrAlert(gw, p.getId(), "cobro del pedido");
 
         p.setProvider(gw.providerName());
         p.setProviderRef(result.providerRef());
         Map<String, Object> meta = result.raw() != null ? new HashMap<>(result.raw()) : new HashMap<>();
-        if (result.clientSecret() != null)
-            meta.put("clientSecret", result.clientSecret());
-        if (result.approveUrl() != null)
-            meta.put("approveUrl", result.approveUrl());
-        if (result.cryptoAddress() != null) {
-            meta.put("cryptoAddress", result.cryptoAddress());
-            meta.put("cryptoChain", result.cryptoChain());
-            meta.put("qrUrl", result.qrUrl());
-            p.setCryptoAddress(result.cryptoAddress());
-            p.setCryptoChain(result.cryptoChain());
-            p.setQrUrl(result.qrUrl());
-            p.setCryptoExpiresAt(Instant.now().plus(Duration.ofMinutes(30)));
-            meta.put("expiresAt", p.getCryptoExpiresAt().toString());
-        }
+        putRedirectMetadata(meta, result);
+        // El vencimiento se fija en el pago ANTES de copiarlo a la metadata: el front y el registro deben
+        // publicar exactamente el mismo instante, no dos "ahora + 30 min" calculados por separado.
+        applyCryptoDetails(p, result);
+        putCryptoMetadata(meta, result, p.getCryptoExpiresAt());
         p.setProviderResponse(meta);
         p.setStatus(PaymentStatus.REQUIRES_ACTION);
         p = paymentRepository.save(p);
 
         auditLogger.log("order_payment.initiate", p.getUserEmail(),
-                Map.of("orderId", orderId, "paymentId", p.getId(), "method", method, "amountCents", amountUsdCents));
+                Map.of(ORDERID, orderId, PAYMENTID, p.getId(), METHOD, method, AMOUNTCENTS, amountUsdCents));
         return p;
     }
 
@@ -424,6 +692,10 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Override
     @Transactional
     public Payment chargeWalletForOrder(UUID orderId, UUID userId, String idempotencyKey) {
+        return doChargeWalletForOrder(orderId, userId, idempotencyKey);
+    }
+
+    private Payment doChargeWalletForOrder(UUID orderId, UUID userId, String idempotencyKey) {
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException("Order"));
         UUID payerUserId = order.getUserId() != null ? order.getUserId() : userId;
         if (payerUserId == null)
@@ -442,7 +714,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 .status(PaymentStatus.SUCCEEDED).amountUsdCents(amountUsdCents)
                 .amountDisplay(BigDecimal.valueOf(amountUsdCents).movePointLeft(2)).currencyDisplay("USD")
                 .settlementCurrency("USD").provider("wallet").idempotencyKey(idempotencyKey).orderId(orderId)
-                .purpose("ORDER_PAYMENT")
+                .purpose(ORDER_PAYMENT)
                 .providerResponse(Map.of("walletId", wallet.getId().toString(), "settled", "atomic")).build();
         p = paymentRepository.save(p);
 
@@ -451,7 +723,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         order = orderRepository.save(order);
 
         auditLogger.log("order_payment.wallet", p.getUserEmail(),
-                Map.of("orderId", orderId, "paymentId", p.getId(), "amountCents", amountUsdCents));
+                Map.of(ORDERID, orderId, PAYMENTID, p.getId(), AMOUNTCENTS, amountUsdCents));
         // Email de confirmación de pago + FACTURA (pago con saldo del wallet).
         String email = userRepository.findById(payerUserId).map(u -> u.getEmail()).orElse(null);
         String locale = userRepository.findById(payerUserId).map(u -> u.getLanguage()).orElse(null);
@@ -463,9 +735,14 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Transactional
     public Payment initiateOrderPaymentView(UUID orderId, UUID userId, PaymentMethod method, boolean wallet,
             String idempotencyKey) {
+        return doInitiateOrderPaymentView(orderId, userId, method, wallet, idempotencyKey);
+    }
+
+    private Payment doInitiateOrderPaymentView(UUID orderId, UUID userId, PaymentMethod method, boolean wallet,
+            String idempotencyKey) {
         return wallet
-                ? chargeWalletForOrder(orderId, userId, idempotencyKey)
-                : initiateOrderPayment(orderId, userId, method, idempotencyKey);
+                ? doChargeWalletForOrder(orderId, userId, idempotencyKey)
+                : doInitiateOrderPayment(orderId, userId, method, idempotencyKey);
     }
 
     @Override
@@ -473,7 +750,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     public Payment initiatePartnerOrderPayment(Jwt jwt, UUID orderId, boolean wallet, PaymentMethod method,
             String idempotencyKey) {
         UUID userId = resolvePartnerUserId(jwt);
-        return initiateOrderPaymentView(orderId, userId, method, wallet, idempotencyKey);
+        return doInitiateOrderPaymentView(orderId, userId, method, wallet, idempotencyKey);
     }
 
     /**
@@ -489,7 +766,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Transactional
     public Payment initiateMeOrderPayment(UUID userId, UUID orderId, boolean wallet, PaymentMethod method,
             String idempotencyKey) {
-        return initiateOrderPaymentView(orderId, userId, method, wallet, idempotencyKey);
+        return doInitiateOrderPaymentView(orderId, userId, method, wallet, idempotencyKey);
     }
 
     @Override
@@ -501,9 +778,14 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Override
     @Transactional(readOnly = true)
     public Payment getOrderPayment(UUID orderId, UUID paymentId) {
-        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException("Payment"));
+        return requireOrderPayment(orderId, paymentId);
+    }
+
+    /** Pago de esa orden o 404. Sin anotar: lo usan confirmar y devolver, que ya abren su transacción. */
+    private Payment requireOrderPayment(UUID orderId, UUID paymentId) {
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
         if (p.getOrderId() != null && !p.getOrderId().equals(orderId)) {
-            throw new NotFoundException("Payment");
+            throw new NotFoundException(PAYMENT);
         }
         return p;
     }
@@ -511,7 +793,22 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Override
     @Transactional
     public Payment confirmMockOrderPayment(UUID orderId, UUID paymentId) {
-        return confirmSucceeded(paymentId, Map.of("mock_confirm", true, "orderId", orderId.toString()));
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
+        // El pago debe corresponder a la orden indicada (evita confirmar un pago de otra orden).
+        if (p.getOrderId() == null || !p.getOrderId().equals(orderId)) {
+            throw new NotFoundException(PAYMENT);
+        }
+        // SEGURIDAD (idéntico a confirmMockRecharge): esta vía marca la orden como PAGADA SIN pasar por la
+        // pasarela real. Solo se admite para pagos sintéticos de mock-mode (providerRef *_mock_). Un checkout
+        // REAL de Stripe/PayPal (cs_test_/cs_live_/pi_...) no cobrado NUNCA se confirma aquí; de lo contrario
+        // cualquiera crearía una orden con tarjeta y la marcaría PAGADA gratis (y se enviaría la mercancía).
+        String ref = p.getProviderRef() != null ? p.getProviderRef() : "";
+        boolean mock = ref.startsWith(CS_MOCK) || ref.startsWith(PAYPAL_MOCK) || ref.startsWith(PI_MOCK);
+        if (!mock) {
+            throw new BusinessException("PAYMENT_REQUIRES_REAL_CONFIRMATION",
+                    "Este pago debe completarse en la pasarela de pago real");
+        }
+        return doConfirmSucceeded(p.getId(), Map.of(MOCK_CONFIRM, true, ORDERID, orderId.toString()));
     }
 
     /* ============================================================
@@ -527,7 +824,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             Map<String, Object> data = (Map<String, Object>) ((Map<String, Object>) root.get("data")).get("object");
             String intentId = String.valueOf(data.get("id"));
             Map<String, Object> meta = (Map<String, Object>) data.getOrDefault("metadata", Map.of());
-            String paymentIdStr = meta != null ? String.valueOf(meta.get("paymentId")) : null;
+            String paymentIdStr = meta != null ? String.valueOf(meta.get(PAYMENTID)) : null;
             if (paymentIdStr == null || "null".equals(paymentIdStr)) {
                 Payment p = paymentRepository.findByProviderAndProviderRef("stripe", intentId).orElse(null);
                 if (p != null)
@@ -537,23 +834,70 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             if ("customer.subscription.created".equals(eventType) || "customer.subscription.updated".equals(eventType)
                     || "customer.subscription.deleted".equals(eventType)) {
                 String stripeSubId = String.valueOf(data.get("id"));
-                String stripeStatus = String.valueOf(data.get("status"));
+                String stripeStatus = String.valueOf(data.get(STATUS));
+                // Sincroniza la CustomerSubscription local (estado, fin de periodo, cancelación) + el tier
+                // del partner. Cubre renovación, fallo de cobro (PAST_DUE) y cancelación desde Stripe.
+                customerSubscriptionUseCase.syncFromStripe(stripeSubId, stripeStatus,
+                        asEpoch(data.get("current_period_end")), asEpoch(data.get("cancel_at")));
                 partnerPlanSyncService.onSubscriptionEvent(stripeSubId, stripeStatus, eventType);
                 return "ok";
             }
 
-            if (paymentIdStr == null)
-                return "no-match";
+            if ("invoice.payment_failed".equals(eventType)) {
+                // Fallo de cobro recurrente de la suscripción: la factura lleva el id de la suscripción de
+                // Stripe. Avisamos al dueño (in-app + email) para que revise/actualice su método de pago.
+                subscriptionNotificationService.planPaymentFailed(String.valueOf(data.get("subscription")));
+                return "ok";
+            }
+
+            // String.valueOf(null) devuelve la CADENA "null", no null: sin este segundo control un evento
+            // sin metadata que además no casa con ningún pago se colaba hasta UUID.fromString("null") y
+            // reventaba. Antes daba igual porque el fallo se tragaba; ahora haría que Stripe reintentase
+            // tres días un evento que no va a casar nunca.
+            if (paymentIdStr == null || "null".equals(paymentIdStr) || paymentIdStr.isBlank()) {
+                return NO_MATCH;
+            }
             UUID paymentId = UUID.fromString(paymentIdStr);
             if ("payment_intent.succeeded".equals(eventType)) {
-                confirmSucceeded(paymentId, data);
+                doConfirmSucceeded(paymentId, data);
             } else if ("payment_intent.payment_failed".equals(eventType)) {
-                markFailed(paymentId, "Stripe: payment_failed", data);
+                doMarkFailed(paymentId, "Stripe: payment_failed", data);
             }
         } catch (Exception e) {
-            log.error("Stripe webhook processing failed: {}", e.getMessage(), e);
+            throw webhookFailure("stripe", eventType, e);
         }
         return "ok";
+    }
+
+    /**
+     * Un fallo procesando el evento NO puede saldarse con un 200.
+     *
+     * <p>Devolver "ok" le decía a la pasarela que el evento quedó atendido, así que no lo reintentaba
+     * nunca más: el cobro seguía hecho en su lado mientras aquí el pedido no pasaba a PAID o el saldo no
+     * se acreditaba, y del incidente solo quedaba una línea de log que nadie mira. Se avisa al
+     * responsable y se propaga para que el controlador responda 5xx y la pasarela reenvíe el evento
+     * —Stripe reintenta durante tres días—.
+     */
+    private WebhookProcessingException webhookFailure(String provider, String eventType, Exception cause) {
+        log.error("{} webhook processing failed for {}: {}", provider, eventType, cause.getMessage(), cause);
+        opsAlertService.paymentFailed(provider, "webhook " + eventType, "-",
+                cause.getMessage() != null ? cause.getMessage() : cause.toString());
+        return new WebhookProcessingException(provider, eventType, cause);
+    }
+
+    /** Convierte un valor JSON (Number/String/null) a epoch-segundos Long, o null. */
+    private static Long asEpoch(Object v) {
+        if (v == null) {
+            return null;
+        }
+        if (v instanceof Number n) {
+            return n.longValue();
+        }
+        try {
+            return Long.parseLong(String.valueOf(v));
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -567,14 +911,14 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             String orderId = String.valueOf(resource.get("id"));
             Payment p = paymentRepository.findByProviderAndProviderRef("paypal", orderId).orElse(null);
             if (p == null)
-                return "no-match";
+                return NO_MATCH;
             if (eventType != null && eventType.contains("CAPTURE.COMPLETED")) {
-                confirmSucceeded(p.getId(), resource);
+                doConfirmSucceeded(p.getId(), resource);
             } else if (eventType != null && eventType.contains("DENIED")) {
-                markFailed(p.getId(), "PayPal: " + eventType, resource);
+                doMarkFailed(p.getId(), "PayPal: " + eventType, resource);
             }
         } catch (Exception e) {
-            log.error("PayPal webhook processing failed: {}", e.getMessage(), e);
+            throw webhookFailure("paypal", "-", e);
         }
         return "ok";
     }
@@ -591,14 +935,14 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             String chargeCode = String.valueOf(data.get("code"));
             Payment p = paymentRepository.findByProviderAndProviderRef("coinbase", chargeCode).orElse(null);
             if (p == null)
-                return "no-match";
+                return NO_MATCH;
             if ("charge:confirmed".equals(type)) {
-                confirmSucceeded(p.getId(), data);
+                doConfirmSucceeded(p.getId(), data);
             } else if ("charge:failed".equals(type) || "charge:delayed".equals(type)) {
-                markFailed(p.getId(), "Coinbase: " + type, data);
+                doMarkFailed(p.getId(), "Coinbase: " + type, data);
             }
         } catch (Exception e) {
-            log.error("Coinbase webhook processing failed: {}", e.getMessage(), e);
+            throw webhookFailure("coinbase", "-", e);
         }
         return "ok";
     }

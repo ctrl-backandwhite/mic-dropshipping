@@ -22,10 +22,12 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantVa
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Inverse of the bulk import: maps a persisted {@link ProductEntity} (with its sub-entities) back to a
@@ -69,13 +71,20 @@ public class ProductBulkExportMapper {
         d.setDescriptionPt(desc(byLang, "pt"));
 
         d.setPrice(p.getBasePrice());
+        d.setShippingCny(p.getShippingCny());
+        d.setIvaCny(p.getIvaCny());
         d.setMoq(p.getMoq());
         d.setMonthlySales(p.getMonthlySales());
         d.setRating(p.getRating());
 
+        // imageUrls del export: se prefiere la URL de origen, pero si falta (p.ej. imagen añadida solo
+        // con cdn_url) se cae a la cdn_url espejada. Así reexportar→reimportar conserva las imágenes y
+        // el producto no se rechaza por "sin imágenes" en el round-trip.
         d.setImageUrls(safe(p.getImages()).stream()
                 .sorted(Comparator.comparingInt(ProductImageEntity::getPosition))
-                .map(ProductImageEntity::getSourceUrl).filter(java.util.Objects::nonNull).toList());
+                .map(img -> img.getSourceUrl() != null && !img.getSourceUrl().isBlank()
+                        ? img.getSourceUrl() : img.getCdnUrl())
+                .filter(Objects::nonNull).toList());
 
         // Logistics / customs (direct columns).
         d.setWeightGrams(p.getWeightGrams());
@@ -126,26 +135,44 @@ public class ProductBulkExportMapper {
         List<String> values = new ArrayList<>();
         Map<String, String> valueImages = new LinkedHashMap<>();
         Map<String, Map<String, String>> valueTranslations = new LinkedHashMap<>();
-        for (VariantValueEntity v : safe(o.getValues()).stream()
-                .sorted(Comparator.comparingInt(VariantValueEntity::getPosition)).toList()) {
-            String value = v.getValue() != null ? v.getValue() : v.getValueZh();
+        for (VariantValueEntity v : sortedValues(o)) {
+            String value = displayValue(v);
             values.add(value);
             if (v.getImageSourceUrl() != null && value != null) {
                 valueImages.put(value, v.getImageSourceUrl());
             }
+            // El mapa de traducciones se indexa por el valor en CHINO, que es la clave estable del
+            // proveedor y la que usa el importador para reencontrarlo al reimportar.
             String key = v.getValueZh() != null ? v.getValueZh() : value;
-            Map<String, String> tr = new LinkedHashMap<>();
-            for (VariantValueTranslationEntity t : safe(v.getTranslations())) {
-                if (t.getLanguage() != null) {
-                    tr.put(t.getLanguage(), t.getValue());
-                }
-            }
+            Map<String, String> tr = translationsByLanguage(v);
             if (!tr.isEmpty() && key != null) {
                 valueTranslations.put(key, tr);
             }
         }
+        // Los mapas vacíos se exportan como ausentes para que el JSON no se llene de objetos vacíos.
         return new BulkAxis(o.getName() != null ? o.getName() : o.getNameZh(), values,
                 valueImages.isEmpty() ? null : valueImages, valueTranslations.isEmpty() ? null : valueTranslations);
+    }
+
+    /** Valores del eje en el orden de carga (posición), que es el mismo orden en el que están en 1688. */
+    private List<VariantValueEntity> sortedValues(VariantOptionEntity o) {
+        return safe(o.getValues()).stream().sorted(Comparator.comparingInt(VariantValueEntity::getPosition)).toList();
+    }
+
+    /** Texto mostrable del valor: el traducido si lo hay, si no el chino original. */
+    private static String displayValue(VariantValueEntity v) {
+        return v.getValue() != null ? v.getValue() : v.getValueZh();
+    }
+
+    /** Traducciones del valor indexadas por idioma; las que no declaran idioma no se pueden exportar. */
+    private Map<String, String> translationsByLanguage(VariantValueEntity v) {
+        Map<String, String> tr = new LinkedHashMap<>();
+        for (VariantValueTranslationEntity t : safe(v.getTranslations())) {
+            if (t.getLanguage() != null) {
+                tr.put(t.getLanguage(), t.getValue());
+            }
+        }
+        return tr;
     }
 
     private BulkVariant variant(ProductVariantEntity v) {
@@ -167,7 +194,7 @@ public class ProductBulkExportMapper {
     private BulkReview review(ProductReviewEntity r) {
         List<String> tags = (r.getTags() == null || r.getTags().isBlank())
                 ? null
-                : java.util.Arrays.stream(r.getTags().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
+                : Arrays.stream(r.getTags().split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
         return new BulkReview(r.getAuthorName(), r.getAuthorCountry(), (int) r.getRating(), r.getTitle(), r.getBody(),
                 r.getLanguage(), r.isVerifiedPurchase(), tags);
     }

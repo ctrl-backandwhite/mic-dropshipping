@@ -1,13 +1,16 @@
 package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.AdminSupplierApi;
+import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AdminSupplierUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.AdminSupplierDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminSupplierToggleDtoOut;
 import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.api.mapper.AdminSupplierMapper;
 import com.nexaplatform.dropshipping.application.usecase.SupplierUseCase;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.SupplierIndexer;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -33,10 +36,20 @@ public class AdminSupplierController implements AdminSupplierApi {
 
     private final AdminSupplierMapper mapper;
     private final SupplierUseCase useCase;
+    private final SupplierIndexer supplierIndexer;
+
+    /** Reindexa todos los proveedores en OpenSearch (botón "Reindexar" del admin). */
+    @PostMapping("/reindex")
+    public ResponseEntity<Map<String, Object>> reindex() {
+        return ResponseEntity.ok(Map.of("indexed", supplierIndexer.reindexAll()));
+    }
 
     @Override
-    public ResponseEntity<List<AdminSupplierDtoOut>> list() {
-        return ResponseEntity.ok(mapper.toDtoOutList(useCase.findAll()));
+    public ResponseEntity<PageResponse<AdminSupplierDtoOut>> list(String q, String country, Boolean verified, int page,
+            int size) {
+        SupplierUseCase.SupplierPage p = useCase.pageAdmin(q, country, verified, page, size);
+        return ResponseEntity.ok(new PageResponse<>(mapper.toDtoOutList(p.items()), p.page(), p.size(), p.total(),
+                (int) Math.ceil((double) p.total() / Math.max(1, p.size()))));
     }
 
     /**
@@ -56,7 +69,7 @@ public class AdminSupplierController implements AdminSupplierApi {
     @Override
     public ResponseEntity<AdminSupplierDtoOut> create(AdminSupplierUpsertDtoIn req) {
         return new ResponseEntity<>(mapper.toDtoOut(useCase.create(mapper.toDomain(req))),
-                org.springframework.http.HttpStatus.CREATED);
+                HttpStatus.CREATED);
     }
 
     @Override

@@ -6,6 +6,7 @@ import com.nexaplatform.dropshipping.application.service.AuditLogger;
 import com.nexaplatform.dropshipping.application.mapper.UserUpdateMapper;
 import com.nexaplatform.dropshipping.application.service.PasswordPolicy;
 import com.nexaplatform.dropshipping.application.usecase.impl.UserUseCaseImpl;
+import com.nexaplatform.dropshipping.infrastructure.security.oauth.JwtRevocationService;
 import com.nexaplatform.dropshipping.domain.enums.UserRole;
 import com.nexaplatform.dropshipping.domain.model.User;
 import com.nexaplatform.dropshipping.domain.repository.UserRepository;
@@ -39,6 +40,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 /**
  * Mirrors {@code PriceRuleUseCaseImplTest}: unit tests for the consolidated
@@ -66,11 +68,13 @@ class UserUseCaseImplTest {
     PasswordPolicy policy = new PasswordPolicy();
 
     UserUseCaseImpl useCase;
+    JwtRevocationService jwtRevocationService;
 
     @BeforeEach
     void setup() {
+        jwtRevocationService = mock(JwtRevocationService.class);
         useCase = new UserUseCaseImpl(userRepository, resetTokenRepository, userJpaRepository, encoder, policy,
-                emailQueueService, auditLogger, userUpdateMapper);
+                emailQueueService, auditLogger, userUpdateMapper, jwtRevocationService);
     }
 
     @Test
@@ -101,8 +105,9 @@ class UserUseCaseImplTest {
     @DisplayName("register: rechaza email duplicado")
     void register_duplicate_email() {
         when(userRepository.existsByEmail("a@b.com")).thenReturn(true);
-        assertThatThrownBy(
-                () -> useCase.register(User.builder().email("a@b.com").language("es").build(), "Str0ngP@ssword!"))
+        User candidate = User.builder().email("a@b.com").language("es").build();
+
+        assertThatThrownBy(() -> useCase.register(candidate, "Str0ngP@ssword!"))
                 .isInstanceOf(ConflictException.class);
         verify(userRepository, never()).save(any());
     }
@@ -110,7 +115,9 @@ class UserUseCaseImplTest {
     @Test
     @DisplayName("register: rechaza contraseña débil sin guardar")
     void register_weak_password() {
-        assertThatThrownBy(() -> useCase.register(User.builder().email("a@b.com").language("es").build(), "weak"))
+        User candidate = User.builder().email("a@b.com").language("es").build();
+
+        assertThatThrownBy(() -> useCase.register(candidate, "weak"))
                 .isInstanceOf(BusinessException.class);
         verify(userRepository, never()).save(any());
     }

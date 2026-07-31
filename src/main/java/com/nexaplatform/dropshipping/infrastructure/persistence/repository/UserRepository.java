@@ -16,4 +16,7 @@ public interface UserRepository extends JpaRepository<UserEntity, UUID> {
     boolean existsByEmail(String email);
 
     List<UserEntity> findByRoleOrderByCreatedAtDesc(UserRole role);
+
+    /** Audiencia de marketing: usuarios activos que no han optado por salir de campañas. */
+    List<UserEntity> findByActiveTrueAndMarketingOptOutFalse();
 }

@@ -48,6 +48,11 @@ public class CustomerOrderEntity extends BaseEntity {
     @Column(name = "external_order_id", length = 120)
     private String externalOrderId;
 
+    /** Clave de idempotencia del checkout (hash del carrito): reintentos del mismo
+     *  carrito reutilizan la orden aún sin pagar en vez de crear un duplicado. */
+    @Column(name = "idempotency_key", length = 80)
+    private String idempotencyKey;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "shipping_address_id", nullable = false)
     private AddressEntity shippingAddress;
@@ -71,6 +76,10 @@ public class CustomerOrderEntity extends BaseEntity {
 
     @Column(name = "total_cents", nullable = false)
     private int totalCents;
+
+    // Descuento de referido aplicado al comprador (céntimos USD). total_cents ya lo resta.
+    @Column(name = "discount_cents", nullable = false)
+    private int discountCents;
 
     @Column(length = 8)
     private String currency;
@@ -111,6 +120,22 @@ public class CustomerOrderEntity extends BaseEntity {
 
     @Column(name = "last_tracked_at")
     private Instant lastTrackedAt;
+
+    /** Intentos de creación del envío consumidos; vuelve a 0 en cuanto la guía existe. */
+    @Column(name = "fulfillment_attempts", nullable = false)
+    private int fulfillmentAttempts;
+
+    /** Último motivo de rechazo del transportista, tal cual, para que el admin sepa qué corregir. */
+    @Column(name = "fulfillment_error")
+    private String fulfillmentError;
+
+    /** No nulo = se abandonó el envío y hace falta intervención manual. */
+    @Column(name = "fulfillment_failed_at")
+    private Instant fulfillmentFailedAt;
+
+    /** No se reintenta antes de este instante (backoff entre fallos transitorios). */
+    @Column(name = "fulfillment_next_attempt_at")
+    private Instant fulfillmentNextAttemptAt;
 
     @Builder.Default
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)

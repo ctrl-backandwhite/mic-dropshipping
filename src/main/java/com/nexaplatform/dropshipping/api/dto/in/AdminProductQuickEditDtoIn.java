@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import lombok.With;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 /** DROP-499: input payload for the admin quick-edit of a product. */
 @Data
@@ -46,4 +47,10 @@ public class AdminProductQuickEditDtoIn {
 
     @Schema(description = "DROP-688: meta descripción SEO del idioma activo (edición manual).")
     private String metaDescription;
+
+    @Schema(description = "Verificación manual del admin (true = revisado OK, false = pendiente/con error).")
+    private Boolean verified;
+
+    @Schema(description = "Categoría del producto (id). Permite reasignar la categoría desde el admin.")
+    private UUID categoryId;
 }

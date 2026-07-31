@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Entity
 @Table(name = "product", uniqueConstraints = @UniqueConstraint(columnNames = {"source", "external_id"}))
@@ -68,6 +69,14 @@ public class ProductEntity extends BaseEntity {
     @Column(name = "base_price", precision = 12, scale = 4)
     private BigDecimal basePrice;
 
+    /** Flete de envío en CNY (misma moneda que base_price). Se suma al total SIN margen. */
+    @Column(name = "shipping_cny", precision = 12, scale = 4)
+    private BigDecimal shippingCny;
+
+    /** IVA en CNY (valor fijo de carga, misma moneda que base_price). Se suma al total SIN margen. */
+    @Column(name = "iva_cny", precision = 12, scale = 4)
+    private BigDecimal ivaCny;
+
     @Column(length = 8)
     private String currency;
 
@@ -86,6 +95,22 @@ public class ProductEntity extends BaseEntity {
     @Column(name = "hs_code", length = 40)
     private String hsCode;
 
+    /** InvoicePart (材质) que se declara a YunExpress, en inglés. Sembrado desde el perfil de la categoría. */
+    @Column(name = "customs_material", length = 255)
+    private String customsMaterial;
+
+    /** InvoiceUsage (用途) que se declara a YunExpress, en inglés. Sembrado desde el perfil de la categoría. */
+    @Column(name = "customs_usage", length = 255)
+    private String customsUsage;
+
+    /**
+     * Presencia de batería: determina el {@code PackageType} de YunExpress (0 = 普货 carga general,
+     * 1 = 带电 con batería) y, por tanto, el canal y la tarifa. Valores: NONE, BUILT_IN, WITH_EQUIPMENT.
+     */
+    @Column(name = "battery_type", length = 20, nullable = false)
+    @Builder.Default
+    private String batteryType = "NONE";
+
     @Column(name = "package_weight_grams")
     private Integer packageWeightGrams;
 
@@ -103,7 +128,7 @@ public class ProductEntity extends BaseEntity {
 
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
-    private java.util.List<String> certifications;
+    private List<String> certifications;
 
     @Column(name = "ship_from", length = 120)
     private String shipFrom;
@@ -123,25 +148,25 @@ public class ProductEntity extends BaseEntity {
     // ── v44: campos internacionales/1688 que faltaban ──
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(name = "video_urls", columnDefinition = "jsonb")
-    private java.util.List<String> videoUrls;
+    private List<String> videoUrls;
 
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(name = "sales_regions", columnDefinition = "jsonb")
-    private java.util.List<String> salesRegions;
+    private List<String> salesRegions;
 
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(name = "rating_breakdown", columnDefinition = "jsonb")
-    private java.util.Map<String, Integer> ratingBreakdown;
+    private Map<String, Integer> ratingBreakdown;
 
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(name = "cross_border_support", columnDefinition = "jsonb")
-    private java.util.Map<String, Object> crossBorderSupport;
+    private Map<String, Object> crossBorderSupport;
 
     @Column(name = "dropship_shipped_30d")
     private Integer dropshipShipped30d;
 
     @Column(name = "dropship_pickup_rate_48h", precision = 5, scale = 2)
-    private java.math.BigDecimal dropshipPickupRate48h;
+    private BigDecimal dropshipPickupRate48h;
 
     @Column(name = "inventory_count")
     private Integer inventoryCount;
@@ -155,6 +180,11 @@ public class ProductEntity extends BaseEntity {
     @Column(name = "ready_to_ship")
     private Boolean readyToShip;
 
+    // Verificación manual del admin: false = pendiente/con error (reimportar), true = revisado y correcto.
+    @Builder.Default
+    @Column(name = "verified", nullable = false)
+    private Boolean verified = false;
+
     @Column(name = "ar_model_url", length = 800)
     private String arModelUrl;
 
@@ -162,7 +192,7 @@ public class ProductEntity extends BaseEntity {
     private String reviewsSummary;
 
     @Column(name = "reviews_sentiment", precision = 3, scale = 2)
-    private java.math.BigDecimal reviewsSentiment;
+    private BigDecimal reviewsSentiment;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

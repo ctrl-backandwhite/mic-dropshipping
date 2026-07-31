@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.service;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.OperatorActionIndexer;
@@ -12,6 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -28,12 +31,12 @@ public class OperatorCommissionService {
 
     private static final String ACTION_DELIVERED = "DELIVERED";
     // % de comisión del operador según el ORIGEN de la orden.
-    private static final java.math.BigDecimal PCT_PLATFORM = new java.math.BigDecimal("10");   // tienda propia
-    private static final java.math.BigDecimal PCT_INTEGRATION = new java.math.BigDecimal("5"); // tienda integrada
+    private static final BigDecimal PCT_PLATFORM = new BigDecimal("10");   // tienda propia
+    private static final BigDecimal PCT_INTEGRATION = new BigDecimal("5"); // tienda integrada
     // IVA chino (13%) incluido en el precio CNY del proveedor. La comisión se calcula sobre la BASE sin IVA:
     // base = precioCNY / 1.13 (p. ej. 113 → 100). NO se calcula sobre el precio con IVA.
-    private static final java.math.BigDecimal IVA_DIVISOR = new java.math.BigDecimal("1.13");
-    private static final java.math.BigDecimal HUNDRED = new java.math.BigDecimal("100");
+    private static final BigDecimal IVA_DIVISOR = new BigDecimal("1.13");
+    private static final BigDecimal HUNDRED = new BigDecimal("100");
 
     private final OperatorOrderActionRepository actionRepository;
     private final OperatorActionIndexer indexer;
@@ -54,29 +57,29 @@ public class OperatorCommissionService {
         }
         // % según el ORIGEN de la orden: 10% propias (PLATFORM), 5% integradas (INTEGRATION).
         boolean integration = "INTEGRATION".equalsIgnoreCase(order.getSource());
-        java.math.BigDecimal pct = integration ? PCT_INTEGRATION : PCT_PLATFORM;
+        BigDecimal pct = integration ? PCT_INTEGRATION : PCT_PLATFORM;
 
         // Base imponible de la comisión = suma de (precioCNY SIN IVA) × cantidad. Primero se quita el 13%
         // de IVA (base = precioCNY / 1.13), luego se aplica el % del operador.
-        java.math.BigDecimal commissionCny = java.math.BigDecimal.ZERO;
+        BigDecimal commissionCny = BigDecimal.ZERO;
         int itemCount = 0;
         if (order.getItems() != null) {
             for (OrderItem it : order.getItems()) {
-                java.math.BigDecimal lineGrossCny = java.math.BigDecimal.valueOf(it.getCostCnyCents())
-                        .multiply(java.math.BigDecimal.valueOf(it.getQuantity()));
-                java.math.BigDecimal lineBaseCny = lineGrossCny.divide(IVA_DIVISOR, 4, java.math.RoundingMode.HALF_UP);
+                BigDecimal lineGrossCny = BigDecimal.valueOf(it.getCostCnyCents())
+                        .multiply(BigDecimal.valueOf(it.getQuantity()));
+                BigDecimal lineBaseCny = lineGrossCny.divide(IVA_DIVISOR, 4, RoundingMode.HALF_UP);
                 commissionCny = commissionCny.add(lineBaseCny.multiply(pct).divide(HUNDRED, 4,
-                        java.math.RoundingMode.HALF_UP));
+                        RoundingMode.HALF_UP));
                 itemCount += it.getQuantity();
             }
         }
-        long commissionCnyCents = commissionCny.setScale(0, java.math.RoundingMode.HALF_UP).longValueExact();
+        long commissionCnyCents = commissionCny.setScale(0, RoundingMode.HALF_UP).longValueExact();
 
         String email = null;
         String name = null;
         try {
             UUID uid = UUID.fromString(subject);
-            var u = userRepository.findById(uid).orElse(null);
+            UserEntity u = userRepository.findById(uid).orElse(null);
             if (u != null) {
                 email = u.getEmail();
                 name = u.getDisplayName();

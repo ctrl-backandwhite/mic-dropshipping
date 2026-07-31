@@ -7,6 +7,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderItem
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import org.mapstruct.Builder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -44,6 +45,7 @@ public interface OrderEntityMapper {
     @Mapping(target = "shippingCents", source = "shippingCents")
     @Mapping(target = "taxCents", source = "taxCents")
     @Mapping(target = "totalCents", source = "totalCents")
+    @Mapping(target = "discountCents", source = "discountCents")
     @Mapping(target = "currency", source = "currency")
     @Mapping(target = "notes", source = "notes")
     @Mapping(target = "placedAt", source = "placedAt")
@@ -95,6 +97,7 @@ public interface OrderEntityMapper {
     @Mapping(target = "shippingCents", source = "shippingCents")
     @Mapping(target = "taxCents", source = "taxCents")
     @Mapping(target = "totalCents", source = "totalCents")
+    @Mapping(target = "discountCents", source = "discountCents")
     @Mapping(target = "currency", source = "currency")
     @Mapping(target = "notes", source = "notes")
     @Mapping(target = "placedAt", source = "placedAt")
@@ -136,14 +139,48 @@ public interface OrderEntityMapper {
     @Mapping(target = "quantity", source = "quantity")
     @Mapping(target = "lineTotalCents", source = "lineTotalCents")
     @Mapping(target = "productTitleZh", expression = "java(item.getProduct() != null ? item.getProduct().getTitleZh() : null)")
-    @Mapping(target = "variantName", expression = "java(item.getVariant() != null ? item.getVariant().getTitle() : null)")
+    @Mapping(target = "variantName", expression = "java(variantLabel(item.getVariant()))")
     @Mapping(target = "supplierName", expression = "java(item.getProduct() != null && item.getProduct().getSupplier() != null ? item.getProduct().getSupplier().getName() : null)")
     @Mapping(target = "productImageUrl", source = "product", qualifiedByName = "resolveLiveImage")
+    @Mapping(target = "variantImageUrl", source = "variant", qualifiedByName = "resolveVariantImage")
     @Mapping(target = "productSourceUrl", expression = "java(item.getProduct() != null ? item.getProduct().getSourceUrl() : null)")
     @Mapping(target = "productTitles", source = "product", qualifiedByName = "resolveTitles")
     OrderItem toItemDomain(OrderItemEntity item);
 
     List<OrderItem> toItemDomainList(List<OrderItemEntity> items);
+
+    /**
+     * Nombre legible de la variante para mostrar en carrito/checkout/factura.
+     * Prioriza el {@code title} de la variante; si está vacío (caso de los
+     * productos importados, que solo traen {@code options_json}), compone la
+     * etiqueta uniendo los valores de opción (p. ej. "Negro / M").
+     */
+    default String variantLabel(ProductVariantEntity v) {
+        if (v == null) {
+            return null;
+        }
+        // Etiqueta = valores de opción (Color/Talla), p. ej. "Negro / 27". Se compone PRIMERO desde las
+        // opciones porque en los productos importados (1688) el `title` de la variante suele ser el título
+        // del producto, y usarlo duplicaba la descripción en la factura/pedido en vez de mostrar la variante.
+        Map<String, String> opts = v.getOptions();
+        if (opts != null && !opts.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (String val : opts.values()) {
+                if (val != null && !val.isBlank()) {
+                    if (!sb.isEmpty()) {
+                        sb.append(" / ");
+                    }
+                    sb.append(val);
+                }
+            }
+            if (!sb.isEmpty()) {
+                return sb.toString();
+            }
+        }
+        // Sin opciones no hay variante real que mostrar. NO usamos v.getTitle() porque en estos productos
+        // es el título del producto y duplicaría la descripción.
+        return null;
+    }
 
     /** Picks the first live catalog image, preferring the CDN url over the source url. */
     @Named("resolveLiveImage")
@@ -153,6 +190,20 @@ public interface OrderEntityMapper {
         }
         ProductImageEntity img = product.getImages().get(0);
         return img.getCdnUrl() != null && !img.getCdnUrl().isBlank() ? img.getCdnUrl() : img.getSourceUrl();
+    }
+
+    /** Imagen propia de la variante (color concreto): CDN preferido sobre el origen. */
+    @Named("resolveVariantImage")
+    default String resolveVariantImage(ProductVariantEntity variant) {
+        if (variant == null) {
+            return null;
+        }
+        String cdn = variant.getImageCdnUrl();
+        if (cdn != null && !cdn.isBlank()) {
+            return cdn;
+        }
+        String src = variant.getImageSourceUrl();
+        return src != null && !src.isBlank() ? src : null;
     }
 
     /** Collapses the product translations into a {language -> title} map for fallback resolution. */

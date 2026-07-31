@@ -39,11 +39,24 @@ public class User {
     private String activationCode;
     private Instant activationCodeExpiresAt;
 
+    /** Marca de BORRADO LÓGICO (soft delete): cuando no es null la cuenta se considera dada de baja. */
+    private Instant deletedAt;
+    /** Código temporal para confirmar la eliminación de la cuenta (enviado por email). */
+    private String deletionCode;
+    /** Instante en que caduca {@link #deletionCode}. */
+    private Instant deletionCodeExpiresAt;
+
     private int failedLoginCount;
     private Instant lockedUntil;
     private Instant lastLogin;
 
     private String displayName;
+    /** Nombre de pila. */
+    private String firstName;
+    /** Primer apellido. */
+    private String lastName1;
+    /** Segundo apellido (opcional). */
+    private String lastName2;
     private String companyName;
     private String country;
     private String phone;
@@ -52,6 +65,9 @@ public class User {
 
     /** Whether this account has a confirmed link to a Google identity (social login). */
     private boolean googleLinked;
+
+    /** Whether this account has already consumed its one-time FREE trial (1-month free plan). */
+    private boolean freeTrialUsed;
 
     /** Nested second-factor data of the aggregate (null when 2FA was never set up). */
     private TotpSecret totp;

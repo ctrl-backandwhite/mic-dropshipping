@@ -116,6 +116,11 @@ public class PartnerWebhookDispatcherService {
             finish(id, attempt, ok ? "SUCCESS" : retryStatus(attempt), res.statusCode(),
                     truncate(res.body(), 1000), ok ? null : nextRetry(attempt));
         } catch (Exception e) {
+            // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
+            // interrupción deja al pool sin enterarse de que le han pedido parar.
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             finish(id, attempt, retryStatus(attempt), null,
                     "dispatch error: " + e.getClass().getSimpleName() + ": " + e.getMessage(), nextRetry(attempt));
         }

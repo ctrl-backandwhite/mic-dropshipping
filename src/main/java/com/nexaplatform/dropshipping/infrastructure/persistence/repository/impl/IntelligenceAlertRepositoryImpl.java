@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository.impl;
 
+import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.domain.model.IntelligenceAlert;
 import com.nexaplatform.dropshipping.domain.repository.IntelligenceAlertRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity;
@@ -71,11 +72,18 @@ public class IntelligenceAlertRepositoryImpl implements IntelligenceAlertReposit
         return intelligenceAlertJpaRepositoryAdapter.existsById(id);
     }
 
-    /** Loads the managed entity for an existing id, or starts a fresh one for inserts. */
+    /**
+     * Loads the managed entity for an existing id, or starts a fresh one for inserts.
+     *
+     * <p>Un id que ya no existe es un error, no un alta: antes se caía a una entidad nueva y guardar
+     * una alerta borrada entre medias la RECREABA con otro id, así que el usuario editaba una alerta
+     * y acababa con una copia que ya no era la que tenía en pantalla. Es lo que hace también
+     * CategoryRepositoryImpl.
+     */
     private IntelligenceAlertEntity resolveEntity(IntelligenceAlert model) {
         if (model.getId() != null) {
             return intelligenceAlertJpaRepositoryAdapter.findById(model.getId())
-                    .orElseGet(IntelligenceAlertEntity::new);
+                    .orElseThrow(() -> new NotFoundException("Intelligence alert"));
         }
         return new IntelligenceAlertEntity();
     }
@@ -94,7 +102,7 @@ public class IntelligenceAlertRepositoryImpl implements IntelligenceAlertReposit
         if (userId == null) {
             return null;
         }
-        return userRepository.findById(userId).orElseThrow();
+        return userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User"));
     }
 
     /** Resolves the optional category from its id; a missing category is left null. */

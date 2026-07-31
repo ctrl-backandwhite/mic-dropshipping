@@ -20,48 +20,66 @@ import java.util.regex.Pattern;
  */
 public final class ErrorMessages {
 
-    private static final Pattern CONSTRAINT = Pattern.compile("constraint\\s+\"?([a-zA-Z0-9_]+)\"?");
-    private static final Pattern COLUMN = Pattern.compile("column\\s+\"?([a-zA-Z0-9_]+)\"?");
+    private static final Pattern CONSTRAINT = Pattern.compile("constraint\\s+\"?(\\w+)\"?");
+    private static final Pattern COLUMN = Pattern.compile("column\\s+\"?(\\w+)\"?");
     private static final Pattern VARCHAR_LEN = Pattern.compile("character varying\\((\\d+)\\)");
     private static final Pattern DUP_DETAIL = Pattern.compile("Key \\(([^)]+)\\)=\\(([^)]+)\\)");
 
     private ErrorMessages() {
     }
 
-    /** Mensaje humano para la excepción (o su causa raíz). Nunca devuelve SQL crudo. */
+    /**
+     * Mensaje humano para la excepción (o su causa raíz). Nunca devuelve SQL crudo.
+     *
+     * <p>El ORDEN de los pasos es la parte que importa: el mensaje de negocio gana siempre porque ya está
+     * redactado para el usuario; después la constraint con nombre propio, que es la traducción más
+     * precisa; y sólo si nada de eso encaja se cae a los patrones genéricos de PostgreSQL y al texto
+     * neutro. Invertirlo daría el mensaje vago cuando existe el concreto.
+     */
     public static String humanize(Throwable t) {
         if (t == null) {
             return "No se pudo completar la operación.";
         }
-        // 1) Mensaje de negocio explícito (validaciones ya redactadas) → tal cual.
-        for (Throwable c = t; c != null; c = c.getCause()) {
-            if (c instanceof BaseException be && be.getMessage() != null && !be.getMessage().isBlank()) {
-                return be.getMessage();
-            }
+        String business = businessMessage(t);
+        if (business != null) {
+            return business;
         }
         String raw = rootMessage(t);
         if (raw == null || raw.isBlank()) {
             return "No se pudo completar la operación por un error inesperado.";
         }
-        String low = raw.toLowerCase();
+        String mapped = mappedConstraintMessage(raw);
+        if (mapped != null) {
+            return mapped;
+        }
+        String pattern = postgresPatternMessage(raw);
+        if (pattern != null) {
+            return pattern;
+        }
+        return "No se pudo guardar por un conflicto de datos. Revisa los valores e inténtalo de nuevo.";
+    }
 
-        // 2) Violación de unique/check con nombre de constraint mapeado.
-        String constraint = firstGroup(CONSTRAINT, raw);
-        if (constraint != null) {
-            String mapped = ConstraintMessage.forConstraint(constraint);
-            if (mapped != null) {
-                return mapped;
+    /** Primer mensaje de negocio de la cadena de causas (validaciones ya redactadas), o null si no hay. */
+    private static String businessMessage(Throwable t) {
+        for (Throwable c = t; c != null; c = c.getCause()) {
+            if (c instanceof BaseException be && be.getMessage() != null && !be.getMessage().isBlank()) {
+                return be.getMessage();
             }
         }
+        return null;
+    }
 
-        // 3) Patrones genéricos de PostgreSQL → mensaje claro.
+    /** Violación de unique/check cuyo nombre de constraint tenemos traducido, o null si no la reconocemos. */
+    private static String mappedConstraintMessage(String raw) {
+        String constraint = firstGroup(CONSTRAINT, raw);
+        return constraint != null ? ConstraintMessage.forConstraint(constraint) : null;
+    }
+
+    /** Patrones genéricos de PostgreSQL traducidos a lenguaje llano. Null si ninguno encaja. */
+    private static String postgresPatternMessage(String raw) {
+        String low = raw.toLowerCase();
         if (low.contains("duplicate key") || low.contains("ya existe") || low.contains("already exists")) {
-            Matcher m = DUP_DETAIL.matcher(raw);
-            if (m.find()) {
-                return "Ya existe un registro con " + m.group(1) + " = " + m.group(2)
-                        + ". Ese valor debe ser único.";
-            }
-            return "Ya existe un registro con esos datos (valor duplicado). Revisa los campos que deben ser únicos.";
+            return duplicateMessage(raw);
         }
         if (low.contains("not-null") || low.contains("null value in column")) {
             String col = firstGroup(COLUMN, raw);
@@ -86,13 +104,20 @@ public final class ErrorMessages {
             return "Un valor tiene un formato inválido (número, fecha o identificador mal formado).";
         }
         if (low.contains("could not execute batch") || low.contains("batch entry")) {
-            // Lote masivo: el detalle real suele estar en una causa con la constraint, ya cubierta arriba;
+            // Lote masivo: el detalle real suele estar en una causa con la constraint, ya cubierta antes;
             // si llegamos aquí sin constraint reconocida, mensaje neutro.
             return "No se pudo guardar el registro por un conflicto de datos. Revisa los valores duplicados u obligatorios.";
         }
+        return null;
+    }
 
-        // 4) Fallback limpio (sin SQL).
-        return "No se pudo guardar por un conflicto de datos. Revisa los valores e inténtalo de nuevo.";
+    /** Duplicado: si PostgreSQL detalla la clave y el valor, se los damos al usuario para que sepa cuál cambiar. */
+    private static String duplicateMessage(String raw) {
+        Matcher m = DUP_DETAIL.matcher(raw);
+        if (m.find()) {
+            return "Ya existe un registro con " + m.group(1) + " = " + m.group(2) + ". Ese valor debe ser único.";
+        }
+        return "Ya existe un registro con esos datos (valor duplicado). Revisa los campos que deben ser únicos.";
     }
 
     /** Mensaje de la causa más profunda. */

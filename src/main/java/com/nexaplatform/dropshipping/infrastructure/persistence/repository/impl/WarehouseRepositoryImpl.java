@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository.impl;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.WarehouseEntity;
 import com.nexaplatform.dropshipping.domain.model.Warehouse;
 import com.nexaplatform.dropshipping.domain.repository.WarehouseRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.WarehouseEntityMapper;
@@ -24,8 +25,19 @@ public class WarehouseRepositoryImpl implements WarehouseRepository {
 
     @Override
     public Warehouse save(Warehouse model) {
-        var entity = warehouseJpaRepositoryAdapter.save(warehouseEntityMapper.toEntity(model));
+        WarehouseEntity entity = warehouseJpaRepositoryAdapter.save(warehouseEntityMapper.toEntity(model));
         return warehouseEntityMapper.toDomain(entity);
+    }
+
+    /**
+     * Actualiza un almacén ya existente. Sin este método se caía al {@code default} de
+     * {@link com.nexaplatform.dropshipping.domain.repository.BaseRepository}, que devuelve {@code null}
+     * SIN escribir nada: editar un almacén desde el admin no guardaba y el caso de uso devolvía null.
+     * La entidad ya lleva id, así que {@code save} de JPA hace merge.
+     */
+    @Override
+    public Warehouse update(Warehouse model) {
+        return save(model);
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.controller;
 
+import com.nexaplatform.dropshipping.api.exception.ArgumentException;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.service.MarginService;
@@ -42,6 +43,10 @@ import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CAC
 @RequestMapping("/api/admin/product-groups")
 @RequiredArgsConstructor
 public class AdminProductGroupController {
+
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String DESCRIPTION = "description";
+    private static final String ACTIVE = "active";
 
     private final ProductGroupRepository groupRepository;
     private final ProductGroupMemberRepository memberRepository;
@@ -118,7 +123,7 @@ public class AdminProductGroupController {
         int added = 0;
         if (raw instanceof List<?> list) {
             for (Object o : list) {
-                UUID productId = UUID.fromString(o.toString());
+                UUID productId = parseProductId(o);
                 if (!memberRepository.existsByIdGroupIdAndIdProductId(id, productId)
                         && productRepository.existsById(productId)) {
                     memberRepository.save(new ProductGroupMemberEntity(new ProductGroupMemberEntity.Id(id, productId)));
@@ -128,6 +133,20 @@ public class AdminProductGroupController {
         }
         marginService.invalidateCache();
         return ResponseEntity.ok(Map.of("added", added));
+    }
+
+    /**
+     * Identificador de producto tal y como llega en el cuerpo (JSON libre, sin DTO).
+     *
+     * <p>{@code UUID.fromString} lanza IllegalArgumentException, que sale como 500: un id mal escrito es
+     * culpa de quien llama, no del servidor.
+     */
+    private static UUID parseProductId(Object raw) {
+        try {
+            return UUID.fromString(String.valueOf(raw).trim());
+        } catch (IllegalArgumentException e) {
+            throw new ArgumentException("Identificador de producto no válido: " + raw);
+        }
     }
 
     @DeleteMapping("/{id}/members/{productId}")
@@ -146,12 +165,12 @@ public class AdminProductGroupController {
         if (b.get("name") != null) {
             e.setName(b.get("name").toString().trim());
         }
-        if (b.containsKey("description")) {
-            e.setDescription(b.get("description") != null && !b.get("description").toString().isBlank()
-                    ? b.get("description").toString() : null);
+        if (b.containsKey(DESCRIPTION)) {
+            e.setDescription(b.get(DESCRIPTION) != null && !b.get(DESCRIPTION).toString().isBlank()
+                    ? b.get(DESCRIPTION).toString() : null);
         }
-        if (b.get("active") != null) {
-            e.setActive(Boolean.parseBoolean(b.get("active").toString()));
+        if (b.get(ACTIVE) != null) {
+            e.setActive(Boolean.parseBoolean(b.get(ACTIVE).toString()));
         }
     }
 
@@ -159,8 +178,8 @@ public class AdminProductGroupController {
         Map<String, Object> m = new HashMap<>();
         m.put("id", e.getId());
         m.put("name", e.getName());
-        m.put("description", e.getDescription());
-        m.put("active", e.isActive());
+        m.put(DESCRIPTION, e.getDescription());
+        m.put(ACTIVE, e.isActive());
         m.put("memberCount", memberRepository.countByIdGroupId(e.getId()));
         return m;
     }

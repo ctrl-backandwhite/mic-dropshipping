@@ -7,7 +7,6 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -46,9 +45,9 @@ public interface PartnerPaymentApi {
             @ExampleObject(name = "CARD", value = "{\"method\":\"CARD\"}"),
             @ExampleObject(name = "PAYPAL", value = "{\"method\":\"PAYPAL\"}"),
             @ExampleObject(name = "USDT", value = "{\"method\":\"USDT\"}"),})))
-    @ApiResponses({@ApiResponse(responseCode = "201", description = "Payment created (or returned from idempotency)"),
-            @ApiResponse(responseCode = "400", description = "Order in non-payable state, or wallet without sufficient balance"),
-            @ApiResponse(responseCode = "404", description = "Order not found")})
+    @ApiResponse(responseCode = "201", description = "Payment created (or returned from idempotency)")
+    @ApiResponse(responseCode = "400", description = "Order in non-payable state, or wallet without sufficient balance")
+    @ApiResponse(responseCode = "404", description = "Order not found")
     @PostMapping("/{orderId}/payment-intent")
     ResponseEntity<OrderPaymentDtoOut> initiate(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID orderId,
             @Valid @RequestBody OrderPaymentIntentDtoIn req,

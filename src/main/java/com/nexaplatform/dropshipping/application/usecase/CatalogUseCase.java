@@ -53,8 +53,21 @@ public interface CatalogUseCase {
 
     Page<ProductSummaryView> listProducts(ProductStatus status, Pageable pageable, String language);
 
-    Page<ProductSummaryView> listProductsForAdmin(String status, UUID categoryId, int page, int size, String language,
-            String sort);
+    /**
+     * Listado del panel de admin.
+     *
+     * <p>Los filtros piden a gritos un record que los agrupe ({@code status}, {@code query} y
+     * {@code sort} son tres cadenas seguidas que al llamar se pueden intercambiar sin error de
+     * compilación), pero la firma no puede cambiar desde aquí: la implementación es la que lleva el
+     * {@code @Transactional(readOnly = true)} que mantiene abierta la sesión mientras se mapean las
+     * traducciones LAZY, y una firma nueva obligaría a un método puente en esta interfaz. Ese puente
+     * llamaría al método anotado desde dentro del propio objetivo —sin pasar por el proxy—, así que el
+     * listado se quedaría sin transacción y reventaría con LazyInitializationException. La agrupación
+     * llega cuando se migren de golpe el controlador de admin y sus pruebas.
+     */
+    @SuppressWarnings("java:S107")
+    Page<ProductSummaryView> listProductsForAdmin(String status, UUID categoryId, String query, int page, int size,
+            String language, String sort, Boolean verified);
 
     /** Reindexes every product into OpenSearch; returns the number indexed. */
     int reindexAllProducts();
@@ -97,6 +110,9 @@ public interface CatalogUseCase {
     /** Renombra la etiqueta visible de un valor de variación (p.ej. un color) y reindexa el producto. */
     void renameVariantValue(UUID valueId, String label);
 
+    /** Elimina un valor de variación (color/estampado) y las combinaciones (variantes) que lo usan. */
+    void deleteVariantValue(UUID valueId);
+
     /** DROP-674: fija la imagen real de un valor de variación (p.ej. la foto de un color). Vacío la elimina. */
     void setVariantValueImage(UUID valueId, String imageUrl);
 
@@ -113,6 +129,12 @@ public interface CatalogUseCase {
     /** Removes a product image and reindexes its product. */
     void deleteProductImage(UUID imageId);
 
+    /** Clears the explanation video of a product (video_url, has_video, video_urls) — admin only. */
+    void deleteProductVideo(UUID id);
+
+    /** Reorders a product's gallery images to match the given id order (first becomes MAIN). */
+    void reorderProductImages(UUID productId, List<UUID> imageIds);
+
     /** Bulk-creates products from friendly JSON rows; returns created/failed counts and errors. */
     BulkResultDtoOut bulkCreateProducts(
             List<BulkProductDtoIn> rows);
@@ -124,6 +146,19 @@ public interface CatalogUseCase {
      */
     List<BulkProductDtoIn> exportProducts(int from, int to);
 
+    /** One page of a keyset-paginated export: the mapped rows and the id of the last row (for the next page). */
+    record ProductExportBatch(List<BulkProductDtoIn> items, UUID lastId) {}
+
+    /**
+     * Keyset-paginated export batch: returns up to {@code limit} products with id greater than {@code afterId}
+     * (or the first ones when {@code afterId} is null), ordered by id. Child collections are batch-fetched by
+     * the page's ids (no N+1). Used to stream millions of products with bounded memory (one page at a time).
+     */
+    ProductExportBatch exportBatchAfter(UUID afterId, int limit);
+
+    /** Exporta UN producto al formato de carga masiva (para editarlo como JSON y reimportar con upsert). */
+    BulkProductDtoIn exportProduct(UUID id);
+
     /** Total number of products (used to compute the export segments). */
     long countProducts();
 
@@ -132,6 +167,25 @@ public interface CatalogUseCase {
 
     /** Permanently deletes a product and its catalog children (refused if it has orders). */
     void deleteProduct(UUID id);
+
+    /**
+     * Resultado de una operación en lote: cuántas salieron bien y el motivo de cada fallo.
+     *
+     * <p>Los lotes NO se paran ante el primer error: un producto que no se puede borrar porque tiene
+     * pedidos no debe impedir que se borren los demás de la selección.
+     */
+    record BulkOutcome(int succeeded, List<String> errors) {
+
+        public int failed() {
+            return errors.size();
+        }
+    }
+
+    /** Borra los productos indicados, continuando ante fallos individuales. */
+    BulkOutcome bulkDeleteProducts(List<UUID> ids);
+
+    /** Cambia el estado (ACTIVE/PAUSED/ARCHIVED) de los productos indicados. */
+    BulkOutcome bulkUpdateStatus(List<UUID> ids, String status);
 
     /** Bulk-creates categories from friendly JSON rows. */
     BulkResultDtoOut bulkCreateCategories(
@@ -162,6 +216,9 @@ public interface CatalogUseCase {
     void updateStatus(UUID id, ProductStatus status);
 
     ProductDetailView quickEdit(UUID id, AdminProductQuickEditDtoIn req, String lang);
+
+    /** Elimina un tramo de precio (price break) de un producto, identificado por su cantidad mínima. */
+    void deletePriceTier(UUID productId, int minQty);
 
     ProductDetailView duplicateProduct(UUID id, String lang);
 }

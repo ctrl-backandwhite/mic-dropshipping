@@ -26,6 +26,7 @@ public interface UserUpdateMapper {
     @Mapping(target = "lockedUntil", ignore = true)
     @Mapping(target = "lastLogin", ignore = true)
     @Mapping(target = "avatarUrl", ignore = true)
+    @Mapping(target = "freeTrialUsed", ignore = true)
     @Mapping(target = "totp", ignore = true)
     @Mapping(target = "resetTokens", ignore = true)
     @Mapping(target = "totpEnabled", ignore = true)

@@ -26,17 +26,18 @@ public class MeWalletRechargeDtoIn {
     @Pattern(regexp = "^(CARD|PAYPAL|USDT)$")
     private String method;
 
-    @Schema(description = "Amount to recharge in USD cents")
-    @NotNull
+    @Schema(description = "Amount to recharge in USD cents (optional fallback; the backend derives it "
+            + "from amountDisplay + currencyDisplay)")
     @Positive
     private Long amountUsdCents;
 
     @Schema(description = "USDT chain: TRC20, ERC20 or BEP20 (USDT only)")
     private String cryptoChain;
 
-    @Schema(description = "Display currency code")
+    @Schema(description = "Active display currency code (source of truth for the charge)")
     private String currencyDisplay;
 
-    @Schema(description = "Amount in the display currency")
+    @Schema(description = "Amount the user entered in the display currency (source of truth)")
+    @Positive
     private BigDecimal amountDisplay;
 }

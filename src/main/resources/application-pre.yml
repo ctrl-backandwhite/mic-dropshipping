@@ -1,0 +1,67 @@
+# =====================================================================================
+# Perfil PRE (preproducción, despliegue remoto Railway, entorno pre-produccion)
+#   Frontend: https://nx036.com
+#   Backend : https://mic-dropshipping-pre.up.railway.app  (servidor de autorización)
+#
+# Réplica de application-dev.yml pero con las URLs públicas de PRE: issuer del authorization
+# server (backend), callback de Google, CORS y enlaces de email apuntan al entorno pre. Solo se
+# carga cuando SPRING_PROFILES_ACTIVE=pre → no afecta a dev (perfil dev) ni a pro (perfil pro).
+#
+# Los SECRETOS (Google client id/secret, BD, KEKs, etc.) NUNCA van aquí: se inyectan por
+# variables de entorno en Railway (ya soportadas en application.yml).
+# =====================================================================================
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+  liquibase:
+    # Datos reales: NO ejecutar los seeds demo (context:demo), que asumen usuarios/catálogo previos.
+    contexts: "!demo"
+  kafka:
+    # Kafka KRaft seguro (SASL/SCRAM) en Railway. El JAAS (usuario+password) llega por env.
+    properties:
+      security.protocol: ${KAFKA_SECURITY_PROTOCOL:SASL_PLAINTEXT}
+      sasl.mechanism: ${KAFKA_SASL_MECHANISM:SCRAM-SHA-256}
+      sasl.jaas.config: ${KAFKA_SASL_JAAS:}
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            # Auth por token (sin proxy nginx): Google redirige al BACKEND directamente (mismo dominio
+            # donde el SPA inicia el OAuth, para que la sesión/state del callback cuadre); su success
+            # handler emite el token y redirige al front (nx036.com/auth/callback#token=…).
+            # El front es estático (Railpack) y NO puede proxiar /login/oauth2/**, por eso el callback
+            # NO puede ir a nx036.com. Override-able por GOOGLE_REDIRECT_URI (p. ej. api.nx036.com si se
+            # da al backend un subdominio propio).
+            redirect-uri: "${GOOGLE_REDIRECT_URI:https://api.nx036.com/login/oauth2/code/google}"
+          github:
+            redirect-uri: "https://mic-dropshipping-pre.up.railway.app/login/oauth2/code/github"
+
+server:
+  servlet:
+    session:
+      cookie:
+        secure: true        # HTTPS en Railway
+        same-site: lax       # el SPA usa el dominio del frontend (mismo origen vía proxy) → lax es correcto
+
+nexadrop:
+  storefront:
+    base-url: https://nx036.com   # CTA / unsubscribe de los emails + redirect post-login Google
+  oauth:
+    # Identidad del authorization server y emisor de los JWT de usuario (este backend).
+    issuer: https://mic-dropshipping-pre.up.railway.app
+  cors:
+    # Dominios de confianza desde los que se accede a la API (frontend + el propio backend).
+    allowed-origins: https://nx036.com,https://mic-dropshipping-pre.up.railway.app
+  cainiao:
+    # En PRE la integración real (sandbox de Cainiao Link) está disponible; se controla por env
+    # CAINIAO_ENABLED en Railway (déjala en false hasta que la app esté aprobada y mapeada).
+    enabled: ${CAINIAO_ENABLED:true}
+    # En PRE el impuesto se calcula con Cainiao (con fallback a la tabla local si Cainiao no responde).
+    # En LOCAL se queda en false (tabla country_tax_rate). Requiere además CAINIAO_ENABLED=true para actuar.
+    tax-enabled: ${CAINIAO_TAX_ENABLED:true}
+    # En PRE el envío se cotiza con Cainiao (con fallback a la tabla de zonas). En LOCAL, false.
+    shipping-quote-enabled: ${CAINIAO_SHIPPING_QUOTE_ENABLED:true}
+    base-url: ${CAINIAO_BASE_URL:https://linkdaily.tbsandbox.com/gateway/link.do}

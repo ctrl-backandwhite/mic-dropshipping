@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.application.usecase.impl;
 
 import com.nexaplatform.dropshipping.api.dto.in.ActivateDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.ChangePasswordDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.DeleteAccountConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.LoginDtoIn;
 import com.nexaplatform.dropshipping.application.service.DeviceSessionService;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetConfirmDtoIn;
@@ -74,9 +75,26 @@ public class AuthUseCaseImpl implements AuthUseCase {
         UUID id = UUID.fromString(auth.getName());
         User user = userUseCase.findById(id);
         completePendingGoogleLink(httpRequest, user);
+        // Vínculo social por TOKEN (cross-origin): la sesión PENDING_* no viaja, así que si el usuario
+        // llegó desde el flujo OAuth (?link=required) y ahora prueba su contraseña, vinculamos aquí. El
+        // control se mantiene: solo se vincula tras autenticar con éxito la cuenta local.
+        if (req.isLinkSocial()) {
+            userUseCase.linkGoogleAccount(id);
+        }
         // Registro de dispositivo: auditoría best-effort (la cookie nx_device no viaja
         // cross-site, pero la fila sirve para histórico de IP/agente).
         deviceSessionService.recordLogin(id, httpRequest, httpResponse);
+        // Registro del login con el EMAIL real (el evento AuthenticationSuccessEvent solo trae el UUID
+        // del JWT y se dispara por request, por eso allí no se actualiza last_login).
+        userUseCase.recordSuccessfulLogin(user.getEmail());
+        // Aviso de seguridad "inicio de sesión detectado" (login por email/contraseña). El login por
+        // OAuth lo cubre LoginAuditListener vía InteractiveAuthenticationSuccessEvent. Nunca debe
+        // bloquear el login, por eso va protegido.
+        try {
+            userUseCase.notifyLoginDetected(user.getEmail());
+        } catch (RuntimeException ignored) {
+            // notificación best-effort
+        }
         return buildLogin(user, authorities(auth));
     }
 
@@ -171,7 +189,17 @@ public class AuthUseCaseImpl implements AuthUseCase {
     public MeDtoOut updateProfile(Authentication authentication, UpdateProfileDtoIn req) {
         UUID id = UUID.fromString(authentication.getName());
         User user = userUseCase.findById(id);
-        if (req.getDisplayName() != null)
+        if (req.getFirstName() != null)
+            user.setFirstName(req.getFirstName().trim());
+        if (req.getLastName1() != null)
+            user.setLastName1(req.getLastName1().trim());
+        if (req.getLastName2() != null)
+            user.setLastName2(req.getLastName2().trim());
+        boolean nameParts = req.getFirstName() != null || req.getLastName1() != null || req.getLastName2() != null;
+        if (nameParts)
+            // El displayName (nombre completo) se recompone a partir de las partes actualizadas.
+            user.setDisplayName(mapper.fullName(user));
+        else if (req.getDisplayName() != null)
             user.setDisplayName(req.getDisplayName().trim());
         if (req.getCompanyName() != null)
             user.setCompanyName(req.getCompanyName().trim());
@@ -181,6 +209,24 @@ public class AuthUseCaseImpl implements AuthUseCase {
             user.setLanguage(req.getLanguage());
         User saved = userUseCase.updateUser(user);
         return mapper.toMeDtoOut(saved, authorities(authentication));
+    }
+
+    @Override
+    @Transactional
+    public void requestAccountDeletion(Authentication authentication) {
+        if (authentication == null) {
+            throw new BusinessException("Not authenticated");
+        }
+        userUseCase.requestAccountDeletion(UUID.fromString(authentication.getName()));
+    }
+
+    @Override
+    @Transactional
+    public void confirmAccountDeletion(Authentication authentication, DeleteAccountConfirmDtoIn req) {
+        if (authentication == null) {
+            throw new BusinessException("Not authenticated");
+        }
+        userUseCase.confirmAccountDeletion(UUID.fromString(authentication.getName()), req.getCode());
     }
 
     private static Set<String> authorities(Authentication authentication) {

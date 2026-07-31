@@ -20,7 +20,7 @@ import java.io.IOException;
  * <p>Detection: a real browser always attaches {@code Origin} (cross-origin / credentialed requests)
  * and the forbidden {@code Sec-Fetch-*} headers (which page JavaScript cannot remove) on fetch/XHR and
  * navigations. A server-side HTTP client sends neither. The app's own SPA does not call {@code /api/v1/**}
- * at runtime (only the storefront {@code /api/storefront/**} and admin APIs), so nothing internal breaks.
+ * at runtime (only the SPA public (/api/catalog, /api/warehouses, …) and admin APIs), so nothing internal breaks.
  *
  * <p>The rejection message is returned in the consumer's language (resolved by {@link #resolveLang},
  * via the {@code lang} query param or {@code Accept-Language} header), defaulting to English.

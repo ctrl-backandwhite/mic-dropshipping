@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.WebhookDeliveryEntity;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.mapper.WebhookSubscriptionUpdateMapper;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
@@ -60,6 +61,16 @@ public class WebhookSubscriptionUseCaseImpl implements WebhookSubscriptionUseCas
     @Override
     @Transactional(readOnly = true)
     public WebhookSubscription getById(UUID id) {
+        return requireById(id);
+    }
+
+    /**
+     * Búsqueda por id sin anotación transaccional, para que la usen los métodos de escritura de esta
+     * misma clase: llamando a {@link #getById(UUID)} con {@code this} la autoinvocación no pasa por el
+     * proxy, así que su {@code @Transactional} no se aplicaba y la anotación prometía algo que nadie
+     * cumplía. La transacción la abre siempre el método público de entrada.
+     */
+    private WebhookSubscription requireById(UUID id) {
         WebhookSubscription model = webhookSubscriptionRepository.getById(id);
         if (Objects.isNull(model)) {
             throw new NotFoundException("Subscription");
@@ -70,7 +81,7 @@ public class WebhookSubscriptionUseCaseImpl implements WebhookSubscriptionUseCas
     @Override
     @Transactional
     public WebhookSubscription update(WebhookSubscription model, UUID id) {
-        WebhookSubscription existing = getById(id);
+        WebhookSubscription existing = requireById(id);
         webhookSubscriptionUpdateMapper.updateFromModel(model, existing);
         WebhookSubscription saved = webhookSubscriptionRepository.update(existing);
         log.info("::> [WEBHOOK] Subscription updated id={}", id);
@@ -87,7 +98,7 @@ public class WebhookSubscriptionUseCaseImpl implements WebhookSubscriptionUseCas
     @Override
     @Transactional
     public WebhookSubscription rotate(UUID id) {
-        WebhookSubscription existing = getById(id);
+        WebhookSubscription existing = requireById(id);
         existing.setSecret(generateSecret());
         WebhookSubscription saved = webhookSubscriptionRepository.update(existing);
         log.info("::> [WEBHOOK] Subscription secret rotated id={}", id);
@@ -97,7 +108,7 @@ public class WebhookSubscriptionUseCaseImpl implements WebhookSubscriptionUseCas
     @Override
     @Transactional
     public WebhookSubscription fireTest(UUID id) {
-        WebhookSubscription existing = getById(id);
+        WebhookSubscription existing = requireById(id);
         dispatcher.publishTest(existing.getId());
         log.info("::> [WEBHOOK] Test delivery fired for subscription id={}", id);
         return existing;
@@ -106,7 +117,7 @@ public class WebhookSubscriptionUseCaseImpl implements WebhookSubscriptionUseCas
     @Override
     @Transactional(readOnly = true)
     public List<WebhookDelivery> deliveries(UUID id) {
-        var rows = deliveryRepository.findBySubscription_IdOrderByCreatedAtDesc(id).stream().limit(MAX_DELIVERIES)
+        List<WebhookDeliveryEntity> rows = deliveryRepository.findBySubscription_IdOrderByCreatedAtDesc(id).stream().limit(MAX_DELIVERIES)
                 .toList();
         return webhookSubscriptionEntityMapper.toDeliveryDomainList(rows);
     }

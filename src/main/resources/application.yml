@@ -6,6 +6,12 @@ spring:
   threads:
     virtual:
       enabled: true
+  mvc:
+    async:
+      # No timeout for async/streaming responses (StreamingResponseBody). The NDJSON export streams the
+      # whole catalogue in batches and can take much longer than the default 30s; without this the async
+      # request is aborted mid-stream and the download is truncated.
+      request-timeout: -1
 
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5532}/${DB_NAME:nexadrop}
@@ -90,6 +96,14 @@ spring:
           starttls:
             enable: ${SMTP_TLS:false}
 
+  jackson:
+    deserialization:
+      # Spring Boot 4 trae este flag ACTIVADO: un campo primitivo que no venga en el JSON llega como null
+      # al constructor (Lombok @AllArgsConstructor + parameter-names) y la petición entera se rechaza con
+      # "JSON inválido". Rompía el login si el cliente omitía `linkSocial`, y afectaba igual al checkout y
+      # a otros DTOs con primitivos. Un campo opcional ausente debe valer su default, no tumbar la llamada.
+      fail-on-null-for-primitives: false
+
   messages:
     basename: i18n/messages
     encoding: UTF-8
@@ -117,6 +131,14 @@ spring:
             client-secret: ${GOOGLE_CLIENT_SECRET:changeme-google-client-secret}
             scope: openid,email,profile
             redirect-uri: "${GOOGLE_REDIRECT_URI:http://localhost:3003/login/oauth2/code/google}"
+          github:
+            # GitHub es un proveedor común de Spring (no requiere bloque provider). Pedimos
+            # user:email porque el correo puede ser privado: el primario verificado se resuelve
+            # vía /user/emails en GithubOAuth2UserService.
+            client-id: ${GITHUB_CLIENT_ID:changeme-github-client-id}
+            client-secret: ${GITHUB_CLIENT_SECRET:changeme-github-client-secret}
+            scope: read:user,user:email
+            redirect-uri: "${GITHUB_REDIRECT_URI:http://localhost:3003/login/oauth2/code/github}"
 
 server:
   # Railway/Heroku inyectan PORT en runtime; si no, usamos SERVER_PORT y por último 18082 (local).
@@ -193,19 +215,29 @@ nexadrop:
     poll-ms: ${OUTBOX_POLL_MS:500}              # dispatcher polling interval
   storefront:
     base-url: ${STOREFRONT_BASE_URL:http://localhost:3003}  # for email CTA / unsubscribe links
+  invoice:
+    # Datos fiscales del EMISOR para que la factura sea un documento legal. Rellénalos por
+    # entorno (Railway). Si legal-name queda vacío, el bloque del emisor NO se pinta.
+    issuer:
+      legal-name: ${INVOICE_ISSUER_LEGAL_NAME:}     # Razón social
+      tax-id: ${INVOICE_ISSUER_TAX_ID:}             # NIF/CIF/VAT
+      address: ${INVOICE_ISSUER_ADDRESS:}           # Domicilio fiscal (calle, nº)
+      city-line: ${INVOICE_ISSUER_CITY_LINE:}       # CP + ciudad + provincia
+      country: ${INVOICE_ISSUER_COUNTRY:}           # País
+      email: ${INVOICE_ISSUER_EMAIL:}               # Email de facturación
+      registry: ${INVOICE_ISSUER_REGISTRY:}         # Reg. Mercantil / datos registrales (opcional)
+    legal-note: ${INVOICE_LEGAL_NOTE:}              # Nota legal al pie (opcional)
   email:
-    from: ${EMAIL_FROM:noreply@nexadrop.local}  # Gmail: set to your Gmail address
+    from: ${EMAIL_FROM:noreply@nexadrop.local}          # Remitente por defecto (transaccional/auth): no-reply@
     from-name: ${EMAIL_FROM_NAME:NX036 Dropshipping}
+    from-billing: ${EMAIL_FROM_BILLING:${EMAIL_FROM:noreply@nexadrop.local}}  # Facturas/recibos: billing@
+    from-support: ${EMAIL_FROM_SUPPORT:${EMAIL_FROM:noreply@nexadrop.local}}  # Acuse de contacto: support@
+    unsubscribe-secret: ${EMAIL_UNSUBSCRIBE_SECRET:dev-unsubscribe-secret-change-me}  # firma HMAC del enlace de baja (sin login)
   oauth:
     # Identidad del authorization server y emisor de los JWT de usuario (login por token).
     issuer: ${OAUTH_ISSUER:http://localhost:18082}
     partner-api:
       default-secret: ${PARTNER_DEFAULT_SECRET:dev-partner-secret-change-me}
-
-  # Admin inicial. La contraseña NUNCA está en el código: dev/pro la exigen por entorno.
-  bootstrap:
-    admin-email: ${NEXADROP_BOOTSTRAP_ADMIN_EMAIL:admin@nx036.local}
-    admin-password: ${NEXADROP_BOOTSTRAP_ADMIN_PASSWORD:}
 
   # Seguridad: nº de proxies de confianza por delante (para resolver la IP real en el rate limit).
   security:
@@ -231,6 +263,10 @@ nexadrop:
     tls-insecure: ${OPENSEARCH_TLS_INSECURE:false}
     products-index: products
     categories-index: categories
+    suppliers-index: suppliers
+    orders-index: orders
+    wallets-index: wallets
+    affiliates-index: affiliates
     operator-actions-index: operator-actions
 
   crawler:
@@ -246,6 +282,9 @@ nexadrop:
   stripe:
     enabled: ${STRIPE_ENABLED:false}
     secret-key: ${STRIPE_SECRET_KEY:}
+    # Clave PÚBLICA (pk_test/pk_live): se expone al frontend para Stripe Elements (guardar tarjeta).
+    # Acepta STRIPE_PUBLISHABLE_KEY o, por compatibilidad con el .env actual, STRIPE_PUBLIC_KEY.
+    publishable-key: ${STRIPE_PUBLISHABLE_KEY:${STRIPE_PUBLIC_KEY:}}
     webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
     # Identificadores que se inyectan como metadata en cada PaymentIntent.
     # Útil cuando varias plataformas comparten la misma cuenta Stripe — filtras en el dashboard
@@ -253,11 +292,6 @@ nexadrop:
     platform-id: ${STRIPE_PLATFORM_ID:nexadrop-dropshipping}
     platform-env: ${STRIPE_PLATFORM_ENV:dev}
 
-  demo-seed:
-    enabled: ${DEMO_SEED_ENABLED:true}
-  # Per-category catalog top-up (CategoryProductFiller). Disable in deployments that load real data.
-  catalog-fill:
-    enabled: ${CATALOG_FILL_ENABLED:true}
 
   currency:
     access-key: ${NEXADROP_CURRENCY_ACCESS_KEY:}
@@ -277,20 +311,51 @@ nexadrop:
     api-key: ${COINBASE_API_KEY:}
     webhook-secret: ${COINBASE_WEBHOOK_SECRET:}
 
-  # Fulfillment con Cainiao (菜鸟). Mock por defecto (sin credenciales): tarifa real por país desde la
-  # tabla cainiao_shipping_zone + tracking simulado que avanza con el tiempo. Con app-key/secret reales
-  # se activan las llamadas a la Cainiao Open Platform. Solo se envía a países cubiertos.
-  cainiao:
-    enabled: ${CAINIAO_ENABLED:false}
-    app-key: ${CAINIAO_APP_KEY:}
-    app-secret: ${CAINIAO_APP_SECRET:}
-    base-url: ${CAINIAO_BASE_URL:https://link.cainiao.com}
-    platform-id: ${CAINIAO_PLATFORM_ID:nexadrop-dropshipping}
-    platform-env: ${CAINIAO_PLATFORM_ENV:dev}
-    # Minutos por etapa del tracking simulado (mock) — pon un valor pequeño para ver el avance en demo.
-    mock-stage-minutes: ${CAINIAO_MOCK_STAGE_MINUTES:2}
-    # Cadencia del job que sincroniza el tracking y avanza el estado semiautomáticamente.
-    sync-enabled: ${CAINIAO_SYNC_ENABLED:true}
+  # Sondeo del seguimiento del envío con el transportista activo (YunExpress). La integración con Cainiao
+  # se retiró —su aprobación quedó bloqueada— y su código se eliminó; solo sobrevive la tabla de zonas
+  # `cainiao_shipping_zone`, que YunExpress reutiliza como cobertura de países (base, por-kg y plazo).
+  fulfillment:
+    sync-enabled: ${FULFILLMENT_SYNC_ENABLED:true}
+    sync-interval-ms: ${FULFILLMENT_SYNC_INTERVAL_MS:60000}
+  yunexpress:
+    enabled: ${YUNEXPRESS_ENABLED:false}
+    # 应用ID / 应用秘钥(AK) de 开发配置 → 沙盒应用, y sourcekey de 用户中心 → 用户信息.
+    app-id: ${YUNEXPRESS_APP_ID:}
+    app-secret: ${YUNEXPRESS_APP_SECRET:}
+    source-key: ${YUNEXPRESS_SOURCE_KEY:}
+    # Sandbox por defecto. Para producción basta cambiar esta URL a https://openapi.yunexpress.cn
+    # y poner las credenciales de la aplicación formal: el contrato de la API es idéntico.
+    base-url: ${YUNEXPRESS_BASE_URL:https://openapi-sbx.yunexpress.cn}
+    # Clave de cifrado del webhook (开发配置 → 事件管理 → 加密策略). Vacía = el webhook rechaza todo.
+    encrypt-key: ${YUNEXPRESS_ENCRYPT_KEY:}
+    # Canal fijo (product_code de /v1/basic-data/products/getlist). Vacío = el más barato que cotice.
+    product-code: ${YUNEXPRESS_PRODUCT_CODE:}
+    # Grupo al que se restringe la simulación de tarifa (DH快递, EM经济, MA挂号, SP专线...). Vacío = todos.
+    product-group-code: ${YUNEXPRESS_PRODUCT_GROUP:}
+    # Formato de etiqueta pedido al crear el envío: PDF, ZPL o PNG.
+    label-type: ${YUNEXPRESS_LABEL_TYPE:PDF}
+    # Suscribir cada guía al push de trazabilidad al crearla (requiere el webhook registrado en 事件管理).
+    tracking-subscription-enabled: ${YUNEXPRESS_TRACK_SUBSCRIBE:true}
+    # A = trazabilidad completa, F = solo tramo de origen, L = solo reparto final, N = oculta.
+    tracking-subscribe-type: ${YUNEXPRESS_TRACK_SUBSCRIBE_TYPE:A}
+    # Espera máxima de la simulación de tarifa. Corto a propósito: está en el camino del checkout y hay
+    # fallback inmediato por la tabla de zonas, así que no se hace esperar al cliente.
+    quote-timeout-seconds: ${YUNEXPRESS_QUOTE_TIMEOUT:5}
+    # Límites del canal contratado para repartir el pedido en bultos. 0 = no se reparte (todo en uno).
+    # El reparto es SOLO por límites físicos: el umbral fiscal se evalúa sobre el pedido completo.
+    max-parcel-weight-grams: ${YUNEXPRESS_MAX_PARCEL_WEIGHT_GRAMS:0}
+    max-parcel-value-cents: ${YUNEXPRESS_MAX_PARCEL_VALUE_CENTS:0}
+    max-parcel-units: ${YUNEXPRESS_MAX_PARCEL_UNITS:0}
+    # Modo de despacho fiscal por defecto del canal: DDP (impuestos incluidos, los paga el comercio) o
+    # DDU (los paga el destinatario). Se puede sobreescribir por país en yunexpress_channel (futuro).
+    default-tax-mode: ${YUNEXPRESS_TAX_MODE:DDP}
+    # Número IOSS del comercio para despacho de IVA en la UE (pedidos <=150 EUR). Vacío = sin IOSS.
+    ioss-number: ${YUNEXPRESS_IOSS:}
+    # Peso VOLUMÉTRICO: el transportista factura el mayor entre peso real y L×W×H(cm)/divisor, y solo
+    # aplica el volumétrico a partir de cierto volumen (los bultos pequeños en bolsa van por peso real).
+    # Ajustar ambos al rate card del contrato cuando YunExpress lo facilite.
+    volumetric-divisor: ${YUNEXPRESS_VOLUMETRIC_DIVISOR:6000}
+    volumetric-min-cm3: ${YUNEXPRESS_VOLUMETRIC_MIN_CM3:6000}
 
   # Almacenamiento de objetos (MinIO/S3) para el mirror de imágenes de producto. El backend descarga
   # la imagen de origen (1688/alicdn, sin Referer) y la sube al bucket; el `public-url` es la base con
@@ -319,3 +384,11 @@ logging:
     com.nexaplatform.dropshipping: DEBUG
     org.springframework.security: INFO
     org.hibernate.SQL: WARN
+
+  # Avisos al responsable cuando un servicio del que depende el negocio deja de funcionar (transportista
+  # que no acepta envíos, pasarela que no cobra). Se agrupan por causa y se silencian durante el cooldown
+  # para que una caída no llene el buzón justo cuando hay que leerlo.
+  alerts:
+    enabled: ${ALERTS_ENABLED:true}
+    email: ${ALERTS_EMAIL:jfinol02@gmail.com}
+    cooldown-minutes: ${ALERTS_COOLDOWN_MINUTES:30}

@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.seed;
 
+import com.github.slugify.Slugify;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
@@ -12,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * Persists a single generated demo product in its own transaction: ingests it via
@@ -24,15 +26,26 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CatalogFillWriter {
 
+    private static final Slugify SLUG = Slugify.builder().build();
+
     private final CatalogUseCase catalogService;
     private final ProductRepository productRepository;
+
+    /** Título y descripción de un idioma: viajan juntos porque siempre se escriben en pareja. */
+    public record LocalizedText(String title, String description) {
+    }
+
+    /** Los textos del producto en los cuatro idiomas de la carga. */
+    public record ProductTexts(LocalizedText es, LocalizedText en, LocalizedText pt, LocalizedText zh) {
+    }
 
     /** Legacy 6-arg shape used by the demo filler: PT falls back to ES, no extra enrichment. */
     @Transactional
     public UUID write(IngestProductRequest req, String esTitle, String enTitle, String zhTitle, String esDesc,
             String enDesc) {
-        return write(req, esTitle, enTitle, esTitle, zhTitle, esDesc, enDesc, esDesc, esDesc, p -> {
-        });
+        return persist(req, new ProductTexts(new LocalizedText(esTitle, esDesc), new LocalizedText(enTitle, enDesc),
+                new LocalizedText(esTitle, esDesc), new LocalizedText(zhTitle, esDesc)), p -> {
+                });
     }
 
     /**
@@ -41,9 +54,31 @@ public class CatalogFillWriter {
      * without hitting a LazyInitializationException).
      */
     @Transactional
+    public UUID write(IngestProductRequest req, ProductTexts texts, Consumer<ProductEntity> enrich) {
+        return persist(req, texts, enrich);
+    }
+
+    /**
+     * Firma heredada (títulos y descripciones sueltos). Se mantiene porque la usan el importador masivo y
+     * sus pruebas; delega en la variante con {@link ProductTexts}, que es la que hay que usar en código nuevo.
+     */
+    @SuppressWarnings("java:S107") // firma heredada: la corta con ProductTexts es la buena
+    @Transactional
     public UUID write(IngestProductRequest req, String esTitle, String enTitle, String ptTitle, String zhTitle,
             String descEs, String descEn, String descPt, String descZh,
-            java.util.function.Consumer<ProductEntity> enrich) {
+            Consumer<ProductEntity> enrich) {
+        return persist(req, new ProductTexts(new LocalizedText(esTitle, descEs), new LocalizedText(enTitle, descEn),
+                new LocalizedText(ptTitle, descPt), new LocalizedText(zhTitle, descZh)), enrich);
+    }
+
+    /**
+     * Alta/actualización real del producto. Privada y sin anotación: las sobrecargas públicas se llamaban
+     * entre sí por {@code this}, de modo que el proxy de Spring no intervenía y el {@code @Transactional}
+     * de la llamada interna no se aplicaba. Ahora la transacción se abre siempre en el punto de entrada.
+     */
+    private UUID persist(IngestProductRequest req, ProductTexts texts, Consumer<ProductEntity> enrich) {
+        String esTitle = texts.es().title();
+        String descEs = texts.es().description();
         ProductEntity saved = catalogService.upsertProduct(req);
         ProductEntity managed = productRepository.findById(saved.getId()).orElse(null);
         if (managed == null)
@@ -54,12 +89,31 @@ public class CatalogFillWriter {
         // unique (product_id, language) [ux_prodtr_prod_lang]. Actualizando la fila existente (o creándola
         // si falta) la reimportación es idempotente y nunca viola la constraint.
         upsertTranslation(managed, "es", esTitle, descEs);
-        upsertTranslation(managed, "en", blankTo(enTitle, esTitle), blankTo(descEn, descEs));
-        upsertTranslation(managed, "zh", zhTitle, blankTo(descZh, descEs));
-        upsertTranslation(managed, "pt", blankTo(ptTitle, esTitle), blankTo(descPt, descEs));
+        upsertTranslation(managed, "en", blankTo(texts.en().title(), esTitle),
+                blankTo(texts.en().description(), descEs));
+        upsertTranslation(managed, "zh", texts.zh().title(), blankTo(texts.zh().description(), descEs));
+        upsertTranslation(managed, "pt", blankTo(texts.pt().title(), esTitle),
+                blankTo(texts.pt().description(), descEs));
 
         if (enrich != null) {
             enrich.accept(managed);
+        }
+
+        // upsertProduct construye el slug con el título ZH y Slugify descarta los caracteres CJK: con un
+        // título chino REAL el slug quedaba en "-<externalId>". Aquí sí tenemos el título ES, así que se
+        // reconstruye para que la URL sea legible. Solo se toca el degradado, nunca un slug ya válido
+        // (así la reimportación de un producto existente no le cambia la URL).
+        String slug = managed.getSlug();
+        if (slug == null || slug.isBlank() || slug.startsWith("-")) {
+            String base = SLUG.slugify(esTitle);
+            if (!base.isBlank()) {
+                if (base.length() > 100) {
+                    base = base.substring(0, 100);
+                }
+                // externalId es único, así que base-externalId no puede colisionar.
+                String full = base + "-" + req.externalId().toLowerCase();
+                managed.setSlug(full.length() > 220 ? full.substring(0, 220) : full);
+            }
         }
 
         // Publish straight away (mirrors DemoCatalogSeedRunner.publishAll trend formula).

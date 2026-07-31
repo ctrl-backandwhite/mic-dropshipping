@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.currency;
 
+import java.util.Map.Entry;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CurrencyRateEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CurrencyRateRepository;
@@ -13,6 +14,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Currency;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -77,13 +79,15 @@ public class CurrencyRateService {
     public BigDecimal usdTo(BigDecimal amountUsd, String targetCode) {
         if (amountUsd == null)
             return null;
-        // Precio final al cliente: 2 decimales SIEMPRE redondeado hacia arriba (RoundingMode.UP) para no
-        // perder fracciones de céntimo en la conversión. Aplica a la moneda mostrada y a la de cobro.
+        // Precio final al cliente: 2 decimales al céntimo MÁS CERCANO (HALF_UP). Antes se redondeaba
+        // siempre hacia arriba (UP), lo que inflaba montos exactos en el round-trip de moneda (30 CNY →
+        // USD → 30.01 CNY). Con HALF_UP un monto exacto de origen se muestra exacto. Aplica a la moneda
+        // mostrada y a la de cobro (mismo cálculo → catálogo == carrito == cobro).
         if ("USD".equalsIgnoreCase(targetCode)) {
-            return amountUsd.setScale(2, RoundingMode.UP);
+            return amountUsd.setScale(2, RoundingMode.HALF_UP);
         }
-        return find(targetCode).map(r -> amountUsd.multiply(r.getRateVsUsd()).setScale(2, RoundingMode.UP))
-                .orElse(amountUsd.setScale(2, RoundingMode.UP));
+        return find(targetCode).map(r -> amountUsd.multiply(r.getRateVsUsd()).setScale(2, RoundingMode.HALF_UP))
+                .orElse(amountUsd.setScale(2, RoundingMode.HALF_UP));
     }
 
     /** Convert an amount in any source currency to USD (used at order creation to fix USD canonical). */
@@ -111,17 +115,54 @@ public class CurrencyRateService {
      * viene redondeado (2 dec UP) desde el pipeline de precios; aquí solo se le da forma textual.
      */
     public String formatDisplay(BigDecimal amountDisplay, String code) {
+        return formatDisplay(amountDisplay, code, false);
+    }
+
+    /**
+     * Formatea {@code amount} en la moneda {@code code} usando los separadores de miles/decimales del
+     * {@code localeTag} indicado (la convención del país que MIRA), no la de la moneda. Así un usuario que
+     * trabaja en español ve tanto EUR como USD con coma decimal y punto de miles ("1.234,56 €", "1.234,56 US$"),
+     * igual que Stripe. El símbolo lo pone la moneda; los separadores, el locale del visor.
+     */
+    public String formatIn(BigDecimal amount, String code, String localeTag) {
+        if (amount == null || code == null) {
+            return null;
+        }
+        Locale locale = Locale.forLanguageTag(localeTag != null && !localeTag.isBlank() ? localeTag : localeOf(code));
+        try {
+            java.text.NumberFormat nf = java.text.NumberFormat.getCurrencyInstance(locale);
+            nf.setCurrency(Currency.getInstance(code.toUpperCase(Locale.ROOT)));
+            return nf.format(amount);
+        } catch (RuntimeException nonIsoOrUnknown) {
+            return symbolOf(code) + " " + amount.toPlainString();
+        }
+    }
+
+    /**
+     * Variante que REDONDEA a número entero (HALF_UP: ≥0.5 arriba, &lt;0.5 abajo) y formatea SIN decimales.
+     * Pensada para los precios de PLANES, que se muestran redondeados (p.ej. "25 €" en vez de "25,28 €").
+     */
+    public String formatDisplayRounded(BigDecimal amountDisplay, String code) {
+        return formatDisplay(amountDisplay, code, true);
+    }
+
+    private String formatDisplay(BigDecimal amountDisplay, String code, boolean wholeNumber) {
         if (amountDisplay == null || code == null) {
             return null;
         }
+        BigDecimal amount = wholeNumber ? amountDisplay.setScale(0, RoundingMode.HALF_UP) : amountDisplay;
         Locale locale = Locale.forLanguageTag(localeOf(code));
         try {
             java.text.NumberFormat nf = java.text.NumberFormat.getCurrencyInstance(locale);
-            nf.setCurrency(java.util.Currency.getInstance(code.toUpperCase(Locale.ROOT)));
-            return nf.format(amountDisplay);
+            nf.setCurrency(Currency.getInstance(code.toUpperCase(Locale.ROOT)));
+            if (wholeNumber) {
+                nf.setMaximumFractionDigits(0);
+                nf.setMinimumFractionDigits(0);
+            }
+            return nf.format(amount);
         } catch (RuntimeException nonIsoOrUnknown) {
             // Códigos no ISO (p.ej. USDT) o locale inválido: símbolo de BD + número plano.
-            return symbolOf(code) + " " + amountDisplay.toPlainString();
+            return symbolOf(code) + " " + amount.toPlainString();
         }
     }
 
@@ -155,8 +196,10 @@ public class CurrencyRateService {
         Instant now = Instant.now();
         int updated = 0;
         int created = 0;
-        for (var entry : ratesFromProvider.entrySet()) {
-            String code = entry.getKey() == null ? null : entry.getKey().toUpperCase();
+        for (Entry<String,BigDecimal> entry : ratesFromProvider.entrySet()) {
+            // Locale.ROOT: con la configuración regional turca "tr", toUpperCase() convierte la i en İ y
+            // "try" saldría como "TRY" con punto, creando una moneda distinta de la que ya existe.
+            String code = entry.getKey() == null ? null : entry.getKey().toUpperCase(Locale.ROOT);
             if (code == null || code.length() != 3) {
                 continue; // ignorar metales/cripto u otros códigos no ISO de 3 letras
             }

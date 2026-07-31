@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.mapper;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import com.nexaplatform.dropshipping.domain.model.MentorBooking;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.MentorBookingEntity;
 import org.mapstruct.Builder;
@@ -70,7 +71,7 @@ public interface MentorBookingEntityMapper {
         if (entity.getMentor() == null || entity.getMentor().getUser() == null) {
             return null;
         }
-        var mu = entity.getMentor().getUser();
+        UserEntity mu = entity.getMentor().getUser();
         return mu.getDisplayName() != null ? mu.getDisplayName() : mu.getEmail();
     }
 }

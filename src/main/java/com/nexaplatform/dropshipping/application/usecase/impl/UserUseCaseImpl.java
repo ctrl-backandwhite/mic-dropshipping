@@ -17,6 +17,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntit
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PasswordResetTokenRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,11 +26,17 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
+import com.nexaplatform.dropshipping.domain.enums.AuthEmailLabel;
+import com.nexaplatform.dropshipping.domain.enums.InvoiceLabel;
+import com.nexaplatform.dropshipping.domain.enums.OrderEmailLabel;
+
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -49,10 +56,21 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserUseCaseImpl implements UserUseCase {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String EMAILS_WELCOME = "emails/welcome";
+    private static final String CIRCLE_CHECK = "circle-check";
+    private static final String FOOTERNOTE = "footerNote";
+    private static final String BODYHTML = "bodyHtml";
+    private static final String CTALABEL = "ctaLabel";
+    private static final String USERID = "userId";
+    private static final String CTAURL = "ctaUrl";
+    private static final String TITLE = "title";
+
     public static final int MAX_FAILED_LOGINS = 5;
     public static final int LOCKOUT_MINUTES = 15;
     public static final int ACTIVATION_TTL_HOURS = 24;
     public static final int RESET_TTL_MINUTES = 30;
+    public static final int DELETION_CODE_TTL_MINUTES = 30;
 
     private static final SecureRandom RNG = new SecureRandom();
 
@@ -64,6 +82,16 @@ public class UserUseCaseImpl implements UserUseCase {
     private final EmailQueueService emailQueueService;
     private final AuditLogger auditLogger;
     private final UserUpdateMapper userUpdateMapper;
+    /** Para invalidar en caliente los tokens de un usuario cuando cambia su rol (o su acceso). */
+    private final com.nexaplatform.dropshipping.infrastructure.security.oauth.JwtRevocationService jwtRevocationService;
+
+    /**
+     * Base URL pública del storefront para los enlaces de los emails
+     * (activación / reset). Configurable por entorno ({@code STOREFRONT_BASE_URL});
+     * en producción debe apuntar al dominio real, NO a localhost.
+     */
+    @Value("${nexadrop.storefront.base-url:http://localhost:3003}")
+    private String storefrontBaseUrl;
 
     /* ============ Registration / activation ============ */
 
@@ -85,15 +113,43 @@ public class UserUseCaseImpl implements UserUseCase {
         user.setActivationCode(activationCode);
         user.setActivationCodeExpiresAt(Instant.now().plus(ACTIVATION_TTL_HOURS, ChronoUnit.HOURS));
         user.setLanguage(user.getLanguage() != null ? user.getLanguage() : "es");
+        // El nombre se captura en partes (nombre + primer/segundo apellido). Componemos el displayName
+        // (nombre completo) cuando no venga informado, para que nav/emails/perfil muestren el nombre real.
+        user.setDisplayName(resolveDisplayName(user));
 
         User saved = userRepository.save(user);
 
-        emailQueueService.enqueue(email, "Confirma tu cuenta NexaDrop", "emails/welcome",
-                Map.of("displayName", saved.getDisplayName() != null ? saved.getDisplayName() : "", "dashboardUrl",
-                        "http://localhost:3003/activate?code=" + activationCode));
+        String confirmLang = InvoiceLabel.lang(saved.getLanguage());
+        emailQueueService.enqueue(email, AuthEmailLabel.CONFIRM_SUBJECT.of(confirmLang), EMAILS_WELCOME,
+                Map.of(TITLE, AuthEmailLabel.CONFIRM_TITLE.of(confirmLang),
+                        BODYHTML, AuthEmailLabel.CONFIRM_BODY.of(confirmLang, saved.getDisplayName()),
+                        CTALABEL, AuthEmailLabel.CONFIRM_CTA.of(confirmLang),
+                        CTAURL, storefrontBaseUrl + "/activate?code=" + activationCode,
+                        "icon", CIRCLE_CHECK,
+                        FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(confirmLang)));
 
-        auditLogger.log("auth.register", email, Map.of("userId", saved.getId(), "role", saved.getRole().name()));
+        auditLogger.log("auth.register", email, Map.of(USERID, saved.getId(), "role", saved.getRole().name()));
         return saved;
+    }
+
+    /**
+     * Resuelve el nombre a mostrar (nombre completo). Si el usuario ya trae un displayName informado lo
+     * respeta; si no, lo compone concatenando nombre + primer apellido + segundo apellido (sin vacíos).
+     */
+    private String resolveDisplayName(User user) {
+        if (user.getDisplayName() != null && !user.getDisplayName().isBlank()) {
+            return user.getDisplayName().trim();
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String part : new String[]{user.getFirstName(), user.getLastName1(), user.getLastName2()}) {
+            if (part != null && !part.isBlank()) {
+                if (!sb.isEmpty()) {
+                    sb.append(' ');
+                }
+                sb.append(part.trim());
+            }
+        }
+        return sb.isEmpty() ? null : sb.toString();
     }
 
     @Override
@@ -108,7 +164,7 @@ public class UserUseCaseImpl implements UserUseCase {
         user.setActivationCode(null);
         user.setActivationCodeExpiresAt(null);
         User saved = userRepository.update(user);
-        auditLogger.log("auth.activate", saved.getEmail(), Map.of("userId", saved.getId()));
+        auditLogger.log("auth.activate", saved.getEmail(), Map.of(USERID, saved.getId()));
         return saved;
     }
 
@@ -143,11 +199,41 @@ public class UserUseCaseImpl implements UserUseCase {
         auditLogger.log("auth.login_ok", normalized, Map.of());
     }
 
+    private static final DateTimeFormatter LOGIN_DATE_FMT =
+            DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm 'UTC'").withZone(ZoneOffset.UTC);
+
+    @Override
+    public void notifyLoginDetected(String email) {
+        String normalized = normalizeEmail(email);
+        userRepository.findByEmail(normalized).ifPresent(u -> {
+            String lang = InvoiceLabel.lang(u.getLanguage());
+            String when = LOGIN_DATE_FMT.format(Instant.now());
+            String body = AuthEmailLabel.LOGIN_BODY.of(lang, u.getDisplayName()).replace("{date}", when);
+            emailQueueService.enqueue(normalized, AuthEmailLabel.LOGIN_SUBJECT.of(lang), EMAILS_WELCOME,
+                    Map.of(TITLE, AuthEmailLabel.LOGIN_TITLE.of(lang),
+                            BODYHTML, body,
+                            CTALABEL, AuthEmailLabel.LOGIN_CTA.of(lang),
+                            CTAURL, storefrontBaseUrl + "/password-reset",
+                            "icon", CIRCLE_CHECK,
+                            FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(lang)));
+        });
+        auditLogger.log("auth.login_notify", normalized, Map.of());
+    }
+
     /* ============ Password reset / change ============ */
 
     @Override
     @Transactional
     public void requestPasswordReset(String email) {
+        doRequestPasswordReset(email);
+    }
+
+    /**
+     * Cuerpo real del reset. Se separa del método anotado porque {@code adminResetPassword} lo invocaba
+     * con {@code this}: el proxy de Spring no intercepta esa llamada, así que el {@code @Transactional}
+     * del método público no pintaba nada ahí. La anotación queda solo en el punto de entrada.
+     */
+    private void doRequestPasswordReset(String email) {
         String normalized = normalizeEmail(email);
         // Always behave the same regardless of existence (no user enumeration).
         userRepository.findByEmail(normalized).ifPresent(user -> {
@@ -157,9 +243,14 @@ public class UserUseCaseImpl implements UserUseCase {
                     .orElseThrow(() -> new NotFoundException("User not found"));
             resetTokenRepository.save(PasswordResetTokenEntity.builder().user(managed).tokenHash(hash)
                     .expiresAt(Instant.now().plus(RESET_TTL_MINUTES, ChronoUnit.MINUTES)).build());
-            emailQueueService.enqueue(normalized, "Restablece tu contraseña NexaDrop", "emails/welcome",
-                    Map.of("displayName", user.getDisplayName() != null ? user.getDisplayName() : "", "dashboardUrl",
-                            "http://localhost:3003/password-reset?token=" + raw));
+            String resetLang = InvoiceLabel.lang(user.getLanguage());
+            emailQueueService.enqueue(normalized, AuthEmailLabel.RESET_SUBJECT.of(resetLang), EMAILS_WELCOME,
+                    Map.of(TITLE, AuthEmailLabel.RESET_TITLE.of(resetLang),
+                            BODYHTML, AuthEmailLabel.RESET_BODY.of(resetLang, user.getDisplayName()),
+                            CTALABEL, AuthEmailLabel.RESET_CTA.of(resetLang),
+                            CTAURL, storefrontBaseUrl + "/password-reset?token=" + raw,
+                            "icon", CIRCLE_CHECK,
+                            FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(resetLang)));
         });
         auditLogger.log("auth.password_reset.request", normalized, Map.of());
     }
@@ -184,7 +275,7 @@ public class UserUseCaseImpl implements UserUseCase {
         prt.setConsumedAt(Instant.now());
         userRepository.update(user);
         resetTokenRepository.save(prt);
-        auditLogger.log("auth.password_reset.confirm", user.getEmail(), Map.of("userId", user.getId()));
+        auditLogger.log("auth.password_reset.confirm", user.getEmail(), Map.of(USERID, user.getId()));
     }
 
     @Override
@@ -193,7 +284,48 @@ public class UserUseCaseImpl implements UserUseCase {
         passwordPolicy.validate(newPassword);
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.update(user);
-        auditLogger.log("auth.password_change", user.getEmail(), Map.of("userId", user.getId()));
+        auditLogger.log("auth.password_change", user.getEmail(), Map.of(USERID, user.getId()));
+    }
+
+    /* ============ Account deletion (soft delete) ============ */
+
+    @Override
+    @Transactional
+    public void requestAccountDeletion(UUID userId) {
+        User user = loadUser(userId);
+        // Código numérico de 6 dígitos, fácil de teclear desde el email. SecureRandom (no Math.random).
+        String code = String.format("%06d", RNG.nextInt(1_000_000));
+        user.setDeletionCode(code);
+        user.setDeletionCodeExpiresAt(Instant.now().plus(DELETION_CODE_TTL_MINUTES, ChronoUnit.MINUTES));
+        userRepository.update(user);
+        emailQueueService.enqueue(user.getEmail(),
+                "Confirma la eliminación de tu cuenta — NX036 Dropshipping", "emails/account-deletion-code",
+                Map.of(TITLE, "Confirma la eliminación de tu cuenta",
+                        "displayName", user.getDisplayName() != null ? user.getDisplayName() : "",
+                        "code", code,
+                        FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(InvoiceLabel.lang(user.getLanguage()))));
+        auditLogger.log("auth.account.delete.request", user.getEmail(), Map.of(USERID, userId));
+    }
+
+    @Override
+    @Transactional
+    public void confirmAccountDeletion(UUID userId, String code) {
+        User user = loadUser(userId);
+        String provided = code == null ? null : code.trim();
+        if (user.getDeletionCode() == null || provided == null || !user.getDeletionCode().equals(provided)
+                || user.getDeletionCodeExpiresAt() == null
+                || user.getDeletionCodeExpiresAt().isBefore(Instant.now())) {
+            throw new BusinessException("DELETION_CODE_INVALID",
+                    "El código de eliminación no es válido o ha expirado.");
+        }
+        // BORRADO LÓGICO: la fila NO se borra físicamente. Se marca deletedAt, se desactiva (el login ya
+        // bloquea active=false) y se limpia el código de confirmación.
+        user.setDeletedAt(Instant.now());
+        user.setActive(false);
+        user.setDeletionCode(null);
+        user.setDeletionCodeExpiresAt(null);
+        userRepository.update(user);
+        auditLogger.log("auth.account.delete", user.getEmail(), Map.of(USERID, userId));
     }
 
     /* ============ Lookups ============ */
@@ -208,6 +340,15 @@ public class UserUseCaseImpl implements UserUseCase {
     @Override
     @Transactional(readOnly = true)
     public User findById(UUID id) {
+        return loadUser(id);
+    }
+
+    /**
+     * Carga sin anotar para el uso interno de la clase: las llamadas a {@code findById} desde otros
+     * métodos iban por {@code this}, así que su {@code @Transactional(readOnly)} nunca se aplicaba. Con
+     * esto la anotación queda solo donde de verdad actúa, en la entrada por proxy.
+     */
+    private User loadUser(UUID id) {
         User user = userRepository.getById(id);
         if (Objects.isNull(user)) {
             throw new NotFoundException("User not found");
@@ -263,9 +404,15 @@ public class UserUseCaseImpl implements UserUseCase {
         if (role == null) {
             throw new BusinessException("role required");
         }
-        User u = findById(id);
+        User u = loadUser(id);
         u.setRole(UserRole.valueOf(role.toUpperCase()));
-        return userRepository.update(u);
+        User updated = userRepository.update(u);
+        // El rol viaja como claim en el access token (60 min). Sin revocar, un usuario degradado de ADMIN
+        // conservaría los permisos de administrador hasta que su token caducara. Se invalidan TODOS sus
+        // tokens (sub = userId): la próxima petición se corta con 401 y el SPA renueva con el rol nuevo.
+        jwtRevocationService.revokeAllForClient(id.toString());
+        auditLogger.log("admin.user_role_changed", u.getEmail(), Map.of("role", updated.getRole().name()));
+        return updated;
     }
 
     /**
@@ -276,7 +423,7 @@ public class UserUseCaseImpl implements UserUseCase {
     @Override
     @Transactional
     public User editUser(UUID id, User patch, Boolean active) {
-        User u = findById(id);
+        User u = loadUser(id);
         // Partial update: null source fields are ignored by the update mapper.
         userUpdateMapper.updateFromModel(patch, u);
         if (active != null)
@@ -287,7 +434,7 @@ public class UserUseCaseImpl implements UserUseCase {
     @Override
     @Transactional
     public User lock(UUID id, int minutes) {
-        User u = findById(id);
+        User u = loadUser(id);
         u.setLockedUntil(Instant.now().plus(minutes, ChronoUnit.MINUTES));
         return userRepository.update(u);
     }
@@ -295,7 +442,7 @@ public class UserUseCaseImpl implements UserUseCase {
     @Override
     @Transactional
     public User unlock(UUID id) {
-        User u = findById(id);
+        User u = loadUser(id);
         u.setLockedUntil(null);
         u.setFailedLoginCount(0);
         return userRepository.update(u);
@@ -304,7 +451,7 @@ public class UserUseCaseImpl implements UserUseCase {
     @Override
     @Transactional
     public User forceActivate(UUID id) {
-        User u = findById(id);
+        User u = loadUser(id);
         u.setActive(true);
         u.setActivationCode(null);
         u.setActivationCodeExpiresAt(null);
@@ -352,16 +499,22 @@ public class UserUseCaseImpl implements UserUseCase {
     @Transactional
     public GoogleLoginOutcome resolveGoogleLogin(String email, String firstName, String lastName) {
         String normalized = normalizeEmail(email);
+        if (normalized == null || normalized.isBlank()) {
+            // GoogleOAuth2SuccessHandler ya rechaza el login cuando el proveedor no devuelve correo, pero
+            // este método no lo comprobaba y más abajo hace normalized.split("@") para el nombre visible:
+            // llegar aquí sin correo creaba una cuenta sin identidad o reventaba con NullPointerException.
+            throw new BusinessException("El proveedor no ha devuelto un correo con el que identificar la cuenta");
+        }
         Optional<User> existing = userRepository.findByEmail(normalized);
         if (existing.isPresent()) {
             User user = existing.get();
             if (user.isGoogleLinked()) {
                 return new GoogleLoginOutcome(user, false, normalized);
             }
-            // A local (password) account already owns this email: do NOT sign in via Google.
-            // The caller must confirm ownership with the account password before linking.
-            log.info("::> [GOOGLE-OAUTH2] Existing local account, link confirmation required userId={}",
-                    user.getId());
+            // Una cuenta local (con contraseña) ya posee este email: NO se inicia sesión vía social sin más.
+            // El usuario debe demostrar que controla la cuenta LOCAL (login con su contraseña) antes de
+            // vincular. El vínculo se completa en ese login por contraseña (flag linkSocial), no por sesión.
+            log.info("::> [OAUTH2] Existing local account, link confirmation required userId={}", user.getId());
             return new GoogleLoginOutcome(null, true, normalized);
         }
         String display = ((firstName != null ? firstName : "") + " " + (lastName != null ? lastName : "")).trim();
@@ -375,7 +528,7 @@ public class UserUseCaseImpl implements UserUseCase {
                 .language("es")
                 .build();
         User saved = userRepository.save(user);
-        auditLogger.log("auth.google.register", normalized, Map.of("userId", saved.getId()));
+        auditLogger.log("auth.google.register", normalized, Map.of(USERID, saved.getId()));
         log.info("::> [GOOGLE-OAUTH2] New user registered userId={}", saved.getId());
         return new GoogleLoginOutcome(saved, false, normalized);
     }
@@ -383,11 +536,11 @@ public class UserUseCaseImpl implements UserUseCase {
     @Override
     @Transactional
     public void linkGoogleAccount(UUID id) {
-        User user = findById(id);
+        User user = loadUser(id);
         if (!user.isGoogleLinked()) {
             user.setGoogleLinked(true);
             userRepository.save(user);
-            auditLogger.log("auth.google.link", user.getEmail(), Map.of("userId", id));
+            auditLogger.log("auth.google.link", user.getEmail(), Map.of(USERID, id));
             log.info("::> [GOOGLE-OAUTH2] Google identity linked to account userId={}", id);
         }
     }
@@ -396,20 +549,20 @@ public class UserUseCaseImpl implements UserUseCase {
     @Override
     @Transactional
     public void adminResetPassword(UUID id) {
-        User user = findById(id);
-        requestPasswordReset(user.getEmail());
-        auditLogger.log("auth.admin.password_reset", user.getEmail(), Map.of("userId", id));
+        User user = loadUser(id);
+        doRequestPasswordReset(user.getEmail());
+        auditLogger.log("auth.admin.password_reset", user.getEmail(), Map.of(USERID, id));
     }
 
     @Override
     @Transactional
     public void deleteUser(UUID id) {
-        User user = findById(id);
+        User user = loadUser(id);
         if (user.getRole() == UserRole.ADMIN) {
             throw new BusinessException("No se puede eliminar una cuenta de administrador");
         }
         userRepository.delete(id);
-        auditLogger.log("auth.admin.delete", user.getEmail(), Map.of("userId", id));
+        auditLogger.log("auth.admin.delete", user.getEmail(), Map.of(USERID, id));
     }
 
     @Override
@@ -436,10 +589,15 @@ public class UserUseCaseImpl implements UserUseCase {
                 .language("es")
                 .build();
         User saved = userRepository.save(user);
-        emailQueueService.enqueue(normalized, "Te han invitado a NexaDrop", "emails/welcome",
-                Map.of("displayName", "", "dashboardUrl",
-                        "http://localhost:3003/activate?code=" + activationCode));
-        auditLogger.log("auth.admin.invite", normalized, Map.of("userId", saved.getId(), "role", r.name()));
+        String inviteLang = InvoiceLabel.lang(saved.getLanguage());
+        emailQueueService.enqueue(normalized, AuthEmailLabel.INVITE_SUBJECT.of(inviteLang), EMAILS_WELCOME,
+                Map.of(TITLE, AuthEmailLabel.INVITE_TITLE.of(inviteLang),
+                        BODYHTML, AuthEmailLabel.INVITE_BODY.of(inviteLang, ""),
+                        CTALABEL, AuthEmailLabel.INVITE_CTA.of(inviteLang),
+                        CTAURL, storefrontBaseUrl + "/activate?code=" + activationCode,
+                        "icon", CIRCLE_CHECK,
+                        FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(inviteLang)));
+        auditLogger.log("auth.admin.invite", normalized, Map.of(USERID, saved.getId(), "role", r.name()));
         return saved;
     }
 

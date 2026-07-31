@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -35,9 +36,14 @@ public interface ProductJpaRepositoryAdapter extends JpaRepository<ProductEntity
 
     Page<ProductEntity> findByStatus(ProductStatus status, Pageable pageable);
 
+    // Filtro de escaparate: solo productos con al menos UNA imagen ya espejada a nuestro storage
+    // (cdn_url no nulo). Así garantizamos que lo que se lista SIEMPRE renderiza una imagen y se
+    // ocultan los productos sin imagen utilizable, sin borrarlos: el admin los sigue viendo y, en
+    // cuanto se les espeje una imagen, reaparecen solos en el escaparate.
     @Query("""
             SELECT p FROM ProductEntity p
             WHERE p.status = :status
+              AND EXISTS (SELECT 1 FROM ProductImageEntity i WHERE i.product = p AND i.cdnUrl IS NOT NULL)
             ORDER BY p.trendScore DESC NULLS LAST
             """)
     Page<ProductEntity> findTopByTrendScore(@Param("status") ProductStatus status, Pageable pageable);
@@ -45,6 +51,7 @@ public interface ProductJpaRepositoryAdapter extends JpaRepository<ProductEntity
     @Query("""
             SELECT p FROM ProductEntity p
             WHERE p.status = :status AND p.category.id = :categoryId
+              AND EXISTS (SELECT 1 FROM ProductImageEntity i WHERE i.product = p AND i.cdnUrl IS NOT NULL)
             ORDER BY p.trendScore DESC NULLS LAST
             """)
     Page<ProductEntity> findByCategoryOrderByTrend(@Param("categoryId") UUID categoryId,
@@ -57,6 +64,7 @@ public interface ProductJpaRepositoryAdapter extends JpaRepository<ProductEntity
     @Query("""
             SELECT p FROM ProductEntity p
             WHERE p.status = :status
+              AND EXISTS (SELECT 1 FROM ProductImageEntity i WHERE i.product = p AND i.cdnUrl IS NOT NULL)
               AND (:categoryId IS NULL OR p.category.id = :categoryId)
               AND (:supplierId IS NULL OR p.supplier.id = :supplierId)
               AND (:minPrice   IS NULL OR p.basePrice >= :minPrice)
@@ -81,10 +89,17 @@ public interface ProductJpaRepositoryAdapter extends JpaRepository<ProductEntity
                                 AND (LOWER(a.attrValue) LIKE CONCAT('%', CAST(:needle AS string), '%')
                                      OR LOWER(a.attrKey) LIKE CONCAT('%', CAST(:needle AS string), '%'))))
             """)
+    // Los filtros NO se pueden agrupar en un record (java:S107): Spring Data enlaza un @Param por
+    // parámetro declarado y con él conoce el tipo Java de cada uno. Pasarlos dentro de un objeto
+    // obligaría a expresiones SpEL (:#{#f.needle}), que se evalúan en ejecución y pierden ese tipo: un
+    // filtro a null volvería a viajar sin tipo y PostgreSQL rompería la consulta con
+    // "operator does not exist: text ~~ bytea", que es justo lo que evitan los CAST de arriba.
+    // El agrupado en record sí existe aguas arriba, en ProductListFilters (api/mapper).
+    @SuppressWarnings("java:S107")
     Page<ProductEntity> searchStorefront(@Param("status") ProductStatus status, @Param("needle") String needle,
             @Param("categoryId") UUID categoryId, @Param("supplierId") UUID supplierId,
-            @Param("minPrice") java.math.BigDecimal minPrice, @Param("maxPrice") java.math.BigDecimal maxPrice,
+            @Param("minPrice") BigDecimal minPrice, @Param("maxPrice") BigDecimal maxPrice,
             @Param("shipFrom") String shipFrom, @Param("freeShipping") Boolean freeShipping,
             @Param("selfPickup") Boolean selfPickup, @Param("hasVideo") Boolean hasVideo,
-            @Param("minRating") java.math.BigDecimal minRating, @Param("minInv") Integer minInv, Pageable pageable);
+            @Param("minRating") BigDecimal minRating, @Param("minInv") Integer minInv, Pageable pageable);
 }

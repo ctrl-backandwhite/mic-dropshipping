@@ -1,11 +1,13 @@
 package com.nexaplatform.dropshipping.api.dto.in;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 /**
  * One product row of a bulk JSON import. Friendly, flat shape (the heavy
@@ -49,6 +51,18 @@ public class BulkProductDtoIn {
 
     private BigDecimal price;
 
+    /**
+     * OBLIGATORIO. Flete de envío en CNY (misma moneda que {@code price}). Se suma al total SIN margen.
+     * Regla de carga: {@code envío = max(10, flete_1688)}.
+     */
+    private BigDecimal shippingCny;
+
+    /**
+     * OBLIGATORIO. Importe de IVA en CNY (misma moneda que {@code price}). Valor fijo que se ingresa en la
+     * carga (la plataforma NO lo recalcula). Se suma al total SIN margen.
+     */
+    private BigDecimal ivaCny;
+
     private Integer moq;
 
     private Integer monthlySales;
@@ -64,7 +78,20 @@ public class BulkProductDtoIn {
     /** Optional product manufacturer (stored in the product's brand field). */
     private String manufacturer;
 
+    /**
+     * URLs de imagen del producto. Se aceptan claves alternativas comunes ({@code images},
+     * {@code photos}, {@code pictures}, {@code mainImage}) para que un JSON razonable no se rechace
+     * por el nombre del campo. Para una sola imagen como string, usar {@link #imageUrl}.
+     */
+    @JsonAlias({"images", "photos", "pictures", "mainImage", "imageURLs"})
     private List<String> imageUrls;
+
+    /**
+     * Atajo para una sola imagen como string ({@code "imageUrl": "https://..."}). Se pliega sobre
+     * {@link #imageUrls} en el caso de uso. Acepta también las claves {@code image} y {@code photo}.
+     */
+    @JsonAlias({"image", "photo"})
+    private String imageUrl;
 
     /** ACTIVE (default) or DRAFT. */
     private String status;
@@ -89,8 +116,18 @@ public class BulkProductDtoIn {
     private Integer heightMm;
     /** País de origen (COO), código ISO-2 (ej. CN). */
     private String countryOfOrigin;
-    /** Código arancelario HS. */
+    /** Código arancelario HS. Si no viene, se hereda del perfil aduanero de la categoría. */
     private String hsCode;
+    /** Material declarado en aduana ({@code InvoicePart}/材质), en inglés. Por defecto, el de la categoría. */
+    private String customsMaterial;
+    /** Uso declarado en aduana ({@code InvoiceUsage}/用途), en inglés. Por defecto, el de la categoría. */
+    private String customsUsage;
+    /**
+     * Batería del artículo: NONE, BUILT_IN (dentro del aparato) o WITH_EQUIPMENT (incluida y acoplada).
+     * Determina el {@code PackageType} del transportista y, con él, el canal y la tarifa. Por defecto,
+     * el de la categoría. Las baterías SUELTAS no se pueden cargar (prohibición aérea).
+     */
+    private String batteryType;
     /** Certificaciones (CE, RoHS, FDA…). */
     private List<String> certifications;
     /** País/almacén de despacho, código ISO-2. */
@@ -106,9 +143,9 @@ public class BulkProductDtoIn {
     /** Regiones de venta sugeridas/autorizadas (ej. ["EU","LATAM"]). */
     private List<String> salesRegions;
     /** Desglose de reseñas por estrellas: {"5":120,"4":30,...}. */
-    private java.util.Map<String, Integer> ratingBreakdown;
+    private Map<String, Integer> ratingBreakdown;
     /** Soporte transfronterizo: {labeling, foreignManual, foreignPackaging, boxMark}. */
-    private java.util.Map<String, Object> crossBorderSupport;
+    private Map<String, Object> crossBorderSupport;
     /** Unidades despachadas en 30 días (fiabilidad del proveedor). */
     private Integer dropshipShipped30d;
     /** Tasa de recolección en 48 h (0-100). */
@@ -133,7 +170,7 @@ public class BulkProductDtoIn {
      * Contenido por idioma en CUALQUIER idioma (ilimitado): {"fr": {"title":"…","description":"…"}, "ja": {…}}.
      * Complementa/override a titleEs/En/Pt/Zh; permite cargar manualmente todos los idiomas que se deseen.
      */
-    private java.util.Map<String, BulkTranslation> translations;
+    private Map<String, BulkTranslation> translations;
 
     /** Reseñas reales del producto (cada una con su idioma). */
     private List<BulkReview> reviews;
@@ -185,9 +222,9 @@ public class BulkProductDtoIn {
     public static class BulkAxis {
         private String name;
         private List<String> values;
-        private java.util.Map<String, String> valueImages;
+        private Map<String, String> valueImages;
         /** Traducciones por valor: {"白色1": {"es":"Blanco","en":"White"}}. */
-        private java.util.Map<String, java.util.Map<String, String>> valueTranslations;
+        private Map<String, Map<String, String>> valueTranslations;
     }
 
     /** Una variante/SKU: {"sku":"...","optionValues":{"Color":"Blanco","Talla":"42"},"price":..,"stock":..}. */
@@ -196,7 +233,7 @@ public class BulkProductDtoIn {
     @AllArgsConstructor
     public static class BulkVariant {
         private String sku;
-        private java.util.Map<String, String> optionValues;
+        private Map<String, String> optionValues;
         private BigDecimal price;
         private Integer stock;
         private String imageUrl;

@@ -30,6 +30,10 @@ public class PlatformNotification {
     private String channel;
     private Map<String, Object> payload;
     private Instant readAt;
+    @lombok.Builder.Default
+    private String status = "NEW";
+    private Instant archivedAt;
+    private Instant deletedAt;
     private Instant createdAt;
     private Instant updatedAt;
     private String createdBy;

@@ -1,7 +1,9 @@
 package com.nexaplatform.dropshipping.infrastructure.cache;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.caffeine.CaffeineCacheManager;
@@ -9,7 +11,6 @@ import org.springframework.cache.interceptor.KeyGenerator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.context.annotation.Profile;
 
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
@@ -39,13 +40,8 @@ public class CacheConfig {
     public static final String CACHE_CURRENCY_RATES = "currency-rates";
     public static final String CACHE_PRODUCT_SPECS = "product-specs";
     public static final String CACHE_PRODUCT_ATTRS = "product-attrs";
+    public static final String CACHE_SEARCH = "search"; // resultados de /api/search por keyword+lang+page+size (TTL corto)
 
-    /**
-     * Local-only fallback que se usa SI no hay Redis configurado (perfil dev /
-     * test sin docker). Caffeine corre dentro de la JVM, así que cada instancia
-     * tiene su propia copia — válido para desarrollo local pero NO para prod
-     * multi-instancia (esa coherencia la da {@link RedisCacheConfig}).
-     */
     /**
      * Clave de caché que INCLUYE la moneda de display activa (X-Currency) además del método + args.
      * Imprescindible para los listados de productos: el precio mostrado depende de la moneda del usuario,
@@ -58,17 +54,29 @@ public class CacheConfig {
         // Incluye moneda Y canal (STOREFRONT 150% vs INTEGRATION 75%): el precio depende de ambos, así
         // que el storefront y las apps conectadas (Shopify/WooCommerce) NO deben compartir entrada de caché.
         return (target, method, params) -> method.getName() + ':' + CurrencyHolder.get() + ':'
-                + com.nexaplatform.dropshipping.application.service.PricingChannelHolder.get() + ':'
+                + PricingChannelHolder.get() + ':'
                 + Arrays.deepToString(params);
     }
 
+    /**
+     * Cache manager por defecto en CUALQUIER perfil mientras no se active el caché distribuido
+     * ({@code nexadrop.cache.distributed=false}, el valor por defecto). Antes estaba atado a perfiles
+     * concretos (local/dev/default/test) y dejaba a {@code pre} y {@code pro} SIN cache manager → 500
+     * "Cannot find cache". Al depender de la propiedad y no del nombre del perfil queda correcto en
+     * todos los entornos.
+     *
+     * <p>Caffeine corre dentro de la JVM, así que cada instancia tiene su propia copia: vale para
+     * desarrollo y para una sola instancia, pero la coherencia multi-instancia la da
+     * {@link RedisCacheConfig}.
+     */
     @Bean
     @Primary
-    @Profile({"local", "dev", "default", "test"})
+    @ConditionalOnProperty(prefix = "nexadrop.cache", name = "distributed", havingValue = "false",
+            matchIfMissing = true)
     public CacheManager caffeineCacheManager() {
         CaffeineCacheManager mgr = new CaffeineCacheManager(CACHE_PRODUCT_DETAIL, CACHE_PRODUCT_SUMMARY,
                 CACHE_PRODUCT_LIST, CACHE_CATEGORY_TREE, CACHE_CATEGORIES_FLAT, CACHE_SUPPLIERS_FLAT,
-                CACHE_PRICING_AMOUNT, CACHE_CURRENCY_RATES, CACHE_PRODUCT_SPECS, CACHE_PRODUCT_ATTRS);
+                CACHE_PRICING_AMOUNT, CACHE_CURRENCY_RATES, CACHE_PRODUCT_SPECS, CACHE_PRODUCT_ATTRS, CACHE_SEARCH);
         mgr.setCaffeine(Caffeine.newBuilder().maximumSize(50_000).expireAfterWrite(5, TimeUnit.MINUTES).recordStats()); // expone métricas a Micrometer
         mgr.setAllowNullValues(false);
         return mgr;

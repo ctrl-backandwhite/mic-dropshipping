@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.search;
 
+import com.nexaplatform.dropshipping.application.service.Texts;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -39,9 +40,10 @@ public class CategorySearchService {
             @Value("${nexadrop.opensearch.uris:http://localhost:9400}") String uris,
             @Value("${nexadrop.opensearch.categories-index:categories}") String index) {
         this.objectMapper = objectMapper;
-        String base = uris.split(",")[0].trim().replaceAll("/+$", "");
+        String base = Texts.stripTrailingSlashes(uris.split(",")[0].trim());
         this.searchUrl = base + "/" + index + "/_search";
     }
+
 
     /** A flattened category row read from the OpenSearch index (everything the admin table needs). */
     public record IndexedCategory(UUID id, String slug, String nameZh, String nameEs, String nameEn, String namePt,
@@ -83,6 +85,11 @@ public class CategorySearchService {
             }
             return rows.isEmpty() ? Optional.empty() : Optional.of(rows);
         } catch (Exception e) {
+            // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
+            // interrupción deja al pool sin enterarse de que le han pedido parar.
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             log.warn("Category index read failed, falling back to DB: {}", e.getMessage());
             return Optional.empty();
         }

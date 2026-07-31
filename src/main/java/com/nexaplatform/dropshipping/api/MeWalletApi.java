@@ -6,6 +6,7 @@ import com.nexaplatform.dropshipping.api.dto.out.MeWalletDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MeWalletPaymentStatusDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MeWalletRechargeDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MeWalletTxDtoOut;
+import com.nexaplatform.dropshipping.application.usecase.RechargeOptions;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -13,6 +14,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -44,6 +46,17 @@ public interface MeWalletApi {
     @PostMapping("/recharge")
     ResponseEntity<MeWalletRechargeDtoOut> recharge(Authentication auth, @Valid @RequestBody MeWalletRechargeDtoIn req,
             @RequestHeader(value = "Idempotency-Key", required = false) String idem);
+
+    @Operation(summary = "Rounded recharge presets in the active currency (backend-computed)")
+    @ApiResponse(responseCode = "200", description = "Recharge options returned")
+    @GetMapping("/recharge/options")
+    ResponseEntity<RechargeOptions> rechargeOptions(@RequestParam(value = "currency", required = false) String currency);
+
+    @Operation(summary = "Confirm a wallet recharge on return from the provider (Stripe/PayPal) and credit it")
+    @ApiResponse(responseCode = "200", description = "Recharge confirmed and credited")
+    @PostMapping("/recharge/{paymentId}/confirm")
+    ResponseEntity<MeWalletPaymentStatusDtoOut> confirmRecharge(Authentication auth,
+            @PathVariable("paymentId") UUID paymentId);
 
     @Operation(summary = "Capture a PayPal wallet recharge result")
     @ApiResponse(responseCode = "200", description = "PayPal capture processed")

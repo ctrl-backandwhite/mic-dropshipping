@@ -1,9 +1,11 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
-import com.nexaplatform.dropshipping.api.controller.StorefrontCatalogController.CategoryBreadcrumb;
-import com.nexaplatform.dropshipping.api.controller.StorefrontCatalogController.CategoryView;
-import com.nexaplatform.dropshipping.api.controller.StorefrontCatalogController.SupplierView;
-import com.nexaplatform.dropshipping.api.controller.StorefrontCatalogController.VariantView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.VariantView;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.SupplierSearchService;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.SupplierSearchService.IndexedSupplier;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
@@ -25,7 +27,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORIES_FLAT;
@@ -38,7 +40,10 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Shared storefront catalog read-projection helper. Holds the category/supplier/
@@ -47,13 +52,14 @@ import java.util.UUID;
  * identical shapes without one controller injecting the other (the partner→storefront
  * controller dependency is replaced by this shared collaborator + the CatalogUseCase).
  */
-@Component
+@Service
 @RequiredArgsConstructor
 public class CatalogStorefrontReadService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final SupplierRepository supplierRepository;
+    private final SupplierSearchService supplierSearchService;
     private final ProductVariantRepository variantRepository;
     private final ProductMapper productMapper;
 
@@ -146,13 +152,23 @@ public class CatalogStorefrontReadService {
     public PageResponse<ProductSummaryView> productsByCategory(String idOrSlug, int page, int size, String lang,
             String sort) {
         UUID categoryId = resolveCategory(idOrSlug).getId();
-        return productList(page, size, lang, null, categoryId, null, null, null, sort);
+        return listing(page, size, lang, ProductListFilters.basic(null, categoryId, null, null, null), sort);
     }
 
     /* ============================ Suppliers ============================ */
 
     @Transactional(readOnly = true)
     public List<SupplierView> suppliers() {
+        // Servido desde OpenSearch (índice `suppliers`, mantenido en sync por SupplierIndexer en cada
+        // alta/edición/baja); el productCount va embebido en el documento. Si el índice está vacío o
+        // OpenSearch no responde, cae a la BD (misma proyección) — igual que categorías/productos.
+        Optional<List<IndexedSupplier>> indexed = supplierSearchService.listFromIndex(null);
+        if (indexed.isPresent()) {
+            return indexed.get().stream()
+                    .map(s -> new SupplierView(s.id(), s.externalId(), s.name(), s.nameZh(), s.country(), s.city(),
+                            s.rating(), s.yearsActive(), s.verified(), s.trustPass(), s.productCount()))
+                    .toList();
+        }
         return supplierRepository.findAll().stream().sorted((a, b) -> a.getName().compareToIgnoreCase(b.getName()))
                 .map(this::supplierView).toList();
     }
@@ -166,7 +182,7 @@ public class CatalogStorefrontReadService {
             + "+ ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get()")
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productsBySupplier(UUID id, int page, int size, String lang, String sort) {
-        return productList(page, size, lang, null, null, id, null, null, sort);
+        return listing(page, size, lang, ProductListFilters.basic(null, null, id, null, null), sort);
     }
 
     /* ============================ Variants ============================ */
@@ -199,10 +215,32 @@ public class CatalogStorefrontReadService {
     // reflejaría" por moneda).
     @Cacheable(value = CACHE_PRODUCT_LIST, keyGenerator = "currencyAwareKeyGenerator")
     @Transactional(readOnly = true)
-    public PageResponse<ProductSummaryView> productListFull(int page, int size, String lang, String q, UUID categoryId,
-            UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping,
-            Boolean selfPickup, Boolean hasVideo, Integer minRating, Integer inventoryMin, String certification,
+    public PageResponse<ProductSummaryView> productListFull(int page, int size, String lang,
+            ProductListFilters filters, String sort) {
+        return listing(page, size, lang, filters, sort);
+    }
+
+    /**
+     * El listado real. Va sin anotaciones a propósito: es el punto al que llaman los demás métodos de
+     * esta misma clase. La autoinvocación NO pasa por el proxy de Spring, así que el {@code @Cacheable}
+     * y el {@code @Transactional} del método invocado nunca se aplicaban; con el cuerpo aquí, esas
+     * anotaciones quedan solo donde de verdad actúan: el método público por el que entra la petición.
+     */
+    private PageResponse<ProductSummaryView> listing(int page, int size, String lang, ProductListFilters filters,
             String sort) {
+        String q = filters.q();
+        UUID categoryId = filters.categoryId();
+        UUID supplierId = filters.supplierId();
+        BigDecimal minPrice = filters.minPrice();
+        BigDecimal maxPrice = filters.maxPrice();
+        String shipFrom = filters.shipFrom();
+        Boolean freeShipping = filters.freeShipping();
+        Boolean selfPickup = filters.selfPickup();
+        Boolean hasVideo = filters.hasVideo();
+        Integer minRating = filters.minRating();
+        Integer inventoryMin = filters.inventoryMin();
+        String certification = filters.certification();
+        Boolean verified = filters.verified();
 
         int safeSize = Math.min(size, 100);
         Sort sortSpec = sortFor(sort);
@@ -213,6 +251,8 @@ public class CatalogStorefrontReadService {
         BigDecimal minRatingBd = minRating == null ? null : BigDecimal.valueOf(minRating);
         boolean certFilter = certification != null && !certification.isBlank();
         boolean priceFilter = minPrice != null || maxPrice != null;
+        // Filtro de verificación manual (solo lo envía el admin desde /admin/browse). Se aplica en memoria.
+        boolean verifiedFilter = verified != null;
 
         // El filtro de precio y el de certificación se aplican en la capa de aplicación, NO en el SQL.
         // Motivo del precio: el número que ve el usuario (displayPrice) se obtiene de la variante
@@ -221,7 +261,7 @@ public class CatalogStorefrontReadService {
         // Por eso aquí filtramos sobre displayPrice, que está en la MISMA moneda que el usuario seleccionó
         // → el filtro de precio funciona para cualquier moneda. Se pagina en memoria para que el total y
         // las páginas sean correctos (el catálogo está acotado por el resto de filtros).
-        if (priceFilter || certFilter) {
+        if (priceFilter || certFilter || verifiedFilter) {
             String certUp = certFilter ? certification.toUpperCase() : null;
             Pageable scan = PageRequest.of(0, 5000, sortSpec);
             Page<ProductEntity> raw = productRepository.searchStorefront(ProductStatus.ACTIVE, needle, categoryId,
@@ -229,10 +269,13 @@ public class CatalogStorefrontReadService {
             List<ProductSummaryView> all = raw.getContent().stream()
                     .filter(p -> certUp == null || (p.getCertifications() != null && p.getCertifications().stream()
                             .anyMatch(c -> c != null && c.toUpperCase().contains(certUp))))
+                    .filter(p -> !verifiedFilter || verified.equals(Boolean.TRUE.equals(p.getVerified())))
                     .map(p -> productMapper.toSummary(p, lang))
                     .filter(v -> withinPrice(v.displayPrice(), minPrice, maxPrice)).toList();
             int total = all.size();
-            int from = Math.min(page * safeSize, total);
+            // (long) para que un ?page enorme no desborde el int: el índice salía negativo y el subList
+            // respondía 500 en vez de una página vacía.
+            int from = (int) Math.min((long) page * safeSize, total);
             int to = Math.min(from + safeSize, total);
             return PageResponse.from(new PageImpl<>(all.subList(from, to), pageable, total));
         }
@@ -241,6 +284,29 @@ public class CatalogStorefrontReadService {
                 supplierId, null, null, shipCc, freeShipping, selfPickup, hasVideo, minRatingBd, inventoryMin, pageable);
         List<ProductSummaryView> slice = raw.getContent().stream().map(p -> productMapper.toSummary(p, lang)).toList();
         return PageResponse.from(new PageImpl<>(slice, pageable, raw.getTotalElements()));
+    }
+
+    /**
+     * Lista los productos FAVORITOS (por sus IDs, en el orden dado = del más reciente al más antiguo) con el
+     * mismo pipeline de precios/formateo que el catálogo. Los inactivos se omiten. Pagina en memoria.
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<ProductSummaryView> favorites(List<UUID> productIds, int page, int size, String lang) {
+        int safe = Math.min(size, 100);
+        Pageable pageable = PageRequest.of(page, safe);
+        if (productIds == null || productIds.isEmpty()) {
+            return PageResponse.from(new PageImpl<>(List.of(), pageable, 0));
+        }
+        Map<UUID, ProductEntity> byId = productRepository.findAllById(productIds).stream()
+                .filter(p -> p.getStatus() == ProductStatus.ACTIVE)
+                .collect(Collectors.toMap(ProductEntity::getId, p -> p, (a, b) -> a));
+        List<ProductSummaryView> all = productIds.stream().map(byId::get).filter(Objects::nonNull)
+                .map(p -> productMapper.toSummary(p, lang)).toList();
+        // (long) para que un ?page enorme no desborde el int y deje un índice negativo que revienta
+        // el subList con un 500.
+        int from = (int) Math.min((long) page * safe, all.size());
+        int to = Math.min(from + safe, all.size());
+        return PageResponse.from(new PageImpl<>(all.subList(from, to), pageable, all.size()));
     }
 
     /** El precio ya viene en la moneda del usuario (displayPrice); rango inclusivo, excluye nulos si hay filtro. */
@@ -254,11 +320,20 @@ public class CatalogStorefrontReadService {
         return (min == null || price.compareTo(min) >= 0) && (max == null || price.compareTo(max) <= 0);
     }
 
+    // @Transactional imprescindible: sin la transacción aquí, el mapeo a summary (que carga translations
+    // LAZY) falla con LazyInitializationException "no session" (p.ej. GET /catalog/products/newest daba
+    // 500). Con esta anotación la sesión sigue abierta mientras se construye la página.
+    //
+    // Versión con los filtros sueltos de {@link #productListFull}, que es la que los agrupa en
+    // ProductListFilters. Sobrevive porque la usan llamadores (controlador del escaparate y sus tests)
+    // que se migrarán aparte; de ahí que se silencie S107 en vez de partir la firma por la mitad.
+    @SuppressWarnings("java:S107")
     @Cacheable(value = CACHE_PRODUCT_LIST, keyGenerator = "currencyAwareKeyGenerator")
+    @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productList(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String sort) {
-        return productListFull(page, size, lang, q, categoryId, supplierId, minPrice, maxPrice, null, null, null, null,
-                null, null, null, sort);
+        return listing(page, size, lang, ProductListFilters.basic(q, categoryId, supplierId, minPrice, maxPrice),
+                sort);
     }
 
     /* ============================ helpers ============================ */
@@ -313,7 +388,16 @@ public class CatalogStorefrontReadService {
         };
     }
 
+    /**
+     * Nombre de la categoría en el idioma pedido, con el chino como respaldo.
+     *
+     * <p>El idioma se comprueba aquí: hoy no llega nulo porque el parámetro de la petición tiene valor
+     * por defecto, pero eso es una casualidad de una capa que este método no controla.
+     */
     public static String translatedName(CategoryEntity c, String lang) {
+        if (lang == null || c.getTranslations() == null) {
+            return c.getNameZh();
+        }
         return c.getTranslations().stream().filter(t -> lang.equalsIgnoreCase(t.getLanguage()))
                 .map(CategoryTranslationEntity::getName).findFirst().orElse(c.getNameZh());
     }

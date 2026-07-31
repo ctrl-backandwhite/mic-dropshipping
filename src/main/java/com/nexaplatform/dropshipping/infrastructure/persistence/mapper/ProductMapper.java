@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.mapper;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueTranslationEntity;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.PriceTierView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView;
@@ -25,7 +26,9 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Component
@@ -55,7 +58,7 @@ public class ProductMapper {
                 p.getRating(), p.getMonthlySales(), p.getTrendScore(),
                 p.getStatus() != null ? p.getStatus().name() : null, priced.retailUsd(), priced.displayAmount(),
                 priced.displayCurrency(), priced.displaySymbol(), priced.displayFormatted(), p.getInventoryCount(),
-                availableUnits);
+                availableUnits, Boolean.TRUE.equals(p.getVerified()));
     }
 
     public ProductDetailView toDetail(ProductEntity p, String language, List<ProductPriceTierEntity> tiers) {
@@ -67,6 +70,10 @@ public class ProductMapper {
         BigDecimal costUsd = admin ? priced.costUsd() : null;
         BigDecimal retailUsd = admin ? priced.retailUsd() : null;
         BigDecimal appliedMarginPercent = admin ? priced.appliedMarginPercent() : null;
+        // Desglose base/IVA/envío: SOLO admin (el usuario final ve únicamente el total = displayFormatted).
+        String baseFormatted = admin ? priced.baseFormatted() : null;
+        String ivaFormatted = admin ? priced.ivaFormatted() : null;
+        String shippingFormatted = admin ? priced.shippingFormatted() : null;
         return new ProductDetailView(p.getId(), p.getSlug(), p.getSource(), p.getExternalId(),
                 p.getSupplier() != null ? supplierMapper.toView(p.getSupplier()) : null,
                 p.getCategory() != null ? p.getCategory().getId() : null, tr != null ? tr.getTitle() : p.getTitleZh(),
@@ -81,7 +88,10 @@ public class ProductMapper {
                 tiers == null ? Collections.emptyList() : tiers.stream().map(this::toPriceTierView).toList(),
                 costUsd, retailUsd, priced.displayAmount(), priced.displayCurrency(),
                 priced.displaySymbol(), priced.displayFormatted(), appliedMarginPercent,
-                tr != null ? tr.getMetaTitle() : null, tr != null ? tr.getMetaDescription() : null);
+                baseFormatted, ivaFormatted, shippingFormatted,
+                tr != null ? tr.getMetaTitle() : null, tr != null ? tr.getMetaDescription() : null,
+                Boolean.TRUE.equals(p.getVerified()),
+                p.getVideoUrl(), Boolean.TRUE.equals(p.getHasVideo()));
     }
 
     public ProductImageView toImageView(ProductImageEntity img) {
@@ -91,14 +101,21 @@ public class ProductMapper {
     public VariantView toVariantView(ProductEntity product, ProductVariantEntity v) {
         // Display variant price converted via PricingService too
         PricedAmount priced = pricingService.priceFor(product, v);
+        // Peso por variante: usa el del paquete (bruto) si existe, si no el neto. Dimensiones tal cual (mm).
+        Integer weight = (v.getPackageWeightGrams() != null && v.getPackageWeightGrams() > 0)
+                ? v.getPackageWeightGrams() : v.getWeightGrams();
         return new VariantView(v.getId(), v.getSku(), v.getTitle(), priced.displayAmount(), // shown in user currency
-                priced.displayFormatted(), v.getStock(), pickVariantImage(v), v.getOptions(), v.isActive());
+                priced.displayFormatted(), v.getStock(), pickVariantImage(v), v.getOptions(), v.isActive(),
+                weight, v.getLengthMm(), v.getWidthMm(), v.getHeightMm());
     }
 
     /** Back-compat overload (without product); used by ProductMapperTest. */
     public VariantView toVariantView(ProductVariantEntity v) {
+        Integer weight = (v.getPackageWeightGrams() != null && v.getPackageWeightGrams() > 0)
+                ? v.getPackageWeightGrams() : v.getWeightGrams();
         return new VariantView(v.getId(), v.getSku(), v.getTitle(), v.getPrice(), null, v.getStock(),
-                pickVariantImage(v), v.getOptions(), v.isActive());
+                pickVariantImage(v), v.getOptions(), v.isActive(),
+                weight, v.getLengthMm(), v.getWidthMm(), v.getHeightMm());
     }
 
     /** Back-compat: opción sin idioma (no resuelve traducción) — usado por tests/llamadas heredadas. */
@@ -114,8 +131,8 @@ public class ProductMapper {
     public VariantValueView toValueView(VariantValueEntity v, String language) {
         // Traducciones por idioma + override neutral (value). valueLocalized = traducción del idioma
         // pedido, si no el override neutral; el frontend cae a translateVariantCN(valueZh) si ambos faltan.
-        java.util.Map<String, String> tr = new java.util.LinkedHashMap<>();
-        for (var t : v.getTranslations()) {
+        Map<String, String> tr = new LinkedHashMap<>();
+        for (VariantValueTranslationEntity t : v.getTranslations()) {
             if (t.getLanguage() != null && t.getValue() != null) {
                 tr.put(t.getLanguage().toLowerCase(), t.getValue());
             }
@@ -125,20 +142,23 @@ public class ProductMapper {
             localized = v.getValue();
         }
         return new VariantValueView(v.getId(), v.getValueZh(), v.getValue(), localized, pickValueImage(v),
-                v.getPosition(), tr);
+                v.getImageSourceUrl(), v.getPosition(), tr);
     }
 
     public PriceTierView toPriceTierView(ProductPriceTierEntity t) {
-        // El tramo se guarda en la moneda del proveedor (CNY) como COSTE. Para mostrarlo al cliente hay que
-        // aplicar el MISMO margen que el headline/variante/pedido; si no, el PDP enseñaría el coste (p.ej.
-        // 14,13 €) y al pagar se cobraría con margen (28,26 €). Coste → USD → margen → moneda de display.
-        BigDecimal costUsd = currencyRateService.toUsd(t.getUnitPrice(), t.getCurrency() != null ? t.getCurrency()
-                : "CNY");
-        BigDecimal retailUsd = marginService.apply(costUsd, t.getProduct(), null).retailUsd();
-        BigDecimal displayAmount = currencyRateService.usdToDisplay(retailUsd != null ? retailUsd : costUsd);
-        String displayCode = pricingService.displayCurrencyCode();
+        // El tramo se guarda en la moneda del proveedor (CNY) como COSTE, y se tarifica por la MISMA vía
+        // que el precio de la ficha, el de la variante y el del pedido.
+        //
+        // Antes tenía su propia cuenta —coste → USD → margen— y se quedaba ahí: le faltaban el IVA y el
+        // envío, que sí lleva el precio que se cobra. La ficha anunciaba «2+ → 1,99 $» y al pagar salían
+        // 3,57 $ la unidad, un 79% más de lo prometido en la tabla de cantidades.
+        PricedAmount priced = pricingService.priceForSupplierAmount(t.getProduct(), null, t.getUnitPrice());
+        BigDecimal displayAmount = priced.displayAmount();
+        String displayCode = priced.displayCurrency() != null ? priced.displayCurrency()
+                : pricingService.displayCurrencyCode();
         return new PriceTierView(t.getMinQty(), t.getMaxQty(), displayAmount, displayCode,
-                currencyRateService.formatDisplay(displayAmount, displayCode));
+                priced.displayFormatted() != null ? priced.displayFormatted()
+                        : currencyRateService.formatDisplay(displayAmount, displayCode));
     }
 
     /* ------------------ helpers ------------------ */

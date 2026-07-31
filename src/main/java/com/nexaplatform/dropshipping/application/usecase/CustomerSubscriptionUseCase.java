@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase;
 
+import com.stripe.exception.StripeException;
 import com.nexaplatform.dropshipping.application.BaseUseCase;
 import com.nexaplatform.dropshipping.domain.model.CustomerSubscription;
 import com.nexaplatform.dropshipping.domain.model.SubscribeResult;
@@ -32,7 +33,7 @@ public interface CustomerSubscriptionUseCase extends BaseUseCase<CustomerSubscri
      * the subscription is created directly and a local success URL is returned;
      * otherwise a provider checkout session is created and its URL/id are returned.
      */
-    SubscribeResult subscribe(UUID userId, String planCode, String period) throws Exception;
+    SubscribeResult subscribe(UUID userId, String planCode, String period) throws StripeException;
 
     /** Admin plan listing, ordered by position, as domain models. */
     List<SubscriptionPlan> listAdminPlans();
@@ -42,4 +43,65 @@ public interface CustomerSubscriptionUseCase extends BaseUseCase<CustomerSubscri
 
     /** Active public plan entities ordered by position (kept as entities for the feature-derived limits). */
     List<SubscriptionPlanEntity> listPublicPlans();
+
+    // ---- Métodos de pago en el perfil (tarjeta guardada vía Stripe Elements) ----
+
+    /** Tarjeta guardada del usuario (datos no sensibles). */
+    record CardInfo(String id, String brand, String last4, Long expMonth, Long expYear, boolean isDefault) {
+    }
+
+    /** Config pública de billing para el frontend. */
+    record BillingConfigInfo(String publishableKey, boolean enabled) {
+    }
+
+    /** Publishable key + estado de Stripe (para inicializar Elements en el front). */
+    BillingConfigInfo billingConfig();
+
+    /** Crea un SetupIntent para que el usuario guarde una tarjeta; devuelve su client_secret. */
+    String createSetupIntentSecret(UUID userId) throws StripeException;
+
+    /** Tarjetas guardadas del usuario. */
+    List<CardInfo> listCards(UUID userId) throws StripeException;
+
+    /** Fija la tarjeta por defecto (la que cobra las suscripciones). */
+    void setDefaultCard(UUID userId, String paymentMethodId) throws StripeException;
+
+    /** Borra (desvincula) una tarjeta guardada. */
+    void deleteCard(UUID userId, String paymentMethodId) throws StripeException;
+
+    // ---- Contratación de plan con la tarjeta guardada ----
+
+    /** Resultado de contratar: id de suscripción Stripe (o local si es gratis) + estado normalizado. */
+    record SubscribeOutcome(String subscriptionId, String status) {
+    }
+
+    /**
+     * Contrata un plan cobrando con la tarjeta por defecto del usuario. El precio del plan está en CNY
+     * (moneda de 1688) y se convierte a USD para el cobro en Stripe (igual que los productos). Plan gratis
+     * (importe 0) → suscripción ACTIVE directa sin Stripe. Asocia/actualiza la CustomerSubscription.
+     */
+    SubscribeOutcome subscribeWithSavedCard(UUID userId, String planCode, String period) throws StripeException;
+
+    /** Suscripción "vigente" del usuario (la más reciente no cancelada), o null si no tiene. */
+    CustomerSubscription currentSubscription(UUID userId);
+
+    /** Cancela la suscripción vigente del usuario al final del periodo. */
+    void cancelMySubscription(UUID userId) throws StripeException;
+
+    /**
+     * Sincroniza la suscripción local desde un evento de Stripe (webhook): estado, fin de periodo y
+     * cancelación programada. Cubre renovación, fallo de cobro (PAST_DUE) y cancelación desde Stripe.
+     */
+    void syncFromStripe(String stripeSubscriptionId, String stripeStatus, Long currentPeriodEnd, Long cancelAtEpoch);
+
+    /** Factura del historial del usuario (datos no sensibles de Stripe). */
+    record InvoiceView(String number, Long total, String currency, String status, Long created, String pdfUrl,
+            String hostedUrl) {
+    }
+
+    /** Historial de facturas del usuario (de Stripe), las más recientes primero. */
+    List<InvoiceView> listInvoices(UUID userId) throws StripeException;
+
+    /** Renderiza en PDF (diseño propio, igual que productos) una factura de plan del usuario, por su número. */
+    byte[] renderInvoicePdf(UUID userId, String number, String locale) throws StripeException;
 }

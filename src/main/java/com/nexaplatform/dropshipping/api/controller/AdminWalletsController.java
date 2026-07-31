@@ -10,13 +10,16 @@ import com.nexaplatform.dropshipping.api.dto.out.AdminWalletTxResultDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminWalletTxRowDtoOut;
 import com.nexaplatform.dropshipping.api.mapper.AdminWalletMapper;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
-import com.nexaplatform.dropshipping.domain.model.Wallet;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.WalletIndexer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
 
 import java.util.List;
 import java.util.UUID;
@@ -33,6 +36,13 @@ public class AdminWalletsController implements AdminWalletsApi {
 
     private final WalletUseCase walletUseCase;
     private final AdminWalletMapper adminWalletMapper;
+    private final WalletIndexer walletIndexer;
+
+    /** Reindexa todas las wallets en OpenSearch (botón "Reindexar" del admin). */
+    @PostMapping("/reindex")
+    public ResponseEntity<Map<String, Object>> reindex() {
+        return ResponseEntity.ok(Map.of("indexed", walletIndexer.reindexAll()));
+    }
 
     @Override
     public ResponseEntity<AdminWalletTxResultDtoOut> topup(UUID userId, AdminWalletTopupDtoIn req) {
@@ -57,19 +67,16 @@ public class AdminWalletsController implements AdminWalletsApi {
         List<AdminWalletTxRowDtoOut> items = adminWalletMapper
                 .toTxRows(walletUseCase.adminTransactions(walletId, page, capped));
         long total = walletUseCase.countWalletTransactions(walletId);
-        var pageable = PageRequest.of(page, capped);
+        PageRequest pageable = PageRequest.of(page, capped);
         return ResponseEntity.ok(PageResponse.from(new PageImpl<>(items, pageable, total)));
     }
 
     @Override
     public ResponseEntity<PageResponse<AdminWalletRowDtoOut>> list(String q, String status, String currency, int page,
             int size) {
-        List<Wallet> all = walletUseCase.adminListWallets(q, status, currency);
-        int total = all.size();
-        int from = Math.min(page * size, total);
-        int to = Math.min(from + size, total);
-        List<AdminWalletRowDtoOut> items = adminWalletMapper.toRows(all.subList(from, to));
-        var pageable = PageRequest.of(page, Math.max(1, size));
-        return ResponseEntity.ok(PageResponse.from(new PageImpl<>(items, pageable, total)));
+        WalletUseCase.WalletPage p = walletUseCase.pageAdminWallets(q, status, currency, page, size);
+        List<AdminWalletRowDtoOut> items = adminWalletMapper.toRows(p.items());
+        PageRequest pageable = PageRequest.of(Math.max(0, p.page()), Math.max(1, p.size()));
+        return ResponseEntity.ok(PageResponse.from(new PageImpl<>(items, pageable, p.total())));
     }
 }

@@ -51,7 +51,7 @@ class RateLimitFilterTest {
     @Test
     void unrelated_routes_pass_through() throws Exception {
         FilterChain chain = mock(FilterChain.class);
-        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/storefront/catalog/products");
+        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/catalog/products");
         MockHttpServletResponse res = new MockHttpServletResponse();
         filter.doFilter(req, res, chain);
         verify(chain, atLeastOnce()).doFilter(req, res);

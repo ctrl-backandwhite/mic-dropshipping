@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.api;
 
 import com.nexaplatform.dropshipping.api.dto.in.ChangePasswordDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.DeleteAccountConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.UpdateProfileDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.MeDtoOut;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,4 +33,13 @@ public interface MeApi {
     @Operation(summary = "Update the authenticated user's profile")
     @PutMapping
     ResponseEntity<MeDtoOut> updateProfile(Authentication authentication, @Valid @RequestBody UpdateProfileDtoIn req);
+
+    @Operation(summary = "Request an emailed code to delete (soft-delete) the authenticated user's own account")
+    @PostMapping("/delete/request")
+    ResponseEntity<Void> requestAccountDeletion(Authentication authentication);
+
+    @Operation(summary = "Confirm the emailed code and soft-delete the authenticated user's own account")
+    @PostMapping("/delete/confirm")
+    ResponseEntity<Void> confirmAccountDeletion(Authentication authentication,
+            @Valid @RequestBody DeleteAccountConfirmDtoIn req);
 }

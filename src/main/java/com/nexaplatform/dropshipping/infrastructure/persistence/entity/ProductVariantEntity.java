@@ -15,6 +15,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Map;
 
 @Entity
@@ -73,6 +74,10 @@ public class ProductVariantEntity extends BaseEntity {
 
     @Column(name = "image_cdn_url", length = 800)
     private String imageCdnUrl;
+
+    /** Marca de fallo de espejado (origen muerto/404): evita reintentar la imagen en bucle. */
+    @Column(name = "image_mirror_failed_at")
+    private Instant imageMirrorFailedAt;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "options_json", columnDefinition = "jsonb")

@@ -20,6 +20,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Lectura del histórico/ganancias de operadores. El histórico se indexa en OpenSearch y la fuente de
@@ -50,23 +51,45 @@ public class OperatorEarningsService {
     /** Histórico paginado del operador autenticado (intenta OpenSearch; si falla, Postgres). */
     @Transactional(readOnly = true)
     public OperatorActionPage myHistory(String fromDate, String toDate, int page, int size) {
-        return history(SecurityUtils.currentSubject(), fromDate, toDate, page, size);
+        return historyPage(SecurityUtils.currentSubject(), fromDate, toDate, page, size);
+    }
+
+    /** Reindexa en OpenSearch todas las acciones de operador (botón admin "Reindexar"). Devuelve el nº indexado. */
+    @Transactional(readOnly = true)
+    public int reindexAll() {
+        int[] n = { 0 };
+        repository.findAll().forEach(a -> {
+            indexer.index(a);
+            n[0]++;
+        });
+        log.info("::> [REINDEX] reindexed {} operator actions", n[0]);
+        return n[0];
     }
 
     /** Histórico paginado (admin): de un operador concreto o de todos. */
     @Transactional(readOnly = true)
     public OperatorActionPage history(String operatorSubject, String fromDate, String toDate, int page, int size) {
+        return historyPage(operatorSubject, fromDate, toDate, page, size);
+    }
+
+    /**
+     * Consulta real del histórico, sin anotación transaccional, para que {@link #myHistory} la reutilice
+     * sin llamarse a sí misma: la autoinvocación no pasa por el proxy, así que el {@code @Transactional}
+     * del método invocado no se aplicaba. La transacción la abre el método público de entrada.
+     */
+    private OperatorActionPage historyPage(String operatorSubject, String fromDate, String toDate, int page,
+            int size) {
         Instant from = startOf(fromDate, 90);
         Instant to = endOf(toDate);
-        int pageSize = Math.min(Math.max(size, 1), 200);
+        int pageSize = Math.clamp(size, 1, 200);
         // Consulta preferente desde OpenSearch (indexado); si no responde, fallback a Postgres.
         try {
-            var res = indexer.search(operatorSubject, from, to, page, pageSize);
+            Map<String,Object> res = indexer.search(operatorSubject, from, to, page, pageSize);
             @SuppressWarnings("unchecked")
-            List<java.util.Map<String, Object>> hits = (List<java.util.Map<String, Object>>) res.get("items");
+            List<Map<String, Object>> hits = (List<Map<String, Object>>) res.get("items");
             if (hits != null) {
                 List<OperatorAction> items = new ArrayList<>();
-                for (var m : hits) {
+                for (Map<String,Object> m : hits) {
                     items.add(new OperatorAction(str(m, "operatorSubject"), str(m, "operatorEmail"),
                             str(m, "operatorName"), str(m, "orderId"), str(m, "orderNumber"), str(m, "action"),
                             lng(m, "commissionCnyCents"), (int) lng(m, "itemCount"), inst(m.get("processedAt"))));
@@ -120,12 +143,12 @@ public class OperatorEarningsService {
         return Instant.now();
     }
 
-    private static String str(java.util.Map<String, Object> m, String k) {
+    private static String str(Map<String, Object> m, String k) {
         Object v = m.get(k);
         return v == null ? null : v.toString();
     }
 
-    private static long lng(java.util.Map<String, Object> m, String k) {
+    private static long lng(Map<String, Object> m, String k) {
         Object v = m.get(k);
         return v instanceof Number n ? n.longValue() : 0L;
     }

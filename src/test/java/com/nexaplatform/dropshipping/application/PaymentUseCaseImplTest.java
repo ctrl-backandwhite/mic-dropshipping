@@ -9,6 +9,7 @@ import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
+import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.usecase.impl.PaymentUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
 import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
@@ -29,10 +30,16 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import java.math.BigDecimal;
+import com.nexaplatform.dropshipping.application.usecase.RechargeOptions;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentUseCaseImplTest {
@@ -52,16 +59,23 @@ class PaymentUseCaseImplTest {
     @Mock
     PartnerPlanSyncService partnerPlanSyncService;
     @Mock
+    com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase customerSubscriptionUseCase;
+    @Mock
+    com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService subscriptionNotificationService;
+    @Mock
     OrderEmailService orderEmailService;
     @Mock
     CurrencyRateService currencyRateService;
+    @Mock
+    com.nexaplatform.dropshipping.application.service.StockService stockService;
 
     private final OrderPaymentDtoMapper orderPaymentDtoMapper = Mappers.getMapper(OrderPaymentDtoMapper.class);
 
     private PaymentUseCaseImpl useCase() {
         return new PaymentUseCaseImpl(List.<PaymentGateway>of(), paymentRepository, paymentJpaRepositoryAdapter,
                 userRepository, orderRepository, walletUseCase, auditLogger, partnerPlanSyncService,
-                new ObjectMapper(), orderEmailService, currencyRateService);
+                customerSubscriptionUseCase, subscriptionNotificationService, new ObjectMapper(), orderEmailService,
+                currencyRateService, stockService, mock(OpsAlertService.class));
     }
 
     @Test
@@ -90,6 +104,38 @@ class PaymentUseCaseImplTest {
 
         assertThatThrownBy(() -> svc.getOrderPayment(orderId, paymentId))
                 .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void rechargeOptions_standardCurrency_keepsBaseAmounts() {
+        when(currencyRateService.symbolOf("EUR")).thenReturn("€");
+        when(currencyRateService.formatDisplay(any(), eq("EUR")))
+                .thenAnswer(inv -> inv.getArgument(0) + " €");
+
+        RechargeOptions opts = useCase().rechargeOptions("eur");
+
+        assertThat(opts.currency()).isEqualTo("EUR");
+        assertThat(opts.symbol()).isEqualTo("€");
+        // EUR conserva los importes estándar (no se convierten): 10/25/50/100/250/500.
+        assertThat(opts.presets()).extracting(p -> p.amount().intValueExact())
+                .containsExactly(10, 25, 50, 100, 250, 500);
+    }
+
+    @Test
+    void rechargeOptions_foreignCurrency_convertsAndRoundsToNiceAmounts() {
+        // 1 USD = 4123,45 COP → los presets se convierten y se REDONDEAN a 2 cifras significativas.
+        when(currencyRateService.symbolOf("COP")).thenReturn("$");
+        when(currencyRateService.usdTo(any(), eq("COP")))
+                .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).multiply(new BigDecimal("4123.45")));
+        when(currencyRateService.formatDisplay(any(), eq("COP")))
+                .thenAnswer(inv -> inv.getArgument(0) + " COP");
+
+        RechargeOptions opts = useCase().rechargeOptions("COP");
+
+        // $10→41 234,5→41 000; $25→103 086→100 000; $50→206 172→210 000; $100→412 345→410 000;
+        // $250→1 030 862→1 000 000; $500→2 061 725→2 100 000. Todos redondos, sin decimales sucios.
+        assertThat(opts.presets()).extracting(p -> p.amount().longValueExact())
+                .containsExactly(41000L, 100000L, 210000L, 410000L, 1000000L, 2100000L);
     }
 
     @Test

@@ -9,6 +9,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -35,15 +38,47 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
 
     Page<ProductEntity> findByStatus(ProductStatus status, Pageable pageable);
 
+    /**
+     * Variante de escaparate de {@link #findByStatus}: solo productos con al menos UNA imagen ya
+     * espejada a nuestro storage (cdn_url no nulo). Garantiza que lo listado siempre renderiza una
+     * imagen y oculta los productos sin imagen utilizable, sin borrarlos (el admin los sigue viendo;
+     * reaparecen solos en cuanto se les espeje una imagen). Usar esta en rutas públicas; dejar
+     * {@link #findByStatus} para conteos/admin.
+     */
+    @Query("""
+            SELECT p FROM ProductEntity p
+            WHERE p.status = :status
+              AND EXISTS (SELECT 1 FROM ProductImageEntity i WHERE i.product = p AND i.cdnUrl IS NOT NULL)
+            """)
+    Page<ProductEntity> findVisibleByStatus(@Param("status") ProductStatus status, Pageable pageable);
+
+    /**
+     * Escaparate — productos VISIBLES que tienen vídeo de explicación ({@code hasVideo = true}). Filtra en
+     * BD (no trae un lote y filtra en memoria), así la sección "Productos con vídeo" del home los encuentra
+     * aunque estén lejos en el catálogo. Misma visibilidad que {@link #findVisibleByStatus} (activo + imagen
+     * espejada). Orden por trendScore para mostrar primero los más relevantes.
+     */
+    @Query("""
+            SELECT p FROM ProductEntity p
+            WHERE p.status = :status
+              AND p.hasVideo = TRUE
+              AND EXISTS (SELECT 1 FROM ProductImageEntity i WHERE i.product = p AND i.cdnUrl IS NOT NULL)
+            ORDER BY p.trendScore DESC NULLS LAST
+            """)
+    Page<ProductEntity> findVisibleWithVideo(@Param("status") ProductStatus status, Pageable pageable);
+
     /** Admin product list filtered by category (any status). */
     Page<ProductEntity> findByCategoryId(UUID categoryId, Pageable pageable);
 
     /** Admin product list filtered by category and status. */
     Page<ProductEntity> findByCategoryIdAndStatus(UUID categoryId, ProductStatus status, Pageable pageable);
 
+    // Escaparate: EXISTS sobre una imagen con cdn_url no nulo → solo se listan productos cuya imagen
+    // renderiza de verdad (espejada a nuestro storage). Misma lógica que findVisibleByStatus.
     @Query("""
             SELECT p FROM ProductEntity p
             WHERE p.status = :status
+              AND EXISTS (SELECT 1 FROM ProductImageEntity i WHERE i.product = p AND i.cdnUrl IS NOT NULL)
             ORDER BY p.trendScore DESC NULLS LAST
             """)
     Page<ProductEntity> findTopByTrendScore(@Param("status") ProductStatus status, Pageable pageable);
@@ -51,6 +86,7 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
     @Query("""
             SELECT p FROM ProductEntity p
             WHERE p.status = :status AND p.category.id = :categoryId
+              AND EXISTS (SELECT 1 FROM ProductImageEntity i WHERE i.product = p AND i.cdnUrl IS NOT NULL)
             ORDER BY p.trendScore DESC NULLS LAST
             """)
     Page<ProductEntity> findByCategoryOrderByTrend(@Param("categoryId") UUID categoryId,
@@ -74,6 +110,7 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
     @Query("""
             SELECT p FROM ProductEntity p
             WHERE p.status = :status
+              AND EXISTS (SELECT 1 FROM ProductImageEntity i WHERE i.product = p AND i.cdnUrl IS NOT NULL)
               AND (:categoryId IS NULL OR p.category.id = :categoryId)
               AND (:supplierId IS NULL OR p.supplier.id = :supplierId)
               AND (:minPrice   IS NULL OR p.basePrice >= :minPrice)
@@ -98,10 +135,50 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
                                 AND (LOWER(a.attrValue) LIKE CONCAT('%', CAST(:needle AS string), '%')
                                      OR LOWER(a.attrKey) LIKE CONCAT('%', CAST(:needle AS string), '%'))))
             """)
+    // Un parámetro por filtro es una exigencia de Spring Data: cada :nombre de la consulta se enlaza con un
+    // argumento del método. Agruparlos en un record obligaría a reescribir la consulta con expresiones SpEL
+    // y a tocar el binding de nulos (los CAST de arriba), que es justo lo que rompía la búsqueda en DROP-556.
+    @SuppressWarnings("java:S107")
     Page<ProductEntity> searchStorefront(@Param("status") ProductStatus status, @Param("needle") String needle,
             @Param("categoryId") UUID categoryId, @Param("supplierId") UUID supplierId,
-            @Param("minPrice") java.math.BigDecimal minPrice, @Param("maxPrice") java.math.BigDecimal maxPrice,
+            @Param("minPrice") BigDecimal minPrice, @Param("maxPrice") BigDecimal maxPrice,
             @Param("shipFrom") String shipFrom, @Param("freeShipping") Boolean freeShipping,
             @Param("selfPickup") Boolean selfPickup, @Param("hasVideo") Boolean hasVideo,
-            @Param("minRating") java.math.BigDecimal minRating, @Param("minInv") Integer minInv, Pageable pageable);
+            @Param("minRating") BigDecimal minRating, @Param("minInv") Integer minInv, Pageable pageable);
+
+    /**
+     * Admin free-text search across the WHOLE catalogue and ALL languages, mirroring the storefront
+     * {@link #searchStorefront} matching rules but WITHOUT the {@code ACTIVE}-only / has-image constraints
+     * (the admin list must surface every product, in any status, with or without an image). Matches the
+     * needle against the Chinese title, the supplier external id, the slug and every translation
+     * ({@link com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity}:
+     * title / short description / description — i.e. ES/EN/PT/…). Optional {@code status}/{@code categoryId}
+     * filters still apply. The {@code needle} is expected already lower-cased and non-null (callers only use
+     * this method when the free-text box has content).
+     */
+    @Query("""
+            SELECT p FROM ProductEntity p
+            WHERE (:status IS NULL OR p.status = :status)
+              AND (:categoryId IS NULL OR p.category.id = :categoryId)
+              AND (:verified IS NULL OR p.verified = :verified)
+              AND (:needle = ''
+                   OR LOWER(p.titleZh) LIKE CONCAT('%', :needle, '%')
+                   OR LOWER(p.externalId) LIKE CONCAT('%', :needle, '%')
+                   OR LOWER(p.slug) LIKE CONCAT('%', :needle, '%')
+                   OR EXISTS (SELECT 1 FROM ProductTranslationEntity t
+                              WHERE t.product = p
+                                AND (LOWER(t.title) LIKE CONCAT('%', :needle, '%')
+                                     OR LOWER(t.shortDescription) LIKE CONCAT('%', :needle, '%')
+                                     OR LOWER(t.description) LIKE CONCAT('%', :needle, '%'))))
+            """)
+    Page<ProductEntity> searchAdmin(@Param("status") ProductStatus status, @Param("categoryId") UUID categoryId,
+            @Param("needle") String needle, @Param("verified") Boolean verified, Pageable pageable);
+
+    /** IDs (distintos) de categorías con productos del estado dado ingeridos desde {@code since} — campaña de novedades. */
+    @Query("""
+            SELECT DISTINCT p.category.id FROM ProductEntity p
+             WHERE p.status = :status AND p.category IS NOT NULL AND p.ingestedAt >= :since
+            """)
+    List<UUID> findCategoryIdsWithProductsIngestedSince(@Param("status") ProductStatus status,
+            @Param("since") Instant since);
 }

@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.storage;
 
 import io.minio.BucketExistsArgs;
+import io.minio.GetObjectArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
@@ -11,6 +12,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Almacenamiento de objetos (MinIO en local/dev, S3-compatible en prod) para el multimedia de producto.
@@ -22,6 +26,9 @@ import java.io.ByteArrayInputStream;
 @Slf4j
 @Service
 public class ObjectStorageService {
+
+    /** Respuesta de "no hay imagen". Un array de longitud cero es inmutable de hecho, así que se comparte. */
+    private static final byte[] NO_BYTES = new byte[0];
 
     @Value("${nexadrop.storage.enabled:true}")
     private boolean enabled;
@@ -71,8 +78,8 @@ public class ObjectStorageService {
     }
 
     /** Lista TODAS las claves de objeto del bucket (para verificar qué imágenes existen realmente). */
-    public java.util.Set<String> listKeys() {
-        java.util.Set<String> keys = new java.util.HashSet<>();
+    public Set<String> listKeys() {
+        Set<String> keys = new HashSet<>();
         if (client == null) {
             return keys;
         }
@@ -88,12 +95,61 @@ public class ObjectStorageService {
     }
 
     /** Sube los bytes con la clave dada y devuelve la URL pública navegable. */
-    public String upload(String key, byte[] data, String contentType) throws Exception {
-        client.putObject(PutObjectArgs.builder().bucket(bucket).object(key)
-                .stream(new ByteArrayInputStream(data), data.length, -1)
-                .contentType(contentType != null && !contentType.isBlank() ? contentType : "application/octet-stream")
-                .build());
-        return publicUrl.replaceAll("/+$", "") + "/" + key;
+    public String upload(String key, byte[] data, String contentType) {
+        try {
+            client.putObject(PutObjectArgs.builder().bucket(bucket).object(key)
+                    .stream(new ByteArrayInputStream(data), data.length, -1)
+                    .contentType(
+                            contentType != null && !contentType.isBlank() ? contentType : "application/octet-stream")
+                    .build());
+        } catch (Exception e) {
+            throw new ObjectStorageException("No se pudo subir el objeto " + key, e);
+        }
+        return baseUrl() + "/" + key;
+    }
+
+    /** Descarga los bytes de un objeto por su clave (usa el endpoint INTERNO, alcanzable por el backend). */
+    public byte[] download(String key) {
+        try (InputStream is = client.getObject(GetObjectArgs.builder().bucket(bucket).object(key).build())) {
+            return is.readAllBytes();
+        } catch (Exception e) {
+            throw new ObjectStorageException("No se pudo descargar el objeto " + key, e);
+        }
+    }
+
+    /**
+     * Bytes de un objeto a partir de su URL pública (la que se guarda en snapshots/cdn). Deriva la clave
+     * quitando el prefijo {@code public-url} y descarga por el endpoint interno. Agnóstico del entorno:
+     * en local usa {@code minio:9000}; en Railway, el {@code STORAGE_ENDPOINT} configurado.
+     *
+     * @return los bytes, o un array VACÍO si el storage no está listo, la URL no es de este bucket o el
+     *         objeto no se puede leer. Vacío y no {@code null} porque para quien llama significan lo mismo
+     *         ("no hay imagen que incrustar") y así no hay que defenderse del nulo en cada uso.
+     */
+    public byte[] bytesFromPublicUrl(String url) {
+        if (client == null || url == null || url.isBlank() || publicUrl == null || publicUrl.isBlank()) {
+            return NO_BYTES;
+        }
+        String base = baseUrl() + "/";
+        if (!url.startsWith(base)) {
+            return NO_BYTES; // URL externa (p.ej. alicdn) o de otro host: no está en nuestro bucket
+        }
+        String key = url.substring(base.length());
+        try {
+            return download(key);
+        } catch (Exception e) {
+            log.debug("No se pudieron leer los bytes de {}: {}", url, e.getMessage());
+            return NO_BYTES;
+        }
+    }
+
+    /** URL pública sin barras finales, para poder concatenar la clave sin duplicar el separador. */
+    private String baseUrl() {
+        int end = publicUrl.length();
+        while (end > 0 && publicUrl.charAt(end - 1) == '/') {
+            end--;
+        }
+        return publicUrl.substring(0, end);
     }
 
     /** Política de bucket: lectura anónima (GET) de los objetos, para servir las imágenes directo al navegador. */

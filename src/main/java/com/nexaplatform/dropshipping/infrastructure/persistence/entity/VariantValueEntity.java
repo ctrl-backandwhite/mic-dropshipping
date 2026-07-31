@@ -8,6 +8,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.AllArgsConstructor;
@@ -40,6 +41,10 @@ public class VariantValueEntity extends BaseEntity {
 
     @Column(name = "image_cdn_url", length = 800)
     private String imageCdnUrl;
+
+    /** Marca de fallo de espejado (origen muerto/404): evita reintentar la imagen en bucle. */
+    @Column(name = "image_mirror_failed_at")
+    private Instant imageMirrorFailedAt;
 
     @Column(nullable = false)
     private int position;

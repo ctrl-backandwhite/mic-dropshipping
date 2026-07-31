@@ -1,22 +1,21 @@
 spring:
-  profiles:
-    active: test
-  datasource:
-    url: jdbc:h2:mem:nexadrop;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_DELAY=-1
-    username: sa
-    password:
-    driver-class-name: org.h2.Driver
+  # El perfil 'test' lo activa @ActiveProfiles; un recurso -test.yml no puede fijar spring.profiles.active.
+  # El datasource lo inyecta Testcontainers vía @ServiceConnection (PostgreSQLContainer) en
+  # los tests de integración (*IT). Los unit (*Test, Mockito) no cargan contexto de Spring.
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      # El esquema lo crea Liquibase; validate confirma que las entidades casan con las migraciones.
+      ddl-auto: validate
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.H2Dialect
         jdbc:
           time_zone: UTC
     open-in-view: false
   liquibase:
-    enabled: false
+    enabled: true
+    # Igual que dev/pre/pro: solo migraciones de esquema, sin los seeds demo (context:demo),
+    # que insertan datos con FKs a usuarios que no existen en una BD de test limpia.
+    contexts: "!demo"
   data:
     redis:
       repositories:
@@ -29,10 +28,12 @@ spring:
     host: localhost
     port: 1025
   autoconfigure:
+    # Kafka SÍ se autoconfigura (varios beans necesitan KafkaTemplate); el productor es lazy y no
+    # conecta en el arranque, y los listeners no arrancan (auto-startup:false). Redis se excluye:
+    # JwtRevocationService y el rate-limit caen a memoria cuando no hay RedisTemplate.
     exclude:
       - org.springframework.boot.data.redis.autoconfigure.RedisAutoConfiguration
       - org.springframework.boot.data.redis.autoconfigure.RedisRepositoriesAutoConfiguration
-      - org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
 
 server:
   port: 0

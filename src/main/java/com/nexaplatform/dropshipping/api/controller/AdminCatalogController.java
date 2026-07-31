@@ -11,6 +11,7 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.UpdateProductStatusRequ
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AddProductImageDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.ReorderProductImagesDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn;
@@ -23,8 +24,17 @@ import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import lombok.RequiredArgsConstructor;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -50,7 +60,10 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AdminCatalogController implements AdminCatalogApi {
 
+    private static final int MAX_BATCH = 1000;
+
     private final CatalogUseCase catalogUseCase;
+    private final ObjectMapper objectMapper;
 
     @Override
     public ResponseEntity<UUID> upsertSupplier(IngestSupplierRequest req) {
@@ -68,9 +81,10 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
-    public PageResponse<ProductSummaryView> list(String status, UUID categoryId, int page, int size, String lang,
-            String sort) {
-        return PageResponse.from(catalogUseCase.listProductsForAdmin(status, categoryId, page, size, lang, sort));
+    public PageResponse<ProductSummaryView> list(String status, UUID categoryId, String q, int page, int size,
+            String lang, String sort, Boolean verified) {
+        return PageResponse
+                .from(catalogUseCase.listProductsForAdmin(status, categoryId, q, page, size, lang, sort, verified));
     }
 
     @Override
@@ -135,6 +149,13 @@ public class AdminCatalogController implements AdminCatalogApi {
         return ResponseEntity.noContent().build();
     }
 
+    /** Elimina un valor de variación (p.ej. un color/estampado) y todas las combinaciones que lo usan. */
+    @DeleteMapping("/variant-values/{id}")
+    public ResponseEntity<Void> deleteVariantValue(@PathVariable UUID id) {
+        catalogUseCase.deleteVariantValue(id);
+        return ResponseEntity.noContent().build();
+    }
+
     /** Traducción por idioma de un valor de variación (color/talla) — valor vacío la elimina. */
     @PutMapping("/variant-values/{id}/translation")
     public ResponseEntity<Void> setVariantValueTranslation(@PathVariable UUID id,
@@ -163,6 +184,18 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
+    public ResponseEntity<Void> deleteProductVideo(UUID id) {
+        catalogUseCase.deleteProductVideo(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    public ResponseEntity<Void> reorderProductImages(UUID productId, ReorderProductImagesDtoIn req) {
+        catalogUseCase.reorderProductImages(productId, req.getImageIds());
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override
     public ResponseEntity<UUID> createProduct(BulkProductDtoIn req) {
         return ResponseEntity.ok(catalogUseCase.createProductManual(req));
     }
@@ -174,34 +207,24 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
+    public ResponseEntity<Void> deletePriceTier(UUID id, int minQty) {
+        catalogUseCase.deletePriceTier(id, minQty);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override
     public ResponseEntity<Map<String, Object>> bulkDeleteProducts(List<UUID> ids) {
-        int deleted = 0;
-        List<String> errors = new ArrayList<>();
-        for (UUID id : ids) {
-            try {
-                catalogUseCase.deleteProduct(id); // per-id tx + cache evict; refused if it has orders
-                deleted++;
-            } catch (RuntimeException ex) {
-                errors.add(id + ": " + ErrorMessages.humanize(ex));
-            }
-        }
-        return ResponseEntity.ok(Map.of("deleted", deleted, "failed", errors.size(), "errors", errors));
+        CatalogUseCase.BulkOutcome result = catalogUseCase.bulkDeleteProducts(ids);
+        return ResponseEntity.ok(Map.of("deleted", result.succeeded(), "failed", result.failed(),
+                "errors", result.errors()));
     }
 
     /** Bulk publish/pause/archive the selected products (sets status: ACTIVE/PAUSED/ARCHIVED). */
     @PutMapping("/products/bulk-status")
     public ResponseEntity<Map<String, Object>> bulkProductStatus(@RequestBody BulkStatusRequest req) {
-        int succeeded = 0;
-        List<String> errors = new ArrayList<>();
-        for (UUID id : req.ids()) {
-            try {
-                catalogUseCase.updateStatus(id, req.status());
-                succeeded++;
-            } catch (RuntimeException ex) {
-                errors.add(id + ": " + ErrorMessages.humanize(ex));
-            }
-        }
-        return ResponseEntity.ok(Map.of("succeeded", succeeded, "failed", errors.size(), "errors", errors));
+        CatalogUseCase.BulkOutcome result = catalogUseCase.bulkUpdateStatus(req.ids(), req.status());
+        return ResponseEntity.ok(Map.of("succeeded", result.succeeded(), "failed", result.failed(),
+                "errors", result.errors()));
     }
 
     public record BulkStatusRequest(List<UUID> ids, String status) {
@@ -220,6 +243,116 @@ public class AdminCatalogController implements AdminCatalogApi {
     @Override
     public ResponseEntity<Map<String, Long>> exportCount() {
         return ResponseEntity.ok(Map.of("count", catalogUseCase.countProducts()));
+    }
+
+    @Override
+    public ResponseEntity<BulkProductDtoIn> exportProduct(UUID id) {
+        return ResponseEntity.ok(catalogUseCase.exportProduct(id));
+    }
+
+    @Override
+    public ResponseEntity<StreamingResponseBody> exportProductsNdjson(int batch) {
+        int safeBatch = Math.clamp(batch, 1, MAX_BATCH);
+        // Stream one product per line; keyset-paginate and flush each batch so memory stays bounded to a
+        // single page regardless of the total number of products (scales to millions).
+        StreamingResponseBody body = out -> {
+            UUID after = null;
+            boolean hasMore = true;
+            while (hasMore) {
+                CatalogUseCase.ProductExportBatch page = catalogUseCase.exportBatchAfter(after, safeBatch);
+                for (BulkProductDtoIn dto : page.items()) {
+                    out.write(objectMapper.writeValueAsBytes(dto));
+                    out.write('\n');
+                }
+                out.flush();
+                // Una página incompleta (o vacía) es el fin del catálogo: la paginación por keyset devuelve
+                // siempre el tamaño pedido mientras queden productos.
+                hasMore = page.items().size() >= safeBatch;
+                after = page.lastId();
+            }
+        };
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/x-ndjson"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"products-export.ndjson\"")
+                .body(body);
+    }
+
+    @Override
+    public ResponseEntity<BulkResultDtoOut> importProductsNdjson(HttpServletRequest request, int batch) {
+        int safeBatch = Math.clamp(batch, 1, MAX_BATCH);
+        NdjsonImportAccumulator acc = new NdjsonImportAccumulator();
+        List<BulkProductDtoIn> buffer = new ArrayList<>(safeBatch);
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(request.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                BulkProductDtoIn row = parseNdjsonRow(line, acc);
+                if (row == null) {
+                    continue;
+                }
+                buffer.add(row);
+                if (buffer.size() >= safeBatch) {
+                    acc.merge(catalogUseCase.bulkCreateProducts(buffer));
+                    buffer.clear();
+                }
+            }
+        } catch (IOException ex) {
+            throw new BusinessException("No se pudo leer el cuerpo NDJSON de importación");
+        }
+        if (!buffer.isEmpty()) {
+            acc.merge(catalogUseCase.bulkCreateProducts(buffer));
+        }
+        return ResponseEntity.ok(acc.toResult());
+    }
+
+    /**
+     * Convierte una línea NDJSON en fila de carga. Devuelve {@code null} —y anota el error en el
+     * acumulador— si la línea está en blanco o no es JSON válido: una línea corrupta a mitad de un
+     * fichero de miles no puede abortar la importación entera, se cuenta como fallida y se sigue.
+     */
+    private BulkProductDtoIn parseNdjsonRow(String line, NdjsonImportAccumulator acc) {
+        if (line.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(line, BulkProductDtoIn.class);
+        } catch (Exception ex) {
+            acc.recordParseError(ex.getMessage());
+            return null;
+        }
+    }
+
+    /** Accumulates the per-batch results of an NDJSON import while keeping the error list bounded. */
+    private static final class NdjsonImportAccumulator {
+        private static final int MAX_ERRORS = 100;
+        private int created;
+        private int failed;
+        private final List<String> errors = new ArrayList<>();
+
+        void recordParseError(String message) {
+            failed++;
+            addError("parse: " + message);
+        }
+
+        void merge(BulkResultDtoOut batchResult) {
+            created += batchResult.getCreated();
+            failed += batchResult.getFailed();
+            if (batchResult.getErrors() != null) {
+                for (String error : batchResult.getErrors()) {
+                    addError(error);
+                }
+            }
+        }
+
+        private void addError(String error) {
+            if (errors.size() < MAX_ERRORS) {
+                errors.add(error);
+            }
+        }
+
+        BulkResultDtoOut toResult() {
+            return new BulkResultDtoOut(created, failed, errors);
+        }
     }
 
     @Override

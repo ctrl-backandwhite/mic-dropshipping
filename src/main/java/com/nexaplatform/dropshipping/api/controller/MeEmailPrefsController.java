@@ -16,24 +16,27 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class MeEmailPrefsController {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String MARKETINGOPTOUT = "marketingOptOut";
+
     private final UserRepository userRepository;
 
     @GetMapping
     public ResponseEntity<Map<String, Object>> get(Authentication auth) {
         UUID userId = UUID.fromString(auth.getName());
         boolean optOut = userRepository.findById(userId).map(u -> u.isMarketingOptOut()).orElse(false);
-        return ResponseEntity.ok(Map.of("marketingOptOut", optOut));
+        return ResponseEntity.ok(Map.of(MARKETINGOPTOUT, optOut));
     }
 
     @PutMapping
     @Transactional
     public ResponseEntity<Map<String, Object>> update(Authentication auth, @RequestBody Map<String, Boolean> body) {
         UUID userId = UUID.fromString(auth.getName());
-        boolean optOut = Boolean.TRUE.equals(body.get("marketingOptOut"));
+        boolean optOut = Boolean.TRUE.equals(body.get(MARKETINGOPTOUT));
         userRepository.findById(userId).ifPresent(u -> {
             u.setMarketingOptOut(optOut);
             userRepository.save(u);
         });
-        return ResponseEntity.ok(Map.of("marketingOptOut", optOut));
+        return ResponseEntity.ok(Map.of(MARKETINGOPTOUT, optOut));
     }
 }

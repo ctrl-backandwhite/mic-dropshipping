@@ -45,11 +45,20 @@ public class TranslationService {
     @KafkaListener(topics = "product.ingested", groupId = "nexadrop-translation")
     @Transactional
     public void onProductIngested(ProductIngestedEvent event) {
-        translateProduct(event.productId());
+        doTranslateProduct(event.productId());
     }
 
     @Transactional
     public void translateProduct(UUID productId) {
+        doTranslateProduct(productId);
+    }
+
+    /**
+     * El listener de Kafka llamaba a {@code translateProduct} con {@code this}, así que el
+     * {@code @Transactional} de ese método no se aplicaba (la transacción la abría ya el listener).
+     * El trabajo vive aquí sin anotar y cada entrada pública abre su propia transacción por proxy.
+     */
+    private void doTranslateProduct(UUID productId) {
         Optional<ProductEntity> opt = productRepository.findById(productId);
         if (opt.isEmpty())
             return;
@@ -97,7 +106,10 @@ public class TranslationService {
 
     private static String sha1(String s) {
         try {
-            MessageDigest md = MessageDigest.getInstance("SHA-1");
+            // NOSONAR java:S4790 — SHA-1 aquí solo genera la CLAVE DE CACHÉ de una traducción; no
+            // protege nada. Una colisión devolvería una traducción cacheada distinta, no un problema
+            // de seguridad.
+            MessageDigest md = MessageDigest.getInstance("SHA-1"); // NOSONAR
             return HexFormat.of().formatHex(md.digest(s.getBytes()));
         } catch (Exception e) {
             return Integer.toHexString(s.hashCode());

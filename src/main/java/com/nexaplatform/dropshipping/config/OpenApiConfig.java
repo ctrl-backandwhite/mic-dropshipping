@@ -6,7 +6,7 @@ import io.swagger.v3.core.converter.ModelConverters;
 import io.swagger.v3.core.converter.ResolvedSchema;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.PathItem;
+import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.License;
@@ -36,7 +36,7 @@ import java.util.Map;
  *
  * Three groups are exposed at distinct endpoints under /v3/api-docs/{group}:
  *   - partner   → /api/v1/partner/**  (OAuth2 client_credentials, JWT bearer, scopes)
- *   - storefront→ /api/v1/storefront/** (public, anonymous)
+ *   - storefront→ /api/v1/rate-limits,/api/v1/invoices (public, anonymous)
  *   - admin     → /api/admin/** + /api/me/** (session cookie, ADMIN/OPERATOR)
  *
  * Vendor extensions added:
@@ -45,6 +45,13 @@ import java.util.Map;
  */
 @Configuration
 public class OpenApiConfig {
+
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String PER_CLIENT_ID = "per client_id";
+    private static final String APPLIESTO = "appliesTo";
+    private static final String PERMINUTE = "perMinute";
+    private static final String PERDAY = "perDay";
+    private static final String SCOPE = "scope";
 
     @Value("${nexadrop.oauth.issuer:http://localhost:8080}")
     private String issuer;
@@ -56,10 +63,10 @@ public class OpenApiConfig {
     public OpenAPI nexaDropOpenAPI() {
         OpenAPI api = buildOpenAPI();
         api.addExtension("x-rate-limit", Map.of("policies", List.of(
-                Map.of("scope", "catalog.read", "perMinute", 600, "perDay", 50000, "appliesTo", "per client_id"),
-                Map.of("scope", "orders.write", "perMinute", 120, "perDay", 10000, "appliesTo", "per client_id"),
-                Map.of("scope", "shop.sync", "perMinute", 60, "perDay", 5000, "appliesTo", "per client_id"),
-                Map.of("scope", "storefront", "perMinute", 60, "perDay", 5000, "appliesTo", "per IP")), "headers",
+                Map.of(SCOPE, "catalog.read", PERMINUTE, 600, PERDAY, 50000, APPLIESTO, PER_CLIENT_ID),
+                Map.of(SCOPE, "orders.write", PERMINUTE, 120, PERDAY, 10000, APPLIESTO, PER_CLIENT_ID),
+                Map.of(SCOPE, "shop.sync", PERMINUTE, 60, PERDAY, 5000, APPLIESTO, PER_CLIENT_ID),
+                Map.of(SCOPE, "storefront", PERMINUTE, 60, PERDAY, 5000, APPLIESTO, "per IP")), "headers",
                 List.of("RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "Retry-After")));
         return api;
     }
@@ -141,7 +148,7 @@ public class OpenApiConfig {
     /** Public storefront group: no authentication. */
     @Bean
     public GroupedOpenApi storefrontApi() {
-        return GroupedOpenApi.builder().group("storefront").pathsToMatch("/api/v1/storefront/**")
+        return GroupedOpenApi.builder().group("storefront").pathsToMatch("/api/v1/rate-limits/**", "/api/v1/invoices/**")
                 .addOpenApiCustomizer(globalResponses()).build();
     }
 
@@ -170,27 +177,57 @@ public class OpenApiConfig {
             Content errorContent = new Content().addMediaType("application/json",
                     new MediaType().schema(new Schema<>().$ref("#/components/schemas/ApiResponseDtoOut")));
 
-            String[][] standard = {{"400", "Bad request — validation or malformed input"},
-                    {"401", "Unauthorized — authentication required or invalid"},
-                    {"403", "Forbidden — insufficient permissions"}, {"404", "Not found — the resource does not exist"},
-                    {"409", "Conflict — domain/state or uniqueness conflict"},
-                    {"422", "Unprocessable entity — business rule violated"},
-                    {"429", "Too many requests — rate limit exceeded"}, {"500", "Internal server error"}};
-
             if (openApi.getPaths() == null) {
                 return;
             }
-            openApi.getPaths().values().forEach(path -> path.readOperations().forEach(op -> {
-                ApiResponses responses = op.getResponses() != null ? op.getResponses() : new ApiResponses();
-                for (String[] entry : standard) {
-                    if (!responses.containsKey(entry[0])) {
-                        responses.addApiResponse(entry[0],
-                                new ApiResponse().description(entry[1]).content(errorContent));
-                    }
-                }
-                op.setResponses(responses);
-            }));
+            openApi.getPaths().values()
+                    .forEach(path -> path.readOperations().forEach(op -> addStandardErrors(op, errorContent)));
         };
+    }
+
+    /**
+     * Añade a una operación las respuestas de error que no documente ya por su cuenta. Nunca se
+     * sobrescribe una existente: si el endpoint describe su propio 404 o 409, ese texto es más preciso
+     * que el genérico y debe ganar.
+     */
+    private static void addStandardErrors(Operation op, Content errorContent) {
+        ApiResponses responses = op.getResponses() != null ? op.getResponses() : new ApiResponses();
+        for (StandardError error : StandardError.values()) {
+            if (!responses.containsKey(error.code())) {
+                responses.addApiResponse(error.code(),
+                        new ApiResponse().description(error.description()).content(errorContent));
+            }
+        }
+        op.setResponses(responses);
+    }
+
+    /** Respuestas de error del envoltorio canónico que se documentan en TODAS las operaciones. */
+    private enum StandardError {
+
+        BAD_REQUEST("400", "Bad request — validation or malformed input"),
+        UNAUTHORIZED("401", "Unauthorized — authentication required or invalid"),
+        FORBIDDEN("403", "Forbidden — insufficient permissions"),
+        NOT_FOUND("404", "Not found — the resource does not exist"),
+        CONFLICT("409", "Conflict — domain/state or uniqueness conflict"),
+        UNPROCESSABLE("422", "Unprocessable entity — business rule violated"),
+        TOO_MANY_REQUESTS("429", "Too many requests — rate limit exceeded"),
+        INTERNAL("500", "Internal server error");
+
+        private final String code;
+        private final String description;
+
+        StandardError(String code, String description) {
+            this.code = code;
+            this.description = description;
+        }
+
+        String code() {
+            return code;
+        }
+
+        String description() {
+            return description;
+        }
     }
 
     /** Adds the named security requirements as the default for every operation in the group. */
@@ -205,9 +242,6 @@ public class OpenApiConfig {
                 if (op.getSecurity() == null || op.getSecurity().isEmpty())
                     op.addSecurityItem(requirement);
             }));
-            // Force the method type access so the lambda compiles cleanly under -Werror.
-            for (PathItem ignored : openApi.getPaths().values()) {
-            }
         };
     }
 }

@@ -14,6 +14,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -58,7 +59,7 @@ public class ShopifyConnector implements ShopConnector {
                     "body_html", product.getDescriptionZh() != null ? product.getDescriptionZh() : "",
                     "vendor", product.getBrand() != null ? product.getBrand() : "",
                     "status", "active",
-                    "variants", java.util.List.of(Map.of("price", price.toPlainString()))));
+                    "variants", List.of(Map.of("price", price.toPlainString()))));
             String json = objectMapper.writeValueAsString(body);
             URI uri = URI.create("https://" + host + "/admin/api/" + API_VERSION + "/products.json");
             HttpRequest req = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(15))
@@ -74,6 +75,11 @@ public class ShopifyConnector implements ShopConnector {
             log.warn("Shopify push failed ({}): {}", res.statusCode(), truncate(res.body()));
             return PushResult.fail("Shopify respondió " + res.statusCode() + ": " + truncate(res.body()));
         } catch (Exception ex) {
+            // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
+            // interrupción deja al pool sin enterarse de que le han pedido parar.
+            if (ex instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             log.warn("Shopify push error for shop {}: {}", shop.getId(), ex.getMessage());
             return PushResult.fail("No se pudo conectar con Shopify: " + ex.getMessage());
         }

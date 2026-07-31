@@ -4,6 +4,8 @@ import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.*;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -13,16 +15,24 @@ import java.util.stream.Collectors;
 @Component
 public class AffiliateViewMapper {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String PENDING = "PENDING";
+
     public ReferralCodeView toCodeView(AffiliateReferralCodeEntity c) {
         return new ReferralCodeView(c.getId(), c.getCode(), c.getLabel(), c.isActive(), c.getClicks(),
                 "/?ref=" + c.getCode());
     }
 
-    public CommissionView toCommissionView(AffiliateCommissionEntity comm, Map<UUID, AffiliateConversionEntity> convById) {
+    public CommissionView toCommissionView(AffiliateCommissionEntity comm, Map<UUID, AffiliateConversionEntity> convById,
+            int returnPeriodDays) {
         AffiliateConversionEntity conv = convById.get(comm.getConversionId());
+        // Solo las PENDIENTES tienen fecha de aprobación futura: creación + periodo de devolución.
+        Instant approvesAt = PENDING.equals(comm.getStatus()) && comm.getCreatedAt() != null
+                ? comm.getCreatedAt().plus(Duration.ofDays(Math.max(0, returnPeriodDays)))
+                : null;
         return new CommissionView(comm.getId(), comm.getAmountCents(), comm.getCurrency(), comm.getPercentage(),
                 comm.getStatus(), comm.getCreatedAt(), comm.getApprovedAt(), comm.getPaidAt(),
-                conv != null ? conv.getOrderId() : null, conv != null ? conv.getBaseAmountCents() : 0L);
+                conv != null ? conv.getOrderId() : null, conv != null ? conv.getBaseAmountCents() : 0L, approvesAt);
     }
 
     public AffiliateStats stats(List<AffiliateReferralCodeEntity> codes, List<AffiliateConversionEntity> conversions,
@@ -31,7 +41,7 @@ public class AffiliateViewMapper {
         // conversions. Legacy/seed data left the per-code click counter at 0 while commissions existed,
         // showing "0 clicks but paid commissions". Enforce the clicks >= conversions invariant on read.
         int clicks = Math.max(codes.stream().mapToInt(AffiliateReferralCodeEntity::getClicks).sum(), conversions.size());
-        long pending = sumByStatus(commissions, "PENDING");
+        long pending = sumByStatus(commissions, PENDING);
         long approved = sumByStatus(commissions, "APPROVED");
         long paid = sumByStatus(commissions, "PAID");
         return new AffiliateStats(clicks, conversions.size(), pending, approved, paid, currency);
@@ -56,7 +66,7 @@ public class AffiliateViewMapper {
                 a.getUser() != null ? a.getUser().getDisplayName() : null,
                 a.getUser() != null ? a.getUser().getEmail() : null, a.getStatus(), codes.size(), clicks,
                 a.getReferralsCount(), a.getEarningsUsdCents(), a.getPayoutUsdCents(),
-                sumByStatus(commissions, "PENDING"), sumByStatus(commissions, "APPROVED"),
+                sumByStatus(commissions, PENDING), sumByStatus(commissions, "APPROVED"),
                 a.getCommissionPercentOverride(), currency);
     }
 

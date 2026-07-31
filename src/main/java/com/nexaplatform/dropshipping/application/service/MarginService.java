@@ -19,6 +19,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -49,11 +50,11 @@ public class MarginService {
      * narrowest cost range first, then lowest admin position, then most recently created,
      * then id — a total order so the winner never depends on stream/DB iteration order.
      */
-    private static final java.util.Comparator<PriceRuleEntity> MOST_SPECIFIC = java.util.Comparator
+    private static final Comparator<PriceRuleEntity> MOST_SPECIFIC = Comparator
             .comparing(MarginService::rangeWidth)
             .thenComparingInt(PriceRuleEntity::getPosition)
             .thenComparing(r -> r.getCreatedAt() != null ? r.getCreatedAt() : Instant.EPOCH,
-                    java.util.Comparator.reverseOrder())
+                    Comparator.reverseOrder())
             .thenComparing(r -> r.getId() != null ? r.getId().toString() : "");
 
     private static BigDecimal rangeWidth(PriceRuleEntity r) {
@@ -109,41 +110,68 @@ public class MarginService {
         // Solo se consideran reglas del canal del request (STOREFRONT por defecto; INTEGRATION para apps API).
         // Así conviven el margen del storefront (p. ej. 150%) y el de integración (p. ej. 75%) sin colisionar.
         final PriceRuleChannel channel = PricingChannelHolder.get();
-        UUID productId = product != null ? product.getId() : null;
-        UUID variantId = variant != null ? variant.getId() : null;
-        UUID supplierId = (product != null && product.getSupplier() != null) ? product.getSupplier().getId() : null;
-        UUID categoryId = (product != null && product.getCategory() != null) ? product.getCategory().getId() : null;
+        ScopeIds ids = ScopeIds.of(product, variant);
 
+        // El orden de PriceRuleScope.values() ES la precedencia (VARIANT > PRODUCT > … > GLOBAL): en cuanto
+        // un ámbito da coincidencia se devuelve, sin mirar los menos específicos.
         for (PriceRuleScope scope : PriceRuleScope.values()) {
-            // A product can belong to several groups, so PRODUCT_GROUP matches a SET of scopeIds; the
-            // other scopes resolve to a single id. The group membership is only queried when there is at
-            // least one active PRODUCT_GROUP rule (keeps the pricing hot path free of extra queries).
-            final Set<UUID> targets = switch (scope) {
-                case VARIANT -> variantId != null ? Set.of(variantId) : Set.of();
-                case PRODUCT -> productId != null ? Set.of(productId) : Set.of();
-                case PRODUCT_GROUP -> (productId != null && hasGroupRules()) ? groupIdsOf(productId) : Set.of();
-                case SUPPLIER -> supplierId != null ? Set.of(supplierId) : Set.of();
-                case CATEGORY -> categoryId != null ? Set.of(categoryId) : Set.of();
-                // Una regla CATEGORY_GROUP aplica si la categoría del producto pertenece a alguno de sus grupos.
-                case CATEGORY_GROUP -> (categoryId != null && hasCategoryGroupRules())
-                        ? categoryGroupIdsOf(categoryId)
-                        : Set.of();
-                case GLOBAL -> Set.of();
-            };
-            // DROP-630: when several active rules of the SAME scope match the same cost,
-            // the declared VARIANT>PRODUCT>… order only disambiguates across levels, not within
-            // one. Pick deterministically: narrowest cost range (most specific) → lowest
-            // position → most recently created → id, so resolution is never order-dependent.
-            Optional<PriceRuleEntity> match = cache.stream().filter(PriceRuleEntity::isActive)
-                    .filter(r -> r.getChannel() == channel)
-                    .filter(r -> r.getScope() == scope)
-                    .filter(r -> scope == PriceRuleScope.GLOBAL
-                            || (r.getScopeId() != null && targets.contains(r.getScopeId())))
-                    .filter(r -> matchesCostRange(r, costUsd)).min(MOST_SPECIFIC);
+            Optional<PriceRuleEntity> match = bestMatch(scope, targetsFor(scope, ids), channel, costUsd);
             if (match.isPresent())
                 return match;
         }
         return Optional.empty();
+    }
+
+    /** Identificadores del producto/variante contra los que se cotejan las reglas de cada ámbito. */
+    private record ScopeIds(UUID variantId, UUID productId, UUID supplierId, UUID categoryId) {
+
+        static ScopeIds of(ProductEntity product, ProductVariantEntity variant) {
+            UUID supplierId = (product != null && product.getSupplier() != null) ? product.getSupplier().getId() : null;
+            UUID categoryId = (product != null && product.getCategory() != null) ? product.getCategory().getId() : null;
+            return new ScopeIds(variant != null ? variant.getId() : null, product != null ? product.getId() : null,
+                    supplierId, categoryId);
+        }
+    }
+
+    /**
+     * Ids que una regla de ese ámbito tendría que apuntar para aplicar. Un producto puede pertenecer a
+     * VARIOS grupos, así que PRODUCT_GROUP casa con un CONJUNTO de scopeIds; los demás ámbitos resuelven a
+     * un único id. La pertenencia a grupos solo se consulta si hay alguna regla de grupo activa, para
+     * mantener el camino caliente del precio libre de consultas extra.
+     */
+    private Set<UUID> targetsFor(PriceRuleScope scope, ScopeIds ids) {
+        return switch (scope) {
+            case VARIANT -> singletonOrEmpty(ids.variantId());
+            case PRODUCT -> singletonOrEmpty(ids.productId());
+            case PRODUCT_GROUP -> (ids.productId() != null && hasGroupRules()) ? groupIdsOf(ids.productId()) : Set.of();
+            case SUPPLIER -> singletonOrEmpty(ids.supplierId());
+            case CATEGORY -> singletonOrEmpty(ids.categoryId());
+            // Una regla CATEGORY_GROUP aplica si la categoría del producto pertenece a alguno de sus grupos.
+            case CATEGORY_GROUP -> (ids.categoryId() != null && hasCategoryGroupRules())
+                    ? categoryGroupIdsOf(ids.categoryId())
+                    : Set.of();
+            case GLOBAL -> Set.of();
+        };
+    }
+
+    private static Set<UUID> singletonOrEmpty(UUID id) {
+        return id == null ? Set.of() : Set.of(id);
+    }
+
+    /**
+     * DROP-630: cuando varias reglas activas del MISMO ámbito casan con el mismo coste, el orden declarado
+     * VARIANT>PRODUCT>… solo desempata entre niveles, no dentro de uno. Se elige de forma determinista:
+     * rango de coste más estrecho (más específico) → menor posición → creada más recientemente → id, para
+     * que la resolución nunca dependa del orden de iteración.
+     */
+    private Optional<PriceRuleEntity> bestMatch(PriceRuleScope scope, Set<UUID> targets, PriceRuleChannel channel,
+            BigDecimal costUsd) {
+        return cache.stream().filter(PriceRuleEntity::isActive)
+                .filter(r -> r.getChannel() == channel)
+                .filter(r -> r.getScope() == scope)
+                .filter(r -> scope == PriceRuleScope.GLOBAL
+                        || (r.getScopeId() != null && targets.contains(r.getScopeId())))
+                .filter(r -> matchesCostRange(r, costUsd)).min(MOST_SPECIFIC);
     }
 
     /** Whether any cached rule targets a product group (gates the membership query). */
@@ -201,12 +229,12 @@ public class MarginService {
             refresh();
     }
 
-    private boolean matchesCostRange(PriceRuleEntity r, BigDecimal cost) {
-        if (r.getMinCostUsd() != null && cost.compareTo(r.getMinCostUsd()) < 0)
+    /** Rango [min,max] abierto por los extremos nulos: sin mínimo o sin máximo la regla no acota ese lado. */
+    private static boolean matchesCostRange(PriceRuleEntity r, BigDecimal cost) {
+        if (r.getMinCostUsd() != null && cost.compareTo(r.getMinCostUsd()) < 0) {
             return false;
-        if (r.getMaxCostUsd() != null && cost.compareTo(r.getMaxCostUsd()) > 0)
-            return false;
-        return true;
+        }
+        return r.getMaxCostUsd() == null || cost.compareTo(r.getMaxCostUsd()) <= 0;
     }
 
     public record PriceWithMargin(BigDecimal costUsd, BigDecimal retailUsd, PriceRuleEntity appliedRule,

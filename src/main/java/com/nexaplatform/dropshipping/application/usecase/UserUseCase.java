@@ -31,6 +31,9 @@ public interface UserUseCase extends BaseUseCase<User, User, UUID> {
     /** Reset the failed-login counter and stamp the last successful login. */
     void recordSuccessfulLogin(String email);
 
+    /** Envía al usuario un aviso de seguridad de "inicio de sesión detectado" (solo en logins interactivos). */
+    void notifyLoginDetected(String email);
+
     /* ============ Password reset / change ============ */
 
     /** Issue a password-reset token + email (no-op response shape for unknown emails). */
@@ -41,6 +44,14 @@ public interface UserUseCase extends BaseUseCase<User, User, UUID> {
 
     /** Replace a user's password after the caller has verified the current one. */
     void changePassword(User user, String newPassword);
+
+    /* ============ Account deletion (soft delete) ============ */
+
+    /** Generate + email a confirmation code and store it (30 min TTL) for a self-service account deletion. */
+    void requestAccountDeletion(UUID userId);
+
+    /** Validate the emailed code and, if valid, soft-delete the account (marks deletedAt + deactivates). */
+    void confirmAccountDeletion(UUID userId, String code);
 
     /* ============ Lookups ============ */
 

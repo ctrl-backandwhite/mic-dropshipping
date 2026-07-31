@@ -26,28 +26,39 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class NewsletterService {
 
+    // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
+    private static final String SUBSCRIBED = "SUBSCRIBED";
+
     private final NewsletterSubscriberRepository subscriberRepo;
     private final NewsletterCampaignRepository campaignRepo;
     private final EventPublisher eventPublisher;
 
+    /** Resultado de suscribir: el estado final y si el correo YA estaba suscrito (para el aviso al usuario). */
+    public record SubscribeResult(String status, boolean alreadySubscribed) {
+    }
+
     @Transactional
-    public NewsletterSubscriberEntity subscribe(String email, UUID userId, String source) {
+    public SubscribeResult subscribe(String email, UUID userId, String source) {
         if (email == null || email.isBlank()) {
             throw new BusinessException("Email obligatorio");
         }
         String normalized = email.trim().toLowerCase();
         NewsletterSubscriberEntity sub = subscriberRepo.findByEmailIgnoreCase(normalized).orElse(null);
+        // Idempotente: un mismo correo NUNCA crea filas duplicadas (además del UNIQUE(email) en BD). Si ya
+        // estaba suscrito, lo indicamos para que el front muestre "ya estabas suscrito" en vez de "gracias".
+        boolean alreadySubscribed = sub != null && SUBSCRIBED.equals(sub.getStatus());
         if (sub == null) {
-            sub = NewsletterSubscriberEntity.builder().email(normalized).userId(userId).status("SUBSCRIBED")
+            sub = NewsletterSubscriberEntity.builder().email(normalized).userId(userId).status(SUBSCRIBED)
                     .token(UUID.randomUUID().toString().replace("-", "")).source(source != null ? source : "storefront")
                     .build();
         } else {
-            sub.setStatus("SUBSCRIBED");
+            sub.setStatus(SUBSCRIBED);
             if (userId != null) {
                 sub.setUserId(userId);
             }
         }
-        return subscriberRepo.save(sub);
+        NewsletterSubscriberEntity saved = subscriberRepo.save(sub);
+        return new SubscribeResult(saved.getStatus(), alreadySubscribed);
     }
 
     @Transactional
@@ -61,7 +72,7 @@ public class NewsletterService {
 
     @Transactional(readOnly = true)
     public long subscriberCount() {
-        return subscriberRepo.countByStatus("SUBSCRIBED");
+        return subscriberRepo.countByStatus(SUBSCRIBED);
     }
 
     @Transactional(readOnly = true)
@@ -75,7 +86,7 @@ public class NewsletterService {
         if (subject == null || subject.isBlank() || bodyHtml == null || bodyHtml.isBlank()) {
             throw new BusinessException("Asunto y contenido obligatorios");
         }
-        int recipients = (int) subscriberRepo.countByStatus("SUBSCRIBED");
+        int recipients = (int) subscriberRepo.countByStatus(SUBSCRIBED);
         NewsletterCampaignEntity campaign = campaignRepo.save(NewsletterCampaignEntity.builder().subject(subject)
                 .bodyHtml(bodyHtml).recipients(recipients).status("SENT").build());
         eventPublisher.publish(NexaTopics.NEWSLETTER_SEND, "Newsletter", campaign.getId().toString(),

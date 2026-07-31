@@ -51,6 +51,17 @@ public interface OrderUseCase extends BaseUseCase<Order, Order, UUID> {
     /** Admin filtered listing (status + free-text), newest first, enriched. */
     List<Order> listAdminOrders(String status, String q);
 
+    /** A page of enriched admin orders (most-recent-first) + the grand total for the filter. */
+    record OrderPage(List<Order> items, int page, int size, long total) {
+    }
+
+    /**
+     * Paginated admin order listing, most-recent-first. Primary source is the OpenSearch {@code orders}
+     * index (paginate/sort/filter); the page's orders are then loaded + enriched from the DB. Falls back
+     * to a DB listing when the index is unavailable.
+     */
+    OrderPage pageAdminOrders(String status, String q, int page, int size);
+
     /** Admin order detail (enriched, with items + shipping address), localised to {@code lang}. */
     Order getAdminOrderDetail(UUID id, String lang);
 
@@ -82,4 +93,12 @@ public interface OrderUseCase extends BaseUseCase<Order, Order, UUID> {
 
     /** Order detail for the authenticated user (ownership-checked); resolves the request language. */
     Order getMyOrderDetail(UUID userId, UUID id, String lang);
+
+    /**
+     * Customer self-cancellation from their orders panel. Only allowed while the order is {@code PAID}
+     * (paid but not yet forwarded to the supplier): refunds the money and marks the order CANCELLED.
+     * {@code refundToWallet} = true credits the wallet (immediate); false refunds to the original method
+     * (card/PayPal via the provider, with its own processing time).
+     */
+    Order cancelMyOrder(UUID userId, UUID orderId, boolean refundToWallet);
 }

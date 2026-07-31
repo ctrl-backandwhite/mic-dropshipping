@@ -1,8 +1,9 @@
 package com.nexaplatform.dropshipping.application.service;
 
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
-import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.CainiaoFulfillmentService;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,36 +20,42 @@ import java.util.UUID;
 public class ShippingQuoteService {
 
     private final ProductRepository productRepository;
-    private final CainiaoFulfillmentService cainiao;
+    private final FulfillmentProvider fulfillment;
 
-    /** Una línea del carrito a cotizar. */
-    public record Line(UUID productId, int quantity) {
+    /** Una línea del carrito a cotizar. {@code variantId} puede ser null (producto sin variantes). */
+    public record Line(UUID productId, UUID variantId, int quantity) {
     }
 
     /** Países a los que Cainiao envía (para el banner de cobertura de la home). */
-    public List<CainiaoFulfillmentService.SupportedCountry> supportedCountries() {
-        return cainiao.supportedCountries();
+    public List<FulfillmentProvider.SupportedCountry> supportedCountries() {
+        return fulfillment.supportedCountries();
     }
 
-    /** Cotiza el envío a {@code country} para las líneas dadas (suma el peso real de cada producto). */
+    /**
+     * Cotiza el envío a {@code country} para las líneas dadas. El bulto (peso, medidas del paquete y
+     * batería) se arma con {@link ParcelAggregator}, el mismo que usa el cobro del pedido, para que la
+     * vista previa del checkout y el importe cobrado no puedan divergir.
+     */
     public ShippingQuote quote(String country, List<Line> lines) {
-        int weightGrams = 0;
+        ParcelAggregator parcel = new ParcelAggregator();
         if (lines != null) {
             for (Line line : lines) {
-                int unit = productRepository.findById(line.productId()).map(this::packageWeight).orElse(500);
-                weightGrams += unit * Math.max(1, line.quantity());
+                ProductEntity product = productRepository.findById(line.productId()).orElse(null);
+                if (product != null) {
+                    parcel.add(product, variantOf(product, line.variantId()), line.quantity());
+                } else {
+                    parcel.addUnknown(line.quantity());
+                }
             }
         }
-        return cainiao.quote(country, Math.max(1, weightGrams));
+        return fulfillment.quote(country, parcel.build());
     }
 
-    private int packageWeight(ProductEntity p) {
-        if (p.getPackageWeightGrams() != null && p.getPackageWeightGrams() > 0) {
-            return p.getPackageWeightGrams();
+    /** La variante seleccionada de la línea, o {@code null} si el producto no tiene variantes. */
+    private ProductVariantEntity variantOf(ProductEntity product, UUID variantId) {
+        if (variantId == null || product.getVariants() == null) {
+            return null;
         }
-        if (p.getWeightGrams() != null && p.getWeightGrams() > 0) {
-            return p.getWeightGrams();
-        }
-        return 500;
+        return product.getVariants().stream().filter(v -> variantId.equals(v.getId())).findFirst().orElse(null);
     }
 }

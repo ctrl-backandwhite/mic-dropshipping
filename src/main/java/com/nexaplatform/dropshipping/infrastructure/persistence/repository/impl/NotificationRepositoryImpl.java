@@ -50,7 +50,8 @@ public class NotificationRepositoryImpl implements NotificationRepository {
 
     @Override
     public long countUnreadByUserId(UUID userId) {
-        return notificationJpaRepositoryAdapter.countByUser_IdAndReadAtIsNull(userId);
+        return notificationJpaRepositoryAdapter
+                .countByUser_IdAndReadAtIsNullAndArchivedAtIsNullAndDeletedAtIsNull(userId);
     }
 
     @Override

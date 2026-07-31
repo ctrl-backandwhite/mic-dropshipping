@@ -21,7 +21,7 @@ class PasswordPolicyTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"short1A!", // < 12 chars
+    @ValueSource(strings = {"Ab1!cde", // < 8 chars (política: mínimo 8)
             "alllowercase1!", // no upper
             "ALLUPPERCASE1!", // no lower
             "NoDigitsHere!!", // no digit
@@ -33,11 +33,40 @@ class PasswordPolicyTest {
     }
 
     @Test
-    @DisplayName("rechaza contraseñas comunes aunque cumplan formato")
+    @DisplayName("las contraseñas de la lista negra caen antes, por las familias que les faltan")
     void rejects_common_password_after_normalization() {
-        // 'password1234' is in the blacklist after .toLowerCase(); but it lacks symbol/upper,
-        // so we craft a 12-char password that lowercases into the blacklist exactly.
-        assertThatThrownBy(() -> policy.validate("password1234")).isInstanceOf(BusinessException.class);
+        // La lista COMMON se consulta DESPUÉS de exigir mayúscula, dígito y símbolo, y ninguna de sus
+        // entradas los tiene: el rechazo llega siempre por la familia que falta, nunca por "too common".
+        // Se rechazan igual —no hay agujero—, pero esa rama no es alcanzable y el test lo dice.
+        assertThatThrownBy(() -> policy.validate("password1234"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("uppercase");
+        assertThatThrownBy(() -> policy.validate("Qwerty123"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("symbol");
+    }
+
+    @Test
+    @DisplayName("la familia exigida se detecta esté donde esté en la contraseña")
+    void detects_required_family_at_any_position() {
+        // Los patrones pasaron de ".*[A-Z].*" con matches() a la clase suelta con find(): el motor ya no
+        // recorre y retrocede sobre toda la cadena. Con el carácter exigido al final se comprueba que el
+        // barrido no se limita al prefijo.
+        assertThat(policy.isAcceptable("aaaaaaaaaaaa1!Z")).isTrue();
+        assertThat(policy.isAcceptable("Zaaaaaaaaaaaa1!")).isTrue();
+    }
+
+    @Test
+    @DisplayName("la más larga admitida sin mayúscula se rechaza sin dispararse")
+    void longest_allowed_without_uppercase_is_fast() {
+        // Peor caso que el motor llega a ver: 128 caracteres que no casan con [A-Z]. El tope de longitud
+        // ya acotaba el coste; esto evita que un patrón con retroceso vuelva a colarse en la validación.
+        String limite = "a1!".repeat(42) + "aa";
+        assertThat(limite).hasSize(128);
+        long inicio = System.nanoTime();
+        assertThatThrownBy(() -> policy.validate(limite)).isInstanceOf(BusinessException.class);
+        assertThat((System.nanoTime() - inicio) / 1_000_000)
+                .as("validar 128 caracteres sin mayúscula").isLessThan(200L);
     }
 
     @Test

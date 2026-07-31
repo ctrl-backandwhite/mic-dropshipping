@@ -2,9 +2,11 @@ package com.nexaplatform.dropshipping.api.dto.in;
 
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.AddressInput;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -29,8 +31,11 @@ public class MeCheckoutDtoIn {
     @Valid
     private AddressInput shippingAddressInline;
 
+    // @Valid CASCADA a cada Item: sin él, las constraints de Item (@Positive, @NotNull) NO se aplicaban
+    // y llegaban cantidades negativas/enormes a la lógica de negocio. @Size acota el nº de líneas.
     @NotEmpty
-    private List<Item> items;
+    @Size(max = 100, message = "Demasiadas líneas en el pedido")
+    private List<@Valid Item> items;
 
     private String notes;
 
@@ -44,6 +49,7 @@ public class MeCheckoutDtoIn {
         private UUID productId;
         private UUID variantId;
         @Positive
+        @Max(value = 100_000, message = "Cantidad por línea demasiado alta")
         private int quantity;
     }
 }

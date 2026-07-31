@@ -30,6 +30,10 @@ public interface UserDtoMapper {
     @Mapping(target = "role", expression = "java(user.getRole() != null ? user.getRole().name() : null)")
     @Mapping(target = "active", source = "user.active")
     @Mapping(target = "displayName", source = "user.displayName")
+    @Mapping(target = "firstName", source = "user.firstName")
+    @Mapping(target = "lastName1", source = "user.lastName1")
+    @Mapping(target = "lastName2", source = "user.lastName2")
+    @Mapping(target = "fullName", expression = "java(fullName(user))")
     @Mapping(target = "companyName", source = "user.companyName")
     @Mapping(target = "country", source = "user.country")
     @Mapping(target = "language", source = "user.language")
@@ -38,6 +42,30 @@ public interface UserDtoMapper {
     @Mapping(target = "lastLogin", source = "user.lastLogin")
     @Mapping(target = "authorities", source = "authorities")
     MeDtoOut toMeDtoOut(User user, Set<String> authorities);
+
+    /**
+     * Nombre completo del usuario para mostrar en el perfil: concatena nombre + primer apellido +
+     * segundo apellido (ignorando los vacíos). Si no hay partes, cae al {@code displayName}.
+     */
+    default String fullName(User user) {
+        if (user == null) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        appendPart(sb, user.getFirstName());
+        appendPart(sb, user.getLastName1());
+        appendPart(sb, user.getLastName2());
+        return sb.isEmpty() ? user.getDisplayName() : sb.toString();
+    }
+
+    private void appendPart(StringBuilder sb, String part) {
+        if (part != null && !part.isBlank()) {
+            if (!sb.isEmpty()) {
+                sb.append(' ');
+            }
+            sb.append(part.trim());
+        }
+    }
 
     @Mapping(target = "id", source = "id")
     @Mapping(target = "email", source = "email")
@@ -80,6 +108,9 @@ public interface UserDtoMapper {
     @Mapping(target = "updatedBy", ignore = true)
     @Mapping(target = "email", source = "email")
     @Mapping(target = "displayName", source = "displayName")
+    @Mapping(target = "firstName", source = "firstName")
+    @Mapping(target = "lastName1", source = "lastName1")
+    @Mapping(target = "lastName2", source = "lastName2")
     @Mapping(target = "companyName", source = "companyName")
     @Mapping(target = "country", source = "country")
     @Mapping(target = "language", source = "language")
@@ -106,6 +137,9 @@ public interface UserDtoMapper {
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "firstName", ignore = true)
+    @Mapping(target = "lastName1", ignore = true)
+    @Mapping(target = "lastName2", ignore = true)
     @Mapping(target = "email", source = "email")
     @Mapping(target = "displayName", source = "displayName")
     User toDomain(CreateAdminUserDtoIn req);
@@ -130,6 +164,9 @@ public interface UserDtoMapper {
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "firstName", ignore = true)
+    @Mapping(target = "lastName1", ignore = true)
+    @Mapping(target = "lastName2", ignore = true)
     @Mapping(target = "displayName", source = "displayName")
     @Mapping(target = "companyName", source = "companyName")
     @Mapping(target = "country", source = "country")

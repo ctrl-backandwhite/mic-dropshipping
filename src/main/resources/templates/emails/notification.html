@@ -1,48 +1,76 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <title th:text="${title}">NX036</title>
+    <style>
+        body { margin: 0; padding: 0; }
+        a { text-decoration: none; }
+    </style>
 </head>
-<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#0f172a;">
-<!-- preheader (hidden) -->
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;" th:text="${preheader} ?: ''"></div>
-
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 12px;">
+<body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;color:#14212e;">
+<!-- preheader oculto -->
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;" th:text="${preheader} ?: ''"></div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6f9;padding:28px 12px;">
   <tr><td align="center">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(15,23,42,.08);">
+    <table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e3e8ef;box-shadow:0 10px 32px rgba(12,74,151,0.22);-fs-box-shadow:0 10px 32px 0 rgba(12,74,151,0.22);">
 
-      <!-- header -->
-      <tr><td style="background:#4f46e5;padding:22px 32px;">
-        <span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:.3px;">NX036</span>
-        <span style="color:#c7d2fe;font-size:13px;margin-left:6px;">Dropshipping</span>
+      <!-- header: wordmark (mismo estilo que el email de factura) -->
+      <tr><td style="background:#f4f6f9;border-bottom:1px solid #e3e8ef;padding:24px 32px;">
+        <span style="color:#0c4a97;font-size:19px;font-weight:700;letter-spacing:.3px;">NX036</span>
+        <span style="color:#5c6e7c;font-size:14px;font-weight:400;"> &#183; Dropshipping</span>
       </td></tr>
 
       <!-- body -->
-      <tr><td style="padding:32px;">
-        <h1 style="margin:0 0 12px;font-size:20px;font-weight:700;color:#0f172a;" th:text="${title}">Título</h1>
-        <div style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#334155;" th:utext="${bodyHtml} ?: ${body}">
-          Cuerpo del mensaje.
-        </div>
+      <tr><td style="padding:32px 32px 8px;">
+        <h1 style="margin:0 0 12px;font-size:21px;font-weight:700;color:#14212e;">
+          <img th:if="${icon}" th:src="'cid:' + ${icon}" width="24" height="24" alt=""
+               style="width:24px;height:24px;vertical-align:middle;margin-right:9px;" />
+          <span th:text="${title}">Título</span>
+        </h1>
+        <div style="margin:0;font-size:14px;line-height:1.6;color:#5c6e7c;" th:utext="${bodyHtml} ?: ${body}">Cuerpo del mensaje.</div>
+      </td></tr>
 
-        <!-- optional CTA -->
-        <table role="presentation" th:if="${ctaUrl}" cellpadding="0" cellspacing="0" style="margin:24px 0 8px;">
-          <tr><td style="border-radius:10px;background:#4f46e5;">
-            <a th:href="${ctaUrl}" th:text="${ctaLabel} ?: 'Ver'"
-               style="display:inline-block;padding:12px 24px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;border-radius:10px;">Ver</a>
-          </td></tr>
+      <!-- bloque de detalle (etiqueta/valor) opcional: resumen del pedido/reembolso -->
+      <!-- 24px de padding inferior: separa la caja de detalle del footer cuando no hay botón CTA debajo. -->
+      <tr th:if="${details}"><td style="padding:8px 32px 24px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+               style="border:1px solid #e3e8ef;border-radius:12px;background:#fcfdfe;">
+          <tr th:each="row,it : ${details}">
+            <td th:style="'padding:12px 16px;font-size:13px;color:#5c6e7c;' + (${it.last} ? '' : 'border-bottom:1px solid #eaf1fb;')"
+                th:text="${row[0]}">Etiqueta</td>
+            <td align="right" th:style="'padding:12px 16px;font-size:13px;font-weight:700;color:#14212e;' + (${it.last} ? '' : 'border-bottom:1px solid #eaf1fb;')"
+                th:utext="${row[1]}">Valor</td>
+          </tr>
         </table>
       </td></tr>
 
+      <!-- CTA (bulletproof button) -->
+      <tr th:if="${ctaUrl}"><td align="center" style="padding:24px 32px 8px;">
+        <!--[if mso]>
+        <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" th:attr="href=${ctaUrl}" style="height:46px;v-text-anchor:middle;width:260px;" arcsize="22%" stroke="f" fillcolor="#0c4a97">
+          <w:anchorlock/>
+          <center style="color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;" th:text="${ctaLabel} ?: 'Ver'">Ver</center>
+        </v:roundrect>
+        <![endif]-->
+        <!--[if !mso]><!-->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
+          <tr><td align="center" style="border-radius:10px;background:#0c4a97;">
+            <a th:href="${ctaUrl}" th:text="${ctaLabel} ?: 'Ver'" style="display:inline-block;padding:13px 32px;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;border-radius:10px;font-family:Arial,Helvetica,sans-serif;">Ver</a>
+          </td></tr>
+        </table>
+        <!--<![endif]-->
+      </td></tr>
+
       <!-- footer -->
-      <tr><td style="padding:20px 32px;border-top:1px solid #e2e8f0;">
-        <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.5;">
-          NX036 Dropshipping · © 2026<br>
-          <a th:if="${unsubscribeUrl}" th:href="${unsubscribeUrl}" style="color:#94a3b8;text-decoration:underline;">Darse de baja</a>
-          <span th:if="${unsubscribeUrl}"> · </span>
-          <span th:text="${footerNote} ?: 'Este es un mensaje automático, no respondas a este correo.'">Mensaje automático.</span>
+      <tr><td style="padding:24px 32px;border-top:1px solid #e3e8ef;background:#f4f6f9;">
+        <p style="margin:0;color:#5c6e7c;font-size:12px;line-height:1.6;">
+          <span th:text="${footer} ?: 'NX036 Dropshipping'">NX036 Dropshipping</span>
+          <span th:if="${unsubscribeUrl}"> · <a th:href="${unsubscribeUrl}" style="color:#9aa4b2;text-decoration:underline;">Darse de baja</a></span>
         </p>
+        <p style="margin:8px 0 0;color:#9aa4b2;font-size:11px;line-height:1.5;" th:text="${footerNote} ?: 'Este es un mensaje automático, no respondas a este correo.'">Mensaje automático.</p>
       </td></tr>
 
     </table>

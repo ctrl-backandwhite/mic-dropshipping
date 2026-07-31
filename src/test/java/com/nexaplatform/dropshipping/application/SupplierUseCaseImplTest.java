@@ -23,6 +23,8 @@ class SupplierUseCaseImplTest {
 
     @Mock
     SupplierRepository supplierRepository;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.integration.search.SupplierIndexer supplierIndexer;
 
     @InjectMocks
     SupplierUseCaseImpl useCase;

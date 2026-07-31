@@ -7,6 +7,8 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.WebhookSu
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.WebhookDeliveryRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.WebhookSubscriptionRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -43,6 +45,11 @@ public class WebhookDispatcherService {
     private static final int MAX_ATTEMPTS = 5;
     private static final long[] BACKOFF_SECONDS = {60, 300, 1800, 7200, 28800};
 
+    // Auto-referencia POR EL PROXY: attempt() es @Async y llamarlo con this lo ejecutaba en el hilo que
+    // publica el evento —síncrono y bloqueante, justo lo contrario del "fire-and-forget" que promete—.
+    // La autoinvocación no pasa por el proxy, así que ni @Async ni @Transactional se aplicaban.
+    private WebhookDispatcherService self;
+
     private final WebhookSubscriptionRepository subscriptionRepository;
     private final WebhookDeliveryRepository deliveryRepository;
     /** DROP-663: the same lifecycle events are also delivered to active partner apps. */
@@ -53,9 +60,29 @@ public class WebhookDispatcherService {
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5))
             .followRedirects(HttpClient.Redirect.NEVER).build();
 
+    /**
+     * La auto-referencia se inyecta por SETTER y no por el constructor a propósito: un bean que se pide a
+     * sí mismo mientras se construye es un ciclo que Spring no puede cerrar por constructor. Con setter el
+     * ciclo se rompe, y {@code @Lazy} garantiza que lo que entra es el PROXY (con @Async/@Transactional) y
+     * no la instancia desnuda. Las dependencias normales sí van por constructor.
+     */
+    @Autowired
+    public void setSelf(@Lazy WebhookDispatcherService self) {
+        this.self = self;
+    }
+
     /** Publish an event to every active subscription that listens to {@code eventType}. */
     @Transactional
     public void publish(String eventType, String eventId, Map<String, Object> data) {
+        fanOut(eventType, eventId, data);
+    }
+
+    /**
+     * Cuerpo del reparto, SIN anotar. Las llamadas internas van aquí: al invocarse dentro de la misma
+     * instancia no pasan por el proxy, así que un {@code @Transactional} en este punto sería una promesa
+     * que nadie cumple. La transacción la abre el método público de entrada.
+     */
+    private void fanOut(String eventType, String eventId, Map<String, Object> data) {
         // DROP-663: fan the event out to active partner apps too (recorded in partner_webhook_delivery).
         partnerWebhooks.publish(eventType, eventId, data);
         List<WebhookSubscriptionEntity> subs = subscriptionRepository.findByActiveTrue();
@@ -81,7 +108,7 @@ public class WebhookDispatcherService {
      */
     @Transactional
     public void publishTest(WebhookSubscriptionEntity subscription) {
-        publishTest(subscription.getId());
+        fireTestPing(subscription.getId());
     }
 
     /**
@@ -91,12 +118,17 @@ public class WebhookDispatcherService {
      */
     @Transactional
     public void publishTest(UUID subscriptionId) {
-        publish("test.ping", "test-" + UUID.randomUUID(), Map.of("message", "NX036 webhook test event",
+        fireTestPing(subscriptionId);
+    }
+
+    /** Cuerpo del ping de prueba, sin anotar: lo comparten las dos sobrecargas públicas. */
+    private void fireTestPing(UUID subscriptionId) {
+        fanOut("test.ping", "test-" + UUID.randomUUID(), Map.of("message", "NX036 webhook test event",
                 "subscriptionId", subscriptionId.toString(), "at", Instant.now().toString()));
     }
 
     private static boolean matches(WebhookSubscriptionEntity s, String eventType) {
-        var events = s.getEvents();
+        List<String> events = s.getEvents();
         if (events == null || events.isEmpty())
             return true; // empty filter = receive all
         return events.contains(eventType) || events.contains("*");
@@ -110,7 +142,7 @@ public class WebhookDispatcherService {
                     .eventType(eventType).eventId(eventId).payload(envelope).signature(signature)
                     .targetUrl(s.getTargetUrl()).status("PENDING").attempt(0).nextRetryAt(Instant.now()).build());
             // Fire-and-forget; the scheduler also picks up PENDING/RETRY rows so we never lose a delivery.
-            attempt(d.getId());
+            self.attempt(d.getId());
         } catch (Exception e) {
             log.warn("Failed to queue webhook delivery for {}: {}", s.getTargetUrl(), e.getMessage());
         }
@@ -143,6 +175,11 @@ public class WebhookDispatcherService {
                 scheduleRetry(d);
             }
         } catch (Exception e) {
+            // Un fallo de red y una interrupción del hilo llegan por el mismo catch. Tragarse la
+            // interrupción deja al pool sin enterarse de que le han pedido parar.
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             d.setResponseBody("dispatch error: " + e.getClass().getSimpleName() + ": " + e.getMessage());
             scheduleRetry(d);
         }
@@ -174,7 +211,10 @@ public class WebhookDispatcherService {
             d.setStatus("PENDING");
             d.setNextRetryAt(null);
             deliveryRepository.save(d);
-            attempt(d.getId());
+            // POR EL PROXY, igual que en queue(): con `this` la autoinvocación se salta @Async y los
+            // reintentos corrían en serie dentro de la transacción del planificador, de modo que un
+            // suscriptor lento retrasaba a todos los demás vencidos.
+            self.attempt(d.getId());
         }
     }
 

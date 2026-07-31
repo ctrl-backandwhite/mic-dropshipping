@@ -10,7 +10,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.regex.Pattern;
+import java.util.List;
+import java.util.Locale;
 
 /**
  * Anti-cloning defense in depth: blocks named AI/training crawlers and known SEO scrapers by
@@ -25,14 +26,20 @@ import java.util.regex.Pattern;
 @Order(Ordered.HIGHEST_PRECEDENCE + 5)
 public class UserAgentBlockingFilter extends OncePerRequestFilter {
 
-    /** Named AI/training crawlers and aggressive SEO bots — never legitimate users or partners. */
-    private static final Pattern BLOCKED = Pattern.compile(
-            "GPTBot|OAI-SearchBot|ChatGPT-User|ClaudeBot|Claude-Web|anthropic-ai|CCBot|Google-Extended|"
-                    + "PerplexityBot|Perplexity-User|Bytespider|Amazonbot|Applebot-Extended|Meta-ExternalAgent|"
-                    + "FacebookBot|Diffbot|DataForSeoBot|ImagesiftBot|Omgilibot|cohere-ai|YouBot|AI2Bot|Timpibot|"
-                    + "Webzio|AhrefsBot|SemrushBot|MJ12bot|DotBot|BLEXBot|PetalBot|MauiBot|SeekportBot|serpstatbot|"
-                    + "magpie-crawler",
-            Pattern.CASE_INSENSITIVE);
+    /**
+     * Named AI/training crawlers and aggressive SEO bots — never legitimate users or partners.
+     *
+     * <p>Es una lista de marcas literales, no una expresión regular: la alternancia de 34 ramas era
+     * ilegible y obligaba al motor a probarlas todas en CADA petición. Un {@code contains} sobre el
+     * user-agent ya en minúsculas hace exactamente lo mismo y se lee de un vistazo al añadir un bot.
+     * Todas las marcas van en MINÚSCULAS porque la comparación se hace contra la cabecera normalizada.
+     */
+    private static final List<String> BLOCKED_AGENTS = List.of("gptbot", "oai-searchbot", "chatgpt-user", "claudebot",
+            "claude-web", "anthropic-ai", "ccbot", "google-extended", "perplexitybot", "perplexity-user", "bytespider",
+            "amazonbot", "applebot-extended", "meta-externalagent", "facebookbot", "diffbot", "dataforseobot",
+            "imagesiftbot", "omgilibot", "cohere-ai", "youbot", "ai2bot", "timpibot", "webzio", "ahrefsbot",
+            "semrushbot", "mj12bot", "dotbot", "blexbot", "petalbot", "mauibot", "seekportbot", "serpstatbot",
+            "magpie-crawler");
 
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
@@ -41,12 +48,26 @@ public class UserAgentBlockingFilter extends OncePerRequestFilter {
         res.setHeader("X-Robots-Tag", "noindex, nofollow, noai, noimageai");
 
         String ua = req.getHeader("User-Agent");
-        if (ua != null && BLOCKED.matcher(ua).find()) {
+        if (isBlockedAgent(ua)) {
             res.setStatus(HttpServletResponse.SC_FORBIDDEN);
             res.setContentType("text/plain;charset=UTF-8");
             res.getWriter().write("Forbidden: automated crawling of this site is not allowed.");
             return;
         }
         chain.doFilter(req, res);
+    }
+
+    /**
+     * Coincidencia por subcadena e insensible a mayúsculas: los bots añaden versión y URL a su marca
+     * ({@code "CCBot/2.0 (https://commoncrawl.org/faq/)"}), así que comparar la cabecera entera nunca
+     * acertaría. Se normaliza con {@link Locale#ROOT} para que la lista siga funcionando con la
+     * configuración regional turca, donde {@code "I"} no baja a {@code "i"}.
+     */
+    private static boolean isBlockedAgent(String userAgent) {
+        if (userAgent == null) {
+            return false;
+        }
+        String normalized = userAgent.toLowerCase(Locale.ROOT);
+        return BLOCKED_AGENTS.stream().anyMatch(normalized::contains);
     }
 }

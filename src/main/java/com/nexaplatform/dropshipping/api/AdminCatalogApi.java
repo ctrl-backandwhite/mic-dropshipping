@@ -14,11 +14,14 @@ import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.ReorderProductImagesDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.ReindexResultDtoOut;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -52,12 +55,13 @@ public interface AdminCatalogApi {
     @PostMapping("/products")
     ResponseEntity<UUID> upsertProduct(@Valid @RequestBody IngestProductRequest req);
 
-    @Operation(summary = "List products with paging and optional status/category filter + sort")
+    @Operation(summary = "List products with paging and optional free-text (q) / status / category filter + sort")
     @GetMapping("/products")
     PageResponse<ProductSummaryView> list(@RequestParam(required = false) String status,
-            @RequestParam(required = false) UUID categoryId, @RequestParam(defaultValue = "0") int page,
+            @RequestParam(required = false) UUID categoryId, @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "30") int size, @RequestParam(defaultValue = "es") String lang,
-            @RequestParam(required = false) String sort);
+            @RequestParam(required = false) String sort, @RequestParam(required = false) Boolean verified);
 
     @Operation(summary = "Get product detail by id")
     @GetMapping("/products/{id}")
@@ -114,6 +118,16 @@ public interface AdminCatalogApi {
     @DeleteMapping("/products/images/{imageId}")
     ResponseEntity<Void> deleteProductImage(@PathVariable UUID imageId);
 
+    @Operation(summary = "Delete the explanation video of a product (clears video_url/has_video)")
+    @DeleteMapping("/products/{id}/video")
+    ResponseEntity<Void> deleteProductVideo(@PathVariable UUID id);
+
+    @Operation(summary = "Reorder a product's gallery images (first becomes the main image)")
+    @PutMapping("/products/{productId}/images/order")
+    ResponseEntity<Void> reorderProductImages(
+            @PathVariable UUID productId,
+            @Valid @RequestBody ReorderProductImagesDtoIn req);
+
     /* ============================ Bulk import ============================ */
 
     @Operation(summary = "Create a single product manually")
@@ -123,6 +137,10 @@ public interface AdminCatalogApi {
     @Operation(summary = "Delete a product (refused if it has orders)")
     @DeleteMapping("/products/{id}")
     ResponseEntity<Void> deleteProduct(@PathVariable UUID id);
+
+    @Operation(summary = "Delete a single price tier of a product (by its min quantity)")
+    @DeleteMapping("/products/{id}/price-tiers/{minQty}")
+    ResponseEntity<Void> deletePriceTier(@PathVariable UUID id, @PathVariable int minQty);
 
     @Operation(summary = "Bulk-delete products by id (per-id error reporting; each refused if it has orders)")
     @PostMapping("/products/bulk-delete")
@@ -140,6 +158,21 @@ public interface AdminCatalogApi {
     @Operation(summary = "Total product count (to compute export segments)")
     @GetMapping("/products/export/count")
     ResponseEntity<Map<String, Long>> exportCount();
+
+    @Operation(summary = "Export ONE product as the bulk JSON shape (to edit as JSON and re-import with upsert)")
+    @GetMapping("/products/{id}/export")
+    ResponseEntity<BulkProductDtoIn> exportProduct(@PathVariable UUID id);
+
+    @Operation(summary = "Stream ALL products as NDJSON (one product per line), batched with bounded memory. "
+            + "Scales to millions: the server keyset-paginates and flushes each batch instead of buffering everything.")
+    @GetMapping(value = "/products/export/ndjson", produces = "application/x-ndjson")
+    ResponseEntity<StreamingResponseBody> exportProductsNdjson(@RequestParam(defaultValue = "200") int batch);
+
+    @Operation(summary = "Import products from an NDJSON body (one product per line), processed in batches with "
+            + "bounded memory. The request body is read as a stream and never fully loaded into memory.")
+    @PostMapping(value = "/products/import/ndjson", consumes = "application/x-ndjson")
+    ResponseEntity<BulkResultDtoOut> importProductsNdjson(HttpServletRequest request,
+            @RequestParam(defaultValue = "200") int batch);
 
     @Operation(summary = "Bulk-create categories from a JSON array")
     @PostMapping("/categories/bulk")

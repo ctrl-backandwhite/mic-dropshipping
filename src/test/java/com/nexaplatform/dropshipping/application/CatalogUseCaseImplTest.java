@@ -5,26 +5,31 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontMapper;
 import com.nexaplatform.dropshipping.api.mapper.ProductBulkExportMapper;
+import com.nexaplatform.dropshipping.application.service.CustomsProfileService;
 import com.nexaplatform.dropshipping.application.usecase.impl.CatalogUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
+import com.nexaplatform.dropshipping.infrastructure.integration.storage.ImageMirrorService;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Category1688MappingRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryAttributeSchemaRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductImageRepository;
 import com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductAttributeRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductReviewJpaRepositoryAdapter;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductSpecificationRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.VariantValueRepository;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -53,6 +58,8 @@ class CatalogUseCaseImplTest {
     SupplierRepository supplierRepository;
     @Mock
     CategoryRepository categoryRepository;
+    @Mock
+    CustomsProfileService customsProfileService;
     @Mock
     ProductPriceTierRepository priceTierRepository;
     @Mock
@@ -83,16 +90,19 @@ class CatalogUseCaseImplTest {
     JdbcTemplate jdbcTemplate;
     @Mock
     ProductBulkExportMapper bulkExportMapper;
+    @Mock
+    ImageMirrorService imageMirrorService;
+    @Mock
+    Category1688MappingRepository category1688MappingRepository;
+    @Mock
+    CategoryAttributeSchemaRepository categoryAttributeSchemaRepository;
+    @Mock
+    ProductReviewJpaRepositoryAdapter productReviewJpaRepositoryAdapter;
 
+    // Con @InjectMocks los colaboradores se pasan por el constructor por tipo: añadir uno nuevo al
+    // caso de uso ya no obliga a retocar esta lista de argumentos.
+    @InjectMocks
     CatalogUseCaseImpl useCase;
-
-    @BeforeEach
-    void setup() {
-        useCase = new CatalogUseCaseImpl(productRepository, supplierRepository, categoryRepository, priceTierRepository,
-                imageRepository, objectStorage, productJpaRepository, productMapper, catalogStorefrontMapper, kafkaTemplate,
-                variantRepository, productIndexer, categoryIndexer, productAttributeRepository,
-                productSpecificationRepository, variantValueRepository, jdbcTemplate, bulkExportMapper);
-    }
 
     @Test
     void upsertSupplier_creates_when_missing() {
@@ -131,6 +141,37 @@ class CatalogUseCaseImplTest {
         assertThat(saved.getImages().get(0).getSourceUrl()).contains("cbu01.alicdn");
         // slug preservado (no se regenera si ya existe)
         assertThat(saved.getSlug()).isEqualTo("old-slug-offer-1");
+    }
+
+    @Test
+    void upsertProduct_cjkTitle_doesNotProduceSlugStartingWithDash() {
+        // Slugify descarta lo que no sea ASCII: con un título íntegramente en chino devolvía "" y el slug
+        // quedaba en "-<externalId>", una URL sin ninguna palabra. Debe caer en el prefijo neutro.
+        when(productJpaRepository.findBySourceAndExternalId("1688", "OFFER-CJK")).thenReturn(Optional.empty());
+        when(productJpaRepository.save(any(ProductEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        IngestProductRequest req = new IngestProductRequest("1688", "OFFER-CJK", "真皮复古经典德训鞋女款", null, null,
+                null, 1, new BigDecimal("42.90"), "CNY", 500, 100, null, new BigDecimal("4.8"), 30,
+                "https://detail.1688.com/offer/OFFER-CJK.html", null, null, List.of(), null, null, null);
+
+        ProductEntity saved = useCase.upsertProduct(req);
+
+        assertThat(saved.getSlug()).doesNotStartWith("-");
+        assertThat(saved.getSlug()).isEqualTo("product-offer-cjk");
+    }
+
+    @Test
+    void upsertProduct_latinTitle_keepsReadableSlug() {
+        when(productJpaRepository.findBySourceAndExternalId("1688", "OFFER-ES")).thenReturn(Optional.empty());
+        when(productJpaRepository.save(any(ProductEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        IngestProductRequest req = new IngestProductRequest("1688", "OFFER-ES", "Bailarinas planas de mujer", null,
+                null, null, 1, new BigDecimal("19.90"), "CNY", 500, 100, null, new BigDecimal("4.8"), 30,
+                "https://detail.1688.com/offer/OFFER-ES.html", null, null, List.of(), null, null, null);
+
+        ProductEntity saved = useCase.upsertProduct(req);
+
+        assertThat(saved.getSlug()).isEqualTo("bailarinas-planas-de-mujer-offer-es");
     }
 
     @Test
