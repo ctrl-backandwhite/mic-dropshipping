@@ -229,7 +229,7 @@ nexadrop:
     legal-note: ${INVOICE_LEGAL_NOTE:}              # Nota legal al pie (opcional)
   email:
     from: ${EMAIL_FROM:noreply@nexadrop.local}          # Remitente por defecto (transaccional/auth): no-reply@
-    from-name: ${EMAIL_FROM_NAME:NX036 LTD}
+    from-name: ${EMAIL_FROM_NAME:NX036}
     from-billing: ${EMAIL_FROM_BILLING:${EMAIL_FROM:noreply@nexadrop.local}}  # Facturas/recibos: billing@
     from-support: ${EMAIL_FROM_SUPPORT:${EMAIL_FROM:noreply@nexadrop.local}}  # Acuse de contacto: support@
     unsubscribe-secret: ${EMAIL_UNSUBSCRIBE_SECRET:dev-unsubscribe-secret-change-me}  # firma HMAC del enlace de baja (sin login)
@@ -317,6 +317,14 @@ nexadrop:
   fulfillment:
     sync-enabled: ${FULFILLMENT_SYNC_ENABLED:true}
     sync-interval-ms: ${FULFILLMENT_SYNC_INTERVAL_MS:60000}
+    # Almacén chino de Yunfulfillment donde el proveedor de 1688 entrega la mercancía. CNCHASHAN es
+    # Dongguan (Guangdong) y CNJIASHAN es Jiashan (Zhejiang): se elige por dónde estén los proveedores,
+    # y hay que quedarse con UNO — no se pueden consolidar en un envío bultos de almacenes distintos.
+    # TESTSTORE es el almacén de pruebas del OMS, para ensayar sin mercancía real.
+    warehouse-code: ${FULFILLMENT_WAREHOUSE_CODE:CNCHASHAN}
+    # Código de cliente en Yunfulfillment. Va en el destinatario Y pegado al final de la dirección:
+    # sin él el almacén recibe un bulto que no sabe de quién es («地址选择错误，仓库无法查询操作»).
+    customer-code: ${FULFILLMENT_CUSTOMER_CODE:CNHC459832}
   yunexpress:
     enabled: ${YUNEXPRESS_ENABLED:false}
     # 应用ID / 应用秘钥(AK) de 开发配置 → 沙盒应用, y sourcekey de 用户中心 → 用户信息.
