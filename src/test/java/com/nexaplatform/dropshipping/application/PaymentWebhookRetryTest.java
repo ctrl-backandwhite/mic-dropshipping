@@ -8,6 +8,7 @@ import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
 import com.nexaplatform.dropshipping.application.service.StockService;
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
@@ -37,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -89,7 +91,7 @@ class PaymentWebhookRetryTest {
         return new PaymentUseCaseImpl(List.<PaymentGateway>of(), paymentRepository, paymentJpaRepositoryAdapter,
                 userRepository, orderRepository, walletUseCase, auditLogger, partnerPlanSyncService,
                 customerSubscriptionUseCase, subscriptionNotificationService, new ObjectMapper(), orderEmailService,
-                currencyRateService, new OrderAmounts(currencyRateService), stockService, opsAlertService);
+                currencyRateService, new OrderAmounts(currencyRateService), stockService, mock(SupplierPurchaseService.class), opsAlertService);
     }
 
     private static final String STRIPE_PAID = """

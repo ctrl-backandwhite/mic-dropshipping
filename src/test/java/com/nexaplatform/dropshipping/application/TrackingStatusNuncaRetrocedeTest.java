@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application;
 
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
@@ -29,6 +30,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -59,7 +61,7 @@ class TrackingStatusNuncaRetrocedeTest {
         service = new FulfillmentService(orderRepository, mock(OrderTrackingEventRepository.class), provider,
                 mock(UserRepository.class), mock(OrderEmailService.class), new ObjectMapper(),
                 mock(YunExpressEventCipher.class), mock(OpsAlertService.class), mock(NotificationUseCase.class),
-                mock(OrderShipmentRepository.class), mock(TrackingViewMapper.class));
+                mock(OrderShipmentRepository.class), mock(TrackingViewMapper.class), readyPurchases());
 
         order = new Order();
         order.setId(UUID.randomUUID());
@@ -135,5 +137,15 @@ class TrackingStatusNuncaRetrocedeTest {
         pushLlega(OrderStatus.SHIPPED, step(OrderStatus.SHIPPED, "En tránsito"));
 
         assertThat(order.getTrackingStatus()).isEqualTo(OrderStatus.SHIPPED.name());
+    }
+
+    /**
+     * Las compras al proveedor ya están en camino: estos tests van del transportista internacional, no
+     * del tramo chino, y sin este permiso {@code createShipment} se frena antes de llamar al carrier.
+     */
+    private static SupplierPurchaseService readyPurchases() {
+        SupplierPurchaseService s = mock(SupplierPurchaseService.class);
+        lenient().when(s.readyForInternationalShipment(any())).thenReturn(true);
+        return s;
     }
 }

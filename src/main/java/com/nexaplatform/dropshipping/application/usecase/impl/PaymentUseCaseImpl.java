@@ -10,6 +10,7 @@ import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
 import com.nexaplatform.dropshipping.application.service.StockService;
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
@@ -98,6 +99,8 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     /** La cuenta del pedido, compartida con el checkout, la ficha del cliente y el panel. */
     private final OrderAmounts orderAmounts;
     private final StockService stockService;
+    /** Al cobrar hay que dejar anotado qué comprar en 1688 y a qué proveedor. */
+    private final SupplierPurchaseService supplierPurchaseService;
     /** Avisos al responsable cuando una pasarela deja de cobrar. */
     private final OpsAlertService opsAlertService;
 
@@ -330,6 +333,12 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             order.setStatus(OrderStatus.PAID);
             order = orderRepository.save(order);
             stockService.deductForOrder(order);
+        }
+        // El dinero ya está cobrado: hay que comprar la mercancía en 1688. Se planifica aunque el pedido
+        // ya estuviera pagado (webhook duplicado o reproceso) porque planPurchases es idempotente y así
+        // un fallo transitorio en el primer intento se recupera solo en el siguiente.
+        if (order != null && order.getStatus() == OrderStatus.PAID) {
+            supplierPurchaseService.planPurchases(order);
         }
         auditLogger.log("order_payment.succeeded", p.getUserEmail(), Map.of(PAYMENTID, p.getId(), ORDERID,
                 p.getOrderId(), METHOD, p.getMethod(), AMOUNT_USD_CENTS, p.getAmountUsdCents()));
@@ -721,6 +730,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         // La orden pasa a PAID — el FulfillmentService la recogerá.
         order.setStatus(OrderStatus.PAID);
         order = orderRepository.save(order);
+        supplierPurchaseService.planPurchases(order);
 
         auditLogger.log("order_payment.wallet", p.getUserEmail(),
                 Map.of(ORDERID, orderId, PAYMENTID, p.getId(), AMOUNTCENTS, amountUsdCents));

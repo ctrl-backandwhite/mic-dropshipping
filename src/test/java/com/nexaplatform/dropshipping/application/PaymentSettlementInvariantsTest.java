@@ -9,6 +9,7 @@ import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
 import com.nexaplatform.dropshipping.application.service.StockService;
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
@@ -109,7 +110,7 @@ class PaymentSettlementInvariantsTest {
         return new PaymentUseCaseImpl(gateways, paymentRepository, paymentJpaRepositoryAdapter, userRepository,
                 orderRepository, walletUseCase, auditLogger, partnerPlanSyncService, customerSubscriptionUseCase,
                 subscriptionNotificationService, new ObjectMapper(), orderEmailService, currencyRateService, new OrderAmounts(currencyRateService),
-                stockService, mock(OpsAlertService.class));
+                stockService, mock(SupplierPurchaseService.class), mock(OpsAlertService.class));
     }
 
     private Payment recharge(PaymentStatus status, String providerRef) {
