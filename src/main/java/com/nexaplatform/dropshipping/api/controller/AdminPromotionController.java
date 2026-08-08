@@ -76,6 +76,7 @@ public class AdminPromotionController implements AdminPromotionApi {
                 .live(p.isLiveAt(Instant.now()))
                 .priority(p.getPriority()).maxUses(p.getMaxUses()).usedCount(p.getUsedCount())
                 .minOrderCents(p.getMinOrderCents())
+                .userId(p.getUserId()).maxUsesPerUser(p.getMaxUsesPerUser())
                 .categoryIds(targets.stream().map(PromotionTargetEntity::getCategoryId)
                         .filter(Objects::nonNull).toList())
                 .productIds(targets.stream().map(PromotionTargetEntity::getProductId)

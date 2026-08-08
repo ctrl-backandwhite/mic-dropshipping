@@ -29,6 +29,9 @@ public class AdminPromotionDtoOut {
     Integer maxUses;
     int usedCount;
     Integer minOrderCents;
+    /** Cuenta a la que se restringe. Nulo = para cualquiera. */
+    UUID userId;
+    Integer maxUsesPerUser;
     List<UUID> categoryIds;
     List<UUID> productIds;
     Instant createdAt;

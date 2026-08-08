@@ -203,3 +203,5 @@ databaseChangeLog:
       file: db/changelog/schema-v96-supplier-purchase.sql
   - include:
       file: db/changelog/schema-v97-promotions.sql
+  - include:
+      file: db/changelog/schema-v98-promotion-redemption.sql

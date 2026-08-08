@@ -9,6 +9,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEn
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PromotionEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PromotionTargetEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PromotionRedemptionRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PromotionRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PromotionTargetRepository;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,6 +43,8 @@ class PromotionServiceTest {
     PromotionTargetRepository targetRepository;
     @Mock
     CategoryRepository categoryRepository;
+    @Mock
+    PromotionRedemptionRepository redemptionRepository;
 
     @InjectMocks
     PromotionService service;
@@ -299,5 +304,112 @@ class PromotionServiceTest {
         assertThat(PromotionKind.CLEARANCE.isAutomatic()).isTrue();
         assertThat(PromotionKind.COUPON.isAutomatic()).isFalse();
         assertThat(PromotionKind.REFERRAL.isAutomatic()).isFalse();
+    }
+
+    // ─────────────────────── condiciones de canje del cupón ───────────────────────
+
+    private PromotionEntity cupon(String code) {
+        PromotionEntity p = promo(code, "20", PromotionScope.ALL, PromotionKind.COUPON);
+        p.setCode(code);
+        when(promotionRepository.findByCodeIgnoreCase(code)).thenReturn(Optional.of(p));
+        return p;
+    }
+
+    @Test
+    void unCodigoInexistenteLoDiceEnVezDeUnErrorGenerico() {
+        when(promotionRepository.findByCodeIgnoreCase("NADA")).thenReturn(Optional.empty());
+
+        PromotionService.CouponCheck c = service.checkCoupon("NADA", UUID.randomUUID(), 10_00);
+
+        assertThat(c.valid()).isFalse();
+        assertThat(c.reason()).isEqualTo("Ese código no existe");
+    }
+
+    @Test
+    void unCuponCaducadoDiceQueCaduco() {
+        PromotionEntity p = cupon("VIEJO");
+        p.setEndsAt(Instant.now().minus(1, ChronoUnit.DAYS));
+
+        assertThat(service.checkCoupon("VIEJO", UUID.randomUUID(), 10_00).reason())
+                .isEqualTo("Ese cupón ha caducado");
+    }
+
+    @Test
+    void unCuponFuturoDiceQueAunNoEmpieza() {
+        PromotionEntity p = cupon("PRONTO");
+        p.setStartsAt(Instant.now().plus(2, ChronoUnit.DAYS));
+
+        assertThat(service.checkCoupon("PRONTO", UUID.randomUUID(), 10_00).reason())
+                .isEqualTo("Ese cupón todavía no ha empezado");
+    }
+
+    @Test
+    void unCuponAgotadoGlobalmenteNoSeCanjea() {
+        PromotionEntity p = cupon("AGOTADO");
+        p.setMaxUses(50);
+        p.setUsedCount(50);
+
+        assertThat(service.checkCoupon("AGOTADO", UUID.randomUUID(), 10_00).reason())
+                .isEqualTo("Ese cupón se ha agotado");
+    }
+
+    @Test
+    void unCuponNominativoSoloSirveASuDuenno() {
+        UUID duenno = UUID.randomUUID();
+        PromotionEntity p = cupon("SOLOTUYO");
+        p.setUserId(duenno);
+
+        assertThat(service.checkCoupon("SOLOTUYO", UUID.randomUUID(), 10_00).reason())
+                .isEqualTo("Ese cupón no está disponible para tu cuenta");
+        assertThat(service.checkCoupon("SOLOTUYO", duenno, 10_00).valid()).isTrue();
+    }
+
+    @Test
+    void elTopePorPersonaImpideQueUnoSoloAgoteElCupon() {
+        // Sin este tope, un cupón de 100 usos se lo lleva entero quien lo publique en un foro.
+        UUID quien = UUID.randomUUID();
+        PromotionEntity p = cupon("UNAVEZ");
+        p.setMaxUsesPerUser(1);
+        when(redemptionRepository.countByPromotionIdAndUserId(p.getId(), quien)).thenReturn(1L);
+
+        assertThat(service.checkCoupon("UNAVEZ", quien, 10_00).reason()).isEqualTo("Ya has usado ese cupón");
+    }
+
+    @Test
+    void elPedidoMinimoSeComunicaConSuImporte() {
+        PromotionEntity p = cupon("MIN50");
+        p.setMinOrderCents(50_00);
+
+        assertThat(service.checkCoupon("MIN50", UUID.randomUUID(), 10_00).reason())
+                .isEqualTo("Ese cupón necesita un pedido mínimo de 50.00");
+    }
+
+    @Test
+    void unCuponPausadoNoSeCanjeaAunqueEsteEnFecha() {
+        PromotionEntity p = cupon("PAUSADO");
+        p.setActive(false);
+
+        assertThat(service.checkCoupon("PAUSADO", UUID.randomUUID(), 10_00).reason())
+                .isEqualTo("Ese cupón ya no está disponible");
+    }
+
+    @Test
+    void unCuponValidoPasaLasCuatroCondiciones() {
+        cupon("BUENO");
+
+        assertThat(service.checkCoupon("BUENO", UUID.randomUUID(), 100_00).valid()).isTrue();
+    }
+
+    @Test
+    void unReintentoDePagoNoCanjeaDosVecesElMismoCupon() {
+        UUID promo = UUID.randomUUID();
+        UUID pedido = UUID.randomUUID();
+        PromotionEntity p = promo("X", "10", PromotionScope.ALL, PromotionKind.COUPON);
+        when(promotionRepository.findById(promo)).thenReturn(Optional.of(p));
+        when(redemptionRepository.existsByPromotionIdAndOrderId(promo, pedido)).thenReturn(true);
+
+        service.recordUse(promo, UUID.randomUUID(), pedido, 500);
+
+        verify(promotionRepository, never()).save(any());
     }
 }

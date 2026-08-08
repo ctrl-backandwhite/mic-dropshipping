@@ -4,8 +4,10 @@ import com.nexaplatform.dropshipping.domain.enums.PromotionScope;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PromotionEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PromotionRedemptionEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PromotionTargetEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PromotionRedemptionRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PromotionRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PromotionTargetRepository;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +51,7 @@ public class PromotionService {
     private final PromotionRepository promotionRepository;
     private final PromotionTargetRepository targetRepository;
     private final CategoryRepository categoryRepository;
+    private final PromotionRedemptionRepository redemptionRepository;
 
     /**
      * Precio rebajado y de dónde sale la rebaja.
@@ -110,13 +113,72 @@ public class PromotionService {
                 .filter(p -> p.isLiveAt(Instant.now()));
     }
 
-    /** Deja constancia de que un cupón se ha canjeado, para respetar su límite de usos. */
+    /** Por qué un cupón no se puede usar, en un texto que el cliente entienda. */
+    public record CouponCheck(boolean valid, String reason, PromotionEntity promotion) {
+    }
+
+    /**
+     * Comprueba un cupón para UNA persona y UN pedido.
+     *
+     * <p>Cuatro condiciones, y las cuatro tienen que decir por qué fallan: un «cupón no válido» a secas
+     * hace que el cliente lo reintente, escriba a soporte o abandone el carrito.
+     */
+    @Transactional(readOnly = true)
+    public CouponCheck checkCoupon(String code, UUID userId, int subtotalCents) {
+        Optional<PromotionEntity> found = promotionRepository.findByCodeIgnoreCase(
+                code == null ? "" : code.trim());
+        if (found.isEmpty()) {
+            return new CouponCheck(false, "Ese código no existe", null);
+        }
+        PromotionEntity p = found.get();
+        Instant now = Instant.now();
+        if (!p.isActive()) {
+            return new CouponCheck(false, "Ese cupón ya no está disponible", p);
+        }
+        if (p.getStartsAt() != null && now.isBefore(p.getStartsAt())) {
+            return new CouponCheck(false, "Ese cupón todavía no ha empezado", p);
+        }
+        if (p.getEndsAt() != null && !now.isBefore(p.getEndsAt())) {
+            return new CouponCheck(false, "Ese cupón ha caducado", p);
+        }
+        if (p.getMaxUses() != null && p.getUsedCount() >= p.getMaxUses()) {
+            return new CouponCheck(false, "Ese cupón se ha agotado", p);
+        }
+        // Cupón nominativo: comprobarlo evita que se comparta y lo canjee cualquiera.
+        if (p.getUserId() != null && !p.getUserId().equals(userId)) {
+            return new CouponCheck(false, "Ese cupón no está disponible para tu cuenta", p);
+        }
+        if (p.getMaxUsesPerUser() != null && userId != null
+                && redemptionRepository.countByPromotionIdAndUserId(p.getId(), userId) >= p.getMaxUsesPerUser()) {
+            return new CouponCheck(false, "Ya has usado ese cupón", p);
+        }
+        if (p.getMinOrderCents() != null && subtotalCents < p.getMinOrderCents()) {
+            BigDecimal min = BigDecimal.valueOf(p.getMinOrderCents()).movePointLeft(2);
+            return new CouponCheck(false, "Ese cupón necesita un pedido mínimo de " + min, p);
+        }
+        return new CouponCheck(true, null, p);
+    }
+
+    /**
+     * Deja constancia del canje.
+     *
+     * <p>Sube el contador global Y guarda la fila del canje: sin la fila no hay forma de saber cuántas
+     * veces lo ha usado UNA persona, que es lo que sostiene el tope por usuario.
+     */
     @Transactional
-    public void recordUse(UUID promotionId) {
+    public void recordUse(UUID promotionId, UUID userId, UUID orderId, int amountCents) {
         promotionRepository.findById(promotionId).ifPresent(p -> {
+            if (orderId != null && redemptionRepository.existsByPromotionIdAndOrderId(promotionId, orderId)) {
+                return;   // reintento de pago: el descuento ya estaba anotado
+            }
             p.setUsedCount(p.getUsedCount() + 1);
             p.setUpdatedAt(Instant.now());
             promotionRepository.save(p);
+            if (userId != null) {
+                redemptionRepository.save(PromotionRedemptionEntity.builder()
+                        .promotionId(promotionId).userId(userId).orderId(orderId)
+                        .amountCents(amountCents).redeemedAt(Instant.now()).build());
+            }
         });
     }
 

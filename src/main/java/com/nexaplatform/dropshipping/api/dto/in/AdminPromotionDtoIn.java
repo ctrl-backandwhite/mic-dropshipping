@@ -51,6 +51,12 @@ public class AdminPromotionDtoIn {
     @Schema(description = "Productos concretos, si el alcance es PRODUCT")
     private List<UUID> productIds;
 
+    @Schema(description = "Cuenta a la que se restringe el cupón. Vacío = disponible para cualquiera")
+    private UUID userId;
+
+    @Schema(description = "Tope de canjes por persona. Vacío = solo aplica el tope global")
+    private Integer maxUsesPerUser;
+
     @Schema(description = "Avisar a los usuarios de que la promoción arranca")
     private Boolean notifyUsers;
 }

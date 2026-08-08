@@ -85,6 +85,18 @@ public class PromotionEntity {
     @Column(name = "min_order_cents")
     private Integer minOrderCents;
 
+    /** Cuenta a la que se restringe el cupón. Nulo = cualquiera puede canjearlo. */
+    @Column(name = "user_id", columnDefinition = "uuid")
+    private UUID userId;
+
+    /**
+     * Tope de canjes por persona. Nulo = solo cuenta el global.
+     *
+     * <p>Sin esto, un cupón de 100 usos se lo lleva entero quien lo publique en un foro.
+     */
+    @Column(name = "max_uses_per_user")
+    private Integer maxUsesPerUser;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

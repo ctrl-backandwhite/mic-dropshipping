@@ -112,6 +112,7 @@ public class PricingService {
         String originalFormatted = null;
         Integer discountPercent = null;
         String promotionName = null;
+        BigDecimal originalRetailUsd = retailUsd;
         if (deal.applies()) {
             originalFormatted = currencyService.formatDisplay(displayTotal, displayCode);
             discountPercent = deal.percentOff().intValue();
@@ -132,14 +133,14 @@ public class PricingService {
         return new PricedAmount(costUsd, retailUsd, displayTotal, displayCode, currencyService.symbolOf(displayCode),
                 displayFormatted, withMargin.appliedRule() != null ? withMargin.appliedRule().getId() : null,
                 withMargin.appliedPercentage(), baseUsd, ivaUsd, shippingUsd, baseFormatted, ivaFormatted,
-                shippingFormatted, originalFormatted, discountPercent, promotionName);
+                shippingFormatted, originalFormatted, discountPercent, promotionName, originalRetailUsd);
     }
 
     /** Resultado "no se puede tarificar": todos los importes a null, nunca 0. */
     private PricedAmount unpriced() {
         String displayCode = CurrencyHolder.get();
         return new PricedAmount(null, null, null, displayCode, currencyService.symbolOf(displayCode),
-                null, null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     /** null → 0 (para sumar componentes de desglose cuando IVA/envío son 0 y la conversión devuelve null). */
@@ -195,7 +196,13 @@ public class PricingService {
             String baseFormatted, String ivaFormatted, String shippingFormatted,
             // Rebaja. Nulos cuando el producto no está en promoción, que es lo que el escaparate usa
             // para decidir si pinta el precio tachado o solo uno.
-            String originalFormatted, Integer discountPercent, String promotionName) {
+            String originalFormatted, Integer discountPercent, String promotionName,
+            /**
+             * Importe en USD ANTES de la rebaja. Hace falta para comparar descuentos a nivel de pedido:
+             * el cupón se mide contra el precio sin rebajar, o compararlo con el ya rebajado acumularía
+             * los dos y daría un descuento que nadie ha decidido.
+             */
+            BigDecimal originalRetailUsd) {
 
         /**
          * Precio sin promoción.
@@ -209,7 +216,7 @@ public class PricingService {
                 BigDecimal shippingUsd, String baseFormatted, String ivaFormatted, String shippingFormatted) {
             this(costUsd, retailUsd, displayAmount, displayCurrency, displaySymbol, displayFormatted,
                     appliedRuleId, appliedMarginPercent, baseRetailUsd, ivaUsd, shippingUsd, baseFormatted,
-                    ivaFormatted, shippingFormatted, null, null, null);
+                    ivaFormatted, shippingFormatted, null, null, null, null);
         }
 
         /** ¿Este precio lleva rebaja? Lo pregunta el frontend para tachar el precio anterior. */

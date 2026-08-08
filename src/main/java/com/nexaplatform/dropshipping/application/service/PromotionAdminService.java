@@ -90,6 +90,8 @@ public class PromotionAdminService {
                 .maxUses(req.getMaxUses())
                 .usedCount(0)
                 .minOrderCents(req.getMinOrderCents())
+                .userId(req.getUserId())
+                .maxUsesPerUser(req.getMaxUsesPerUser())
                 .createdAt(Instant.now())
                 .build();
         p = promotionRepository.save(p);
@@ -134,6 +136,8 @@ public class PromotionAdminService {
         }
         p.setMaxUses(req.getMaxUses());
         p.setMinOrderCents(req.getMinOrderCents());
+        p.setUserId(req.getUserId());
+        p.setMaxUsesPerUser(req.getMaxUsesPerUser());
         p.setUpdatedAt(Instant.now());
         p = promotionRepository.save(p);
         replaceTargets(p, req);
