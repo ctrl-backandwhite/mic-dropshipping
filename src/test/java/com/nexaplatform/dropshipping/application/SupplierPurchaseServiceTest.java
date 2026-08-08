@@ -274,4 +274,51 @@ class SupplierPurchaseServiceTest {
         assertThatThrownBy(() -> service.planForExistingOrder(ORDER_ID))
                 .isInstanceOf(NotFoundException.class);
     }
+
+    /* ============================ exportación (anti-duplicado del .xls) ============================ */
+
+    /** La cola de exportación excluye lo ya volcado a un fichero (exported_at IS NULL). */
+    @Test
+    void laColaDeExportacionSoloTraeLoNoExportado() {
+        SupplierPurchaseEntity pend = SupplierPurchaseEntity.builder().id(UUID.randomUUID())
+                .orderId(ORDER_ID).status(SupplierPurchaseStatus.AT_WAREHOUSE).build();
+        when(purchaseRepository.findByStatusInAndExportedAtIsNullOrderByCreatedAtAsc(any()))
+                .thenReturn(List.of(pend));
+
+        assertThat(service.exportQueue()).containsExactly(pend);
+        verify(purchaseRepository).findByStatusInAndExportedAtIsNullOrderByCreatedAtAsc(any());
+    }
+
+    /** Al descargar se marcan como exportadas las compras del pedido, una sola vez (idempotente). */
+    @Test
+    void marcarExportadoSellaLaFechaSoloUnaVez() {
+        SupplierPurchaseEntity sinExportar = SupplierPurchaseEntity.builder().id(UUID.randomUUID())
+                .orderId(ORDER_ID).status(SupplierPurchaseStatus.AT_WAREHOUSE).build();
+        SupplierPurchaseEntity yaExportada = SupplierPurchaseEntity.builder().id(UUID.randomUUID())
+                .orderId(ORDER_ID).status(SupplierPurchaseStatus.AT_WAREHOUSE)
+                .exportedAt(java.time.Instant.parse("2026-08-01T00:00:00Z")).build();
+        when(purchaseRepository.findByOrderId(ORDER_ID)).thenReturn(List.of(sinExportar, yaExportada));
+
+        service.markExported(List.of(ORDER_ID));
+
+        assertThat(sinExportar.getExportedAt()).isNotNull();          // se sella
+        assertThat(yaExportada.getExportedAt())                        // no se pisa la fecha previa
+                .isEqualTo(java.time.Instant.parse("2026-08-01T00:00:00Z"));
+        verify(purchaseRepository).save(sinExportar);
+        verify(purchaseRepository, org.mockito.Mockito.never()).save(yaExportada);
+    }
+
+    /** «Volver a exportar» limpia la fecha para que la compra reentre en el próximo fichero. */
+    @Test
+    void volverAExportarLimpiaLaFecha() {
+        SupplierPurchaseEntity p = SupplierPurchaseEntity.builder().id(UUID.randomUUID())
+                .orderId(ORDER_ID).status(SupplierPurchaseStatus.AT_WAREHOUSE)
+                .exportedAt(java.time.Instant.parse("2026-08-01T00:00:00Z")).build();
+        when(purchaseRepository.findById(p.getId())).thenReturn(java.util.Optional.of(p));
+        when(purchaseRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        SupplierPurchaseEntity out = service.requestReexport(p.getId());
+
+        assertThat(out.getExportedAt()).isNull();
+    }
 }

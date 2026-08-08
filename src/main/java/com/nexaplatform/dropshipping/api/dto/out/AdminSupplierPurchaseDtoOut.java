@@ -43,6 +43,8 @@ public class AdminSupplierPurchaseDtoOut {
     String packOrderNo;
     String packServiceType;
     Instant packSubmittedAt;
+    /** Cuándo se volcó a un fichero descargado; null = pendiente de exportar. */
+    Instant exportedAt;
 
     /**
      * Días que lleva el bulto en el almacén. A los 30 lo destruyen sin compensación, así que este número

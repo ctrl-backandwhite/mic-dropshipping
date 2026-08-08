@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
@@ -141,6 +142,48 @@ public class SupplierPurchaseService {
     @Transactional(readOnly = true)
     public List<SupplierPurchaseEntity> openQueue() {
         return purchaseRepository.findByStatusInOrderByCreatedAtAsc(OPEN);
+    }
+
+    /**
+     * La cola para el fichero de re-empaquetado: como {@link #openQueue()} pero SIN las compras ya
+     * volcadas a un .xls descargado. Es lo que evita repetir un YT que el OMS ya importó.
+     */
+    public List<SupplierPurchaseEntity> exportQueue() {
+        return purchaseRepository.findByStatusInAndExportedAtIsNullOrderByCreatedAtAsc(OPEN);
+    }
+
+    /**
+     * Marca como exportadas las compras de estos pedidos: al descargar el fichero salen de la cola de
+     * exportación para no repetirse. Idempotente por si el operador descarga dos veces seguidas.
+     */
+    @Transactional
+    public void markExported(Collection<UUID> orderIds) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return;
+        }
+        Instant now = Instant.now();
+        for (UUID orderId : orderIds) {
+            for (SupplierPurchaseEntity p : purchaseRepository.findByOrderId(orderId)) {
+                if (p.getExportedAt() == null) {
+                    p.setExportedAt(now);
+                    p.setUpdatedAt(now);
+                    purchaseRepository.save(p);
+                }
+            }
+        }
+    }
+
+    /**
+     * Vuelve a poner una compra en la cola de exportación (marca manual del admin). Limpia la fecha de
+     * export para que entre en el próximo fichero; es la única forma de re-exportar algo ya volcado.
+     */
+    @Transactional
+    public SupplierPurchaseEntity requestReexport(UUID purchaseId) {
+        SupplierPurchaseEntity p = purchaseRepository.findById(purchaseId)
+                .orElseThrow(() -> new NotFoundException("No existe la compra " + purchaseId));
+        p.setExportedAt(null);
+        p.setUpdatedAt(Instant.now());
+        return purchaseRepository.save(p);
     }
 
     /**

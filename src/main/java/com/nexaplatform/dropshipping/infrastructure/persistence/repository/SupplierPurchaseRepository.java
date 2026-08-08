@@ -19,6 +19,13 @@ public interface SupplierPurchaseRepository extends JpaRepository<SupplierPurcha
     /** La cola de trabajo del admin, de lo más antiguo a lo más reciente. */
     List<SupplierPurchaseEntity> findByStatusInOrderByCreatedAtAsc(Collection<SupplierPurchaseStatus> statuses);
 
+    /**
+     * La cola de EXPORTACIÓN: como la de trabajo, pero solo lo que aún no se ha volcado a un fichero
+     * descargado ({@code exported_at IS NULL}). Así el .xls no repite un YT que el OMS ya importó.
+     */
+    List<SupplierPurchaseEntity> findByStatusInAndExportedAtIsNullOrderByCreatedAtAsc(
+            Collection<SupplierPurchaseStatus> statuses);
+
     boolean existsByOrderId(UUID orderId);
 
     /**

@@ -94,7 +94,7 @@ public class PackOrderExportService {
     @Transactional(readOnly = true)
     public PackOrderPlan plan() {
         Map<UUID, List<SupplierPurchaseEntity>> byOrder = new LinkedHashMap<>();
-        for (SupplierPurchaseEntity p : supplierPurchaseService.openQueue()) {
+        for (SupplierPurchaseEntity p : supplierPurchaseService.exportQueue()) {
             byOrder.computeIfAbsent(p.getOrderId(), k -> new ArrayList<>()).add(p);
         }
         List<PackOrderRow> rows = new ArrayList<>();

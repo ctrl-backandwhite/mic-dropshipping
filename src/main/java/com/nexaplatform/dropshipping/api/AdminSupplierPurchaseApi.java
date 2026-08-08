@@ -80,10 +80,18 @@ public interface AdminSupplierPurchaseApi {
     @GetMapping("/pack-sheet/preview")
     ResponseEntity<Map<String, Object>> packSheetPreview();
 
-    @Operation(summary = "Descargar el .xls de importación masiva para el OMS de Yunfulfillment")
+    @Operation(summary = "Generar y descargar el .xls de importación masiva para el OMS de Yunfulfillment. "
+            + "Marca las compras incluidas como exportadas para que no se repitan en el siguiente fichero.")
     @ApiResponse(responseCode = "200", description = "Fichero generado")
-    @GetMapping("/pack-sheet")
+    // POST y no GET: la descarga TIENE efecto (marca las compras como exportadas). Un GET no debe mutar,
+    // y un prefetch/retry del navegador consumiría la cola sin que el operador lo pida.
+    @PostMapping("/pack-sheet")
     ResponseEntity<byte[]> packSheet();
+
+    @Operation(summary = "Volver a poner una compra en la cola de exportación (re-marca manual del admin)")
+    @ApiResponse(responseCode = "200", description = "Compra devuelta a la cola de exportación")
+    @PostMapping("/{id}/reexport")
+    ResponseEntity<AdminSupplierPurchaseDtoOut> reexport(@PathVariable UUID id);
 
     @Operation(summary = "Marcar como reempaquetadas las compras del fichero ya subido al OMS")
     @ApiResponse(responseCode = "200", description = "Compras marcadas")

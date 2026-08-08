@@ -10,6 +10,8 @@ import com.nexaplatform.dropshipping.application.service.PackOrderExportService.
 import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService.PurchaseView;
 import com.nexaplatform.dropshipping.domain.enums.PackServiceType;
+import java.time.format.DateTimeFormatter;
+import java.time.ZoneId;
 import com.nexaplatform.dropshipping.domain.enums.PackWarehouse;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierPurchaseEntity;
@@ -43,7 +45,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AdminSupplierPurchaseController implements AdminSupplierPurchaseApi {
 
-    private static final String FILENAME = "yunfulfillment-packorder.xls";
+    private static final DateTimeFormatter FILE_STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmm");
 
     private final SupplierPurchaseService purchaseService;
     private final PackOrderExportService packOrderExportService;
@@ -115,10 +117,22 @@ public class AdminSupplierPurchaseController implements AdminSupplierPurchaseApi
     public ResponseEntity<byte[]> packSheet() {
         PackOrderPlan plan = packOrderExportService.plan();
         byte[] xls = packOrderExportService.toXls(plan.rows());
+        // Marcadas como exportadas: salen de la cola de exportación para no repetir el YT en el
+        // siguiente fichero. NO es marcar reempaquetado (eso es confirmPacked, tras subir al OMS).
+        purchaseService.markExported(plan.orderIds());
+        // Nombre con fecha y hora para distinguir descargas y saber cuál es la última. El front pone su
+        // propia hora (la del navegador); este es el respaldo para quien llame la API directamente.
+        String filename = "yunfulfillment-packorder_"
+                + FILE_STAMP.format(Instant.now().atZone(ZoneId.systemDefault())) + ".xls";
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + FILENAME + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(xls);
+    }
+
+    @Override
+    public ResponseEntity<AdminSupplierPurchaseDtoOut> reexport(UUID id) {
+        return ResponseEntity.ok(reload(purchaseService.requestReexport(id)));
     }
 
     /**
@@ -206,6 +220,7 @@ public class AdminSupplierPurchaseController implements AdminSupplierPurchaseApi
                 .packOrderNo(p.getPackOrderNo())
                 .packServiceType(p.getPackServiceType())
                 .packSubmittedAt(p.getPackSubmittedAt())
+                .exportedAt(p.getExportedAt())
                 .daysInWarehouse(daysInWarehouse(p.getReceivedAt()))
                 .suggestedServiceType(PackServiceType.forIncomingParcels(parcels).name())
                 .notes(p.getNotes())

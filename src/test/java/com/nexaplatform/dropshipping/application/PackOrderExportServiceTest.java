@@ -54,7 +54,7 @@ class PackOrderExportServiceTest {
     @Test
     void unSoloBultoSeReempaquetaYNoLlevaNota() {
         // «更换包装» no admite observaciones: mandarlas invalidaría la fila entera.
-        when(purchaseService.openQueue()).thenReturn(List.of(purchase("SF123")));
+        when(purchaseService.exportQueue()).thenReturn(List.of(purchase("SF123")));
         when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order("YT999")));
 
         PackOrderPlan plan = service.plan();
@@ -70,7 +70,7 @@ class PackOrderExportServiceTest {
 
     @Test
     void variosBultosDelMismoPedidoSeConsolidanBajoUnSoloYt() {
-        when(purchaseService.openQueue()).thenReturn(List.of(purchase("SF123"), purchase("JT456")));
+        when(purchaseService.exportQueue()).thenReturn(List.of(purchase("SF123"), purchase("JT456")));
         when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order("YT999")));
 
         PackOrderPlan plan = service.plan();
@@ -84,7 +84,7 @@ class PackOrderExportServiceTest {
 
     @Test
     void sinSeguimientoNacionalNoSeExportaYSeExplicaPorQue() {
-        when(purchaseService.openQueue()).thenReturn(List.of(purchase(null)));
+        when(purchaseService.exportQueue()).thenReturn(List.of(purchase(null)));
         when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order("YT999")));
 
         PackOrderPlan plan = service.plan();
@@ -98,7 +98,7 @@ class PackOrderExportServiceTest {
     void detectaLosNumerosCruzadosEntreNacionalYYt() {
         // Causa real del OMS: «the domestic tracking number and the YT tracking number are registered
         // in the wrong positions».
-        when(purchaseService.openQueue()).thenReturn(List.of(purchase("YT888")));
+        when(purchaseService.exportQueue()).thenReturn(List.of(purchase("YT888")));
         when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order("YT999")));
 
         PackOrderPlan plan = service.plan();
@@ -110,7 +110,7 @@ class PackOrderExportServiceTest {
 
     @Test
     void sinGuiaInternacionalNoHayNumeroYtQueRegistrar() {
-        when(purchaseService.openQueue()).thenReturn(List.of(purchase("SF123")));
+        when(purchaseService.exportQueue()).thenReturn(List.of(purchase("SF123")));
         when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order(null)));
 
         PackOrderPlan plan = service.plan();
@@ -124,7 +124,7 @@ class PackOrderExportServiceTest {
     void unaCompraYaReempaquetadaNoSeVuelveASubir() {
         SupplierPurchaseEntity yaHecha = purchase("SF123");
         yaHecha.setPackOrderNo("PK-1");
-        when(purchaseService.openQueue()).thenReturn(List.of(yaHecha));
+        when(purchaseService.exportQueue()).thenReturn(List.of(yaHecha));
         when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order("YT999")));
 
         PackOrderPlan plan = service.plan();
@@ -139,7 +139,7 @@ class PackOrderExportServiceTest {
         SupplierPurchaseEntity viva = purchase("SF123");
         SupplierPurchaseEntity muerta = purchase("JT456");
         muerta.setStatus(SupplierPurchaseStatus.CANCELLED);
-        when(purchaseService.openQueue()).thenReturn(List.of(viva, muerta));
+        when(purchaseService.exportQueue()).thenReturn(List.of(viva, muerta));
         when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order("YT999")));
 
         PackOrderPlan plan = service.plan();
@@ -182,7 +182,7 @@ class PackOrderExportServiceTest {
         // devuelve «Warehouse does not exist» y tumba el fichero ENTERO, no solo esa fila.
         SupplierPurchaseEntity p = purchase("SF123");
         p.setWarehouseCode("TESTSTORE");
-        when(purchaseService.openQueue()).thenReturn(List.of(p));
+        when(purchaseService.exportQueue()).thenReturn(List.of(p));
         when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order("YT999")));
 
         PackOrderPlan plan = service.plan();

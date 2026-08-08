@@ -92,6 +92,13 @@ public class SupplierPurchaseEntity {
     @Column(name = "pack_submitted_at")
     private Instant packSubmittedAt;
 
+    /**
+     * Cuándo se volcó por última vez a un fichero de re-empaquetado descargado. NULL = pendiente de
+     * exportar (entra en el próximo .xls); con fecha = ya exportada, no se repite salvo re-marca manual.
+     */
+    @Column(name = "exported_at")
+    private Instant exportedAt;
+
     @Column(columnDefinition = "text")
     private String notes;
 
