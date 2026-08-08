@@ -296,7 +296,17 @@ nexadrop:
   currency:
     access-key: ${NEXADROP_CURRENCY_ACCESS_KEY:}
     api-url: ${NEXADROP_CURRENCY_API_URL:https://api.currencylayer.com/live}
-    sync-cron: "0 30 4 * * *"
+    # Una vez al día (04:30). Una sola llamada trae TODAS las divisas, así que son ~31 requests al mes:
+    # cabe de sobra en el plan gratuito. La cadencia se cambia por entorno, sin tocar código ni
+    # recompilar, cuando el plan lo permita:
+    #
+    #   0 */5 * * * *   cada 5 min → 288/día · 8.928/mes  (necesita plan de 10.000; ~11% de margen)
+    #   0 0 * * * *     cada hora  →  24/día ·   744/mes  (opción intermedia, muy holgada)
+    #   0 30 4 * * *    diaria     →   1/día ·    31/mes  (actual)
+    #
+    # Ojo al elegir: los reintentos tras un fallo, los reinicios y las sincronizaciones manuales del
+    # admin también consumen cuota, así que conviene no apurar el límite del plan.
+    sync-cron: ${NEXADROP_CURRENCY_SYNC_CRON:0 30 4 * * *}
 
   paypal:
     enabled: ${PAYPAL_ENABLED:false}
