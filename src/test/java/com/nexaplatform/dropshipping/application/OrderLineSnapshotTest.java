@@ -16,6 +16,7 @@ import com.nexaplatform.dropshipping.application.notifications.NotificationsPubl
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.application.usecase.impl.OrderUseCaseImpl;
+import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
@@ -25,6 +26,8 @@ import com.nexaplatform.dropshipping.infrastructure.integration.search.OrderSear
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderTrackingEventEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderTrackingEventRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopConnectionRepository;
@@ -35,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -52,6 +56,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -109,6 +114,8 @@ class OrderLineSnapshotTest {
     OrderIndexer orderIndexer;
     @Mock
     OrderSearchService orderSearchService;
+    @Mock
+    OrderTrackingEventRepository trackingRepository;
 
     private final UUID productId = UUID.randomUUID();
 
@@ -116,7 +123,7 @@ class OrderLineSnapshotTest {
         return new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository,
                 userRepository, shopConnectionRepository, userAddressRepository, webhooks, walletUseCase,
                 notificationsPublisher, pricingService, affiliateProgramService, stockService, paymentUseCase,
-                orderEmailService, fulfillment, checkoutTotalsService, operatorCommissionService, orderIndexer,
+                orderEmailService, fulfillment, checkoutTotalsService, operatorCommissionService, trackingRepository, orderIndexer,
                 orderSearchService);
     }
 
@@ -326,5 +333,37 @@ class OrderLineSnapshotTest {
         assertThatThrownBy(() -> subject.createOrder(null, null, sinLineas))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("at least one item");
+    }
+
+    @Test
+    void elSeguimientoRecogeLosPasosQueMarcaElAdmin() {
+        // El cliente ve DOS cosas: la barra de estado y el detalle del seguimiento. Marcar solo el
+        // estado dejaba la barra en «Entregado» y el detalle parado en «Envío registrado».
+        UUID id = UUID.randomUUID();
+        Order o = Order.builder().id(id).orderNumber("NX-1").status(OrderStatus.FORWARDED)
+                .shippingCountry("ES").build();
+        when(orderRepository.findById(id)).thenReturn(Optional.of(o));
+        when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        useCase().shipOrder(id);
+
+        ArgumentCaptor<OrderTrackingEventEntity> ev = ArgumentCaptor.forClass(OrderTrackingEventEntity.class);
+        verify(trackingRepository).save(ev.capture());
+        assertThat(ev.getValue().getStatus()).isEqualTo(OrderStatus.SHIPPED.name());
+        // ADMIN y no el carrier: el timeline debe distinguir lo anotado a mano de lo que informó YunExpress.
+        assertThat(ev.getValue().getSource()).isEqualTo("ADMIN");
+    }
+
+    @Test
+    void siFallaElApunteDelSeguimientoElPedidoAvanzaIgual() {
+        // Perder una línea del seguimiento es un incordio; tumbar la transición sería peor.
+        UUID id = UUID.randomUUID();
+        Order o = Order.builder().id(id).orderNumber("NX-2").status(OrderStatus.FORWARDED)
+                .shippingCountry("ES").build();
+        when(orderRepository.findById(id)).thenReturn(Optional.of(o));
+        when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(trackingRepository.save(any())).thenThrow(new IllegalStateException("timeline caído"));
+
+        assertThat(useCase().shipOrder(id).getStatus()).isEqualTo(OrderStatus.SHIPPED);
     }
 }

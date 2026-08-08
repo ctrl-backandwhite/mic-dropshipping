@@ -36,9 +36,11 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomerO
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderTrackingEventEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserAddressEntity;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.OrderIndexer;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.OrderSearchService;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderTrackingEventRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopConnectionRepository;
@@ -115,6 +117,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final FulfillmentProvider fulfillment;
     private final CheckoutTotalsService checkoutTotalsService;
     private final OperatorCommissionService operatorCommissionService;
+    /** Timeline del pedido: los pasos que marca una persona también tienen que verse ahí. */
+    private final OrderTrackingEventRepository trackingRepository;
     private final OrderIndexer orderIndexer;
     private final OrderSearchService orderSearchService;
 
@@ -483,6 +487,10 @@ public class OrderUseCaseImpl implements OrderUseCase {
         o.setStatus(OrderStatus.SHIPPED);
         o.setShippedAt(Instant.now());
         o = orderRepository.save(o);
+        // El cliente ve DOS cosas: la barra de estado y el detalle del seguimiento. Cambiar solo el
+        // estado dejaba la barra en «Entregado» y el detalle parado en «Envío registrado», que es
+        // justo cuando alguien escribe preguntando dónde está su pedido.
+        appendManualStep(o, OrderStatus.SHIPPED, "Paquete recogido por el transportista");
         sendOrderEmail(o, "shipped");
         return publishAndEnrich(o, "order.shipped");
     }
@@ -498,6 +506,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         o.setStatus(OrderStatus.DELIVERED);
         o.setDeliveredAt(Instant.now());
         o = orderRepository.save(o);
+        appendManualStep(o, OrderStatus.DELIVERED, "Entregado al destinatario");
         // Acredita al operador que entrega la comisión del 15% (CNY) y registra la operación (histórico).
         operatorCommissionService.recordDelivery(o);
         sendOrderEmail(o, "delivered");
@@ -942,5 +951,24 @@ public class OrderUseCaseImpl implements OrderUseCase {
         long ts = Instant.now().getEpochSecond();
         int rnd = RNG.nextInt(9000) + 1000;
         return "NX-" + ts + "-" + rnd;
+    }
+
+    /**
+     * Deja constancia en el seguimiento de un paso que marcó una persona, no el transportista.
+     *
+     * <p>Se etiqueta como ADMIN para que el timeline distinga lo que informó el carrier de lo que se
+     * anotó a mano, y se escribe en un try-catch: perder una línea del seguimiento es un incordio, pero
+     * tumbar la transición del pedido por ello sería peor.
+     */
+    private void appendManualStep(Order o, OrderStatus status, String description) {
+        try {
+            trackingRepository.save(OrderTrackingEventEntity.builder()
+                    .orderId(o.getId()).status(status.name()).description(description)
+                    .location(o.getShippingCountry()).source("ADMIN")
+                    .occurredAt(Instant.now()).createdAt(Instant.now()).build());
+        } catch (RuntimeException e) {
+            log.warn("No se pudo anotar el paso {} en el seguimiento del pedido {}: {}",
+                    status, o.getOrderNumber(), e.getMessage());
+        }
     }
 }
