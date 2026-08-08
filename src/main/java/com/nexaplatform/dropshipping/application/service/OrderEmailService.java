@@ -77,6 +77,20 @@ public class OrderEmailService {
     }
 
     /** Pedido despachado / en camino → email con el nº de seguimiento. */
+    /**
+     * Pedido registrado y pendiente de pago (tarjeta/PayPal/USDT). El pago con saldo no pasa por aquí:
+     * cobra en el acto y su primer correo ya es la factura.
+     */
+    public void placedAwaitingPayment(Order o, String email, String locale) {
+        if (blank(email)) {
+            return;
+        }
+        String lang = InvoiceLabel.lang(locale);
+        notify(email, o, new Notice(OrderEmailLabel.PLACED_TITLE.of(lang),
+                OrderEmailLabel.PLACED_BODY.of(lang, o.getOrderNumber()),
+                OrderEmailLabel.CTA_VIEW_ORDER.of(lang), "clipboard-check", lang));
+    }
+
     public void shipped(Order o, String email, String locale) {
         if (blank(email)) {
             return;

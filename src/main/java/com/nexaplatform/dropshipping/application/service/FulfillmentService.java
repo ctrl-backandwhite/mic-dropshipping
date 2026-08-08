@@ -514,13 +514,28 @@ public class FulfillmentService {
             known.add(e.getStatus() + "|" + e.getDescription());
         }
         boolean changed = false;
+        // Mismo criterio de aviso que el sondeo: los pasos intermedios en tránsito se notifican, pero ni
+        // FORWARDED (interno) ni el PRIMER SHIPPED ("recogido") ni la entrega, que tienen correo propio.
+        // Sin esto, con el push activo el comprador no recibía NINGÚN correo de "en tránsito": el push
+        // guardaba los pasos sin avisar y el sondeo, al verlos ya guardados, tampoco avisaba.
+        boolean shippedSeen = known.stream().anyMatch(k -> k.startsWith(OrderStatus.SHIPPED.name() + "|"));
+        List<TrackingStep> toNotify = new ArrayList<>();
         for (TrackingStep step : snap.steps()) {
-            changed |= appendIfNew(o, known, step.status(), step.description(), step.location(), step.occurredAt(),
-                    CARRIER_SOURCE);
+            boolean added = appendIfNew(o, known, step.status(), step.description(), step.location(),
+                    step.occurredAt(), CARRIER_SOURCE);
+            changed |= added;
+            if (added && step.status() == OrderStatus.SHIPPED) {
+                if (shippedSeen) {
+                    toNotify.add(step);
+                } else {
+                    shippedSeen = true;
+                }
+            }
         }
         if (changed) {
             o.setLastTrackedAt(Instant.now());
             orderRepository.save(o);
+            notifyTrackingSteps(o, toNotify);
             log.info("YunExpress push: timeline actualizado para pedido {}", o.getOrderNumber());
         } else if (!snap.steps().isEmpty()) {
             // Todos los pasos venían repetidos: normal, el transportista reenvía.

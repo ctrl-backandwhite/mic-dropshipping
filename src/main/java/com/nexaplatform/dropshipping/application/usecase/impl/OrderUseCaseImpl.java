@@ -786,6 +786,12 @@ public class OrderUseCaseImpl implements OrderUseCase {
             o.setStatus(OrderStatus.PENDING);
         }
         o = orderRepository.save(o);
+        if (!WALLET.equals(method) && !reused) {
+            // «Hemos recibido tu pedido»: el pago externo puede tardar (o abandonarse) y sin este correo
+            // el cliente no tenía ninguna constancia escrita hasta la factura. Con saldo no hace falta:
+            // se cobra en el acto y su primer correo ya es la factura. Solo la 1ª vez (no en reuso idem).
+            sendOrderEmail(o, "placed");
+        }
 
         // Sella el idem en la orden para que un reintento del MISMO carrito la reutilice
         // (se hace al final: save() de dominio hace update parcial y no toca esta columna).
@@ -887,6 +893,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         }
         userRepository.findById(o.getUserId()).ifPresent(u -> {
             switch (kind) {
+                case "placed" -> orderEmailService.placedAwaitingPayment(o, u.getEmail(), u.getLanguage());
                 case "shipped" -> orderEmailService.shipped(o, u.getEmail(), u.getLanguage());
                 case "delivered" -> orderEmailService.delivered(o, u.getEmail(), u.getLanguage());
                 case "refunded" -> orderEmailService.refunded(o, u.getEmail(), u.getLanguage());

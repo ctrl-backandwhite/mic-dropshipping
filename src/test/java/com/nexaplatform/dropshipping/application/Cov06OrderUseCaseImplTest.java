@@ -186,6 +186,11 @@ class Cov06OrderUseCaseImplTest {
         assertThat(pedido.getStatus()).isEqualTo(OrderStatus.PENDING);
         verify(walletUseCase, never()).charge(any(), anyLong(), any(), anyString(), anyString());
         verify(orderEmailService, never()).paymentConfirmed(any(), anyString(), anyString(), anyString());
+        // El pago externo puede tardar o abandonarse: se avisa «hemos recibido tu pedido» para que el
+        // cliente tenga constancia escrita antes de la factura.
+        verify(orderEmailService).placedAwaitingPayment(any(Order.class), eq("comprador@x.com"), eq("es"));
+        // Y NO se planifican compras todavía: aún no hay dinero cobrado.
+        verify(supplierPurchaseService, never()).planPurchases(any());
     }
 
     /**
