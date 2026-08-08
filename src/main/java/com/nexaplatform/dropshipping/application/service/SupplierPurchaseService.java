@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.service;
 
+import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.domain.enums.SupplierPurchaseStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
@@ -303,8 +304,16 @@ public class SupplierPurchaseService {
         return purchaseRepository.save(p);
     }
 
+    /**
+     * La compra, o un 404 con un motivo que se entienda.
+     *
+     * <p>Antes lanzaba {@code IllegalArgumentException}, que el manejador global traduce a un 400
+     * «Parámetros de la petición inválidos» — y no es eso: los parámetros están bien, lo que falta es la
+     * compra. Pasa en cuanto la pantalla lleva un rato abierta y la fila ya no existe.
+     */
     private SupplierPurchaseEntity require(UUID id) {
         Optional<SupplierPurchaseEntity> found = purchaseRepository.findById(id);
-        return found.orElseThrow(() -> new IllegalArgumentException("Compra no encontrada: " + id));
+        return found.orElseThrow(() -> new NotFoundException(
+                "La compra ya no existe. Puede que la hayan cancelado desde otra pantalla; recarga la página."));
     }
 }
