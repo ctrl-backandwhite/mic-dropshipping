@@ -69,6 +69,11 @@ public class PromotionService {
         public boolean applies() {
             return percentOff != null && percentOff.signum() > 0;
         }
+
+        /** Sin rebaja: el precio se queda como está (canal de integración, o producto sin promoción). */
+        public static Discounted none(BigDecimal price) {
+            return new Discounted(price, price, BigDecimal.ZERO, null, null);
+        }
     }
 
     /**
@@ -274,6 +279,43 @@ public class PromotionService {
         return ancestorsOf(product.getCategory().getId()).stream().anyMatch(wanted::contains);
     }
 
+    /**
+     * Un predicado «¿este producto entra en la promoción X?», para listar en el catálogo solo los
+     * productos de una rebaja concreta (el botón «Ver los productos» del banner).
+     *
+     * <p>Vacío si la promoción no existe o no está viva: la vista, al no recibir filtro, cae a mostrar
+     * el catálogo entero en vez de una lista vacía sin explicación. Los targets se cargan UNA vez y los
+     * ancestros de categoría se memoizan, para no consultar por cada uno de los miles de productos.
+     */
+    @Transactional(readOnly = true)
+    public Optional<java.util.function.Predicate<ProductEntity>> reachFilter(UUID promotionId) {
+        if (promotionId == null) {
+            return Optional.empty();
+        }
+        Optional<PromotionEntity> found = promotionRepository.findById(promotionId)
+                .filter(p -> p.isLiveAt(Instant.now()));
+        // Promoción global: alcanza a TODO el catálogo, así que no hay nada que filtrar y se evita el
+        // barrido en memoria. Devolver un predicado «siempre true» funcionaría, pero pagaría el scan.
+        if (found.isEmpty() || found.get().getScope() == PromotionScope.ALL) {
+            return Optional.empty();
+        }
+        return found
+                .map(p -> {
+                    List<PromotionTargetEntity> targets = targetRepository.findByPromotionId(p.getId());
+                    if (p.getScope() == PromotionScope.PRODUCT) {
+                        Set<UUID> ids = targets.stream().map(PromotionTargetEntity::getProductId)
+                                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+                        return product -> ids.contains(product.getId());
+                    }
+                    Set<UUID> wanted = targets.stream().map(PromotionTargetEntity::getCategoryId)
+                            .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+                    Map<UUID, Set<UUID>> ancestorCache = new java.util.HashMap<>();
+                    return product -> product.getCategory() != null && ancestorCache
+                            .computeIfAbsent(product.getCategory().getId(), this::ancestorsOf).stream()
+                            .anyMatch(wanted::contains);
+                });
+    }
+
     /** La categoría del producto y todas sus ascendientes hasta la raíz. */
     private Set<UUID> ancestorsOf(UUID categoryId) {
         Set<UUID> chain = new HashSet<>();
@@ -287,7 +329,7 @@ public class PromotionService {
     }
 
     private static Discounted none(BigDecimal price) {
-        return new Discounted(price, price, BigDecimal.ZERO, null, null);
+        return Discounted.none(price);
     }
 
     /** Promociones automáticas vivas, para que el admin vea de un vistazo qué está corriendo. */

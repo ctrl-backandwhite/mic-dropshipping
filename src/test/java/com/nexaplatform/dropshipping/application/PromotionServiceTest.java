@@ -412,4 +412,64 @@ class PromotionServiceTest {
 
         verify(promotionRepository, never()).save(any());
     }
+
+    /* ============================ reachFilter (botón «Ver los productos») ============================ */
+
+    /** Una promoción global no filtra nada: el botón lleva al catálogo entero (vacío = sin filtro). */
+    @Test
+    void reachFilterDeUnaPromocionGlobalNoFiltra() {
+        PromotionEntity p = promo("Invierno", "30", PromotionScope.ALL, PromotionKind.SEASONAL);
+        when(promotionRepository.findById(p.getId())).thenReturn(java.util.Optional.of(p));
+
+        assertThat(service.reachFilter(p.getId())).isEmpty();
+    }
+
+    /** Alcance por productos: solo pasan los IDs objetivo. */
+    @Test
+    void reachFilterPorProductoSoloDejaPasarLosObjetivo() {
+        PromotionEntity p = promo("Selección", "20", PromotionScope.PRODUCT, PromotionKind.FLASH);
+        ProductEntity dentro = producto(null);
+        ProductEntity fuera = producto(null);
+        when(promotionRepository.findById(p.getId())).thenReturn(java.util.Optional.of(p));
+        when(targetRepository.findByPromotionId(p.getId())).thenReturn(List.of(
+                PromotionTargetEntity.builder().productId(dentro.getId()).build()));
+
+        java.util.function.Predicate<ProductEntity> f = service.reachFilter(p.getId()).orElseThrow();
+        assertThat(f.test(dentro)).isTrue();
+        assertThat(f.test(fuera)).isFalse();
+    }
+
+    /** Alcance por categoría: cuenta la jerarquía (un producto de una subcategoría de la objetivo entra). */
+    @Test
+    void reachFilterPorCategoriaCuentaLaJerarquia() {
+        UUID padre = UUID.randomUUID();
+        UUID hijo = UUID.randomUUID();
+        CategoryEntity catPadre = new CategoryEntity();
+        catPadre.setId(padre);
+        CategoryEntity catHijo = new CategoryEntity();
+        catHijo.setId(hijo);
+        catHijo.setParent(catPadre);
+        when(categoryRepository.findById(hijo)).thenReturn(java.util.Optional.of(catHijo));
+        when(categoryRepository.findById(padre)).thenReturn(java.util.Optional.of(catPadre));
+
+        PromotionEntity p = promo("Ropa", "25", PromotionScope.CATEGORY, PromotionKind.SEASONAL);
+        when(promotionRepository.findById(p.getId())).thenReturn(java.util.Optional.of(p));
+        when(targetRepository.findByPromotionId(p.getId())).thenReturn(List.of(
+                PromotionTargetEntity.builder().categoryId(padre).build()));
+
+        java.util.function.Predicate<ProductEntity> f = service.reachFilter(p.getId()).orElseThrow();
+        assertThat(f.test(producto(hijo))).isTrue();      // subcategoría de la objetivo
+        assertThat(f.test(producto(UUID.randomUUID()))).isFalse(); // categoría ajena
+    }
+
+    /** Una promoción que no está viva (o no existe) no filtra: cae al catálogo completo. */
+    @Test
+    void reachFilterDeUnaPromocionApagadaNoFiltra() {
+        PromotionEntity p = promo("Apagada", "40", PromotionScope.PRODUCT, PromotionKind.FLASH);
+        p.setActive(false);
+        when(promotionRepository.findById(p.getId())).thenReturn(java.util.Optional.of(p));
+
+        assertThat(service.reachFilter(p.getId())).isEmpty();
+        assertThat(service.reachFilter(null)).isEmpty();
+    }
 }

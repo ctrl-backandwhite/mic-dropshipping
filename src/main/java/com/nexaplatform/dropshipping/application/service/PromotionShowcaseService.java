@@ -55,7 +55,7 @@ public class PromotionShowcaseService {
 
         List<LivePromotionView> out = new ArrayList<>();
         for (PromotionEntity p : vivas) {
-            out.add(new LivePromotionView(p.getName(),
+            out.add(new LivePromotionView(p.getId(), p.getName(),
                     p.getPercentOff() != null ? p.getPercentOff().intValue() : null,
                     p.getEndsAt() != null ? p.getEndsAt().toString() : null,
                     p.getScope() != null ? p.getScope().name() : null,

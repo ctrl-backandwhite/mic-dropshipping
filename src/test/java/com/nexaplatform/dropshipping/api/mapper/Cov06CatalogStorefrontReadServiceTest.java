@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
 import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.service.PromotionService;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
@@ -72,6 +73,8 @@ class Cov06CatalogStorefrontReadServiceTest {
     ProductMapper productMapper;
     @Mock
     PricingService pricingService;
+    @Mock
+    PromotionService promotionService;
 
     @InjectMocks
     CatalogStorefrontReadService service;
@@ -82,6 +85,9 @@ class Cov06CatalogStorefrontReadServiceTest {
      */
     @org.junit.jupiter.api.BeforeEach
     void precioDeVentaPorDefecto() {
+        // El listado consulta reachFilter en cada llamada; sin promoción activa devuelve vacío (sin filtro).
+        org.mockito.Mockito.lenient().when(promotionService.reachFilter(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.Optional.empty());
         PricingService.PricedAmount venta = org.mockito.Mockito.mock(PricingService.PricedAmount.class);
         org.mockito.Mockito.lenient().when(venta.displayAmount()).thenReturn(java.math.BigDecimal.ONE);
         org.mockito.Mockito.lenient().when(pricingService.priceFor(org.mockito.ArgumentMatchers.any(),
@@ -373,7 +379,7 @@ class Cov06CatalogStorefrontReadServiceTest {
         when(productMapper.toSummary(conCe, "es")).thenReturn(resumen("con-ce", new BigDecimal("10")));
 
         ProductListFilters filtros = new ProductListFilters(null, null, null, null, null, null, null, null, null,
-                null, null, "ce", null);
+                null, null, "ce", null, null);
         PageResponse<ProductSummaryView> pagina = service.productListFull(0, 20, "es", filtros, null);
 
         assertThat(pagina.items()).extracting(ProductSummaryView::slug).containsExactly("con-ce");
@@ -392,7 +398,7 @@ class Cov06CatalogStorefrontReadServiceTest {
         when(productMapper.toSummary(pendiente, "es")).thenReturn(resumen("pendiente", new BigDecimal("10")));
 
         ProductListFilters soloPendientes = new ProductListFilters(null, null, null, null, null, null, null, null,
-                null, null, null, null, Boolean.FALSE);
+                null, null, null, null, Boolean.FALSE, null);
         PageResponse<ProductSummaryView> pagina = service.productListFull(0, 20, "es", soloPendientes, null);
 
         assertThat(pagina.items()).extracting(ProductSummaryView::slug).containsExactly("pendiente");

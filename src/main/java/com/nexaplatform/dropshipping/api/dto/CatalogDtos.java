@@ -187,7 +187,7 @@ public final class CatalogDtos {
      * <p>Solo lleva lo que el escaparate necesita pintar: ni el alcance interno ni los topes de uso,
      * que son cosa del admin.
      */
-    public record LivePromotionView(String name, Integer percentOff, String endsAt, String scope,
+    public record LivePromotionView(UUID id, String name, Integer percentOff, String endsAt, String scope,
             List<ProductSummaryView> products) {
     }
 

@@ -4,6 +4,8 @@ import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.MarginService.PriceWithMargin;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.PromotionService;
+import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
+import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
 import com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
@@ -33,19 +35,61 @@ class PricingServiceTest {
 
     private CurrencyRateService currencyService;
     private MarginService marginService;
+    private PromotionService promotionService;
     private PricingService service;
 
     @BeforeEach
     void setup() {
         currencyService = mock(CurrencyRateService.class);
         marginService = mock(MarginService.class);
-        service = new PricingService(currencyService, sinPromociones(), marginService);
+        promotionService = sinPromociones();
+        service = new PricingService(currencyService, promotionService, marginService);
         CurrencyHolder.clear();
+        PricingChannelHolder.set(PriceRuleChannel.STOREFRONT);
     }
 
     @AfterEach
     void cleanup() {
         CurrencyHolder.clear();
+        PricingChannelHolder.set(PriceRuleChannel.STOREFRONT);
+    }
+
+    /**
+     * REGLA ESTRICTA: el canal de integración (Shopify/WooCommerce/API) NO recibe rebajas. Se comprueba
+     * por el contrato —no se consulta ni una sola vez a la promoción— para que la regla no dependa de
+     * que el mock «casualmente» no descuente.
+     */
+    @Test
+    void priceFor_integrationChannel_neverAppliesPromotions() {
+        when(currencyService.toUsd(any(BigDecimal.class), eq("CNY"))).thenReturn(new BigDecimal("14.00"));
+        when(marginService.apply(any(), any(), any())).thenReturn(
+                new PriceWithMargin(new BigDecimal("14.00"), new BigDecimal("21.00"), null, new BigDecimal("50.0")));
+        when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(currencyService.symbolOf(anyString())).thenReturn("$");
+        PricingChannelHolder.set(PriceRuleChannel.INTEGRATION);
+
+        PricedAmount priced = service.priceFor(
+                ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY").build());
+
+        assertThat(priced.discountPercent()).isNull();
+        assertThat(priced.originalFormatted()).isNull();
+        org.mockito.Mockito.verify(promotionService, org.mockito.Mockito.never())
+                .applyAutomatic(any(), any(), any());
+    }
+
+    /** En el escaparate sí se pregunta a la promoción (aunque este mock no descuente). */
+    @Test
+    void priceFor_storefrontChannel_consultsPromotions() {
+        when(currencyService.toUsd(any(BigDecimal.class), eq("CNY"))).thenReturn(new BigDecimal("14.00"));
+        when(marginService.apply(any(), any(), any())).thenReturn(
+                new PriceWithMargin(new BigDecimal("14.00"), new BigDecimal("21.00"), null, new BigDecimal("50.0")));
+        when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(currencyService.symbolOf(anyString())).thenReturn("$");
+        PricingChannelHolder.set(PriceRuleChannel.STOREFRONT);
+
+        service.priceFor(ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY").build());
+
+        org.mockito.Mockito.verify(promotionService).applyAutomatic(any(), any(), any());
     }
 
     @Test

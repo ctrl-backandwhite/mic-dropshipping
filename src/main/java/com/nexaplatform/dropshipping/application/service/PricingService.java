@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.UUID;
+import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 
 /**
  * Canonical pricing pipeline:
@@ -112,7 +113,13 @@ public class PricingService {
         // base ya lleva dentro el coste y deja un margen aunque el descuento llegue al tope, mientras
         // que rozar el coste desnudo convierte cada venta rebajada en trabajo gratis.
         BigDecimal floorDisplay = displayBase;
-        PromotionService.Discounted deal = promotionService.applyAutomatic(product, displayTotal, floorDisplay);
+        // REGLA ESTRICTA: las rebajas y promociones son SOLO del escaparate propio (web/app NX036). El
+        // canal de integración (Shopify/WooCommerce/API de partners) vende con su propio margen y NUNCA
+        // se le aplica un descuento: si un partner revende, la promoción es decisión suya, no nuestra, y
+        // regalársela le comería el margen que paga por integrarse. Ver [[price-rule-channel]].
+        PromotionService.Discounted deal = PricingChannelHolder.get() == PriceRuleChannel.STOREFRONT
+                ? promotionService.applyAutomatic(product, displayTotal, floorDisplay)
+                : PromotionService.Discounted.none(displayTotal);
         String originalFormatted = null;
         Integer discountPercent = null;
         String promotionName = null;
