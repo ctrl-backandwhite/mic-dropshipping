@@ -15,11 +15,14 @@ import java.util.Locale;
  */
 public enum PackWarehouse {
 
-    /** 东莞仓 (Dongguan, Guangdong): el de referencia para proveedores del sur. */
+    /**
+     * 东莞仓 (Dongguan, Guangdong). <b>Es el almacén del negocio</b> (decisión del 8-ago-2026): toda la
+     * mercancía de 1688 se entrega aquí.
+     */
     CNCHASHAN("东莞仓", "广东省东莞市茶山镇超横路2号2栋4楼仓储部(请勿放丰巢)", "523392",
             "0769-83369816"),
 
-    /** 嘉善仓 (Jiashan, Zhejiang): para proveedores de la zona de Yiwu y Hangzhou. */
+    /** 嘉善仓 (Jiashan, Zhejiang): la alternativa descartada, para proveedores de Yiwu y Hangzhou. */
     CNJIASHAN("嘉善仓", "浙江省嘉兴市嘉善县魏塘街道嘉魏路9号镝擎嘉善产业园二楼云途物流3号仓1213号", "314100",
             "13085621862"),
 

@@ -317,10 +317,14 @@ nexadrop:
   fulfillment:
     sync-enabled: ${FULFILLMENT_SYNC_ENABLED:true}
     sync-interval-ms: ${FULFILLMENT_SYNC_INTERVAL_MS:60000}
-    # Almacén chino de Yunfulfillment donde el proveedor de 1688 entrega la mercancía. CNCHASHAN es
-    # Dongguan (Guangdong) y CNJIASHAN es Jiashan (Zhejiang): se elige por dónde estén los proveedores,
-    # y hay que quedarse con UNO — no se pueden consolidar en un envío bultos de almacenes distintos.
-    # TESTSTORE es el almacén de pruebas del OMS, para ensayar sin mercancía real.
+    # Almacén chino de Yunfulfillment donde el proveedor de 1688 entrega la mercancía.
+    #
+    # CNCHASHAN (Dongguan, Guangdong) es el almacén DEFINITIVO del negocio, decidido el 8-ago-2026.
+    # La alternativa era CNJIASHAN (Jiashan, Zhejiang). No es un valor por defecto provisional: cambiarlo
+    # parte el catálogo en dos, porque no se pueden consolidar en un mismo envío bultos que están en
+    # almacenes distintos, y todo pedido multiproveedor dejaría de poder agruparse bajo un único YT.
+    #
+    # TESTSTORE aparece en los desplegables pero NO admite importación (ver PackWarehouse).
     warehouse-code: ${FULFILLMENT_WAREHOUSE_CODE:CNCHASHAN}
     # Código de cliente en Yunfulfillment. Va en el destinatario Y pegado al final de la dirección:
     # sin él el almacén recibe un bulto que no sabe de quién es («地址选择错误，仓库无法查询操作»).
