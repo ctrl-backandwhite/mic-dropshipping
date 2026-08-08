@@ -36,6 +36,11 @@ public interface AdminSupplierPurchaseApi {
     @GetMapping("/order/{orderId}")
     ResponseEntity<List<AdminSupplierPurchaseDtoOut>> forOrder(@PathVariable UUID orderId);
 
+    @Operation(summary = "Generar las compras de un pedido ya pagado que aún no las tiene")
+    @ApiResponse(responseCode = "200", description = "Compras generadas (o las que ya había)")
+    @PostMapping("/order/{orderId}/plan")
+    ResponseEntity<List<AdminSupplierPurchaseDtoOut>> plan(@PathVariable UUID orderId);
+
     @Operation(summary = "Bultos en riesgo de destrucción por llevar demasiado tiempo en el almacén")
     @ApiResponse(responseCode = "200", description = "Bultos en riesgo devueltos")
     @GetMapping("/at-risk")

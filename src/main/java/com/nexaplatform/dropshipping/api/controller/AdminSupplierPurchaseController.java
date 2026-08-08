@@ -63,6 +63,11 @@ public class AdminSupplierPurchaseController implements AdminSupplierPurchaseApi
     }
 
     @Override
+    public ResponseEntity<List<AdminSupplierPurchaseDtoOut>> plan(UUID orderId) {
+        return ResponseEntity.ok(toDtos(purchaseService.planForExistingOrder(orderId)));
+    }
+
+    @Override
     public ResponseEntity<List<AdminSupplierPurchaseDtoOut>> atRisk() {
         return ResponseEntity.ok(toDtos(purchaseService.atRiskViews()));
     }

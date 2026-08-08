@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application;
 
+import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.domain.enums.SupplierPurchaseStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
@@ -28,6 +29,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
@@ -242,5 +244,34 @@ class SupplierPurchaseServiceTest {
         assertThat(packed.getStatus()).isEqualTo(SupplierPurchaseStatus.PACKED);
         assertThat(packed.getPackOrderNo()).isEqualTo("PK-99");
         assertThat(packed.getPackSubmittedAt()).isNotNull();
+    }
+
+    @Test
+    void unPedidoYaPagadoSinComprasPuedeGenerarlasMasTarde() {
+        // Los pedidos cobrados antes de esta funcionalidad se quedaron sin lista de la compra, y sin
+        // ella no aparecen en la cola ni se pueden reempaquetar nunca.
+        withWarehouse();
+        UUID product = productOf(SUPPLIER_A);
+        Order o = order(List.of(line(product, 1)));
+        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(o));
+        when(purchaseRepository.existsByOrderId(ORDER_ID)).thenReturn(false);
+        when(purchaseRepository.save(any())).thenAnswer(inv -> {
+            SupplierPurchaseEntity p = inv.getArgument(0);
+            p.setId(UUID.randomUUID());
+            return p;
+        });
+        when(purchaseRepository.findByOrderId(ORDER_ID)).thenReturn(List.of());
+
+        service.planForExistingOrder(ORDER_ID);
+
+        verify(purchaseRepository).save(any());
+    }
+
+    @Test
+    void generarLasComprasDeUnPedidoQueNoExisteEsUn404() {
+        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.planForExistingOrder(ORDER_ID))
+                .isInstanceOf(NotFoundException.class);
     }
 }

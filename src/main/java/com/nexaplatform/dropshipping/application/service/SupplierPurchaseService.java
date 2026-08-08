@@ -165,6 +165,21 @@ public class SupplierPurchaseService {
         return toViews(purchaseRepository.findByOrderId(orderId));
     }
 
+    /**
+     * Genera las compras de un pedido ya pagado que no las tiene.
+     *
+     * <p>Los pedidos cobrados antes de esta funcionalidad se quedaron sin lista de la compra, y sin ella
+     * no aparecen en la cola ni se pueden reempaquetar. Se apoya en {@link #planPurchases}, que es
+     * idempotente, así que llamarlo sobre un pedido que ya las tiene no duplica nada.
+     */
+    @Transactional
+    public List<PurchaseView> planForExistingOrder(UUID orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new NotFoundException("No existe el pedido " + orderId));
+        planPurchases(order);
+        return toViews(purchaseRepository.findByOrderId(orderId));
+    }
+
     @Transactional(readOnly = true)
     public List<PurchaseView> atRiskViews() {
         return toViews(atRiskOfDestruction());
