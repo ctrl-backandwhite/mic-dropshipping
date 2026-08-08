@@ -454,7 +454,8 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         flattenCategories(storefrontRead.categoriesTree(lang), allCats);
         List<CategoryView> hot = allCats.stream().filter(v -> v.directProductCount() > 0)
                 .sorted((a, b) -> Integer.compare(b.directProductCount(), a.directProductCount())).limit(8).toList();
-        return new HomeSectionsResponse(sections, hot);
+        long totalProducts = productRepository.countByStatus(ProductStatus.ACTIVE);
+        return new HomeSectionsResponse(sections, hot, totalProducts);
     }
 
     /** Aplana el árbol de categorías (raíces + todas sus descendientes) en una lista plana. */

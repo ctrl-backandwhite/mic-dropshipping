@@ -38,6 +38,9 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
 
     Page<ProductEntity> findByStatus(ProductStatus status, Pageable pageable);
 
+    /** Total publicado: la portada lo enseña sin necesidad de abrir el listado. */
+    long countByStatus(ProductStatus status);
+
     /**
      * Variante de escaparate de {@link #findByStatus}: solo productos con al menos UNA imagen ya
      * espejada a nuestro storage (cdn_url no nulo). Garantiza que lo listado siempre renderiza una

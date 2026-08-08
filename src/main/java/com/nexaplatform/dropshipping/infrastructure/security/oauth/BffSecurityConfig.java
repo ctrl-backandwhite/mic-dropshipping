@@ -102,6 +102,18 @@ public class BffSecurityConfig {
                         // Debe ir ANTES del permitAll general de GET del catálogo público.
                         .requestMatchers(HttpMethod.GET, "/api/catalog/products/*/margin-estimate")
                         .hasRole(ADMIN)
+                        // El catálogo se navega con cuenta. El muro estaba SOLO en el frontend
+                        // (ProtectedRoute), que oculta la vista pero no cierra la API: sin ninguna
+                        // credencial se podían sacar 100 productos por llamada —con precio, ventas
+                        // mensuales y trend score—, o sea el catálogo entero en ~45 peticiones. Un
+                        // scraper no usa el navegador.
+                        //
+                        // Se cierran los dos endpoints que permiten ENUMERAR, y solo esos:
+                        // la ficha individual sigue abierta (hay que conocer el slug) y también
+                        // /api/catalog/home/sections, que la portada pública necesita y devuelve un
+                        // puñado de productos por sección, no el catálogo.
+                        .requestMatchers(HttpMethod.GET, "/api/catalog/products").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/search", "/api/search/**").authenticated()
                         // GET públicos de navegación (antes GET /api/storefront/**), enumerados por base.
                         .requestMatchers(HttpMethod.GET, "/api/catalog/**", "/api/billing/**", API_CONTACT,
                                 "/api/contact/**", "/api/newsletter/**", "/api/affiliate/**", "/api/search",
