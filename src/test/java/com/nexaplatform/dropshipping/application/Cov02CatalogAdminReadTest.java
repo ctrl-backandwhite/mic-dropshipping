@@ -452,6 +452,35 @@ class Cov02CatalogAdminReadTest {
     }
 
     @Test
+    void laEdicionRapidaCorrigeElEnvioYElIva() {
+        // El envío y el IVA se cargan al importar y antes no había forma de corregirlos: el endpoint
+        // aceptaba el campo y lo descartaba en silencio, así que 262 productos se quedaron con el
+        // valor por defecto del importador y la respuesta 200 hacía creer que se había guardado.
+        producto.setShippingCny(new BigDecimal("12.00"));
+        producto.setIvaCny(new BigDecimal("3.00"));
+        when(productJpaRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
+
+        useCase.quickEdit(producto.getId(), AdminProductQuickEditDtoIn.builder()
+                .shippingCny(new BigDecimal("10.00")).ivaCny(new BigDecimal("3.38")).build(), "es");
+
+        assertThat(producto.getShippingCny()).isEqualByComparingTo("10.00");
+        assertThat(producto.getIvaCny()).isEqualByComparingTo("3.38");
+    }
+
+    @Test
+    void unEnvioNuloNoBorraElQueYaTeniaElProducto() {
+        // Mismo contrato que el resto de campos: null es "no lo edito", no "ponlo a cero".
+        producto.setShippingCny(new BigDecimal("10.00"));
+        producto.setIvaCny(new BigDecimal("3.38"));
+        when(productJpaRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
+
+        useCase.quickEdit(producto.getId(), AdminProductQuickEditDtoIn.builder().moq(2).build(), "es");
+
+        assertThat(producto.getShippingCny()).isEqualByComparingTo("10.00");
+        assertThat(producto.getIvaCny()).isEqualByComparingTo("3.38");
+    }
+
+    @Test
     void unaMonedaEnBlancoNoBorraLaDelProducto() {
         when(productJpaRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
 

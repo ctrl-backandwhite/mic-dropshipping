@@ -659,6 +659,14 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (req.getMoq() != null) {
             p.setMoq(req.getMoq());
         }
+        // Envío e IVA se cargan al importar, pero hasta ahora no había forma de corregirlos sin
+        // reimportar el producto entero: el PUT aceptaba el campo y lo descartaba en silencio.
+        if (req.getShippingCny() != null) {
+            p.setShippingCny(req.getShippingCny());
+        }
+        if (req.getIvaCny() != null) {
+            p.setIvaCny(req.getIvaCny());
+        }
         // Verificación manual del admin (checkbox del listado): true = revisado OK, false = pendiente/reimportar.
         if (req.getVerified() != null) {
             p.setVerified(req.getVerified());
