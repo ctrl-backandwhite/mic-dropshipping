@@ -104,10 +104,14 @@ public class PricingService {
         BigDecimal displayTotal = currencyService.usdToDisplay(retailUsd);
         // Rebaja. Se aplica sobre el precio YA compuesto y en la moneda que se enseña, para que el
         // porcentaje anunciado sea el que el cliente ve descontado y no difiera por redondeos.
-        // El suelo es coste + envío convertidos a la misma moneda: por debajo de ahí cada venta pierde
-        // dinero, así que ninguna promoción puede bajar de ese punto por mucho que diga su porcentaje.
-        BigDecimal floorDisplay = currencyService.usdToDisplay(
-                nz(costUsd).add(nz(shippingUsd)).setScale(2, RoundingMode.HALF_UP));
+        // Suelo: el PRECIO BASE del producto (coste × margen), decisión del usuario del 8-ago-2026.
+        // Ninguna promoción baja de ahí por mucho que diga su porcentaje.
+        //
+        // Se eligió la base y no «coste + envío» por dos motivos. Uno, aquel suelo se olvidaba del IVA
+        // —cubría producto y porte pero no el impuesto, así que dejaba vender con pérdida—. Y dos, la
+        // base ya lleva dentro el coste y deja un margen aunque el descuento llegue al tope, mientras
+        // que rozar el coste desnudo convierte cada venta rebajada en trabajo gratis.
+        BigDecimal floorDisplay = displayBase;
         PromotionService.Discounted deal = promotionService.applyAutomatic(product, displayTotal, floorDisplay);
         String originalFormatted = null;
         Integer discountPercent = null;

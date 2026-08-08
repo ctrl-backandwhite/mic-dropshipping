@@ -54,7 +54,9 @@ public class ShippingQuoteController {
     }
 
     /** {@code region} = código del estado/provincia (p. ej. "CA", "ON", "SP") para el IVA por región. */
-    public record QuoteRequest(String country, String region, List<QuoteItem> items) {
+    public record QuoteRequest(String country, String region, List<QuoteItem> items,
+            /** Código de cupón que el cliente ha tecleado. Nulo o vacío = sin cupón. */
+            String couponCode) {
     }
 
     /** Región (estado/provincia) para el dropdown del checkout. */
@@ -74,7 +76,12 @@ public class ShippingQuoteController {
             String serviceName, int etaMinDays, int etaMaxDays, String zone, int taxRateBps,
             String shippingFormatted, String taxFormatted, String totalFormatted,
             int discountCents, String discountFormatted,
-            boolean customsThresholdExceeded, boolean customsBlocked, String taxMode) {
+            boolean customsThresholdExceeded, boolean customsBlocked, String taxMode,
+            /**
+             * Cupón: el código aplicado, o el motivo por el que no vale. Se devuelven los dos para que
+             * el checkout distinga «canjeado» de «rechazado y por qué» sin adivinarlo del importe.
+             */
+            String couponCode, String couponError) {
     }
 
     @Operation(summary = "Cotizar envío + IVA + total del carrito para un país")
@@ -86,7 +93,7 @@ public class ShippingQuoteController {
         CheckoutPreviewService.Preview preview = checkoutPreview.compute(req.country(), req.region(),
                 items.stream().map(i -> new CheckoutPreviewService.Line(i.productId(), i.variantId(), i.quantity()))
                         .toList(),
-                userId);
+                userId, req.couponCode());
 
         ShippingQuote q = preview.quote();
         String code = pricingService.displayCurrencyCode();
@@ -100,7 +107,8 @@ public class ShippingQuoteController {
                 preview.discountUsdCents(),
                 currencyService.formatDisplay(preview.discountDisplay(), code),
                 preview.totals().customs().deMinimisExceeded(), preview.totals().blocked(),
-                preview.totals().customs().taxMode().name());
+                preview.totals().customs().taxMode().name(),
+                preview.couponCode(), preview.couponError());
         return ResponseEntity.ok(body);
     }
 

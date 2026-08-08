@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.controller;
 
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.LivePromotionView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
@@ -39,6 +40,7 @@ import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
 import com.nexaplatform.dropshipping.application.service.ProductDetailQueryService;
 import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.service.PromotionShowcaseService;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
@@ -101,6 +103,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     private final ProductMapper productMapper;
     // DROP-669/678: estimación de rentabilidad con datos reales (tramo aplicable + margen configurado).
     private final PricingService pricingService;
+    private final PromotionShowcaseService promotionShowcase;
     private final MarginService marginService;
     private final CurrencyRateService currencyService;
     private final ProductPriceTierRepository priceTierRepository;
@@ -716,5 +719,10 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     private static String firstNonNull(String a, String b) {
         return a != null && !a.isBlank() ? a : b;
+    }
+
+    @Override
+    public List<LivePromotionView> livePromotions(String lang) {
+        return promotionShowcase.live(lang);
     }
 }

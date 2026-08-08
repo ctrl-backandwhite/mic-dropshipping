@@ -42,7 +42,14 @@ public final class PartnerDtos {
     }
 
     public record CreateOrderRequest(String externalOrderId, @Valid @NotNull AddressInput shippingAddress,
-            @Valid AddressInput billingAddress, @NotEmpty List<@Valid OrderItemInput> items, String notes) {
+            @Valid AddressInput billingAddress, @NotEmpty List<@Valid OrderItemInput> items, String notes,
+            String couponCode) {
+
+        /** Sin cupón. Los pedidos de socio y los manuales no teclean códigos. */
+        public CreateOrderRequest(String externalOrderId, AddressInput shippingAddress, AddressInput billingAddress,
+                List<OrderItemInput> items, String notes) {
+            this(externalOrderId, shippingAddress, billingAddress, items, notes, null);
+        }
     }
 
     public record OrderItemView(UUID productId, UUID variantId, int quantity, BigDecimal unitPrice,

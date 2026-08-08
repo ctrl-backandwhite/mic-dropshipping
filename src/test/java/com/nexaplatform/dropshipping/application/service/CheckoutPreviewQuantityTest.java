@@ -41,8 +41,11 @@ class CheckoutPreviewQuantityTest {
     private final ProductRepository products = mock(ProductRepository.class);
     private final AffiliateProgramService affiliate = mock(AffiliateProgramService.class);
 
+    /** Sin promociones: esta prueba mide el tope de cantidad por línea, no las rebajas. */
+    private final PromotionService promociones = mock(PromotionService.class);
+
     private final CheckoutPreviewService service =
-            new CheckoutPreviewService(shipping, totals, pricing, currency, products, affiliate);
+            new CheckoutPreviewService(shipping, totals, pricing, currency, products, affiliate, promociones);
 
     private final UUID productId = UUID.randomUUID();
 

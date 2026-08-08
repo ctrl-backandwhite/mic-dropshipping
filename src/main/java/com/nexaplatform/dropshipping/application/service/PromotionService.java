@@ -209,16 +209,30 @@ public class PromotionService {
         }
         // El suelo se aplica DESPUÉS de elegir, no antes: si no, una promoción agresiva quedaría
         // recortada al suelo y perdería frente a otra menor que no llega a tocarlo.
+        boolean recortada = false;
         if (floor != null && floor.signum() > 0 && bestPrice.compareTo(floor) < 0) {
-            log.debug("Promoción «{}» recortada al suelo de coste: {} -> {}", best.getName(), bestPrice, floor);
+            log.debug("Promoción «{}» recortada al suelo: {} -> {}", best.getName(), bestPrice, floor);
             bestPrice = floor;
+            recortada = true;
         }
         if (bestPrice.compareTo(price) >= 0) {
             return none(price);   // el suelo se comió la rebaja entera
         }
-        BigDecimal percent = price.subtract(bestPrice)
-                .multiply(BigDecimal.valueOf(100))
-                .divide(price, 0, RoundingMode.DOWN);
+        // El porcentaje que se ANUNCIA es el de la regla —el «-30%» que configuró el admin—, no el que
+        // sale de dividir importes ya redondeados al céntimo: con precios pequeños ese cálculo daba
+        // -29% en unos productos y -30% en otros con la MISMA promoción, y el escaparate parecía
+        // aplicar descuentos distintos a cada uno.
+        //
+        // La excepción es el suelo: si ha recortado la rebaja, el descuento REAL es menor que el
+        // nominal y hay que decir el real. Anunciar el -90% de la regla cuando solo se aplicó un -35%
+        // sería mentir en el escaparate.
+        BigDecimal percent;
+        if (recortada || best.getPercentOff() == null) {
+            percent = price.subtract(bestPrice).multiply(BigDecimal.valueOf(100))
+                    .divide(price, 0, RoundingMode.DOWN);
+        } else {
+            percent = best.getPercentOff().setScale(0, RoundingMode.DOWN);
+        }
         return new Discounted(price, bestPrice, percent, best.getName(), best.getId());
     }
 

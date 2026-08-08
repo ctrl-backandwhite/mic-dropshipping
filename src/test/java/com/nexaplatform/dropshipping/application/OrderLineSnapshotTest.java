@@ -8,6 +8,7 @@ import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
+import com.nexaplatform.dropshipping.application.service.PromotionService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.StockService;
@@ -111,6 +112,8 @@ class OrderLineSnapshotTest {
     @Mock
     OperatorCommissionService operatorCommissionService;
     @Mock
+    PromotionService promotionService;
+    @Mock
     OrderIndexer orderIndexer;
     @Mock
     OrderSearchService orderSearchService;
@@ -123,7 +126,7 @@ class OrderLineSnapshotTest {
         return new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository,
                 userRepository, shopConnectionRepository, userAddressRepository, webhooks, walletUseCase,
                 notificationsPublisher, pricingService, affiliateProgramService, stockService, paymentUseCase,
-                orderEmailService, fulfillment, checkoutTotalsService, operatorCommissionService, trackingRepository, orderIndexer,
+                orderEmailService, fulfillment, checkoutTotalsService, operatorCommissionService, promotionService, trackingRepository, orderIndexer,
                 orderSearchService);
     }
 

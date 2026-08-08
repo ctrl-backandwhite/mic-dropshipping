@@ -19,6 +19,7 @@ import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.ParcelAggregator;
 import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.service.PromotionService;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
@@ -32,6 +33,7 @@ import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.domain.model.Payment;
 import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PromotionEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomerOrderEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
@@ -117,6 +119,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final FulfillmentProvider fulfillment;
     private final CheckoutTotalsService checkoutTotalsService;
     private final OperatorCommissionService operatorCommissionService;
+    private final PromotionService promotionService;
     /** Timeline del pedido: los pasos que marca una persona también tienen que verse ahí. */
     private final OrderTrackingEventRepository trackingRepository;
     private final OrderIndexer orderIndexer;
@@ -164,15 +167,20 @@ public class OrderUseCaseImpl implements OrderUseCase {
 
         int subtotal = 0;
         ParcelAggregator parcel = new ParcelAggregator();
+        GrossSubtotal gross = new GrossSubtotal();
         for (OrderItemInput itemReq : req.items()) {
-            OrderItem line = buildLine(itemReq, orderLang, parcel);
+            OrderItem line = buildLine(itemReq, orderLang, parcel, gross);
             order.getItems().add(line);
             subtotal = Math.addExact(subtotal, line.getLineTotalCents());
         }
 
-        applyTotals(order, userId, subtotal, parcel);
+        UUID cuponAplicado = applyTotals(order, userId, subtotal, gross.cents(), parcel, req.couponCode());
 
         Order saved = orderRepository.save(order);
+        // El canje se apunta con el pedido ya guardado: si el guardado falla, el cupón no se gasta.
+        if (cuponAplicado != null) {
+            promotionService.recordUse(cuponAplicado, userId, saved.getId(), saved.getDiscountCents());
+        }
         orderIndexer.indexOrder(saved.getId()); // auto-sync del índice al crear la orden
         return saved;
     }
@@ -183,8 +191,26 @@ public class OrderUseCaseImpl implements OrderUseCase {
      * <p>Todo lo que se guarda aquí es una FOTO del momento de la compra: si mañana cambia el precio, el
      * título o la imagen del producto, la línea vendida sigue diciendo lo que se vendió.
      */
+    /**
+     * Suma de las líneas a precio SIN rebajar.
+     *
+     * <p>Es la referencia contra la que se mide un cupón: si se midiera contra el subtotal ya
+     * rebajado, el cupón se aplicaría ENCIMA de la rebaja y los dos descuentos se acumularían.
+     */
+    private static final class GrossSubtotal {
+        private int cents;
+
+        void add(int amount) {
+            cents = Math.addExact(cents, amount);
+        }
+
+        int cents() {
+            return cents;
+        }
+    }
+
     private OrderItem buildLine(OrderItemInput itemReq, String orderLang,
-            ParcelAggregator parcel) {
+            ParcelAggregator parcel, GrossSubtotal gross) {
         // Cantidad dentro de un rango sano ANTES de calcular importes. Cierra el desbordamiento de
         // enteros del cobro (unitCents * quantity) y rechaza cantidades ≤ 0 aunque el DTO no valide.
         if (itemReq.quantity() <= 0 || itemReq.quantity() > MAX_LINE_QUANTITY) {
@@ -241,6 +267,12 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // multiplyExact: si el producto se saliera de rango (int), lanza en vez de envolver a un
         // valor pequeño (que se cobraría de menos). Con MAX_LINE_QUANTITY nunca ocurre en la práctica.
         int lineTotal = Math.multiplyExact(unitCents, itemReq.quantity());
+        // Precio de tarifa (antes de la rebaja automática). Cuando el producto no está en promoción
+        // coincide con el de venta, así que la resta que mide la rebaja da cero.
+        BigDecimal sinRebaja = priced.originalRetailUsd() != null ? priced.originalRetailUsd() : unitPrice;
+        gross.add(Math.multiplyExact(
+                sinRebaja.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact(),
+                itemReq.quantity()));
 
         parcel.add(product, variant, itemReq.quantity());
         return OrderItem.builder().productId(product.getId())
@@ -274,7 +306,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
      * <p>Se calculan con los MISMOS servicios que la vista previa del checkout para que lo mostrado
      * coincida al céntimo con lo cobrado.
      */
-    private void applyTotals(Order order, UUID userId, int subtotal, ParcelAggregator parcel) {
+    private UUID applyTotals(Order order, UUID userId, int subtotal, int grossSubtotal, ParcelAggregator parcel,
+            String couponCode) {
         // Envío: tarifa por destino del carrier. Si el país no está cubierto, el envío queda en 0 aquí
         // (el checkout del storefront bloquea antes el destino no soportado). El bulto se arma con el
         // MISMO agregador que la vista previa del checkout: peso, medidas del paquete y batería.
@@ -285,6 +318,28 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // de afiliado viva (y no es su propio código). El envío y el IVA se calculan sobre (subtotal −
         // descuento).
         int discount = (int) affiliateProgramService.referralDiscountCents(userId, subtotal);
+
+        // Cupón tecleado en el checkout. Compite con el descuento de referido y se queda el MAYOR: dos
+        // descuentos sumados sobre el mismo pedido se comen el margen entero. La rebaja automática del
+        // producto no entra en la cuenta porque ya está descontada del precio de cada línea.
+        UUID cuponAplicado = null;
+        if (couponCode != null && !couponCode.isBlank()) {
+            PromotionService.CouponCheck check = promotionService.checkCoupon(couponCode, userId, subtotal);
+            if (check.valid()) {
+                // Lo que la rebaja automática YA descontó de las líneas. El cupón se mide sobre el precio
+                // de tarifa y solo se cobra la DIFERENCIA, igual que en la vista previa del checkout: si
+                // los dos números no se calcularan igual, se cobraría un total distinto del enseñado.
+                int cupon = couponDiscountCents(check.promotion(), grossSubtotal);
+                int extra = couponExtraDiscountCents(cupon, grossSubtotal, subtotal, discount);
+                if (extra > 0) {
+                    discount = extra;
+                    cuponAplicado = check.promotion().getId();
+                }
+            }
+            // Un cupón inválido no tumba el pedido: el checkout ya avisó en la vista previa y aquí
+            // simplemente no descuenta. Rechazar la compra entera por un código caducado sería peor.
+        }
+
         int discountedSubtotal = subtotal - discount;
 
         // Impuesto + despacho aduanero. Incluye:
@@ -305,6 +360,39 @@ public class OrderUseCaseImpl implements OrderUseCase {
         order.setShippingCents(totals.shippingCents());
         order.setTaxCents(totals.taxCents());
         order.setTotalCents(totals.totalCents(discountedSubtotal));
+        return cuponAplicado;
+    }
+
+    /**
+     * Lo que hay que descontar DE MÁS al aplicar un cupón, o 0 si el cupón no mejora lo que ya había.
+     *
+     * <p>La regla es «gana el mayor, nunca se suman»: el cupón se mide sobre el precio de tarifa y
+     * compite contra la rebaja automática (que ya está descontada de las líneas) y contra el descuento
+     * de referido. Si gana, solo se cobra la diferencia respecto a la rebaja ya aplicada.
+     *
+     * <p>Es el MISMO cálculo que hace la vista previa del checkout; si los dos se separan, se cobra un
+     * total distinto del que se enseñó.
+     */
+    static int couponExtraDiscountCents(int couponCents, int grossSubtotal, int subtotal, int otherDiscount) {
+        int yaRebajado = Math.max(0, grossSubtotal - subtotal);
+        if (couponCents <= Math.max(yaRebajado, otherDiscount)) {
+            return 0;
+        }
+        return couponCents - yaRebajado;
+    }
+
+    /**
+     * Lo que descuenta un cupón sobre un subtotal, en céntimos.
+     *
+     * <p>Nunca más que el propio subtotal: un cupón de importe fijo mayor que el carrito dejaría el
+     * pedido en negativo.
+     */
+    private static int couponDiscountCents(PromotionEntity coupon, int subtotalCents) {
+        if (coupon.getPercentOff() != null) {
+            return coupon.getPercentOff().multiply(BigDecimal.valueOf(subtotalCents))
+                    .divide(BigDecimal.valueOf(100), 0, RoundingMode.DOWN).intValue();
+        }
+        return coupon.getAmountOffCents() != null ? Math.min(coupon.getAmountOffCents(), subtotalCents) : 0;
     }
 
     @Override
@@ -672,7 +760,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
                     .orElseThrow(() -> new NotFoundException(ORDER_RESOURCE));
         } else {
             CreateOrderRequest orderReq = new CreateOrderRequest("ME-" + Instant.now().getEpochSecond(), addr, null,
-                    items, req.getNotes());
+                    items, req.getNotes(), req.getCouponCode());
             created = newOrder(null, userId, orderReq);
         }
 

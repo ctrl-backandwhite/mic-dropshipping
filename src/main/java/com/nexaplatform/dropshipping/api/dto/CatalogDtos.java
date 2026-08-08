@@ -180,4 +180,15 @@ public final class CatalogDtos {
     public record BestsellerView(UUID productId, String slug, String title, String mainImage, int rank, String listCode,
             Instant capturedAt) {
     }
+
+    /**
+     * Una promoción vigente, para anunciarla en la portada.
+     *
+     * <p>Solo lleva lo que el escaparate necesita pintar: ni el alcance interno ni los topes de uso,
+     * que son cosa del admin.
+     */
+    public record LivePromotionView(String name, Integer percentOff, String endsAt, String scope,
+            List<ProductSummaryView> products) {
+    }
+
 }
