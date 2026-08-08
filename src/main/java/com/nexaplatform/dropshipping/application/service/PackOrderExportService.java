@@ -227,9 +227,16 @@ public class PackOrderExportService {
         cell.setCellStyle(style);
     }
 
-    /** El OMS espera «1» o «0» literales, no TRUE/FALSE ni celdas booleanas. */
+    /**
+     * Marca un servicio de valor añadido.
+     *
+     * <p>«1» para pedirlo y celda VACÍA para no pedirlo, que es como lo escribe la propia plantilla en
+     * su hoja de ejemplos: donde no quieren el servicio dejan el hueco en blanco, nunca un cero. La
+     * primera importación real fue con «0» y la orden salió listando los tres servicios, así que el
+     * cero no se comporta como un «no» — y cada uno cuesta 0,5 CNY por pieza.
+     */
     private static String flag(boolean on) {
-        return on ? "1" : "0";
+        return on ? "1" : "";
     }
 
     private static boolean isBlank(String s) {

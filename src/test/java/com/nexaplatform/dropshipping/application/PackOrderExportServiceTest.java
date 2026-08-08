@@ -168,8 +168,10 @@ class PackOrderExportServiceTest {
             // Varios números en UNA celda separados por salto de línea, como pide la plantilla.
             assertThat(sheet.getRow(1).getCell(2).getStringCellValue()).isEqualTo("SF123\nJT456");
             assertThat(sheet.getRow(1).getCell(0).getStringCellValue()).isEqualTo("多个快递一个YT单");
-            // El OMS espera «1»/«0» literales, no celdas booleanas.
-            assertThat(sheet.getRow(1).getCell(4).getStringCellValue()).isEqualTo("0");
+            // «1» pide el servicio; NO pedirlo se escribe con la celda vacía, como hace la propia
+            // plantilla en sus ejemplos. Un «0» no se comporta como un «no» y cuesta 0,5 CNY/pieza.
+            assertThat(sheet.getRow(1).getCell(4).getStringCellValue()).isEmpty();
+            assertThat(sheet.getRow(1).getCell(5).getStringCellValue()).isEmpty();
             assertThat(sheet.getRow(1).getCell(6).getStringCellValue()).isEqualTo("1");
         }
     }
