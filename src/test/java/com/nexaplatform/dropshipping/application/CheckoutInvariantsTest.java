@@ -113,6 +113,9 @@ class CheckoutInvariantsTest {
     @Mock
     OrderSearchService orderSearchService;
 
+    @Mock
+    com.nexaplatform.dropshipping.application.service.SupplierPurchaseService supplierPurchaseService;
+
     @InjectMocks
     private OrderUseCaseImpl subject;
 

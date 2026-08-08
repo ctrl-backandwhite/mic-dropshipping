@@ -63,6 +63,19 @@ class StorefrontCatalogReadTest {
     @Mock
     ProductMapper productMapper;
 
+    @Mock
+    com.nexaplatform.dropshipping.application.service.PricingService pricingService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void precioDeVentaPorDefecto() {
+        com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount venta =
+                org.mockito.Mockito.mock(com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount.class);
+        org.mockito.Mockito.lenient().when(venta.displayAmount()).thenReturn(java.math.BigDecimal.ONE);
+        org.mockito.Mockito.lenient().when(pricingService.priceFor(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity.class)))
+                .thenReturn(venta);
+    }
+
     @InjectMocks
     CatalogStorefrontReadService service;
 

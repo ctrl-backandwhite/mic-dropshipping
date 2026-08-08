@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
+import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
@@ -69,9 +70,23 @@ class Cov06CatalogStorefrontReadServiceTest {
     ProductVariantRepository variantRepository;
     @Mock
     ProductMapper productMapper;
+    @Mock
+    PricingService pricingService;
 
     @InjectMocks
     CatalogStorefrontReadService service;
+
+    /**
+     * Precio de venta por defecto para cualquier variante: los tests de imagen/opciones/sku no miran
+     * el precio, pero variantView SIEMPRE precia (nunca sirve el coste CNY del proveedor).
+     */
+    @org.junit.jupiter.api.BeforeEach
+    void precioDeVentaPorDefecto() {
+        PricingService.PricedAmount venta = org.mockito.Mockito.mock(PricingService.PricedAmount.class);
+        org.mockito.Mockito.lenient().when(venta.displayAmount()).thenReturn(java.math.BigDecimal.ONE);
+        org.mockito.Mockito.lenient().when(pricingService.priceFor(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(ProductVariantEntity.class))).thenReturn(venta);
+    }
 
     /* ============================ nombre traducido ============================ */
 
@@ -502,5 +517,22 @@ class Cov06CatalogStorefrontReadServiceTest {
     private static ProductSummaryView resumen(String slug, BigDecimal displayPrice) {
         return new ProductSummaryView(UUID.randomUUID(), slug, slug, null, null, "CNY", null, 0, null, "ACTIVE", null,
                 displayPrice, "EUR", "€", null, null, null, false);
+    }
+
+    /**
+     * La variante se sirve a PRECIO DE VENTA. v.getPrice() es el coste CNY del proveedor, y servirlo
+     * por el API público regalaba el margen a cualquier usuario logueado (y a los partners).
+     */
+    @Test
+    void laVarianteNuncaEnsenaElCosteDelProveedor() {
+        ProductVariantEntity v = variante("SKU-A", true);
+        v.setPrice(new java.math.BigDecimal("5.38")); // coste CNY 1688
+        PricingService.PricedAmount venta = org.mockito.Mockito.mock(PricingService.PricedAmount.class,
+                org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(venta.displayAmount()).thenReturn(new java.math.BigDecimal("2.70"));
+        when(pricingService.priceFor(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(v)))
+                .thenReturn(venta);
+
+        assertThat(service.variantView(v).price()).isEqualByComparingTo("2.70");
     }
 }

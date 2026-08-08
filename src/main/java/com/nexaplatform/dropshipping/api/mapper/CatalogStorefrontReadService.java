@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
+import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
@@ -62,6 +63,7 @@ public class CatalogStorefrontReadService {
     private final SupplierSearchService supplierSearchService;
     private final ProductVariantRepository variantRepository;
     private final ProductMapper productMapper;
+    private final PricingService pricingService;
 
     /* ============================ Categories ============================ */
 
@@ -368,7 +370,10 @@ public class CatalogStorefrontReadService {
 
     public VariantView variantView(ProductVariantEntity v) {
         String img = v.getImageCdnUrl() != null ? v.getImageCdnUrl() : v.getImageSourceUrl();
-        return new VariantView(v.getId(), v.getSku(), v.getExternalId(), v.getTitle(), v.getPrice(), v.getStock(), img,
+        // Precio de VENTA, nunca v.getPrice(): esa columna es el coste CNY del proveedor, y servirla
+        // aquí regalaba el margen a cualquier usuario logueado (y a los partners).
+        BigDecimal retail = pricingService.priceFor(v.getProduct(), v).displayAmount();
+        return new VariantView(v.getId(), v.getSku(), v.getExternalId(), v.getTitle(), retail, v.getStock(), img,
                 v.getOptions() != null ? v.getOptions() : Map.of(), v.isActive());
     }
 

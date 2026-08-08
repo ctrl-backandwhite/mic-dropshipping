@@ -123,6 +123,9 @@ class Cov06OrderUseCaseImplTest {
     @Mock
     OrderSearchService orderSearchService;
 
+    @Mock
+    com.nexaplatform.dropshipping.application.service.SupplierPurchaseService supplierPurchaseService;
+
     @InjectMocks
     OrderUseCaseImpl useCase;
 
@@ -164,6 +167,9 @@ class Cov06OrderUseCaseImplTest {
 
         assertThat(pedido.getStatus()).isEqualTo(OrderStatus.PAID);
         verify(walletUseCase).charge(eq(userId), eq(2500L), any(), eq("idem-1"), anyString());
+        // El dinero está cobrado → la mercancía entra en la cola de compras de 1688. Sin esta llamada el
+        // freno veía cero compras, trataba el pedido como antiguo y dejaba emitir la guía sin comprar.
+        verify(supplierPurchaseService).planPurchases(any(Order.class));
         verify(orderEmailService).paymentConfirmed(any(Order.class), eq("comprador@x.com"), eq("es"), eq("WALLET"));
     }
 

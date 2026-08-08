@@ -20,6 +20,7 @@ import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.ParcelAggregator;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.PromotionService;
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
@@ -120,6 +121,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final CheckoutTotalsService checkoutTotalsService;
     private final OperatorCommissionService operatorCommissionService;
     private final PromotionService promotionService;
+    private final SupplierPurchaseService supplierPurchaseService;
     /** Timeline del pedido: los pasos que marca una persona también tienen que verse ahí. */
     private final OrderTrackingEventRepository trackingRepository;
     private final OrderIndexer orderIndexer;
@@ -775,6 +777,11 @@ public class OrderUseCaseImpl implements OrderUseCase {
             String idemKey = idem != null ? idem : ("checkout-" + created.getId());
             walletUseCase.charge(userId, charge, created.getId(), idemKey, "Order " + created.getOrderNumber());
             o.setStatus(OrderStatus.PAID);
+            // El dinero ya está cobrado: a la cola de compras de 1688. Los pagos externos (Stripe/PayPal)
+            // planifican al confirmarse en PaymentUseCaseImpl; este camino cobra el wallet en el acto y
+            // sin esta llamada el pedido quedaba SIN compra — y el freno, al ver cero compras, lo trataba
+            // como pedido antiguo y dejaba emitir la guía sin mercancía comprada.
+            supplierPurchaseService.planPurchases(o);
         } else {
             o.setStatus(OrderStatus.PENDING);
         }

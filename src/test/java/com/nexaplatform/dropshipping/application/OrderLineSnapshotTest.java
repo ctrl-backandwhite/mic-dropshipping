@@ -114,6 +114,8 @@ class OrderLineSnapshotTest {
     @Mock
     PromotionService promotionService;
     @Mock
+    com.nexaplatform.dropshipping.application.service.SupplierPurchaseService supplierPurchaseService;
+    @Mock
     OrderIndexer orderIndexer;
     @Mock
     OrderSearchService orderSearchService;
@@ -126,7 +128,7 @@ class OrderLineSnapshotTest {
         return new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository,
                 userRepository, shopConnectionRepository, userAddressRepository, webhooks, walletUseCase,
                 notificationsPublisher, pricingService, affiliateProgramService, stockService, paymentUseCase,
-                orderEmailService, fulfillment, checkoutTotalsService, operatorCommissionService, promotionService, trackingRepository, orderIndexer,
+                orderEmailService, fulfillment, checkoutTotalsService, operatorCommissionService, promotionService, supplierPurchaseService, trackingRepository, orderIndexer,
                 orderSearchService);
     }
 
