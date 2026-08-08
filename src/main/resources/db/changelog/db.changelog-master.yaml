@@ -201,3 +201,5 @@ databaseChangeLog:
       file: db/changelog/schema-v95-newsletter-double-optin.sql
   - include:
       file: db/changelog/schema-v96-supplier-purchase.sql
+  - include:
+      file: db/changelog/schema-v97-promotions.sql

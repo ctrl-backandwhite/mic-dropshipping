@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.application;
 
 import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.service.PromotionService;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
@@ -15,6 +16,8 @@ import org.mockito.Mockito;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 
+import static org.mockito.Mockito.lenient;
+import static org.mockito.ArgumentMatchers.any;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -44,7 +47,7 @@ class ProductMapperTest {
                 .thenAnswer(inv -> new MarginService.PriceWithMargin(inv.getArgument(0), inv.getArgument(0), null,
                         BigDecimal.ZERO));
 
-        pricingService = new PricingService(currencyService, marginService);
+        pricingService = new PricingService(currencyService, sinPromociones(), marginService);
 
         productMapper = new ProductMapper(supplierMapper, pricingService, currencyService, marginService);
     }
@@ -93,5 +96,18 @@ class ProductMapperTest {
         p.setTranslations(new ArrayList<>());
         var view = productMapper.toSummary(p, "es");
         assertThat(view.mainImage()).isEqualTo("https://cbu01.alicdn.com/x.jpg");
+    }
+
+    /**
+     * Motor de promociones que no rebaja nada: estas pruebas miden el pipeline de precio (coste →
+     * margen → divisa), no las rebajas, y una promoción activa cambiaría todos los importes esperados.
+     */
+    private static PromotionService sinPromociones() {
+        PromotionService p = mock(PromotionService.class);
+        lenient().when(p.applyAutomatic(any(), any(), any())).thenAnswer(inv -> {
+            java.math.BigDecimal precio = inv.getArgument(1);
+            return new PromotionService.Discounted(precio, precio, java.math.BigDecimal.ZERO, null, null);
+        });
+        return p;
     }
 }

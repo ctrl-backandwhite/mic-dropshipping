@@ -105,7 +105,20 @@ public final class CatalogDtos {
             // la suma del stock por variantes activas (más fiel para fulfillment).
             Integer inventoryCount, Integer availableUnits,
             // verificación manual del admin (false = pendiente/con error, true = revisado OK)
-            boolean verified) {
+            boolean verified,
+            // Rebaja. Nulos cuando el producto no está en promoción: es lo que decide si el escaparate
+            // pinta el precio anterior tachado o solo uno. Ya vienen formateados por el backend.
+            String originalFormatted, Integer discountPercent, String promotionName) {
+
+        /** Sin promoción: atajo para los usos que no la calculan. */
+        public ProductSummaryView(UUID id, String slug, String title, String mainImage, BigDecimal basePrice,
+                String currency, BigDecimal rating, int monthlySales, BigDecimal trendScore, String status,
+                BigDecimal priceUsd, BigDecimal displayPrice, String displayCurrency, String displaySymbol,
+                String displayFormatted, Integer inventoryCount, Integer availableUnits, boolean verified) {
+            this(id, slug, title, mainImage, basePrice, currency, rating, monthlySales, trendScore, status,
+                    priceUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted, inventoryCount,
+                    availableUnits, verified, null, null, null);
+        }
     }
 
     public record ProductDetailView(UUID id, String slug, String source, String externalId, SupplierView supplier,
@@ -126,7 +139,30 @@ public final class CatalogDtos {
             // verificación manual del admin (false = pendiente/con error, true = revisado OK)
             boolean verified,
             // Vídeo de explicación del producto (columna product.video_url). El front lo muestra en la galería.
-            String videoUrl, boolean hasVideo) {
+            String videoUrl, boolean hasVideo,
+            // Rebaja vigente sobre este producto. Nulos si no la hay.
+            String originalFormatted, Integer discountPercent, String promotionName) {
+
+        /** Sin promoción: atajo para los usos que no la calculan. */
+        public ProductDetailView(UUID id, String slug, String source, String externalId, SupplierView supplier,
+                UUID categoryId, String title, String shortDescription, String description, String titleZh,
+                String shortDescriptionZh, String descriptionZh, String brand, int moq, BigDecimal basePrice,
+                String currency, BigDecimal rating, int reviewCount, int monthlySales, BigDecimal repurchaseRate,
+                BigDecimal trendScore, String status, String sourceUrl, Instant ingestedAt, Instant lastSyncedAt,
+                List<ProductImageView> images, List<VariantOptionView> variantOptions, List<VariantView> variants,
+                List<PriceTierView> priceTiers, BigDecimal costUsd, BigDecimal retailUsd, BigDecimal displayPrice,
+                String displayCurrency, String displaySymbol, String displayFormatted,
+                BigDecimal appliedMarginPercent, String baseFormatted, String ivaFormatted,
+                String shippingFormatted, String metaTitle, String metaDescription, boolean verified,
+                String videoUrl, boolean hasVideo) {
+            this(id, slug, source, externalId, supplier, categoryId, title, shortDescription, description,
+                    titleZh, shortDescriptionZh, descriptionZh, brand, moq, basePrice, currency, rating,
+                    reviewCount, monthlySales, repurchaseRate, trendScore, status, sourceUrl, ingestedAt,
+                    lastSyncedAt, images, variantOptions, variants, priceTiers, costUsd, retailUsd, displayPrice,
+                    displayCurrency, displaySymbol, displayFormatted, appliedMarginPercent, baseFormatted,
+                    ivaFormatted, shippingFormatted, metaTitle, metaDescription, verified, videoUrl, hasVideo,
+                    null, null, null);
+        }
     }
 
     public record BestsellerView(UUID productId, String slug, String title, String mainImage, int rank, String listCode,

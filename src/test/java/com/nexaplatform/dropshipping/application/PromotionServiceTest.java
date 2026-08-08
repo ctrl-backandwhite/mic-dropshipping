@@ -1,0 +1,303 @@
+package com.nexaplatform.dropshipping.application;
+
+import com.nexaplatform.dropshipping.application.service.PromotionService;
+import com.nexaplatform.dropshipping.application.service.PromotionService.Discounted;
+import com.nexaplatform.dropshipping.domain.enums.PromotionKind;
+import com.nexaplatform.dropshipping.domain.enums.PromotionScope;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PromotionEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PromotionTargetEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PromotionRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PromotionTargetRepository;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
+class PromotionServiceTest {
+
+    @Mock
+    PromotionRepository promotionRepository;
+    @Mock
+    PromotionTargetRepository targetRepository;
+    @Mock
+    CategoryRepository categoryRepository;
+
+    @InjectMocks
+    PromotionService service;
+
+    private static final BigDecimal PRECIO = new BigDecimal("100.00");
+
+    private static PromotionEntity promo(String name, String percent, PromotionScope scope, PromotionKind kind) {
+        return PromotionEntity.builder().id(UUID.randomUUID()).name(name)
+                .percentOff(new BigDecimal(percent)).scope(scope).kind(kind)
+                .active(true).createdAt(Instant.now()).build();
+    }
+
+    private static ProductEntity producto(UUID categoryId) {
+        ProductEntity p = new ProductEntity();
+        p.setId(UUID.randomUUID());
+        if (categoryId != null) {
+            CategoryEntity c = new CategoryEntity();
+            c.setId(categoryId);
+            p.setCategory(c);
+        }
+        return p;
+    }
+
+    private void live(PromotionEntity... promos) {
+        when(promotionRepository.findLive(any())).thenReturn(List.of(promos));
+    }
+
+    // ─────────────────────── descuento básico ───────────────────────
+
+    @Test
+    void unaRebajaGlobalDescuentaElPorcentajeYLoAnuncia() {
+        live(promo("Rebajas de invierno", "30", PromotionScope.ALL, PromotionKind.SEASONAL));
+
+        Discounted d = service.applyAutomatic(producto(null), PRECIO, null);
+
+        assertThat(d.applies()).isTrue();
+        assertThat(d.finalAmount()).isEqualByComparingTo("70.00");
+        assertThat(d.percentOff()).isEqualByComparingTo("30");
+        assertThat(d.promotionName()).isEqualTo("Rebajas de invierno");
+    }
+
+    @Test
+    void sinPromocionesElPrecioNoSeToca() {
+        live();
+
+        Discounted d = service.applyAutomatic(producto(null), PRECIO, null);
+
+        assertThat(d.applies()).isFalse();
+        assertThat(d.finalAmount()).isEqualByComparingTo(PRECIO);
+    }
+
+    @Test
+    void unDescuentoDeImporteFijoRestaEseImporte() {
+        PromotionEntity p = PromotionEntity.builder().id(UUID.randomUUID()).name("5 € menos")
+                .amountOffCents(500).scope(PromotionScope.ALL).kind(PromotionKind.FLASH)
+                .active(true).createdAt(Instant.now()).build();
+        live(p);
+
+        assertThat(service.applyAutomatic(producto(null), PRECIO, null).finalAmount())
+                .isEqualByComparingTo("95.00");
+    }
+
+    // ─────────────────────── regla 1: gana la mayor, no se acumulan ───────────────────────
+
+    @Test
+    void conDosRebajasAplicablesGanaLaQueMasDescuenta() {
+        live(promo("Invierno", "20", PromotionScope.ALL, PromotionKind.SEASONAL),
+             promo("Liquidación", "45", PromotionScope.ALL, PromotionKind.CLEARANCE));
+
+        Discounted d = service.applyAutomatic(producto(null), PRECIO, null);
+
+        // 45%, NO 20+45 ni encadenado: se aplica una sola.
+        assertThat(d.finalAmount()).isEqualByComparingTo("55.00");
+        assertThat(d.promotionName()).isEqualTo("Liquidación");
+    }
+
+    @Test
+    void elCuponCompiteConLaRebajaYGanaElMejorParaElCliente() {
+        live(promo("Invierno", "40", PromotionScope.ALL, PromotionKind.SEASONAL));
+        PromotionEntity cupon = promo("CUPON10", "10", PromotionScope.ALL, PromotionKind.COUPON);
+
+        Discounted d = service.applyWithCoupon(producto(null), PRECIO, null, cupon);
+
+        // El cupón es PEOR que la rebaja: el cliente se queda con la rebaja, no pierde por canjearlo.
+        assertThat(d.finalAmount()).isEqualByComparingTo("60.00");
+        assertThat(d.promotionName()).isEqualTo("Invierno");
+    }
+
+    @Test
+    void unCuponMejorQueLaRebajaSustituyeALaRebaja() {
+        live(promo("Invierno", "10", PromotionScope.ALL, PromotionKind.SEASONAL));
+        PromotionEntity cupon = promo("VIP50", "50", PromotionScope.ALL, PromotionKind.COUPON);
+
+        Discounted d = service.applyWithCoupon(producto(null), PRECIO, null, cupon);
+
+        assertThat(d.finalAmount()).isEqualByComparingTo("50.00");
+        assertThat(d.promotionName()).isEqualTo("VIP50");
+    }
+
+    // ─────────────────────── regla 2: nunca por debajo de coste ───────────────────────
+
+    @Test
+    void elSueloDeCosteRecortaLaRebajaQueVenderiaAPerdida() {
+        live(promo("Liquidación total", "80", PromotionScope.ALL, PromotionKind.CLEARANCE));
+
+        // Coste + envío = 60. Un 80% dejaría el precio en 20: por debajo, cada venta pierde dinero.
+        Discounted d = service.applyAutomatic(producto(null), PRECIO, new BigDecimal("60.00"));
+
+        assertThat(d.finalAmount()).isEqualByComparingTo("60.00");
+        // Y se anuncia el descuento REAL (40%), no el nominal del 80%.
+        assertThat(d.percentOff()).isEqualByComparingTo("40");
+    }
+
+    @Test
+    void siElSueloSeComeLaRebajaEnteraNoSeAnunciaNinguna() {
+        live(promo("Imposible", "30", PromotionScope.ALL, PromotionKind.SEASONAL));
+
+        // El suelo ya está por encima del precio: no hay rebaja posible.
+        Discounted d = service.applyAutomatic(producto(null), PRECIO, new BigDecimal("120.00"));
+
+        assertThat(d.applies()).isFalse();
+        assertThat(d.finalAmount()).isEqualByComparingTo(PRECIO);
+    }
+
+    @Test
+    void elSueloSeAplicaDespuesDeElegirLaMejorPromocion() {
+        // Si el suelo se aplicara ANTES, la del 80% quedaría recortada a 60 y perdería frente a la del
+        // 30% (que da 70). Elegir primero y recortar después conserva la más ventajosa.
+        live(promo("Suave", "30", PromotionScope.ALL, PromotionKind.SEASONAL),
+             promo("Agresiva", "80", PromotionScope.ALL, PromotionKind.CLEARANCE));
+
+        Discounted d = service.applyAutomatic(producto(null), PRECIO, new BigDecimal("60.00"));
+
+        assertThat(d.promotionName()).isEqualTo("Agresiva");
+        assertThat(d.finalAmount()).isEqualByComparingTo("60.00");
+    }
+
+    // ─────────────────────── regla 3: alcance ───────────────────────
+
+    @Test
+    void unaRebajaPorProductoSoloAlcanzaAEseProducto() {
+        ProductEntity dentro = producto(null);
+        ProductEntity fuera = producto(null);
+        PromotionEntity p = promo("Solo este", "50", PromotionScope.PRODUCT, PromotionKind.FLASH);
+        live(p);
+        when(targetRepository.findByPromotionId(p.getId())).thenReturn(List.of(
+                PromotionTargetEntity.builder().promotionId(p.getId()).productId(dentro.getId()).build()));
+
+        assertThat(service.applyAutomatic(dentro, PRECIO, null).applies()).isTrue();
+        assertThat(service.applyAutomatic(fuera, PRECIO, null).applies()).isFalse();
+    }
+
+    @Test
+    void unaRebajaPorCategoriaAlcanzaTambienALasSubcategorias() {
+        // Rebajar «Ropa de mujer» tiene que alcanzar a «Vestidos», que cuelga de ella: si no, habría
+        // que listar cada subcategoría a mano y las nuevas se quedarían fuera sin que nadie lo note.
+        UUID madre = UUID.randomUUID();
+        UUID hija = UUID.randomUUID();
+        CategoryEntity padre = new CategoryEntity();
+        padre.setId(madre);
+        CategoryEntity sub = new CategoryEntity();
+        sub.setId(hija);
+        sub.setParent(padre);
+        when(categoryRepository.findById(hija)).thenReturn(Optional.of(sub));
+        when(categoryRepository.findById(madre)).thenReturn(Optional.of(padre));
+
+        PromotionEntity p = promo("Ropa de mujer -25%", "25", PromotionScope.CATEGORY, PromotionKind.SEASONAL);
+        live(p);
+        when(targetRepository.findByPromotionId(p.getId())).thenReturn(List.of(
+                PromotionTargetEntity.builder().promotionId(p.getId()).categoryId(madre).build()));
+
+        assertThat(service.applyAutomatic(producto(hija), PRECIO, null).applies()).isTrue();
+    }
+
+    @Test
+    void unaRebajaPorCategoriaNoAlcanzaAOtraRama() {
+        UUID objetivo = UUID.randomUUID();
+        UUID ajena = UUID.randomUUID();
+        CategoryEntity otra = new CategoryEntity();
+        otra.setId(ajena);
+        when(categoryRepository.findById(ajena)).thenReturn(Optional.of(otra));
+
+        PromotionEntity p = promo("Calzado", "30", PromotionScope.CATEGORY, PromotionKind.SEASONAL);
+        live(p);
+        when(targetRepository.findByPromotionId(p.getId())).thenReturn(List.of(
+                PromotionTargetEntity.builder().promotionId(p.getId()).categoryId(objetivo).build()));
+
+        assertThat(service.applyAutomatic(producto(ajena), PRECIO, null).applies()).isFalse();
+    }
+
+    // ─────────────────────── vigencia ───────────────────────
+
+    @Test
+    void unaPromocionCaducadaOFuturaNoEstaViva() {
+        Instant ahora = Instant.now();
+        PromotionEntity caducada = promo("Verano pasado", "30", PromotionScope.ALL, PromotionKind.SEASONAL);
+        caducada.setEndsAt(ahora.minus(1, ChronoUnit.DAYS));
+        PromotionEntity futura = promo("Black Friday", "40", PromotionScope.ALL, PromotionKind.SEASONAL);
+        futura.setStartsAt(ahora.plus(30, ChronoUnit.DAYS));
+
+        assertThat(caducada.isLiveAt(ahora)).isFalse();
+        assertThat(futura.isLiveAt(ahora)).isFalse();
+    }
+
+    @Test
+    void unaPromocionDesactivadaNoSeAplicaAunqueEsteEnFecha() {
+        PromotionEntity p = promo("Pausada", "30", PromotionScope.ALL, PromotionKind.SEASONAL);
+        p.setActive(false);
+
+        assertThat(p.isLiveAt(Instant.now())).isFalse();
+    }
+
+    @Test
+    void unCuponAgotadoDejaDeEstarVivo() {
+        PromotionEntity p = promo("SOLO100", "20", PromotionScope.ALL, PromotionKind.COUPON);
+        p.setMaxUses(100);
+        p.setUsedCount(100);
+
+        assertThat(p.isLiveAt(Instant.now())).isFalse();
+    }
+
+    @Test
+    void unaVigenciaAbiertaPorLosDosLadosEstaViva() {
+        assertThat(promo("Permanente", "10", PromotionScope.ALL, PromotionKind.SEASONAL)
+                .isLiveAt(Instant.now())).isTrue();
+    }
+
+    // ─────────────────────── cupones ───────────────────────
+
+    @Test
+    void elCuponSeResuelvePorCodigoSinDistinguirMayusculas() {
+        PromotionEntity p = promo("VERANO25", "25", PromotionScope.ALL, PromotionKind.COUPON);
+        p.setCode("VERANO25");
+        when(promotionRepository.findByCodeIgnoreCase("verano25")).thenReturn(Optional.of(p));
+
+        assertThat(service.findLiveCoupon("verano25")).isPresent();
+    }
+
+    @Test
+    void unCodigoVacioNoResuelveNingunCupon() {
+        assertThat(service.findLiveCoupon("  ")).isEmpty();
+        assertThat(service.findLiveCoupon(null)).isEmpty();
+    }
+
+    @Test
+    void loscuponesNoRebajanElEscaparate() {
+        // Un cupón visible en el catálogo rebajaría el precio de toda la tienda sin que nadie lo canjee.
+        live(promo("CUPON30", "30", PromotionScope.ALL, PromotionKind.COUPON));
+
+        assertThat(service.applyAutomatic(producto(null), PRECIO, null).applies()).isFalse();
+    }
+
+    @Test
+    void soloLasPromocionesAutomaticasSeAnuncianSolas() {
+        assertThat(PromotionKind.SEASONAL.isAutomatic()).isTrue();
+        assertThat(PromotionKind.FLASH.isAutomatic()).isTrue();
+        assertThat(PromotionKind.CLEARANCE.isAutomatic()).isTrue();
+        assertThat(PromotionKind.COUPON.isAutomatic()).isFalse();
+        assertThat(PromotionKind.REFERRAL.isAutomatic()).isFalse();
+    }
+}

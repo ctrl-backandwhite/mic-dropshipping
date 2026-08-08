@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.application;
 import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.MarginService.PriceWithMargin;
 import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.service.PromotionService;
 import com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 
 import java.math.BigDecimal;
 
+import static org.mockito.Mockito.lenient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -37,7 +39,7 @@ class PricingServiceTest {
     void setup() {
         currencyService = mock(CurrencyRateService.class);
         marginService = mock(MarginService.class);
-        service = new PricingService(currencyService, marginService);
+        service = new PricingService(currencyService, sinPromociones(), marginService);
         CurrencyHolder.clear();
     }
 
@@ -209,5 +211,18 @@ class PricingServiceTest {
 
         // Should still convert as if it were CNY (default).
         assertThat(priced.costUsd()).isEqualByComparingTo("5.00");
+    }
+
+    /**
+     * Motor de promociones que no rebaja nada: estas pruebas miden el pipeline de precio (coste →
+     * margen → divisa), no las rebajas, y una promoción activa cambiaría todos los importes esperados.
+     */
+    private static PromotionService sinPromociones() {
+        PromotionService p = mock(PromotionService.class);
+        lenient().when(p.applyAutomatic(any(), any(), any())).thenAnswer(inv -> {
+            java.math.BigDecimal precio = inv.getArgument(1);
+            return new PromotionService.Discounted(precio, precio, java.math.BigDecimal.ZERO, null, null);
+        });
+        return p;
     }
 }
