@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application.service;
 
 import com.nexaplatform.dropshipping.domain.enums.PackServiceType;
+import com.nexaplatform.dropshipping.domain.enums.PackWarehouse;
 import com.nexaplatform.dropshipping.domain.enums.SupplierPurchaseStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
@@ -159,6 +160,13 @@ public class PackOrderExportService {
         } else if (!order.getTrackingNumber().startsWith(YT_PREFIX)) {
             problems.add("El número de seguimiento " + order.getTrackingNumber()
                     + " no parece un YT de YunExpress");
+        }
+        // El OMS rechaza el fichero ENTERO si una fila trae un almacén no operativo («Warehouse does
+        // not exist»), así que la fila mala tiene que quedarse fuera antes de generarlo.
+        PackWarehouse warehouse = PackWarehouse.fromCode(pending.get(0).getWarehouseCode());
+        if (!warehouse.usableForImport()) {
+            problems.add("El almacén " + pending.get(0).getWarehouseCode()
+                    + " no admite órdenes de re-empaquetado: usa CNCHASHAN o CNJIASHAN");
         }
         return problems;
     }

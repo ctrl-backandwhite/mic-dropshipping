@@ -23,8 +23,12 @@ public enum PackWarehouse {
     CNJIASHAN("嘉善仓", "浙江省嘉兴市嘉善县魏塘街道嘉魏路9号镝擎嘉善产业园二楼云途物流3号仓1213号", "314100",
             "13085621862"),
 
-    /** Almacén de pruebas del OMS: permite ensayar el flujo entero sin mercancía real. */
-    TESTSTORE("测试仓", "", "", "");
+    /**
+     * Aparece en los desplegables de FILTRO del OMS, pero no es un almacén operativo: importar una
+     * orden con él la rechaza con «Warehouse does not exist» (comprobado el 8-ago-2026). En la hoja
+     * «仓库» de la plantilla oficial ya figura sin nombre ni dirección, que era la pista.
+     */
+    TESTSTORE("", "", "", "");
 
     private final String nameZh;
     private final String address;
@@ -58,6 +62,16 @@ public enum PackWarehouse {
     /** La dirección completa con el código de cliente pegado al final, como exige el almacén. */
     public String fullAddress(String customerCode) {
         return address.isEmpty() ? "" : address + " " + customerCode;
+    }
+
+    /**
+     * ¿Se puede dar de alta una orden de re-empaquetado en este almacén?
+     *
+     * <p>Un almacén sin dirección física no es operativo: el OMS lo acepta como filtro de búsqueda pero
+     * rechaza la importación con «Warehouse does not exist», y el fichero entero se pierde.
+     */
+    public boolean usableForImport() {
+        return !address.isEmpty();
     }
 
     /** Resuelve el código del almacén sin reventar si viene vacío o desconocido. */

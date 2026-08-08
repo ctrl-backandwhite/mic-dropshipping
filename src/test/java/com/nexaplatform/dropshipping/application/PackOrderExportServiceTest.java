@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.application.service.PackOrderExportService.
 import com.nexaplatform.dropshipping.application.service.PackOrderExportService.PackOrderRow;
 import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.domain.enums.PackServiceType;
+import com.nexaplatform.dropshipping.domain.enums.PackWarehouse;
 import com.nexaplatform.dropshipping.domain.enums.SupplierPurchaseStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
@@ -171,6 +172,34 @@ class PackOrderExportServiceTest {
             assertThat(sheet.getRow(1).getCell(4).getStringCellValue()).isEqualTo("0");
             assertThat(sheet.getRow(1).getCell(6).getStringCellValue()).isEqualTo("1");
         }
+    }
+
+    @Test
+    void elAlmacenDePruebasNoAdmiteOrdenesYSeAvisaAntesDeGenerarElFichero() {
+        // Comprobado contra el OMS el 8-ago-2026: TESTSTORE sale en los filtros pero al importar
+        // devuelve «Warehouse does not exist» y tumba el fichero ENTERO, no solo esa fila.
+        SupplierPurchaseEntity p = purchase("SF123");
+        p.setWarehouseCode("TESTSTORE");
+        when(purchaseService.openQueue()).thenReturn(List.of(p));
+        when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order("YT999")));
+
+        PackOrderPlan plan = service.plan();
+
+        assertThat(plan.rows()).isEmpty();
+        assertThat(plan.issues()).singleElement()
+                .satisfies(i -> assertThat(i.reason()).contains("no admite órdenes de re-empaquetado"));
+    }
+
+    @Test
+    void soloLosAlmacenesConDireccionFisicaSirvenParaImportar() {
+        assertThat(PackWarehouse.CNCHASHAN.usableForImport()).isTrue();
+        assertThat(PackWarehouse.CNJIASHAN.usableForImport()).isTrue();
+        assertThat(PackWarehouse.TESTSTORE.usableForImport()).isFalse();
+        // Un código desconocido cae en Dongguan en vez de reventar: mejor el almacén de referencia
+        // que un fichero sin generar.
+        assertThat(PackWarehouse.fromCode("loquesea")).isEqualTo(PackWarehouse.CNCHASHAN);
+        assertThat(PackWarehouse.CNCHASHAN.consignee("CNHC459832")).isEqualTo("云途CNHC459832");
+        assertThat(PackWarehouse.CNCHASHAN.fullAddress("CNHC459832")).endsWith("CNHC459832");
     }
 
     @Test
