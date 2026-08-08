@@ -165,7 +165,7 @@ public class NotificationUseCaseImpl implements NotificationUseCase {
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", mail.title);
         vars.put("bodyHtml", "<p>" + escapeHtml(body) + "</p>");
-        vars.put("footer", "NX036 LTD · Soporte");
+        vars.put("footer", "NX036 · Soporte");
         vars.put("footerNote", "Actualización del estado de tu solicitud de soporte.");
         emailQueue.enqueue(email, mail.title, "emails/notification", vars);
         // Buzón in-app si el solicitante tiene cuenta.

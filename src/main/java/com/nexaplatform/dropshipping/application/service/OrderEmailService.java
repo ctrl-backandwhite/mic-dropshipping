@@ -233,7 +233,7 @@ public class OrderEmailService {
             vars.put("preheader", notice.title());
             vars.put("ctaUrl", baseUrl + ORDERS + o.getId());
             vars.put("ctaLabel", notice.ctaLabel());
-            vars.put("footer", "NX036 LTD");
+            vars.put("footer", "NX036");
             vars.put("footerNote", OrderEmailLabel.AUTO_NOTE.of(notice.lang())); // pie en el idioma del usuario
             emailQueue.enqueue(email, notice.title(), "emails/notification", vars);
         } catch (RuntimeException e) {

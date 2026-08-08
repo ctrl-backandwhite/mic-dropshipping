@@ -174,7 +174,7 @@
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
           <tr>
             <td style="vertical-align:bottom;font-size:11px;color:#5c6e7c;line-height:1.6;">
-              <div th:text="${footerLegal}">NX036 LTD · VAT · email · NX-000</div>
+              <div th:text="${footerLegal}">NX036 · VAT · email · NX-000</div>
               <div th:if="${pdf and qr != ''}" style="margin-top:8px;color:#9aa4b2;max-width:340px;" th:text="${verifyNote}">Documento generado electrónicamente. Escanea el QR para verificar la autenticidad de esta factura.</div>
               <div th:if="${legalNote != ''}" style="margin-top:8px;color:#9aa4b2;" th:text="${legalNote}">Nota legal</div>
             </td>

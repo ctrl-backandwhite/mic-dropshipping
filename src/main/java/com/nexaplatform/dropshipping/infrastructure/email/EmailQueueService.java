@@ -43,7 +43,7 @@ public class EmailQueueService {
 
     @Value("${nexadrop.email.from:noreply@nexadrop.local}")
     private String fromAddress;
-    @Value("${nexadrop.email.from-name:NX036 LTD}")
+    @Value("${nexadrop.email.from-name:NX036}")
     private String fromName;
     // Remitentes por tipo de correo (alias del dominio). Si no se definen, caen al 'from' por defecto.
     @Value("${nexadrop.email.from-billing:${nexadrop.email.from:noreply@nexadrop.local}}")

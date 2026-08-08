@@ -98,8 +98,8 @@ public class StripeGateway implements PaymentGateway {
             String cancelUrl = isOrder ? storefrontBaseUrl + "/checkout?cancelled=1"
                     : storefrontBaseUrl + "/wallet/recharge?cancelled=1";
             String productName = isOrder
-                    ? "NX036 LTD · order " + shortId(p.getOrderId().toString())
-                    : "NX036 LTD · wallet recharge";
+                    ? "NX036 · order " + shortId(p.getOrderId().toString())
+                    : "NX036 · wallet recharge";
             String description = isOrder ? platformId + " · order " + p.getOrderId()
                     : platformId + " · wallet recharge";
 
