@@ -109,7 +109,8 @@ public class ProductMapper {
                 ? v.getPackageWeightGrams() : v.getWeightGrams();
         return new VariantView(v.getId(), v.getSku(), v.getTitle(), priced.displayAmount(), // shown in user currency
                 priced.displayFormatted(), v.getStock(), pickVariantImage(v), v.getOptions(), v.isActive(),
-                weight, v.getLengthMm(), v.getWidthMm(), v.getHeightMm());
+                weight, v.getLengthMm(), v.getWidthMm(), v.getHeightMm(),
+                priced.originalFormatted(), priced.discountPercent());
     }
 
     /** Back-compat overload (without product); used by ProductMapperTest. */

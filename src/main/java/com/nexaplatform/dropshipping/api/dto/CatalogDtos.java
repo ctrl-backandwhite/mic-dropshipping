@@ -86,7 +86,19 @@ public final class CatalogDtos {
     public record VariantView(UUID id, String sku, String title, BigDecimal price, String priceFormatted, int stock,
             String imageUrl, Map<String, String> options, boolean active,
             // Báscula de peso por variante (peso en gramos, dimensiones en mm). El volumen se calcula en el front.
-            Integer weightGrams, Integer lengthMm, Integer widthMm, Integer heightMm) {
+            Integer weightGrams, Integer lengthMm, Integer widthMm, Integer heightMm,
+            // Rebaja de ESTA variante. Tiene que ser suya y no la del producto: cada variante parte de
+            // un precio distinto, así que el «antes» del producto junto al «ahora» de la variante da
+            // un tachado incoherente — y puede salir MENOR que el precio rebajado.
+            String originalFormatted, Integer discountPercent) {
+
+        /** Sin promoción: atajo para los usos que no la calculan. */
+        public VariantView(UUID id, String sku, String title, BigDecimal price, String priceFormatted, int stock,
+                String imageUrl, Map<String, String> options, boolean active, Integer weightGrams,
+                Integer lengthMm, Integer widthMm, Integer heightMm) {
+            this(id, sku, title, price, priceFormatted, stock, imageUrl, options, active, weightGrams,
+                    lengthMm, widthMm, heightMm, null, null);
+        }
     }
 
     public record PriceTierView(int minQty, Integer maxQty, BigDecimal unitPrice, String currency,
