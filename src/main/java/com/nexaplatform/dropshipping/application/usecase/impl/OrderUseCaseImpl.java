@@ -353,9 +353,15 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // Destino cuya política prohíbe vender por encima del umbral: se rechaza ANTES de cobrar, en vez de
         // aceptar un pedido que costaría aranceles y despacho formal no repercutidos.
         if (totals.blocked()) {
+            // El importe de la mercancía supera el umbral libre de aranceles del destino; por encima, la
+            // línea de e-commerce no despacha y habría aranceles. Se rechaza ANTES de cobrar. El texto que
+            // ve el cliente lo localiza el front por el CODE; este es el fallback técnico.
+            String limite = totals.customs().deMinimisLabel();
             throw new BusinessException("CUSTOMS_THRESHOLD_EXCEEDED",
-                    "El valor del pedido supera el límite de importación de " + order.getShippingCountry()
-                            + ". Reduce el importe del carrito o divídelo en varios pedidos.");
+                    "El valor de los productos supera el límite de importación de "
+                            + order.getShippingCountry() + (limite.isBlank() ? "" : " (" + limite + ")")
+                            + ", por encima del cual se aplican aranceles de aduana. Reduce el carrito por"
+                            + " debajo de ese importe para completar la compra.");
         }
         order.setSubtotalCents(subtotal);
         order.setDiscountCents(discount);

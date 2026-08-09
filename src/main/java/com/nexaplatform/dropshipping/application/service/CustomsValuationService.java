@@ -60,9 +60,11 @@ public class CustomsValuationService {
      * @param policy              qué hacer al superar el umbral
      * @param handlingFeeCents    recargo total del despacho a sumar al envío, céntimos USD
      * @param blocked             true si la política del país impide vender ese pedido a ese destino
+     * @param deMinimisLabel      el umbral del país en su divisa legal, ya formateado ("150 EUR"); "" si no hay
      */
     public record CustomsValuation(String countryCode, TaxMode taxMode, int intrinsicValueCents,
-            boolean deMinimisExceeded, OverThresholdPolicy policy, int handlingFeeCents, boolean blocked) {
+            boolean deMinimisExceeded, OverThresholdPolicy policy, int handlingFeeCents, boolean blocked,
+            String deMinimisLabel) {
 
         /** Valor a declarar en aduana (céntimos USD). Hoy coincide con el valor intrínseco de los bienes. */
         public int declaredValueCents() {
@@ -73,7 +75,7 @@ public class CustomsValuationService {
     /** Valoración neutra: sin regla configurada para el país no se altera nada del cálculo actual. */
     private static CustomsValuation neutral(String countryCode, int intrinsicValueCents) {
         return new CustomsValuation(countryCode, TaxMode.DDP, intrinsicValueCents, false,
-                OverThresholdPolicy.SURCHARGE, 0, false);
+                OverThresholdPolicy.SURCHARGE, 0, false, "");
     }
 
     /**
@@ -105,7 +107,20 @@ public class CustomsValuationService {
             }
         }
         return new CustomsValuation(countryCode, mode, intrinsic, exceeded, policy, Math.max(0, handling),
-                blocked);
+                blocked, thresholdLabel(r));
+    }
+
+    /**
+     * El umbral del país en su divisa legal, formateado para el mensaje al cliente ("150 EUR"). Vacío si
+     * el país no tiene franquicia configurada. Se muestra en su divisa LEGAL (la ley lo fija así: 150 € en
+     * la UE), no en la divisa activa del comprador.
+     */
+    private static String thresholdLabel(CountryCustomsRuleEntity rule) {
+        if (rule.getDeMinimisAmount() == null || rule.getDeMinimisAmount().signum() <= 0) {
+            return "";
+        }
+        return rule.getDeMinimisAmount().stripTrailingZeros().toPlainString() + " "
+                + (rule.getDeMinimisCurrency() != null ? rule.getDeMinimisCurrency() : "EUR");
     }
 
     /** Modo de despacho fiscal configurado para el país (DDP si no hay regla). */

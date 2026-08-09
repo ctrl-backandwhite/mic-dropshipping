@@ -77,6 +77,8 @@ public class ShippingQuoteController {
             String shippingFormatted, String taxFormatted, String totalFormatted,
             int discountCents, String discountFormatted,
             boolean customsThresholdExceeded, boolean customsBlocked, String taxMode,
+            /** Umbral de importación del país en su divisa legal ("150 EUR"); "" si no aplica. */
+            String customsLimit,
             /**
              * Cupón: el código aplicado, o el motivo por el que no vale. Se devuelven los dos para que
              * el checkout distinga «canjeado» de «rechazado y por qué» sin adivinarlo del importe.
@@ -108,6 +110,7 @@ public class ShippingQuoteController {
                 currencyService.formatDisplay(preview.discountDisplay(), code),
                 preview.totals().customs().deMinimisExceeded(), preview.totals().blocked(),
                 preview.totals().customs().taxMode().name(),
+                preview.totals().customs().deMinimisLabel(),
                 preview.couponCode(), preview.couponError());
         return ResponseEntity.ok(body);
     }

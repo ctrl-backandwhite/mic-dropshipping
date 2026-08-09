@@ -207,3 +207,5 @@ databaseChangeLog:
       file: db/changelog/schema-v98-promotion-redemption.sql
   - include:
       file: db/changelog/schema-v99-pack-export-tracking.sql
+  - include:
+      file: db/changelog/schema-v100-customs-block-over-threshold.sql
