@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application;
 
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.api.dto.out.OrderPaymentDtoOut;
@@ -78,7 +79,7 @@ class PaymentUseCaseImplTest {
         return new PaymentUseCaseImpl(List.<PaymentGateway>of(), paymentRepository, paymentJpaRepositoryAdapter,
                 userRepository, orderRepository, walletUseCase, auditLogger, partnerPlanSyncService,
                 customerSubscriptionUseCase, subscriptionNotificationService, new ObjectMapper(), orderEmailService,
-                currencyRateService, new OrderAmounts(currencyRateService), stockService, mock(OpsAlertService.class));
+                currencyRateService, new OrderAmounts(currencyRateService), stockService, mock(SupplierPurchaseService.class), mock(OpsAlertService.class));
     }
 
     @Test

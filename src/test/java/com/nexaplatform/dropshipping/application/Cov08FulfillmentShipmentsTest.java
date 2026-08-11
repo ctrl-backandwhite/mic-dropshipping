@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application;
 
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService;
@@ -36,6 +37,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -70,7 +72,7 @@ class Cov08FulfillmentShipmentsTest {
         trackingViewMapper = mock(TrackingViewMapper.class);
         service = new FulfillmentService(orderRepository, trackingRepository, provider, mock(UserRepository.class),
                 mock(OrderEmailService.class), new ObjectMapper(), mock(YunExpressEventCipher.class),
-                mock(OpsAlertService.class), mock(NotificationUseCase.class), shipmentRepository, trackingViewMapper);
+                mock(OpsAlertService.class), mock(NotificationUseCase.class), shipmentRepository, trackingViewMapper, readyPurchases());
 
         order = new Order();
         order.setId(UUID.randomUUID());
@@ -348,5 +350,15 @@ class Cov08FulfillmentShipmentsTest {
 
         assertThat(service.timeline(orderId)).containsExactly(evento);
         assertThat(service.shipmentsOf(orderId)).containsExactly(bulto);
+    }
+
+    /**
+     * Las compras al proveedor ya están en camino: estos tests van del transportista internacional, no
+     * del tramo chino, y sin este permiso {@code createShipment} se frena antes de llamar al carrier.
+     */
+    private static SupplierPurchaseService readyPurchases() {
+        SupplierPurchaseService s = mock(SupplierPurchaseService.class);
+        lenient().when(s.readyForInternationalShipment(any())).thenReturn(true);
+        return s;
     }
 }

@@ -41,6 +41,10 @@ public class MeCheckoutDtoIn {
 
     private String paymentMethod;
 
+    /** Código de cupón tecleado en el checkout. Se revalida en el servidor antes de cobrar. */
+    @Size(max = 40)
+    private String couponCode;
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

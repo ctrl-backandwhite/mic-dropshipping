@@ -83,6 +83,8 @@ public class FulfillmentService {
     private final OrderShipmentRepository shipmentRepository;
     /** Proyección de entidades de seguimiento a las vistas de la API (MapStruct). */
     private final TrackingViewMapper trackingViewMapper;
+    /** Compras al proveedor: sin mercancía comprada y en camino no se emite guía internacional. */
+    private final SupplierPurchaseService supplierPurchaseService;
 
     /** Estado actual del pedido + estado objetivo del envío tras sondear el tracking. */
     public record TrackingProgress(OrderStatus current, OrderStatus target) {
@@ -109,6 +111,15 @@ public class FulfillmentService {
         Order o = orderRepository.findById(orderId).orElse(null);
         if (o == null || o.getTrackingNumber() != null || o.getStatus() != OrderStatus.FORWARDED) {
             return; // sin pedido, ya tiene envío, o aún no despachado
+        }
+        // La guía se paga y arranca el reloj del seguimiento del cliente. Hasta aquí bastaba con que
+        // alguien pulsara «despachar» para emitirla, y con bulk-forward se podían emitir decenas de
+        // golpe: guías reales para mercancía que todavía no se había comprado en 1688. Ahora se exige
+        // que TODOS los bultos del pedido vayan camino del almacén chino.
+        if (!supplierPurchaseService.readyForInternationalShipment(orderId)) {
+            log.debug("Fulfillment: pedido {} aún sin mercancía en camino; no se crea la guía",
+                    o.getOrderNumber());
+            return;
         }
         if (!readyForAttempt(o)) {
             return; // rendido, o aún dentro de la espera del backoff
@@ -142,7 +153,10 @@ public class FulfillmentService {
         o.setFulfillmentFailedAt(null);
         o.setFulfillmentNextAttemptAt(null);
         orderRepository.save(o);
-        appendEvent(o.getId(), OrderStatus.FORWARDED.name(), "Envío registrado para entrega", "Shenzhen, CN", "SYSTEM",
+        // El origen es el almacén donde se reempaqueta, no la sede del transportista: Yunfulfillment
+        // opera en Dongguan (CNCHASHAN). Decía Shenzhen desde antes de que existiera el almacén, cuando
+        // el punto de salida era una suposición.
+        appendEvent(o.getId(), OrderStatus.FORWARDED.name(), "Envío registrado para entrega", "Dongguan, CN", "SYSTEM",
                 o.getForwardedAt() != null ? o.getForwardedAt() : Instant.now());
         log.info("Fulfillment: envío {} creado para pedido {}", r.trackingNumber(), o.getOrderNumber());
     }
@@ -500,13 +514,28 @@ public class FulfillmentService {
             known.add(e.getStatus() + "|" + e.getDescription());
         }
         boolean changed = false;
+        // Mismo criterio de aviso que el sondeo: los pasos intermedios en tránsito se notifican, pero ni
+        // FORWARDED (interno) ni el PRIMER SHIPPED ("recogido") ni la entrega, que tienen correo propio.
+        // Sin esto, con el push activo el comprador no recibía NINGÚN correo de "en tránsito": el push
+        // guardaba los pasos sin avisar y el sondeo, al verlos ya guardados, tampoco avisaba.
+        boolean shippedSeen = known.stream().anyMatch(k -> k.startsWith(OrderStatus.SHIPPED.name() + "|"));
+        List<TrackingStep> toNotify = new ArrayList<>();
         for (TrackingStep step : snap.steps()) {
-            changed |= appendIfNew(o, known, step.status(), step.description(), step.location(), step.occurredAt(),
-                    CARRIER_SOURCE);
+            boolean added = appendIfNew(o, known, step.status(), step.description(), step.location(),
+                    step.occurredAt(), CARRIER_SOURCE);
+            changed |= added;
+            if (added && step.status() == OrderStatus.SHIPPED) {
+                if (shippedSeen) {
+                    toNotify.add(step);
+                } else {
+                    shippedSeen = true;
+                }
+            }
         }
         if (changed) {
             o.setLastTrackedAt(Instant.now());
             orderRepository.save(o);
+            notifyTrackingSteps(o, toNotify);
             log.info("YunExpress push: timeline actualizado para pedido {}", o.getOrderNumber());
         } else if (!snap.steps().isEmpty()) {
             // Todos los pasos venían repetidos: normal, el transportista reenvía.

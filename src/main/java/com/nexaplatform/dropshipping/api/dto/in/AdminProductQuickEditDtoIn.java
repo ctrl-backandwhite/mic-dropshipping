@@ -33,6 +33,12 @@ public class AdminProductQuickEditDtoIn {
     @Schema(description = "Minimum order quantity")
     private Integer moq;
 
+    @Schema(description = "Shipping cost in CNY, as declared by the supplier listing")
+    private BigDecimal shippingCny;
+
+    @Schema(description = "Import VAT in CNY")
+    private BigDecimal ivaCny;
+
     @Schema(description = "Localized short description")
     private String shortDescription;
 

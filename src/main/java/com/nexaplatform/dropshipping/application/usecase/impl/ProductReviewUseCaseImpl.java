@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import com.nexaplatform.dropshipping.domain.enums.ReviewSource;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.usecase.ProductReviewUseCase;
@@ -76,7 +77,9 @@ public class ProductReviewUseCaseImpl implements ProductReviewUseCase {
                 .authorCountry(review.getAuthorCountry()).rating(rating).title(review.getTitle()).body(review.getBody())
                 .language(review.getLanguage() != null && !review.getLanguage().isBlank()
                         ? review.getLanguage().toLowerCase() : "es")
-                .helpfulCount(0).verifiedPurchase(false).approved(true).build();
+                // Escrita en la plataforma, no importada del proveedor. Sin compra verificada: esta ruta
+                // no asocia usuario, así que no hay ningún pedido con el que respaldar el distintivo.
+                .helpfulCount(0).verifiedPurchase(false).source(ReviewSource.CUSTOMER).approved(true).build();
         ProductReviewEntity saved = reviewJpa.save(entity);
 
         // Recalcular media y contador del producto (solo reseñas aprobadas).

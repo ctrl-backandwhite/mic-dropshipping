@@ -123,6 +123,9 @@ class Cov06OrderUseCaseImplTest {
     @Mock
     OrderSearchService orderSearchService;
 
+    @Mock
+    com.nexaplatform.dropshipping.application.service.SupplierPurchaseService supplierPurchaseService;
+
     @InjectMocks
     OrderUseCaseImpl useCase;
 
@@ -164,6 +167,9 @@ class Cov06OrderUseCaseImplTest {
 
         assertThat(pedido.getStatus()).isEqualTo(OrderStatus.PAID);
         verify(walletUseCase).charge(eq(userId), eq(2500L), any(), eq("idem-1"), anyString());
+        // El dinero está cobrado → la mercancía entra en la cola de compras de 1688. Sin esta llamada el
+        // freno veía cero compras, trataba el pedido como antiguo y dejaba emitir la guía sin comprar.
+        verify(supplierPurchaseService).planPurchases(any(Order.class));
         verify(orderEmailService).paymentConfirmed(any(Order.class), eq("comprador@x.com"), eq("es"), eq("WALLET"));
     }
 
@@ -180,6 +186,11 @@ class Cov06OrderUseCaseImplTest {
         assertThat(pedido.getStatus()).isEqualTo(OrderStatus.PENDING);
         verify(walletUseCase, never()).charge(any(), anyLong(), any(), anyString(), anyString());
         verify(orderEmailService, never()).paymentConfirmed(any(), anyString(), anyString(), anyString());
+        // El pago externo puede tardar o abandonarse: se avisa «hemos recibido tu pedido» para que el
+        // cliente tenga constancia escrita antes de la factura.
+        verify(orderEmailService).placedAwaitingPayment(any(Order.class), eq("comprador@x.com"), eq("es"));
+        // Y NO se planifican compras todavía: aún no hay dinero cobrado.
+        verify(supplierPurchaseService, never()).planPurchases(any());
     }
 
     /**
@@ -685,7 +696,7 @@ class Cov06OrderUseCaseImplTest {
     /** Desglose neutro: sin impuesto ni recargo de despacho, para que el total sea subtotal + envío. */
     private static CheckoutTotalsService.CheckoutTotals totalesNeutros(int envioCents) {
         CustomsValuationService.CustomsValuation customs = new CustomsValuationService.CustomsValuation("XX",
-                TaxMode.DDP, 0, false, OverThresholdPolicy.SURCHARGE, 0, false);
+                TaxMode.DDP, 0, false, OverThresholdPolicy.SURCHARGE, 0, false, "");
         return new CheckoutTotalsService.CheckoutTotals(envioCents, 0, envioCents, 0, 0, customs);
     }
 

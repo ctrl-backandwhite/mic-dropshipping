@@ -44,7 +44,7 @@ class YunExpressMockGuardTest {
         lenient().when(zones.findByCountryCodeIgnoreCase(anyString())).thenReturn(Optional.empty());
         lenient().when(customs.valuate(anyString(), anyInt(), anyInt()))
                 .thenReturn(new CustomsValuation("ES", TaxMode.DDP, 1000, false,
-                        OverThresholdPolicy.ALLOW, 0, false));
+                        OverThresholdPolicy.ALLOW, 0, false, ""));
         lenient().when(client.hasCredentials()).thenReturn(false);
 
         MockEnvironment environment = new MockEnvironment();

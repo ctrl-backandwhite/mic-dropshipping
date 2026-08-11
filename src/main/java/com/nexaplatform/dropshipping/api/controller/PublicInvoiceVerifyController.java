@@ -44,7 +44,7 @@ public class PublicInvoiceVerifyController {
                 .orderNumber(o.getOrderNumber())
                 .status(o.getStatus() != null ? o.getStatus().name() : null)
                 .issuedAt(o.getPlacedAt() != null ? o.getPlacedAt() : o.getCreatedAt())
-                .issuer("NX036 Dropshipping")
+                .issuer("NX036")
                 .build());
     }
 }

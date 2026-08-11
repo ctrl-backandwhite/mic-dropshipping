@@ -6,6 +6,7 @@ import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
 import com.nexaplatform.dropshipping.application.service.StockService;
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
@@ -105,7 +106,7 @@ class OrderChargeMatchesShownTotalTest {
                 orderRepository, walletUseCase, auditLogger, mock(PartnerPlanSyncService.class),
                 mock(CustomerSubscriptionUseCase.class), mock(SubscriptionNotificationService.class),
                 new ObjectMapper(), mock(OrderEmailService.class), currencyRateService, new OrderAmounts(currencyRateService), mock(StockService.class),
-                mock(OpsAlertService.class));
+                mock(SupplierPurchaseService.class), mock(OpsAlertService.class));
 
         when(currencyRateService.usdTo(any(BigDecimal.class), anyString()))
                 .thenAnswer(inv -> inv.<BigDecimal>getArgument(0).multiply(USD_A_EUR));

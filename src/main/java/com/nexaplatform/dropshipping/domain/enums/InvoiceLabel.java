@@ -40,9 +40,12 @@ public enum InvoiceLabel {
     DISCOUNT(new Translations("Descuento", "Discount", "Desconto", "折扣", "Remise", "Rabatt", "Sconto", "Korting")),
     VAT(new Translations("IVA", "VAT", "IVA", "增值税", "TVA", "MwSt.", "IVA", "btw")),
     TOTAL(new Translations(Word.TOTAL, Word.TOTAL, Word.TOTAL, "总计", Word.TOTAL, "Gesamt", "Totale", "Totaal")),
-    TAX_ID(new Translations("NIF/CIF", "Tax ID", "NIF", "税号", "N° fiscal", "USt-IdNr.", "P. IVA", "Btw-nr.")),
-    TAX_ID_PREFIX(new Translations("CIF: ", "Tax ID: ", "NIF: ", "税号: ", "N° fiscal : ", "USt-IdNr.: ", "P. IVA: ",
-            "Btw-nr.: ")),
+    // El emisor es una sociedad IRLANDESA: lo que se imprime es su número de IVA intracomunitario, no un
+    // CIF ni un NIF, que son identificadores españoles y no existen en Irlanda.
+    TAX_ID(new Translations("NIF-IVA", "VAT", "NIF-IVA", "增值税号", "N° de TVA", "USt-IdNr.", "P. IVA",
+            "Btw-nr.")),
+    TAX_ID_PREFIX(new Translations("NIF-IVA: ", "VAT: ", "NIF-IVA: ", "增值税号: ", "N° de TVA : ", "USt-IdNr.: ",
+            "P. IVA: ", "Btw-nr.: ")),
     VERIFY(new Translations("Verificar factura", "Verify invoice", "Verificar fatura", "验证发票",
             "Vérifier la facture", "Rechnung prüfen", "Verifica fattura", "Factuur verifiëren")),
     VERIFY_NOTE(new Translations(

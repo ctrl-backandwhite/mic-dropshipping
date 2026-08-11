@@ -45,6 +45,10 @@
                 <div th:if="${issuerEmail != ''}" th:text="${issuerEmail}">info@nx036.com</div>
                 <div th:if="${issuerAddress != '' or issuerCityLine != '' or issuerCountry != ''}"><span th:if="${issuerAddress != ''}" th:text="${issuerAddress}">Calle</span><span th:if="${issuerAddress != '' and (issuerCityLine != '' or issuerCountry != '')}"> · </span><span th:if="${issuerCityLine != ''}" th:text="${issuerCityLine}">Ciudad</span><span th:if="${issuerCityLine != '' and issuerCountry != ''}"> · </span><span th:if="${issuerCountry != ''}" th:text="${issuerCountry}">País</span></div>
                 <div th:if="${issuerTaxId != ''}"><span th:text="${labelTaxId}">NIF/CIF</span>: <span th:text="${issuerTaxId}">B00000000</span></div>
+                <!-- El número de registro mercantil. En una sociedad irlandesa es el CRO, y la Companies
+                     Act 2014 obliga a que figure en la papelería comercial, facturas incluidas. El campo
+                     ya se calculaba en InvoiceService pero no se pintaba en ninguna parte. -->
+                <div th:if="${issuerRegistry != ''}" th:text="${issuerRegistry}">CRO 000000</div>
               </div>
             </td>
             <td align="right" style="vertical-align:top;text-align:right;">
@@ -170,7 +174,7 @@
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
           <tr>
             <td style="vertical-align:bottom;font-size:11px;color:#5c6e7c;line-height:1.6;">
-              <div th:text="${footerLegal}">NX036 S.L. · CIF · email · NX-000</div>
+              <div th:text="${footerLegal}">NX036 · VAT · email · NX-000</div>
               <div th:if="${pdf and qr != ''}" style="margin-top:8px;color:#9aa4b2;max-width:340px;" th:text="${verifyNote}">Documento generado electrónicamente. Escanea el QR para verificar la autenticidad de esta factura.</div>
               <div th:if="${legalNote != ''}" style="margin-top:8px;color:#9aa4b2;" th:text="${legalNote}">Nota legal</div>
             </td>

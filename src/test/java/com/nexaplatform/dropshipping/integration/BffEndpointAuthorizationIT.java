@@ -16,7 +16,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>Paths reales (verificados contra {@code BffSecurityConfig} y los controllers):
  * <ul>
- *   <li>GET  /api/catalog/products                         — permitAll</li>
+ *   <li>GET  /api/catalog/products                         — authenticated (muro del catálogo)</li>
+ *   <li>GET  /api/catalog/home/sections                    — permitAll (portada pública)</li>
  *   <li>GET  /api/catalog/products/{id}/margin-estimate    — hasRole ADMIN</li>
  *   <li>GET  /api/me/orders                                           — authenticated</li>
  *   <li>POST /api/admin/orders/{id}/ship                              — hasAnyRole ADMIN, OPERATOR</li>
@@ -33,10 +34,40 @@ class BffEndpointAuthorizationIT extends BaseIntegration {
     private static final String OPERATOR_EARNINGS = "/api/admin/operator/earnings";
     private static final String DASHBOARD_METRICS = "/api/admin/dashboard/metrics";
 
-    /** PERMITIDO: el catálogo storefront es permitAll → accesible sin token (no 401/403). */
+    /**
+     * PROHIBIDO: el listado del catálogo exige cuenta.
+     *
+     * <p>El muro estaba solo en el frontend (ProtectedRoute), que oculta la vista pero no cierra la
+     * API: sin credenciales se sacaban 100 productos por llamada —con precio, ventas mensuales y trend
+     * score—, o sea el catálogo entero en ~45 peticiones. Un scraper no usa el navegador.
+     */
     @Test
-    void catalogProducts_anonymous_isReachable() {
-        client.get().uri(CATALOG_PRODUCTS).exchange()
+    void catalogProducts_anonymous_isRejected() {
+        client.get().uri(CATALOG_PRODUCTS).exchange().expectStatus().isUnauthorized();
+    }
+
+    /** PERMITIDO: con cuenta, el mismo listado es accesible. */
+    @Test
+    void catalogProducts_authenticated_isReachable() {
+        client.get().uri(CATALOG_PRODUCTS).header("Authorization", bearer(jwt.userToken("USER")))
+                .exchange().expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
+    }
+
+    /** PROHIBIDO: la búsqueda también permite enumerar, así que va detrás del mismo muro. */
+    @Test
+    void search_anonymous_isRejected() {
+        client.get().uri("/api/search?q=vestido").exchange().expectStatus().isUnauthorized();
+    }
+
+    /**
+     * PERMITIDO: la portada la ven visitantes sin cuenta.
+     *
+     * <p>Es el contrapeso del muro: cerrar de más echaba al visitante a la pantalla de login nada más
+     * entrar en la home, porque esta pedía el listado solo para leer el total de SKUs.
+     */
+    @Test
+    void homeSections_anonymous_isReachable() {
+        client.get().uri("/api/catalog/home/sections?lang=es&perSection=6").exchange()
                 .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
     }
 

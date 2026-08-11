@@ -58,7 +58,9 @@ public class ProductMapper {
                 p.getRating(), p.getMonthlySales(), p.getTrendScore(),
                 p.getStatus() != null ? p.getStatus().name() : null, priced.retailUsd(), priced.displayAmount(),
                 priced.displayCurrency(), priced.displaySymbol(), priced.displayFormatted(), p.getInventoryCount(),
-                availableUnits, Boolean.TRUE.equals(p.getVerified()));
+                availableUnits, Boolean.TRUE.equals(p.getVerified()),
+                // La rebaja viaja YA resuelta desde el motor de precios: el escaparate solo la pinta.
+                priced.originalFormatted(), priced.discountPercent(), priced.promotionName());
     }
 
     public ProductDetailView toDetail(ProductEntity p, String language, List<ProductPriceTierEntity> tiers) {
@@ -91,7 +93,8 @@ public class ProductMapper {
                 baseFormatted, ivaFormatted, shippingFormatted,
                 tr != null ? tr.getMetaTitle() : null, tr != null ? tr.getMetaDescription() : null,
                 Boolean.TRUE.equals(p.getVerified()),
-                p.getVideoUrl(), Boolean.TRUE.equals(p.getHasVideo()));
+                p.getVideoUrl(), Boolean.TRUE.equals(p.getHasVideo()),
+                priced.originalFormatted(), priced.discountPercent(), priced.promotionName());
     }
 
     public ProductImageView toImageView(ProductImageEntity img) {
@@ -106,7 +109,8 @@ public class ProductMapper {
                 ? v.getPackageWeightGrams() : v.getWeightGrams();
         return new VariantView(v.getId(), v.getSku(), v.getTitle(), priced.displayAmount(), // shown in user currency
                 priced.displayFormatted(), v.getStock(), pickVariantImage(v), v.getOptions(), v.isActive(),
-                weight, v.getLengthMm(), v.getWidthMm(), v.getHeightMm());
+                weight, v.getLengthMm(), v.getWidthMm(), v.getHeightMm(),
+                priced.originalFormatted(), priced.discountPercent());
     }
 
     /** Back-compat overload (without product); used by ProductMapperTest. */

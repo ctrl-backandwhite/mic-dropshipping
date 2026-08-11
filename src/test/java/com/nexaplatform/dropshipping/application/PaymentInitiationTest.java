@@ -9,6 +9,7 @@ import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
 import com.nexaplatform.dropshipping.application.service.StockService;
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
@@ -108,7 +109,7 @@ class PaymentInitiationTest {
         return new PaymentUseCaseImpl(List.of(gateway), paymentRepository, paymentJpaRepositoryAdapter, userRepository,
                 orderRepository, walletUseCase, auditLogger, partnerPlanSyncService, customerSubscriptionUseCase,
                 subscriptionNotificationService, new ObjectMapper(), orderEmailService, currencyRateService, new OrderAmounts(currencyRateService),
-                stockService, opsAlertService);
+                stockService, mock(SupplierPurchaseService.class), opsAlertService);
     }
 
     /** Pedido de 2 × 40,00 $ + 10,00 $ de envío + 5,40 $ de impuesto = 95,40 $. */

@@ -83,7 +83,16 @@ public final class StorefrontViews {
     public record HomeSection(String code, String title, List<ProductSummaryView> items) {
     }
 
-    public record HomeSectionsResponse(List<HomeSection> sections, List<CategoryView> hotCategories) {
+    /**
+     * Secciones de la portada.
+     *
+     * <p>{@code totalProducts} viaja aquí porque la portada lo enseña («N SKUs en producción») y antes
+     * lo sacaba pidiendo la primera página del listado solo para leer su total. Desde que el listado
+     * exige cuenta, esa llamada devolvía 401 y echaba al visitante a la pantalla de login. El número de
+     * SKUs es un dato de escaparate, no el catálogo.
+     */
+    public record HomeSectionsResponse(List<HomeSection> sections, List<CategoryView> hotCategories,
+            long totalProducts) {
     }
 
     public record ImportUrlRequest(@NotBlank String url) {

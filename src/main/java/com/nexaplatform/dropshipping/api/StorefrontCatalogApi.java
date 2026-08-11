@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api;
 
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.LivePromotionView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.HomeSectionsResponse;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.AttributeKeyView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.AttributeView;
@@ -90,6 +91,10 @@ public interface StorefrontCatalogApi {
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "24") int size,
             @RequestParam(defaultValue = "es") String lang, @RequestParam(defaultValue = "trending") String sort);
 
+    @Operation(summary = "Rebajas vigentes para anunciar en la portada")
+    @GetMapping("/promotions/live")
+    List<LivePromotionView> livePromotions(@RequestParam(defaultValue = "es") String lang);
+
     /* =========================== PRODUCTS =========================== */
 
     @Operation(summary = "List/search products with filters")
@@ -103,7 +108,8 @@ public interface StorefrontCatalogApi {
             @RequestParam(required = false) Boolean hasVideo, @RequestParam(required = false) Integer minRating,
             @RequestParam(required = false) Integer inventoryMin, @RequestParam(required = false) String certification,
             @RequestParam(required = false, defaultValue = "best_match") String sort,
-            @RequestParam(required = false) Boolean verified);
+            @RequestParam(required = false) Boolean verified,
+            @RequestParam(required = false) UUID promotionId);
 
     @Operation(summary = "Get a product detail by slug")
     @GetMapping("/products/{slug}")

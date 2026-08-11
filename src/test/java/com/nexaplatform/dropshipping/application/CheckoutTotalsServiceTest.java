@@ -39,7 +39,7 @@ class CheckoutTotalsServiceTest {
 
     private void givenCustoms(int handlingCents, boolean exceeded, boolean blocked) {
         when(customsValuationService.valuate(any(), anyInt(), anyInt())).thenReturn(new CustomsValuation("ES",
-                TaxMode.DDP, 0, exceeded, OverThresholdPolicy.SURCHARGE, handlingCents, blocked));
+                TaxMode.DDP, 0, exceeded, OverThresholdPolicy.SURCHARGE, handlingCents, blocked, ""));
     }
 
     @Test

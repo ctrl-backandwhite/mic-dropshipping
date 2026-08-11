@@ -1,5 +1,7 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
+import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.service.PromotionService;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
@@ -62,6 +64,8 @@ public class CatalogStorefrontReadService {
     private final SupplierSearchService supplierSearchService;
     private final ProductVariantRepository variantRepository;
     private final ProductMapper productMapper;
+    private final PricingService pricingService;
+    private final PromotionService promotionService;
 
     /* ============================ Categories ============================ */
 
@@ -253,6 +257,11 @@ public class CatalogStorefrontReadService {
         boolean priceFilter = minPrice != null || maxPrice != null;
         // Filtro de verificación manual (solo lo envía el admin desde /admin/browse). Se aplica en memoria.
         boolean verifiedFilter = verified != null;
+        // «Ver los productos» de una promoción: lista solo los alcanzados por ella (por categoría o por
+        // producto; una promoción global no filtra). Se resuelve una vez y se aplica en el mismo barrido
+        // en memoria que el resto de filtros de la capa de aplicación.
+        java.util.function.Predicate<ProductEntity> promoFilter =
+                promotionService.reachFilter(filters.promotionId()).orElse(null);
 
         // El filtro de precio y el de certificación se aplican en la capa de aplicación, NO en el SQL.
         // Motivo del precio: el número que ve el usuario (displayPrice) se obtiene de la variante
@@ -261,12 +270,13 @@ public class CatalogStorefrontReadService {
         // Por eso aquí filtramos sobre displayPrice, que está en la MISMA moneda que el usuario seleccionó
         // → el filtro de precio funciona para cualquier moneda. Se pagina en memoria para que el total y
         // las páginas sean correctos (el catálogo está acotado por el resto de filtros).
-        if (priceFilter || certFilter || verifiedFilter) {
+        if (priceFilter || certFilter || verifiedFilter || promoFilter != null) {
             String certUp = certFilter ? certification.toUpperCase() : null;
             Pageable scan = PageRequest.of(0, 5000, sortSpec);
             Page<ProductEntity> raw = productRepository.searchStorefront(ProductStatus.ACTIVE, needle, categoryId,
                     supplierId, null, null, shipCc, freeShipping, selfPickup, hasVideo, minRatingBd, inventoryMin, scan);
             List<ProductSummaryView> all = raw.getContent().stream()
+                    .filter(p -> promoFilter == null || promoFilter.test(p))
                     .filter(p -> certUp == null || (p.getCertifications() != null && p.getCertifications().stream()
                             .anyMatch(c -> c != null && c.toUpperCase().contains(certUp))))
                     .filter(p -> !verifiedFilter || verified.equals(Boolean.TRUE.equals(p.getVerified())))
@@ -368,7 +378,10 @@ public class CatalogStorefrontReadService {
 
     public VariantView variantView(ProductVariantEntity v) {
         String img = v.getImageCdnUrl() != null ? v.getImageCdnUrl() : v.getImageSourceUrl();
-        return new VariantView(v.getId(), v.getSku(), v.getExternalId(), v.getTitle(), v.getPrice(), v.getStock(), img,
+        // Precio de VENTA, nunca v.getPrice(): esa columna es el coste CNY del proveedor, y servirla
+        // aquí regalaba el margen a cualquier usuario logueado (y a los partners).
+        BigDecimal retail = pricingService.priceFor(v.getProduct(), v).displayAmount();
+        return new VariantView(v.getId(), v.getSku(), v.getExternalId(), v.getTitle(), retail, v.getStock(), img,
                 v.getOptions() != null ? v.getOptions() : Map.of(), v.isActive());
     }
 

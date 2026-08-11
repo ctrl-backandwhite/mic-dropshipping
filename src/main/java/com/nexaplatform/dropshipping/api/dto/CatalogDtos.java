@@ -86,7 +86,19 @@ public final class CatalogDtos {
     public record VariantView(UUID id, String sku, String title, BigDecimal price, String priceFormatted, int stock,
             String imageUrl, Map<String, String> options, boolean active,
             // Báscula de peso por variante (peso en gramos, dimensiones en mm). El volumen se calcula en el front.
-            Integer weightGrams, Integer lengthMm, Integer widthMm, Integer heightMm) {
+            Integer weightGrams, Integer lengthMm, Integer widthMm, Integer heightMm,
+            // Rebaja de ESTA variante. Tiene que ser suya y no la del producto: cada variante parte de
+            // un precio distinto, así que el «antes» del producto junto al «ahora» de la variante da
+            // un tachado incoherente — y puede salir MENOR que el precio rebajado.
+            String originalFormatted, Integer discountPercent) {
+
+        /** Sin promoción: atajo para los usos que no la calculan. */
+        public VariantView(UUID id, String sku, String title, BigDecimal price, String priceFormatted, int stock,
+                String imageUrl, Map<String, String> options, boolean active, Integer weightGrams,
+                Integer lengthMm, Integer widthMm, Integer heightMm) {
+            this(id, sku, title, price, priceFormatted, stock, imageUrl, options, active, weightGrams,
+                    lengthMm, widthMm, heightMm, null, null);
+        }
     }
 
     public record PriceTierView(int minQty, Integer maxQty, BigDecimal unitPrice, String currency,
@@ -105,7 +117,20 @@ public final class CatalogDtos {
             // la suma del stock por variantes activas (más fiel para fulfillment).
             Integer inventoryCount, Integer availableUnits,
             // verificación manual del admin (false = pendiente/con error, true = revisado OK)
-            boolean verified) {
+            boolean verified,
+            // Rebaja. Nulos cuando el producto no está en promoción: es lo que decide si el escaparate
+            // pinta el precio anterior tachado o solo uno. Ya vienen formateados por el backend.
+            String originalFormatted, Integer discountPercent, String promotionName) {
+
+        /** Sin promoción: atajo para los usos que no la calculan. */
+        public ProductSummaryView(UUID id, String slug, String title, String mainImage, BigDecimal basePrice,
+                String currency, BigDecimal rating, int monthlySales, BigDecimal trendScore, String status,
+                BigDecimal priceUsd, BigDecimal displayPrice, String displayCurrency, String displaySymbol,
+                String displayFormatted, Integer inventoryCount, Integer availableUnits, boolean verified) {
+            this(id, slug, title, mainImage, basePrice, currency, rating, monthlySales, trendScore, status,
+                    priceUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted, inventoryCount,
+                    availableUnits, verified, null, null, null);
+        }
     }
 
     public record ProductDetailView(UUID id, String slug, String source, String externalId, SupplierView supplier,
@@ -126,10 +151,44 @@ public final class CatalogDtos {
             // verificación manual del admin (false = pendiente/con error, true = revisado OK)
             boolean verified,
             // Vídeo de explicación del producto (columna product.video_url). El front lo muestra en la galería.
-            String videoUrl, boolean hasVideo) {
+            String videoUrl, boolean hasVideo,
+            // Rebaja vigente sobre este producto. Nulos si no la hay.
+            String originalFormatted, Integer discountPercent, String promotionName) {
+
+        /** Sin promoción: atajo para los usos que no la calculan. */
+        public ProductDetailView(UUID id, String slug, String source, String externalId, SupplierView supplier,
+                UUID categoryId, String title, String shortDescription, String description, String titleZh,
+                String shortDescriptionZh, String descriptionZh, String brand, int moq, BigDecimal basePrice,
+                String currency, BigDecimal rating, int reviewCount, int monthlySales, BigDecimal repurchaseRate,
+                BigDecimal trendScore, String status, String sourceUrl, Instant ingestedAt, Instant lastSyncedAt,
+                List<ProductImageView> images, List<VariantOptionView> variantOptions, List<VariantView> variants,
+                List<PriceTierView> priceTiers, BigDecimal costUsd, BigDecimal retailUsd, BigDecimal displayPrice,
+                String displayCurrency, String displaySymbol, String displayFormatted,
+                BigDecimal appliedMarginPercent, String baseFormatted, String ivaFormatted,
+                String shippingFormatted, String metaTitle, String metaDescription, boolean verified,
+                String videoUrl, boolean hasVideo) {
+            this(id, slug, source, externalId, supplier, categoryId, title, shortDescription, description,
+                    titleZh, shortDescriptionZh, descriptionZh, brand, moq, basePrice, currency, rating,
+                    reviewCount, monthlySales, repurchaseRate, trendScore, status, sourceUrl, ingestedAt,
+                    lastSyncedAt, images, variantOptions, variants, priceTiers, costUsd, retailUsd, displayPrice,
+                    displayCurrency, displaySymbol, displayFormatted, appliedMarginPercent, baseFormatted,
+                    ivaFormatted, shippingFormatted, metaTitle, metaDescription, verified, videoUrl, hasVideo,
+                    null, null, null);
+        }
     }
 
     public record BestsellerView(UUID productId, String slug, String title, String mainImage, int rank, String listCode,
             Instant capturedAt) {
     }
+
+    /**
+     * Una promoción vigente, para anunciarla en la portada.
+     *
+     * <p>Solo lleva lo que el escaparate necesita pintar: ni el alcance interno ni los topes de uso,
+     * que son cosa del admin.
+     */
+    public record LivePromotionView(UUID id, String name, Integer percentOff, String endsAt, String scope,
+            List<ProductSummaryView> products) {
+    }
+
 }

@@ -74,7 +74,9 @@ class UserUseCaseImplTest {
     void setup() {
         jwtRevocationService = mock(JwtRevocationService.class);
         useCase = new UserUseCaseImpl(userRepository, resetTokenRepository, userJpaRepository, encoder, policy,
-                emailQueueService, auditLogger, userUpdateMapper, jwtRevocationService);
+                emailQueueService, auditLogger, userUpdateMapper,
+                mock(com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserAddressRepository.class),
+                jwtRevocationService);
     }
 
     @Test

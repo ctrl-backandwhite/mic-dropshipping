@@ -111,7 +111,7 @@ public class PayPalGateway implements PaymentGateway {
             purchase.put("invoice_id", p.getOrderId().toString());
 
         Map<String, Object> body = Map.of("intent", "CAPTURE", "purchase_units", List.of(purchase),
-                "application_context", Map.of("brand_name", "NX036 Dropshipping (" + platformEnv + ")", "user_action",
+                "application_context", Map.of("brand_name", "NX036 (" + platformEnv + ")", "user_action",
                         "PAY_NOW", "return_url", effReturnUrl, "cancel_url", effCancelUrl));
 
         Map<String, Object> resp = webClientBuilder.build().post()

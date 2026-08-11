@@ -35,6 +35,19 @@ public enum OrderEmailLabel {
             "Deine Bestellung <strong>{order}</strong> wurde geliefert. Wir hoffen, sie gefällt dir!",
             "Il tuo ordine <strong>{order}</strong> è stato consegnato. Ci auguriamo che ti piaccia!",
             "Je bestelling <strong>{order}</strong> is bezorgd. We hopen dat je ervan geniet!")),
+    PLACED_TITLE(new Translations(
+            "Hemos recibido tu pedido", "We received your order", "Recebemos o seu pedido", "我们已收到您的订单",
+            "Nous avons bien reçu votre commande", "Wir haben deine Bestellung erhalten",
+            "Abbiamo ricevuto il tuo ordine", "We hebben je bestelling ontvangen")),
+    PLACED_BODY(new Translations(
+            "Tu pedido <strong>{order}</strong> está registrado y pendiente de pago. En cuanto se confirme el pago te enviaremos la factura y empezaremos a prepararlo.",
+            "Your order <strong>{order}</strong> is registered and awaiting payment. As soon as the payment is confirmed we will send you the invoice and start preparing it.",
+            "O seu pedido <strong>{order}</strong> está registado e a aguardar pagamento. Assim que o pagamento for confirmado, enviaremos a fatura e começaremos a prepará-lo.",
+            "您的订单 <strong>{order}</strong> 已登记，正在等待付款。付款确认后，我们将向您发送发票并开始备货。",
+            "Votre commande <strong>{order}</strong> est enregistrée et en attente de paiement. Dès que le paiement sera confirmé, nous vous enverrons la facture et commencerons à la préparer.",
+            "Deine Bestellung <strong>{order}</strong> ist registriert und wartet auf die Zahlung. Sobald die Zahlung bestätigt ist, senden wir dir die Rechnung und beginnen mit der Vorbereitung.",
+            "Il tuo ordine <strong>{order}</strong> è registrato e in attesa di pagamento. Non appena il pagamento sarà confermato ti invieremo la fattura e inizieremo a prepararlo.",
+            "Je bestelling <strong>{order}</strong> is geregistreerd en wacht op betaling. Zodra de betaling is bevestigd, sturen we je de factuur en beginnen we met de voorbereiding.")),
     REFUNDED_TITLE(new Translations(
             "Reembolso procesado", "Refund processed", "Reembolso processado", "退款已处理",
             "Remboursement traité", "Rückerstattung verarbeitet", "Rimborso elaborato", "Terugbetaling verwerkt")),

@@ -229,7 +229,7 @@ nexadrop:
     legal-note: ${INVOICE_LEGAL_NOTE:}              # Nota legal al pie (opcional)
   email:
     from: ${EMAIL_FROM:noreply@nexadrop.local}          # Remitente por defecto (transaccional/auth): no-reply@
-    from-name: ${EMAIL_FROM_NAME:NX036 Dropshipping}
+    from-name: ${EMAIL_FROM_NAME:NX036}
     from-billing: ${EMAIL_FROM_BILLING:${EMAIL_FROM:noreply@nexadrop.local}}  # Facturas/recibos: billing@
     from-support: ${EMAIL_FROM_SUPPORT:${EMAIL_FROM:noreply@nexadrop.local}}  # Acuse de contacto: support@
     unsubscribe-secret: ${EMAIL_UNSUBSCRIBE_SECRET:dev-unsubscribe-secret-change-me}  # firma HMAC del enlace de baja (sin login)
@@ -296,7 +296,17 @@ nexadrop:
   currency:
     access-key: ${NEXADROP_CURRENCY_ACCESS_KEY:}
     api-url: ${NEXADROP_CURRENCY_API_URL:https://api.currencylayer.com/live}
-    sync-cron: "0 30 4 * * *"
+    # Una vez al día (04:30). Una sola llamada trae TODAS las divisas, así que son ~31 requests al mes:
+    # cabe de sobra en el plan gratuito. La cadencia se cambia por entorno, sin tocar código ni
+    # recompilar, cuando el plan lo permita:
+    #
+    #   0 */5 * * * *   cada 5 min → 288/día · 8.928/mes  (necesita plan de 10.000; ~11% de margen)
+    #   0 0 * * * *     cada hora  →  24/día ·   744/mes  (opción intermedia, muy holgada)
+    #   0 30 4 * * *    diaria     →   1/día ·    31/mes  (actual)
+    #
+    # Ojo al elegir: los reintentos tras un fallo, los reinicios y las sincronizaciones manuales del
+    # admin también consumen cuota, así que conviene no apurar el límite del plan.
+    sync-cron: ${NEXADROP_CURRENCY_SYNC_CRON:0 30 4 * * *}
 
   paypal:
     enabled: ${PAYPAL_ENABLED:false}
@@ -317,6 +327,18 @@ nexadrop:
   fulfillment:
     sync-enabled: ${FULFILLMENT_SYNC_ENABLED:true}
     sync-interval-ms: ${FULFILLMENT_SYNC_INTERVAL_MS:60000}
+    # Almacén chino de Yunfulfillment donde el proveedor de 1688 entrega la mercancía.
+    #
+    # CNCHASHAN (Dongguan, Guangdong) es el almacén DEFINITIVO del negocio, decidido el 8-ago-2026.
+    # La alternativa era CNJIASHAN (Jiashan, Zhejiang). No es un valor por defecto provisional: cambiarlo
+    # parte el catálogo en dos, porque no se pueden consolidar en un mismo envío bultos que están en
+    # almacenes distintos, y todo pedido multiproveedor dejaría de poder agruparse bajo un único YT.
+    #
+    # TESTSTORE aparece en los desplegables pero NO admite importación (ver PackWarehouse).
+    warehouse-code: ${FULFILLMENT_WAREHOUSE_CODE:CNCHASHAN}
+    # Código de cliente en Yunfulfillment. Va en el destinatario Y pegado al final de la dirección:
+    # sin él el almacén recibe un bulto que no sabe de quién es («地址选择错误，仓库无法查询操作»).
+    customer-code: ${FULFILLMENT_CUSTOMER_CODE:CNHC459832}
   yunexpress:
     enabled: ${YUNEXPRESS_ENABLED:false}
     # 应用ID / 应用秘钥(AK) de 开发配置 → 沙盒应用, y sourcekey de 用户中心 → 用户信息.
@@ -390,5 +412,5 @@ logging:
   # para que una caída no llene el buzón justo cuando hay que leerlo.
   alerts:
     enabled: ${ALERTS_ENABLED:true}
-    email: ${ALERTS_EMAIL:jfinol02@gmail.com}
+    email: ${ALERTS_EMAIL:support@nx036.com}   # Buzón de la empresa, NUNCA un correo personal
     cooldown-minutes: ${ALERTS_COOLDOWN_MINUTES:30}

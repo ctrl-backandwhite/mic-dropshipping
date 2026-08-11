@@ -47,8 +47,10 @@ public class PartnerCatalogController implements PartnerCatalogApi {
             Boolean selfPickup, Boolean hasVideo, Integer minRating, Integer inventoryMin, String certification,
             String sort) {
         return storefrontRead.productListFull(page, size, lang,
+                // promotionId = null: el canal de integración no filtra por promoción (tampoco recibe sus
+                // descuentos). verified = null: la verificación manual es cosa del admin del escaparate.
                 new ProductListFilters(q, categoryId, supplierId, minPrice, maxPrice, shipFrom, freeShipping,
-                        selfPickup, hasVideo, minRating, inventoryMin, certification, null),
+                        selfPickup, hasVideo, minRating, inventoryMin, certification, null, null),
                 sort);
     }
 

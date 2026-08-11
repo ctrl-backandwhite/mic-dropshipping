@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.controller;
 
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.LivePromotionView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
@@ -39,6 +40,7 @@ import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
 import com.nexaplatform.dropshipping.application.service.ProductDetailQueryService;
 import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.service.PromotionShowcaseService;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
@@ -101,6 +103,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     private final ProductMapper productMapper;
     // DROP-669/678: estimación de rentabilidad con datos reales (tramo aplicable + margen configurado).
     private final PricingService pricingService;
+    private final PromotionShowcaseService promotionShowcase;
     private final MarginService marginService;
     private final CurrencyRateService currencyService;
     private final ProductPriceTierRepository priceTierRepository;
@@ -179,12 +182,12 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     public PageResponse<ProductSummaryView> list(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping,
             Boolean selfPickup, Boolean hasVideo, Integer minRating, Integer inventoryMin, String certification,
-            String sort, Boolean verified) {
+            String sort, Boolean verified, UUID promotionId) {
         // El filtro de verificación es SOLO para admin: si el que consulta no es admin, se ignora.
         Boolean verifiedFilter = SecurityUtils.isAdmin() ? verified : null;
         return storefrontRead.productListFull(page, size, lang,
                 new ProductListFilters(q, categoryId, supplierId, minPrice, maxPrice, shipFrom, freeShipping,
-                        selfPickup, hasVideo, minRating, inventoryMin, certification, verifiedFilter),
+                        selfPickup, hasVideo, minRating, inventoryMin, certification, verifiedFilter, promotionId),
                 sort);
     }
 
@@ -454,7 +457,8 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         flattenCategories(storefrontRead.categoriesTree(lang), allCats);
         List<CategoryView> hot = allCats.stream().filter(v -> v.directProductCount() > 0)
                 .sorted((a, b) -> Integer.compare(b.directProductCount(), a.directProductCount())).limit(8).toList();
-        return new HomeSectionsResponse(sections, hot);
+        long totalProducts = productRepository.countByStatus(ProductStatus.ACTIVE);
+        return new HomeSectionsResponse(sections, hot, totalProducts);
     }
 
     /** Aplana el árbol de categorías (raíces + todas sus descendientes) en una lista plana. */
@@ -715,5 +719,10 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     private static String firstNonNull(String a, String b) {
         return a != null && !a.isBlank() ? a : b;
+    }
+
+    @Override
+    public List<LivePromotionView> livePromotions(String lang) {
+        return promotionShowcase.live(lang);
     }
 }

@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.application;
 import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.MarginService.PriceWithMargin;
 import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.service.PromotionService;
 import com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
@@ -41,6 +42,13 @@ class PriceTierMatchesChargedPriceTest {
     @Mock
     private MarginService marginService;
 
+    /**
+     * Sin rebajas: esta prueba comprueba que el precio del tramo por cantidad sale con la misma
+     * fórmula que el que se cobra. Una promoción activa movería ambos y taparía justamente eso.
+     */
+    @Mock
+    PromotionService promotionService;
+
     @InjectMocks
     private PricingService pricingService;
 
@@ -57,6 +65,11 @@ class PriceTierMatchesChargedPriceTest {
 
     @BeforeEach
     void setUp() {
+        // El motor de promociones devuelve el precio intacto: aquí no se miden rebajas.
+        when(promotionService.applyAutomatic(any(), any(), any())).thenAnswer(inv -> {
+            java.math.BigDecimal precio = inv.getArgument(1);
+            return new PromotionService.Discounted(precio, precio, java.math.BigDecimal.ZERO, null, null);
+        });
         product = new ProductEntity();
         product.setBasePrice(COSTE_CNY);
         product.setCurrency("CNY");

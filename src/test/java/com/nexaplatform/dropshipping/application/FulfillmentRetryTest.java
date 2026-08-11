@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application;
 
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService;
@@ -33,6 +34,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 
 /**
@@ -64,7 +66,7 @@ class FulfillmentRetryTest {
         service = new FulfillmentService(orderRepository, mock(OrderTrackingEventRepository.class),
                 provider, mock(UserRepository.class), mock(OrderEmailService.class),
                 new ObjectMapper(), new YunExpressEventCipher(), opsAlertService, notificationUseCase, shipmentRepository,
-                mock(TrackingViewMapper.class));
+                mock(TrackingViewMapper.class), readyPurchases());
 
         order = new Order();
         order.setId(UUID.randomUUID());
@@ -185,5 +187,15 @@ class FulfillmentRetryTest {
         // Lo desconocido se trata como transitorio: rendirse de más deja envíos sin crear para siempre.
         assertThat(FulfillmentFailure.from("algo que no hemos visto nunca").isPermanent()).isFalse();
         assertThat(FulfillmentFailure.of(new IllegalStateException("fallo de red")).isPermanent()).isFalse();
+    }
+
+    /**
+     * Las compras al proveedor ya están en camino: estos tests van del transportista internacional, no
+     * del tramo chino, y sin este permiso {@code createShipment} se frena antes de llamar al carrier.
+     */
+    private static SupplierPurchaseService readyPurchases() {
+        SupplierPurchaseService s = mock(SupplierPurchaseService.class);
+        lenient().when(s.readyForInternationalShipment(any())).thenReturn(true);
+        return s;
     }
 }

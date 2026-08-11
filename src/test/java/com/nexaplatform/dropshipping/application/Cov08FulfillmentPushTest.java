@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application;
 
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
@@ -31,10 +32,14 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.nexaplatform.dropshipping.domain.model.User;
+import static org.mockito.Mockito.times;
+import static org.mockito.ArgumentMatchers.eq;
 
 /**
  * Push entrante del transportista (事件管理): el webhook aplica al timeline los eventos que YunExpress
@@ -50,6 +55,8 @@ class Cov08FulfillmentPushTest {
     private OrderTrackingEventRepository trackingRepository;
     private YunExpressFulfillmentService provider;
     private YunExpressEventCipher cipher;
+    private OrderEmailService orderEmailService;
+    private UserRepository userRepository;
     private FulfillmentService service;
 
     private Order order;
@@ -60,6 +67,8 @@ class Cov08FulfillmentPushTest {
         trackingRepository = mock(OrderTrackingEventRepository.class);
         provider = mock(YunExpressFulfillmentService.class);
         cipher = mock(YunExpressEventCipher.class);
+        orderEmailService = mock(OrderEmailService.class);
+        userRepository = mock(UserRepository.class);
         service = build(provider);
 
         order = new Order();
@@ -71,9 +80,9 @@ class Cov08FulfillmentPushTest {
     }
 
     private FulfillmentService build(FulfillmentProvider activeProvider) {
-        return new FulfillmentService(orderRepository, trackingRepository, activeProvider, mock(UserRepository.class),
-                mock(OrderEmailService.class), new ObjectMapper(), cipher, mock(OpsAlertService.class),
-                mock(NotificationUseCase.class), mock(OrderShipmentRepository.class), mock(TrackingViewMapper.class));
+        return new FulfillmentService(orderRepository, trackingRepository, activeProvider, userRepository,
+                orderEmailService, new ObjectMapper(), cipher, mock(OpsAlertService.class),
+                mock(NotificationUseCase.class), mock(OrderShipmentRepository.class), mock(TrackingViewMapper.class), readyPurchases());
     }
 
     private void providerReturns(TrackingStep... steps) {
@@ -203,4 +212,50 @@ class Cov08FulfillmentPushTest {
         assertThat(order.getTrackingStatus()).isEqualTo(OrderStatus.DELIVERED.name());
         assertThat(order.getLastTrackedAt()).isNotNull();
     }
+
+    /**
+     * Las compras al proveedor ya están en camino: estos tests van del transportista internacional, no
+     * del tramo chino, y sin este permiso {@code createShipment} se frena antes de llamar al carrier.
+     */
+    private static SupplierPurchaseService readyPurchases() {
+        SupplierPurchaseService s = mock(SupplierPurchaseService.class);
+        lenient().when(s.readyForInternationalShipment(any())).thenReturn(true);
+        return s;
+    }
+
+    @Test
+    void unPasoIntermedioEnTransitoAvisaAlCompradorPorEmail() {
+        // El pedido YA tiene un SHIPPED previo ("recogido"), así que el siguiente paso en tránsito es
+        // intermedio y debe notificarse. Sin el fix, el push guardaba el paso pero no avisaba, y el
+        // sondeo posterior lo veía ya guardado y tampoco avisaba: el cliente no recibía nada.
+        when(orderRepository.findByTrackingNumber("YT-1")).thenReturn(Optional.of(order));
+        when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(order.getId())).thenReturn(List.of(
+                OrderTrackingEventEntity.builder().orderId(order.getId())
+                        .status(OrderStatus.SHIPPED.name()).description("Recogido por el transportista").build()));
+        UUID userId = UUID.randomUUID();
+        order.setUserId(userId);
+        when(userRepository.getById(userId)).thenReturn(
+                User.builder().id(userId).email("comprador@x.com").language("es").build());
+        providerReturns(step(OrderStatus.SHIPPED, "En tránsito hacia el destino"));
+
+        service.applyYunExpressPush("{\"waybill_number\":\"YT-1\",\"track_events\":[{}]}");
+
+        verify(orderEmailService).trackingUpdate(eq(order), eq("comprador@x.com"), eq("es"),
+                eq("En tránsito hacia el destino"), anyString());
+    }
+
+    @Test
+    void elPrimerShippedDelPushNoDuplicaElCorreoDeRecogida() {
+        // Primer SHIPPED del envío = "recogido", que ya tiene su propio correo shipped(). El push no debe
+        // mandar ADEMÁS un trackingUpdate por él.
+        when(orderRepository.findByTrackingNumber("YT-1")).thenReturn(Optional.of(order));
+        when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(order.getId())).thenReturn(List.of());
+        order.setUserId(UUID.randomUUID());
+        providerReturns(step(OrderStatus.SHIPPED, "Recogido por el transportista"));
+
+        service.applyYunExpressPush("{\"waybill_number\":\"YT-1\",\"track_events\":[{}]}");
+
+        verify(orderEmailService, never()).trackingUpdate(any(), anyString(), anyString(), anyString(), anyString());
+    }
+
 }

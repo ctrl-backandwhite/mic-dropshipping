@@ -105,7 +105,7 @@ class Cov04YunExpressShipmentTest {
 
     private static CustomsValuation valoracion(boolean deMinimisExceeded) {
         return new CustomsValuation("ES", TaxMode.DDP, 4500, deMinimisExceeded, OverThresholdPolicy.ALLOW, 0,
-                false);
+                false, "");
     }
 
     private JsonNode ok(String raw) {

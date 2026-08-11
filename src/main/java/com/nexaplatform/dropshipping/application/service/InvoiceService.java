@@ -229,7 +229,7 @@ public class InvoiceService {
         m.put(BODYBG, "#F4F1FB");
         m.put("ctaUrl", downloadUrl);
         m.put("ctaLabel", InvoiceLabel.CTA_DOWNLOAD.of(lang));
-        m.put("footer", "NX036 Dropshipping · " + InvoiceLabel.RECEIPT_NOTE.of(lang));
+        m.put("footer", "NX036 · " + InvoiceLabel.RECEIPT_NOTE.of(lang));
         return m;
     }
 
@@ -498,7 +498,7 @@ public class InvoiceService {
         m.put("verifyNote", InvoiceLabel.VERIFY_NOTE.of(lang));
         m.put("ctaUrl", null);
         m.put("ctaLabel", InvoiceLabel.CTA_DOWNLOAD.of(lang));
-        m.put("footer", "NX036 Dropshipping · " + InvoiceLabel.RECEIPT_NOTE.of(lang));
+        m.put("footer", "NX036 · " + InvoiceLabel.RECEIPT_NOTE.of(lang));
         return m;
     }
 

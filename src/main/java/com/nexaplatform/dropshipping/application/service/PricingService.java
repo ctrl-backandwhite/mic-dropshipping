@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.UUID;
+import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 
 /**
  * Canonical pricing pipeline:
@@ -32,6 +33,8 @@ import java.util.UUID;
 public class PricingService {
 
     private final CurrencyRateService currencyService;
+    /** Rebajas vigentes: el precio de escaparate sale ya descontado. */
+    private final PromotionService promotionService;
     private final MarginService marginService;
 
     public PricedAmount priceFor(ProductEntity product, ProductVariantEntity variant) {
@@ -100,6 +103,39 @@ public class PricingService {
         // mientras el pedido se cobraba a 14,78 €. Derivándolo del canónico, lo que se enseña ES lo que
         // se cobra, en cualquier moneda y sin más cuentas de por medio.
         BigDecimal displayTotal = currencyService.usdToDisplay(retailUsd);
+        // Rebaja. Se aplica sobre el precio YA compuesto y en la moneda que se enseña, para que el
+        // porcentaje anunciado sea el que el cliente ve descontado y no difiera por redondeos.
+        // Suelo: el PRECIO BASE del producto (coste × margen), decisión del usuario del 8-ago-2026.
+        // Ninguna promoción baja de ahí por mucho que diga su porcentaje.
+        //
+        // Se eligió la base y no «coste + envío» por dos motivos. Uno, aquel suelo se olvidaba del IVA
+        // —cubría producto y porte pero no el impuesto, así que dejaba vender con pérdida—. Y dos, la
+        // base ya lleva dentro el coste y deja un margen aunque el descuento llegue al tope, mientras
+        // que rozar el coste desnudo convierte cada venta rebajada en trabajo gratis.
+        BigDecimal floorDisplay = displayBase;
+        // REGLA ESTRICTA: las rebajas y promociones son SOLO del escaparate propio (web/app NX036). El
+        // canal de integración (Shopify/WooCommerce/API de partners) vende con su propio margen y NUNCA
+        // se le aplica un descuento: si un partner revende, la promoción es decisión suya, no nuestra, y
+        // regalársela le comería el margen que paga por integrarse. Ver [[price-rule-channel]].
+        PromotionService.Discounted deal = PricingChannelHolder.get() == PriceRuleChannel.STOREFRONT
+                ? promotionService.applyAutomatic(product, displayTotal, floorDisplay)
+                : PromotionService.Discounted.none(displayTotal);
+        String originalFormatted = null;
+        Integer discountPercent = null;
+        String promotionName = null;
+        BigDecimal originalRetailUsd = retailUsd;
+        if (deal.applies()) {
+            originalFormatted = currencyService.formatDisplay(displayTotal, displayCode);
+            discountPercent = deal.percentOff().intValue();
+            promotionName = deal.promotionName();
+            displayTotal = deal.finalAmount();
+            // El cobro real también baja: si solo cambiara el escaparate, se anunciaría una rebaja que
+            // el cliente no llega a pagar. Se aplica el MISMO porcentaje al importe en dólares en vez
+            // de reconvertir desde la moneda mostrada: ida y vuelta por el tipo de cambio introduce un
+            // céntimo de deriva, y ahí es donde el precio anunciado deja de coincidir con el cobrado.
+            BigDecimal factor = deal.finalAmount().divide(deal.original(), 8, RoundingMode.HALF_UP);
+            retailUsd = retailUsd == null ? null : retailUsd.multiply(factor).setScale(2, RoundingMode.HALF_UP);
+        }
         // El string formateado lo produce el BACKEND (locale de la moneda en BD); el frontend solo pinta.
         String displayFormatted = currencyService.formatDisplay(displayTotal, displayCode);
         String baseFormatted = currencyService.formatDisplay(displayBase, displayCode);
@@ -108,14 +144,14 @@ public class PricingService {
         return new PricedAmount(costUsd, retailUsd, displayTotal, displayCode, currencyService.symbolOf(displayCode),
                 displayFormatted, withMargin.appliedRule() != null ? withMargin.appliedRule().getId() : null,
                 withMargin.appliedPercentage(), baseUsd, ivaUsd, shippingUsd, baseFormatted, ivaFormatted,
-                shippingFormatted);
+                shippingFormatted, originalFormatted, discountPercent, promotionName, originalRetailUsd);
     }
 
     /** Resultado "no se puede tarificar": todos los importes a null, nunca 0. */
     private PricedAmount unpriced() {
         String displayCode = CurrencyHolder.get();
         return new PricedAmount(null, null, null, displayCode, currencyService.symbolOf(displayCode),
-                null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     /** null → 0 (para sumar componentes de desglose cuando IVA/envío son 0 y la conversión devuelve null). */
@@ -168,6 +204,35 @@ public class PricingService {
             BigDecimal appliedMarginPercent,
             // Desglose (solo informativo, para el admin): base con margen + IVA + envío = total.
             BigDecimal baseRetailUsd, BigDecimal ivaUsd, BigDecimal shippingUsd,
-            String baseFormatted, String ivaFormatted, String shippingFormatted) {
+            String baseFormatted, String ivaFormatted, String shippingFormatted,
+            // Rebaja. Nulos cuando el producto no está en promoción, que es lo que el escaparate usa
+            // para decidir si pinta el precio tachado o solo uno.
+            String originalFormatted, Integer discountPercent, String promotionName,
+            /**
+             * Importe en USD ANTES de la rebaja. Hace falta para comparar descuentos a nivel de pedido:
+             * el cupón se mide contra el precio sin rebajar, o compararlo con el ya rebajado acumularía
+             * los dos y daría un descuento que nadie ha decidido.
+             */
+            BigDecimal originalRetailUsd) {
+
+        /**
+         * Precio sin promoción.
+         *
+         * <p>La mayoría de los usos —y de las pruebas— no se ocupan de rebajas, y obligarles a pasar
+         * tres nulos solo añade ruido a cada llamada.
+         */
+        public PricedAmount(BigDecimal costUsd, BigDecimal retailUsd, BigDecimal displayAmount,
+                String displayCurrency, String displaySymbol, String displayFormatted, UUID appliedRuleId,
+                BigDecimal appliedMarginPercent, BigDecimal baseRetailUsd, BigDecimal ivaUsd,
+                BigDecimal shippingUsd, String baseFormatted, String ivaFormatted, String shippingFormatted) {
+            this(costUsd, retailUsd, displayAmount, displayCurrency, displaySymbol, displayFormatted,
+                    appliedRuleId, appliedMarginPercent, baseRetailUsd, ivaUsd, shippingUsd, baseFormatted,
+                    ivaFormatted, shippingFormatted, null, null, null, null);
+        }
+
+        /** ¿Este precio lleva rebaja? Lo pregunta el frontend para tachar el precio anterior. */
+        public boolean discounted() {
+            return discountPercent != null && discountPercent > 0;
+        }
     }
 }

@@ -8,6 +8,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.Newslette
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.NewsletterSubscriberEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.NewsletterCampaignRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.NewsletterSubscriberRepository;
+import com.nexaplatform.dropshipping.infrastructure.email.EmailQueueService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -23,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -36,6 +38,8 @@ class NewsletterServiceTest {
     NewsletterCampaignRepository campaignRepo;
     @Mock
     EventPublisher eventPublisher;
+    @Mock
+    EmailQueueService emailQueueService;
     @InjectMocks
     NewsletterService service;
 
@@ -54,14 +58,16 @@ class NewsletterServiceTest {
 
         NewsletterService.SubscribeResult result = service.subscribe("  USER@Mail.com  ", userId, "footer");
 
-        assertThat(result.status()).isEqualTo("SUBSCRIBED");
+        // Doble opt-in: el alta nace PENDIENTE. Sólo el clic en el enlace que llega a ese buzón la
+        // confirma, y ese clic es la prueba de que quien consiente tiene acceso al correo.
+        assertThat(result.status()).isEqualTo("PENDING");
         assertThat(result.alreadySubscribed()).isFalse();
         ArgumentCaptor<NewsletterSubscriberEntity> cap = ArgumentCaptor.forClass(NewsletterSubscriberEntity.class);
         verify(subscriberRepo).save(cap.capture());
         NewsletterSubscriberEntity saved = cap.getValue();
         assertThat(saved.getEmail()).isEqualTo("user@mail.com");
         assertThat(saved.getUserId()).isEqualTo(userId);
-        assertThat(saved.getStatus()).isEqualTo("SUBSCRIBED");
+        assertThat(saved.getStatus()).isEqualTo("PENDING");
         assertThat(saved.getSource()).isEqualTo("footer");
         assertThat(saved.getToken()).isNotBlank().doesNotContain("-");
     }
@@ -94,7 +100,8 @@ class NewsletterServiceTest {
         verify(subscriberRepo).save(cap.capture());
         NewsletterSubscriberEntity saved = cap.getValue();
         assertThat(saved).isSameAs(existing);
-        assertThat(saved.getStatus()).isEqualTo("SUBSCRIBED");
+        // Reactivar tampoco salta la confirmación: vuelve a PENDING hasta que se pulse el enlace.
+        assertThat(saved.getStatus()).isEqualTo("PENDING");
         assertThat(saved.getUserId()).isEqualTo(userId);
         // No se sobreescribe el source ni se genera token nuevo en el camino de reactivación.
         assertThat(saved.getSource()).isEqualTo("storefront");
@@ -162,5 +169,53 @@ class NewsletterServiceTest {
                 .containsEntry("subject", "Hello")
                 .containsEntry("bodyHtml", "<p>body</p>")
                 .containsEntry("campaignId", campaignId.toString());
+    }
+
+    @Test
+    void subscribe_sendsTheConfirmationEmail() {
+        // Sin este correo no hay doble opt-in: el alta se quedaría pendiente para siempre y el usuario
+        // creería estar suscrito.
+        when(subscriberRepo.findByEmailIgnoreCase("a@b.com")).thenReturn(Optional.empty());
+        when(subscriberRepo.save(any(NewsletterSubscriberEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.subscribe("a@b.com", null, null);
+
+        verify(emailQueueService).enqueue(eq("a@b.com"), anyString(), anyString(), any());
+    }
+
+    @Test
+    void subscribe_yaConfirmadoNoReenviaNiDegradaElEstado() {
+        // Quien ya confirmó no puede volver a PENDING porque otro escriba su correo en el formulario:
+        // sería una forma trivial de darle de baja a traición.
+        NewsletterSubscriberEntity ya = NewsletterSubscriberEntity.builder().email("a@b.com")
+                .status("SUBSCRIBED").token("tok").build();
+        when(subscriberRepo.findByEmailIgnoreCase("a@b.com")).thenReturn(Optional.of(ya));
+
+        NewsletterService.SubscribeResult r = service.subscribe("a@b.com", null, null);
+
+        assertThat(r.alreadySubscribed()).isTrue();
+        assertThat(ya.getStatus()).isEqualTo("SUBSCRIBED");
+        verifyNoInteractions(emailQueueService);
+    }
+
+    @Test
+    void confirm_activaLaSuscripcionYDejaConstanciaDeCuando() {
+        NewsletterSubscriberEntity pendiente = NewsletterSubscriberEntity.builder().email("a@b.com")
+                .status("PENDING").token("tok").build();
+        when(subscriberRepo.findByToken("tok")).thenReturn(Optional.of(pendiente));
+
+        assertThat(service.confirm("tok")).isTrue();
+
+        assertThat(pendiente.getStatus()).isEqualTo("SUBSCRIBED");
+        // La fecha es la prueba de cuándo se prestó el consentimiento.
+        assertThat(pendiente.getConfirmedAt()).isNotNull();
+    }
+
+    @Test
+    void confirm_conUnTestigoDesconocidoNoSuscribeANadie() {
+        when(subscriberRepo.findByToken("inventado")).thenReturn(Optional.empty());
+
+        assertThat(service.confirm("inventado")).isFalse();
+        verify(subscriberRepo, never()).save(any());
     }
 }

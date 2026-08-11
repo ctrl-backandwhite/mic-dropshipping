@@ -193,3 +193,21 @@ databaseChangeLog:
       file: db/changelog/schema-v91-fulfillment-retry.sql
   - include:
       file: db/changelog/schema-v92-order-shipments.sql
+  - include:
+      file: db/changelog/schema-v93-review-source.sql
+  - include:
+      file: db/changelog/schema-v94-terms-acceptance.sql
+  - include:
+      file: db/changelog/schema-v95-newsletter-double-optin.sql
+  - include:
+      file: db/changelog/schema-v96-supplier-purchase.sql
+  - include:
+      file: db/changelog/schema-v97-promotions.sql
+  - include:
+      file: db/changelog/schema-v98-promotion-redemption.sql
+  - include:
+      file: db/changelog/schema-v99-pack-export-tracking.sql
+  - include:
+      file: db/changelog/schema-v100-customs-block-over-threshold.sql
+  - include:
+      file: db/changelog/schema-v101-customs-gulf-caps.sql

@@ -82,6 +82,7 @@ public class UserUseCaseImpl implements UserUseCase {
     private final EmailQueueService emailQueueService;
     private final AuditLogger auditLogger;
     private final UserUpdateMapper userUpdateMapper;
+    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserAddressRepository userAddressJpaRepository;
     /** Para invalidar en caliente los tokens de un usuario cuando cambia su rol (o su acceso). */
     private final com.nexaplatform.dropshipping.infrastructure.security.oauth.JwtRevocationService jwtRevocationService;
 
@@ -299,7 +300,7 @@ public class UserUseCaseImpl implements UserUseCase {
         user.setDeletionCodeExpiresAt(Instant.now().plus(DELETION_CODE_TTL_MINUTES, ChronoUnit.MINUTES));
         userRepository.update(user);
         emailQueueService.enqueue(user.getEmail(),
-                "Confirma la eliminación de tu cuenta — NX036 Dropshipping", "emails/account-deletion-code",
+                "Confirma la eliminación de tu cuenta — NX036", "emails/account-deletion-code",
                 Map.of(TITLE, "Confirma la eliminación de tu cuenta",
                         "displayName", user.getDisplayName() != null ? user.getDisplayName() : "",
                         "code", code,
@@ -318,14 +319,58 @@ public class UserUseCaseImpl implements UserUseCase {
             throw new BusinessException("DELETION_CODE_INVALID",
                     "El código de eliminación no es válido o ha expirado.");
         }
-        // BORRADO LÓGICO: la fila NO se borra físicamente. Se marca deletedAt, se desactiva (el login ya
-        // bloquea active=false) y se limpia el código de confirmación.
+        String emailOriginal = user.getEmail();
+        // El hash se sustituye por el de un secreto aleatorio de 48 bytes que nadie llega a conocer:
+        // sigue siendo un BCrypt válido —así el login lo compara con normalidad y responde 401— pero no
+        // existe contraseña que lo produzca.
+        anonymise(user, passwordEncoder.encode(randomToken(48)));
+        userRepository.update(user);
+        // Las direcciones son datos personales por sí solas y no las ampara ninguna obligación de
+        // conservación: el pedido ya guarda su propio snapshot para la factura.
+        userAddressJpaRepository.deleteAll(
+                userAddressJpaRepository.findByUser_IdOrderByIsDefaultDescCreatedAtDesc(userId));
+        // Y ninguna sesión abierta puede sobrevivir a la cuenta.
+        jwtRevocationService.revokeAllForClient(userId.toString());
+        // El registro de auditoría guarda el email para poder acreditar QUE se atendió la solicitud; es
+        // una obligación distinta (art. 5.2 RGPD, responsabilidad proactiva) y su propia retención.
+        auditLogger.log("auth.account.delete", emailOriginal, Map.of(USERID, userId));
+    }
+
+    /**
+     * Deja la cuenta sin datos que identifiquen a nadie.
+     *
+     * <p>Antes esto era una desactivación con otro nombre: se marcaba {@code deletedAt}, se ponía
+     * {@code active = false} y nombre, email, teléfono y direcciones seguían en la base de datos
+     * indefinidamente. Quien ejerce el derecho de supresión (art. 17 RGPD) tiene derecho a que se
+     * supriman, no a que se oculten.
+     *
+     * <p>La fila se conserva porque los pedidos la referencian y borrarla rompería la contabilidad. Lo
+     * que se va es el contenido personal. El email se sustituye por uno irrepetible del dominio
+     * reservado {@code deleted.invalid} —que por RFC 2606 no puede existir— para no chocar con la
+     * restricción de unicidad y para que el correo no pueda entregarse a nadie por accidente; de paso
+     * queda libre para registrarse de nuevo.
+     *
+     * <p>Lo que NO se toca: los datos de facturación ya emitidos. Conservarlos no es una excepción que
+     * nos inventemos, es una obligación legal (art. 17.3.b) y su plazo es el fiscal y mercantil.
+     */
+    static void anonymise(User user, String unusableHash) {
         user.setDeletedAt(Instant.now());
         user.setActive(false);
+        user.setEmail("deleted-" + UUID.randomUUID() + "@deleted.invalid");
+        user.setPasswordHash(unusableHash);
+        user.setDisplayName(null);
+        user.setFirstName(null);
+        user.setLastName1(null);
+        user.setLastName2(null);
+        user.setCompanyName(null);
+        user.setPhone(null);
+        user.setAvatarUrl(null);
+        user.setGoogleLinked(false);
         user.setDeletionCode(null);
         user.setDeletionCodeExpiresAt(null);
-        userRepository.update(user);
-        auditLogger.log("auth.account.delete", user.getEmail(), Map.of(USERID, userId));
+        user.setActivationCode(null);
+        user.setActivationCodeExpiresAt(null);
+        user.setLastLogin(null);
     }
 
     /* ============ Lookups ============ */

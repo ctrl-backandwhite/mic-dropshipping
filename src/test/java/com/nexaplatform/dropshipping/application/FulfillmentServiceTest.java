@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService.TrackingProgress;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.User;
@@ -57,6 +58,8 @@ class FulfillmentServiceTest {
     OrderShipmentRepository shipmentRepository;
     @Mock
     TrackingViewMapper trackingViewMapper;
+    @Mock
+    SupplierPurchaseService supplierPurchaseService;
     @InjectMocks
     FulfillmentService service;
 
@@ -109,6 +112,8 @@ class FulfillmentServiceTest {
     void createShipment_setsFulfillmentFieldsAndAppendsEvent() {
         Order o = order(OrderStatus.FORWARDED, null);
         when(orderRepository.findById(o.getId())).thenReturn(Optional.of(o));
+        // Este test va del transportista internacional: la mercancía ya está camino del almacén chino.
+        when(supplierPurchaseService.readyForInternationalShipment(o.getId())).thenReturn(true);
         when(cainiao.createShipments(o)).thenReturn(
                 List.of(new FulfillmentResult("Standard Shipping", "CN-TRACK", "LP-REF", 20)));
 

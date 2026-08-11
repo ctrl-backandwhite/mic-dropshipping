@@ -109,4 +109,15 @@ public class UserEntity extends BaseEntity {
 
     @Column(name = "google_linked", nullable = false)
     private boolean googleLinked;
+
+    /** Cuándo y qué versión de los textos legales aceptó. Sin esto no se puede acreditar la aceptación. */
+    @Column(name = "terms_accepted_at")
+    private Instant termsAcceptedAt;
+
+    @Column(name = "terms_accepted_version", length = 20)
+    private String termsAcceptedVersion;
+
+    /** Cuándo consintió el marketing. NULL significa que nunca lo hizo, no que no se sepa. */
+    @Column(name = "marketing_opt_in_at")
+    private Instant marketingOptInAt;
 }

@@ -370,6 +370,16 @@
             <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
+        <!--
+            Generación del .xls de importación masiva de Yunfulfillment. Su OMS rechaza cualquier otro
+            formato ("Only the suffix can be uploaded xls file"), así que hace falta HSSF (BIFF8) y no
+            vale un CSV renombrado ni un XLSX. Solo `poi`: `poi-ooxml` (formato nuevo) no se usa.
+        -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi</artifactId>
+            <version>5.4.1</version>
+        </dependency>
     </dependencies>
 
     <dependencyManagement>
