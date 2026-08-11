@@ -209,3 +209,5 @@ databaseChangeLog:
       file: db/changelog/schema-v99-pack-export-tracking.sql
   - include:
       file: db/changelog/schema-v100-customs-block-over-threshold.sql
+  - include:
+      file: db/changelog/schema-v101-customs-gulf-caps.sql
