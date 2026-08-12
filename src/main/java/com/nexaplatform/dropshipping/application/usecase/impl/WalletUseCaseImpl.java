@@ -294,6 +294,12 @@ public class WalletUseCaseImpl implements WalletUseCase {
         return walletRepository.findByUserId(userId).orElseThrow(() -> new NotFoundException("Wallet not found"));
     }
 
+    /** Carga la wallet con bloqueo de fila (FOR UPDATE) para los movimientos que tocan el saldo. */
+    private Wallet requireForUpdate(UUID userId) {
+        return walletRepository.findByUserIdForUpdate(userId)
+                .orElseThrow(() -> new NotFoundException("Wallet not found"));
+    }
+
     /**
      * Apunte del libro mayor antes de aplicarlo: qué movimiento es, por cuánto (con signo) y contra qué
      * documento (pago o pedido) va. La clave de idempotencia viaja con el apunte porque es lo que impide
@@ -308,6 +314,14 @@ public class WalletUseCaseImpl implements WalletUseCase {
      * llama ya la ha modificado (HOLD/RELEASE): releerla descartaría ese cambio pendiente.
      */
     private WalletTransaction recordTransaction(LedgerEntry entry, Wallet preloadedWallet) {
+        // For HOLD/RELEASE we do NOT change balance, only hold counter (signedAmount is informational).
+        boolean affectsBalance = !"HOLD".equals(entry.kind()) && !"RELEASE".equals(entry.kind());
+        // Movimientos que tocan el saldo: cargar la wallet con BLOQUEO de fila (FOR UPDATE) para que la
+        // lectura del saldo, la comprobación y la escritura queden serializadas y NO se pueda doble-gastar
+        // por checkouts concurrentes (lost update). El lock también serializa reenvíos de la MISMA clave de
+        // idempotencia, por eso su comprobación va AHORA después de tomar el lock.
+        Wallet w = preloadedWallet != null ? preloadedWallet
+                : (affectsBalance ? requireForUpdate(entry.userId()) : require(entry.userId()));
         if (entry.idempotencyKey() != null) {
             Optional<WalletTransaction> existing = txRepository.findByIdempotencyKey(entry.idempotencyKey());
             if (existing.isPresent()) {
@@ -315,9 +329,6 @@ public class WalletUseCaseImpl implements WalletUseCase {
                 return existing.get();
             }
         }
-        Wallet w = preloadedWallet != null ? preloadedWallet : require(entry.userId());
-        // For HOLD/RELEASE we do NOT change balance, only hold counter (signedAmount is informational).
-        boolean affectsBalance = !"HOLD".equals(entry.kind()) && !"RELEASE".equals(entry.kind());
         long newBalance = w.getBalanceUsdCents();
         if (affectsBalance) {
             newBalance += entry.signedAmount();

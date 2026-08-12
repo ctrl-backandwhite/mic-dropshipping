@@ -798,8 +798,35 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
     @Override
     @Transactional(readOnly = true)
+    public List<Payment> listOrderPaymentsForPartner(Jwt jwt, UUID orderId) {
+        assertOrderOwnedByPartner(jwt, orderId);
+        return listOrderPayments(orderId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Payment getOrderPayment(UUID orderId, UUID paymentId) {
         return requireOrderPayment(orderId, paymentId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Payment getOrderPaymentForPartner(Jwt jwt, UUID orderId, UUID paymentId) {
+        assertOrderOwnedByPartner(jwt, orderId);
+        return requireOrderPayment(orderId, paymentId);
+    }
+
+    /**
+     * IDOR entre partners: un partner solo puede leer los pagos de SUS pedidos. El pedido debe pertenecer al
+     * partner del JWT (partnerAppId == id derivado del subject); si es de otro partner o del escaparate
+     * (partnerAppId null), 404 — sin filtrar su existencia.
+     */
+    private void assertOrderOwnedByPartner(Jwt jwt, UUID orderId) {
+        UUID partnerId = resolvePartnerUserId(jwt);
+        Order order = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException("Order"));
+        if (order.getPartnerAppId() == null || !order.getPartnerAppId().equals(partnerId)) {
+            throw new NotFoundException("Order");
+        }
     }
 
     /**

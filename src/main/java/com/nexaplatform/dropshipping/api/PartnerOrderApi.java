@@ -41,5 +41,5 @@ public interface PartnerOrderApi {
     @Operation(summary = "Get an order by id")
     @ApiResponse(responseCode = "200", description = "Order found")
     @GetMapping("/{id}")
-    ResponseEntity<PartnerOrderDtoOut> get(@PathVariable UUID id);
+    ResponseEntity<PartnerOrderDtoOut> get(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id);
 }

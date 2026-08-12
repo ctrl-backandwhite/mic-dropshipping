@@ -49,6 +49,11 @@ public class WalletRepositoryImpl implements WalletRepository {
     }
 
     @Override
+    public Optional<Wallet> findByUserIdForUpdate(UUID userId) {
+        return walletJpaRepositoryAdapter.findByUser_IdForUpdate(userId).map(walletEntityMapper::toDomain);
+    }
+
+    @Override
     public Wallet update(Wallet model) {
         return this.save(model);
     }

@@ -78,8 +78,14 @@ public interface PaymentUseCase extends BaseUseCase<Payment, Payment, UUID> {
     /** All payment attempts for an order, newest first. */
     List<Payment> listOrderPayments(UUID orderId);
 
+    /** Como {@link #listOrderPayments} pero validando que el pedido es del PARTNER del JWT (IDOR entre partners). */
+    List<Payment> listOrderPaymentsForPartner(org.springframework.security.oauth2.jwt.Jwt jwt, UUID orderId);
+
     /** A single order payment, validating it belongs to the order. */
     Payment getOrderPayment(UUID orderId, UUID paymentId);
+
+    /** Como {@link #getOrderPayment} pero validando que el pedido es del PARTNER del JWT (IDOR entre partners). */
+    Payment getOrderPaymentForPartner(org.springframework.security.oauth2.jwt.Jwt jwt, UUID orderId, UUID paymentId);
 
     /** Dev-only mock-confirm of a pending order payment. */
     Payment confirmMockOrderPayment(UUID userId, UUID orderId, UUID paymentId);

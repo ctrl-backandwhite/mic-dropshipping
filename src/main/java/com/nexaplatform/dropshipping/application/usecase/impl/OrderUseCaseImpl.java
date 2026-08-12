@@ -467,8 +467,15 @@ public class OrderUseCaseImpl implements OrderUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public Order getPartnerOrder(UUID id) {
-        return requireOrder(id);
+    public Order getPartnerOrder(Jwt jwt, UUID id) {
+        Order order = requireOrder(id);
+        // IDOR: un partner solo puede leer SUS pedidos (partnerAppId == su id derivado del JWT). Los pedidos
+        // de otro partner o del escaparate (partnerAppId null) → 404, sin filtrar su existencia.
+        UUID partnerId = resolvePartnerId(jwt);
+        if (order.getPartnerAppId() == null || !order.getPartnerAppId().equals(partnerId)) {
+            throw new NotFoundException("Order not found: " + id);
+        }
+        return order;
     }
 
     private UUID resolvePartnerId(Jwt jwt) {

@@ -90,11 +90,18 @@ public class ShopifyConnector implements ShopConnector {
         if (handle == null || handle.isBlank()) {
             return null;
         }
-        String h = handle.trim().replaceFirst("^https?://", "").replaceAll("/.*$", "");
+        String h = handle.trim().replaceFirst("^https?://", "").replaceAll("/.*$", "").toLowerCase();
         if (h.isEmpty()) {
             return null;
         }
-        return h.contains(".") ? h : h + ".myshopify.com";
+        String host = h.contains(".") ? h : h + ".myshopify.com";
+        // Anti-SSRF: el host de una tienda Shopify SIEMPRE es *.myshopify.com (dominio de Shopify, público).
+        // Exigirlo impide apuntar el conector a 169.254.169.254 u otros hosts internos. Doble comprobación:
+        // que además resuelva a una IP pública.
+        if (!host.endsWith(".myshopify.com") || !ShopHostGuard.isPublicHost(host)) {
+            return null;
+        }
+        return host;
     }
 
     private String truncate(String s) {

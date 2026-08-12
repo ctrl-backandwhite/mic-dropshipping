@@ -142,6 +142,13 @@ public class BffSecurityConfig {
                         .requestMatchers("/api/admin/orders/**").hasAnyRole(ADMIN, "OPERATOR")
                         .requestMatchers("/api/admin/operator/**").hasAnyRole(ADMIN, "OPERATOR")
                         .requestMatchers("/api/admin/**").hasRole(ADMIN)
+                        // Envío de cotizaciones de sourcing = operación de AGENTE/soporte, NO de cliente. Vivía
+                        // bajo /api/me/** (solo "authenticated") sin comprobar rol y aceptando ?asAgent=<id>, así
+                        // que cualquier usuario podía inyectar cotizaciones falsas en la petición de otro e
+                        // IMPERSONAR a cualquier agente. Se restringe a ADMIN/OPERATOR. El cliente solo crea la
+                        // petición y SELECCIONA la cotización ganadora (esas rutas siguen siendo suyas).
+                        .requestMatchers(HttpMethod.POST, "/api/me/sourcing/requests/*/quotes")
+                        .hasAnyRole(ADMIN, "OPERATOR")
                         // /api/me is the auth-bootstrap probe — it must succeed even when
                         // unauthenticated (the controller returns null), otherwise the SPA
                         // sees a noisy 401 on every cold load before login.

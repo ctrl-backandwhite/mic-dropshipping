@@ -66,6 +66,14 @@ class Cov03WalletAdminAndDisplayTest {
 
     private final UUID userId = UUID.randomUUID();
 
+    @org.junit.jupiter.api.BeforeEach
+    void delegaBloqueoAlFindNormal() {
+        // Los movimientos de saldo cargan la wallet con bloqueo (findByUserIdForUpdate); se delega al mismo
+        // stub que findByUserId para no duplicar cada `when(...)`.
+        when(walletRepository.findByUserIdForUpdate(any()))
+                .thenAnswer(inv -> walletRepository.findByUserId(inv.getArgument(0)));
+    }
+
     @AfterEach
     void limpiaDivisa() {
         CurrencyHolder.clear();

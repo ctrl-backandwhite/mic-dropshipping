@@ -114,6 +114,22 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST);
     }
 
+    // Cabecera requerida ausente (p. ej. el webhook inbound sin X-NX-Signature): 400, no un 500 genérico.
+    @ExceptionHandler(org.springframework.web.bind.MissingRequestHeaderException.class)
+    public ResponseEntity<ApiResponseDtoOut<?>> handleMissingHeader(
+            org.springframework.web.bind.MissingRequestHeaderException ex) {
+        return new ResponseEntity<>(body("VE001", "Cabecera requerida ausente: " + ex.getHeaderName(),
+                List.of(ex.getHeaderName())), HttpStatus.BAD_REQUEST);
+    }
+
+    // Content-Type no soportado (p. ej. text/plain en un endpoint JSON): 415, no un 500 genérico.
+    @ExceptionHandler(org.springframework.web.HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiResponseDtoOut<?>> handleMediaType(
+            org.springframework.web.HttpMediaTypeNotSupportedException ex) {
+        return new ResponseEntity<>(body("VE006", "Content-Type no soportado", List.of(ex.getMessage())),
+                HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleNotReadable(HttpMessageNotReadableException ex) {
         // El cliente solo recibe "JSON inválido" (no se le filtra el detalle interno), pero sin dejar

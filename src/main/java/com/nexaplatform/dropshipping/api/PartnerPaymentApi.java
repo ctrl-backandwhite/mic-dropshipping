@@ -55,9 +55,11 @@ public interface PartnerPaymentApi {
 
     @Operation(summary = "List all payment attempts associated to an order")
     @GetMapping("/{orderId}/payments")
-    ResponseEntity<List<OrderPaymentDtoOut>> list(@PathVariable UUID orderId);
+    ResponseEntity<List<OrderPaymentDtoOut>> list(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID orderId);
 
     @Operation(summary = "Read a payment by id (poll while pending)")
     @GetMapping("/{orderId}/payments/{paymentId}")
-    ResponseEntity<OrderPaymentDtoOut> get(@PathVariable UUID orderId, @PathVariable UUID paymentId);
+    ResponseEntity<OrderPaymentDtoOut> get(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID orderId, @PathVariable UUID paymentId);
 }
