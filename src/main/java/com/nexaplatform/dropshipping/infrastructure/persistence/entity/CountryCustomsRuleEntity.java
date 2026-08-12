@@ -65,6 +65,22 @@ public class CountryCustomsRuleEntity extends BaseEntity {
     @Column(name = "duty_rate_bps", nullable = false)
     private int dutyRateBps;
 
+    /**
+     * Comisión del prepago de IVA del transportista sobre el VALOR DECLARADO, en puntos básicos
+     * (200 = 2%). Solo aplica cuando el vendedor no tiene IOSS y el carrier adelanta el IVA. 0 = sin
+     * comisión (p. ej. si se registra un IOSS).
+     */
+    @Column(name = "vat_prepay_percent_bps", nullable = false)
+    private int vatPrepayPercentBps;
+
+    /** Arancel por ARTÍCULO (producto distinto) en su divisa legal; 3 EUR en la UE. 0 = no aplica. */
+    @Column(name = "per_article_fee_amount", nullable = false, precision = 12, scale = 2)
+    private BigDecimal perArticleFeeAmount;
+
+    /** Divisa del arancel por artículo (se convierte a USD con la tasa del día, como el umbral). */
+    @Column(name = "per_article_fee_currency", nullable = false, length = 3)
+    private String perArticleFeeCurrency;
+
     @Column(nullable = false)
     private boolean active;
 }

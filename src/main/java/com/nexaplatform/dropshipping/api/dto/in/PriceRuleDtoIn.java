@@ -58,4 +58,7 @@ public class PriceRuleDtoIn {
     @Size(min = 3, max = 200)
     @Schema(description = "Human-readable description")
     private String description;
+
+    @Schema(description = "País de destino (ISO-2) al que aplica el margen; vacío = cualquier país", example = "DE")
+    private String countryCode;
 }

@@ -55,4 +55,7 @@ public class PriceRuleDtoOut {
 
     @Schema(description = "Canal: STOREFRONT (tienda propia) o INTEGRATION (apps API: Shopify/WooCommerce)", example = "STOREFRONT")
     private String channel;
+
+    @Schema(description = "País de destino (ISO-2) al que aplica; vacío = cualquier país", example = "DE")
+    private String countryCode;
 }

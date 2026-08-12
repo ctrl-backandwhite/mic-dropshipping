@@ -151,7 +151,8 @@ public class CatalogStorefrontReadService {
 
     @Cacheable(value = CACHE_PRODUCT_LIST,
             key = "'cat:' + #idOrSlug + ':' + #page + ':' + #size + ':' + #lang + ':' + #sort + ':' "
-                    + "+ T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get()")
+                    + "+ T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get() + ':' "
+                    + "+ T(com.nexaplatform.dropshipping.application.service.PricingCountryHolder).get()")
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productsByCategory(String idOrSlug, int page, int size, String lang,
             String sort) {
@@ -183,7 +184,8 @@ public class CatalogStorefrontReadService {
     }
 
     @Cacheable(value = CACHE_PRODUCT_LIST, key = "'sup:' + #id + ':' + #page + ':' + #size + ':' + #lang + ':' + #sort "
-            + "+ ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get()")
+            + "+ ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get() "
+            + "+ ':' + T(com.nexaplatform.dropshipping.application.service.PricingCountryHolder).get()")
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productsBySupplier(UUID id, int page, int size, String lang, String sort) {
         return listing(page, size, lang, ProductListFilters.basic(null, null, id, null, null), sort);

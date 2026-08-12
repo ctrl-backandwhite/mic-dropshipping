@@ -38,7 +38,7 @@ class CheckoutTotalsServiceTest {
     }
 
     private void givenCustoms(int handlingCents, boolean exceeded, boolean blocked) {
-        when(customsValuationService.valuate(any(), anyInt(), anyInt())).thenReturn(new CustomsValuation("ES",
+        when(customsValuationService.valuate(any(), anyInt(), anyInt(), anyInt())).thenReturn(new CustomsValuation("ES",
                 TaxMode.DDP, 0, exceeded, OverThresholdPolicy.SURCHARGE, handlingCents, blocked, ""));
     }
 
@@ -47,7 +47,7 @@ class CheckoutTotalsServiceTest {
         givenTax(2100, 25_20);
         givenCustoms(0, false, false);
 
-        service.compute("ES", null, 100_00, 20_00);
+        service.compute("ES", null, 100_00, 20_00, 1);
 
         // Base imponible = 100,00 + 20,00 = 120,00 (el recargo de despacho NO entra en la base)
         verify(taxService).taxCentsFor("ES", null, 120_00);
@@ -58,7 +58,7 @@ class CheckoutTotalsServiceTest {
         givenTax(2100, 25_20);
         givenCustoms(3_00, false, false);
 
-        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00);
+        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00, 1);
 
         assertThat(t.shippingBaseCents()).isEqualTo(20_00);
         assertThat(t.customsHandlingCents()).isEqualTo(3_00);
@@ -72,7 +72,7 @@ class CheckoutTotalsServiceTest {
         givenTax(2100, 25_20);
         givenCustoms(3_00, false, false);
 
-        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00);
+        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00, 1);
 
         // 100,00 + (20,00 + 3,00) + 25,20 = 148,20
         assertThat(t.totalCents(100_00)).isEqualTo(148_20);
@@ -83,7 +83,7 @@ class CheckoutTotalsServiceTest {
         givenTax(0, 0);
         givenCustoms(15_00, true, true);
 
-        CheckoutTotals t = service.compute("BR", null, 300_00, 10_00);
+        CheckoutTotals t = service.compute("BR", null, 300_00, 10_00, 1);
 
         assertThat(t.customs().deMinimisExceeded()).isTrue();
         assertThat(t.blocked()).isTrue();
@@ -95,7 +95,7 @@ class CheckoutTotalsServiceTest {
         givenTax(0, 0);
         givenCustoms(0, false, false);
 
-        CheckoutTotals t = service.compute("ES", null, -10_00, -5_00);
+        CheckoutTotals t = service.compute("ES", null, -10_00, -5_00, 1);
 
         assertThat(t.shippingBaseCents()).isZero();
         assertThat(t.shippingCents()).isZero();
@@ -107,7 +107,7 @@ class CheckoutTotalsServiceTest {
         givenTax(875, 8_75);
         givenCustoms(0, false, false);
 
-        CheckoutTotals t = service.compute("US", "CA", 100_00, 0);
+        CheckoutTotals t = service.compute("US", "CA", 100_00, 0, 1);
 
         verify(taxService).taxCentsFor("US", "CA", 100_00);
         assertThat(t.taxRateBps()).isEqualTo(875);

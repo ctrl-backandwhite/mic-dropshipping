@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.UUID;
 
@@ -83,7 +85,15 @@ public class ShippingQuoteController {
              * Cupón: el código aplicado, o el motivo por el que no vale. Se devuelven los dos para que
              * el checkout distinga «canjeado» de «rechazado y por qué» sin adivinarlo del importe.
              */
-            String couponCode, String couponError) {
+            String couponCode, String couponError,
+            /** Subtotal de producto (con el margen del país ya aplicado), céntimos USD. */
+            int subtotalUsdCents,
+            /** Recargo de despacho de aduana incluido en el envío (p. ej. 3 EUR/artículo en la UE), céntimos USD. */
+            int customsHandlingUsdCents,
+            /** Envío SIN el recargo de aduana, ya formateado (para separarlo de "Aranceles UE" en el checkout). */
+            String shippingBaseFormatted,
+            /** Recargo de aduana ("Aranceles UE") ya formateado; "" si no aplica. */
+            String customsHandlingFormatted) {
     }
 
     @Operation(summary = "Cotizar envío + IVA + total del carrito para un país")
@@ -99,6 +109,14 @@ public class ShippingQuoteController {
 
         ShippingQuote q = preview.quote();
         String code = pricingService.displayCurrencyCode();
+        // Separar el envío en "Envío base" y "Aranceles UE": el recargo de aduana se convierte a la divisa
+        // y el envío base = envío total − aduana, para que la suma cuadre exactamente con el envío mostrado.
+        int customsCents = preview.totals().customsHandlingCents();
+        BigDecimal customsDisplay = currencyService.usdToDisplay(BigDecimal.valueOf(customsCents).movePointLeft(2))
+                .setScale(2, RoundingMode.HALF_UP);
+        String customsFmt = customsCents > 0 ? currencyService.formatDisplay(customsDisplay, code) : "";
+        String shippingBaseFmt = currencyService.formatDisplay(
+                preview.shippingDisplay().subtract(customsDisplay), code);
         // amountUsdCents = envío TOTAL (tarifa + recargo de despacho), que es lo que se cobrará. Si se
         // devolviera la tarifa sin recargo, el front pintaría un envío distinto del facturado.
         QuoteResponse body = new QuoteResponse(q.supported(), q.countryCode(), preview.shippingUsdCents(),
@@ -111,7 +129,9 @@ public class ShippingQuoteController {
                 preview.totals().customs().deMinimisExceeded(), preview.totals().blocked(),
                 preview.totals().customs().taxMode().name(),
                 preview.totals().customs().deMinimisLabel(),
-                preview.couponCode(), preview.couponError());
+                preview.couponCode(), preview.couponError(),
+                preview.subtotalUsdCents(), preview.totals().customsHandlingCents(),
+                shippingBaseFmt, customsFmt);
         return ResponseEntity.ok(body);
     }
 

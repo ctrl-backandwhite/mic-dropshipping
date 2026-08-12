@@ -153,7 +153,10 @@ public final class CatalogDtos {
             // Vídeo de explicación del producto (columna product.video_url). El front lo muestra en la galería.
             String videoUrl, boolean hasVideo,
             // Rebaja vigente sobre este producto. Nulos si no la hay.
-            String originalFormatted, Integer discountPercent, String promotionName) {
+            String originalFormatted, Integer discountPercent, String promotionName,
+            // SOLO ADMIN: arancel de aduana por artículo ya formateado (p. ej. "3,00 €") cuando el país
+            // efectivo es de la UE; null en el resto. Informativo (no está en el total del producto).
+            String customsFormatted) {
 
         /** Sin promoción: atajo para los usos que no la calculan. */
         public ProductDetailView(UUID id, String slug, String source, String externalId, SupplierView supplier,
@@ -173,7 +176,7 @@ public final class CatalogDtos {
                     lastSyncedAt, images, variantOptions, variants, priceTiers, costUsd, retailUsd, displayPrice,
                     displayCurrency, displaySymbol, displayFormatted, appliedMarginPercent, baseFormatted,
                     ivaFormatted, shippingFormatted, metaTitle, metaDescription, verified, videoUrl, hasVideo,
-                    null, null, null);
+                    null, null, null, null);
         }
     }
 

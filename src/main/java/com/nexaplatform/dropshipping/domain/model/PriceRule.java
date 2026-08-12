@@ -36,6 +36,8 @@ public class PriceRule {
     private String description;
     /** Canal al que aplica (STOREFRONT por defecto; INTEGRATION para apps API). */
     private PriceRuleChannel channel;
+    /** País de destino (ISO-2) al que aplica; null = cualquier país. */
+    private String countryCode;
     private Instant createdAt;
     private Instant updatedAt;
     private String createdBy;

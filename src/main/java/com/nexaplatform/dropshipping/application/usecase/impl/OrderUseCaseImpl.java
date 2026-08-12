@@ -348,8 +348,11 @@ public class OrderUseCaseImpl implements OrderUseCase {
         //  · IVA por estado/provincia (US/CA/BR) o tasa nacional, sobre (subtotal − descuento) + envío.
         //  · Recargo del despacho DDP del país (lo que el transportista cobra por adelantar el impuesto).
         //  · Recargo de despacho formal si el valor de los bienes supera el umbral de minimis del destino.
-        CheckoutTotalsService.CheckoutTotals totals = checkoutTotalsService
-                .compute(order.getShippingCountry(), order.getShippingState(), discountedSubtotal, shippingCents);
+        // Artículos = productos DISTINTOS del pedido (para el arancel UE de 3 EUR por artículo).
+        int articleCount = (int) order.getItems().stream().map(OrderItem::getProductId)
+                .filter(p -> p != null).distinct().count();
+        CheckoutTotalsService.CheckoutTotals totals = checkoutTotalsService.compute(order.getShippingCountry(),
+                order.getShippingState(), discountedSubtotal, shippingCents, articleCount);
         // Destino cuya política prohíbe vender por encima del umbral: se rechaza ANTES de cobrar, en vez de
         // aceptar un pedido que costaría aranceles y despacho formal no repercutidos.
         if (totals.blocked()) {

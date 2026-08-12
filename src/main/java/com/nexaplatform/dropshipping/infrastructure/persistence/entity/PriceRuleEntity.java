@@ -60,4 +60,12 @@ public class PriceRuleEntity extends BaseEntity {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private PriceRuleChannel channel = PriceRuleChannel.STOREFRONT;
+
+    /**
+     * País de destino (ISO-2) al que aplica la regla, para márgenes distintos por país. NULL = aplica a
+     * cualquier país (regla base). Una regla con país concreto gana sobre la equivalente sin país cuando el
+     * país efectivo del comprador coincide.
+     */
+    @Column(name = "country_code", length = 2)
+    private String countryCode;
 }

@@ -61,6 +61,8 @@ class Cov05ProductMapperTest {
     CurrencyRateService currencyRateService;
     @Mock
     MarginService marginService;
+    @Mock
+    com.nexaplatform.dropshipping.application.service.CustomsValuationService customsValuationService;
 
     @InjectMocks
     ProductMapper mapper;

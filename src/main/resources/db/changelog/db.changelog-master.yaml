@@ -215,3 +215,13 @@ databaseChangeLog:
       file: db/changelog/schema-v102-outbound-email-next-attempt.sql
   - include:
       file: db/changelog/schema-v103-saved-cart-item.sql
+  - include:
+      file: db/changelog/schema-v104-eu-vat-rates-complete.sql
+  - include:
+      file: db/changelog/schema-v105-eu-customs-fees.sql
+  - include:
+      file: db/changelog/schema-v106-price-rule-country.sql
+  - include:
+      file: db/changelog/schema-v107-eu-margin-seed.sql
+  - include:
+      file: db/changelog/schema-v108-eu-drop-vat-prepay.sql

@@ -166,7 +166,7 @@ class CheckoutInvariantsTest {
         when(totals.shippingCents()).thenReturn(0);
         when(totals.taxCents()).thenReturn(0);
         when(totals.totalCents(anyInt())).thenReturn(totalCents);
-        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt())).thenReturn(totals);
+        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyInt())).thenReturn(totals);
         when(orderRepository.save(any())).thenAnswer(i -> {
             Order o = i.getArgument(0);
             if (o.getId() == null) {

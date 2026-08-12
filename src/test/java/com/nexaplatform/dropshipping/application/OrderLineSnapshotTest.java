@@ -164,7 +164,7 @@ class OrderLineSnapshotTest {
         when(totals.shippingCents()).thenReturn(0);
         when(totals.taxCents()).thenReturn(0);
         when(totals.totalCents(anyInt())).thenAnswer(i -> i.getArgument(0));
-        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt())).thenReturn(totals);
+        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyInt())).thenReturn(totals);
         when(orderRepository.save(any())).thenAnswer(i -> {
             Order o = i.getArgument(0);
             o.setId(UUID.randomUUID());

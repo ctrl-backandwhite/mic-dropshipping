@@ -51,6 +51,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AuthUseCaseImpl implements AuthUseCase {
 
+    /** UE-27: sus usuarios no pueden cambiar de país (candado anti-trampa del margen por país). */
+    private static final Set<String> EU_COUNTRIES = Set.of(
+            "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT",
+            "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE");
+
     private final UserUseCase userUseCase;
     private final AuthenticationManager authenticationManager;
     private final PasswordEncoder passwordEncoder;
@@ -216,8 +221,17 @@ public class AuthUseCaseImpl implements AuthUseCase {
             user.setDisplayName(req.getDisplayName().trim());
         if (req.getCompanyName() != null)
             user.setCompanyName(req.getCompanyName().trim());
-        if (req.getCountry() != null)
-            user.setCountry(req.getCountry().trim().toUpperCase());
+        if (req.getCountry() != null) {
+            String newCountry = req.getCountry().trim().toUpperCase();
+            String current = user.getCountry() != null ? user.getCountry().trim().toUpperCase() : null;
+            // Candado anti-trampa: un usuario con país UE NO puede cambiar su país (evitar saltar a un país
+            // con margen más favorable). Puede fijarlo si aún no tiene, o cambiarlo si su país actual no es UE.
+            if (current != null && EU_COUNTRIES.contains(current) && !newCountry.equals(current)) {
+                throw new BusinessException("EU_COUNTRY_LOCKED",
+                        "Los usuarios registrados en la UE no pueden cambiar su país");
+            }
+            user.setCountry(newCountry);
+        }
         if (req.getLanguage() != null)
             user.setLanguage(req.getLanguage());
         User saved = userUseCase.updateUser(user);
