@@ -51,7 +51,9 @@ public class MarginService {
      * then id — a total order so the winner never depends on stream/DB iteration order.
      */
     private static final Comparator<PriceRuleEntity> MOST_SPECIFIC = Comparator
-            .comparing(MarginService::rangeWidth)
+            // Una regla CON país es más específica que la equivalente sin país (margen por país gana).
+            .comparingInt((PriceRuleEntity r) -> r.getCountryCode() == null ? 1 : 0)
+            .thenComparing(MarginService::rangeWidth)
             .thenComparingInt(PriceRuleEntity::getPosition)
             .thenComparing(r -> r.getCreatedAt() != null ? r.getCreatedAt() : Instant.EPOCH,
                     Comparator.reverseOrder())
@@ -110,12 +112,14 @@ public class MarginService {
         // Solo se consideran reglas del canal del request (STOREFRONT por defecto; INTEGRATION para apps API).
         // Así conviven el margen del storefront (p. ej. 150%) y el de integración (p. ej. 75%) sin colisionar.
         final PriceRuleChannel channel = PricingChannelHolder.get();
+        // País efectivo del comprador (o null): una regla del país gana sobre la equivalente sin país.
+        final String country = PricingCountryHolder.get();
         ScopeIds ids = ScopeIds.of(product, variant);
 
         // El orden de PriceRuleScope.values() ES la precedencia (VARIANT > PRODUCT > … > GLOBAL): en cuanto
         // un ámbito da coincidencia se devuelve, sin mirar los menos específicos.
         for (PriceRuleScope scope : PriceRuleScope.values()) {
-            Optional<PriceRuleEntity> match = bestMatch(scope, targetsFor(scope, ids), channel, costUsd);
+            Optional<PriceRuleEntity> match = bestMatch(scope, targetsFor(scope, ids), channel, country, costUsd);
             if (match.isPresent())
                 return match;
         }
@@ -165,13 +169,25 @@ public class MarginService {
      * que la resolución nunca dependa del orden de iteración.
      */
     private Optional<PriceRuleEntity> bestMatch(PriceRuleScope scope, Set<UUID> targets, PriceRuleChannel channel,
-            BigDecimal costUsd) {
+            String country, BigDecimal costUsd) {
         return cache.stream().filter(PriceRuleEntity::isActive)
                 .filter(r -> r.getChannel() == channel)
+                .filter(r -> countryMatches(r, country))
                 .filter(r -> r.getScope() == scope)
                 .filter(r -> scope == PriceRuleScope.GLOBAL
                         || (r.getScopeId() != null && targets.contains(r.getScopeId())))
                 .filter(r -> matchesCostRange(r, costUsd)).min(MOST_SPECIFIC);
+    }
+
+    /**
+     * Una regla sin país (country_code null) vale para cualquier país; una regla con país solo aplica si el
+     * país efectivo del comprador coincide. Sin país conocido solo casan las reglas sin país.
+     */
+    private static boolean countryMatches(PriceRuleEntity r, String country) {
+        if (r.getCountryCode() == null) {
+            return true;
+        }
+        return country != null && r.getCountryCode().equalsIgnoreCase(country);
     }
 
     /** Whether any cached rule targets a product group (gates the membership query). */
