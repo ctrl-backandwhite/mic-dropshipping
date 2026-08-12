@@ -49,7 +49,8 @@ class ProductMapperTest {
 
         pricingService = new PricingService(currencyService, sinPromociones(), marginService);
 
-        productMapper = new ProductMapper(supplierMapper, pricingService, currencyService, marginService);
+        productMapper = new ProductMapper(supplierMapper, pricingService, currencyService, marginService,
+                mock(com.nexaplatform.dropshipping.application.service.CustomsValuationService.class));
     }
 
     @Test

@@ -9,6 +9,8 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantOptionView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantValueView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
 import com.nexaplatform.dropshipping.application.service.MarginService;
+import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
+import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
@@ -39,6 +41,7 @@ public class ProductMapper {
     private final PricingService pricingService;
     private final CurrencyRateService currencyRateService;
     private final MarginService marginService;
+    private final CustomsValuationService customsValuationService;
 
     public ProductSummaryView toSummary(ProductEntity p, String language) {
         if (p == null)
@@ -76,6 +79,16 @@ public class ProductMapper {
         String baseFormatted = admin ? priced.baseFormatted() : null;
         String ivaFormatted = admin ? priced.ivaFormatted() : null;
         String shippingFormatted = admin ? priced.shippingFormatted() : null;
+        // SOLO admin: arancel de aduana por artículo del país efectivo (3 €/artículo en la UE), formateado.
+        String customsFormatted = null;
+        if (admin) {
+            int customsCents = customsValuationService.perArticleFeeUsdCents(PricingCountryHolder.get());
+            if (customsCents > 0) {
+                customsFormatted = currencyRateService.formatDisplay(
+                        currencyRateService.usdToDisplay(BigDecimal.valueOf(customsCents).movePointLeft(2)),
+                        priced.displayCurrency());
+            }
+        }
         return new ProductDetailView(p.getId(), p.getSlug(), p.getSource(), p.getExternalId(),
                 p.getSupplier() != null ? supplierMapper.toView(p.getSupplier()) : null,
                 p.getCategory() != null ? p.getCategory().getId() : null, tr != null ? tr.getTitle() : p.getTitleZh(),
@@ -94,7 +107,7 @@ public class ProductMapper {
                 tr != null ? tr.getMetaTitle() : null, tr != null ? tr.getMetaDescription() : null,
                 Boolean.TRUE.equals(p.getVerified()),
                 p.getVideoUrl(), Boolean.TRUE.equals(p.getHasVideo()),
-                priced.originalFormatted(), priced.discountPercent(), priced.promotionName());
+                priced.originalFormatted(), priced.discountPercent(), priced.promotionName(), customsFormatted);
     }
 
     public ProductImageView toImageView(ProductImageEntity img) {

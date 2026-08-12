@@ -129,6 +129,14 @@ public class CustomsValuationService {
                 + (rule.getDeMinimisCurrency() != null ? rule.getDeMinimisCurrency() : "EUR");
     }
 
+    /** Arancel por artículo del país en céntimos USD (0 si no aplica). Para el desglose admin de la ficha. */
+    @Transactional(readOnly = true)
+    public int perArticleFeeUsdCents(String countryCode) {
+        return activeRule(countryCode)
+                .map(r -> toUsdCents(r.getPerArticleFeeAmount(), r.getPerArticleFeeCurrency()))
+                .orElse(0);
+    }
+
     /** Modo de despacho fiscal configurado para el país (DDP si no hay regla). */
     @Transactional(readOnly = true)
     public TaxMode taxModeFor(String countryCode) {
