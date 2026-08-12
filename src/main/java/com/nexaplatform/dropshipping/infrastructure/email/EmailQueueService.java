@@ -152,8 +152,15 @@ public class EmailQueueService {
     /** Longitud de la columna error_message: el mensaje se recorta para no reventar el INSERT. */
     private static final int ERROR_MESSAGE_MAX = 2000;
 
+    /**
+     * Barrido periódico de la cola. NO es {@code @Transactional} a propósito: cada correo se marca
+     * (SENT o el backoff del fallo) en su PROPIA transacción vía {@code repo.save} —que abre la suya—,
+     * de modo que un correo ya entregado queda persistido como SENT de inmediato. Si envolviéramos todo
+     * el lote en una sola transacción, un reinicio del proceso a mitad de lote (o un fallo al commitear)
+     * revertiría el estado de los correos YA ENVIADOS y el siguiente barrido los REENVIARÍA (duplicados).
+     * El envío SMTP es un efecto externo irreversible: hay que confirmarlo por correo, no por lote.
+     */
     @Scheduled(fixedDelay = 15_000)
-    @Transactional
     public void dispatchPending() {
         Instant now = Instant.now();
         for (OutboundEmailEntity email : repo.findDispatchable(now, Limit.of(BATCH_SIZE))) {
