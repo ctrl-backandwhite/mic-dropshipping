@@ -225,3 +225,5 @@ databaseChangeLog:
       file: db/changelog/schema-v107-eu-margin-seed.sql
   - include:
       file: db/changelog/schema-v108-eu-drop-vat-prepay.sql
+  - include:
+      file: db/changelog/schema-v109-activate-base-margin.sql
