@@ -152,6 +152,24 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(body("SE001", "Access denied", List.of(ex.getMessage())), HttpStatus.FORBIDDEN);
     }
 
+    /**
+     * 2FA: la contraseña era correcta pero falta el segundo factor. Se distingue del 401 genérico con un
+     * código propio para que el front sepa que debe pedir el OTP. No abre oráculo de enumeración: solo se
+     * llega aquí tras validar la contraseña.
+     */
+    @ExceptionHandler(TwoFactorRequiredException.class)
+    public ResponseEntity<ApiResponseDtoOut<?>> handleTwoFactorRequired(TwoFactorRequiredException ex) {
+        return new ResponseEntity<>(body("MFA_REQUIRED", "Two-factor authentication code required",
+                List.of(ex.getMessage())), HttpStatus.UNAUTHORIZED);
+    }
+
+    /** 2FA: contraseña correcta pero el código TOTP / de recuperación es inválido. */
+    @ExceptionHandler(TwoFactorInvalidException.class)
+    public ResponseEntity<ApiResponseDtoOut<?>> handleTwoFactorInvalid(TwoFactorInvalidException ex) {
+        return new ResponseEntity<>(body("MFA_INVALID", "Invalid two-factor authentication code",
+                List.of(ex.getMessage())), HttpStatus.UNAUTHORIZED);
+    }
+
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleUnauthorized(AuthenticationException ex) {
         // Respuesta UNIFORME: nunca se expone el motivo real (credenciales malas, cuenta no

@@ -33,4 +33,13 @@ public class LoginDtoIn {
      */
     @Schema(description = "Link the pending social identity after a successful password login")
     private boolean linkSocial;
+
+    /**
+     * Segundo factor (TOTP) o código de recuperación. Solo se exige cuando la cuenta tiene 2FA
+     * activo: en ese caso el primer intento (sin {@code otp}) responde 401 {@code MFA_REQUIRED} y el
+     * front reenvía el login con este campo relleno. Se ignora si la cuenta no tiene 2FA.
+     */
+    @Schema(description = "TOTP code or recovery code (required only when the account has 2FA enabled)",
+            example = "123456")
+    private String otp;
 }

@@ -7,6 +7,9 @@ import com.nexaplatform.dropshipping.api.dto.in.ChangePasswordDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.DeleteAccountConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.LoginDtoIn;
 import com.nexaplatform.dropshipping.application.service.DeviceSessionService;
+import com.nexaplatform.dropshipping.application.service.TotpService;
+import com.nexaplatform.dropshipping.api.exception.TwoFactorInvalidException;
+import com.nexaplatform.dropshipping.api.exception.TwoFactorRequiredException;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetRequestDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.RefreshTokenDtoIn;
@@ -63,6 +66,7 @@ public class AuthUseCaseImpl implements AuthUseCase {
     private final UserDtoMapper mapper;
     private final DeviceSessionService deviceSessionService;
     private final UserTokenService userTokenService;
+    private final TotpService totpService;
 
     @Override
     public RegisterDtoOut register(RegisterDtoIn req) {
@@ -105,6 +109,11 @@ public class AuthUseCaseImpl implements AuthUseCase {
 
         UUID id = UUID.fromString(auth.getName());
         User user = userUseCase.findById(id);
+        // SEGUNDO FACTOR: si la cuenta tiene 2FA activo, la contraseña sola NO basta. Debe ir ANTES de
+        // registrar el login como correcto, emitir tokens o enviar el aviso "inicio de sesión detectado":
+        // un OTP ausente/erróneo no puede dejar rastro de sesión válida ni acreditar el acceso. Sin este
+        // control, activar 2FA no protegía nada (el token completo se emitía solo con la contraseña).
+        enforceTwoFactor(id, req.getOtp());
         completePendingGoogleLink(httpRequest, user);
         // Vínculo social por TOKEN (cross-origin): la sesión PENDING_* no viaja, así que si el usuario
         // llegó desde el flujo OAuth (?link=required) y ahora prueba su contraseña, vinculamos aquí. El
@@ -142,6 +151,26 @@ public class AuthUseCaseImpl implements AuthUseCase {
             return;
         }
         userTokenService.revokeAll(authentication.getName());
+    }
+
+    /**
+     * Exige el segundo factor cuando la cuenta lo tiene activo. Acepta tanto el código TOTP como un
+     * código de recuperación de un solo uso. Lanza {@link TwoFactorRequiredException} (401
+     * {@code MFA_REQUIRED}) si falta el código y {@link TwoFactorInvalidException} (401
+     * {@code MFA_INVALID}) si es incorrecto. No hace nada si la cuenta no tiene 2FA.
+     */
+    private void enforceTwoFactor(UUID userId, String otp) {
+        if (!totpService.isEnabled(userId)) {
+            return;
+        }
+        if (otp == null || otp.isBlank()) {
+            throw new TwoFactorRequiredException();
+        }
+        String code = otp.trim();
+        boolean ok = totpService.verifyOtp(userId, code) || totpService.consumeBackupCode(userId, code);
+        if (!ok) {
+            throw new TwoFactorInvalidException();
+        }
     }
 
     /** Emite el par de tokens para {@code user} y arma la respuesta de login. */

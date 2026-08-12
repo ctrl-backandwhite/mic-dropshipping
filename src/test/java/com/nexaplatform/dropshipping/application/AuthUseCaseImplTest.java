@@ -9,7 +9,10 @@ import com.nexaplatform.dropshipping.api.dto.out.MeDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.RegisterDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.mapper.UserDtoMapper;
+import com.nexaplatform.dropshipping.api.exception.TwoFactorInvalidException;
+import com.nexaplatform.dropshipping.api.exception.TwoFactorRequiredException;
 import com.nexaplatform.dropshipping.application.service.DeviceSessionService;
+import com.nexaplatform.dropshipping.application.service.TotpService;
 import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
 import com.nexaplatform.dropshipping.application.usecase.impl.AuthUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.UserRole;
@@ -69,6 +72,8 @@ class AuthUseCaseImplTest {
     DeviceSessionService deviceSessionService;
     @Mock
     UserTokenService userTokenService;
+    @Mock
+    TotpService totpService;
 
     @InjectMocks
     AuthUseCaseImpl useCase;
@@ -186,6 +191,99 @@ class AuthUseCaseImplTest {
         assertThatThrownBy(() -> useCase.login(req, httpRequest, httpResponse))
                 .isInstanceOf(BadCredentialsException.class)
                 .hasMessage("Bad credentials");
+        verify(userTokenService, never()).issue(any(), any(), any(), anySet());
+    }
+
+    /* ============ login: segundo factor (2FA/TOTP) ============ */
+
+    @Test
+    @DisplayName("login 2FA: cuenta con 2FA y SIN otp -> TwoFactorRequired, no emite tokens ni registra sesión")
+    void login_twoFactorEnabled_noOtp_challenged() {
+        UUID id = UUID.randomUUID();
+        LoginDtoIn req = LoginDtoIn.builder().email("user@example.com").password("pw").build();
+        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
+        HttpServletResponse httpResponse = mock(HttpServletResponse.class);
+
+        Authentication auth = new UsernamePasswordAuthenticationToken(id.toString(), null,
+                List.of(new SimpleGrantedAuthority("ROLE_USER")));
+        when(authenticationManager.authenticate(any())).thenReturn(auth);
+        when(userUseCase.findById(id)).thenReturn(user(id, "user@example.com"));
+        when(totpService.isEnabled(id)).thenReturn(true);
+
+        assertThatThrownBy(() -> useCase.login(req, httpRequest, httpResponse))
+                .isInstanceOf(TwoFactorRequiredException.class);
+
+        // La contraseña era válida pero el reto de 2FA corta el flujo ANTES de emitir tokens o registrar.
+        verify(userTokenService, never()).issue(any(), any(), any(), anySet());
+        verify(deviceSessionService, never()).recordLogin(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("login 2FA: otp TOTP válido -> emite tokens con normalidad")
+    void login_twoFactorEnabled_validOtp_succeeds() {
+        UUID id = UUID.randomUUID();
+        LoginDtoIn req = LoginDtoIn.builder().email("user@example.com").password("pw").otp("123456").build();
+        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
+        HttpServletResponse httpResponse = mock(HttpServletResponse.class);
+
+        Authentication auth = new UsernamePasswordAuthenticationToken(id.toString(), null,
+                List.of(new SimpleGrantedAuthority("ROLE_USER")));
+        when(authenticationManager.authenticate(any())).thenReturn(auth);
+        when(userUseCase.findById(id)).thenReturn(user(id, "user@example.com"));
+        when(totpService.isEnabled(id)).thenReturn(true);
+        when(totpService.verifyOtp(id, "123456")).thenReturn(true);
+        when(httpRequest.getSession(false)).thenReturn(null);
+        when(userTokenService.issue(eq(id), any(), eq("USER"), anySet())).thenReturn(tokens());
+        when(mapper.toMeDtoOut(any(User.class), anySet())).thenReturn(MeDtoOut.builder().build());
+
+        LoginDtoOut out = useCase.login(req, httpRequest, httpResponse);
+
+        assertThat(out.getToken()).isEqualTo("access-jwt");
+        verify(deviceSessionService).recordLogin(id, httpRequest, httpResponse);
+    }
+
+    @Test
+    @DisplayName("login 2FA: código de recuperación válido (TOTP falla) -> emite tokens")
+    void login_twoFactorEnabled_backupCode_succeeds() {
+        UUID id = UUID.randomUUID();
+        LoginDtoIn req = LoginDtoIn.builder().email("user@example.com").password("pw").otp("ABCDE-12345").build();
+        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
+        HttpServletResponse httpResponse = mock(HttpServletResponse.class);
+
+        Authentication auth = new UsernamePasswordAuthenticationToken(id.toString(), null,
+                List.of(new SimpleGrantedAuthority("ROLE_USER")));
+        when(authenticationManager.authenticate(any())).thenReturn(auth);
+        when(userUseCase.findById(id)).thenReturn(user(id, "user@example.com"));
+        when(totpService.isEnabled(id)).thenReturn(true);
+        when(totpService.verifyOtp(id, "ABCDE-12345")).thenReturn(false);
+        when(totpService.consumeBackupCode(id, "ABCDE-12345")).thenReturn(true);
+        when(httpRequest.getSession(false)).thenReturn(null);
+        when(userTokenService.issue(eq(id), any(), eq("USER"), anySet())).thenReturn(tokens());
+        when(mapper.toMeDtoOut(any(User.class), anySet())).thenReturn(MeDtoOut.builder().build());
+
+        LoginDtoOut out = useCase.login(req, httpRequest, httpResponse);
+
+        assertThat(out.getToken()).isEqualTo("access-jwt");
+    }
+
+    @Test
+    @DisplayName("login 2FA: otp inválido (TOTP y backup fallan) -> TwoFactorInvalid, no emite tokens")
+    void login_twoFactorEnabled_invalidOtp_rejected() {
+        UUID id = UUID.randomUUID();
+        LoginDtoIn req = LoginDtoIn.builder().email("user@example.com").password("pw").otp("000000").build();
+        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
+        HttpServletResponse httpResponse = mock(HttpServletResponse.class);
+
+        Authentication auth = new UsernamePasswordAuthenticationToken(id.toString(), null,
+                List.of(new SimpleGrantedAuthority("ROLE_USER")));
+        when(authenticationManager.authenticate(any())).thenReturn(auth);
+        when(userUseCase.findById(id)).thenReturn(user(id, "user@example.com"));
+        when(totpService.isEnabled(id)).thenReturn(true);
+        when(totpService.verifyOtp(id, "000000")).thenReturn(false);
+        when(totpService.consumeBackupCode(id, "000000")).thenReturn(false);
+
+        assertThatThrownBy(() -> useCase.login(req, httpRequest, httpResponse))
+                .isInstanceOf(TwoFactorInvalidException.class);
         verify(userTokenService, never()).issue(any(), any(), any(), anySet());
     }
 
