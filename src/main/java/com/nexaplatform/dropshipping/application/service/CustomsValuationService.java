@@ -86,8 +86,9 @@ public class CustomsValuationService {
      * @param taxCents            impuesto ya calculado sobre la base imponible, céntimos USD
      */
     @Transactional(readOnly = true)
-    public CustomsValuation valuate(String countryCode, int intrinsicValueCents, int taxCents) {
+    public CustomsValuation valuate(String countryCode, int intrinsicValueCents, int taxCents, int articleCount) {
         int intrinsic = Math.max(0, intrinsicValueCents);
+        int articles = Math.max(0, articleCount);
         Optional<CountryCustomsRuleEntity> found = activeRule(countryCode);
         if (found.isEmpty()) {
             return neutral(countryCode, intrinsic);
@@ -102,6 +103,11 @@ public class CustomsValuationService {
         int handling = 0;
         if (mode == TaxMode.DDP) {
             handling = r.getHandlingFeeCents() + percentOf(Math.max(0, taxCents), r.getHandlingPercentBps());
+            // Comisión del prepago de IVA (sin IOSS): % sobre el VALOR DECLARADO, además del IVA.
+            handling += percentOf(intrinsic, r.getVatPrepayPercentBps());
+            // Arancel temporal de la UE por ARTÍCULO (producto distinto): tarifa × nº de artículos.
+            handling += Math.multiplyExact(articles,
+                    toUsdCents(r.getPerArticleFeeAmount(), r.getPerArticleFeeCurrency()));
             if (exceeded && policy == OverThresholdPolicy.SURCHARGE) {
                 handling += r.getOverThresholdSurchargeCents() + percentOf(intrinsic, r.getDutyRateBps());
             }
@@ -155,16 +161,17 @@ public class CustomsValuationService {
      * los pedidos de un destino por falta de dato.
      */
     private boolean exceedsDeMinimis(CountryCustomsRuleEntity rule, int intrinsicValueCents) {
-        int thresholdCents = thresholdUsdCents(rule.getDeMinimisAmount(), rule.getDeMinimisCurrency());
+        int thresholdCents = toUsdCents(rule.getDeMinimisAmount(), rule.getDeMinimisCurrency());
         return thresholdCents > 0 && intrinsicValueCents > thresholdCents;
     }
 
     /**
-     * Umbral legal (en su divisa) → céntimos USD, con la tasa del día. Si la divisa no está en
-     * {@code currency_rate} el importe se toma tal cual como USD (los umbrales sembrados para esas divisas
-     * ya van en su equivalente USD) y se deja traza para poder corregir la configuración.
+     * Importe legal (en su divisa) → céntimos USD, con la tasa del día. Si la divisa no está en
+     * {@code currency_rate} el importe se toma tal cual como USD (los importes sembrados para esas divisas
+     * ya van en su equivalente USD) y se deja traza para poder corregir la configuración. Lo usan tanto el
+     * umbral de minimis como el arancel por artículo.
      */
-    private int thresholdUsdCents(BigDecimal amount, String currency) {
+    private int toUsdCents(BigDecimal amount, String currency) {
         if (amount == null || amount.signum() <= 0) {
             return 0;
         }
@@ -198,9 +205,14 @@ public class CustomsValuationService {
         return repository.findAllByOrderByCountryCodeAsc();
     }
 
-    /** Crea o actualiza la regla aduanera de un país. */
+    /**
+     * Crea o actualiza la regla aduanera de un país. Los tres últimos parámetros (comisión de prepago de
+     * IVA y arancel por artículo) son OPCIONALES: {@code null} = conservar el valor actual, para no pisar
+     * los sembrados de la UE desde un formulario que aún no los incluya.
+     */
     @Transactional
-    public CountryCustomsRuleEntity upsert(CountryCustomsRuleEntity input) {
+    public CountryCustomsRuleEntity upsert(CountryCustomsRuleEntity input, Integer vatPrepayPercentBps,
+            BigDecimal perArticleFeeAmount, String perArticleFeeCurrency) {
         String code = input.getCountryCode().trim().toUpperCase();
         CountryCustomsRuleEntity e = repository.findByCountryCodeIgnoreCase(code)
                 .orElseGet(() -> CountryCustomsRuleEntity.builder().countryCode(code).build());
@@ -215,6 +227,23 @@ public class CustomsValuationService {
         e.setHandlingPercentBps(Math.max(0, input.getHandlingPercentBps()));
         e.setOverThresholdSurchargeCents(Math.max(0, input.getOverThresholdSurchargeCents()));
         e.setDutyRateBps(Math.max(0, input.getDutyRateBps()));
+        // Opcionales: null = conservar lo que ya tiene la fila (recién creada trae 0/EUR por defecto).
+        if (vatPrepayPercentBps != null) {
+            e.setVatPrepayPercentBps(Math.max(0, vatPrepayPercentBps));
+        }
+        if (perArticleFeeAmount != null) {
+            e.setPerArticleFeeAmount(perArticleFeeAmount.max(BigDecimal.ZERO));
+        }
+        if (perArticleFeeCurrency != null && !perArticleFeeCurrency.isBlank()) {
+            e.setPerArticleFeeCurrency(perArticleFeeCurrency.trim().toUpperCase());
+        }
+        // Garantiza los NOT NULL para una regla nueva que no traiga estos campos.
+        if (e.getPerArticleFeeAmount() == null) {
+            e.setPerArticleFeeAmount(BigDecimal.ZERO);
+        }
+        if (e.getPerArticleFeeCurrency() == null || e.getPerArticleFeeCurrency().isBlank()) {
+            e.setPerArticleFeeCurrency("EUR");
+        }
         e.setActive(input.isActive());
         return repository.save(e);
     }

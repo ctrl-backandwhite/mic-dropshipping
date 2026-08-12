@@ -717,7 +717,10 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
      */
     public CustomsValuation declarationFor(Order order) {
         int intrinsic = Math.max(0, order.getSubtotalCents() - order.getDiscountCents());
-        return customsValuation.valuate(order.getShippingCountry(), intrinsic, order.getTaxCents());
+        // Artículos = productos distintos del pedido (para el arancel UE de 3 EUR por artículo).
+        int articles = (int) order.getItems().stream().map(OrderItem::getProductId)
+                .filter(p -> p != null).distinct().count();
+        return customsValuation.valuate(order.getShippingCountry(), intrinsic, order.getTaxCents(), articles);
     }
 
     /**

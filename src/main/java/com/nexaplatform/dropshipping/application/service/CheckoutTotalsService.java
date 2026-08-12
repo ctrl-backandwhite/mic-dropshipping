@@ -65,7 +65,7 @@ public class CheckoutTotalsService {
      */
     @Transactional(readOnly = true)
     public CheckoutTotals compute(String country, String region, int discountedSubtotalCents,
-            int shippingBaseCents) {
+            int shippingBaseCents, int articleCount) {
         int base = Math.max(0, shippingBaseCents);
         int intrinsic = Math.max(0, discountedSubtotalCents);
         int taxableBase = Math.addExact(intrinsic, base);
@@ -73,7 +73,7 @@ public class CheckoutTotalsService {
         int taxRateBps = taxService.rateBpsFor(country, region);
         int taxCents = taxService.taxCentsFor(country, region, taxableBase);
 
-        CustomsValuation customs = customsValuationService.valuate(country, intrinsic, taxCents);
+        CustomsValuation customs = customsValuationService.valuate(country, intrinsic, taxCents, articleCount);
         int handling = customs.handlingFeeCents();
         if (log.isDebugEnabled() && (handling > 0 || customs.deMinimisExceeded())) {
             log.debug("Despacho {}: modo={} declarado={} umbralSuperado={} recargo={}", country,

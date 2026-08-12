@@ -152,10 +152,13 @@ public class CheckoutPreviewService {
         int discountedSubtotalUsdCents = subtotalUsdCents - discountUsdCents;
 
         int shippingBaseUsdCents = quote.supported() ? quote.amountUsdCents() : 0;
+        // Artículos = productos DISTINTOS (varias unidades o variantes del mismo producto = 1 artículo),
+        // para el arancel de la UE de 3 EUR por artículo.
+        int articleCount = (int) items.stream().map(Line::productId).filter(p -> p != null).distinct().count();
         // Impuesto + despacho aduanero por el MISMO servicio que usa el cobro (CheckoutTotalsService), para
         // que el desglose mostrado coincida al céntimo con el pedido.
         CheckoutTotalsService.CheckoutTotals totals = checkoutTotalsService.compute(country, region,
-                discountedSubtotalUsdCents, shippingBaseUsdCents);
+                discountedSubtotalUsdCents, shippingBaseUsdCents, articleCount);
 
         // Importes en la moneda activa: cada componente convertido y REDONDEADO a 2 decimales; el total
         // es la SUMA de esos componentes redondeados (igual que el detalle del pedido), para que el

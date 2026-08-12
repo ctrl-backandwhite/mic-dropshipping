@@ -215,3 +215,7 @@ databaseChangeLog:
       file: db/changelog/schema-v102-outbound-email-next-attempt.sql
   - include:
       file: db/changelog/schema-v103-saved-cart-item.sql
+  - include:
+      file: db/changelog/schema-v104-eu-vat-rates-complete.sql
+  - include:
+      file: db/changelog/schema-v105-eu-customs-fees.sql

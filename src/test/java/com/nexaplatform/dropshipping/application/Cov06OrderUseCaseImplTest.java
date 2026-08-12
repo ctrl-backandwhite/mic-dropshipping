@@ -137,7 +137,7 @@ class Cov06OrderUseCaseImplTest {
         when(fulfillment.isSupported(anyString())).thenReturn(true);
         when(fulfillment.quote(any(), any(FulfillmentProvider.ParcelSpec.class)))
                 .thenReturn(ShippingQuote.unsupported("XX"));
-        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt()))
+        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyInt()))
                 .thenAnswer(inv -> totalesNeutros(inv.getArgument(3)));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
             Order o = inv.getArgument(0);

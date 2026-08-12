@@ -98,7 +98,7 @@ class Cov04YunExpressShipmentTest {
                 .thenReturn(Optional.of(CainiaoZoneEntity.builder().countryCode("ES").countryName("España")
                         .zone("EU").baseCents(500).perKgCents(1000).etaMinDays(5).etaMaxDays(12).enabled(true)
                         .build()));
-        when(customsValuation.valuate(anyString(), anyInt(), anyInt()))
+        when(customsValuation.valuate(anyString(), anyInt(), anyInt(), anyInt()))
                 .thenReturn(valoracion(false));
         when(client.post(eq(PATH_SUBSCRIBE), any(Object.class))).thenReturn(ok("{\"success\":true}"));
     }
@@ -118,6 +118,7 @@ class Cov04YunExpressShipmentTest {
 
     private static OrderItem linea(int qty, int unitPriceCents) {
         OrderItem item = new OrderItem();
+        item.setProductId(UUID.randomUUID()); // cada línea es un producto distinto (para contar artículos)
         item.setQuantity(qty);
         item.setUnitPriceCents(unitPriceCents);
         item.setTitleSnapshot("Cotton T-shirt");
@@ -318,7 +319,7 @@ class Cov04YunExpressShipmentTest {
         // transportista liquide impuesto de más a cargo del comercio.
         service.declarationFor(pedido(linea(1, 4500)));
 
-        verify(customsValuation).valuate("ES", 4500, 0);
+        verify(customsValuation).valuate("ES", 4500, 0, 1);
     }
 
     @Test
