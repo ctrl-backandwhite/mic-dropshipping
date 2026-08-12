@@ -280,7 +280,7 @@ class UserUseCaseImplTest {
             return u;
         });
 
-        var outcome = useCase.resolveGoogleLogin("New@Gmail.com", "Ada", "Lovelace");
+        var outcome = useCase.resolveGoogleLogin("New@Gmail.com", "Ada", "Lovelace", "us");
 
         assertThat(outcome.isLinkRequired()).isFalse();
         assertThat(outcome.getUser()).isNotNull();
@@ -289,6 +289,8 @@ class UserUseCaseImplTest {
         assertThat(outcome.getUser().isActive()).isTrue();
         assertThat(outcome.getUser().isGoogleLinked()).isTrue();
         assertThat(outcome.getUser().getDisplayName()).isEqualTo("Ada Lovelace");
+        // El país por IP (CDN) se persiste en el alta social, normalizado a mayúsculas.
+        assertThat(outcome.getUser().getCountry()).isEqualTo("US");
     }
 
     @Test
@@ -298,7 +300,7 @@ class UserUseCaseImplTest {
                 .googleLinked(true).build();
         when(userRepository.findByEmail("me@gmail.com")).thenReturn(Optional.of(linked));
 
-        var outcome = useCase.resolveGoogleLogin("me@gmail.com", "Me", null);
+        var outcome = useCase.resolveGoogleLogin("me@gmail.com", "Me", null, null);
 
         assertThat(outcome.isLinkRequired()).isFalse();
         assertThat(outcome.getUser()).isSameAs(linked);
@@ -312,7 +314,7 @@ class UserUseCaseImplTest {
                 .googleLinked(false).build();
         when(userRepository.findByEmail("local@gmail.com")).thenReturn(Optional.of(local));
 
-        var outcome = useCase.resolveGoogleLogin("local@gmail.com", "L", "Ocal");
+        var outcome = useCase.resolveGoogleLogin("local@gmail.com", "L", "Ocal", "es");
 
         assertThat(outcome.isLinkRequired()).isTrue();
         assertThat(outcome.getUser()).isNull();
