@@ -249,8 +249,11 @@ public class CatalogStorefrontReadService {
         Boolean verified = filters.verified();
 
         int safeSize = Math.min(size, 100);
+        // Acotar `page`: un offset gigante (page*size) desbordaba y caía en un 500 genérico. Con un techo
+        // razonable devolvemos una página vacía en vez de reventar (el catálogo real nunca llega ahí).
+        int safePage = Math.max(0, Math.min(page, 100_000));
         Sort sortSpec = sortFor(sort);
-        Pageable pageable = PageRequest.of(page, safeSize, sortSpec);
+        Pageable pageable = PageRequest.of(safePage, safeSize, sortSpec);
 
         String needle = (q == null || q.isBlank()) ? null : q.trim().toLowerCase();
         String shipCc = shipFrom == null ? null : shipFrom.toUpperCase();
@@ -287,7 +290,7 @@ public class CatalogStorefrontReadService {
             int total = all.size();
             // (long) para que un ?page enorme no desborde el int: el índice salía negativo y el subList
             // respondía 500 en vez de una página vacía.
-            int from = (int) Math.min((long) page * safeSize, total);
+            int from = (int) Math.min((long) safePage * safeSize, total);
             int to = Math.min(from + safeSize, total);
             return PageResponse.from(new PageImpl<>(all.subList(from, to), pageable, total));
         }

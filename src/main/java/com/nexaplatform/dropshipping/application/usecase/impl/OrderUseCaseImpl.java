@@ -14,6 +14,7 @@ import com.nexaplatform.dropshipping.application.service.AffiliateProgramService
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
 import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
+import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
 import com.nexaplatform.dropshipping.application.service.StockService;
 import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
@@ -170,13 +171,23 @@ public class OrderUseCaseImpl implements OrderUseCase {
         int subtotal = 0;
         ParcelAggregator parcel = new ParcelAggregator();
         GrossSubtotal gross = new GrossSubtotal();
-        for (OrderItemInput itemReq : req.items()) {
-            OrderItem line = buildLine(itemReq, orderLang, parcel, gross);
-            order.getItems().add(line);
-            subtotal = Math.addExact(subtotal, line.getLineTotalCents());
+        UUID cuponAplicado = null;
+        // Integridad de precio: el pedido SIEMPRE se precia por el país de ENVÍO (parte confiable del
+        // pedido), NUNCA por el header X-Country del cliente. Sin esto, un comprador podía enviar
+        // X-Country=<país con menor margen> y pagar menos que uno legítimo, ya que el margen se resolvía por
+        // PricingCountryHolder (cabecera manipulable). Así el MARGEN y la ADUANA usan el mismo país destino.
+        String prevPricingCountry = PricingCountryHolder.get();
+        PricingCountryHolder.set(order.getShippingCountry());
+        try {
+            for (OrderItemInput itemReq : req.items()) {
+                OrderItem line = buildLine(itemReq, orderLang, parcel, gross);
+                order.getItems().add(line);
+                subtotal = Math.addExact(subtotal, line.getLineTotalCents());
+            }
+            cuponAplicado = applyTotals(order, userId, subtotal, gross.cents(), parcel, req.couponCode());
+        } finally {
+            PricingCountryHolder.set(prevPricingCountry);
         }
-
-        UUID cuponAplicado = applyTotals(order, userId, subtotal, gross.cents(), parcel, req.couponCode());
 
         Order saved = orderRepository.save(order);
         // El canje se apunta con el pedido ya guardado: si el guardado falla, el cupón no se gasta.
