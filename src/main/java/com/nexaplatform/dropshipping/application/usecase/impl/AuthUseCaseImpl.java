@@ -28,6 +28,7 @@ import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -87,8 +88,20 @@ public class AuthUseCaseImpl implements AuthUseCase {
         // no activada o bloqueada) se deja propagar como AuthenticationException → 401 genérico
         // idéntico. Así NO se puede enumerar qué emails existen ni su estado de cuenta.
         // (DisabledException/LockedException extienden AuthenticationException.)
-        Authentication auth = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(req.getEmail().toLowerCase().trim(), req.getPassword()));
+        String normalizedEmail = req.getEmail().toLowerCase().trim();
+        Authentication auth;
+        try {
+            auth = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(normalizedEmail, req.getPassword()));
+        } catch (BadCredentialsException ex) {
+            // Contraseña incorrecta: contabiliza el intento fallido para el bloqueo por fuerza bruta.
+            // OJO: el authenticate() PROGRAMÁTICO no dispara los AbstractAuthenticationFailureEvent que
+            // escuchaba LoginAuditListener, así que el contador nunca se incrementaba y el bloqueo (5→15min)
+            // estaba MUERTO en esta ruta. Lo contamos aquí y re-lanzamos la MISMA excepción → 401 genérico
+            // idéntico (no rompe la anti-enumeración; recordFailedLogin es no-op si el email no existe).
+            userUseCase.recordFailedLogin(normalizedEmail);
+            throw ex;
+        }
 
         UUID id = UUID.fromString(auth.getName());
         User user = userUseCase.findById(id);

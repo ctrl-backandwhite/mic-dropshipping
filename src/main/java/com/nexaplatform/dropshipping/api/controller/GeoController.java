@@ -41,8 +41,15 @@ public class GeoController {
     @GetMapping
     @Operation(summary = "País efectivo del visitante y divisa recomendada (país soportado o USD)")
     public GeoResponse geo() {
-        String country = PricingCountryHolder.get();
+        // Solo devolvemos un ISO-3166 alpha-2 válido: así NO reflejamos cabeceras X-Country arbitrarias
+        // (cadenas largas / payloads) que un cliente pueda inyectar. Cualquier otra cosa → null → USD.
+        String country = sanitizeCountry(PricingCountryHolder.get());
         return new GeoResponse(country, resolveCurrency(country));
+    }
+
+    /** Devuelve el código solo si es exactamente dos letras ASCII (ISO-2); si no, {@code null}. */
+    private static String sanitizeCountry(String c) {
+        return (c != null && c.length() == 2 && c.chars().allMatch(Character::isLetter)) ? c.toUpperCase() : null;
     }
 
     /**

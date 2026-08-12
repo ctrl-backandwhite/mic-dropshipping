@@ -62,4 +62,19 @@ class GeoControllerTest {
         PricingCountryHolder.set("ZZ");
         assertThat(controller.geo().currency()).isEqualTo("USD");
     }
+
+    @Test
+    void cabeceraXCountryArbitraria_noSeRefleja_yCaeEnUsd() {
+        // Saneo: una X-Country inyectada (larga / con símbolos) NO debe reflejarse; country=null, moneda USD.
+        PricingCountryHolder.set("<script>alert(1)</script>");
+        GeoController.GeoResponse r1 = controller.geo();
+        assertThat(r1.country()).isNull();
+        assertThat(r1.currency()).isEqualTo("USD");
+
+        PricingCountryHolder.set("ESPANA");
+        assertThat(controller.geo().country()).isNull();
+
+        PricingCountryHolder.set("E1");
+        assertThat(controller.geo().country()).isNull();
+    }
 }

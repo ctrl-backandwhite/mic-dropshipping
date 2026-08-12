@@ -234,6 +234,15 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private String clientIp(HttpServletRequest req) {
+        // Detrás de Cloudflare (producción: api.nx036.com), CF-Connecting-IP es la IP REAL del cliente y
+        // Cloudflare SOBRESCRIBE cualquier valor que mande el cliente → no es falsificable por tráfico que
+        // pasa por CF. Es la fuente autoritativa cuando existe, y evita el bypass del rate-limit por
+        // X-Forwarded-For rotado. (Requiere además bloquear el acceso DIRECTO al origen Railway para que
+        // nadie salte Cloudflare; ver nota de despliegue.)
+        String cf = req.getHeader("CF-Connecting-IP");
+        if (cf != null && !cf.isBlank()) {
+            return cf.trim();
+        }
         String xff = req.getHeader("X-Forwarded-For");
         if (xff == null || xff.isBlank())
             return req.getRemoteAddr();
