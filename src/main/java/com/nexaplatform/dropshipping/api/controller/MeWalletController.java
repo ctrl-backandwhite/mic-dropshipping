@@ -86,8 +86,8 @@ public class MeWalletController implements MeWalletApi {
     }
 
     @Override
-    public ResponseEntity<MeWalletPaymentStatusDtoOut> capturePayPal(UUID paymentId) {
-        Payment p = paymentUseCase.capturePayPal(paymentId);
+    public ResponseEntity<MeWalletPaymentStatusDtoOut> capturePayPal(Authentication auth, UUID paymentId) {
+        Payment p = paymentUseCase.capturePayPal(UUID.fromString(auth.getName()), paymentId);
         return ResponseEntity
                 .ok(MeWalletPaymentStatusDtoOut.builder().paymentId(p.getId()).status(p.getStatus().name()).build());
     }

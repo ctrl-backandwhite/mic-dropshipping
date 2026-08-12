@@ -100,11 +100,14 @@ public class UserUseCaseImpl implements UserUseCase {
     @Transactional
     public User register(User user, String rawPassword) {
         String email = normalizeEmail(user.getEmail());
-        if (userRepository.existsByEmail(email)) {
-            // Same response shape as success path to mitigate user enumeration.
-            throw new ConflictException("Account creation failed");
-        }
         passwordPolicy.validate(rawPassword);
+        if (userRepository.existsByEmail(email)) {
+            // Anti-enumeración REAL: mismo status (200) y mismo cuerpo que el alta correcta. Antes se
+            // lanzaba ConflictException → 409, que permitía distinguir "email registrado" de "libre". No
+            // creamos ni reenviamos nada; devolvemos un id efímero para que la respuesta sea idéntica.
+            auditLogger.log("auth.register.duplicate", email, Map.of());
+            return User.builder().id(UUID.randomUUID()).email(email).role(UserRole.USER).active(false).build();
+        }
 
         String activationCode = randomToken(32);
         user.setEmail(email);
@@ -276,6 +279,9 @@ public class UserUseCaseImpl implements UserUseCase {
         prt.setConsumedAt(Instant.now());
         userRepository.update(user);
         resetTokenRepository.save(prt);
+        // Cambiar la contraseña cierra TODAS las sesiones activas: si la cuenta estaba comprometida, el
+        // token del atacante (access hasta 60 min, refresh hasta 14 días) dejaría de servir de inmediato.
+        jwtRevocationService.revokeAllForClient(user.getId().toString());
         auditLogger.log("auth.password_reset.confirm", user.getEmail(), Map.of(USERID, user.getId()));
     }
 
@@ -285,6 +291,8 @@ public class UserUseCaseImpl implements UserUseCase {
         passwordPolicy.validate(newPassword);
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.update(user);
+        // Igual que el reset: cambiar la contraseña revoca las sesiones/tokens previos.
+        jwtRevocationService.revokeAllForClient(user.getId().toString());
         auditLogger.log("auth.password_change", user.getEmail(), Map.of(USERID, user.getId()));
     }
 

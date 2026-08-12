@@ -17,5 +17,5 @@ public interface AcademyEnrollmentUseCase extends BaseUseCase<AcademyEnrollment,
     List<AcademyEnrollment> findByUser(UUID userId);
 
     /** Updates the progress of an enrollment, completing it when it reaches 100%. */
-    AcademyEnrollment updateProgress(UUID id, Map<String, Number> body);
+    AcademyEnrollment updateProgress(UUID userId, UUID id, Map<String, Number> body);
 }

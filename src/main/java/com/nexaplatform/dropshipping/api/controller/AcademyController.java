@@ -71,8 +71,8 @@ public class AcademyController implements AcademyApi {
     }
 
     @Override
-    public EnrollmentDtoOut updateProgress(UUID id, Map<String, Number> body) {
-        return enrollmentMapper.toDtoOut(enrollmentUseCase.updateProgress(id, body));
+    public EnrollmentDtoOut updateProgress(Authentication auth, UUID id, Map<String, Number> body) {
+        return enrollmentMapper.toDtoOut(enrollmentUseCase.updateProgress(UUID.fromString(auth.getName()), id, body));
     }
 
     @Override
