@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -79,7 +80,7 @@ class GoogleOAuth2SuccessHandlerTest {
     void new_or_linked_account_issues_tokens_and_redirects_to_callback_fragment() throws Exception {
         UUID userId = UUID.randomUUID();
         User user = user(userId, "jane@gmail.com");
-        when(userUseCase.resolveGoogleLogin("jane@gmail.com", "Jane", "Doe"))
+        when(userUseCase.resolveGoogleLogin(eq("jane@gmail.com"), eq("Jane"), eq("Doe"), isNull()))
                 .thenReturn(new GoogleLoginOutcome(user, false, "jane@gmail.com"));
         when(userTokenService.issue(eq(userId), eq("jane@gmail.com"), eq("USER"), any()))
                 .thenReturn(new UserTokenService.Tokens("ACCESS-T", "REFRESH-T", 3600L));
@@ -92,7 +93,7 @@ class GoogleOAuth2SuccessHandlerTest {
 
     @Test
     void existing_local_account_stashes_email_in_session_and_redirects_to_link_required() throws Exception {
-        when(userUseCase.resolveGoogleLogin(eq("owner@gmail.com"), anyString(), anyString()))
+        when(userUseCase.resolveGoogleLogin(eq("owner@gmail.com"), anyString(), anyString(), isNull()))
                 .thenReturn(new GoogleLoginOutcome(null, true, "owner@gmail.com"));
 
         handler.onAuthenticationSuccess(request, response, authToken(verifiedAttributes("owner@gmail.com")));

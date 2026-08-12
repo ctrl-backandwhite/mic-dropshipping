@@ -458,9 +458,9 @@ class Cov10UserUseCaseImplTest {
     void googleSinCorreoNoPuedeCrearNiIdentificarUnaCuenta() {
         // Sin correo, más abajo se hace normalized.split("@") para el nombre visible: era una cuenta
         // sin identidad o un NullPointerException.
-        assertThatThrownBy(() -> useCase.resolveGoogleLogin(null, "Ada", "Lovelace"))
+        assertThatThrownBy(() -> useCase.resolveGoogleLogin(null, "Ada", "Lovelace", null))
                 .isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> useCase.resolveGoogleLogin("   ", "Ada", "Lovelace"))
+        assertThatThrownBy(() -> useCase.resolveGoogleLogin("   ", "Ada", "Lovelace", null))
                 .isInstanceOf(BusinessException.class);
         verify(userRepository, never()).save(any());
     }
@@ -469,7 +469,7 @@ class Cov10UserUseCaseImplTest {
     void googleSinNombreUsaLaParteLocalDelCorreoComoNombreVisible() {
         when(userRepository.findByEmail("ada.lovelace@gmail.com")).thenReturn(Optional.empty());
 
-        GoogleLoginOutcome outcome = useCase.resolveGoogleLogin("Ada.Lovelace@Gmail.com", null, null);
+        GoogleLoginOutcome outcome = useCase.resolveGoogleLogin("Ada.Lovelace@Gmail.com", null, null, null);
 
         assertThat(outcome.getUser().getDisplayName()).isEqualTo("ada.lovelace");
     }

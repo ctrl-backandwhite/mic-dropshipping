@@ -72,7 +72,9 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         String firstName = "github".equals(provider) ? principal.getAttribute("name")
                 : principal.getAttribute("given_name");
         String lastName = "github".equals(provider) ? null : principal.getAttribute("family_name");
-        GoogleLoginOutcome outcome = userUseCase.resolveGoogleLogin(email, firstName, lastName);
+        // País por IP del CDN (Cloudflare CF-IPCountry, etc.) para prerrellenar el país del alta social.
+        // Solo se usa al CREAR la cuenta; a un usuario ya existente no se le toca el país.
+        GoogleLoginOutcome outcome = userUseCase.resolveGoogleLogin(email, firstName, lastName, ipCountry(request));
 
         if (outcome.isLinkRequired()) {
             // Existing local account: stash the verified email and ask for password confirmation
@@ -90,5 +92,20 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         // Tokens en el fragmento (#) — no llega al servidor ni a los logs del proxy.
         response.sendRedirect(frontBaseUrl + "/auth/callback#token=" + tokens.accessToken() + "&refresh="
                 + tokens.refreshToken());
+    }
+
+    /** Cabeceras de país por IP que inyectan los CDN/proxys (mismas que usa PricingCountryFilter). */
+    private static final String[] GEO_HEADERS = { "CF-IPCountry", "X-Vercel-IP-Country", "X-Geo-Country",
+            "X-Country-Code" };
+
+    /** País ISO-2 del CDN, o {@code null} si no viene o es "XX"/"T1" (país desconocido / Tor). */
+    private static String ipCountry(HttpServletRequest request) {
+        for (String h : GEO_HEADERS) {
+            String v = request.getHeader(h);
+            if (v != null && v.length() == 2 && !"XX".equalsIgnoreCase(v) && !"T1".equalsIgnoreCase(v)) {
+                return v;
+            }
+        }
+        return null;
     }
 }

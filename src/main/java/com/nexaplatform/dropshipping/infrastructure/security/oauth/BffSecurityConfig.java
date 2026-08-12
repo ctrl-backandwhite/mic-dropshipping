@@ -83,7 +83,7 @@ public class BffSecurityConfig {
                 "/api/catalog/**", "/api/billing/**", API_CONTACT, "/api/contact/**", "/api/newsletter/**",
                 "/api/affiliate/**", "/api/search", "/api/search/**", "/api/shipping/**", "/api/currency/**",
                 "/api/languages", "/api/languages/**", "/api/warehouses", "/api/warehouses/**", "/api/academy/**",
-                "/api/mentors", "/api/mentors/**", "/api/pod/**", "/api/campaigns/**")
+                "/api/mentors", "/api/mentors/**", "/api/pod/**", "/api/campaigns/**", "/api/geo")
                 .cors(Customizer.withDefaults())// NOSONAR java:S4502 — API stateless con token Bearer: no hay cookie de sesión que un tercero pueda hacer viajar, que es lo que CSRF protege.
                 .csrf(csrf -> csrf.disable()) // NOSONAR java:S4502 — API stateless con Bearer, sin cookie de sesión
                 .headers(h -> h
@@ -119,7 +119,7 @@ public class BffSecurityConfig {
                                 "/api/contact/**", "/api/newsletter/**", "/api/affiliate/**", "/api/search",
                                 "/api/search/**", "/api/shipping/**", "/api/currency/**", "/api/languages",
                                 "/api/languages/**", "/api/warehouses", "/api/warehouses/**", "/api/academy/**",
-                                "/api/mentors", "/api/mentors/**", "/api/pod/**")
+                                "/api/mentors", "/api/mentors/**", "/api/pod/**", "/api/geo")
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/catalog/shipping/quote").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/catalog/cart-quote").permitAll()

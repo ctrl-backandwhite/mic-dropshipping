@@ -550,7 +550,7 @@ public class UserUseCaseImpl implements UserUseCase {
 
     @Override
     @Transactional
-    public GoogleLoginOutcome resolveGoogleLogin(String email, String firstName, String lastName) {
+    public GoogleLoginOutcome resolveGoogleLogin(String email, String firstName, String lastName, String country) {
         String normalized = normalizeEmail(email);
         if (normalized == null || normalized.isBlank()) {
             // GoogleOAuth2SuccessHandler ya rechaza el login cuando el proveedor no devuelve correo, pero
@@ -579,11 +579,27 @@ public class UserUseCaseImpl implements UserUseCase {
                 .googleLinked(true)
                 .displayName(display.isBlank() ? normalized.split("@")[0] : display)
                 .language("es")
+                .country(normalizeCountry(country))
                 .build();
         User saved = userRepository.save(user);
         auditLogger.log("auth.google.register", normalized, Map.of(USERID, saved.getId()));
         log.info("::> [GOOGLE-OAUTH2] New user registered userId={}", saved.getId());
         return new GoogleLoginOutcome(saved, false, normalized);
+    }
+
+    /**
+     * País ISO-2 saneado para el alta social, o {@code null} si no es utilizable. Los CDN mandan "XX"/"T1"
+     * (Tor) cuando no saben el país: se descartan para no persistir un país basura en el perfil.
+     */
+    private static String normalizeCountry(String country) {
+        if (country == null) {
+            return null;
+        }
+        String c = country.trim().toUpperCase();
+        if (c.length() != 2 || "XX".equals(c) || "T1".equals(c)) {
+            return null;
+        }
+        return c;
     }
 
     @Override
