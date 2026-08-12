@@ -83,7 +83,11 @@ public class ShippingQuoteController {
              * Cupón: el código aplicado, o el motivo por el que no vale. Se devuelven los dos para que
              * el checkout distinga «canjeado» de «rechazado y por qué» sin adivinarlo del importe.
              */
-            String couponCode, String couponError) {
+            String couponCode, String couponError,
+            /** Subtotal de producto (con el margen del país ya aplicado), céntimos USD. */
+            int subtotalUsdCents,
+            /** Recargo de despacho de aduana incluido en el envío (p. ej. 3 EUR/artículo en la UE), céntimos USD. */
+            int customsHandlingUsdCents) {
     }
 
     @Operation(summary = "Cotizar envío + IVA + total del carrito para un país")
@@ -111,7 +115,8 @@ public class ShippingQuoteController {
                 preview.totals().customs().deMinimisExceeded(), preview.totals().blocked(),
                 preview.totals().customs().taxMode().name(),
                 preview.totals().customs().deMinimisLabel(),
-                preview.couponCode(), preview.couponError());
+                preview.couponCode(), preview.couponError(),
+                preview.subtotalUsdCents(), preview.totals().customsHandlingCents());
         return ResponseEntity.ok(body);
     }
 
