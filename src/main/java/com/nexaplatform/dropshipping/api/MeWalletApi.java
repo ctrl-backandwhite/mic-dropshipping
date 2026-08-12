@@ -61,7 +61,8 @@ public interface MeWalletApi {
     @Operation(summary = "Capture a PayPal wallet recharge result")
     @ApiResponse(responseCode = "200", description = "PayPal capture processed")
     @PostMapping("/paypal/capture")
-    ResponseEntity<MeWalletPaymentStatusDtoOut> capturePayPal(@RequestParam("paymentId") UUID paymentId);
+    ResponseEntity<MeWalletPaymentStatusDtoOut> capturePayPal(Authentication auth,
+            @RequestParam("paymentId") UUID paymentId);
 
     @Operation(summary = "Dev-only: mock-confirm a pending wallet recharge")
     @ApiResponse(responseCode = "200", description = "Recharge mock-confirmed")

@@ -308,7 +308,7 @@ class PaymentSettlementInvariantsTest {
 
         assertThatThrownBy(() -> subject.refundOrderPayment(foreignOrder, paymentId, 100L))
                 .isInstanceOf(NotFoundException.class);
-        assertThatThrownBy(() -> subject.confirmOrderPayment(foreignOrder, paymentId))
+        assertThatThrownBy(() -> subject.confirmOrderPayment(userId, foreignOrder, paymentId))
                 .isInstanceOf(NotFoundException.class);
     }
 

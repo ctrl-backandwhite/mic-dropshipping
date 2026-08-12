@@ -38,7 +38,7 @@ public interface PaymentUseCase extends BaseUseCase<Payment, Payment, UUID> {
     Payment markFailed(UUID paymentId, String errorMessage, Map<String, Object> providerPayload);
 
     /** Capture an approved PayPal recharge and confirm/fail accordingly. */
-    Payment capturePayPal(UUID paymentId);
+    Payment capturePayPal(UUID userId, UUID paymentId);
 
     /** Dev-only mock-confirm of a wallet recharge; returns the (re)credited wallet balance in cents. */
     Payment confirmMockRecharge(UUID userId, UUID paymentId);
@@ -82,14 +82,14 @@ public interface PaymentUseCase extends BaseUseCase<Payment, Payment, UUID> {
     Payment getOrderPayment(UUID orderId, UUID paymentId);
 
     /** Dev-only mock-confirm of a pending order payment. */
-    Payment confirmMockOrderPayment(UUID orderId, UUID paymentId);
+    Payment confirmMockOrderPayment(UUID userId, UUID orderId, UUID paymentId);
 
     /**
      * Confirm an order payment against the REAL provider on buyer return: Stripe Checkout
      * Session retrieve (payment_status=paid) or PayPal Orders capture. Falls back to a mock
      * confirm when the provider is disabled. Marks the order PAID on success.
      */
-    Payment confirmOrderPayment(UUID orderId, UUID paymentId);
+    Payment confirmOrderPayment(UUID userId, UUID orderId, UUID paymentId);
 
     /**
      * Refund a SUCCEEDED order payment at the provider (Stripe Refund / PayPal capture refund).

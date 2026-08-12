@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.application.usecase.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
+import org.springframework.beans.factory.annotation.Value;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.api.exception.WebhookProcessingException;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
@@ -88,6 +89,10 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     private final PaymentJpaRepositoryAdapter paymentJpaRepositoryAdapter;
     private final UserRepository userRepository;
     private final OrderRepository orderRepository;
+
+    /** Perfiles Spring activos: se usa para prohibir los pagos simulados en pro/pre (fail-closed). */
+    @Value("${spring.profiles.active:}")
+    private String activeProfiles;
     private final WalletUseCase walletUseCase;
     private final AuditLogger auditLogger;
     private final PartnerPlanSyncService partnerPlanSyncService;
@@ -384,7 +389,9 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
     @Override
     @Transactional
-    public Payment capturePayPal(UUID paymentId) {
+    public Payment capturePayPal(UUID userId, UUID paymentId) {
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
+        assertPaymentOwnedBy(p, userId); // IDOR: solo el dueño del pago puede capturarlo
         return doCapturePayPal(paymentId);
     }
 
@@ -406,8 +413,9 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
     @Override
     @Transactional
-    public Payment confirmOrderPayment(UUID orderId, UUID paymentId) {
+    public Payment confirmOrderPayment(UUID userId, UUID orderId, UUID paymentId) {
         Payment p = requireOrderPayment(orderId, paymentId);
+        assertPaymentOwnedBy(p, userId);
         if (p.getStatus() == PaymentStatus.SUCCEEDED) {
             return p; // idempotente
         }
@@ -513,6 +521,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Override
     @Transactional
     public Payment confirmMockRecharge(UUID userId, UUID paymentId) {
+        assertMockAllowed();
         Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
         // Propietario: no permitir confirmar el pago de otro usuario (no filtramos pagos ajenos → 404).
         if (p.getUserId() == null || !p.getUserId().equals(userId)) {
@@ -624,6 +633,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             return existing.get();
 
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException("Order"));
+        assertOrderOwnedBy(order, userId);
         if (order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.REFUNDED) {
             throw new BusinessException("Order is " + order.getStatus() + " and cannot be paid");
         }
@@ -706,6 +716,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
     private Payment doChargeWalletForOrder(UUID orderId, UUID userId, String idempotencyKey) {
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException("Order"));
+        assertOrderOwnedBy(order, userId);
         UUID payerUserId = order.getUserId() != null ? order.getUserId() : userId;
         if (payerUserId == null)
             throw new BusinessException("Cannot resolve payer user for this order");
@@ -791,6 +802,50 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         return requireOrderPayment(orderId, paymentId);
     }
 
+    /**
+     * IDOR: la orden debe pertenecer al usuario que paga/confirma. Si es de otro, 404 (no filtramos la
+     * existencia de pedidos ajenos ni permitimos cargar el wallet del dueño desde otra cuenta). Se tolera
+     * {@code order.userId == null} (pedido sin dueño explícito) por compatibilidad.
+     */
+    private void assertOrderOwnedBy(Order order, UUID userId) {
+        if (order.getUserId() != null && userId != null && !order.getUserId().equals(userId)) {
+            throw new NotFoundException("Order");
+        }
+    }
+
+    /** IDOR: el pago debe ser del usuario autenticado (mismo criterio que {@code confirmMockRecharge}). */
+    private void assertPaymentOwnedBy(Payment p, UUID userId) {
+        if (p.getUserId() == null || userId == null || !p.getUserId().equals(userId)) {
+            throw new NotFoundException(PAYMENT);
+        }
+    }
+
+    /** ¿Estamos en un entorno productivo (pro/pre)? Ahí los pagos simulados están PROHIBIDOS. */
+    private boolean isProdLikeProfile() {
+        if (activeProfiles == null) {
+            return false;
+        }
+        for (String prof : activeProfiles.split(",")) {
+            String t = prof.trim().toLowerCase();
+            if (t.equals("pro") || t.equals("pre") || t.equals("prod") || t.equals("production")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Fail-closed: si la app corre en pro/pre, NUNCA se acepta una confirmación "mock" (que acredita el
+     * wallet o marca el pedido pagado sin pasar por la pasarela real). Cierra el agujero de arrancar en
+     * producción con la pasarela deshabilitada y obtener dinero/pedidos gratis.
+     */
+    private void assertMockAllowed() {
+        if (isProdLikeProfile()) {
+            throw new BusinessException("MOCK_PAYMENT_DISABLED",
+                    "Los pagos simulados no están permitidos en este entorno");
+        }
+    }
+
     /** Pago de esa orden o 404. Sin anotar: lo usan confirmar y devolver, que ya abren su transacción. */
     private Payment requireOrderPayment(UUID orderId, UUID paymentId) {
         Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
@@ -802,12 +857,15 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
     @Override
     @Transactional
-    public Payment confirmMockOrderPayment(UUID orderId, UUID paymentId) {
+    public Payment confirmMockOrderPayment(UUID userId, UUID orderId, UUID paymentId) {
+        assertMockAllowed();
         Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
-        // El pago debe corresponder a la orden indicada (evita confirmar un pago de otra orden).
+        // El pago debe corresponder a la orden indicada (evita confirmar un pago de otra orden)...
         if (p.getOrderId() == null || !p.getOrderId().equals(orderId)) {
             throw new NotFoundException(PAYMENT);
         }
+        // ...y debe ser del usuario autenticado (IDOR: no confirmar/pagar el pedido de otro).
+        assertPaymentOwnedBy(p, userId);
         // SEGURIDAD (idéntico a confirmMockRecharge): esta vía marca la orden como PAGADA SIN pasar por la
         // pasarela real. Solo se admite para pagos sintéticos de mock-mode (providerRef *_mock_). Un checkout
         // REAL de Stripe/PayPal (cs_test_/cs_live_/pi_...) no cobrado NUNCA se confirma aquí; de lo contrario

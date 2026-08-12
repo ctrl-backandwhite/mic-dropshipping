@@ -38,13 +38,15 @@ public class MeOrderPaymentController implements MeOrderPaymentApi {
 
     @Override
     public ResponseEntity<OrderPaymentDtoOut> confirmMock(Authentication auth, UUID orderId, UUID paymentId) {
+        UUID userId = UUID.fromString(auth.getName());
         return ResponseEntity
-                .ok(orderPaymentDtoMapper.toDtoOut(paymentUseCase.confirmMockOrderPayment(orderId, paymentId)));
+                .ok(orderPaymentDtoMapper.toDtoOut(paymentUseCase.confirmMockOrderPayment(userId, orderId, paymentId)));
     }
 
     @Override
     public ResponseEntity<OrderPaymentDtoOut> confirm(Authentication auth, UUID orderId, UUID paymentId) {
+        UUID userId = UUID.fromString(auth.getName());
         return ResponseEntity
-                .ok(orderPaymentDtoMapper.toDtoOut(paymentUseCase.confirmOrderPayment(orderId, paymentId)));
+                .ok(orderPaymentDtoMapper.toDtoOut(paymentUseCase.confirmOrderPayment(userId, orderId, paymentId)));
     }
 }

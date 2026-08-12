@@ -211,3 +211,7 @@ databaseChangeLog:
       file: db/changelog/schema-v100-customs-block-over-threshold.sql
   - include:
       file: db/changelog/schema-v101-customs-gulf-caps.sql
+  - include:
+      file: db/changelog/schema-v102-outbound-email-next-attempt.sql
+  - include:
+      file: db/changelog/schema-v103-saved-cart-item.sql

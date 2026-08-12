@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import org.springframework.test.util.ReflectionTestUtils;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
 import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
@@ -160,7 +161,7 @@ class Cov09PaymentGatewayFlowsTest {
     void soloSeCapturaEnPaypalUnPagoQueSeAbrioEnPaypal() {
         payment(PaymentMethod.CARD, PaymentStatus.REQUIRES_ACTION, "cs_test_1", false);
 
-        assertThatThrownBy(() -> subject.capturePayPal(paymentId))
+        assertThatThrownBy(() -> subject.capturePayPal(userId, paymentId))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Not a PayPal payment");
     }
@@ -173,7 +174,7 @@ class Cov09PaymentGatewayFlowsTest {
         when(impostor.supports(PaymentMethod.PAYPAL)).thenReturn(true);
         PaymentUseCaseImpl sinPaypal = useCase(List.of(impostor));
 
-        assertThatThrownBy(() -> sinPaypal.capturePayPal(paymentId))
+        assertThatThrownBy(() -> sinPaypal.capturePayPal(userId, paymentId))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("PayPal gateway not configured");
     }
@@ -183,7 +184,7 @@ class Cov09PaymentGatewayFlowsTest {
         Payment p = payment(PaymentMethod.PAYPAL, PaymentStatus.REQUIRES_ACTION, "PAYID-1", false);
         when(paypal.capture("PAYID-1")).thenReturn(Map.of("status", "COMPLETED"));
 
-        Payment out = subject.capturePayPal(paymentId);
+        Payment out = subject.capturePayPal(userId, paymentId);
 
         assertThat(out.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
         verify(walletUseCase).deposit(eq(userId), eq(2500L), eq(p.getId()), anyString(), anyString());
@@ -194,7 +195,7 @@ class Cov09PaymentGatewayFlowsTest {
         payment(PaymentMethod.PAYPAL, PaymentStatus.REQUIRES_ACTION, "PAYID-1", false);
         when(paypal.capture("PAYID-1")).thenReturn(Map.of("status", "DECLINED"));
 
-        Payment out = subject.capturePayPal(paymentId);
+        Payment out = subject.capturePayPal(userId, paymentId);
 
         assertThat(out.getStatus()).isEqualTo(PaymentStatus.FAILED);
         assertThat(out.getErrorMessage()).contains("DECLINED");
@@ -209,7 +210,7 @@ class Cov09PaymentGatewayFlowsTest {
         Order o = order(OrderStatus.AWAITING_PAYMENT);
         when(stripe.retrieveCheckoutSession("cs_test_real")).thenReturn(Map.of("status", "paid"));
 
-        Payment out = subject.confirmOrderPayment(orderId, paymentId);
+        Payment out = subject.confirmOrderPayment(userId, orderId, paymentId);
 
         assertThat(out.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
         assertThat(o.getStatus()).isEqualTo(OrderStatus.PAID);
@@ -222,7 +223,7 @@ class Cov09PaymentGatewayFlowsTest {
         Order o = order(OrderStatus.AWAITING_PAYMENT);
         when(stripe.retrieveCheckoutSession("cs_test_real")).thenReturn(Map.of("status", "open"));
 
-        Payment out = subject.confirmOrderPayment(orderId, paymentId);
+        Payment out = subject.confirmOrderPayment(userId, orderId, paymentId);
 
         assertThat(out.getStatus()).isEqualTo(PaymentStatus.FAILED);
         assertThat(o.getStatus()).isEqualTo(OrderStatus.AWAITING_PAYMENT);
@@ -235,7 +236,7 @@ class Cov09PaymentGatewayFlowsTest {
         order(OrderStatus.AWAITING_PAYMENT);
         when(paypal.capture("PAYID-1")).thenReturn(Map.of("status", "COMPLETED"));
 
-        assertThat(subject.confirmOrderPayment(orderId, paymentId).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+        assertThat(subject.confirmOrderPayment(userId, orderId, paymentId).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
 
         verify(paypal).capture("PAYID-1");
     }
@@ -244,7 +245,7 @@ class Cov09PaymentGatewayFlowsTest {
     void confirmarUnPedidoYaCobradoNoVuelveATocarLaPasarela() {
         payment(PaymentMethod.CARD, PaymentStatus.SUCCEEDED, "cs_test_real", true);
 
-        assertThat(subject.confirmOrderPayment(orderId, paymentId).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+        assertThat(subject.confirmOrderPayment(userId, orderId, paymentId).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
 
         verify(stripe, never()).retrieveCheckoutSession(anyString());
     }
@@ -253,7 +254,7 @@ class Cov09PaymentGatewayFlowsTest {
     void unMetodoSinConfirmacionSoportadaNoDaPorCobradoElPedido() {
         payment(PaymentMethod.USDT, PaymentStatus.REQUIRES_ACTION, "usdt-tx", true);
 
-        assertThatThrownBy(() -> subject.confirmOrderPayment(orderId, paymentId))
+        assertThatThrownBy(() -> subject.confirmOrderPayment(userId, orderId, paymentId))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Confirm not supported");
     }
@@ -429,5 +430,34 @@ class Cov09PaymentGatewayFlowsTest {
         Payment p = subject.initiatePartnerOrderPayment(jwt, orderId, true, PaymentMethod.CARD, "k1");
 
         assertThat(p.getUserId()).isEqualTo(esperado);
+    }
+
+    // ---------------------------------------------------------------- seguridad: IDOR y mock en prod
+
+    @Test
+    void confirmarElPagoDeUnPedidoDeOtroUsuarioDevuelve404() {
+        // IDOR: el pago pertenece a `userId`; otro usuario autenticado no puede confirmarlo.
+        payment(PaymentMethod.CARD, PaymentStatus.REQUIRES_ACTION, "cs_test_real", true);
+
+        assertThatThrownBy(() -> subject.confirmOrderPayment(UUID.randomUUID(), orderId, paymentId))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void capturarElPagoDeOtroUsuarioDevuelve404() {
+        payment(PaymentMethod.PAYPAL, PaymentStatus.REQUIRES_ACTION, "PAYID-1", false);
+
+        assertThatThrownBy(() -> subject.capturePayPal(UUID.randomUUID(), paymentId))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void enPerfilProLaConfirmacionMockEstaProhibida() {
+        // Fail-closed: en pro/pre no se acepta una confirmación simulada (dinero/pedido gratis).
+        ReflectionTestUtils.setField(subject, "activeProfiles", "pro,kibana");
+        payment(PaymentMethod.CARD, PaymentStatus.REQUIRES_ACTION, "cs_mock_x", false);
+
+        assertThatThrownBy(() -> subject.confirmMockRecharge(userId, paymentId))
+                .isInstanceOf(BusinessException.class);
     }
 }

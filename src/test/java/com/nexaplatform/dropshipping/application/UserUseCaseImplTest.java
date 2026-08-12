@@ -104,13 +104,16 @@ class UserUseCaseImplTest {
     }
 
     @Test
-    @DisplayName("register: rechaza email duplicado")
+    @DisplayName("register: email duplicado NO revela nada (anti-enumeración) — no crea ni lanza")
     void register_duplicate_email() {
         when(userRepository.existsByEmail("a@b.com")).thenReturn(true);
         User candidate = User.builder().email("a@b.com").language("es").build();
 
-        assertThatThrownBy(() -> useCase.register(candidate, "Str0ngP@ssword!"))
-                .isInstanceOf(ConflictException.class);
+        // Antes lanzaba ConflictException (→409, permitía enumerar). Ahora responde como el alta correcta:
+        // devuelve un User (id efímero) SIN persistir ni enviar email de activación.
+        User result = useCase.register(candidate, "Str0ngP@ssword!");
+        assertThat(result).isNotNull();
+        assertThat(result.getId()).isNotNull();
         verify(userRepository, never()).save(any());
     }
 

@@ -64,6 +64,15 @@ public class OutboundEmailEntity {
     @Column(name = "sent_at")
     private Instant sentAt;
 
+    /**
+     * Momento a partir del cual el barrido puede volver a intentar enviar este correo. Null = puede
+     * salir ya. Al fallar por causa temporal (p. ej. rate-limit del proveedor) se aplaza aquí con
+     * backoff creciente, en lugar de reintentar cada 15 s y agotar los intentos dentro de la misma
+     * ventana de bloqueo.
+     */
+    @Column(name = "next_attempt_at")
+    private Instant nextAttemptAt;
+
     @Column(name = "error_message", length = 2000)
     private String errorMessage;
 

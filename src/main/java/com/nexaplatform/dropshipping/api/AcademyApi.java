@@ -48,7 +48,7 @@ public interface AcademyApi {
 
     @Operation(summary = "Update the progress of an enrollment")
     @PutMapping("/me/academy/enrollments/{id}/progress")
-    EnrollmentDtoOut updateProgress(@PathVariable UUID id, @RequestBody Map<String, Number> body);
+    EnrollmentDtoOut updateProgress(Authentication auth, @PathVariable UUID id, @RequestBody Map<String, Number> body);
 
     @Operation(summary = "List active mentors")
     @GetMapping("/mentors")

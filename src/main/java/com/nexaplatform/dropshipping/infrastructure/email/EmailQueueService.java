@@ -12,6 +12,7 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Limit;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -23,6 +24,7 @@ import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -131,13 +133,30 @@ public class EmailQueueService {
         }
     }
 
-    /** Intentos de envío antes de rendirse. Un fallo de SMTP suele ser pasajero. */
-    private static final int MAX_SEND_ATTEMPTS = 5;
+    /** Cuántos correos se procesan por pasada del barrido. */
+    private static final int BATCH_SIZE = 20;
+
+    /**
+     * Backoff (espera hasta el siguiente intento) para fallos TEMPORALES, indexado por nº de intento.
+     * A partir del último valor se mantiene el tope. Pensado para superar un rate-limit horario del
+     * proveedor: 2, 5, 10, 20, 40 y 60 min, luego cada hora.
+     */
+    private static final Duration[] TRANSIENT_BACKOFF = {
+            Duration.ofMinutes(2), Duration.ofMinutes(5), Duration.ofMinutes(10),
+            Duration.ofMinutes(20), Duration.ofMinutes(40), Duration.ofMinutes(60)
+    };
+
+    /** Antigüedad máxima que un correo temporalmente fallido sigue reintentándose antes de rendirse. */
+    private static final Duration GIVE_UP_TRANSIENT_AFTER = Duration.ofHours(24);
+
+    /** Longitud de la columna error_message: el mensaje se recorta para no reventar el INSERT. */
+    private static final int ERROR_MESSAGE_MAX = 2000;
 
     @Scheduled(fixedDelay = 15_000)
     @Transactional
     public void dispatchPending() {
-        for (OutboundEmailEntity email : repo.findTop20ByStatusOrderByCreatedAtAsc("PENDING")) {
+        Instant now = Instant.now();
+        for (OutboundEmailEntity email : repo.findDispatchable(now, Limit.of(BATCH_SIZE))) {
             try {
                 String html = email.getBodyHtml();
                 // Iconos FontAwesome incrustados como adjuntos inline (CID): funcionan en Gmail sin
@@ -168,24 +187,52 @@ public class EmailQueueService {
                 mailSender.send(msg);
                 email.setStatus("SENT");
                 email.setSentAt(Instant.now());
+                email.setNextAttemptAt(null);
             } catch (Exception e) {
-                // El barrido sólo lee PENDING, así que marcar FAILED al primer tropiezo era rendirse
-                // para siempre: attemptCount no pasaba nunca de 1 y ningún correo fallido volvía a
-                // salir. Un SMTP que no responde suele estar de vuelta al minuto siguiente, así que la
-                // fila se queda PENDING hasta agotar los intentos y sólo entonces pasa a FAILED.
-                int attempts = email.getAttemptCount() + 1;
-                email.setAttemptCount(attempts);
-                email.setErrorMessage(e.getMessage());
-                if (attempts >= MAX_SEND_ATTEMPTS) {
-                    email.setStatus("FAILED");
-                    log.error("Email {} descartado tras {} intentos: {}", email.getId(), attempts, e.getMessage());
-                } else {
-                    log.warn("Email {} falló (intento {}/{}): {}", email.getId(), attempts, MAX_SEND_ATTEMPTS,
-                            e.getMessage());
-                }
+                handleSendFailure(email, e, now);
             }
             repo.save(email);
         }
+    }
+
+    /**
+     * Decide qué hacer con un correo que no se pudo enviar. Un fallo PERMANENTE (código SMTP 5xx:
+     * buzón inexistente, dirección inválida) se descarta ya. Un fallo TEMPORAL (rate-limit del
+     * proveedor, SMTP caído, timeout) se aplaza con backoff creciente y se sigue reintentando hasta
+     * {@link #GIVE_UP_TRANSIENT_AFTER}; así un rate-limit horario no hace perder el correo.
+     */
+    private void handleSendFailure(OutboundEmailEntity email, Exception e, Instant now) {
+        int attempts = email.getAttemptCount() + 1;
+        email.setAttemptCount(attempts);
+        email.setErrorMessage(truncate(e.getMessage()));
+
+        if (SmtpFailureClassifier.classify(e) == SmtpFailureClassifier.Kind.PERMANENT) {
+            email.setStatus("FAILED");
+            log.error("Email {} descartado (error permanente, intento {}): {}", email.getId(), attempts,
+                    e.getMessage());
+            return;
+        }
+
+        Instant createdAt = email.getCreatedAt();
+        if (createdAt != null && Duration.between(createdAt, now).compareTo(GIVE_UP_TRANSIENT_AFTER) > 0) {
+            email.setStatus("FAILED");
+            log.error("Email {} descartado tras {} h reintentando ({} intentos): {}",
+                    email.getId(), GIVE_UP_TRANSIENT_AFTER.toHours(), attempts, e.getMessage());
+            return;
+        }
+
+        Duration wait = TRANSIENT_BACKOFF[Math.min(attempts - 1, TRANSIENT_BACKOFF.length - 1)];
+        email.setNextAttemptAt(now.plus(wait));
+        log.warn("Email {} aplazado {} min por fallo temporal (intento {}): {}", email.getId(),
+                wait.toMinutes(), attempts, e.getMessage());
+    }
+
+    /** Recorta el mensaje de error a lo que cabe en la columna, preservando el principio (el código SMTP). */
+    private static String truncate(String message) {
+        if (message == null) {
+            return null;
+        }
+        return message.length() <= ERROR_MESSAGE_MAX ? message : message.substring(0, ERROR_MESSAGE_MAX);
     }
 
     /**

@@ -163,14 +163,14 @@ class Cov06MeWalletControllerTest {
         assertThat(body.getPaymentId()).isEqualTo(paymentId);
     }
 
-    /** La captura de PayPal la dispara el propio proveedor: no hay usuario y por eso no se devuelve saldo. */
+    /** La captura de PayPal va ligada al usuario del token (IDOR); esta respuesta no recalcula el saldo. */
     @Test
     void laCapturaDePayPalNoDevuelveSaldo() {
         UUID paymentId = UUID.randomUUID();
-        when(paymentUseCase.capturePayPal(paymentId))
+        when(paymentUseCase.capturePayPal(userId, paymentId))
                 .thenReturn(Payment.builder().id(paymentId).status(PaymentStatus.SUCCEEDED).build());
 
-        MeWalletPaymentStatusDtoOut body = controller.capturePayPal(paymentId).getBody();
+        MeWalletPaymentStatusDtoOut body = controller.capturePayPal(auth, paymentId).getBody();
 
         assertThat(body.getStatus()).isEqualTo("SUCCEEDED");
         assertThat(body.getBalanceUsdCents()).isNull();
