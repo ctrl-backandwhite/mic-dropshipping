@@ -46,7 +46,10 @@ class WalletUseCaseImplTest {
         UUID userId = UUID.randomUUID();
         Wallet wallet = Wallet.builder().balanceUsdCents(0L).holdUsdCents(0L).status("ACTIVE").build();
         wallet.setId(UUID.randomUUID());
-        when(walletRepository.findByUserId(userId)).thenReturn(Optional.of(wallet));
+        // El movimiento de saldo (topup admin) carga la wallet con BLOQUEO de fila (findByUserIdForUpdate),
+        // ya no por findByUserId; ese queda lenient por si algún otro camino lo usa.
+        org.mockito.Mockito.lenient().when(walletRepository.findByUserId(userId)).thenReturn(Optional.of(wallet));
+        when(walletRepository.findByUserIdForUpdate(userId)).thenReturn(Optional.of(wallet));
         when(txRepository.findByIdempotencyKey("key-1")).thenReturn(Optional.empty());
         when(walletRepository.save(any())).thenReturn(wallet);
         when(txRepository.save(any())).thenAnswer(inv -> {

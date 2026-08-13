@@ -40,12 +40,22 @@ public class BillingController implements BillingApi {
         // Precio del plan en CNY (moneda de 1688) → moneda de display del usuario (X-Currency), igual que
         // los productos. El backend deja el importe formateado listo; el front solo lo pinta.
         String displayCode = CurrencyHolder.get();
+        boolean eur = "EUR".equalsIgnoreCase(displayCode);
         for (BillingPlanDtoOut p : plans) {
             String src = p.getCurrency() != null && !p.getCurrency().isBlank() ? p.getCurrency() : "CNY";
-            BigDecimal monthly = currencyService.usdToDisplay(
-                    currencyService.toUsd(BigDecimal.valueOf(p.getPriceMonthlyCents()).movePointLeft(2), src));
-            BigDecimal yearly = currencyService.usdToDisplay(
-                    currencyService.toUsd(BigDecimal.valueOf(p.getPriceYearlyCents()).movePointLeft(2), src));
+            BigDecimal monthly;
+            BigDecimal yearly;
+            if (eur && p.getPriceMonthlyEurCents() > 0) {
+                // UE: ancla FIJA en EUR (p. ej. 50 €), no una conversión del importe USD.
+                monthly = BigDecimal.valueOf(p.getPriceMonthlyEurCents()).movePointLeft(2);
+                yearly = BigDecimal.valueOf(p.getPriceYearlyEurCents()).movePointLeft(2);
+            } else {
+                // Resto del mundo: ancla en USD; en otras divisas se convierte con la tasa del día.
+                monthly = currencyService.usdToDisplay(
+                        currencyService.toUsd(BigDecimal.valueOf(p.getPriceMonthlyCents()).movePointLeft(2), src));
+                yearly = currencyService.usdToDisplay(
+                        currencyService.toUsd(BigDecimal.valueOf(p.getPriceYearlyCents()).movePointLeft(2), src));
+            }
             // Precio de plan REDONDEADO a entero (HALF_UP) — se muestra "25 €", no "25,28 €".
             p.setDisplayCurrency(displayCode);
             p.setDisplayMonthly(monthly.setScale(0, RoundingMode.HALF_UP));

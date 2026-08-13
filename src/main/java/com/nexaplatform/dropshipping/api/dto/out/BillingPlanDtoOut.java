@@ -39,6 +39,12 @@ public class BillingPlanDtoOut {
     @Schema(description = "Yearly price in cents, in the plan's source currency (CNY)")
     private int priceYearlyCents;
 
+    @Schema(description = "Ancla de precio mensual en EUR (céntimos) para la UE; 0 = sin override")
+    private int priceMonthlyEurCents;
+
+    @Schema(description = "Ancla de precio anual en EUR (céntimos) para la UE; 0 = sin override")
+    private int priceYearlyEurCents;
+
     @Schema(description = "ISO currency code de origen del plan (CNY)")
     private String currency;
 

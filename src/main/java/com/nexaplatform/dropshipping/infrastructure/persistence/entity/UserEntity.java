@@ -67,6 +67,16 @@ public class UserEntity extends BaseEntity {
     @Column(name = "deletion_code_expires_at")
     private Instant deletionCodeExpiresAt;
 
+    // Confirmación por código para eliminar un método de pago (código enviado por correo).
+    @Column(name = "pm_delete_code", length = 12)
+    private String pmDeleteCode;
+
+    @Column(name = "pm_delete_ref", length = 200)
+    private String pmDeleteRef;
+
+    @Column(name = "pm_delete_code_at")
+    private Instant pmDeleteCodeAt;
+
     @Column(name = "failed_login_count")
     private int failedLoginCount;
 

@@ -39,6 +39,10 @@ server:
   port: 0
 
 nexadrop:
+  captcha:
+    # Los tests no resuelven proof-of-work: se desactiva la verificación para no bloquear los POST
+    # a los formularios públicos (registro, contacto, reset, newsletter).
+    enabled: false
   oauth:
     issuer: http://localhost:18082
     admin-spa:

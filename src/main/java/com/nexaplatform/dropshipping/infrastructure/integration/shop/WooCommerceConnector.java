@@ -100,6 +100,17 @@ public class WooCommerceConnector implements ShopConnector {
         if (!h.startsWith("http://") && !h.startsWith("https://")) {
             h = "https://" + h;
         }
+        // Anti-SSRF: el host lo controla el usuario. Rechazamos cualquier destino que resuelva a la red
+        // interna (loopback/privadas/metadata), para que el conector no pueda usarse para alcanzar servicios
+        // internos ni escanear puertos.
+        try {
+            String host = URI.create(h).getHost();
+            if (host == null || !ShopHostGuard.isPublicHost(host)) {
+                return null;
+            }
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
         return h;
     }
 

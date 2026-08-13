@@ -49,6 +49,9 @@ public class MeDtoOut {
     @Schema(description = "Company name")
     private String companyName;
 
+    @Schema(description = "Phone number (E.164)")
+    private String phone;
+
     @Schema(description = "Country")
     private String country;
 

@@ -35,6 +35,8 @@ public interface CustomerSubscriptionEntityMapper {
     @Mapping(target = "cancelAt", source = "cancelAt")
     @Mapping(target = "canceledAt", source = "canceledAt")
     @Mapping(target = "trialEndsAt", source = "trialEndsAt")
+    @Mapping(target = "pendingPlanCode", source = "pendingPlanCode")
+    @Mapping(target = "pendingPlanAt", source = "pendingPlanAt")
     @Mapping(target = "planCode", expression = "java(entity.getPlan() != null ? entity.getPlan().getCode() : null)")
     @Mapping(target = "userEmail", expression = "java(entity.getUser() != null ? entity.getUser().getEmail() : null)")
     @Mapping(target = "priceMonthly", expression = "java(entity.getPlan() != null ? entity.getPlan().getPriceMonthlyCents() : 0)")

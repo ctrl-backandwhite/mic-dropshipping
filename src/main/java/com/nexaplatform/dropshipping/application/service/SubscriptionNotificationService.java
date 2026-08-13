@@ -1,5 +1,7 @@
 package com.nexaplatform.dropshipping.application.service;
 
+import com.nexaplatform.dropshipping.domain.enums.SubscriptionEmailLabel;
+import com.nexaplatform.dropshipping.domain.enums.SubscriptionPlanLabel;
 import com.nexaplatform.dropshipping.domain.model.CustomerSubscription;
 import com.nexaplatform.dropshipping.domain.model.PlatformNotification;
 import com.nexaplatform.dropshipping.domain.repository.CustomerSubscriptionRepository;
@@ -12,6 +14,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -89,5 +94,68 @@ public class SubscriptionNotificationService {
             log.warn("::> [BILLING] no se pudo encolar el email de pago fallido user={}: {}", userId, e.getMessage());
         }
         log.info("::> [BILLING] Aviso de pago fallido enviado user={} stripeSub={}", userId, stripeSubscriptionId);
+    }
+
+    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(ZoneOffset.UTC);
+
+    /**
+     * Email de confirmación al contratar un plan, en el idioma del usuario. {@code trial=true} usa el texto
+     * de la prueba de 15 días (con su fecha de fin); {@code trial=false} el de un plan de pago. Best-effort:
+     * cualquier fallo se registra y no rompe la contratación.
+     */
+    public void planActivated(UUID userId, String planCode, Instant periodEnd, boolean trial) {
+        planActivated(userId, planCode, periodEnd, trial, null, null);
+    }
+
+    /**
+     * Como {@link #planActivated(UUID, String, Instant, boolean)} pero adjuntando la FACTURA (PDF) del plan
+     * al correo (solo planes de pago; la prueba no genera factura). Además crea una notificación in-app
+     * (campana) para que la contratación aparezca en el buzón del usuario. Todo best-effort.
+     */
+    public void planActivated(UUID userId, String planCode, Instant periodEnd, boolean trial, byte[] invoicePdf,
+            String invoiceFilename) {
+        try {
+            UserEntity user = userRepository.findById(userId).orElse(null);
+            if (user == null || user.getEmail() == null || user.getEmail().isBlank()) {
+                return;
+            }
+            String lang = user.getLanguage();
+            String name = user.getDisplayName() != null ? user.getDisplayName() : "";
+            String date = periodEnd != null ? DATE.format(periodEnd) : "";
+            // Nombre del plan traducido al idioma del usuario (no el nombre crudo de la BD "Starter").
+            String plan = SubscriptionPlanLabel.planName(planCode, lang);
+            String tpl = trial ? SubscriptionEmailLabel.BODY_TRIAL.of(lang) : SubscriptionEmailLabel.BODY_PAID.of(lang);
+            String body = tpl.replace("{name}", name).replace("{plan}", plan).replace("{date}", date)
+                    .replace("  ", " ").replace(" ,", ",");
+
+            // Notificación in-app (campana): la contratación queda en el buzón del usuario.
+            try {
+                notificationRepository.save(PlatformNotification.builder().userId(userId)
+                        .eventType("PLAN_ACTIVATED").channel("IN_APP")
+                        .title(SubscriptionEmailLabel.TITLE.of(lang)).body(body).build());
+            } catch (RuntimeException e) {
+                log.warn("::> [BILLING] no se pudo crear la notificación in-app de plan contratado user={}: {}",
+                        userId, e.getMessage());
+            }
+
+            Map<String, Object> vars = new HashMap<>();
+            vars.put("title", SubscriptionEmailLabel.TITLE.of(lang));
+            vars.put("preheader", SubscriptionEmailLabel.TITLE.of(lang));
+            vars.put("bodyHtml", body);
+            vars.put("ctaUrl", baseUrl + "/profile");
+            vars.put("ctaLabel", SubscriptionEmailLabel.CTA.of(lang));
+            vars.put("footer", "NX036");
+            String subject = SubscriptionEmailLabel.SUBJECT.of(lang);
+            if (invoicePdf != null && invoicePdf.length > 0) {
+                emailQueue.enqueueWithAttachment(user.getEmail(), subject, "emails/notification", vars, invoicePdf,
+                        invoiceFilename != null ? invoiceFilename : "factura.pdf");
+            } else {
+                emailQueue.enqueue(user.getEmail(), subject, "emails/notification", vars);
+            }
+            log.info("::> [BILLING] Email de plan contratado encolado user={} plan={} trial={} conFactura={}", userId,
+                    plan, trial, invoicePdf != null);
+        } catch (RuntimeException e) {
+            log.warn("::> [BILLING] no se pudo encolar el email de plan contratado user={}: {}", userId, e.getMessage());
+        }
     }
 }

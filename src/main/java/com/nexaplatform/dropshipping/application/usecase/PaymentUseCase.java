@@ -75,11 +75,32 @@ public interface PaymentUseCase extends BaseUseCase<Payment, Payment, UUID> {
     Payment initiateMeOrderPayment(UUID userId, UUID orderId, boolean wallet, PaymentMethod method,
             String idempotencyKey);
 
+    /** Resultado de cobrar un pedido con tarjeta guardada: estado, client_secret (si hace falta 3DS) y pago. */
+    record SavedCardPayResult(String status, String clientSecret, java.util.UUID paymentId) {
+    }
+
+    /**
+     * Cobra un pedido con una tarjeta GUARDADA del usuario (off-session). Si la tarjeta exige 3DS, devuelve
+     * {@code requires_action} + client_secret para que el navegador autentique y luego se confirme.
+     */
+    SavedCardPayResult payOrderWithSavedCard(UUID userId, UUID orderId, String paymentMethodId,
+            String idempotencyKey) throws com.stripe.exception.StripeException;
+
+    /** Confirma un cobro con tarjeta guardada tras completar el 3DS en el navegador. */
+    Payment confirmSavedCardPayment(UUID userId, UUID orderId, UUID paymentId)
+            throws com.stripe.exception.StripeException;
+
     /** All payment attempts for an order, newest first. */
     List<Payment> listOrderPayments(UUID orderId);
 
+    /** Como {@link #listOrderPayments} pero validando que el pedido es del PARTNER del JWT (IDOR entre partners). */
+    List<Payment> listOrderPaymentsForPartner(org.springframework.security.oauth2.jwt.Jwt jwt, UUID orderId);
+
     /** A single order payment, validating it belongs to the order. */
     Payment getOrderPayment(UUID orderId, UUID paymentId);
+
+    /** Como {@link #getOrderPayment} pero validando que el pedido es del PARTNER del JWT (IDOR entre partners). */
+    Payment getOrderPaymentForPartner(org.springframework.security.oauth2.jwt.Jwt jwt, UUID orderId, UUID paymentId);
 
     /** Dev-only mock-confirm of a pending order payment. */
     Payment confirmMockOrderPayment(UUID userId, UUID orderId, UUID paymentId);

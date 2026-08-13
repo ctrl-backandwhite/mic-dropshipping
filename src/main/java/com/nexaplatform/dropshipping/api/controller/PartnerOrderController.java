@@ -41,7 +41,7 @@ public class PartnerOrderController implements PartnerOrderApi {
     }
 
     @Override
-    public ResponseEntity<PartnerOrderDtoOut> get(UUID id) {
-        return new ResponseEntity<>(partnerOrderDtoMapper.toDtoOut(orderUseCase.getPartnerOrder(id)), HttpStatus.OK);
+    public ResponseEntity<PartnerOrderDtoOut> get(Jwt jwt, UUID id) {
+        return new ResponseEntity<>(partnerOrderDtoMapper.toDtoOut(orderUseCase.getPartnerOrder(jwt, id)), HttpStatus.OK);
     }
 }

@@ -42,7 +42,8 @@ public class AcademyEnrollmentUseCaseImpl implements AcademyEnrollmentUseCase {
         }
         return academyEnrollmentRepository.findByUserIdAndCourseId(userId, courseId)
                 .orElseGet(() -> academyEnrollmentRepository
-                        .save(AcademyEnrollment.builder().userId(userId).courseId(courseId).build()));
+                        .save(AcademyEnrollment.builder().userId(userId).courseId(courseId)
+                                .progressPct(BigDecimal.ZERO).build()));
     }
 
     @Override

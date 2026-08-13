@@ -4,6 +4,7 @@ import com.nexaplatform.dropshipping.application.usecase.GoogleLoginOutcome;
 import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
 import com.nexaplatform.dropshipping.domain.enums.UserRole;
 import com.nexaplatform.dropshipping.domain.model.User;
+import com.nexaplatform.dropshipping.application.service.DeviceSessionService;
 import com.nexaplatform.dropshipping.infrastructure.security.jwt.UserTokenService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,6 +43,9 @@ class GoogleOAuth2SuccessHandlerTest {
     @Mock
     private UserTokenService userTokenService;
 
+    @Mock
+    private DeviceSessionService deviceSessionService;
+
     private GoogleOAuth2SuccessHandler handler;
 
     private MockHttpServletRequest request;
@@ -50,7 +54,7 @@ class GoogleOAuth2SuccessHandlerTest {
     @BeforeEach
     void setUp() {
         // Trailing slash must be trimmed by the handler.
-        handler = new GoogleOAuth2SuccessHandler(userUseCase, userTokenService, FRONT + "/");
+        handler = new GoogleOAuth2SuccessHandler(userUseCase, userTokenService, deviceSessionService, FRONT + "/");
         request = new MockHttpServletRequest();
         response = new MockHttpServletResponse();
     }

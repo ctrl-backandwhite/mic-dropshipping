@@ -29,4 +29,10 @@ public class MySubscriptionDtoOut {
 
     @Schema(description = "Fecha en la que se cancelará (si está marcada para cancelar al final del periodo)")
     private Instant cancelAt;
+
+    @Schema(description = "Código del plan menor al que se bajará en la próxima renovación (bajada programada)")
+    private String pendingPlanCode;
+
+    @Schema(description = "Fecha en que se aplicará la bajada de plan programada")
+    private Instant pendingPlanAt;
 }

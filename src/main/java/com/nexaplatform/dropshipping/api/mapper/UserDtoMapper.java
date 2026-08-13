@@ -35,6 +35,7 @@ public interface UserDtoMapper {
     @Mapping(target = "lastName2", source = "user.lastName2")
     @Mapping(target = "fullName", expression = "java(fullName(user))")
     @Mapping(target = "companyName", source = "user.companyName")
+    @Mapping(target = "phone", source = "user.phone")
     @Mapping(target = "country", source = "user.country")
     @Mapping(target = "language", source = "user.language")
     @Mapping(target = "avatarUrl", source = "user.avatarUrl")

@@ -44,7 +44,7 @@ public interface OrderUseCase extends BaseUseCase<Order, Order, UUID> {
     List<Order> listForPartner(Jwt jwt);
 
     /** Single order for a partner. */
-    Order getPartnerOrder(UUID id);
+    Order getPartnerOrder(Jwt jwt, UUID id);
 
     /* ============ Admin ============ */
 

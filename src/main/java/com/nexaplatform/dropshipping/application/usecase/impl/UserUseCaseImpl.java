@@ -158,6 +158,32 @@ public class UserUseCaseImpl implements UserUseCase {
 
     @Override
     @Transactional
+    public void resendActivation(String email) {
+        String normalized = normalizeEmail(email);
+        // Respuesta NEUTRA (anti-enumeración): el controlador siempre devuelve 204. Aquí solo reenviamos si
+        // la cuenta existe, aún no está activada y no está borrada; en cualquier otro caso, no hacemos nada.
+        userRepository.findByEmail(normalized).ifPresent(user -> {
+            if (user.isActive() || user.getDeletedAt() != null) {
+                return;
+            }
+            String activationCode = randomToken(32);
+            user.setActivationCode(activationCode);
+            user.setActivationCodeExpiresAt(Instant.now().plus(ACTIVATION_TTL_HOURS, ChronoUnit.HOURS));
+            userRepository.update(user);
+            String confirmLang = InvoiceLabel.lang(user.getLanguage());
+            emailQueueService.enqueue(user.getEmail(), AuthEmailLabel.CONFIRM_SUBJECT.of(confirmLang), EMAILS_WELCOME,
+                    Map.of(TITLE, AuthEmailLabel.CONFIRM_TITLE.of(confirmLang),
+                            BODYHTML, AuthEmailLabel.CONFIRM_BODY.of(confirmLang, user.getDisplayName()),
+                            CTALABEL, AuthEmailLabel.CONFIRM_CTA.of(confirmLang),
+                            CTAURL, storefrontBaseUrl + "/activate?code=" + activationCode,
+                            "icon", CIRCLE_CHECK,
+                            FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(confirmLang)));
+            auditLogger.log("auth.activation.resend", user.getEmail(), Map.of(USERID, user.getId()));
+        });
+    }
+
+    @Override
+    @Transactional
     public User activate(String code) {
         User user = userRepository.findByActivationCode(code)
                 .orElseThrow(() -> new BusinessException("Invalid or expired activation code"));
@@ -328,20 +354,18 @@ public class UserUseCaseImpl implements UserUseCase {
                     "El código de eliminación no es válido o ha expirado.");
         }
         String emailOriginal = user.getEmail();
-        // El hash se sustituye por el de un secreto aleatorio de 48 bytes que nadie llega a conocer:
-        // sigue siendo un BCrypt válido —así el login lo compara con normalidad y responde 401— pero no
-        // existe contraseña que lo produzca.
-        anonymise(user, passwordEncoder.encode(randomToken(48)));
+        // A efectos del usuario es una ELIMINACIÓN (no puede acceder ni verla), pero por dentro solo se
+        // DESACTIVA para poder recuperarla si decide volver: se conservan sus datos (perfil, direcciones,
+        // pedidos). active=false hace que el login responda "cuenta desactivada" (UserDetails.disabled);
+        // deleted_at la oculta de los listados. La reactivación la hace un ADMIN (active=true, deleted_at=null).
+        user.setActive(false);
+        user.setDeletedAt(Instant.now());
+        user.setDeletionCode(null);
+        user.setDeletionCodeExpiresAt(null);
         userRepository.update(user);
-        // Las direcciones son datos personales por sí solas y no las ampara ninguna obligación de
-        // conservación: el pedido ya guarda su propio snapshot para la factura.
-        userAddressJpaRepository.deleteAll(
-                userAddressJpaRepository.findByUser_IdOrderByIsDefaultDescCreatedAtDesc(userId));
-        // Y ninguna sesión abierta puede sobrevivir a la cuenta.
+        // Ninguna sesión abierta puede sobrevivir a la desactivación.
         jwtRevocationService.revokeAllForClient(userId.toString());
-        // El registro de auditoría guarda el email para poder acreditar QUE se atendió la solicitud; es
-        // una obligación distinta (art. 5.2 RGPD, responsabilidad proactiva) y su propia retención.
-        auditLogger.log("auth.account.delete", emailOriginal, Map.of(USERID, userId));
+        auditLogger.log("auth.account.deactivate", emailOriginal, Map.of(USERID, userId));
     }
 
     /**
@@ -517,6 +541,8 @@ public class UserUseCaseImpl implements UserUseCase {
     private List<User> filtered(String role, String q, String country) {
         String needle = q == null ? "" : q.trim().toLowerCase();
         return userRepository.findAll().stream()
+                // Los borrados (auto-baja o borrado del admin) están anonimizados: no deben salir en la lista.
+                .filter(u -> u.getDeletedAt() == null)
                 .filter(u -> role == null || role.isBlank() || u.getRole().name().equalsIgnoreCase(role))
                 .filter(u -> country == null || country.isBlank()
                         || (u.getCountry() != null && u.getCountry().equalsIgnoreCase(country)))
@@ -630,8 +656,18 @@ public class UserUseCaseImpl implements UserUseCase {
         if (user.getRole() == UserRole.ADMIN) {
             throw new BusinessException("No se puede eliminar una cuenta de administrador");
         }
-        userRepository.delete(id);
-        auditLogger.log("auth.admin.delete", user.getEmail(), Map.of(USERID, id));
+        // Borrado SUAVE, igual que la auto-baja (confirmAccountDeletion). Un DELETE físico fallaba con una
+        // violación de FK —"se hace referencia a un registro que no existe"— porque pedidos, facturas, el
+        // libro de la wallet, favoritos y sesiones referencian al usuario; y esos datos deben CONSERVARSE
+        // (obligación fiscal/contable, art. 17.3.b RGPD). Se anonimiza el PII, se desactiva, se borran las
+        // direcciones (PII sin obligación de conservación) y se cierran todas sus sesiones.
+        String emailOriginal = user.getEmail();
+        anonymise(user, passwordEncoder.encode(randomToken(48)));
+        userRepository.update(user);
+        userAddressJpaRepository.deleteAll(
+                userAddressJpaRepository.findByUser_IdOrderByIsDefaultDescCreatedAtDesc(id));
+        jwtRevocationService.revokeAllForClient(id.toString());
+        auditLogger.log("auth.admin.delete", emailOriginal, Map.of(USERID, id));
     }
 
     @Override

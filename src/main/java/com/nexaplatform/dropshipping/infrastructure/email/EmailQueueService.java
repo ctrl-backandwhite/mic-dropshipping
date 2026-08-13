@@ -67,13 +67,13 @@ public class EmailQueueService {
 
     @Transactional
     public OutboundEmailEntity enqueue(String to, String subject, String template, Map<String, Object> vars) {
-        return doEnqueue(to, null, subject, template, vars, Map.of());
+        return doEnqueue(to, null, subject, template, vars, Map.of(), null, null);
     }
 
     @Transactional
     public OutboundEmailEntity enqueue(String to, String replyTo, String subject, String template,
             Map<String, Object> vars) {
-        return doEnqueue(to, replyTo, subject, template, vars, Map.of());
+        return doEnqueue(to, replyTo, subject, template, vars, Map.of(), null, null);
     }
 
     /**
@@ -86,7 +86,14 @@ public class EmailQueueService {
     @Transactional
     public OutboundEmailEntity enqueue(String to, String replyTo, String subject, String template,
             Map<String, Object> vars, Map<String, String> inlineImages) {
-        return doEnqueue(to, replyTo, subject, template, vars, inlineImages);
+        return doEnqueue(to, replyTo, subject, template, vars, inlineImages, null, null);
+    }
+
+    /** Encola un correo con un adjunto (p. ej. el PDF de la factura del plan). */
+    @Transactional
+    public OutboundEmailEntity enqueueWithAttachment(String to, String subject, String template,
+            Map<String, Object> vars, byte[] attachment, String attachmentFilename) {
+        return doEnqueue(to, null, subject, template, vars, Map.of(), attachment, attachmentFilename);
     }
 
     /**
@@ -96,13 +103,15 @@ public class EmailQueueService {
      * se escribe.
      */
     private OutboundEmailEntity doEnqueue(String to, String replyTo, String subject, String template,
-            Map<String, Object> vars, Map<String, String> inlineImages) {
+            Map<String, Object> vars, Map<String, String> inlineImages, byte[] attachment, String attachmentFilename) {
         Context ctx = new Context();
         vars.forEach(ctx::setVariable);
         String html = templateEngine.process(template, ctx);
         OutboundEmailEntity email = OutboundEmailEntity.builder().toAddress(to).replyTo(replyTo).subject(subject)
                 .bodyHtml(html).template(template).status("PENDING")
-                .inlineImages(writeInlineImages(inlineImages)).build();
+                .inlineImages(writeInlineImages(inlineImages))
+                .attachmentBytes(attachment != null && attachment.length > 0 ? attachment : null)
+                .attachmentFilename(attachmentFilename).build();
         return repo.save(email);
     }
 
@@ -152,8 +161,15 @@ public class EmailQueueService {
     /** Longitud de la columna error_message: el mensaje se recorta para no reventar el INSERT. */
     private static final int ERROR_MESSAGE_MAX = 2000;
 
+    /**
+     * Barrido periódico de la cola. NO es {@code @Transactional} a propósito: cada correo se marca
+     * (SENT o el backoff del fallo) en su PROPIA transacción vía {@code repo.save} —que abre la suya—,
+     * de modo que un correo ya entregado queda persistido como SENT de inmediato. Si envolviéramos todo
+     * el lote en una sola transacción, un reinicio del proceso a mitad de lote (o un fallo al commitear)
+     * revertiría el estado de los correos YA ENVIADOS y el siguiente barrido los REENVIARÍA (duplicados).
+     * El envío SMTP es un efecto externo irreversible: hay que confirmarlo por correo, no por lote.
+     */
     @Scheduled(fixedDelay = 15_000)
-    @Transactional
     public void dispatchPending() {
         Instant now = Instant.now();
         for (OutboundEmailEntity email : repo.findDispatchable(now, Limit.of(BATCH_SIZE))) {
@@ -162,8 +178,9 @@ public class EmailQueueService {
                 // Iconos FontAwesome incrustados como adjuntos inline (CID): funcionan en Gmail sin
                 // necesidad de hosting público (los data-URI/SVG los bloquea). multipart solo si hay alguno.
                 Set<String> cids = referencedCids(html);
+                boolean hasAttachment = email.getAttachmentBytes() != null && email.getAttachmentBytes().length > 0;
                 MimeMessage msg = mailSender.createMimeMessage();
-                MimeMessageHelper helper = new MimeMessageHelper(msg, !cids.isEmpty(),
+                MimeMessageHelper helper = new MimeMessageHelper(msg, !cids.isEmpty() || hasAttachment,
                         StandardCharsets.UTF_8.name());
                 helper.setTo(email.getToAddress());
                 helper.setSubject(email.getSubject());
@@ -183,6 +200,12 @@ public class EmailQueueService {
                         continue;
                     }
                     attachStorageImage(helper, cid, storageImages.get(cid));
+                }
+                if (hasAttachment) {
+                    String filename = email.getAttachmentFilename() != null ? email.getAttachmentFilename()
+                            : "factura.pdf";
+                    helper.addAttachment(filename, new ByteArrayResource(email.getAttachmentBytes()),
+                            "application/pdf");
                 }
                 mailSender.send(msg);
                 email.setStatus("SENT");

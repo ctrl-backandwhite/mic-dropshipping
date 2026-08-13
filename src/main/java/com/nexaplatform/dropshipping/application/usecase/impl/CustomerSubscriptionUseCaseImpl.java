@@ -7,7 +7,10 @@ import com.nexaplatform.dropshipping.application.mapper.CustomerSubscriptionUpda
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.service.CountryTaxService;
 import com.nexaplatform.dropshipping.application.service.InvoiceService;
+import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
 import com.nexaplatform.dropshipping.application.usecase.SubscriptionPlanUseCase;
+import com.nexaplatform.dropshipping.domain.enums.InvoiceLabel;
+import com.nexaplatform.dropshipping.domain.enums.SubscriptionPlanLabel;
 import com.nexaplatform.dropshipping.domain.enums.SubscriptionStatus;
 import com.nexaplatform.dropshipping.domain.model.CustomerSubscription;
 import com.nexaplatform.dropshipping.domain.model.SubscribeResult;
@@ -23,6 +26,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserR
 import com.stripe.model.Customer;
 import com.stripe.model.PaymentMethod;
 import com.stripe.model.checkout.Session;
+import com.stripe.param.SubscriptionUpdateParams;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,7 +37,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
@@ -57,6 +60,8 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
     private static final String MONTHLY = "MONTHLY";
     private static final String YEARLY = "YEARLY";
+    /** Duración de la prueba GRATIS: 15 días, un solo uso por cuenta. */
+    private static final int FREE_TRIAL_DAYS = 15;
 
     private final CustomerSubscriptionRepository customerSubscriptionRepository;
     private final CustomerSubscriptionUpdateMapper customerSubscriptionUpdateMapper;
@@ -67,6 +72,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     private final CurrencyRateService currencyService;
     private final CountryTaxService countryTaxService;
     private final InvoiceService invoiceService;
+    private final SubscriptionNotificationService subscriptionNotificationService;
 
     /** URL pública del escaparate, para las vueltas de Stripe. La misma que usan los correos. */
     @Value("${nexadrop.storefront.base-url:http://localhost:3003}")
@@ -190,7 +196,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         SubscriptionPlanEntity plan = getPlanEntityByCode(planCode);
         Instant now = Instant.now();
 
-        // Plan GRATIS = PRUEBA de 1 mes, un solo uso por cuenta/correo (rechaza el 2º intento).
+        // Plan GRATIS = PRUEBA de 15 días, un solo uso por cuenta/correo (rechaza el 2º intento).
         if (isFreePlan(plan)) {
             return startFreeTrial(userId, plan, now);
         }
@@ -202,11 +208,13 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
                 .status(SubscriptionStatus.ACTIVE)
                 .billingPeriod(billingPeriod == null ? MONTHLY : billingPeriod.toUpperCase()).currentPeriodStart(now)
                 .currentPeriodEnd(end).build();
-        return customerSubscriptionRepository.save(model);
+        CustomerSubscription savedPaid = customerSubscriptionRepository.save(model);
+        subscriptionNotificationService.planActivated(userId, plan.getCode(), end, false);
+        return savedPaid;
     }
 
     /**
-     * Contrata el plan de PRUEBA (gratis): vence en 1 mes y solo puede usarse UNA vez por cuenta/correo. La
+     * Contrata el plan de PRUEBA (gratis): vence en 15 días y solo puede usarse UNA vez por cuenta/correo. La
      * fila queda {@code ACTIVE} con {@code currentPeriodEnd = ahora + 1 mes} (el modelo trata FREE como
      * activo, no como TRIALING — misma convención que {@link #normalizeForAdmin} y schema-v33); el
      * vencimiento lo aplica el barrido {@link #expireFreeTrials()}. Marca {@code freeTrialUsed=true} en el
@@ -214,17 +222,22 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
      */
     private CustomerSubscription startFreeTrial(UUID userId, SubscriptionPlanEntity plan, Instant now) {
         UserEntity user = loadUser(userId);
-        if (user.isFreeTrialUsed()) {
+        // Un solo uso por cuenta: la marca es la fuente de verdad, pero además bloqueamos si ya EXISTE una
+        // suscripción FREE (cuentas antiguas cuya marca no se fijó) — defensa en profundidad.
+        boolean hadFree = customerSubscriptionRepository.findByUserId(userId).stream()
+                .anyMatch(s -> "FREE".equalsIgnoreCase(s.getPlanCode()));
+        if (user.isFreeTrialUsed() || hadFree) {
             throw new BusinessException("FREE_TRIAL_ALREADY_USED",
-                    "Ya has utilizado tu mes de prueba gratis. Elige un plan de pago.");
+                    "Ya has utilizado tu prueba gratis de 15 días. Elige un plan de pago.");
         }
-        Instant trialEnd = now.atZone(ZoneOffset.UTC).plusMonths(1).toInstant();
+        Instant trialEnd = now.plus(FREE_TRIAL_DAYS, ChronoUnit.DAYS);
         CustomerSubscription model = CustomerSubscription.builder().userId(userId).planId(plan.getId())
                 .status(SubscriptionStatus.ACTIVE).billingPeriod(MONTHLY).currentPeriodStart(now)
                 .currentPeriodEnd(trialEnd).build();
         CustomerSubscription saved = customerSubscriptionRepository.save(model);
         user.setFreeTrialUsed(true);
         userRepository.save(user);
+        subscriptionNotificationService.planActivated(userId, plan.getCode(), trialEnd, true);
         log.info("::> [BILLING] Free trial started user={} plan={} endsAt={}", userId, plan.getCode(), trialEnd);
         return saved;
     }
@@ -344,8 +357,13 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     // =============================================================================================
 
     @Override
-    public BillingConfigInfo billingConfig() {
-        return new BillingConfigInfo(stripeService.publishableKey(), stripeService.isEnabled());
+    @Transactional(readOnly = true)
+    public BillingConfigInfo billingConfig(UUID userId) {
+        boolean flag = userId != null && userRepository.findById(userId)
+                .map(UserEntity::isFreeTrialUsed).orElse(false);
+        boolean hadFree = userId != null && customerSubscriptionRepository.findByUserId(userId).stream()
+                .anyMatch(s -> "FREE".equalsIgnoreCase(s.getPlanCode()));
+        return new BillingConfigInfo(stripeService.publishableKey(), stripeService.isEnabled(), flag || hadFree);
     }
 
     @Override
@@ -464,13 +482,26 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         // Stripe; la contratación incluye el IVA y aparece desglosado en la factura de Stripe.
         int taxBps = countryTaxService.rateBpsFor(user.getCountry());
         String taxRateId = stripeService.ensureTaxRate(user.getCountry(), taxBps);
-        // Precio del plan en CNY (moneda de 1688) → USD canónico (igual que los productos).
+        // Precio del plan: base en USD (ancla del "resto del mundo") → USD canónico. Para la UE se cobra el
+        // ancla FIJA en EUR (no una conversión del USD).
         String src = plan.getCurrency() != null && !plan.getCurrency().isBlank() ? plan.getCurrency() : "CNY";
         BigDecimal cny = BigDecimal.valueOf(cnyCents).movePointLeft(2);
         BigDecimal usdAmount = currencyService.toUsd(cny, src);
-        StripeCharge charge = chargeFor(usdAmount);
+        int eurAnchorCents = YEARLY.equals(billingPeriod) ? plan.getPriceYearlyEurCents() : plan.getPriceMonthlyEurCents();
+        StripeCharge charge = chargeFor(usdAmount, eurAnchorCents);
         String priceId = stripeService.ensureRecurringPrice(planCode, billingPeriod, charge.cents(),
                 charge.currency(), plan.getName());
+
+        // CAMBIO de plan sobre una suscripción de pago YA existente (no crear una nueva):
+        //  · SUBIDA  → se cobra AHORA solo la diferencia por los días que quedan (prorrateo, ALWAYS_INVOICE).
+        //  · BAJADA  → se mantiene el plan actual con TODAS sus características hasta fin de mes y en la
+        //              renovación se cobra y aplica el plan menor (NONE + cambio pendiente que aplica el barrido).
+        CustomerSubscription existing = latestActivePaidStripeSub(userId);
+        if (existing != null) {
+            return changePlan(userId, existing, plan, billingPeriod, priceId);
+        }
+        // Sin plan de pago activo: se contrata uno nuevo. Si había una PRUEBA gratis en curso, se sustituye.
+        supersedeFreeTrial(userId);
 
         // Fila local (INCOMPLETE) para pasar su id como metadata a Stripe; se actualiza con el resultado.
         CustomerSubscription local = customerSubscriptionRepository.save(CustomerSubscription.builder().userId(userId)
@@ -480,12 +511,136 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         StripeService.SubResult res = stripeService.createSubscription(customerId, priceId, defaultPm, taxRateId,
                 planCode, userId.toString(), local.getId().toString());
 
+        Instant paidEnd = res.periodEnd() != null ? Instant.ofEpochSecond(res.periodEnd()) : null;
         customerSubscriptionRepository.save(local.withStripeSubscriptionId(res.id())
                 .withStatus(mapStripeStatus(res.status()))
                 .withCurrentPeriodStart(res.periodStart() != null ? Instant.ofEpochSecond(res.periodStart()) : null)
-                .withCurrentPeriodEnd(res.periodEnd() != null ? Instant.ofEpochSecond(res.periodEnd()) : null));
+                .withCurrentPeriodEnd(paidEnd));
+        // Adjunta la FACTURA (PDF, en el idioma del usuario) al correo de confirmación. Best-effort: si la
+        // factura aún no está lista (p. ej. 3DS pendiente) o falla el render, se envía el correo sin adjunto.
+        byte[] invoicePdf = null;
+        String invoiceFilename = null;
+        try {
+            String lang = loadUser(userId).getLanguage();
+            List<StripeService.InvoiceInfo> invs = stripeService.listInvoices(customerId, 1);
+            if (!invs.isEmpty() && invs.get(0).number() != null) {
+                invoiceFilename = "factura-" + invs.get(0).number() + ".pdf";
+                invoicePdf = renderInvoicePdf(userId, invs.get(0).number(), lang);
+            }
+        } catch (Exception e) {
+            log.warn("::> [BILLING] no se pudo generar la factura para adjuntar user={}: {}", userId, e.getMessage());
+        }
+        subscriptionNotificationService.planActivated(userId, plan.getCode(), paidEnd, false, invoicePdf,
+                invoiceFilename);
         log.info("::> [BILLING] Subscribed user={} plan={} status={}", userId, planCode, res.status());
         return new SubscribeOutcome(res.id(), res.status());
+    }
+
+    /** Suscripción de PAGO activa (con id de Stripe, no cancelándose) más reciente del usuario, o null. */
+    private CustomerSubscription latestActivePaidStripeSub(UUID userId) {
+        return customerSubscriptionRepository.findByUserId(userId).stream()
+                .filter(s -> s.getStripeSubscriptionId() != null && !s.getStripeSubscriptionId().isBlank())
+                .filter(s -> s.getStatus() == SubscriptionStatus.ACTIVE
+                        || s.getStatus() == SubscriptionStatus.TRIALING
+                        || s.getStatus() == SubscriptionStatus.PAST_DUE)
+                .filter(s -> s.getCancelAt() == null)
+                .max(java.util.Comparator.comparing(
+                        s -> s.getCurrentPeriodStart() != null ? s.getCurrentPeriodStart() : Instant.EPOCH))
+                .orElse(null);
+    }
+
+    /** Cancela una PRUEBA gratis local en curso (sin Stripe) al contratar un plan de pago, para no duplicar. */
+    private void supersedeFreeTrial(UUID userId) {
+        customerSubscriptionRepository.findByUserId(userId).stream()
+                .filter(s -> (s.getStripeSubscriptionId() == null || s.getStripeSubscriptionId().isBlank())
+                        && s.getStatus() == SubscriptionStatus.ACTIVE
+                        && "FREE".equalsIgnoreCase(s.getPlanCode()))
+                .forEach(s -> customerSubscriptionRepository.save(
+                        s.withStatus(SubscriptionStatus.CANCELED).withCanceledAt(Instant.now())));
+    }
+
+    /**
+     * Cambia de plan sobre una suscripción de pago EXISTENTE. Subida → cobra ahora el prorrateo (diferencia
+     * por los días restantes). Bajada → se aplica en la próxima renovación manteniendo el plan actual hasta
+     * entonces (cambio pendiente que aplica {@link #applyPendingDowngrades()}).
+     */
+    private SubscribeOutcome changePlan(UUID userId, CustomerSubscription existing, SubscriptionPlanEntity newPlan,
+            String newPeriod, String newPriceId) throws StripeException {
+        SubscriptionPlanEntity currentPlan = getPlanEntityByCode(existing.getPlanCode());
+        int curTier = currentPlan != null ? currentPlan.getPriceMonthlyCents() : 0;
+        int newTier = newPlan.getPriceMonthlyCents();
+        boolean samePlan = currentPlan != null && currentPlan.getId().equals(newPlan.getId())
+                && newPeriod.equalsIgnoreCase(existing.getBillingPeriod());
+        if (samePlan) {
+            return new SubscribeOutcome(existing.getStripeSubscriptionId(), "active");
+        }
+        boolean upgrade = newTier > curTier
+                || (newTier == curTier && YEARLY.equalsIgnoreCase(newPeriod)
+                        && !YEARLY.equalsIgnoreCase(existing.getBillingPeriod()));
+        String subId = existing.getStripeSubscriptionId();
+
+        if (upgrade) {
+            // Cobra AHORA la diferencia prorrateada por los días que quedan del periodo.
+            StripeService.SubResult res = stripeService.changeSubscriptionPrice(subId, newPriceId, newPlan.getCode(),
+                    SubscriptionUpdateParams.ProrationBehavior.ALWAYS_INVOICE);
+            Instant end = res.periodEnd() != null ? Instant.ofEpochSecond(res.periodEnd())
+                    : existing.getCurrentPeriodEnd();
+            customerSubscriptionRepository.save(existing.withPlanId(newPlan.getId())
+                    .withBillingPeriod(newPeriod.toUpperCase()).withStatus(mapStripeStatus(res.status()))
+                    .withCurrentPeriodStart(res.periodStart() != null ? Instant.ofEpochSecond(res.periodStart())
+                            : existing.getCurrentPeriodStart())
+                    .withCurrentPeriodEnd(end).withPendingPlanCode(null).withPendingPlanAt(null));
+            attachInvoiceAndNotify(userId, existing.getStripeCustomerId(), newPlan.getCode(), end);
+            log.info("::> [BILLING] Plan UPGRADE user={} -> {} (prorrateo cobrado)", userId, newPlan.getCode());
+            return new SubscribeOutcome(subId, "active");
+        }
+
+        // BAJADA: el precio nuevo (menor) se aplicará en la renovación; el periodo actual sigue al plan actual.
+        stripeService.changeSubscriptionPrice(subId, newPriceId, newPlan.getCode(),
+                SubscriptionUpdateParams.ProrationBehavior.NONE);
+        Instant at = existing.getCurrentPeriodEnd();
+        customerSubscriptionRepository.save(existing.withPendingPlanCode(newPlan.getCode()).withPendingPlanAt(at));
+        log.info("::> [BILLING] Plan DOWNGRADE programado user={} -> {} el {}", userId, newPlan.getCode(), at);
+        return new SubscribeOutcome(subId, "scheduled");
+    }
+
+    /** Renderiza la última factura del usuario (idioma de la cuenta) y encola el correo de plan con ella. */
+    private void attachInvoiceAndNotify(UUID userId, String customerId, String planCode, Instant periodEnd) {
+        byte[] pdf = null;
+        String filename = null;
+        try {
+            String lang = loadUser(userId).getLanguage();
+            List<StripeService.InvoiceInfo> invs = stripeService.listInvoices(customerId, 1);
+            if (!invs.isEmpty() && invs.get(0).number() != null) {
+                filename = "factura-" + invs.get(0).number() + ".pdf";
+                pdf = renderInvoicePdf(userId, invs.get(0).number(), lang);
+            }
+        } catch (Exception e) {
+            log.warn("::> [BILLING] no se pudo adjuntar la factura del cambio de plan user={}: {}", userId,
+                    e.getMessage());
+        }
+        subscriptionNotificationService.planActivated(userId, planCode, periodEnd, false, pdf, filename);
+    }
+
+    /**
+     * Aplica las BAJADAS de plan programadas cuya fecha (fin de periodo) ya llegó: pone el plan menor como
+     * plan efectivo (Stripe ya cambió el precio en la renovación). Cada hora.
+     */
+    @Scheduled(fixedDelay = 3_600_000L)
+    @Transactional
+    public void applyPendingDowngrades() {
+        Instant now = Instant.now();
+        for (CustomerSubscription sub : customerSubscriptionRepository.findAll()) {
+            if (sub.getPendingPlanCode() == null || sub.getPendingPlanAt() == null
+                    || sub.getPendingPlanAt().isAfter(now)) {
+                continue;
+            }
+            planRepository.findByCode(sub.getPendingPlanCode()).ifPresent(plan -> {
+                customerSubscriptionRepository.save(sub.withPlanId(plan.getId())
+                        .withBillingPeriod(sub.getBillingPeriod()).withPendingPlanCode(null).withPendingPlanAt(null));
+                log.info("::> [BILLING] Bajada de plan aplicada subId={} -> {}", sub.getId(), plan.getCode());
+            });
+        }
     }
 
     /** Moneda e importe (en la subunidad de esa moneda) con los que se cobra el plan en Stripe. */
@@ -495,17 +650,21 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     /**
      * Moneda e importe de COBRO del plan a partir de su precio en USD canónico: MISMA regla que el
      * checkout y la recarga, y COINCIDE con el precio MOSTRADO —BillingController lo redondea a entero en
-     * la divisa activa—. EUR si la web está en EUR; USD si está en USD; y con cualquier otra divisa se
-     * muestra el precio en ella pero se cobra su equivalente en USD.
+     * la divisa activa—. La divisa activa la fija la detección por IP (geo: EUR para la UE, USD para el
+     * resto). En EUR se cobra el ANCLA fija en EUR ({@code eurAnchorCents}, p. ej. 50 €), no la conversión
+     * del USD; en USD se cobra el ancla USD; con cualquier otra divisa se muestra en ella pero se cobra su
+     * equivalente en USD.
      */
-    private StripeCharge chargeFor(BigDecimal usdAmount) {
+    private StripeCharge chargeFor(BigDecimal usdAmount, int eurAnchorCents) {
         String displayCode = CurrencyHolder.get();
         String chargeCurrency;
         long chargeCents;
         if ("EUR".equalsIgnoreCase(displayCode)) {
             chargeCurrency = "eur";
-            chargeCents = currencyService.usdTo(usdAmount, "EUR").setScale(0, RoundingMode.HALF_UP)
-                    .movePointRight(2).longValueExact();
+            chargeCents = eurAnchorCents > 0
+                    ? eurAnchorCents
+                    : currencyService.usdTo(usdAmount, "EUR").setScale(0, RoundingMode.HALF_UP)
+                            .movePointRight(2).longValueExact();
         } else if (displayCode == null || displayCode.isBlank() || "USD".equalsIgnoreCase(displayCode)) {
             chargeCurrency = "usd";
             chargeCents = usdAmount.setScale(0, RoundingMode.HALF_UP).movePointRight(2).longValueExact();
@@ -585,11 +744,37 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
                 .findFirst()
                 .orElseThrow(() -> new NotFoundException("Invoice"));
         boolean paid = "paid".equalsIgnoreCase(inv.status());
+        String line = localizedPlanLine(userId, inv, locale);
         InvoiceService.PlanInvoiceData data = new InvoiceService.PlanInvoiceData(inv.number(), inv.currency(),
-                inv.subtotal(), inv.tax(), inv.total() != null ? inv.total() : 0L, inv.lineDescription(),
+                inv.subtotal(), inv.tax(), inv.total() != null ? inv.total() : 0L, line,
                 inv.periodStart(), inv.periodEnd(), inv.created(), inv.customerName(), inv.customerEmail(), paid,
                 inv.hostedUrl());
         return invoiceService.renderPlanInvoicePdf(data, locale);
+    }
+
+    /**
+     * Concepto de la factura del plan EN EL IDIOMA del usuario (Stripe lo genera en inglés: "Starter —
+     * MONTHLY (at €50.00 / month)"). Resuelve el plan+periodo de la suscripción del usuario (la que casa por
+     * inicio de periodo con la factura, o la más reciente) → "Inicial — Mensual". Si no se puede resolver,
+     * cae al texto de Stripe para no dejar la línea vacía.
+     */
+    private String localizedPlanLine(UUID userId, StripeService.InvoiceInfo inv, String locale) {
+        String lang = InvoiceLabel.lang(locale);
+        List<CustomerSubscription> subs = customerSubscriptionRepository.findByUserId(userId);
+        CustomerSubscription match = subs.stream()
+                .filter(s -> s.getCurrentPeriodStart() != null && inv.periodStart() != null
+                        && Math.abs(s.getCurrentPeriodStart().getEpochSecond() - inv.periodStart()) < 172800)
+                .findFirst()
+                .orElse(subs.stream()
+                        .max(java.util.Comparator.comparing(
+                                s -> s.getCurrentPeriodStart() != null ? s.getCurrentPeriodStart() : Instant.EPOCH))
+                        .orElse(null));
+        if (match == null || match.getPlanCode() == null) {
+            return inv.lineDescription();
+        }
+        String name = SubscriptionPlanLabel.planName(match.getPlanCode(), lang);
+        String period = SubscriptionPlanLabel.period(match.getBillingPeriod(), lang);
+        return period.isBlank() ? name : name + " — " + period;
     }
 
     @Override

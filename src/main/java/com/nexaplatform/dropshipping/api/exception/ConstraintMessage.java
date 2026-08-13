@@ -7,6 +7,10 @@ package com.nexaplatform.dropshipping.api.exception;
  */
 public enum ConstraintMessage {
 
+    // --- Cuentas de usuario ---
+    UK_USERS_PHONE("uk_users_phone",
+            "Ese número de teléfono ya está registrado en otra cuenta. Usa un número distinto."),
+
     // --- Catálogo: productos y traducciones ---
     UX_PRODTR_PROD_LANG("ux_prodtr_prod_lang",
             "Ese producto ya existe en el catálogo (mismo origen + externalId) y ya tiene sus traducciones. "

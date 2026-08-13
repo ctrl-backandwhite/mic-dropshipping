@@ -83,7 +83,8 @@ public class BffSecurityConfig {
                 "/api/catalog/**", "/api/billing/**", API_CONTACT, "/api/contact/**", "/api/newsletter/**",
                 "/api/affiliate/**", "/api/search", "/api/search/**", "/api/shipping/**", "/api/currency/**",
                 "/api/languages", "/api/languages/**", "/api/warehouses", "/api/warehouses/**", "/api/academy/**",
-                "/api/mentors", "/api/mentors/**", "/api/pod/**", "/api/campaigns/**", "/api/geo")
+                "/api/mentors", "/api/mentors/**", "/api/pod/**", "/api/campaigns/**", "/api/geo",
+                "/api/captcha/**")
                 .cors(Customizer.withDefaults())// NOSONAR java:S4502 — API stateless con token Bearer: no hay cookie de sesión que un tercero pueda hacer viajar, que es lo que CSRF protege.
                 .csrf(csrf -> csrf.disable()) // NOSONAR java:S4502 — API stateless con Bearer, sin cookie de sesión
                 .headers(h -> h
@@ -96,8 +97,11 @@ public class BffSecurityConfig {
                 .authorizeHttpRequests(reg -> reg.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         // Endpoints públicos de auth: aún no hay token.
                         .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/activate",
-                                "/api/auth/refresh", "/api/auth/password-reset/**", "/api/webhooks/**")
+                                "/api/auth/activate/resend", "/api/auth/refresh", "/api/auth/password-reset/**",
+                                "/api/webhooks/**")
                         .permitAll()
+                        // Reto CAPTCHA (proof-of-work): el navegador lo pide antes de enviar un formulario público.
+                        .requestMatchers(HttpMethod.GET, "/api/captcha/challenge").permitAll()
                         // El estimado de margen/ganancia es SOLO para ADMIN (ni USER ni OPERATOR/soporte).
                         // Debe ir ANTES del permitAll general de GET del catálogo público.
                         .requestMatchers(HttpMethod.GET, "/api/catalog/products/*/margin-estimate")
@@ -142,6 +146,13 @@ public class BffSecurityConfig {
                         .requestMatchers("/api/admin/orders/**").hasAnyRole(ADMIN, "OPERATOR")
                         .requestMatchers("/api/admin/operator/**").hasAnyRole(ADMIN, "OPERATOR")
                         .requestMatchers("/api/admin/**").hasRole(ADMIN)
+                        // Envío de cotizaciones de sourcing = operación de AGENTE/soporte, NO de cliente. Vivía
+                        // bajo /api/me/** (solo "authenticated") sin comprobar rol y aceptando ?asAgent=<id>, así
+                        // que cualquier usuario podía inyectar cotizaciones falsas en la petición de otro e
+                        // IMPERSONAR a cualquier agente. Se restringe a ADMIN/OPERATOR. El cliente solo crea la
+                        // petición y SELECCIONA la cotización ganadora (esas rutas siguen siendo suyas).
+                        .requestMatchers(HttpMethod.POST, "/api/me/sourcing/requests/*/quotes")
+                        .hasAnyRole(ADMIN, "OPERATOR")
                         // /api/me is the auth-bootstrap probe — it must succeed even when
                         // unauthenticated (the controller returns null), otherwise the SPA
                         // sees a noisy 401 on every cold load before login.

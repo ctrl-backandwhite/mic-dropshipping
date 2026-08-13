@@ -94,6 +94,10 @@ class WalletLedgerInvariantsTest {
     @BeforeEach
     void buildSubject() {
         subject = useCase();
+        // Los movimientos de saldo ahora cargan la wallet con bloqueo de fila (findByUserIdForUpdate). En los
+        // tests se delega al mismo stub que findByUserId para no duplicar cada `when(...)`.
+        org.mockito.Mockito.lenient().when(walletRepository.findByUserIdForUpdate(any()))
+                .thenAnswer(inv -> walletRepository.findByUserId(inv.getArgument(0)));
     }
 
     // ---------------------------------------------------------------- no gastar lo que no hay
