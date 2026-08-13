@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.application;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.application.service.CountryTaxService;
 import com.nexaplatform.dropshipping.application.service.InvoiceService;
+import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
 import com.nexaplatform.dropshipping.application.usecase.SubscriptionPlanUseCase;
 import com.nexaplatform.dropshipping.application.usecase.impl.CustomerSubscriptionUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.SubscriptionStatus;
@@ -69,6 +70,8 @@ class SubscriptionLifecycleTest {
     CountryTaxService countryTaxService;
     @Mock
     InvoiceService invoiceService;
+    @Mock
+    SubscriptionNotificationService subscriptionNotificationService;
 
     @InjectMocks
     CustomerSubscriptionUseCaseImpl useCase;
@@ -96,17 +99,19 @@ class SubscriptionLifecycleTest {
         return u;
     }
 
-    // ---------------------------------------------------------------- mes de prueba
+    // ---------------------------------------------------------------- prueba de 15 días
 
     @Test
-    void elMesDePruebaSeConcedeUnaVezYMarcaLaCuentaParaQueNoSeRepita() {
+    void laPruebaDeQuinceDiasSeConcedeUnaVezYMarcaLaCuentaParaQueNoSeRepita() {
         plan("FREE", 0, 0);
         UserEntity u = user(false);
 
         CustomerSubscription sub = useCase.createSubscription(userId, "FREE", "MONTHLY");
 
         assertThat(sub.getStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
-        assertThat(sub.getCurrentPeriodEnd()).isAfter(Instant.now().plus(25, ChronoUnit.DAYS));
+        assertThat(sub.getCurrentPeriodEnd())
+                .isAfter(Instant.now().plus(14, ChronoUnit.DAYS))
+                .isBefore(Instant.now().plus(16, ChronoUnit.DAYS));
         assertThat(u.isFreeTrialUsed()).isTrue();
         verify(userRepository).save(u);
     }

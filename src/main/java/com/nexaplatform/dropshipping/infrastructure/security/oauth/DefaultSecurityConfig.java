@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.security.oauth;
 
+import com.nexaplatform.dropshipping.application.service.DeviceSessionService;
 import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
 import com.nexaplatform.dropshipping.infrastructure.security.jwt.UserTokenService;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,8 +24,8 @@ public class DefaultSecurityConfig {
 
     @Bean
     public GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler(UserUseCase userUseCase,
-            UserTokenService userTokenService) {
-        return new GoogleOAuth2SuccessHandler(userUseCase, userTokenService, frontBaseUrl);
+            UserTokenService userTokenService, DeviceSessionService deviceSessionService) {
+        return new GoogleOAuth2SuccessHandler(userUseCase, userTokenService, deviceSessionService, frontBaseUrl);
     }
 
     @Bean

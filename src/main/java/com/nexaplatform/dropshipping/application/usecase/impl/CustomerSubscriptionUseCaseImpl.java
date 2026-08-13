@@ -7,6 +7,7 @@ import com.nexaplatform.dropshipping.application.mapper.CustomerSubscriptionUpda
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.service.CountryTaxService;
 import com.nexaplatform.dropshipping.application.service.InvoiceService;
+import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
 import com.nexaplatform.dropshipping.application.usecase.SubscriptionPlanUseCase;
 import com.nexaplatform.dropshipping.domain.enums.SubscriptionStatus;
 import com.nexaplatform.dropshipping.domain.model.CustomerSubscription;
@@ -33,7 +34,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
@@ -57,6 +57,8 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
     private static final String MONTHLY = "MONTHLY";
     private static final String YEARLY = "YEARLY";
+    /** Duración de la prueba GRATIS: 15 días, un solo uso por cuenta. */
+    private static final int FREE_TRIAL_DAYS = 15;
 
     private final CustomerSubscriptionRepository customerSubscriptionRepository;
     private final CustomerSubscriptionUpdateMapper customerSubscriptionUpdateMapper;
@@ -67,6 +69,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     private final CurrencyRateService currencyService;
     private final CountryTaxService countryTaxService;
     private final InvoiceService invoiceService;
+    private final SubscriptionNotificationService subscriptionNotificationService;
 
     /** URL pública del escaparate, para las vueltas de Stripe. La misma que usan los correos. */
     @Value("${nexadrop.storefront.base-url:http://localhost:3003}")
@@ -190,7 +193,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         SubscriptionPlanEntity plan = getPlanEntityByCode(planCode);
         Instant now = Instant.now();
 
-        // Plan GRATIS = PRUEBA de 1 mes, un solo uso por cuenta/correo (rechaza el 2º intento).
+        // Plan GRATIS = PRUEBA de 15 días, un solo uso por cuenta/correo (rechaza el 2º intento).
         if (isFreePlan(plan)) {
             return startFreeTrial(userId, plan, now);
         }
@@ -202,11 +205,13 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
                 .status(SubscriptionStatus.ACTIVE)
                 .billingPeriod(billingPeriod == null ? MONTHLY : billingPeriod.toUpperCase()).currentPeriodStart(now)
                 .currentPeriodEnd(end).build();
-        return customerSubscriptionRepository.save(model);
+        CustomerSubscription savedPaid = customerSubscriptionRepository.save(model);
+        subscriptionNotificationService.planActivated(userId, plan.getName(), end, false);
+        return savedPaid;
     }
 
     /**
-     * Contrata el plan de PRUEBA (gratis): vence en 1 mes y solo puede usarse UNA vez por cuenta/correo. La
+     * Contrata el plan de PRUEBA (gratis): vence en 15 días y solo puede usarse UNA vez por cuenta/correo. La
      * fila queda {@code ACTIVE} con {@code currentPeriodEnd = ahora + 1 mes} (el modelo trata FREE como
      * activo, no como TRIALING — misma convención que {@link #normalizeForAdmin} y schema-v33); el
      * vencimiento lo aplica el barrido {@link #expireFreeTrials()}. Marca {@code freeTrialUsed=true} en el
@@ -216,15 +221,16 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         UserEntity user = loadUser(userId);
         if (user.isFreeTrialUsed()) {
             throw new BusinessException("FREE_TRIAL_ALREADY_USED",
-                    "Ya has utilizado tu mes de prueba gratis. Elige un plan de pago.");
+                    "Ya has utilizado tu prueba gratis de 15 días. Elige un plan de pago.");
         }
-        Instant trialEnd = now.atZone(ZoneOffset.UTC).plusMonths(1).toInstant();
+        Instant trialEnd = now.plus(FREE_TRIAL_DAYS, ChronoUnit.DAYS);
         CustomerSubscription model = CustomerSubscription.builder().userId(userId).planId(plan.getId())
                 .status(SubscriptionStatus.ACTIVE).billingPeriod(MONTHLY).currentPeriodStart(now)
                 .currentPeriodEnd(trialEnd).build();
         CustomerSubscription saved = customerSubscriptionRepository.save(model);
         user.setFreeTrialUsed(true);
         userRepository.save(user);
+        subscriptionNotificationService.planActivated(userId, plan.getName(), trialEnd, true);
         log.info("::> [BILLING] Free trial started user={} plan={} endsAt={}", userId, plan.getCode(), trialEnd);
         return saved;
     }
@@ -480,10 +486,12 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         StripeService.SubResult res = stripeService.createSubscription(customerId, priceId, defaultPm, taxRateId,
                 planCode, userId.toString(), local.getId().toString());
 
+        Instant paidEnd = res.periodEnd() != null ? Instant.ofEpochSecond(res.periodEnd()) : null;
         customerSubscriptionRepository.save(local.withStripeSubscriptionId(res.id())
                 .withStatus(mapStripeStatus(res.status()))
                 .withCurrentPeriodStart(res.periodStart() != null ? Instant.ofEpochSecond(res.periodStart()) : null)
-                .withCurrentPeriodEnd(res.periodEnd() != null ? Instant.ofEpochSecond(res.periodEnd()) : null));
+                .withCurrentPeriodEnd(paidEnd));
+        subscriptionNotificationService.planActivated(userId, plan.getName(), paidEnd, false);
         log.info("::> [BILLING] Subscribed user={} plan={} status={}", userId, planCode, res.status());
         return new SubscribeOutcome(res.id(), res.status());
     }

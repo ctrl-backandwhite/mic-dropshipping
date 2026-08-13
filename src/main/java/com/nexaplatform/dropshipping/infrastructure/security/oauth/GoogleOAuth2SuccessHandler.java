@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.security.oauth;
 
+import com.nexaplatform.dropshipping.application.service.DeviceSessionService;
 import com.nexaplatform.dropshipping.application.service.Texts;
 import com.nexaplatform.dropshipping.application.usecase.GoogleLoginOutcome;
 import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
@@ -36,11 +37,14 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
 
     private final UserUseCase userUseCase;
     private final UserTokenService userTokenService;
+    private final DeviceSessionService deviceSessionService;
     private final String frontBaseUrl;
 
-    public GoogleOAuth2SuccessHandler(UserUseCase userUseCase, UserTokenService userTokenService, String frontBaseUrl) {
+    public GoogleOAuth2SuccessHandler(UserUseCase userUseCase, UserTokenService userTokenService,
+            DeviceSessionService deviceSessionService, String frontBaseUrl) {
         this.userUseCase = userUseCase;
         this.userTokenService = userTokenService;
+        this.deviceSessionService = deviceSessionService;
         this.frontBaseUrl = frontBaseUrl == null ? "" : Texts.stripTrailingSlashes(frontBaseUrl);
     }
 
@@ -89,6 +93,9 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         UserTokenService.Tokens tokens = userTokenService.issue(user.getId(), user.getEmail(), user.getRole().name(),
                 Set.of(user.getRole().authority()));
         log.info("::> [OAUTH2 {}] Login success userId={}", provider, user.getId());
+        // Registrar la sesión/dispositivo también en el login social: sin esto, las cuentas que entran por
+        // Google/GitHub no aparecían en "Sesiones activas" del perfil (solo lo hacía el login por contraseña).
+        deviceSessionService.recordLogin(user.getId(), request, response);
         // Tokens en el fragmento (#) — no llega al servidor ni a los logs del proxy.
         response.sendRedirect(frontBaseUrl + "/auth/callback#token=" + tokens.accessToken() + "&refresh="
                 + tokens.refreshToken());
