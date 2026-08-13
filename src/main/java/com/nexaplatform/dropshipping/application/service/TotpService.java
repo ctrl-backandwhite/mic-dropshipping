@@ -149,7 +149,7 @@ public class TotpService {
     /** Verifica un OTP contra el secret ya activo (uso en login). Rechaza la reutilización (replay). */
     @Transactional
     public boolean verifyOtp(UUID userId, String otp) {
-        TotpSecretEntity rec = repo.findById(userId).orElse(null);
+        TotpSecretEntity rec = repo.findByIdForUpdate(userId).orElse(null);
         if (rec == null || !rec.isEnabled())
             return false;
         String secret = crypto.decrypt(rec.getSecretEnc());
@@ -172,7 +172,7 @@ public class TotpService {
     /** Acepta un backup code (single-use). Invalida el code al consumirse. */
     @Transactional
     public boolean consumeBackupCode(UUID userId, String code) {
-        TotpSecretEntity rec = repo.findById(userId).orElse(null);
+        TotpSecretEntity rec = repo.findByIdForUpdate(userId).orElse(null);
         if (rec == null || !rec.isEnabled() || rec.getRecoveryCodesHash() == null)
             return false;
         try {

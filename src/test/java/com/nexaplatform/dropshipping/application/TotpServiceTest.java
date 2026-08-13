@@ -85,23 +85,23 @@ class TotpServiceTest {
 
     @Test
     void verifyOtp_falseWhenNoRecordOrDisabled() {
-        when(repo.findById(userId)).thenReturn(Optional.empty());
+        when(repo.findByIdForUpdate(userId)).thenReturn(Optional.empty());
         assertThat(service.verifyOtp(userId, "123456")).isFalse();
 
-        when(repo.findById(userId)).thenReturn(Optional.of(disabledRec()));
+        when(repo.findByIdForUpdate(userId)).thenReturn(Optional.of(disabledRec()));
         assertThat(service.verifyOtp(userId, "123456")).isFalse();
     }
 
     @Test
     void verifyOtp_falseForWrongLength() {
-        when(repo.findById(userId)).thenReturn(Optional.of(enabledRec()));
+        when(repo.findByIdForUpdate(userId)).thenReturn(Optional.of(enabledRec()));
         when(crypto.decrypt("enc")).thenReturn(SECRET);
         assertThat(service.verifyOtp(userId, "123")).isFalse();
     }
 
     @Test
     void verifyOtp_trueForValidCodeAndUpdatesLastUsed() {
-        when(repo.findById(userId)).thenReturn(Optional.of(enabledRec()));
+        when(repo.findByIdForUpdate(userId)).thenReturn(Optional.of(enabledRec()));
         when(crypto.decrypt("enc")).thenReturn(SECRET);
         String valid = totp(SECRET, System.currentTimeMillis() / 1000);
 
@@ -124,7 +124,7 @@ class TotpServiceTest {
         String hash = new BCryptPasswordEncoder(10).encode(code);
         TotpSecretEntity rec = enabledRec();
         rec.setRecoveryCodesHash("[\"" + hash + "\"]");
-        when(repo.findById(userId)).thenReturn(Optional.of(rec));
+        when(repo.findByIdForUpdate(userId)).thenReturn(Optional.of(rec));
         when(mapper.readValue(anyString(), eq(List.class))).thenReturn(new java.util.ArrayList<>(List.of(hash)));
         when(mapper.writeValueAsString(any())).thenReturn("[null]");
 

@@ -37,6 +37,7 @@ public class ProductReviewUseCaseImpl implements ProductReviewUseCase {
     private final ProductRepository productRepo;
     private final ProductReviewJpaRepositoryAdapter reviewJpa;
     private final ProductReviewEntityMapper reviewEntityMapper;
+    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository userRepository;
 
     /** Lists approved reviews for a product with a rating histogram and average. */
     @Override
@@ -67,18 +68,25 @@ public class ProductReviewUseCaseImpl implements ProductReviewUseCase {
 
     @Override
     @Transactional
-    public ProductReview create(UUID productId, ProductReview review) {
+    public ProductReview create(UUID productId, ProductReview review, UUID userId) {
         ProductEntity product = productRepo.findById(productId).orElseThrow(() -> new NotFoundException("Product"));
+        // La reseña se ATA al usuario autenticado y el nombre/país los pone el SERVIDOR desde su perfil,
+        // ignorando lo que venga en el cuerpo: si no, cualquiera podía firmar como "NexaPlatform Oficial"
+        // (suplantación) y quedaban autopublicadas sin dueño.
+        var author = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User"));
+        String authorName = author.getDisplayName() != null && !author.getDisplayName().isBlank()
+                ? author.getDisplayName()
+                : (author.getFirstName() != null && !author.getFirstName().isBlank() ? author.getFirstName()
+                        : "Anónimo");
         short rating = (short) Math.clamp(review.getRating(), 1, 5);
         ProductReviewEntity entity = ProductReviewEntity.builder()
                 .product(product)
-                .authorName(review.getAuthorName() != null && !review.getAuthorName().isBlank()
-                        ? review.getAuthorName() : "Anónimo")
-                .authorCountry(review.getAuthorCountry()).rating(rating).title(review.getTitle()).body(review.getBody())
+                .user(author)
+                .authorName(authorName)
+                .authorCountry(author.getCountry()).rating(rating).title(review.getTitle()).body(review.getBody())
                 .language(review.getLanguage() != null && !review.getLanguage().isBlank()
                         ? review.getLanguage().toLowerCase() : "es")
-                // Escrita en la plataforma, no importada del proveedor. Sin compra verificada: esta ruta
-                // no asocia usuario, así que no hay ningún pedido con el que respaldar el distintivo.
+                // Escrita en la plataforma, no importada del proveedor. Sin compra verificada asociada aún.
                 .helpfulCount(0).verifiedPurchase(false).source(ReviewSource.CUSTOMER).approved(true).build();
         ProductReviewEntity saved = reviewJpa.save(entity);
 

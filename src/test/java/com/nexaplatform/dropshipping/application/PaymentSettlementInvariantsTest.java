@@ -334,7 +334,8 @@ class PaymentSettlementInvariantsTest {
 
         // El importe cargado es el TOTAL del pedido, no el subtotal: si se cobrara el subtotal, el envío
         // y el impuesto se regalarían en cada compra pagada con saldo.
-        verify(walletUseCase).charge(eq(userId), eq(9540L), eq(orderId), eq("idem-1"), anyString());
+        // La clave del cargo va acotada al pedido ("order-charge-<orderId>"), no la del cliente.
+        verify(walletUseCase).charge(eq(userId), eq(9540L), eq(orderId), eq("order-charge-" + orderId), anyString());
         assertThat(p.getAmountUsdCents()).isEqualTo(9540L);
         assertThat(p.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
         assertThat(o.getStatus()).isEqualTo(OrderStatus.PAID);

@@ -830,8 +830,12 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             throw new NotFoundException("User");
         Wallet wallet = walletUseCase.getOrCreate(payerUserId);
 
-        // El WalletUseCase.charge ya valida saldo y maneja idempotencia.
-        walletUseCase.charge(payerUserId, amountUsdCents, orderId, idempotencyKey, "Order " + order.getOrderNumber());
+        // El WalletUseCase.charge ya valida saldo y maneja idempotencia. La clave del cargo va ACOTADA AL
+        // PEDIDO ("order-charge-<orderId>"), no la del cliente: así dos peticiones concurrentes al MISMO
+        // pedido con claves idem distintas deduplican en el wallet y solo se debita UNA vez (el guard PAID
+        // solo cubre el caso secuencial).
+        String walletKey = "order-charge-" + orderId;
+        walletUseCase.charge(payerUserId, amountUsdCents, orderId, walletKey, "Order " + order.getOrderNumber());
 
         // Registramos el payment en SUCCEEDED para auditoría uniforme.
         Payment p = Payment.builder().userId(payerUserId).walletId(wallet.getId()).method(PaymentMethod.CARD) // sentinel: wallet no es un PaymentMethod del enum
@@ -874,6 +878,10 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Transactional
     public Payment initiatePartnerOrderPayment(Jwt jwt, UUID orderId, boolean wallet, PaymentMethod method,
             String idempotencyKey) {
+        // Cross-tenant: el pedido DEBE pertenecer a este partner. assertOrderOwnedBy tolera userId==null (los
+        // pedidos de partner no tienen userId), así que sin esta comprobación un partner podía pagar/forzar a
+        // PAID el pedido de OTRO partner conociendo su UUID.
+        assertOrderOwnedByPartner(jwt, orderId);
         UUID userId = resolvePartnerUserId(jwt);
         return doInitiateOrderPaymentView(orderId, userId, method, wallet, idempotencyKey);
     }

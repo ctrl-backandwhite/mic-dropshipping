@@ -30,8 +30,11 @@ import java.util.Map;
 public class WooCommerceConnector implements ShopConnector {
 
     private final ObjectMapper objectMapper;
+    // Anti-SSRF: NUNCA seguir redirecciones automáticamente. Solo se valida el host INICIAL (ShopHostGuard);
+    // un 3xx a un host interno (169.254.169.254, 10.x…) se seguiría sin re-validar y su cuerpo se reflejaría
+    // en el error → exfiltración. Una API real de WooCommerce no redirige a la red interna.
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8))
-            .followRedirects(HttpClient.Redirect.NORMAL).build();
+            .followRedirects(HttpClient.Redirect.NEVER).build();
 
     @Override
     public String platform() {

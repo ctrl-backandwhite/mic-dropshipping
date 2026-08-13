@@ -1,9 +1,8 @@
 package com.nexaplatform.dropshipping.infrastructure.security;
 
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
@@ -41,7 +40,9 @@ public class StartupSecretsValidator {
         this.environment = environment;
     }
 
-    @EventListener(ApplicationReadyEvent.class)
+    // @PostConstruct (no ApplicationReadyEvent): se ejecuta durante la inicialización del contexto, ANTES de
+    // que el servidor embebido abra el puerto. Así un secreto inseguro aborta el arranque sin servir tráfico.
+    @PostConstruct
     public void validate() {
         if (!environment.acceptsProfiles(Profiles.of("pro", "pre"))) {
             return; // Solo se exige en entornos reales.
