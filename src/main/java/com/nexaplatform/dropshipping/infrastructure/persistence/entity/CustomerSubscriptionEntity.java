@@ -61,4 +61,11 @@ public class CustomerSubscriptionEntity extends BaseEntity {
 
     @Column(name = "trial_ends_at")
     private Instant trialEndsAt;
+
+    // Bajada de plan programada: código del plan menor y la fecha (fin de periodo) en que se aplicará.
+    @Column(name = "pending_plan_code", length = 40)
+    private String pendingPlanCode;
+
+    @Column(name = "pending_plan_at")
+    private Instant pendingPlanAt;
 }

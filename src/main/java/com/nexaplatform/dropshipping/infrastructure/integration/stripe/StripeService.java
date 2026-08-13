@@ -311,14 +311,22 @@ public class StripeService {
         return toResult(Subscription.create(b.build()));
     }
 
-    /** Cambia el precio/plan de una suscripción existente con prorrateo (upgrade/downgrade). */
-    public SubResult changeSubscriptionPrice(String subscriptionId, String newPriceId, String planCode)
-            throws StripeException {
+    /**
+     * Cambia el precio/plan de una suscripción existente.
+     * <ul>
+     *   <li><b>Subida (upgrade)</b>: {@code ALWAYS_INVOICE} → Stripe factura y COBRA de inmediato el
+     *       prorrateo (diferencia por los días que quedan del periodo) contra la tarjeta por defecto.</li>
+     *   <li><b>Bajada (downgrade)</b>: {@code NONE} → no cobra ahora; el periodo actual sigue al precio
+     *       viejo (ya pagado) y el nuevo precio (menor) se aplica en la próxima renovación.</li>
+     * </ul>
+     */
+    public SubResult changeSubscriptionPrice(String subscriptionId, String newPriceId, String planCode,
+            SubscriptionUpdateParams.ProrationBehavior proration) throws StripeException {
         Subscription sub = Subscription.retrieve(subscriptionId);
         String itemId = sub.getItems().getData().get(0).getId();
         return toResult(sub.update(SubscriptionUpdateParams.builder()
                 .addItem(SubscriptionUpdateParams.Item.builder().setId(itemId).setPrice(newPriceId).build())
-                .setProrationBehavior(SubscriptionUpdateParams.ProrationBehavior.CREATE_PRORATIONS)
+                .setProrationBehavior(proration)
                 .putMetadata(PLAN_CODE, planCode).build()));
     }
 

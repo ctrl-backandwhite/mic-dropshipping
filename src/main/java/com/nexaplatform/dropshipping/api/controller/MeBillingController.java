@@ -91,7 +91,8 @@ public class MeBillingController implements MeBillingApi {
         return ResponseEntity.ok(MySubscriptionDtoOut.builder()
                 .planId(s.getPlanId() != null ? s.getPlanId().toString() : null)
                 .status(s.getStatus() != null ? s.getStatus().name() : null).billingPeriod(s.getBillingPeriod())
-                .currentPeriodEnd(s.getCurrentPeriodEnd()).cancelAt(s.getCancelAt()).build());
+                .currentPeriodEnd(s.getCurrentPeriodEnd()).cancelAt(s.getCancelAt())
+                .pendingPlanCode(s.getPendingPlanCode()).pendingPlanAt(s.getPendingPlanAt()).build());
     }
 
     @Override

@@ -131,16 +131,26 @@ public class SavedPaymentMethodsService {
 
     private void markDefault(UUID userId, List<PaymentMethodDtoOut> methods) {
         String def = defaultRepository.findById(userId).map(UserDefaultPaymentEntity::getRef)
-                .orElseGet(() -> methods.size() == 1 ? methods.get(0).getId() : null);
+                .orElseGet(() -> implicitDefault(methods));
         if (def != null) {
             methods.forEach(m -> m.setDefault(def.equals(m.getId())));
         }
     }
 
+    /**
+     * Predeterminado DE FACTO cuando el usuario no ha fijado uno a mano: la TARJETA (aunque también haya una
+     * cuenta PayPal). Solo cambia si el usuario elige otro método manualmente. Si no hay tarjeta, el primero.
+     */
+    private static String implicitDefault(List<PaymentMethodDtoOut> methods) {
+        return methods.stream().filter(m -> "CARD".equalsIgnoreCase(m.getType()))
+                .map(PaymentMethodDtoOut::getId).findFirst()
+                .orElseGet(() -> methods.isEmpty() ? null : methods.get(0).getId());
+    }
+
     private String soleMethodRef(UUID userId) {
         try {
-            List<PaymentMethodDtoOut> all = list(userId);
-            return all.size() == 1 ? all.get(0).getId() : null;
+            // Sin default explícito, el de facto para cobrar es la tarjeta (misma regla que markDefault).
+            return implicitDefault(list(userId));
         } catch (StripeException e) {
             return null;
         }

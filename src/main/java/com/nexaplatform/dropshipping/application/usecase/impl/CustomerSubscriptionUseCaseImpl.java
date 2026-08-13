@@ -26,6 +26,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserR
 import com.stripe.model.Customer;
 import com.stripe.model.PaymentMethod;
 import com.stripe.model.checkout.Session;
+import com.stripe.param.SubscriptionUpdateParams;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -491,6 +492,17 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         String priceId = stripeService.ensureRecurringPrice(planCode, billingPeriod, charge.cents(),
                 charge.currency(), plan.getName());
 
+        // CAMBIO de plan sobre una suscripción de pago YA existente (no crear una nueva):
+        //  · SUBIDA  → se cobra AHORA solo la diferencia por los días que quedan (prorrateo, ALWAYS_INVOICE).
+        //  · BAJADA  → se mantiene el plan actual con TODAS sus características hasta fin de mes y en la
+        //              renovación se cobra y aplica el plan menor (NONE + cambio pendiente que aplica el barrido).
+        CustomerSubscription existing = latestActivePaidStripeSub(userId);
+        if (existing != null) {
+            return changePlan(userId, existing, plan, billingPeriod, priceId);
+        }
+        // Sin plan de pago activo: se contrata uno nuevo. Si había una PRUEBA gratis en curso, se sustituye.
+        supersedeFreeTrial(userId);
+
         // Fila local (INCOMPLETE) para pasar su id como metadata a Stripe; se actualiza con el resultado.
         CustomerSubscription local = customerSubscriptionRepository.save(CustomerSubscription.builder().userId(userId)
                 .planId(plan.getId()).status(SubscriptionStatus.INCOMPLETE).billingPeriod(billingPeriod)
@@ -522,6 +534,113 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
                 invoiceFilename);
         log.info("::> [BILLING] Subscribed user={} plan={} status={}", userId, planCode, res.status());
         return new SubscribeOutcome(res.id(), res.status());
+    }
+
+    /** Suscripción de PAGO activa (con id de Stripe, no cancelándose) más reciente del usuario, o null. */
+    private CustomerSubscription latestActivePaidStripeSub(UUID userId) {
+        return customerSubscriptionRepository.findByUserId(userId).stream()
+                .filter(s -> s.getStripeSubscriptionId() != null && !s.getStripeSubscriptionId().isBlank())
+                .filter(s -> s.getStatus() == SubscriptionStatus.ACTIVE
+                        || s.getStatus() == SubscriptionStatus.TRIALING
+                        || s.getStatus() == SubscriptionStatus.PAST_DUE)
+                .filter(s -> s.getCancelAt() == null)
+                .max(java.util.Comparator.comparing(
+                        s -> s.getCurrentPeriodStart() != null ? s.getCurrentPeriodStart() : Instant.EPOCH))
+                .orElse(null);
+    }
+
+    /** Cancela una PRUEBA gratis local en curso (sin Stripe) al contratar un plan de pago, para no duplicar. */
+    private void supersedeFreeTrial(UUID userId) {
+        customerSubscriptionRepository.findByUserId(userId).stream()
+                .filter(s -> (s.getStripeSubscriptionId() == null || s.getStripeSubscriptionId().isBlank())
+                        && s.getStatus() == SubscriptionStatus.ACTIVE
+                        && "FREE".equalsIgnoreCase(s.getPlanCode()))
+                .forEach(s -> customerSubscriptionRepository.save(
+                        s.withStatus(SubscriptionStatus.CANCELED).withCanceledAt(Instant.now())));
+    }
+
+    /**
+     * Cambia de plan sobre una suscripción de pago EXISTENTE. Subida → cobra ahora el prorrateo (diferencia
+     * por los días restantes). Bajada → se aplica en la próxima renovación manteniendo el plan actual hasta
+     * entonces (cambio pendiente que aplica {@link #applyPendingDowngrades()}).
+     */
+    private SubscribeOutcome changePlan(UUID userId, CustomerSubscription existing, SubscriptionPlanEntity newPlan,
+            String newPeriod, String newPriceId) throws StripeException {
+        SubscriptionPlanEntity currentPlan = getPlanEntityByCode(existing.getPlanCode());
+        int curTier = currentPlan != null ? currentPlan.getPriceMonthlyCents() : 0;
+        int newTier = newPlan.getPriceMonthlyCents();
+        boolean samePlan = currentPlan != null && currentPlan.getId().equals(newPlan.getId())
+                && newPeriod.equalsIgnoreCase(existing.getBillingPeriod());
+        if (samePlan) {
+            return new SubscribeOutcome(existing.getStripeSubscriptionId(), "active");
+        }
+        boolean upgrade = newTier > curTier
+                || (newTier == curTier && YEARLY.equalsIgnoreCase(newPeriod)
+                        && !YEARLY.equalsIgnoreCase(existing.getBillingPeriod()));
+        String subId = existing.getStripeSubscriptionId();
+
+        if (upgrade) {
+            // Cobra AHORA la diferencia prorrateada por los días que quedan del periodo.
+            StripeService.SubResult res = stripeService.changeSubscriptionPrice(subId, newPriceId, newPlan.getCode(),
+                    SubscriptionUpdateParams.ProrationBehavior.ALWAYS_INVOICE);
+            Instant end = res.periodEnd() != null ? Instant.ofEpochSecond(res.periodEnd())
+                    : existing.getCurrentPeriodEnd();
+            customerSubscriptionRepository.save(existing.withPlanId(newPlan.getId())
+                    .withBillingPeriod(newPeriod.toUpperCase()).withStatus(mapStripeStatus(res.status()))
+                    .withCurrentPeriodStart(res.periodStart() != null ? Instant.ofEpochSecond(res.periodStart())
+                            : existing.getCurrentPeriodStart())
+                    .withCurrentPeriodEnd(end).withPendingPlanCode(null).withPendingPlanAt(null));
+            attachInvoiceAndNotify(userId, existing.getStripeCustomerId(), newPlan.getCode(), end);
+            log.info("::> [BILLING] Plan UPGRADE user={} -> {} (prorrateo cobrado)", userId, newPlan.getCode());
+            return new SubscribeOutcome(subId, "active");
+        }
+
+        // BAJADA: el precio nuevo (menor) se aplicará en la renovación; el periodo actual sigue al plan actual.
+        stripeService.changeSubscriptionPrice(subId, newPriceId, newPlan.getCode(),
+                SubscriptionUpdateParams.ProrationBehavior.NONE);
+        Instant at = existing.getCurrentPeriodEnd();
+        customerSubscriptionRepository.save(existing.withPendingPlanCode(newPlan.getCode()).withPendingPlanAt(at));
+        log.info("::> [BILLING] Plan DOWNGRADE programado user={} -> {} el {}", userId, newPlan.getCode(), at);
+        return new SubscribeOutcome(subId, "scheduled");
+    }
+
+    /** Renderiza la última factura del usuario (idioma de la cuenta) y encola el correo de plan con ella. */
+    private void attachInvoiceAndNotify(UUID userId, String customerId, String planCode, Instant periodEnd) {
+        byte[] pdf = null;
+        String filename = null;
+        try {
+            String lang = loadUser(userId).getLanguage();
+            List<StripeService.InvoiceInfo> invs = stripeService.listInvoices(customerId, 1);
+            if (!invs.isEmpty() && invs.get(0).number() != null) {
+                filename = "factura-" + invs.get(0).number() + ".pdf";
+                pdf = renderInvoicePdf(userId, invs.get(0).number(), lang);
+            }
+        } catch (Exception e) {
+            log.warn("::> [BILLING] no se pudo adjuntar la factura del cambio de plan user={}: {}", userId,
+                    e.getMessage());
+        }
+        subscriptionNotificationService.planActivated(userId, planCode, periodEnd, false, pdf, filename);
+    }
+
+    /**
+     * Aplica las BAJADAS de plan programadas cuya fecha (fin de periodo) ya llegó: pone el plan menor como
+     * plan efectivo (Stripe ya cambió el precio en la renovación). Cada hora.
+     */
+    @Scheduled(fixedDelay = 3_600_000L)
+    @Transactional
+    public void applyPendingDowngrades() {
+        Instant now = Instant.now();
+        for (CustomerSubscription sub : customerSubscriptionRepository.findAll()) {
+            if (sub.getPendingPlanCode() == null || sub.getPendingPlanAt() == null
+                    || sub.getPendingPlanAt().isAfter(now)) {
+                continue;
+            }
+            planRepository.findByCode(sub.getPendingPlanCode()).ifPresent(plan -> {
+                customerSubscriptionRepository.save(sub.withPlanId(plan.getId())
+                        .withBillingPeriod(sub.getBillingPeriod()).withPendingPlanCode(null).withPendingPlanAt(null));
+                log.info("::> [BILLING] Bajada de plan aplicada subId={} -> {}", sub.getId(), plan.getCode());
+            });
+        }
     }
 
     /** Moneda e importe (en la subunidad de esa moneda) con los que se cobra el plan en Stripe. */
