@@ -635,6 +635,11 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
                     || sub.getPendingPlanAt().isAfter(now)) {
                 continue;
             }
+            // Defensa: si la suscripción se está cancelando o ya está cancelada, la bajada no aplica.
+            if (sub.getCancelAt() != null || sub.getStatus() == SubscriptionStatus.CANCELED) {
+                customerSubscriptionRepository.save(sub.withPendingPlanCode(null).withPendingPlanAt(null));
+                continue;
+            }
             planRepository.findByCode(sub.getPendingPlanCode()).ifPresent(plan -> {
                 customerSubscriptionRepository.save(sub.withPlanId(plan.getId())
                         .withBillingPeriod(sub.getBillingPeriod()).withPendingPlanCode(null).withPendingPlanAt(null));
@@ -703,13 +708,17 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         if (sub == null) {
             throw new NotFoundException("No tienes una suscripción activa");
         }
+        // La cancelación PREVALECE sobre una bajada de plan programada: si se cancela toda la suscripción,
+        // ya no hay plan al que bajar. Se limpia el cambio pendiente para no mostrar "se cancela" + "bajarás
+        // a X" a la vez.
         if (sub.getStripeSubscriptionId() != null && !sub.getStripeSubscriptionId().isBlank()) {
             StripeService.SubResult res = stripeService.cancelSubscription(sub.getStripeSubscriptionId(), true);
             customerSubscriptionRepository.save(sub.withStatus(mapStripeStatus(res.status()))
-                    .withCancelAt(res.periodEnd() != null ? Instant.ofEpochSecond(res.periodEnd()) : Instant.now()));
+                    .withCancelAt(res.periodEnd() != null ? Instant.ofEpochSecond(res.periodEnd()) : Instant.now())
+                    .withPendingPlanCode(null).withPendingPlanAt(null));
         } else {
-            customerSubscriptionRepository
-                    .save(sub.withStatus(SubscriptionStatus.CANCELED).withCanceledAt(Instant.now()));
+            customerSubscriptionRepository.save(sub.withStatus(SubscriptionStatus.CANCELED)
+                    .withCanceledAt(Instant.now()).withPendingPlanCode(null).withPendingPlanAt(null));
         }
         log.info("::> [BILLING] Subscription canceled user={}", userId);
     }
