@@ -517,6 +517,8 @@ public class UserUseCaseImpl implements UserUseCase {
     private List<User> filtered(String role, String q, String country) {
         String needle = q == null ? "" : q.trim().toLowerCase();
         return userRepository.findAll().stream()
+                // Los borrados (auto-baja o borrado del admin) están anonimizados: no deben salir en la lista.
+                .filter(u -> u.getDeletedAt() == null)
                 .filter(u -> role == null || role.isBlank() || u.getRole().name().equalsIgnoreCase(role))
                 .filter(u -> country == null || country.isBlank()
                         || (u.getCountry() != null && u.getCountry().equalsIgnoreCase(country)))
@@ -630,8 +632,18 @@ public class UserUseCaseImpl implements UserUseCase {
         if (user.getRole() == UserRole.ADMIN) {
             throw new BusinessException("No se puede eliminar una cuenta de administrador");
         }
-        userRepository.delete(id);
-        auditLogger.log("auth.admin.delete", user.getEmail(), Map.of(USERID, id));
+        // Borrado SUAVE, igual que la auto-baja (confirmAccountDeletion). Un DELETE físico fallaba con una
+        // violación de FK —"se hace referencia a un registro que no existe"— porque pedidos, facturas, el
+        // libro de la wallet, favoritos y sesiones referencian al usuario; y esos datos deben CONSERVARSE
+        // (obligación fiscal/contable, art. 17.3.b RGPD). Se anonimiza el PII, se desactiva, se borran las
+        // direcciones (PII sin obligación de conservación) y se cierran todas sus sesiones.
+        String emailOriginal = user.getEmail();
+        anonymise(user, passwordEncoder.encode(randomToken(48)));
+        userRepository.update(user);
+        userAddressJpaRepository.deleteAll(
+                userAddressJpaRepository.findByUser_IdOrderByIsDefaultDescCreatedAtDesc(id));
+        jwtRevocationService.revokeAllForClient(id.toString());
+        auditLogger.log("auth.admin.delete", emailOriginal, Map.of(USERID, id));
     }
 
     @Override

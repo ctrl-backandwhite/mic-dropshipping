@@ -347,14 +347,23 @@ class Cov10UserUseCaseImplTest {
     }
 
     @Test
-    void unaCuentaNormalSiSePuedeBorrar() {
+    void unaCuentaNormalSeBorraDeFormaSuave() {
         UUID id = UUID.randomUUID();
         when(userRepository.getById(id))
                 .thenReturn(User.builder().id(id).email("ana@x.com").role(UserRole.USER).build());
 
         useCase.deleteUser(id);
 
-        verify(userRepository).delete(id);
+        // Borrado SUAVE: NO se hace DELETE físico (rompería las FK de pedidos/facturas). Se anonimiza y
+        // desactiva vía update, y se cierran sus sesiones.
+        verify(userRepository, never()).delete(any());
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).update(captor.capture());
+        User saved = captor.getValue();
+        assertThat(saved.getDeletedAt()).isNotNull();
+        assertThat(saved.isActive()).isFalse();
+        assertThat(saved.getEmail()).endsWith("@deleted.invalid");
+        verify(jwtRevocationService).revokeAllForClient(id.toString());
     }
 
     @Test
