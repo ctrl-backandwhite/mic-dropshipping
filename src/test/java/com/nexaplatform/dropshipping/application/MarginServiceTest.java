@@ -5,8 +5,10 @@ import com.nexaplatform.dropshipping.domain.enums.MarginType;
 import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.domain.enums.PriceRuleScope;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PriceRuleEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.MoqMarginSettingEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryGroupMemberRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.MoqMarginSettingRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PriceRuleRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductGroupMemberRepository;
 import org.junit.jupiter.api.Test;
@@ -34,6 +36,8 @@ class MarginServiceTest {
     ProductGroupMemberRepository groupMemberRepository;
     @Mock
     CategoryGroupMemberRepository categoryGroupMemberRepository;
+    @Mock
+    MoqMarginSettingRepository moqRepository;
     @InjectMocks
     MarginService service;
 
@@ -109,6 +113,38 @@ class MarginServiceTest {
         // moq>1 → margen fijo 5 a la mitad = 2.5 → 10 + 2.5 = 12.5; pct = 2.5*100/10 = 25
         assertThat(r.retailUsd()).isEqualByComparingTo("12.5000");
         assertThat(r.appliedPercentage()).isEqualByComparingTo("25");
+    }
+
+    @Test
+    void apply_moqReductionDisabledKeepsFullMargin() {
+        rules(rule(PriceRuleScope.GLOBAL, null, MarginType.PERCENTAGE, "150", null, null));
+        when(moqRepository.findById((short) 1)).thenReturn(Optional.of(moqSetting(false, "50")));
+        ProductEntity product = product(UUID.randomUUID());
+        product.setMoq(2);
+        MarginService.PriceWithMargin r = service.apply(new BigDecimal("10"), product, null);
+        // Ajuste desactivado → margen completo 150% aunque moq>1 → 10 * 2.5 = 25
+        assertThat(r.retailUsd()).isEqualByComparingTo("25.0000");
+        assertThat(r.appliedPercentage()).isEqualByComparingTo("150");
+    }
+
+    @Test
+    void apply_moqReductionUsesConfiguredFactor() {
+        rules(rule(PriceRuleScope.GLOBAL, null, MarginType.PERCENTAGE, "150", null, null));
+        when(moqRepository.findById((short) 1)).thenReturn(Optional.of(moqSetting(true, "40")));
+        ProductEntity product = product(UUID.randomUUID());
+        product.setMoq(2);
+        MarginService.PriceWithMargin r = service.apply(new BigDecimal("10"), product, null);
+        // moq>1 con factor 40% → 150% * 0.4 = 60% → 10 * 1.6 = 16
+        assertThat(r.retailUsd()).isEqualByComparingTo("16.0000");
+        assertThat(r.appliedPercentage()).isEqualByComparingTo("60.000000");
+    }
+
+    private static MoqMarginSettingEntity moqSetting(boolean enabled, String percent) {
+        MoqMarginSettingEntity e = new MoqMarginSettingEntity();
+        e.setId((short) 1);
+        e.setEnabled(enabled);
+        e.setFactorPercent(new BigDecimal(percent));
+        return e;
     }
 
     @Test
