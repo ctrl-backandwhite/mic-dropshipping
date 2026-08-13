@@ -241,3 +241,5 @@ databaseChangeLog:
       file: db/changelog/schema-v115-pm-delete-code.sql
   - include:
       file: db/changelog/schema-v116-user-phone-unique.sql
+  - include:
+      file: db/changelog/schema-v117-cancel-reminder.sql

@@ -21,6 +21,7 @@ import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.application.service.BulkProductFields;
+import com.nexaplatform.dropshipping.application.service.CatalogReindexRunner;
 import com.nexaplatform.dropshipping.application.service.BulkProductRules;
 import com.nexaplatform.dropshipping.application.service.BulkProductStructure;
 import com.nexaplatform.dropshipping.application.service.ProductSeoMetadata;
@@ -173,6 +174,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private final JdbcTemplate jdbcTemplate;
     private final ProductBulkExportMapper bulkExportMapper;
     private final ImageMirrorService imageMirrorService;
+    /** Ejecutor del reindexado completo en segundo plano (evita el timeout del proxy/edge). */
+    private final CatalogReindexRunner reindexRunner;
     /** DROP-677: mapeo de categorías de 1688 → categoría interna, usado al resolver la fila de carga. */
     private final Category1688MappingRepository category1688MappingRepository;
     /** DROP-670: esquema de atributos obligatorios por categoría, validado en cada alta masiva. */
@@ -822,6 +825,22 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     }
 
     @Override
+    public ReindexStatus startReindex() {
+        // tryAcquire() marca "en curso" de forma atómica; si ya había uno, no se lanza otro.
+        if (!reindexRunner.tryAcquire()) {
+            return new ReindexStatus(true, false, reindexRunner.lastIndexed());
+        }
+        // Cruce de bean (runner distinto): así surte efecto el @Async y la petición vuelve al instante.
+        reindexRunner.runAsync();
+        return new ReindexStatus(true, true, reindexRunner.lastIndexed());
+    }
+
+    @Override
+    public ReindexStatus reindexStatus() {
+        return new ReindexStatus(reindexRunner.isRunning(), false, reindexRunner.lastIndexed());
+    }
+
+    @Override
     @Transactional
     public int backfillVariantAxes() {
         int filled = 0;
@@ -1270,14 +1289,30 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<BulkProductDtoIn> exportProducts(int from, int to) {
+    public List<BulkProductDtoIn> exportProducts(int from, int to, Instant createdFrom, Instant createdTo) {
         int safeFrom = Math.max(1, from);
         int safeTo = Math.max(safeFrom, to);
         int offset = safeFrom - 1;
         int limit = safeTo - safeFrom + 1;
-        List<ProductEntity> products = em
-                .createQuery("SELECT p FROM ProductEntity p ORDER BY p.id ASC", ProductEntity.class)
-                .setFirstResult(offset).setMaxResults(limit).getResultList();
+        // El filtro por fecha de carga se añade SOLO si viene informado: pasar un parámetro null a un
+        // "(:cf IS NULL OR ...)" hace que Postgres no pueda inferir el tipo del bind ("could not determine
+        // data type of parameter"). Construyendo el WHERE condicional se evita el bind nulo por completo.
+        StringBuilder jpql = new StringBuilder("SELECT p FROM ProductEntity p WHERE 1 = 1");
+        if (createdFrom != null) {
+            jpql.append(" AND p.ingestedAt >= :cf");
+        }
+        if (createdTo != null) {
+            jpql.append(" AND p.ingestedAt < :ct");
+        }
+        jpql.append(" ORDER BY p.id ASC");
+        TypedQuery<ProductEntity> query = em.createQuery(jpql.toString(), ProductEntity.class);
+        if (createdFrom != null) {
+            query.setParameter("cf", createdFrom);
+        }
+        if (createdTo != null) {
+            query.setParameter("ct", createdTo);
+        }
+        List<ProductEntity> products = query.setFirstResult(offset).setMaxResults(limit).getResultList();
         List<BulkProductDtoIn> out = new ArrayList<>();
         for (ProductEntity p : products) {
             List<ProductAttributeEntity> attributes = em.createQuery(
@@ -1299,16 +1334,21 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public ProductExportBatch exportBatchAfter(UUID afterId, int limit) {
+    public ProductExportBatch exportBatchAfter(UUID afterId, int limit, Instant createdFrom, Instant createdTo) {
         int safeLimit = Math.clamp(limit, 1, 1000);
         // Keyset pagination by id. A native query with an explicit uuid cast is used because Hibernate does
         // not reliably translate the JPQL "p.id > :afterId" comparison on a UUID column (it silently returns
         // no rows past a point), which truncated the stream. Native SQL uses Postgres' native uuid ordering.
+        // El rango opcional por fecha de carga (ingested_at) se pasa como texto ISO y se castea a timestamptz.
         @SuppressWarnings("unchecked")
         List<ProductEntity> products = em.createNativeQuery(
                 "SELECT * FROM product WHERE (CAST(:afterId AS uuid) IS NULL OR id > CAST(:afterId AS uuid)) "
+                        + "AND (CAST(:cf AS timestamptz) IS NULL OR ingested_at >= CAST(:cf AS timestamptz)) "
+                        + "AND (CAST(:ct AS timestamptz) IS NULL OR ingested_at < CAST(:ct AS timestamptz)) "
                         + "ORDER BY id ASC LIMIT :lim", ProductEntity.class)
                 .setParameter("afterId", afterId != null ? afterId.toString() : null)
+                .setParameter("cf", createdFrom != null ? createdFrom.toString() : null)
+                .setParameter("ct", createdTo != null ? createdTo.toString() : null)
                 .setParameter("lim", safeLimit)
                 .getResultList();
         if (products.isEmpty()) {
@@ -1364,8 +1404,23 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public long countProducts() {
-        return em.createQuery("SELECT COUNT(p) FROM ProductEntity p", Long.class).getSingleResult();
+    public long countProducts(Instant createdFrom, Instant createdTo) {
+        // Filtro condicional (ver exportProducts): evita el bind nulo sin tipo que Postgres rechaza.
+        StringBuilder jpql = new StringBuilder("SELECT COUNT(p) FROM ProductEntity p WHERE 1 = 1");
+        if (createdFrom != null) {
+            jpql.append(" AND p.ingestedAt >= :cf");
+        }
+        if (createdTo != null) {
+            jpql.append(" AND p.ingestedAt < :ct");
+        }
+        TypedQuery<Long> query = em.createQuery(jpql.toString(), Long.class);
+        if (createdFrom != null) {
+            query.setParameter("cf", createdFrom);
+        }
+        if (createdTo != null) {
+            query.setParameter("ct", createdTo);
+        }
+        return query.getSingleResult();
     }
 
     @Override

@@ -68,4 +68,8 @@ public class CustomerSubscriptionEntity extends BaseEntity {
 
     @Column(name = "pending_plan_at")
     private Instant pendingPlanAt;
+
+    // Instante del último email de recordatorio de cancelación (para no repetir en el mismo día).
+    @Column(name = "cancel_reminder_last_at")
+    private Instant cancelReminderLastAt;
 }
