@@ -79,6 +79,39 @@ class MarginServiceTest {
     }
 
     @Test
+    void apply_moqGreaterThanOneHalvesPercentageMargin() {
+        rules(rule(PriceRuleScope.GLOBAL, null, MarginType.PERCENTAGE, "150", null, null));
+        ProductEntity product = product(UUID.randomUUID());
+        product.setMoq(2);
+        MarginService.PriceWithMargin r = service.apply(new BigDecimal("10"), product, null);
+        // moq>1 → margen 150% a la mitad = 75% → 10 * 1.75 = 17.5
+        assertThat(r.retailUsd()).isEqualByComparingTo("17.5000");
+        assertThat(r.appliedPercentage()).isEqualByComparingTo("75");
+    }
+
+    @Test
+    void apply_moqOneKeepsFullMargin() {
+        rules(rule(PriceRuleScope.GLOBAL, null, MarginType.PERCENTAGE, "150", null, null));
+        ProductEntity product = product(UUID.randomUUID());
+        product.setMoq(1);
+        MarginService.PriceWithMargin r = service.apply(new BigDecimal("10"), product, null);
+        // moq=1 → margen completo 150% → 10 * 2.5 = 25
+        assertThat(r.retailUsd()).isEqualByComparingTo("25.0000");
+        assertThat(r.appliedPercentage()).isEqualByComparingTo("150");
+    }
+
+    @Test
+    void apply_moqGreaterThanOneHalvesFixedMargin() {
+        rules(rule(PriceRuleScope.GLOBAL, null, MarginType.FIXED, "5", null, null));
+        ProductEntity product = product(UUID.randomUUID());
+        product.setMoq(2);
+        MarginService.PriceWithMargin r = service.apply(new BigDecimal("10"), product, null);
+        // moq>1 → margen fijo 5 a la mitad = 2.5 → 10 + 2.5 = 12.5; pct = 2.5*100/10 = 25
+        assertThat(r.retailUsd()).isEqualByComparingTo("12.5000");
+        assertThat(r.appliedPercentage()).isEqualByComparingTo("25");
+    }
+
+    @Test
     void resolve_picksMoreSpecificProductScopeOverGlobal() {
         UUID productId = UUID.randomUUID();
         rules(rule(PriceRuleScope.GLOBAL, null, MarginType.PERCENTAGE, "100", null, null),

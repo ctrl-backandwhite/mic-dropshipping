@@ -39,6 +39,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class MarginService {
 
     private static final BigDecimal HUNDRED = new BigDecimal("100");
+    private static final BigDecimal TWO = new BigDecimal("2");
     private static final Duration CACHE_TTL = Duration.ofMinutes(5);
 
     /** Half-bounded ranges are less specific than fully bounded ones; "any cost" is the least specific. */
@@ -93,15 +94,22 @@ public class MarginService {
             return new PriceWithMargin(costUsd, costUsd, null, BigDecimal.ZERO);
         }
         PriceRuleEntity r = rule.get();
+        // Regla MOQ (13-ago-2026): si el producto exige comprar MÁS de una unidad (moq>1),
+        // el margen de ganancia se reduce al 50% del margen actual (mitad del markup).
+        boolean halfMargin = product != null && product.getMoq() > 1;
+        BigDecimal marginValue = r.getMarginValue();
+        BigDecimal effectiveValue = halfMargin
+                ? marginValue.divide(TWO, 6, RoundingMode.HALF_UP)
+                : marginValue;
         BigDecimal retail = switch (r.getMarginType()) {
             case PERCENTAGE ->
-                costUsd.multiply(BigDecimal.ONE.add(r.getMarginValue().divide(HUNDRED, 6, RoundingMode.HALF_UP)));
-            case FIXED -> costUsd.add(r.getMarginValue());
+                costUsd.multiply(BigDecimal.ONE.add(effectiveValue.divide(HUNDRED, 6, RoundingMode.HALF_UP)));
+            case FIXED -> costUsd.add(effectiveValue);
         };
         retail = retail.setScale(4, RoundingMode.HALF_UP);
         BigDecimal appliedPct = r.getMarginType() == MarginType.PERCENTAGE
-                ? r.getMarginValue()
-                : r.getMarginValue().multiply(HUNDRED).divide(costUsd, 2, RoundingMode.HALF_UP);
+                ? effectiveValue
+                : effectiveValue.multiply(HUNDRED).divide(costUsd, 2, RoundingMode.HALF_UP);
         return new PriceWithMargin(costUsd, retail, r, appliedPct);
     }
 
