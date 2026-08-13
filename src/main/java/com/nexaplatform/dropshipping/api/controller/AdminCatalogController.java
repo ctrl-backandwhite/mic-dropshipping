@@ -19,7 +19,6 @@ import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.Category1688MappingDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CategoryAttributeSchemaDtoOut;
-import com.nexaplatform.dropshipping.api.dto.out.ReindexResultDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
@@ -109,8 +108,18 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
-    public ResponseEntity<ReindexResultDtoOut> reindex() {
-        return ResponseEntity.ok(new ReindexResultDtoOut(catalogUseCase.reindexAllProducts()));
+    public ResponseEntity<Map<String, Object>> reindex() {
+        // Reindexado en SEGUNDO PLANO: responde al instante (con miles de productos, hacerlo síncrono
+        // superaba el timeout del proxy/edge y el admin veía "No se pudo reindexar").
+        CatalogUseCase.ReindexStatus s = catalogUseCase.startReindex();
+        return ResponseEntity.accepted().body(Map.of(
+                "started", s.started(), "running", s.running(), "indexed", s.lastIndexed()));
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> reindexStatus() {
+        CatalogUseCase.ReindexStatus s = catalogUseCase.reindexStatus();
+        return ResponseEntity.ok(Map.of("running", s.running(), "indexed", s.lastIndexed()));
     }
 
     @Override

@@ -72,6 +72,19 @@ public interface CatalogUseCase {
     /** Reindexes every product into OpenSearch; returns the number indexed. */
     int reindexAllProducts();
 
+    /** Estado de un reindexado: si hay uno en curso, si esta llamada acaba de lanzarlo y el último recuento. */
+    record ReindexStatus(boolean running, boolean started, int lastIndexed) {}
+
+    /**
+     * Lanza el reindexado completo en SEGUNDO PLANO y responde al instante (no bloquea la petición HTTP,
+     * que con miles de productos moriría por timeout del proxy/edge). Si ya había uno en curso no arranca
+     * otro ({@code started=false}).
+     */
+    ReindexStatus startReindex();
+
+    /** Estado actual del reindexado en background (para que el panel muestre "en curso"/"terminado"). */
+    ReindexStatus reindexStatus();
+
     /** DROP-679: rellena el SEO (meta_title/meta_description) faltante de productos ya activos. */
     int backfillMissingSeo();
 

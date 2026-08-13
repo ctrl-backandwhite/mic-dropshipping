@@ -16,7 +16,6 @@ import com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.ReorderProductImagesDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut;
-import com.nexaplatform.dropshipping.api.dto.out.ReindexResultDtoOut;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -83,9 +82,14 @@ public interface AdminCatalogApi {
 
     /* ============================ Reindex ============================ */
 
-    @Operation(summary = "Reindex the whole catalog into OpenSearch")
+    @Operation(summary = "Kick off a full catalog reindex in the BACKGROUND (returns 202 immediately). "
+            + "Long reindexes of large catalogs would otherwise die on the proxy/edge timeout.")
     @PostMapping("/reindex")
-    ResponseEntity<ReindexResultDtoOut> reindex();
+    ResponseEntity<Map<String, Object>> reindex();
+
+    @Operation(summary = "Status of the background reindex ({running, indexed}) so the panel can poll it")
+    @GetMapping("/reindex/status")
+    ResponseEntity<Map<String, Object>> reindexStatus();
 
     /* ============================ Variants ============================ */
 

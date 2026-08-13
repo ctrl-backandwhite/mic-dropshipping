@@ -21,6 +21,7 @@ import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.application.service.BulkProductFields;
+import com.nexaplatform.dropshipping.application.service.CatalogReindexRunner;
 import com.nexaplatform.dropshipping.application.service.BulkProductRules;
 import com.nexaplatform.dropshipping.application.service.BulkProductStructure;
 import com.nexaplatform.dropshipping.application.service.ProductSeoMetadata;
@@ -173,6 +174,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private final JdbcTemplate jdbcTemplate;
     private final ProductBulkExportMapper bulkExportMapper;
     private final ImageMirrorService imageMirrorService;
+    /** Ejecutor del reindexado completo en segundo plano (evita el timeout del proxy/edge). */
+    private final CatalogReindexRunner reindexRunner;
     /** DROP-677: mapeo de categorías de 1688 → categoría interna, usado al resolver la fila de carga. */
     private final Category1688MappingRepository category1688MappingRepository;
     /** DROP-670: esquema de atributos obligatorios por categoría, validado en cada alta masiva. */
@@ -819,6 +822,22 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // "reindexar" deje todo el catálogo visible en el escaparate, no solo actualice el índice.
         imageMirrorService.mirrorAllPendingAsync();
         return n;
+    }
+
+    @Override
+    public ReindexStatus startReindex() {
+        // tryAcquire() marca "en curso" de forma atómica; si ya había uno, no se lanza otro.
+        if (!reindexRunner.tryAcquire()) {
+            return new ReindexStatus(true, false, reindexRunner.lastIndexed());
+        }
+        // Cruce de bean (runner distinto): así surte efecto el @Async y la petición vuelve al instante.
+        reindexRunner.runAsync();
+        return new ReindexStatus(true, true, reindexRunner.lastIndexed());
+    }
+
+    @Override
+    public ReindexStatus reindexStatus() {
+        return new ReindexStatus(reindexRunner.isRunning(), false, reindexRunner.lastIndexed());
     }
 
     @Override
