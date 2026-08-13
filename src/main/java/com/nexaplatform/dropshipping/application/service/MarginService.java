@@ -6,6 +6,8 @@ import com.nexaplatform.dropshipping.domain.enums.PriceRuleScope;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PriceRuleEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.MoqMarginSettingEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.MoqMarginSettingRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PriceRuleRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryGroupMemberRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductGroupMemberRepository;
@@ -74,8 +76,13 @@ public class MarginService {
     private final PriceRuleRepository repository;
     private final ProductGroupMemberRepository groupMemberRepository;
     private final CategoryGroupMemberRepository categoryGroupMemberRepository;
+    private final MoqMarginSettingRepository moqRepository;
     private final List<PriceRuleEntity> cache = new CopyOnWriteArrayList<>();
     private volatile Instant cacheStamp = Instant.EPOCH;
+
+    /** Ajuste MOQ cacheado (se refresca con el mismo ciclo que las reglas). Por defecto: activo al 50%. */
+    private volatile boolean moqEnabled = true;
+    private volatile BigDecimal moqFactorPercent = new BigDecimal("50");
 
     @PostConstruct
     public void warm() {
@@ -93,15 +100,22 @@ public class MarginService {
             return new PriceWithMargin(costUsd, costUsd, null, BigDecimal.ZERO);
         }
         PriceRuleEntity r = rule.get();
+        // Regla MOQ (13-ago-2026): si el producto exige comprar MÁS de una unidad (moq>1) y la regla está
+        // activa, el margen que le corresponda se reduce a `moqFactorPercent`% (por defecto 50% = la mitad).
+        boolean reduceForMoq = moqEnabled && product != null && product.getMoq() > 1;
+        BigDecimal marginValue = r.getMarginValue();
+        BigDecimal effectiveValue = reduceForMoq
+                ? marginValue.multiply(moqFactorPercent).divide(HUNDRED, 6, RoundingMode.HALF_UP)
+                : marginValue;
         BigDecimal retail = switch (r.getMarginType()) {
             case PERCENTAGE ->
-                costUsd.multiply(BigDecimal.ONE.add(r.getMarginValue().divide(HUNDRED, 6, RoundingMode.HALF_UP)));
-            case FIXED -> costUsd.add(r.getMarginValue());
+                costUsd.multiply(BigDecimal.ONE.add(effectiveValue.divide(HUNDRED, 6, RoundingMode.HALF_UP)));
+            case FIXED -> costUsd.add(effectiveValue);
         };
         retail = retail.setScale(4, RoundingMode.HALF_UP);
         BigDecimal appliedPct = r.getMarginType() == MarginType.PERCENTAGE
-                ? r.getMarginValue()
-                : r.getMarginValue().multiply(HUNDRED).divide(costUsd, 2, RoundingMode.HALF_UP);
+                ? effectiveValue
+                : effectiveValue.multiply(HUNDRED).divide(costUsd, 2, RoundingMode.HALF_UP);
         return new PriceWithMargin(costUsd, retail, r, appliedPct);
     }
 
@@ -237,7 +251,40 @@ public class MarginService {
     private synchronized void refresh() {
         cache.clear();
         cache.addAll(repository.findByActiveTrueOrderByPositionAsc());
+        moqRepository.findById((short) 1).ifPresent(s -> {
+            moqEnabled = s.isEnabled();
+            moqFactorPercent = s.getFactorPercent();
+        });
         cacheStamp = Instant.now();
+    }
+
+    /* ============ Ajuste MOQ (margen a la mitad para productos con MOQ > 1) ============ */
+
+    /** Vista del ajuste MOQ: si está activo y a qué % se reduce el margen que corresponda. */
+    public record MoqMarginView(boolean enabled, BigDecimal factorPercent) {}
+
+    public MoqMarginView getMoqMargin() {
+        ensureFresh();
+        return new MoqMarginView(moqEnabled, moqFactorPercent);
+    }
+
+    /** Actualiza el ajuste MOQ (fila única id=1) y refresca la caché para que aplique al instante. */
+    @Transactional
+    public MoqMarginView updateMoqMargin(boolean enabled, BigDecimal factorPercent) {
+        if (factorPercent == null || factorPercent.signum() < 0 || factorPercent.compareTo(HUNDRED) > 0) {
+            throw new IllegalArgumentException("El porcentaje del ajuste MOQ debe estar entre 0 y 100.");
+        }
+        MoqMarginSettingEntity e = moqRepository.findById((short) 1).orElseGet(() -> {
+            MoqMarginSettingEntity fresh = new MoqMarginSettingEntity();
+            fresh.setId((short) 1);
+            return fresh;
+        });
+        e.setEnabled(enabled);
+        e.setFactorPercent(factorPercent);
+        e.setUpdatedAt(Instant.now());
+        moqRepository.save(e);
+        invalidateCache();
+        return new MoqMarginView(enabled, factorPercent);
     }
 
     private void ensureFresh() {
