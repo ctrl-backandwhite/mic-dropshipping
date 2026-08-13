@@ -69,6 +69,8 @@ class Cov05AuthUseCaseImplTest {
     DeviceSessionService deviceSessionService;
     @Mock
     UserTokenService userTokenService;
+    @Mock
+    com.nexaplatform.dropshipping.application.service.TotpService totpService;
 
     @InjectMocks
     AuthUseCaseImpl useCase;
