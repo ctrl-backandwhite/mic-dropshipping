@@ -231,3 +231,5 @@ databaseChangeLog:
       file: db/changelog/schema-v110-saved-payment-methods.sql
   - include:
       file: db/changelog/schema-v111-plan-eur-usd-anchor.sql
+  - include:
+      file: db/changelog/schema-v112-email-attachment.sql

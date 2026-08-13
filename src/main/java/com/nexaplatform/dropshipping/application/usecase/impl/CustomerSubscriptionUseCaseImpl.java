@@ -9,6 +9,8 @@ import com.nexaplatform.dropshipping.application.service.CountryTaxService;
 import com.nexaplatform.dropshipping.application.service.InvoiceService;
 import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
 import com.nexaplatform.dropshipping.application.usecase.SubscriptionPlanUseCase;
+import com.nexaplatform.dropshipping.domain.enums.InvoiceLabel;
+import com.nexaplatform.dropshipping.domain.enums.SubscriptionPlanLabel;
 import com.nexaplatform.dropshipping.domain.enums.SubscriptionStatus;
 import com.nexaplatform.dropshipping.domain.model.CustomerSubscription;
 import com.nexaplatform.dropshipping.domain.model.SubscribeResult;
@@ -206,7 +208,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
                 .billingPeriod(billingPeriod == null ? MONTHLY : billingPeriod.toUpperCase()).currentPeriodStart(now)
                 .currentPeriodEnd(end).build();
         CustomerSubscription savedPaid = customerSubscriptionRepository.save(model);
-        subscriptionNotificationService.planActivated(userId, plan.getName(), end, false);
+        subscriptionNotificationService.planActivated(userId, plan.getCode(), end, false);
         return savedPaid;
     }
 
@@ -230,7 +232,7 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         CustomerSubscription saved = customerSubscriptionRepository.save(model);
         user.setFreeTrialUsed(true);
         userRepository.save(user);
-        subscriptionNotificationService.planActivated(userId, plan.getName(), trialEnd, true);
+        subscriptionNotificationService.planActivated(userId, plan.getCode(), trialEnd, true);
         log.info("::> [BILLING] Free trial started user={} plan={} endsAt={}", userId, plan.getCode(), trialEnd);
         return saved;
     }
@@ -493,7 +495,22 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
                 .withStatus(mapStripeStatus(res.status()))
                 .withCurrentPeriodStart(res.periodStart() != null ? Instant.ofEpochSecond(res.periodStart()) : null)
                 .withCurrentPeriodEnd(paidEnd));
-        subscriptionNotificationService.planActivated(userId, plan.getName(), paidEnd, false);
+        // Adjunta la FACTURA (PDF, en el idioma del usuario) al correo de confirmación. Best-effort: si la
+        // factura aún no está lista (p. ej. 3DS pendiente) o falla el render, se envía el correo sin adjunto.
+        byte[] invoicePdf = null;
+        String invoiceFilename = null;
+        try {
+            String lang = loadUser(userId).getLanguage();
+            List<StripeService.InvoiceInfo> invs = stripeService.listInvoices(customerId, 1);
+            if (!invs.isEmpty() && invs.get(0).number() != null) {
+                invoiceFilename = "factura-" + invs.get(0).number() + ".pdf";
+                invoicePdf = renderInvoicePdf(userId, invs.get(0).number(), lang);
+            }
+        } catch (Exception e) {
+            log.warn("::> [BILLING] no se pudo generar la factura para adjuntar user={}: {}", userId, e.getMessage());
+        }
+        subscriptionNotificationService.planActivated(userId, plan.getCode(), paidEnd, false, invoicePdf,
+                invoiceFilename);
         log.info("::> [BILLING] Subscribed user={} plan={} status={}", userId, planCode, res.status());
         return new SubscribeOutcome(res.id(), res.status());
     }
@@ -599,11 +616,37 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
                 .findFirst()
                 .orElseThrow(() -> new NotFoundException("Invoice"));
         boolean paid = "paid".equalsIgnoreCase(inv.status());
+        String line = localizedPlanLine(userId, inv, locale);
         InvoiceService.PlanInvoiceData data = new InvoiceService.PlanInvoiceData(inv.number(), inv.currency(),
-                inv.subtotal(), inv.tax(), inv.total() != null ? inv.total() : 0L, inv.lineDescription(),
+                inv.subtotal(), inv.tax(), inv.total() != null ? inv.total() : 0L, line,
                 inv.periodStart(), inv.periodEnd(), inv.created(), inv.customerName(), inv.customerEmail(), paid,
                 inv.hostedUrl());
         return invoiceService.renderPlanInvoicePdf(data, locale);
+    }
+
+    /**
+     * Concepto de la factura del plan EN EL IDIOMA del usuario (Stripe lo genera en inglés: "Starter —
+     * MONTHLY (at €50.00 / month)"). Resuelve el plan+periodo de la suscripción del usuario (la que casa por
+     * inicio de periodo con la factura, o la más reciente) → "Inicial — Mensual". Si no se puede resolver,
+     * cae al texto de Stripe para no dejar la línea vacía.
+     */
+    private String localizedPlanLine(UUID userId, StripeService.InvoiceInfo inv, String locale) {
+        String lang = InvoiceLabel.lang(locale);
+        List<CustomerSubscription> subs = customerSubscriptionRepository.findByUserId(userId);
+        CustomerSubscription match = subs.stream()
+                .filter(s -> s.getCurrentPeriodStart() != null && inv.periodStart() != null
+                        && Math.abs(s.getCurrentPeriodStart().getEpochSecond() - inv.periodStart()) < 172800)
+                .findFirst()
+                .orElse(subs.stream()
+                        .max(java.util.Comparator.comparing(
+                                s -> s.getCurrentPeriodStart() != null ? s.getCurrentPeriodStart() : Instant.EPOCH))
+                        .orElse(null));
+        if (match == null || match.getPlanCode() == null) {
+            return inv.lineDescription();
+        }
+        String name = SubscriptionPlanLabel.planName(match.getPlanCode(), lang);
+        String period = SubscriptionPlanLabel.period(match.getBillingPeriod(), lang);
+        return period.isBlank() ? name : name + " — " + period;
     }
 
     @Override

@@ -55,6 +55,14 @@ public class OutboundEmailEntity {
     @Column(name = "inline_images", columnDefinition = "TEXT")
     private String inlineImages;
 
+    // Adjunto opcional (PDF de la factura del plan). Los bytes viajan con el correo hasta que el envío
+    // diferido los adjunta como fichero.
+    @Column(name = "attachment_bytes")
+    private byte[] attachmentBytes;
+
+    @Column(name = "attachment_filename", length = 200)
+    private String attachmentFilename;
+
     @Column(nullable = false, length = 20)
     private String status;
 
