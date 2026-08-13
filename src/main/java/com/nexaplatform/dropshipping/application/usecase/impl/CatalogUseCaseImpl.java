@@ -431,8 +431,17 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // (:needle = '' OR ...). searchAdmin también sirve como ruta del filtro `verified` (con o sin texto/categoría).
         String needle = (query == null || query.isBlank()) ? "" : query.trim().toLowerCase();
         if (!needle.isEmpty() || verified != null) {
-            return productJpaRepository.searchAdmin(st, categoryId, needle, verified, pageable)
-                    .map(p -> productMapper.toSummary(p, language));
+            // El fuzzy se acota al idioma que está viendo el admin (contra los 8 a la vez, "botas" casaba
+            // con el "botao" portugués). Las descripciones largas solo se rastrean si el match por
+            // título/atributo/variante no ha encontrado NADA — así el ruido no tapa lo relevante, pero el
+            // admin sigue pudiendo localizar un producto por una frase que solo está en su descripción.
+            String lang = (language == null || language.isBlank()) ? "es" : language.toLowerCase();
+            Page<ProductEntity> found = productJpaRepository.searchAdmin(st, categoryId, needle, verified, lang,
+                    false, pageable);
+            if (!needle.isEmpty() && found.getTotalElements() == 0) {
+                found = productJpaRepository.searchAdmin(st, categoryId, needle, verified, lang, true, pageable);
+            }
+            return found.map(p -> productMapper.toSummary(p, language));
         }
         if (categoryId == null) {
             return pageProducts(st, pageable, language);

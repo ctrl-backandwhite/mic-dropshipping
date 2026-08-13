@@ -105,6 +105,19 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
      * más golpeadas (status+category+trend, status+supplier, status+ship_from).
      *
      * <p>El sort no se expresa aquí porque Spring lo añade desde el {@code Pageable}.
+     *
+     * <p><b>Precisión del texto libre</b> (buscar "botas" devolvía vestidos y blazers):
+     * <ul>
+     *   <li>{@code lang} — el fuzzy ({@code nx_wmatch}) SOLO se aplica al título del idioma activo. Al
+     *       evaluarlo contra los 8 idiomas a la vez, "botas" (es) casaba con "botao" (pt) con similitud
+     *       0.50 ≥ 0.45. El LIKE literal sí sigue cruzando idiomas: una subcadena exacta es intencional.</li>
+     *   <li>{@code wide} — las descripciones solo se miran si se pide. Una falda cuya descripción dice
+     *       "combina con botas" no es un resultado de "botas"; el servicio reintenta con {@code wide=true}
+     *       únicamente cuando el match fuerte (título/slug/atributo/variante) no devuelve nada.</li>
+     *   <li>{@code ranked} — con texto y orden "best_match", los productos que llevan el término EN EL
+     *       TÍTULO van primero y el resto (atributo, variante, descripción) después. Con {@code false}
+     *       todos empatan a 0 y manda el {@code Sort} del {@code Pageable} (precio, novedad…).</li>
+     * </ul>
      */
     // DROP-556: CAST(:needle AS string) y CAST(:shipFrom AS string) son
     // necesarios — Hibernate JPA, al hacer el binding de un parámetro String null
@@ -131,10 +144,9 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
                    OR nx_wmatch(CAST(:needle AS string), p.titleZh) = TRUE
                    OR EXISTS (SELECT 1 FROM ProductTranslationEntity t
                               WHERE t.product = p
-                                AND (nx_norm(t.title)            LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')
-                                     OR nx_norm(t.shortDescription) LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')
-                                     OR nx_norm(t.description)       LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')
-                                     OR nx_wmatch(CAST(:needle AS string), t.title) = TRUE))
+                                AND (nx_norm(t.title) LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')
+                                     OR (t.language = CAST(:lang AS string)
+                                         AND nx_wmatch(CAST(:needle AS string), t.title) = TRUE)))
                    OR EXISTS (SELECT 1 FROM ProductAttributeEntity a
                               WHERE a.product = p
                                 AND nx_norm(a.attrValue) LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%'))
@@ -144,7 +156,18 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
                                      OR nx_norm(vv.value) LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')))
                    OR EXISTS (SELECT 1 FROM VariantValueTranslationEntity vt
                               WHERE vt.variantValue.option.product = p
-                                AND nx_norm(vt.value) LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')))
+                                AND nx_norm(vt.value) LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%'))
+                   OR (:wide = TRUE
+                       AND EXISTS (SELECT 1 FROM ProductTranslationEntity t2
+                                   WHERE t2.product = p
+                                     AND (nx_norm(t2.shortDescription) LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')
+                                          OR nx_norm(t2.description)   LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')))))
+            ORDER BY CASE WHEN :ranked = FALSE THEN 0
+                          WHEN nx_norm(p.titleZh) LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%') THEN 0
+                          WHEN EXISTS (SELECT 1 FROM ProductTranslationEntity tr
+                                       WHERE tr.product = p
+                                         AND nx_norm(tr.title) LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')) THEN 0
+                          ELSE 1 END ASC
             """)
     // Un parámetro por filtro es una exigencia de Spring Data: cada :nombre de la consulta se enlaza con un
     // argumento del método. Agruparlos en un record obligaría a reescribir la consulta con expresiones SpEL
@@ -155,7 +178,42 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             @Param("minPrice") BigDecimal minPrice, @Param("maxPrice") BigDecimal maxPrice,
             @Param("shipFrom") String shipFrom, @Param("freeShipping") Boolean freeShipping,
             @Param("selfPickup") Boolean selfPickup, @Param("hasVideo") Boolean hasVideo,
-            @Param("minRating") BigDecimal minRating, @Param("minInv") Integer minInv, Pageable pageable);
+            @Param("minRating") BigDecimal minRating, @Param("minInv") Integer minInv,
+            @Param("lang") String lang, @Param("wide") boolean wide, @Param("ranked") boolean ranked,
+            Pageable pageable);
+
+    /**
+     * Productos del escaparate restringidos a un conjunto de identificadores — el camino que se usa cuando
+     * el texto libre lo ha resuelto OpenSearch.
+     *
+     * <p>El reparto de responsabilidades es deliberado: el buscador decide QUÉ casa y en qué orden de
+     * relevancia (que es lo que sabe hacer bien en 8 idiomas), y esta consulta aplica lo que solo la base
+     * de datos sabe — visibilidad real (publicado y con imagen espejada) y el resto de filtros. Así el
+     * índice no necesita conocer reglas de negocio ni reindexarse cuando cambia un margen.
+     *
+     * <p>Sin paginación a propósito: el conjunto ya viene acotado por el buscador y quien llama ordena por
+     * relevancia y pagina en memoria, porque ese orden no existe en SQL.
+     */
+    @Query("""
+            SELECT p FROM ProductEntity p
+            WHERE p.status = :status
+              AND p.id IN :ids
+              AND EXISTS (SELECT 1 FROM ProductImageEntity i WHERE i.product = p AND i.cdnUrl IS NOT NULL)
+              AND (:categoryId IS NULL OR p.category.id = :categoryId)
+              AND (:supplierId IS NULL OR p.supplier.id = :supplierId)
+              AND (CAST(:shipFrom AS string) IS NULL OR p.shipFrom = CAST(:shipFrom AS string))
+              AND (:freeShipping IS NULL OR p.freeShipping = :freeShipping)
+              AND (:selfPickup IS NULL OR p.selfPickup = :selfPickup)
+              AND (:hasVideo IS NULL OR p.hasVideo = :hasVideo)
+              AND (:minRating IS NULL OR p.rating >= :minRating)
+              AND (:minInv IS NULL OR p.inventoryCount >= :minInv)
+            """)
+    @SuppressWarnings("java:S107")
+    List<ProductEntity> searchStorefrontByIds(@Param("status") ProductStatus status, @Param("ids") List<UUID> ids,
+            @Param("categoryId") UUID categoryId, @Param("supplierId") UUID supplierId,
+            @Param("shipFrom") String shipFrom, @Param("freeShipping") Boolean freeShipping,
+            @Param("selfPickup") Boolean selfPickup, @Param("hasVideo") Boolean hasVideo,
+            @Param("minRating") BigDecimal minRating, @Param("minInv") Integer minInv);
 
     /**
      * Admin free-text search across the WHOLE catalogue and ALL languages, mirroring the storefront
@@ -179,10 +237,9 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
                    OR nx_wmatch(:needle, p.titleZh) = TRUE
                    OR EXISTS (SELECT 1 FROM ProductTranslationEntity t
                               WHERE t.product = p
-                                AND (nx_norm(t.title)            LIKE CONCAT('%', nx_norm(:needle), '%')
-                                     OR nx_norm(t.shortDescription) LIKE CONCAT('%', nx_norm(:needle), '%')
-                                     OR nx_norm(t.description)       LIKE CONCAT('%', nx_norm(:needle), '%')
-                                     OR nx_wmatch(:needle, t.title) = TRUE))
+                                AND (nx_norm(t.title) LIKE CONCAT('%', nx_norm(:needle), '%')
+                                     OR (t.language = CAST(:lang AS string)
+                                         AND nx_wmatch(:needle, t.title) = TRUE)))
                    OR EXISTS (SELECT 1 FROM ProductAttributeEntity a
                               WHERE a.product = p
                                 AND nx_norm(a.attrValue) LIKE CONCAT('%', nx_norm(:needle), '%'))
@@ -192,10 +249,16 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
                                      OR nx_norm(vv.value) LIKE CONCAT('%', nx_norm(:needle), '%')))
                    OR EXISTS (SELECT 1 FROM VariantValueTranslationEntity vt
                               WHERE vt.variantValue.option.product = p
-                                AND nx_norm(vt.value) LIKE CONCAT('%', nx_norm(:needle), '%')))
+                                AND nx_norm(vt.value) LIKE CONCAT('%', nx_norm(:needle), '%'))
+                   OR (:wide = TRUE
+                       AND EXISTS (SELECT 1 FROM ProductTranslationEntity t2
+                                   WHERE t2.product = p
+                                     AND (nx_norm(t2.shortDescription) LIKE CONCAT('%', nx_norm(:needle), '%')
+                                          OR nx_norm(t2.description)   LIKE CONCAT('%', nx_norm(:needle), '%')))))
             """)
     Page<ProductEntity> searchAdmin(@Param("status") ProductStatus status, @Param("categoryId") UUID categoryId,
-            @Param("needle") String needle, @Param("verified") Boolean verified, Pageable pageable);
+            @Param("needle") String needle, @Param("verified") Boolean verified, @Param("lang") String lang,
+            @Param("wide") boolean wide, Pageable pageable);
 
     /** IDs (distintos) de categorías con productos del estado dado ingeridos desde {@code since} — campaña de novedades. */
     @Query("""

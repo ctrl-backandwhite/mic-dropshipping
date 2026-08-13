@@ -44,6 +44,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -318,7 +319,7 @@ class Cov06CatalogStorefrontReadServiceTest {
     @Test
     void elTamanoDePaginaDelListadoSeAcotaACien() {
         when(productRepository.searchStorefront(eq(ProductStatus.ACTIVE), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(Pageable.class)))
+                any(), any(), any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
                         .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 100), 0));
 
         PageResponse<ProductSummaryView> pagina = service.productListFull(0, 5000, "es", ProductListFilters.none(),
@@ -338,7 +339,7 @@ class Cov06CatalogStorefrontReadServiceTest {
         ProductEntity caro = producto("caro");
         ProductEntity sinPrecio = producto("sin-precio");
         when(productRepository.searchStorefront(eq(ProductStatus.ACTIVE), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(Pageable.class)))
+                any(), any(), any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
                         .thenReturn(new PageImpl<>(List.of(barato, caro, sinPrecio)));
         when(productMapper.toSummary(barato, "es")).thenReturn(resumen("barato", new BigDecimal("10.00")));
         when(productMapper.toSummary(caro, "es")).thenReturn(resumen("caro", new BigDecimal("90.00")));
@@ -357,7 +358,7 @@ class Cov06CatalogStorefrontReadServiceTest {
     void elRangoDePrecioIncluyeSusExtremos() {
         ProductEntity justo = producto("justo");
         when(productRepository.searchStorefront(eq(ProductStatus.ACTIVE), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(Pageable.class)))
+                any(), any(), any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
                         .thenReturn(new PageImpl<>(List.of(justo)));
         when(productMapper.toSummary(justo, "es")).thenReturn(resumen("justo", new BigDecimal("90.00")));
 
@@ -374,7 +375,7 @@ class Cov06CatalogStorefrontReadServiceTest {
         conCe.setCertifications(List.of("CE-EMC"));
         ProductEntity sinCert = producto("sin-cert");
         when(productRepository.searchStorefront(eq(ProductStatus.ACTIVE), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(Pageable.class)))
+                any(), any(), any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
                         .thenReturn(new PageImpl<>(List.of(conCe, sinCert)));
         when(productMapper.toSummary(conCe, "es")).thenReturn(resumen("con-ce", new BigDecimal("10")));
 
@@ -393,7 +394,7 @@ class Cov06CatalogStorefrontReadServiceTest {
         ProductEntity pendiente = producto("pendiente");
         pendiente.setVerified(null);
         when(productRepository.searchStorefront(eq(ProductStatus.ACTIVE), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(Pageable.class)))
+                any(), any(), any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
                         .thenReturn(new PageImpl<>(List.of(revisado, pendiente)));
         when(productMapper.toSummary(pendiente, "es")).thenReturn(resumen("pendiente", new BigDecimal("10")));
 

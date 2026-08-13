@@ -44,8 +44,11 @@ class CheckoutPreviewQuantityTest {
     /** Sin promociones: esta prueba mide el tope de cantidad por línea, no las rebajas. */
     private final PromotionService promociones = mock(PromotionService.class);
 
+    private final com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService dutyLines =
+            new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService();
+
     private final CheckoutPreviewService service =
-            new CheckoutPreviewService(shipping, totals, pricing, currency, products, affiliate, promociones);
+            new CheckoutPreviewService(shipping, totals, pricing, currency, products, dutyLines, affiliate, promociones);
 
     private final UUID productId = UUID.randomUUID();
 

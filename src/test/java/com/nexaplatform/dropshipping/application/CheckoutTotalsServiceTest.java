@@ -7,6 +7,9 @@ import com.nexaplatform.dropshipping.application.service.CustomsValuationService
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService.CustomsValuation;
 import com.nexaplatform.dropshipping.domain.enums.OverThresholdPolicy;
 import com.nexaplatform.dropshipping.domain.enums.TaxMode;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService.DutyParcel;
+
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -16,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -38,7 +42,7 @@ class CheckoutTotalsServiceTest {
     }
 
     private void givenCustoms(int handlingCents, boolean exceeded, boolean blocked) {
-        when(customsValuationService.valuate(any(), anyInt(), anyInt(), anyInt())).thenReturn(new CustomsValuation("ES",
+        when(customsValuationService.valuate(any(), anyInt(), anyInt(), anyList())).thenReturn(new CustomsValuation("ES",
                 TaxMode.DDP, 0, exceeded, OverThresholdPolicy.SURCHARGE, handlingCents, blocked, ""));
     }
 
@@ -47,7 +51,7 @@ class CheckoutTotalsServiceTest {
         givenTax(2100, 25_20);
         givenCustoms(0, false, false);
 
-        service.compute("ES", null, 100_00, 20_00, 1);
+        service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(Math.max(0, 100_00), 1)));
 
         // Base imponible = 100,00 + 20,00 = 120,00 (el recargo de despacho NO entra en la base)
         verify(taxService).taxCentsFor("ES", null, 120_00);
@@ -58,7 +62,7 @@ class CheckoutTotalsServiceTest {
         givenTax(2100, 25_20);
         givenCustoms(3_00, false, false);
 
-        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00, 1);
+        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(Math.max(0, 100_00), 1)));
 
         assertThat(t.shippingBaseCents()).isEqualTo(20_00);
         assertThat(t.customsHandlingCents()).isEqualTo(3_00);
@@ -72,7 +76,7 @@ class CheckoutTotalsServiceTest {
         givenTax(2100, 25_20);
         givenCustoms(3_00, false, false);
 
-        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00, 1);
+        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(Math.max(0, 100_00), 1)));
 
         // 100,00 + (20,00 + 3,00) + 25,20 = 148,20
         assertThat(t.totalCents(100_00)).isEqualTo(148_20);
@@ -83,7 +87,7 @@ class CheckoutTotalsServiceTest {
         givenTax(0, 0);
         givenCustoms(15_00, true, true);
 
-        CheckoutTotals t = service.compute("BR", null, 300_00, 10_00, 1);
+        CheckoutTotals t = service.compute("BR", null, 300_00, 10_00, List.of(new DutyParcel(Math.max(0, 300_00), 1)));
 
         assertThat(t.customs().deMinimisExceeded()).isTrue();
         assertThat(t.blocked()).isTrue();
@@ -95,7 +99,7 @@ class CheckoutTotalsServiceTest {
         givenTax(0, 0);
         givenCustoms(0, false, false);
 
-        CheckoutTotals t = service.compute("ES", null, -10_00, -5_00, 1);
+        CheckoutTotals t = service.compute("ES", null, -10_00, -5_00, List.of(new DutyParcel(Math.max(0, -10_00), 1)));
 
         assertThat(t.shippingBaseCents()).isZero();
         assertThat(t.shippingCents()).isZero();
@@ -107,7 +111,7 @@ class CheckoutTotalsServiceTest {
         givenTax(875, 8_75);
         givenCustoms(0, false, false);
 
-        CheckoutTotals t = service.compute("US", "CA", 100_00, 0, 1);
+        CheckoutTotals t = service.compute("US", "CA", 100_00, 0, List.of(new DutyParcel(Math.max(0, 100_00), 1)));
 
         verify(taxService).taxCentsFor("US", "CA", 100_00);
         assertThat(t.taxRateBps()).isEqualTo(875);

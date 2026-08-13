@@ -206,6 +206,10 @@ springdoc:
 
 # ============ NexaDrop-specific config ============
 nexadrop:
+  search:
+    # Reindexar el catálogo al arrancar SI el índice acaba de crearse (versión de esquema nueva). Sin esto
+    # la búsqueda quedaría degradada al fallback SQL hasta que alguien pulsara "Sincronizar" en el admin.
+    auto-reindex: ${SEARCH_AUTO_REINDEX:true}
   # Plan 300k: toggles para activar/desactivar lo nuevo en cada entorno.
   cache:
     distributed: ${CACHE_DISTRIBUTED:false}     # Redis CacheManager en prod
@@ -271,6 +275,8 @@ nexadrop:
     password: ${OPENSEARCH_PASSWORD:}
     # TLS relajado SOLO para el cert autofirmado del OpenSearch interno (red privada). Estricto por defecto.
     tls-insecure: ${OPENSEARCH_TLS_INSECURE:false}
+    # Nombre LÓGICO. El índice real lleva la versión del esquema (products-v2): el mapping de un índice no
+    # se puede cambiar en caliente, así que cambiar analizadores = índice nuevo. Ver ProductIndexSchema.
     products-index: products
     categories-index: categories
     suppliers-index: suppliers

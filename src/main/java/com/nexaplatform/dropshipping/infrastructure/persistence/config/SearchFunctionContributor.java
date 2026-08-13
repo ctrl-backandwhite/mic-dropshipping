@@ -30,7 +30,7 @@ public class SearchFunctionContributor implements FunctionContributor {
         // nx_wmatch(needle, col): ¿la aguja casa como PALABRA dentro de col (plurales/erratas/multi-término)?
         // Usa el OPERADOR <% de pg_trgm (a diferencia de la función word_similarity, el operador SÍ aprovecha
         // el índice GIN → búsqueda rápida). El umbral lo fija pg_trgm.word_similarity_threshold (0.45, v119).
-        registry.registerPattern("nx_wmatch", "(nx_norm(?1) <% nx_norm(?2))",
+        registry.registerPattern("nx_wmatch", "(nx_norm(?1) <<% nx_norm(?2))",
                 types.resolve(StandardBasicTypes.BOOLEAN));
     }
 }

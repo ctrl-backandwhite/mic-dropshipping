@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.fulfillment;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService.CustomsValuation;
 import com.nexaplatform.dropshipping.application.service.ParcelAggregator;
@@ -83,6 +84,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     private final CainiaoZoneRepository zoneRepository;
     private final YunExpressClient client;
     private final CustomsValuationService customsValuation;
+    private final CustomsDutyLinesService customsDutyLines;
     /** Para la declaración aduanera por línea: nombre EN/ZH, partida, material, uso y peso del artículo. */
     private final ProductRepository productRepository;
     /** La tarifa de YunExpress llega en su divisa (RMB); el sistema cotiza en céntimos USD. */
@@ -717,10 +719,10 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
      */
     public CustomsValuation declarationFor(Order order) {
         int intrinsic = Math.max(0, order.getSubtotalCents() - order.getDiscountCents());
-        // Artículos = productos distintos del pedido (para el arancel UE de 3 EUR por artículo).
-        int articles = (int) order.getItems().stream().map(OrderItem::getProductId)
-                .filter(p -> p != null).distinct().count();
-        return customsValuation.valuate(order.getShippingCountry(), intrinsic, order.getTaxCents(), articles);
+        // El derecho fijo va por línea de declaración (partida arancelaria) y por bulto — los MISMOS bultos
+        // que se van a despachar, así que se reutiliza el reparto real del transportista.
+        return customsValuation.valuate(order.getShippingCountry(), intrinsic, order.getTaxCents(),
+                dutyParcelsOf(order));
     }
 
     /**
@@ -1103,4 +1105,24 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     public String iossNumberOrNull() {
         return iossNumber != null && !iossNumber.isBlank() ? iossNumber.trim() : null;
     }
+
+    /** Bultos del pedido con sus partidas arancelarias, a partir del reparto real en bultos. */
+    private java.util.List<CustomsDutyLinesService.DutyParcel> dutyParcelsOf(Order order) {
+        java.util.List<CustomsDutyLinesService.Line> lines = new java.util.ArrayList<>();
+        for (OrderItem item : order.getItems()) {
+            ProductEntity product = item.getProductId() != null
+                    ? productRepository.findById(item.getProductId()).orElse(null) : null;
+            if (product == null) {
+                continue;
+            }
+            ProductVariantEntity variant = variantOf(product, item);
+            lines.add(new CustomsDutyLinesService.Line(product.getId(), product.getHsCode(),
+                    Math.max(1, item.getQuantity()), item.getUnitPriceCents(),
+                    ParcelAggregator.unitWeightGrams(product, variant), dimension(product, variant, Dimension.LENGTH),
+                    dimension(product, variant, Dimension.WIDTH), dimension(product, variant, Dimension.HEIGHT),
+                    ParcelAggregator.hasBattery(product)));
+        }
+        return customsDutyLines.parcelsOf(lines);
+    }
+
 }

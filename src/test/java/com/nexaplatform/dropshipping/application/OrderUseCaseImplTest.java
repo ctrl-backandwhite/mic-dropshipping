@@ -31,6 +31,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopC
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserAddressRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService.DutyParcel;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -46,6 +47,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -96,6 +98,10 @@ class OrderUseCaseImplTest {
     @Mock
     com.nexaplatform.dropshipping.infrastructure.integration.search.OrderSearchService orderSearchService;
 
+    @org.mockito.Spy
+    com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService customsDutyLinesService =
+            new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService();
+
     @InjectMocks
     OrderUseCaseImpl orderUseCase;
 
@@ -106,7 +112,7 @@ class OrderUseCaseImplTest {
                 .thenReturn(ShippingQuote.unsupported("XX"));
         // Por defecto, sin impuesto ni recargo de despacho: total = subtotal + envío, como en los
         // tests de billing existentes. El envío devuelto es el mismo que entra (sin handling fee).
-        lenient().when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyInt()))
+        lenient().when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList()))
                 .thenAnswer(inv -> noCustomsTotals(inv.getArgument(3)));
     }
 
@@ -165,7 +171,7 @@ class OrderUseCaseImplTest {
         when(pricingService.priceFor(any(), any())).thenReturn(priced("12.50"));
         CustomsValuationService.CustomsValuation blocked = new CustomsValuationService.CustomsValuation("MX",
                 TaxMode.DDP, 0, true, OverThresholdPolicy.BLOCK, 0, true, "150 EUR");
-        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyInt()))
+        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList()))
                 .thenReturn(new CheckoutTotalsService.CheckoutTotals(0, 0, 0, 0, 0, blocked));
 
         var req = new CreateOrderRequest("EXT-002",

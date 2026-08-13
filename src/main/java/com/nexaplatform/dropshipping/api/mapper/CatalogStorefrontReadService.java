@@ -19,10 +19,12 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVa
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.ProductSearchService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -45,6 +47,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 /**
@@ -54,6 +57,7 @@ import java.util.stream.Collectors;
  * identical shapes without one controller injecting the other (the partner→storefront
  * controller dependency is replaced by this shared collaborator + the CatalogUseCase).
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CatalogStorefrontReadService {
@@ -66,6 +70,7 @@ public class CatalogStorefrontReadService {
     private final ProductMapper productMapper;
     private final PricingService pricingService;
     private final PromotionService promotionService;
+    private final ProductSearchService productSearchService;
 
     /* ============================ Categories ============================ */
 
@@ -268,37 +273,151 @@ public class CatalogStorefrontReadService {
         java.util.function.Predicate<ProductEntity> promoFilter =
                 promotionService.reachFilter(filters.promotionId()).orElse(null);
 
-        // El filtro de precio y el de certificación se aplican en la capa de aplicación, NO en el SQL.
-        // Motivo del precio: el número que ve el usuario (displayPrice) se obtiene de la variante
-        // representativa → coste en USD → margen (reglas) → conversión a la moneda activa (X-Currency).
-        // El SQL solo conoce base_price en CNY, así que filtrar ahí daría rangos sin sentido para EUR/USD/etc.
-        // Por eso aquí filtramos sobre displayPrice, que está en la MISMA moneda que el usuario seleccionó
-        // → el filtro de precio funciona para cualquier moneda. Se pagina en memoria para que el total y
-        // las páginas sean correctos (el catálogo está acotado por el resto de filtros).
-        if (priceFilter || certFilter || verifiedFilter || promoFilter != null) {
-            String certUp = certFilter ? certification.toUpperCase() : null;
-            Pageable scan = PageRequest.of(0, 5000, sortSpec);
-            Page<ProductEntity> raw = productRepository.searchStorefront(ProductStatus.ACTIVE, needle, categoryId,
-                    supplierId, null, null, shipCc, freeShipping, selfPickup, hasVideo, minRatingBd, inventoryMin, scan);
-            List<ProductSummaryView> all = raw.getContent().stream()
-                    .filter(p -> promoFilter == null || promoFilter.test(p))
-                    .filter(p -> certUp == null || (p.getCertifications() != null && p.getCertifications().stream()
-                            .anyMatch(c -> c != null && c.toUpperCase().contains(certUp))))
-                    .filter(p -> !verifiedFilter || verified.equals(Boolean.TRUE.equals(p.getVerified())))
-                    .map(p -> productMapper.toSummary(p, lang))
-                    .filter(v -> withinPrice(v.displayPrice(), minPrice, maxPrice)).toList();
-            int total = all.size();
-            // (long) para que un ?page enorme no desborde el int: el índice salía negativo y el subList
-            // respondía 500 en vez de una página vacía.
-            int from = (int) Math.min((long) safePage * safeSize, total);
-            int to = Math.min(from + safeSize, total);
-            return PageResponse.from(new PageImpl<>(all.subList(from, to), pageable, total));
+        // Texto libre: el idioma activo acota el fuzzy a UN idioma (buscando "botas" en español, el fuzzy
+        // contra los 8 idiomas casaba "botao" en portugués) y `ranked` ordena por relevancia — el término
+        // en el título primero — solo cuando el usuario no ha pedido otro orden explícito.
+        final String langCode = (lang == null || lang.isBlank()) ? "es" : lang.toLowerCase();
+        final boolean ranked = needle != null && (sort == null || sort.isBlank() || "best_match".equals(sort));
+        // `wide` = mirar también dentro de las descripciones largas. Se deja para el segundo intento: una
+        // falda cuya descripción dice "combina con botas" no es un resultado de "botas", pero sí es mejor
+        // que devolver la página vacía cuando NADA casa por título/atributo/variante.
+        BiFunction<Boolean, Pageable, Page<ProductEntity>> search = (wide, pg) -> productRepository
+                .searchStorefront(ProductStatus.ACTIVE, needle, categoryId, supplierId, null, null, shipCc,
+                        freeShipping, selfPickup, hasVideo, minRatingBd, inventoryMin, langCode, wide, ranked, pg);
+
+        // Los filtros que NO se pueden delegar: promoción, certificación, verificado y precio. Este último
+        // porque el número que ve el usuario (displayPrice) sale de la variante representativa → coste en
+        // USD → margen (reglas) → conversión a la moneda activa (X-Currency), mientras que el SQL solo
+        // conoce base_price en CNY: filtrar ahí daría rangos sin sentido para EUR/USD/etc.
+        String certUp = certFilter ? certification.toUpperCase() : null;
+        InMemoryFilters postFilters = new InMemoryFilters(promoFilter, certUp, verifiedFilter, verified, minPrice,
+                maxPrice);
+
+        // TEXTO LIBRE → OpenSearch, que es el motor principal de la búsqueda: entiende la morfología de los
+        // 8 idiomas (plurales, acentos, chino) y devuelve los productos ORDENADOS POR RELEVANCIA. Aquí solo
+        // llegan identificadores; la visibilidad, los filtros y el precio los sigue resolviendo la BD.
+        if (needle != null) {
+            Optional<List<UUID>> relevant = productSearchService.searchRelevantIds(needle, langCode);
+            if (relevant.isPresent()) {
+                return fromRelevantIds(relevant.get(), categoryId, supplierId, shipCc, freeShipping, selfPickup,
+                        hasVideo, minRatingBd, inventoryMin, sort, lang, postFilters, safePage, safeSize, pageable);
+            }
+            // Si el buscador no ha podido responder (caído, índice aún sin construir) se sigue por SQL: la
+            // búsqueda se degrada, pero el catálogo NUNCA deja de funcionar.
+            log.debug("Búsqueda '{}' resuelta por SQL — OpenSearch no disponible", needle);
         }
 
-        Page<ProductEntity> raw = productRepository.searchStorefront(ProductStatus.ACTIVE, needle, categoryId,
-                supplierId, null, null, shipCc, freeShipping, selfPickup, hasVideo, minRatingBd, inventoryMin, pageable);
+        if (priceFilter || certFilter || verifiedFilter || promoFilter != null) {
+            Pageable scan = PageRequest.of(0, 5000, sortSpec);
+            Page<ProductEntity> raw = search.apply(false, scan);
+            if (needle != null && raw.isEmpty()) {
+                raw = search.apply(true, scan);
+            }
+            return paginate(applyPostFilters(raw.getContent(), postFilters, lang), safePage, safeSize, pageable);
+        }
+
+        Page<ProductEntity> raw = search.apply(false, pageable);
+        if (needle != null && raw.getTotalElements() == 0) {
+            raw = search.apply(true, pageable);
+        }
         List<ProductSummaryView> slice = raw.getContent().stream().map(p -> productMapper.toSummary(p, lang)).toList();
         return PageResponse.from(new PageImpl<>(slice, pageable, raw.getTotalElements()));
+    }
+
+    /**
+     * Materializa en productos del escaparate los identificadores que ha devuelto el buscador, conservando
+     * su orden de relevancia salvo que el usuario haya pedido otro criterio (precio, novedad, ventas…).
+     *
+     * <p>Todo el pipeline va en memoria a partir de aquí, y puede: la lista viene acotada por el buscador
+     * ({@link ProductSearchService#MAX_IDS}), mientras que el barrido SQL equivalente traía hasta 5.000.
+     */
+    @SuppressWarnings("java:S107")
+    private PageResponse<ProductSummaryView> fromRelevantIds(List<UUID> ids, UUID categoryId, UUID supplierId,
+            String shipCc, Boolean freeShipping, Boolean selfPickup, Boolean hasVideo, BigDecimal minRatingBd,
+            Integer inventoryMin, String sort, String lang, InMemoryFilters postFilters, int safePage, int safeSize,
+            Pageable pageable) {
+        if (ids.isEmpty()) {
+            return PageResponse.from(new PageImpl<>(List.of(), pageable, 0));
+        }
+        List<ProductEntity> found = productRepository.searchStorefrontByIds(ProductStatus.ACTIVE, ids, categoryId,
+                supplierId, shipCc, freeShipping, selfPickup, hasVideo, minRatingBd, inventoryMin);
+        List<ProductEntity> ordered = orderBy(found, ids, sort);
+        return paginate(byDisplayPrice(applyPostFilters(ordered, postFilters, lang), sort), safePage, safeSize,
+                pageable);
+    }
+
+    /**
+     * Ordena por el precio que el usuario VE, no por el coste en CNY.
+     *
+     * <p>Pedir "precio más bajo" y recibir 5,53 → 7,87 → 6,50 es lo que pasa al ordenar por {@code
+     * basePrice}: entre el coste y el precio mostrado median el margen (que varía por producto — reglas de
+     * canal, ajuste por MOQ) y la conversión a la divisa activa, así que el orden del coste no es el orden
+     * del precio. Aquí ya están los precios calculados, de modo que se ordena por el número real de la
+     * ficha. Solo aplica a la búsqueda: el listado por SQL sigue ordenando en base de datos.
+     */
+    private static List<ProductSummaryView> byDisplayPrice(List<ProductSummaryView> views, String sort) {
+        if (!"price_asc".equals(sort) && !"price_desc".equals(sort)) {
+            return views;
+        }
+        Comparator<ProductSummaryView> byPrice = Comparator.comparing(ProductSummaryView::displayPrice,
+                Comparator.nullsLast(Comparator.naturalOrder()));
+        return views.stream().sorted("price_desc".equals(sort) ? byPrice.reversed() : byPrice).toList();
+    }
+
+    /**
+     * Orden final de una búsqueda. Por defecto manda la RELEVANCIA (la posición que le dio el buscador);
+     * si el usuario ha elegido otro criterio en el desplegable, ese gana — buscar y pedir "precio más
+     * bajo" tiene que ordenar por precio, no por relevancia.
+     */
+    private static List<ProductEntity> orderBy(List<ProductEntity> found, List<UUID> relevanceOrder, String sort) {
+        Comparator<ProductEntity> explicit = switch (sort == null ? "" : sort) {
+            case "price_asc" -> Comparator.comparing(ProductEntity::getBasePrice, nullsLast());
+            case "price_desc" -> Comparator.comparing(ProductEntity::getBasePrice, nullsLast()).reversed();
+            case "newest" -> Comparator.comparing(ProductEntity::getCreatedAt, nullsLast()).reversed();
+            case "sales", "lists" -> Comparator.comparing(ProductEntity::getMonthlySales, nullsLast()).reversed();
+            case "rating" -> Comparator.comparing(ProductEntity::getRating, nullsLast()).reversed();
+            case "inventory" -> Comparator.comparing(ProductEntity::getInventoryCount, nullsLast()).reversed();
+            default -> null;
+        };
+        if (explicit != null) {
+            return found.stream().sorted(explicit).toList();
+        }
+        Map<UUID, Integer> rank = new HashMap<>();
+        for (int i = 0; i < relevanceOrder.size(); i++) {
+            rank.put(relevanceOrder.get(i), i);
+        }
+        return found.stream().sorted(Comparator.comparingInt(p -> rank.getOrDefault(p.getId(), Integer.MAX_VALUE)))
+                .toList();
+    }
+
+    /** Comparador natural que deja los nulos al final — hay productos sin precio, sin nota o sin ventas. */
+    private static <T extends Comparable<T>> Comparator<T> nullsLast() {
+        return Comparator.nullsLast(Comparator.naturalOrder());
+    }
+
+    /** Filtros que solo se pueden resolver con el producto ya mapeado (precio en divisa) o en memoria. */
+    private record InMemoryFilters(java.util.function.Predicate<ProductEntity> promo, String certification,
+            boolean verifiedFilter, Boolean verified, BigDecimal minPrice, BigDecimal maxPrice) {
+    }
+
+    private List<ProductSummaryView> applyPostFilters(List<ProductEntity> entities, InMemoryFilters f, String lang) {
+        return entities.stream()
+                .filter(p -> f.promo() == null || f.promo().test(p))
+                .filter(p -> f.certification() == null || (p.getCertifications() != null && p.getCertifications()
+                        .stream().anyMatch(c -> c != null && c.toUpperCase().contains(f.certification()))))
+                .filter(p -> !f.verifiedFilter() || f.verified().equals(Boolean.TRUE.equals(p.getVerified())))
+                .map(p -> productMapper.toSummary(p, lang))
+                .filter(v -> withinPrice(v.displayPrice(), f.minPrice(), f.maxPrice())).toList();
+    }
+
+    private static PageResponse<ProductSummaryView> paginate(List<ProductSummaryView> all, int safePage, int safeSize,
+            Pageable pageable) {
+        int total = all.size();
+        // (long) para que un ?page enorme no desborde el int: el índice salía negativo y el subList
+        // respondía 500 en vez de una página vacía.
+        int from = (int) Math.min((long) safePage * safeSize, total);
+        int to = Math.min(from + safeSize, total);
+        return PageResponse.from(new PageImpl<>(all.subList(from, to), pageable, total));
     }
 
     /**

@@ -247,3 +247,5 @@ databaseChangeLog:
       file: db/changelog/schema-v118-moq-margin-setting.sql
   - include:
       file: db/changelog/schema-v119-search-trgm.sql
+  - include:
+      file: db/changelog/schema-v120-search-strict.sql

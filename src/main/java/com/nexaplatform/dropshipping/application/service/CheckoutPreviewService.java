@@ -63,6 +63,7 @@ public class CheckoutPreviewService {
     private final PricingService pricingService;
     private final CurrencyRateService currencyService;
     private final ProductRepository productRepository;
+    private final CustomsDutyLinesService customsDutyLinesService;
     private final AffiliateProgramService affiliateProgramService;
     private final PromotionService promotionService;
 
@@ -160,13 +161,13 @@ public class CheckoutPreviewService {
         int discountedSubtotalUsdCents = subtotalUsdCents - discountUsdCents;
 
         int shippingBaseUsdCents = quote.supported() ? quote.amountUsdCents() : 0;
-        // Artículos = productos DISTINTOS (varias unidades o variantes del mismo producto = 1 artículo),
-        // para el arancel de la UE de 3 EUR por artículo.
-        int articleCount = (int) items.stream().map(Line::productId).filter(p -> p != null).distinct().count();
+        // Bultos con sus partidas arancelarias: el derecho fijo de la UE se cobra por línea de declaración
+        // dentro de cada bulto, no por producto ni por unidad (ver CustomsDutyLinesService).
+        List<CustomsDutyLinesService.DutyParcel> parcels = customsDutyLinesService.parcelsOf(customsLines(items));
         // Impuesto + despacho aduanero por el MISMO servicio que usa el cobro (CheckoutTotalsService), para
         // que el desglose mostrado coincida al céntimo con el pedido.
         CheckoutTotalsService.CheckoutTotals totals = checkoutTotalsService.compute(country, region,
-                discountedSubtotalUsdCents, shippingBaseUsdCents, articleCount);
+                discountedSubtotalUsdCents, shippingBaseUsdCents, parcels);
 
         // Importes en la moneda activa: cada componente convertido y REDONDEADO a 2 decimales; el total
         // es la SUMA de esos componentes redondeados (igual que el detalle del pedido), para que el
@@ -265,4 +266,48 @@ public class CheckoutPreviewService {
     private static BigDecimal usd(int cents) {
         return BigDecimal.valueOf(cents).movePointLeft(2);
     }
+
+    /**
+     * Traduce las líneas del carrito a lo que necesita el cálculo aduanero: clasificación arancelaria para
+     * agrupar, y peso/medidas para repartir la mercancía en bultos igual que hará el transportista.
+     */
+    private List<CustomsDutyLinesService.Line> customsLines(List<Line> items) {
+        List<CustomsDutyLinesService.Line> out = new java.util.ArrayList<>();
+        for (Line it : items) {
+            if (it == null || it.productId() == null) {
+                continue;
+            }
+            ProductEntity p = productRepository.findById(it.productId()).orElse(null);
+            if (p == null) {
+                continue;
+            }
+            ProductVariantEntity v = it.variantId() == null ? null
+                    : p.getVariants().stream().filter(x -> it.variantId().equals(x.getId())).findFirst()
+                            .orElse(null);
+            Integer unit = unitPriceUsdCents(it);
+            out.add(new CustomsDutyLinesService.Line(p.getId(), p.getHsCode(), Math.max(1, it.quantity()),
+                    unit == null ? 0 : unit, ParcelAggregator.unitWeightGrams(p, v), dimension(p, v, 0),
+                    dimension(p, v, 1), dimension(p, v, 2), ParcelAggregator.hasBattery(p)));
+        }
+        return out;
+    }
+
+    /** Medida del bulto (0=largo, 1=ancho, 2=alto): manda el producto y, si no la tiene, la variante. */
+    private static int dimension(ProductEntity p, ProductVariantEntity v, int which) {
+        Integer fromProduct = switch (which) {
+            case 0 -> p.getLengthMm();
+            case 1 -> p.getWidthMm();
+            default -> p.getHeightMm();
+        };
+        if (fromProduct != null && fromProduct > 0) {
+            return fromProduct;
+        }
+        Integer fromVariant = v == null ? null : switch (which) {
+            case 0 -> v.getLengthMm();
+            case 1 -> v.getWidthMm();
+            default -> v.getHeightMm();
+        };
+        return fromVariant != null && fromVariant > 0 ? fromVariant : 0;
+    }
+
 }
