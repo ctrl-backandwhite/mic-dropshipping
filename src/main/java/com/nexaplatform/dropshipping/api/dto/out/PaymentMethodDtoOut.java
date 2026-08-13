@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.dto.out;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -34,6 +35,9 @@ public class PaymentMethodDtoOut {
     @Schema(description = "Año de expiración")
     private Long expYear;
 
-    @Schema(description = "true si es la tarjeta por defecto (la que cobra las suscripciones)")
+    // Sin @JsonProperty, Lombok+Jackson publican este booleano como "default" (quita el "is"), pero el
+    // front lee "isDefault"; se fija el nombre del campo JSON para que coincidan y salga el predeterminado.
+    @JsonProperty("isDefault")
+    @Schema(description = "true si es el método por defecto (tarjeta o PayPal)")
     private boolean isDefault;
 }
