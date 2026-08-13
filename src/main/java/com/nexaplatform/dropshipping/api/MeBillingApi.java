@@ -56,10 +56,17 @@ public interface MeBillingApi {
     @PostMapping("/payment-methods/{id}/default")
     ResponseEntity<Void> setDefault(Authentication auth, @PathVariable String id) throws StripeException;
 
-    @Operation(summary = "Borra (desvincula) una tarjeta guardada")
-    @ApiResponse(responseCode = "204", description = "Tarjeta borrada")
+    @Operation(summary = "Envía por correo un código para confirmar la eliminación de un método de pago")
+    @ApiResponse(responseCode = "204", description = "Código enviado")
+    @PostMapping("/payment-methods/{id}/delete-code")
+    ResponseEntity<Void> requestDeleteCode(Authentication auth, @PathVariable String id) throws StripeException;
+
+    @Operation(summary = "Borra (desvincula) un método de pago confirmando con el código enviado por correo")
+    @ApiResponse(responseCode = "204", description = "Método borrado")
     @DeleteMapping("/payment-methods/{id}")
-    ResponseEntity<Void> delete(Authentication auth, @PathVariable String id) throws StripeException;
+    ResponseEntity<Void> delete(Authentication auth, @PathVariable String id,
+            @org.springframework.web.bind.annotation.RequestParam(value = "code", required = false) String code)
+            throws StripeException;
 
     @Operation(summary = "Contrata un plan cobrando con la tarjeta guardada por defecto")
     @ApiResponse(responseCode = "200", description = "Suscripción creada")

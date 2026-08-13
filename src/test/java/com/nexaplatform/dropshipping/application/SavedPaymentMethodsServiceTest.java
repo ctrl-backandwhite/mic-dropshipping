@@ -48,6 +48,8 @@ class SavedPaymentMethodsServiceTest {
     UserRepository userRepository;
     @Mock
     TokenCryptoService crypto;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.email.EmailQueueService emailQueue;
 
     @InjectMocks
     SavedPaymentMethodsService service;
@@ -100,19 +102,38 @@ class SavedPaymentMethodsServiceTest {
     }
 
     @Test
-    void borrarElMetodoPredeterminadoLimpiaElPuntero() throws StripeException {
-        noCards();
+    void borrarElMetodoPredeterminadoConCodigoValidoLimpiaElPuntero() throws StripeException {
         UUID ppId = UUID.randomUUID();
         String ref = "paypal:" + ppId;
+        // El usuario tiene un código de borrado VÁLIDO para esa referencia (paso 1 ya hecho).
+        UserEntity u = new UserEntity();
+        u.setPmDeleteCode("123456");
+        u.setPmDeleteRef(ref);
+        u.setPmDeleteCodeAt(java.time.Instant.now());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(u));
         when(paypalRepository.findById(ppId)).thenReturn(Optional.of(
                 PayPalPaymentMethodEntity.builder().id(ppId).userId(userId).build()));
         when(defaultRepository.findById(userId)).thenReturn(Optional.of(
                 UserDefaultPaymentEntity.builder().userId(userId).ref(ref).build()));
 
-        service.delete(userId, ref);
+        service.delete(userId, ref, "123456");
 
         verify(paypalRepository).deleteById(ppId);
         verify(defaultRepository).deleteById(userId);
+    }
+
+    @Test
+    void borrarConCodigoInvalidoFalla() throws StripeException {
+        UUID ppId = UUID.randomUUID();
+        String ref = "paypal:" + ppId;
+        UserEntity u = new UserEntity(); // sin código pendiente
+        when(userRepository.findById(userId)).thenReturn(Optional.of(u));
+        when(paypalRepository.findById(ppId)).thenReturn(Optional.of(
+                PayPalPaymentMethodEntity.builder().id(ppId).userId(userId).build()));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.delete(userId, ref, "000000"))
+                .isInstanceOf(com.nexaplatform.dropshipping.api.exception.BusinessException.class);
+        verify(paypalRepository, never()).deleteById(any());
     }
 
     @Test
@@ -122,7 +143,7 @@ class SavedPaymentMethodsServiceTest {
         when(paypalRepository.findById(ppId)).thenReturn(Optional.of(
                 PayPalPaymentMethodEntity.builder().id(ppId).userId(UUID.randomUUID()).build())); // otro dueño
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.delete(userId, "paypal:" + ppId))
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.delete(userId, "paypal:" + ppId, "123456"))
                 .isInstanceOf(com.nexaplatform.dropshipping.api.exception.NotFoundException.class);
         verify(paypalRepository, never()).deleteById(any());
     }

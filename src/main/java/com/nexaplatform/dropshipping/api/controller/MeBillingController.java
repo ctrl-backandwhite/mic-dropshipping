@@ -69,8 +69,14 @@ public class MeBillingController implements MeBillingApi {
     }
 
     @Override
-    public ResponseEntity<Void> delete(Authentication auth, String id) throws StripeException {
-        savedMethods.delete(UUID.fromString(auth.getName()), id);
+    public ResponseEntity<Void> requestDeleteCode(Authentication auth, String id) throws StripeException {
+        savedMethods.requestDelete(UUID.fromString(auth.getName()), id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override
+    public ResponseEntity<Void> delete(Authentication auth, String id, String code) throws StripeException {
+        savedMethods.delete(UUID.fromString(auth.getName()), id, code);
         return ResponseEntity.noContent().build();
     }
 

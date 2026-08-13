@@ -237,3 +237,7 @@ databaseChangeLog:
       file: db/changelog/schema-v113-backfill-free-trial-used.sql
   - include:
       file: db/changelog/schema-v114-plan-pending-downgrade.sql
+  - include:
+      file: db/changelog/schema-v115-pm-delete-code.sql
+  - include:
+      file: db/changelog/schema-v116-user-phone-unique.sql

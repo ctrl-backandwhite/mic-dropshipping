@@ -104,12 +104,12 @@ class Cov01MeBillingControllerTest {
         authenticatedAs(USER_ID);
 
         ResponseEntity<Void> setDefault = controller.setDefault(auth, "pm_1");
-        ResponseEntity<Void> deleted = controller.delete(auth, "pm_2");
+        ResponseEntity<Void> deleted = controller.delete(auth, "pm_2", "123456");
 
         assertThat(setDefault.getStatusCode().value()).isEqualTo(204);
         assertThat(deleted.getStatusCode().value()).isEqualTo(204);
         verify(savedMethods).setDefault(USER_ID, "pm_1");
-        verify(savedMethods).delete(USER_ID, "pm_2");
+        verify(savedMethods).delete(USER_ID, "pm_2", "123456");
     }
 
     @Test

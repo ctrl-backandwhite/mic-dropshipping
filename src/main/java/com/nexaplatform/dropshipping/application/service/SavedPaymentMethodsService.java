@@ -18,9 +18,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.nexaplatform.dropshipping.domain.enums.PaymentMethodEmailLabel;
+
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -46,6 +50,8 @@ public class SavedPaymentMethodsService {
     private final UserDefaultPaymentRepository defaultRepository;
     private final UserRepository userRepository;
     private final TokenCryptoService crypto;
+    private final com.nexaplatform.dropshipping.infrastructure.email.EmailQueueService emailQueue;
+    private static final java.security.SecureRandom SECURE_RANDOM = new java.security.SecureRandom();
 
     /** Lista todos los métodos guardados del usuario (tarjetas + PayPal) con el predeterminado marcado. */
     @Transactional(readOnly = true, noRollbackFor = StripeException.class)
@@ -55,8 +61,22 @@ public class SavedPaymentMethodsService {
         UserEntity user = loadUser(userId);
         String customerId = user.getStripeCustomerId();
         if (stripeService.isEnabled() && customerId != null && !customerId.isBlank()) {
+            // Unicidad de tarjeta: Stripe permite adjuntar la MISMA tarjeta varias veces (pm_ distintos, mismo
+            // fingerprint). Se conserva una sola por fingerprint (la más reciente va primero) y las duplicadas
+            // se desvinculan para no dejar métodos repetidos.
+            java.util.Set<String> seenFingerprints = new java.util.HashSet<>();
             for (PaymentMethod pm : stripeService.listCards(customerId)) {
                 PaymentMethod.Card c = pm.getCard();
+                String fingerprint = c != null ? c.getFingerprint() : null;
+                if (fingerprint != null && !seenFingerprints.add(fingerprint)) {
+                    try {
+                        stripeService.detachPaymentMethod(pm.getId());
+                    } catch (StripeException e) {
+                        log.warn("::> [BILLING] no se pudo desvincular tarjeta duplicada {}: {}", pm.getId(),
+                                e.getMessage());
+                    }
+                    continue;
+                }
                 out.add(PaymentMethodDtoOut.builder().id(pm.getId()).type("CARD")
                         .brand(c != null ? c.getBrand() : null).last4(c != null ? c.getLast4() : null)
                         .expMonth(c != null ? c.getExpMonth() : null).expYear(c != null ? c.getExpYear() : null)
@@ -78,6 +98,14 @@ public class SavedPaymentMethodsService {
         loadUser(userId);
         if (email == null || email.isBlank()) {
             throw new BusinessException("Email de PayPal requerido");
+        }
+        // Unicidad por usuario: no se puede guardar la MISMA cuenta de PayPal dos veces (correo cifrado con
+        // GCM no determinista → se compara descifrando los que ya tiene).
+        String normalized = email.trim().toLowerCase();
+        boolean already = paypalRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+                .anyMatch(pp -> normalized.equalsIgnoreCase(safeDecrypt(pp.getPaypalEmailEnc())));
+        if (already) {
+            throw new BusinessException("PAYPAL_ALREADY_SAVED", "Esa cuenta de PayPal ya está guardada.");
         }
         PayPalPaymentMethodEntity row = PayPalPaymentMethodEntity.builder().id(UUID.randomUUID()).userId(userId)
                 .paypalEmailEnc(crypto.encrypt(email.trim())).createdAt(Instant.now()).build();
@@ -105,8 +133,45 @@ public class SavedPaymentMethodsService {
 
     /** Borra un método guardado. Si era el predeterminado, se limpia el puntero (queda el de facto). */
     @Transactional(noRollbackFor = StripeException.class)
-    public void delete(UUID userId, String ref) throws StripeException {
+    /**
+     * Paso 1 de la eliminación: genera un código de 6 dígitos (caduca en 15 min), lo guarda junto a la
+     * referencia del método y lo envía por correo en el idioma del usuario. No borra nada todavía.
+     */
+    public void requestDelete(UUID userId, String ref) throws StripeException {
         assertOwned(userId, ref);
+        UserEntity user = loadUser(userId);
+        String code = String.format("%06d", SECURE_RANDOM.nextInt(1_000_000));
+        user.setPmDeleteCode(code);
+        user.setPmDeleteRef(ref);
+        user.setPmDeleteCodeAt(Instant.now());
+        userRepository.save(user);
+        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+            String lang = user.getLanguage();
+            Map<String, Object> vars = new HashMap<>();
+            vars.put("title", PaymentMethodEmailLabel.TITLE.of(lang));
+            vars.put("preheader", PaymentMethodEmailLabel.TITLE.of(lang));
+            vars.put("bodyHtml", PaymentMethodEmailLabel.BODY.of(lang).replace("{code}", code));
+            vars.put("footer", "NX036");
+            emailQueue.enqueue(user.getEmail(), PaymentMethodEmailLabel.SUBJECT.of(lang), "emails/notification", vars);
+        }
+        log.info("::> [BILLING] Código de borrado de método enviado user={} ref={}", userId, ref);
+    }
+
+    /**
+     * Paso 2: elimina el método SOLO si el código coincide con el enviado, no ha caducado (15 min) y es para
+     * esa misma referencia. Limpia el código tras usarlo.
+     */
+    public void delete(UUID userId, String ref, String code) throws StripeException {
+        assertOwned(userId, ref);
+        UserEntity user = loadUser(userId);
+        boolean valid = code != null && !code.isBlank()
+                && code.equals(user.getPmDeleteCode())
+                && ref.equals(user.getPmDeleteRef())
+                && user.getPmDeleteCodeAt() != null
+                && user.getPmDeleteCodeAt().isAfter(Instant.now().minusSeconds(900));
+        if (!valid) {
+            throw new BusinessException("PM_DELETE_CODE_INVALID", "El código no es válido o ha caducado.");
+        }
         if (isPayPal(ref)) {
             paypalRepository.deleteById(paypalId(ref));
         } else {
@@ -117,6 +182,10 @@ public class SavedPaymentMethodsService {
                 defaultRepository.deleteById(userId);
             }
         });
+        user.setPmDeleteCode(null);
+        user.setPmDeleteRef(null);
+        user.setPmDeleteCodeAt(null);
+        userRepository.save(user);
         log.info("::> [BILLING] Método borrado user={} ref={}", userId, ref);
     }
 

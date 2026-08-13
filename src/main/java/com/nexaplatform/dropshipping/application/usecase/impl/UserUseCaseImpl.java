@@ -354,20 +354,18 @@ public class UserUseCaseImpl implements UserUseCase {
                     "El código de eliminación no es válido o ha expirado.");
         }
         String emailOriginal = user.getEmail();
-        // El hash se sustituye por el de un secreto aleatorio de 48 bytes que nadie llega a conocer:
-        // sigue siendo un BCrypt válido —así el login lo compara con normalidad y responde 401— pero no
-        // existe contraseña que lo produzca.
-        anonymise(user, passwordEncoder.encode(randomToken(48)));
+        // A efectos del usuario es una ELIMINACIÓN (no puede acceder ni verla), pero por dentro solo se
+        // DESACTIVA para poder recuperarla si decide volver: se conservan sus datos (perfil, direcciones,
+        // pedidos). active=false hace que el login responda "cuenta desactivada" (UserDetails.disabled);
+        // deleted_at la oculta de los listados. La reactivación la hace un ADMIN (active=true, deleted_at=null).
+        user.setActive(false);
+        user.setDeletedAt(Instant.now());
+        user.setDeletionCode(null);
+        user.setDeletionCodeExpiresAt(null);
         userRepository.update(user);
-        // Las direcciones son datos personales por sí solas y no las ampara ninguna obligación de
-        // conservación: el pedido ya guarda su propio snapshot para la factura.
-        userAddressJpaRepository.deleteAll(
-                userAddressJpaRepository.findByUser_IdOrderByIsDefaultDescCreatedAtDesc(userId));
-        // Y ninguna sesión abierta puede sobrevivir a la cuenta.
+        // Ninguna sesión abierta puede sobrevivir a la desactivación.
         jwtRevocationService.revokeAllForClient(userId.toString());
-        // El registro de auditoría guarda el email para poder acreditar QUE se atendió la solicitud; es
-        // una obligación distinta (art. 5.2 RGPD, responsabilidad proactiva) y su propia retención.
-        auditLogger.log("auth.account.delete", emailOriginal, Map.of(USERID, userId));
+        auditLogger.log("auth.account.deactivate", emailOriginal, Map.of(USERID, userId));
     }
 
     /**

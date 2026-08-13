@@ -269,6 +269,12 @@ public class AuthUseCaseImpl implements AuthUseCase {
             user.setDisplayName(req.getDisplayName().trim());
         if (req.getCompanyName() != null)
             user.setCompanyName(req.getCompanyName().trim());
+        if (req.getPhone() != null) {
+            // Teléfono ÚNICO en toda la app (índice parcial en BD); vacío lo limpia. La violación del índice
+            // se traduce a un mensaje humano en el handler global (constraint uk_users_phone).
+            String phone = req.getPhone().trim();
+            user.setPhone(phone.isBlank() ? null : phone);
+        }
         if (req.getCountry() != null) {
             String newCountry = req.getCountry().trim().toUpperCase();
             String current = user.getCountry() != null ? user.getCountry().trim().toUpperCase() : null;
