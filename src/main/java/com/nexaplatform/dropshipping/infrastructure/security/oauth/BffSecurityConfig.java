@@ -83,7 +83,8 @@ public class BffSecurityConfig {
                 "/api/catalog/**", "/api/billing/**", API_CONTACT, "/api/contact/**", "/api/newsletter/**",
                 "/api/affiliate/**", "/api/search", "/api/search/**", "/api/shipping/**", "/api/currency/**",
                 "/api/languages", "/api/languages/**", "/api/warehouses", "/api/warehouses/**", "/api/academy/**",
-                "/api/mentors", "/api/mentors/**", "/api/pod/**", "/api/campaigns/**", "/api/geo")
+                "/api/mentors", "/api/mentors/**", "/api/pod/**", "/api/campaigns/**", "/api/geo",
+                "/api/captcha/**")
                 .cors(Customizer.withDefaults())// NOSONAR java:S4502 — API stateless con token Bearer: no hay cookie de sesión que un tercero pueda hacer viajar, que es lo que CSRF protege.
                 .csrf(csrf -> csrf.disable()) // NOSONAR java:S4502 — API stateless con Bearer, sin cookie de sesión
                 .headers(h -> h
@@ -98,6 +99,8 @@ public class BffSecurityConfig {
                         .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/activate",
                                 "/api/auth/refresh", "/api/auth/password-reset/**", "/api/webhooks/**")
                         .permitAll()
+                        // Reto CAPTCHA (proof-of-work): el navegador lo pide antes de enviar un formulario público.
+                        .requestMatchers(HttpMethod.GET, "/api/captcha/challenge").permitAll()
                         // El estimado de margen/ganancia es SOLO para ADMIN (ni USER ni OPERATOR/soporte).
                         // Debe ir ANTES del permitAll general de GET del catálogo público.
                         .requestMatchers(HttpMethod.GET, "/api/catalog/products/*/margin-estimate")

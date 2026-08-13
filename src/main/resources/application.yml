@@ -215,6 +215,14 @@ nexadrop:
     poll-ms: ${OUTBOX_POLL_MS:500}              # dispatcher polling interval
   storefront:
     base-url: ${STOREFRONT_BASE_URL:http://localhost:3003}  # for email CTA / unsubscribe links
+  captcha:
+    # CAPTCHA proof-of-work (ALTCHA) en formularios públicos: registro, contacto, reset y newsletter.
+    enabled: ${CAPTCHA_ENABLED:true}
+    # Clave HMAC que firma los retos. En PROD fíjala por entorno (si se deja vacía se genera una
+    # aleatoria por arranque: vale para local/PRE de un solo nodo, pero un reinicio invalida retos en vuelo).
+    hmac-key: ${CAPTCHA_HMAC_KEY:}
+    max-number: ${CAPTCHA_MAX_NUMBER:100000}   # coste del proof-of-work (a mayor, más caro para el bot)
+    expiry-seconds: ${CAPTCHA_EXPIRY_SECONDS:300}
   invoice:
     # Datos fiscales del EMISOR para que la factura sea un documento legal. Rellénalos por
     # entorno (Railway). Si legal-name queda vacío, el bloque del emisor NO se pinta.
