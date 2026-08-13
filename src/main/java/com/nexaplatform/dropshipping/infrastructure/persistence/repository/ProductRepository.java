@@ -125,18 +125,26 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
               AND (:minRating  IS NULL OR p.rating >= :minRating)
               AND (:minInv     IS NULL OR p.inventoryCount >= :minInv)
               AND (CAST(:needle AS string) IS NULL
-                   OR LOWER(p.titleZh) LIKE CONCAT('%', CAST(:needle AS string), '%')
-                   OR LOWER(p.externalId) LIKE CONCAT('%', CAST(:needle AS string), '%')
-                   OR LOWER(p.slug) LIKE CONCAT('%', CAST(:needle AS string), '%')
+                   OR nx_norm(p.titleZh)    LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')
+                   OR nx_norm(p.externalId) LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')
+                   OR nx_norm(p.slug)       LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')
+                   OR nx_wmatch(CAST(:needle AS string), p.titleZh) = TRUE
                    OR EXISTS (SELECT 1 FROM ProductTranslationEntity t
                               WHERE t.product = p
-                                AND (LOWER(t.title) LIKE CONCAT('%', CAST(:needle AS string), '%')
-                                     OR LOWER(t.shortDescription) LIKE CONCAT('%', CAST(:needle AS string), '%')
-                                     OR LOWER(t.description) LIKE CONCAT('%', CAST(:needle AS string), '%')))
+                                AND (nx_norm(t.title)            LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')
+                                     OR nx_norm(t.shortDescription) LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')
+                                     OR nx_norm(t.description)       LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')
+                                     OR nx_wmatch(CAST(:needle AS string), t.title) = TRUE))
                    OR EXISTS (SELECT 1 FROM ProductAttributeEntity a
                               WHERE a.product = p
-                                AND (LOWER(a.attrValue) LIKE CONCAT('%', CAST(:needle AS string), '%')
-                                     OR LOWER(a.attrKey) LIKE CONCAT('%', CAST(:needle AS string), '%'))))
+                                AND nx_norm(a.attrValue) LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%'))
+                   OR EXISTS (SELECT 1 FROM VariantOptionEntity vo JOIN vo.values vv
+                              WHERE vo.product = p
+                                AND (nx_norm(vv.valueZh) LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')
+                                     OR nx_norm(vv.value) LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')))
+                   OR EXISTS (SELECT 1 FROM VariantValueTranslationEntity vt
+                              WHERE vt.variantValue.option.product = p
+                                AND nx_norm(vt.value) LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')))
             """)
     // Un parámetro por filtro es una exigencia de Spring Data: cada :nombre de la consulta se enlaza con un
     // argumento del método. Agruparlos en un record obligaría a reescribir la consulta con expresiones SpEL
@@ -165,14 +173,26 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
               AND (:categoryId IS NULL OR p.category.id = :categoryId)
               AND (:verified IS NULL OR p.verified = :verified)
               AND (:needle = ''
-                   OR LOWER(p.titleZh) LIKE CONCAT('%', :needle, '%')
-                   OR LOWER(p.externalId) LIKE CONCAT('%', :needle, '%')
-                   OR LOWER(p.slug) LIKE CONCAT('%', :needle, '%')
+                   OR nx_norm(p.titleZh)    LIKE CONCAT('%', nx_norm(:needle), '%')
+                   OR nx_norm(p.externalId) LIKE CONCAT('%', nx_norm(:needle), '%')
+                   OR nx_norm(p.slug)       LIKE CONCAT('%', nx_norm(:needle), '%')
+                   OR nx_wmatch(:needle, p.titleZh) = TRUE
                    OR EXISTS (SELECT 1 FROM ProductTranslationEntity t
                               WHERE t.product = p
-                                AND (LOWER(t.title) LIKE CONCAT('%', :needle, '%')
-                                     OR LOWER(t.shortDescription) LIKE CONCAT('%', :needle, '%')
-                                     OR LOWER(t.description) LIKE CONCAT('%', :needle, '%'))))
+                                AND (nx_norm(t.title)            LIKE CONCAT('%', nx_norm(:needle), '%')
+                                     OR nx_norm(t.shortDescription) LIKE CONCAT('%', nx_norm(:needle), '%')
+                                     OR nx_norm(t.description)       LIKE CONCAT('%', nx_norm(:needle), '%')
+                                     OR nx_wmatch(:needle, t.title) = TRUE))
+                   OR EXISTS (SELECT 1 FROM ProductAttributeEntity a
+                              WHERE a.product = p
+                                AND nx_norm(a.attrValue) LIKE CONCAT('%', nx_norm(:needle), '%'))
+                   OR EXISTS (SELECT 1 FROM VariantOptionEntity vo JOIN vo.values vv
+                              WHERE vo.product = p
+                                AND (nx_norm(vv.valueZh) LIKE CONCAT('%', nx_norm(:needle), '%')
+                                     OR nx_norm(vv.value) LIKE CONCAT('%', nx_norm(:needle), '%')))
+                   OR EXISTS (SELECT 1 FROM VariantValueTranslationEntity vt
+                              WHERE vt.variantValue.option.product = p
+                                AND nx_norm(vt.value) LIKE CONCAT('%', nx_norm(:needle), '%')))
             """)
     Page<ProductEntity> searchAdmin(@Param("status") ProductStatus status, @Param("categoryId") UUID categoryId,
             @Param("needle") String needle, @Param("verified") Boolean verified, Pageable pageable);
