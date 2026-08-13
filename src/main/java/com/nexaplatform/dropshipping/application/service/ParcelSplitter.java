@@ -11,8 +11,8 @@ import java.util.List;
  * Reparte las líneas de un pedido en los bultos necesarios para que cada uno quepa en el canal del
  * transportista.
  *
- * <p>Cada producto logístico impone un peso y un valor declarado máximos —el canal BPA rechaza más de
- * 2 kg o más de 24 $— así que un carrito grande no viaja en un solo paquete. Este repartidor decide
+ * <p>Cada producto logístico impone un peso y un valor declarado máximos —el canal BPA contratado rechaza
+ * más de 2 kg o más de 155 $— así que un carrito grande no viaja en un solo paquete. Este repartidor decide
  * cuántos bultos hacen falta y qué unidades van en cada uno; después, cada bulto se da de alta como una
  * guía independiente.
  *

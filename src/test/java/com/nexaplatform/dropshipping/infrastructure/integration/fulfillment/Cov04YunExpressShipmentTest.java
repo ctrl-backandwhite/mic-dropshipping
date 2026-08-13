@@ -16,6 +16,8 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Caini
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.BeforeEach;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService.DutyParcel;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -29,6 +31,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -37,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -75,7 +79,7 @@ class Cov04YunExpressShipmentTest {
 
     @BeforeEach
     void setUp() {
-        service = new YunExpressFulfillmentService(zoneRepository, client, customsValuation, productRepository,
+        service = new YunExpressFulfillmentService(zoneRepository, client, customsValuation, new CustomsDutyLinesService(), productRepository,
                 currencyRateService, new MockEnvironment());
         ReflectionTestUtils.setField(service, "enabled", true);
         ReflectionTestUtils.setField(service, "productCode", "BPA");
@@ -98,7 +102,7 @@ class Cov04YunExpressShipmentTest {
                 .thenReturn(Optional.of(CainiaoZoneEntity.builder().countryCode("ES").countryName("España")
                         .zone("EU").baseCents(500).perKgCents(1000).etaMinDays(5).etaMaxDays(12).enabled(true)
                         .build()));
-        when(customsValuation.valuate(anyString(), anyInt(), anyInt(), anyInt()))
+        when(customsValuation.valuate(anyString(), anyInt(), anyInt(), anyList()))
                 .thenReturn(valoracion(false));
         when(client.post(eq(PATH_SUBSCRIBE), any(Object.class))).thenReturn(ok("{\"success\":true}"));
     }
@@ -317,9 +321,15 @@ class Cov04YunExpressShipmentTest {
     void seDeclaraElValorIntrinsecoDeLosBienesYNoElTotalDelPedido() {
         // Declarar de menos es infradeclaración; declarar el total (con envío/impuesto) hace que el
         // transportista liquide impuesto de más a cargo del comercio.
-        service.declarationFor(pedido(linea(1, 4500)));
+        OrderItem item = linea(1, 4500);
+        ProductEntity producto = ProductEntity.builder().hsCode("610910").weightGrams(300).build();
+        producto.setId(item.getProductId());
+        when(productRepository.findById(item.getProductId())).thenReturn(Optional.of(producto));
 
-        verify(customsValuation).valuate("ES", 4500, 0, 1);
+        service.declarationFor(pedido(item));
+
+        // El valor declarado es el de la mercancía, y el bulto que lo ampara lleva UNA partida arancelaria.
+        verify(customsValuation).valuate("ES", 4500, 0, List.of(new DutyParcel(4500, 1)));
     }
 
     @Test

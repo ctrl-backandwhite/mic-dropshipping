@@ -39,6 +39,10 @@ server:
   port: 0
 
 nexadrop:
+  search:
+    # Sin reindexado automático al arrancar: en los tests el índice se puebla explícitamente cuando hace
+    # falta, y un barrido de fondo sobre el catálogo entero solo añadiría ruido y lentitud.
+    auto-reindex: false
   captcha:
     # Los tests no resuelven proof-of-work: se desactiva la verificación para no bloquear los POST
     # a los formularios públicos (registro, contacto, reset, newsletter).

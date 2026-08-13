@@ -84,11 +84,16 @@ public class CustomsValuationService {
      * @param countryCode         país de destino (ISO-2)
      * @param intrinsicValueCents valor de los bienes que paga el cliente (subtotal − descuento), céntimos USD
      * @param taxCents            impuesto ya calculado sobre la base imponible, céntimos USD
+     * @param parcels             los bultos que se van a declarar, con sus partidas arancelarias. Cada bulto
+     *                            es un envío a efectos de aduana: el derecho se cobra por sus líneas y el
+     *                            umbral de franquicia se mide sobre SU valor, no sobre el del pedido entero
+     *                            (ver {@link CustomsDutyLinesService})
      */
     @Transactional(readOnly = true)
-    public CustomsValuation valuate(String countryCode, int intrinsicValueCents, int taxCents, int articleCount) {
+    public CustomsValuation valuate(String countryCode, int intrinsicValueCents, int taxCents,
+            List<CustomsDutyLinesService.DutyParcel> parcels) {
         int intrinsic = Math.max(0, intrinsicValueCents);
-        int articles = Math.max(0, articleCount);
+        List<CustomsDutyLinesService.DutyParcel> bultos = parcels == null ? List.of() : parcels;
         Optional<CountryCustomsRuleEntity> found = activeRule(countryCode);
         if (found.isEmpty()) {
             return neutral(countryCode, intrinsic);
@@ -96,7 +101,11 @@ public class CustomsValuationService {
         CountryCustomsRuleEntity r = found.get();
         TaxMode mode = TaxMode.from(r.getTaxMode());
         OverThresholdPolicy policy = OverThresholdPolicy.from(r.getOverThresholdPolicy());
-        boolean exceeded = exceedsDeMinimis(r, intrinsic);
+        // El umbral se comprueba bulto a bulto: un pedido de 400 EUR repartido en cuatro bultos de 100 no
+        // supera la franquicia en ninguna de sus cuatro declaraciones. Si no hay bultos calculados (rutas
+        // que aún no los conocen), se cae al valor del pedido, que es el comportamiento anterior.
+        boolean exceeded = bultos.isEmpty() ? exceedsDeMinimis(r, intrinsic)
+                : bultos.stream().anyMatch(b -> exceedsDeMinimis(r, b.valueCents()));
         boolean blocked = exceeded && policy == OverThresholdPolicy.BLOCK;
 
         // El recargo solo existe en DDP: en DDU el impuesto y su gestión los asume el destinatario.
@@ -105,9 +114,17 @@ public class CustomsValuationService {
             handling = r.getHandlingFeeCents() + percentOf(Math.max(0, taxCents), r.getHandlingPercentBps());
             // Comisión del prepago de IVA (sin IOSS): % sobre el VALOR DECLARADO, además del IVA.
             handling += percentOf(intrinsic, r.getVatPrepayPercentBps());
-            // Arancel temporal de la UE por ARTÍCULO (producto distinto): tarifa × nº de artículos.
-            handling += Math.multiplyExact(articles,
-                    toUsdCents(r.getPerArticleFeeAmount(), r.getPerArticleFeeCurrency()));
+            // Derecho temporal de la UE: tarifa × nº de LÍNEAS DE DECLARACIÓN (partidas arancelarias
+            // distintas), contadas dentro de cada bulto y solo en los bultos que no superan la franquicia
+            // —por encima de ella no se aplica el importe fijo, sino el arancel normal del TARIC—.
+            int perLine = toUsdCents(r.getPerArticleFeeAmount(), r.getPerArticleFeeCurrency());
+            if (perLine > 0) {
+                for (CustomsDutyLinesService.DutyParcel bulto : bultos) {
+                    if (!exceedsDeMinimis(r, bulto.valueCents())) {
+                        handling += Math.multiplyExact(bulto.tariffLines(), perLine);
+                    }
+                }
+            }
             if (exceeded && policy == OverThresholdPolicy.SURCHARGE) {
                 handling += r.getOverThresholdSurchargeCents() + percentOf(intrinsic, r.getDutyRateBps());
             }

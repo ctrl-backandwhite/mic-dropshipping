@@ -1,0 +1,136 @@
+{
+  "settings": {
+    "index": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "max_result_window": 20000
+    },
+    "analysis": {
+      "filter": {
+        "nx_stop_es": { "type": "stop", "stopwords": "_spanish_" },
+        "nx_stem_es": { "type": "stemmer", "language": "spanish" },
+        "nx_stop_en": { "type": "stop", "stopwords": "_english_" },
+        "nx_stem_en": { "type": "stemmer", "language": "english" },
+        "nx_stop_pt": { "type": "stop", "stopwords": "_portuguese_" },
+        "nx_stem_pt": { "type": "stemmer", "language": "portuguese" },
+        "nx_stop_fr": { "type": "stop", "stopwords": "_french_" },
+        "nx_stem_fr": { "type": "stemmer", "language": "french" },
+        "nx_stop_it": { "type": "stop", "stopwords": "_italian_" },
+        "nx_stem_it": { "type": "stemmer", "language": "italian" },
+        "nx_stop_de": { "type": "stop", "stopwords": "_german_" },
+        "nx_stem_de": { "type": "stemmer", "language": "german" },
+        "nx_stop_nl": { "type": "stop", "stopwords": "_dutch_" },
+        "nx_stem_nl": { "type": "stemmer", "language": "dutch" },
+        "nx_elision_it": {
+          "type": "elision",
+          "articles_case": true,
+          "articles": ["c", "l", "all", "dall", "dell", "nell", "sull", "coll", "pell", "gl", "agl", "dagl", "degl", "negl", "sugl", "un", "m", "t", "s", "v", "d"]
+        },
+
+        "nx_foreign": {
+          "type": "stemmer_override",
+          "rules": [
+            "shorts => short",
+            "jeans => jean",
+            "leggings => legging",
+            "boxers => boxer",
+            "tops => top",
+            "crops => crop",
+            "blazers => blazer",
+            "hoodies => hoodie",
+            "sneakers => sneaker",
+            "joggers => jogger",
+            "cardigans => cardigan",
+            "bodies => body",
+            "bodys => body",
+            "sets => set",
+            "packs => pack",
+            "kits => kit",
+            "slips => slip",
+            "polos => polo",
+            "jerseys => jersey",
+            "pijamas => pijama",
+            "tanks => tank"
+          ]
+        },
+
+        "nx_syn_es": {
+          "type": "synonym_graph",
+          "lenient": true,
+          "synonyms": [
+            "ropa intima, ropa interior, lenceria",
+            "sujetador, sosten, brasier, bra",
+            "bragas, panties, calzones",
+            "camiseta, playera, remera, polera",
+            "sudadera, buzo, hoodie",
+            "chaqueta, campera, casaca",
+            "zapatillas, deportivas, sneakers, tenis",
+            "pantalon corto, short, bermudas",
+            "jersey, sueter, pullover, sweater",
+            "gafas, lentes, anteojos",
+            "bolso, cartera",
+            "falda, pollera",
+            "abrigo, tapado",
+            "vaqueros, jeans, tejanos",
+            "traje de bano, banador, malla de bano",
+            "botas, botines",
+            "movil, celular, telefono"
+          ]
+        }
+      },
+      "analyzer": {
+        "nx_es": { "tokenizer": "standard", "filter": ["lowercase", "asciifolding", "nx_foreign", "nx_stop_es", "nx_stem_es"] },
+        "nx_es_search": { "tokenizer": "standard", "filter": ["lowercase", "asciifolding", "nx_syn_es", "nx_foreign", "nx_stop_es", "nx_stem_es"] },
+        "nx_en": { "tokenizer": "standard", "filter": ["lowercase", "asciifolding", "nx_stop_en", "nx_stem_en"] },
+        "nx_pt": { "tokenizer": "standard", "filter": ["lowercase", "asciifolding", "nx_foreign", "nx_stop_pt", "nx_stem_pt"] },
+        "nx_fr": { "tokenizer": "standard", "filter": ["elision", "lowercase", "asciifolding", "nx_foreign", "nx_stop_fr", "nx_stem_fr"] },
+        "nx_it": { "tokenizer": "standard", "filter": ["nx_elision_it", "lowercase", "asciifolding", "nx_foreign", "nx_stop_it", "nx_stem_it"] },
+        "nx_de": { "tokenizer": "standard", "filter": ["lowercase", "asciifolding", "nx_foreign", "nx_stop_de", "nx_stem_de"] },
+        "nx_nl": { "tokenizer": "standard", "filter": ["lowercase", "asciifolding", "nx_foreign", "nx_stop_nl", "nx_stem_nl"] },
+        "nx_plain": { "tokenizer": "standard", "filter": ["lowercase", "asciifolding"] }
+      }
+    }
+  },
+  "mappings": {
+    "dynamic": false,
+    "properties": {
+      "id": { "type": "keyword" },
+      "slug": { "type": "keyword", "fields": { "text": { "type": "text", "analyzer": "nx_plain" } } },
+      "externalId": { "type": "keyword" },
+      "source": { "type": "keyword" },
+      "status": { "type": "keyword" },
+      "categoryId": { "type": "keyword" },
+      "supplierId": { "type": "keyword" },
+      "shipFrom": { "type": "keyword" },
+      "mainImage": { "type": "keyword", "index": false },
+
+      "hasImage": { "type": "boolean" },
+      "hasVideo": { "type": "boolean" },
+      "freeShipping": { "type": "boolean" },
+      "selfPickup": { "type": "boolean" },
+      "verified": { "type": "boolean" },
+
+      "basePrice": { "type": "scaled_float", "scaling_factor": 10000 },
+      "trendScore": { "type": "float" },
+      "monthlySales": { "type": "integer" },
+      "rating": { "type": "float" },
+      "inventoryCount": { "type": "integer" },
+      "ingestedAt": { "type": "date" },
+
+      "titleZh": { "type": "text", "analyzer": "cjk" },
+      "titleEs": { "type": "text", "analyzer": "nx_es", "search_analyzer": "nx_es_search", "copy_to": "titleAll" },
+      "titleEn": { "type": "text", "analyzer": "nx_en", "copy_to": "titleAll" },
+      "titlePt": { "type": "text", "analyzer": "nx_pt", "copy_to": "titleAll" },
+      "titleFr": { "type": "text", "analyzer": "nx_fr", "copy_to": "titleAll" },
+      "titleIt": { "type": "text", "analyzer": "nx_it", "copy_to": "titleAll" },
+      "titleDe": { "type": "text", "analyzer": "nx_de", "copy_to": "titleAll" },
+      "titleNl": { "type": "text", "analyzer": "nx_nl", "copy_to": "titleAll" },
+      "titleAll": { "type": "text", "analyzer": "nx_plain" },
+
+      "attrs": { "type": "text", "analyzer": "nx_es", "search_analyzer": "nx_es_search" },
+      "variants": { "type": "text", "analyzer": "nx_plain" },
+      "categoryName": { "type": "text", "analyzer": "nx_es", "search_analyzer": "nx_es_search" },
+      "descAll": { "type": "text", "analyzer": "nx_plain" }
+    }
+  }
+}

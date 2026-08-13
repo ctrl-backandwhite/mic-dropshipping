@@ -44,6 +44,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopC
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserAddressRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService.DutyParcel;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -67,6 +68,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -126,6 +128,10 @@ class Cov06OrderUseCaseImplTest {
     @Mock
     com.nexaplatform.dropshipping.application.service.SupplierPurchaseService supplierPurchaseService;
 
+    @org.mockito.Spy
+    com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService customsDutyLinesService =
+            new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService();
+
     @InjectMocks
     OrderUseCaseImpl useCase;
 
@@ -137,7 +143,7 @@ class Cov06OrderUseCaseImplTest {
         when(fulfillment.isSupported(anyString())).thenReturn(true);
         when(fulfillment.quote(any(), any(FulfillmentProvider.ParcelSpec.class)))
                 .thenReturn(ShippingQuote.unsupported("XX"));
-        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyInt()))
+        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList()))
                 .thenAnswer(inv -> totalesNeutros(inv.getArgument(3)));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
             Order o = inv.getArgument(0);

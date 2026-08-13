@@ -7,6 +7,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEn
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -43,7 +44,7 @@ class YunExpressDeclarationSourcesTest {
     ProductRepository productRepository;
 
     private YunExpressFulfillmentService service() {
-        return new YunExpressFulfillmentService(null, null, null, productRepository, null, null);
+        return new YunExpressFulfillmentService(null, null, null, new CustomsDutyLinesService(), productRepository, null, null);
     }
 
     private final UUID productId = UUID.randomUUID();

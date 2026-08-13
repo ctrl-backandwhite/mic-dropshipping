@@ -12,6 +12,7 @@ import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunE
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CainiaoZoneEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CainiaoZoneRepository;
 import org.junit.jupiter.api.BeforeEach;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -66,7 +67,7 @@ class Cov04YunExpressQuoteTest {
 
     @BeforeEach
     void setUp() {
-        service = new YunExpressFulfillmentService(zoneRepository, client, customsValuation, null,
+        service = new YunExpressFulfillmentService(zoneRepository, client, customsValuation, new CustomsDutyLinesService(), null,
                 currencyRateService, new MockEnvironment());
         ReflectionTestUtils.setField(service, "enabled", false);
         ReflectionTestUtils.setField(service, "quoteTimeoutSeconds", 5L);

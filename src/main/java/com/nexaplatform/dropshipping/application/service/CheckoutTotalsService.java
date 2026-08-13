@@ -4,6 +4,8 @@ import com.nexaplatform.dropshipping.application.service.CustomsValuationService
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -62,10 +64,12 @@ public class CheckoutTotalsService {
      * @param discountedSubtotalCents  subtotal de producto menos descuento — es también el valor intrínseco
      *                                 que se declarará en aduana
      * @param shippingBaseCents        tarifa de envío cotizada por el transportista
+     * @param parcels                  bultos a declarar con sus partidas arancelarias: sobre ellos se calcula
+     *                                 el derecho fijo de la UE y se mide la franquicia (uno por declaración)
      */
     @Transactional(readOnly = true)
     public CheckoutTotals compute(String country, String region, int discountedSubtotalCents,
-            int shippingBaseCents, int articleCount) {
+            int shippingBaseCents, List<CustomsDutyLinesService.DutyParcel> parcels) {
         int base = Math.max(0, shippingBaseCents);
         int intrinsic = Math.max(0, discountedSubtotalCents);
         int taxableBase = Math.addExact(intrinsic, base);
@@ -73,7 +77,7 @@ public class CheckoutTotalsService {
         int taxRateBps = taxService.rateBpsFor(country, region);
         int taxCents = taxService.taxCentsFor(country, region, taxableBase);
 
-        CustomsValuation customs = customsValuationService.valuate(country, intrinsic, taxCents, articleCount);
+        CustomsValuation customs = customsValuationService.valuate(country, intrinsic, taxCents, parcels);
         int handling = customs.handlingFeeCents();
         if (log.isDebugEnabled() && (handling > 0 || customs.deMinimisExceeded())) {
             log.debug("Despacho {}: modo={} declarado={} umbralSuperado={} recargo={}", country,

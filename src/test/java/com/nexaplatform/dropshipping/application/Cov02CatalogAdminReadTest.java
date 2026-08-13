@@ -55,7 +55,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.atLeastOnce;
@@ -143,15 +145,15 @@ class Cov02CatalogAdminReadTest {
     void conTextoDeBusquedaSeConsultaTodoElCatalogoNoSoloLaPaginaActual() {
         // La caja de búsqueda del admin debe encontrar el producto esté en la página que esté y en
         // cualquier idioma; filtrar en cliente solo miraría las 20 filas visibles.
-        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), any(Pageable.class)))
+        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(Pageable.class)))
                 .thenReturn(pagina(producto));
 
         Page<ProductSummaryView> page = useCase.listProductsForAdmin("ACTIVE", null, "  Bailarinas  ", 0, 20,
                 "es", null, null);
 
         assertThat(page.getTotalElements()).isEqualTo(1);
-        verify(productJpaRepository).searchAdmin(eq(ProductStatus.ACTIVE), isNull(), eq("bailarinas"), isNull(),
-                any(Pageable.class));
+        verify(productJpaRepository).searchAdmin(eq(ProductStatus.ACTIVE), isNull(), eq("bailarinas"), isNull(), eq("es"),
+                eq(false), any(Pageable.class));
         // El listado se traduce al idioma pedido: el admin en español no puede ver títulos en chino.
         verify(productMapper).toSummary(producto, "es");
     }
@@ -159,12 +161,12 @@ class Cov02CatalogAdminReadTest {
     @Test
     void elFiltroDeVerificadosUsaLaBusquedaAunqueNoHayaTexto() {
         // needle "" (no nulo) evita el error de tipo de Postgres al bindear null en el LIKE.
-        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), any(Pageable.class)))
+        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(Pageable.class)))
                 .thenReturn(pagina(producto));
 
         useCase.listProductsForAdmin(null, null, null, 0, 20, "es", null, Boolean.FALSE);
 
-        verify(productJpaRepository).searchAdmin(isNull(), isNull(), eq(""), eq(Boolean.FALSE),
+        verify(productJpaRepository).searchAdmin(isNull(), isNull(), eq(""), eq(Boolean.FALSE), eq("es"), eq(false),
                 any(Pageable.class));
     }
 
@@ -175,7 +177,7 @@ class Cov02CatalogAdminReadTest {
         useCase.listProductsForAdmin("ALL", null, "", 0, 20, "es", null, null);
 
         verify(productJpaRepository).findAll(any(Pageable.class));
-        verify(productJpaRepository, never()).searchAdmin(any(), any(), any(), any(), any(Pageable.class));
+        verify(productJpaRepository, never()).searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(Pageable.class));
     }
 
     @Test

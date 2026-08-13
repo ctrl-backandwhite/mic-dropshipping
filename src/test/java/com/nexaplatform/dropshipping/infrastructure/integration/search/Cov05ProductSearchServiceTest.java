@@ -42,13 +42,17 @@ class Cov05ProductSearchServiceTest {
 
     @Mock
     OpenSearchClient client;
+    @Mock
+    ProductIndexer indexer;
 
     @InjectMocks
     ProductSearchService service;
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(service, "index", "products");
+        // El índice ya no es un campo del servicio: su nombre lleva la versión del esquema y lo resuelve
+        // el indexador, para que un cambio de analizadores no exija tocar la configuración.
+        org.mockito.Mockito.lenient().when(indexer.indexName()).thenReturn("products-v2");
     }
 
     @SuppressWarnings("rawtypes")

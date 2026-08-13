@@ -18,6 +18,7 @@ import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
 import com.nexaplatform.dropshipping.application.service.StockService;
 import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import com.nexaplatform.dropshipping.application.service.ParcelAggregator;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.PromotionService;
@@ -120,6 +121,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final OrderEmailService orderEmailService;
     private final FulfillmentProvider fulfillment;
     private final CheckoutTotalsService checkoutTotalsService;
+    private final CustomsDutyLinesService customsDutyLinesService;
     private final OperatorCommissionService operatorCommissionService;
     private final PromotionService promotionService;
     private final SupplierPurchaseService supplierPurchaseService;
@@ -368,11 +370,10 @@ public class OrderUseCaseImpl implements OrderUseCase {
         //  · IVA por estado/provincia (US/CA/BR) o tasa nacional, sobre (subtotal − descuento) + envío.
         //  · Recargo del despacho DDP del país (lo que el transportista cobra por adelantar el impuesto).
         //  · Recargo de despacho formal si el valor de los bienes supera el umbral de minimis del destino.
-        // Artículos = productos DISTINTOS del pedido (para el arancel UE de 3 EUR por artículo).
-        int articleCount = (int) order.getItems().stream().map(OrderItem::getProductId)
-                .filter(p -> p != null).distinct().count();
+        // Derecho fijo de la UE: se cobra por línea de declaración (partida arancelaria) dentro de cada
+        // bulto, no por producto ni por unidad. Ver CustomsDutyLinesService.
         CheckoutTotalsService.CheckoutTotals totals = checkoutTotalsService.compute(order.getShippingCountry(),
-                order.getShippingState(), discountedSubtotal, shippingCents, articleCount);
+                order.getShippingState(), discountedSubtotal, shippingCents, customsParcelsOf(order));
         // Destino cuya política prohíbe vender por encima del umbral: se rechaza ANTES de cobrar, en vez de
         // aceptar un pedido que costaría aranceles y despacho formal no repercutidos.
         if (totals.blocked()) {
@@ -1120,4 +1121,29 @@ public class OrderUseCaseImpl implements OrderUseCase {
                     status, o.getOrderNumber(), e.getMessage());
         }
     }
+
+    /**
+     * Bultos a declarar de un pedido, con sus partidas arancelarias. Es el mismo cálculo que se le mostró al
+     * cliente en el checkout, para que lo cobrado y lo declarado coincidan.
+     */
+    private java.util.List<CustomsDutyLinesService.DutyParcel> customsParcelsOf(Order order) {
+        java.util.List<CustomsDutyLinesService.Line> lines = new java.util.ArrayList<>();
+        for (OrderItem item : order.getItems()) {
+            if (item.getProductId() == null) {
+                continue;
+            }
+            ProductEntity p = productRepository.findById(item.getProductId()).orElse(null);
+            if (p == null) {
+                continue;
+            }
+            ProductVariantEntity v = p.getVariants().stream()
+                    .filter(x -> item.getVariantId() != null && item.getVariantId().equals(x.getId())).findFirst()
+                    .orElse(null);
+            lines.add(new CustomsDutyLinesService.Line(p.getId(), p.getHsCode(), Math.max(1, item.getQuantity()),
+                    item.getUnitPriceCents(), ParcelAggregator.unitWeightGrams(p, v), 0, 0, 0,
+                    ParcelAggregator.hasBattery(p)));
+        }
+        return customsDutyLinesService.parcelsOf(lines);
+    }
+
 }
