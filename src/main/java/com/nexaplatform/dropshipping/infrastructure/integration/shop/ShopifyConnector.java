@@ -29,8 +29,10 @@ public class ShopifyConnector implements ShopConnector {
 
     private static final String API_VERSION = "2024-10";
     private final ObjectMapper objectMapper;
+    // Anti-SSRF: NUNCA seguir redirecciones automáticamente (solo se valida el host inicial; un 3xx a un
+    // host interno se seguiría sin re-validar). La API de Shopify (*.myshopify.com) no redirige a red interna.
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8))
-            .followRedirects(HttpClient.Redirect.NORMAL).build();
+            .followRedirects(HttpClient.Redirect.NEVER).build();
 
     @Override
     public String platform() {

@@ -245,3 +245,5 @@ databaseChangeLog:
       file: db/changelog/schema-v117-cancel-reminder.sql
   - include:
       file: db/changelog/schema-v118-moq-margin-setting.sql
+  - include:
+      file: db/changelog/schema-v119-search-trgm.sql

@@ -141,7 +141,7 @@ class Cov03TotpBackupCodesTest {
         String hash = new BCryptPasswordEncoder(10).encode(codigo);
         TotpSecretEntity rec = registro(true);
         rec.setRecoveryCodesHash("[\"" + hash + "\"]");
-        when(repo.findById(userId)).thenReturn(Optional.of(rec));
+        when(repo.findByIdForUpdate(userId)).thenReturn(Optional.of(rec));
         List<String> guardados = new ArrayList<>(List.of(hash));
         when(mapper.readValue(anyString(), eq(List.class))).thenReturn(guardados);
         when(mapper.writeValueAsString(any())).thenReturn("[null]");

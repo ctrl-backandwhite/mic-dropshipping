@@ -58,6 +58,8 @@ class Cov09RegisteredClientConfigTest {
     RegisteredClientRepository repo;
     @Mock
     CustomerSubscriptionRepository subsRepo;
+    @Mock
+    org.springframework.core.env.Environment environment;
 
     @InjectMocks
     private RegisteredClientConfig subject;

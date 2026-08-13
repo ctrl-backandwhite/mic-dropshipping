@@ -60,6 +60,10 @@ import java.util.UUID;
 public class AdminCatalogController implements AdminCatalogApi {
 
     private static final int MAX_BATCH = 1000;
+    /** Topes anti-DoS de la importación NDJSON (cuerpo crudo por streaming). */
+    private static final long MAX_IMPORT_BYTES = 100L * 1024 * 1024; // 100 MB
+    private static final int MAX_IMPORT_LINE_CHARS = 2_000_000;       // ~2 MB por línea
+    private static final long MAX_IMPORT_RECORDS = 1_000_000L;
 
     private final CatalogUseCase catalogUseCase;
     private final ObjectMapper objectMapper;
@@ -318,12 +322,26 @@ public class AdminCatalogController implements AdminCatalogApi {
     @Override
     public ResponseEntity<BulkResultDtoOut> importProductsNdjson(HttpServletRequest request, int batch) {
         int safeBatch = Math.clamp(batch, 1, MAX_BATCH);
+        // Límites anti-DoS/OOM (el cuerpo se lee como stream crudo, sin los caps de multipart):
+        //  · Content-Length declarado por encima del tope → se rechaza sin leer.
+        //  · nº de registros y longitud de una línea acotados para no agotar memoria.
+        if (request.getContentLengthLong() > MAX_IMPORT_BYTES) {
+            throw new BusinessException("El fichero NDJSON supera el tamaño máximo permitido");
+        }
         NdjsonImportAccumulator acc = new NdjsonImportAccumulator();
         List<BulkProductDtoIn> buffer = new ArrayList<>(safeBatch);
+        long records = 0;
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(request.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
+                if (line.length() > MAX_IMPORT_LINE_CHARS) {
+                    throw new BusinessException("Una línea del NDJSON supera el tamaño máximo permitido");
+                }
+                if (++records > MAX_IMPORT_RECORDS) {
+                    throw new BusinessException("El NDJSON supera el número máximo de registros ("
+                            + MAX_IMPORT_RECORDS + ")");
+                }
                 BulkProductDtoIn row = parseNdjsonRow(line, acc);
                 if (row == null) {
                     continue;

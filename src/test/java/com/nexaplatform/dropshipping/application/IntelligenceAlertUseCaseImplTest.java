@@ -68,11 +68,12 @@ class IntelligenceAlertUseCaseImplTest {
 
     @Test
     void deactivate_flipsActiveAndUpdates() {
+        UUID userId = UUID.randomUUID();
         UUID id = UUID.randomUUID();
-        IntelligenceAlert existing = IntelligenceAlert.builder().id(id).active(true).build();
+        IntelligenceAlert existing = IntelligenceAlert.builder().id(id).userId(userId).active(true).build();
         when(intelligenceAlertRepository.getById(id)).thenReturn(existing);
 
-        useCase.deactivate(id);
+        useCase.deactivate(userId, id);
 
         assertThat(existing.isActive()).isFalse();
         verify(intelligenceAlertRepository).update(existing);
@@ -83,8 +84,20 @@ class IntelligenceAlertUseCaseImplTest {
         UUID id = UUID.randomUUID();
         when(intelligenceAlertRepository.getById(id)).thenReturn(null);
 
-        useCase.deactivate(id);
+        useCase.deactivate(UUID.randomUUID(), id);
 
+        verify(intelligenceAlertRepository, never()).update(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void deactivate_ignoresAlertOfAnotherUser() {
+        UUID id = UUID.randomUUID();
+        IntelligenceAlert ajena = IntelligenceAlert.builder().id(id).userId(UUID.randomUUID()).active(true).build();
+        when(intelligenceAlertRepository.getById(id)).thenReturn(ajena);
+
+        useCase.deactivate(UUID.randomUUID(), id); // otro usuario
+
+        assertThat(ajena.isActive()).isTrue();
         verify(intelligenceAlertRepository, never()).update(org.mockito.ArgumentMatchers.any());
     }
 }

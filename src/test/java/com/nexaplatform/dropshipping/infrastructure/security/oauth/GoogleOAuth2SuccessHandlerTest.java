@@ -46,6 +46,9 @@ class GoogleOAuth2SuccessHandlerTest {
     @Mock
     private DeviceSessionService deviceSessionService;
 
+    @Mock
+    private com.nexaplatform.dropshipping.application.service.TotpService totpService;
+
     private GoogleOAuth2SuccessHandler handler;
 
     private MockHttpServletRequest request;
@@ -54,7 +57,8 @@ class GoogleOAuth2SuccessHandlerTest {
     @BeforeEach
     void setUp() {
         // Trailing slash must be trimmed by the handler.
-        handler = new GoogleOAuth2SuccessHandler(userUseCase, userTokenService, deviceSessionService, FRONT + "/");
+        handler = new GoogleOAuth2SuccessHandler(userUseCase, userTokenService, deviceSessionService, totpService,
+                FRONT + "/");
         request = new MockHttpServletRequest();
         response = new MockHttpServletResponse();
     }

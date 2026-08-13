@@ -410,7 +410,7 @@ class Cov09PaymentGatewayFlowsTest {
         assertThat(p.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
         assertThat(p.getProvider()).isEqualTo("wallet");
         assertThat(o.getStatus()).isEqualTo(OrderStatus.PAID);
-        verify(walletUseCase).charge(eq(userId), eq(2500L), eq(orderId), eq("k1"), anyString());
+        verify(walletUseCase).charge(eq(userId), eq(2500L), eq(orderId), eq("order-charge-" + orderId), anyString());
         verify(stripe, never()).initiate(any());
     }
 
@@ -421,6 +421,7 @@ class Cov09PaymentGatewayFlowsTest {
         UUID esperado = UUID.nameUUIDFromBytes("partner:acme-client".getBytes());
         Order o = order(OrderStatus.AWAITING_PAYMENT);
         o.setUserId(null);
+        o.setPartnerAppId(esperado); // el pedido pertenece a ESTE partner (assertOrderOwnedByPartner)
         when(userRepository.findById(esperado)).thenReturn(Optional.of(mock(UserEntity.class)));
         Wallet w = new Wallet();
         w.setId(UUID.randomUUID());

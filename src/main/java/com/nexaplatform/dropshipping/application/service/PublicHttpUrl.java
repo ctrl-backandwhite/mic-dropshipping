@@ -33,8 +33,27 @@ public final class PublicHttpUrl {
      */
     private static volatile boolean allowPrivateTargets = false;
 
-    /** @param allow true sólo en pruebas: deja llamar a direcciones internas. */
+    /** true si estamos en runtime de PRUEBAS (JUnit en el classpath). En producción JUnit no está. */
+    private static final boolean TEST_RUNTIME = isTestRuntime();
+
+    private static boolean isTestRuntime() {
+        try {
+            Class.forName("org.junit.jupiter.api.Test");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+
+    /**
+     * @param allow true sólo en pruebas: deja llamar a direcciones internas.
+     * @throws IllegalStateException si se intenta activar FUERA de un runtime de pruebas — así activar la
+     *         desprotección SSRF en un entorno real es imposible por accidente (JUnit no está en producción).
+     */
     public static void allowPrivateTargets(boolean allow) {
+        if (allow && !TEST_RUNTIME) {
+            throw new IllegalStateException("allowPrivateTargets(true) solo se permite en pruebas");
+        }
         allowPrivateTargets = allow;
     }
 

@@ -427,6 +427,9 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         String ref = p.getProviderRef() != null ? p.getProviderRef() : "";
         boolean mock = ref.startsWith(CS_MOCK) || ref.startsWith(PAYPAL_MOCK) || ref.startsWith(PI_MOCK);
         if (mock) {
+            // FAIL-CLOSED: marcar un pedido como pagado por vía sintética (sin pasarela real) SOLO fuera de
+            // pro/pre. Evita que, si prod arranca con pagos deshabilitados, se confirmen pedidos gratis.
+            assertMockAllowed();
             return doConfirmSucceeded(p.getId(), Map.of(MOCK_CONFIRM, true, ORDERID, orderId.toString()));
         }
         if (p.getMethod() == PaymentMethod.PAYPAL) {
@@ -559,6 +562,10 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         String ref = p.getProviderRef() != null ? p.getProviderRef() : "";
         boolean mock = ref.startsWith(CS_MOCK) || ref.startsWith(PAYPAL_MOCK) || ref.startsWith(PI_MOCK);
         if (mock) {
+            // FAIL-CLOSED: acreditar un pago sintético (sin pasarela real) SOLO se permite fuera de pro/pre.
+            // Si prod arranca con las pasarelas deshabilitadas, initiate() genera refs mock; sin este guard
+            // cualquiera "confirmaría" una recarga y tendría saldo gratis. En pro/pre esto lanza excepción.
+            assertMockAllowed();
             return doConfirmSucceeded(p.getId(), Map.of(MOCK_CONFIRM, true));
         }
         if (p.getMethod() == PaymentMethod.PAYPAL) {
@@ -640,6 +647,10 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         assertOrderOwnedBy(order, userId);
         if (order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.REFUNDED) {
             throw new BusinessException("Order is " + order.getStatus() + " and cannot be paid");
+        }
+        // Un pedido ya PAGADO no se vuelve a cobrar (evita doble cargo al reintentar con otra clave idem).
+        if (order.getStatus() == OrderStatus.PAID) {
+            throw new BusinessException("Order is already PAID");
         }
 
         long amountUsdCents = order.getTotalCents();
@@ -803,6 +814,13 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     private Payment doChargeWalletForOrder(UUID orderId, UUID userId, String idempotencyKey) {
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException("Order"));
         assertOrderOwnedBy(order, userId);
+        if (order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.REFUNDED) {
+            throw new BusinessException("Order is " + order.getStatus() + " and cannot be paid");
+        }
+        // Un pedido ya PAGADO no se vuelve a cobrar (evita doble débito del wallet con otra clave idem).
+        if (order.getStatus() == OrderStatus.PAID) {
+            throw new BusinessException("Order is already PAID");
+        }
         UUID payerUserId = order.getUserId() != null ? order.getUserId() : userId;
         if (payerUserId == null)
             throw new BusinessException("Cannot resolve payer user for this order");
@@ -812,8 +830,12 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             throw new NotFoundException("User");
         Wallet wallet = walletUseCase.getOrCreate(payerUserId);
 
-        // El WalletUseCase.charge ya valida saldo y maneja idempotencia.
-        walletUseCase.charge(payerUserId, amountUsdCents, orderId, idempotencyKey, "Order " + order.getOrderNumber());
+        // El WalletUseCase.charge ya valida saldo y maneja idempotencia. La clave del cargo va ACOTADA AL
+        // PEDIDO ("order-charge-<orderId>"), no la del cliente: así dos peticiones concurrentes al MISMO
+        // pedido con claves idem distintas deduplican en el wallet y solo se debita UNA vez (el guard PAID
+        // solo cubre el caso secuencial).
+        String walletKey = "order-charge-" + orderId;
+        walletUseCase.charge(payerUserId, amountUsdCents, orderId, walletKey, "Order " + order.getOrderNumber());
 
         // Registramos el payment en SUCCEEDED para auditoría uniforme.
         Payment p = Payment.builder().userId(payerUserId).walletId(wallet.getId()).method(PaymentMethod.CARD) // sentinel: wallet no es un PaymentMethod del enum
@@ -856,6 +878,10 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Transactional
     public Payment initiatePartnerOrderPayment(Jwt jwt, UUID orderId, boolean wallet, PaymentMethod method,
             String idempotencyKey) {
+        // Cross-tenant: el pedido DEBE pertenecer a este partner. assertOrderOwnedBy tolera userId==null (los
+        // pedidos de partner no tienen userId), así que sin esta comprobación un partner podía pagar/forzar a
+        // PAID el pedido de OTRO partner conociendo su UUID.
+        assertOrderOwnedByPartner(jwt, orderId);
         UUID userId = resolvePartnerUserId(jwt);
         return doInitiateOrderPaymentView(orderId, userId, method, wallet, idempotencyKey);
     }

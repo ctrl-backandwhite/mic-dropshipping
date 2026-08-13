@@ -93,8 +93,18 @@ public class RedisCacheConfig {
                 .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
                 .changeDefaultVisibility(vc -> vc.withVisibility(PropertyAccessor.ALL,
                         JsonAutoDetect.Visibility.ANY))
+                // SEGURIDAD: el validador NO puede permitir Object.class (aceptaría cualquier @class → cadena
+                // de gadgets en deserialización). Se restringe a los tipos propios de la app y a los
+                // contenedores/valores estándar de la JDK que aparecen en los DTO cacheados. Cualquier otro
+                // tipo (los gadgets viven en otros paquetes) se rechaza.
                 .activateDefaultTyping(
-                        BasicPolymorphicTypeValidator.builder().allowIfBaseType(Object.class).build(),
+                        BasicPolymorphicTypeValidator.builder()
+                                .allowIfSubType("com.nexaplatform.dropshipping.")
+                                .allowIfSubType("java.util.")
+                                .allowIfSubType("java.lang.")
+                                .allowIfSubType("java.time.")
+                                .allowIfSubType("java.math.")
+                                .build(),
                         DefaultTyping.NON_FINAL)
                 .build();
     }

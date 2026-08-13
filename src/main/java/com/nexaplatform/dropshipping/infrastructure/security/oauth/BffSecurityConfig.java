@@ -140,7 +140,19 @@ public class BffSecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/campaigns/unsubscribe", "/api/campaigns/resubscribe")
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, API_CONTACT).permitAll()
-                        // OPERATOR (soporte) SOLO puede: procesar órdenes y ver sus propias ganancias/historial.
+                        // OPERATOR (soporte) SOLO puede: procesar órdenes (avanzar/enviar/entregar) y ver sus
+                        // propias ganancias/historial. Las mutaciones con impacto FINANCIERO o de CREACIÓN de
+                        // pedidos —cancelar, reembolsar (al wallet/tarjeta), crear e importar— son EXCLUSIVAS de
+                        // ADMIN: sin este gate por método, el gate por URL /api/admin/orders/** dejaba a un
+                        // OPERATOR emitir reembolsos masivos. Estas reglas MÁS ESPECÍFICAS van antes que la general.
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/admin/orders",
+                                "/api/admin/orders/demo",
+                                "/api/admin/orders/import",
+                                "/api/admin/orders/*/cancel",
+                                "/api/admin/orders/*/refund",
+                                "/api/admin/orders/bulk-cancel",
+                                "/api/admin/orders/bulk-refund").hasRole(ADMIN)
                         // Todo lo demás del admin (pricing/márgenes, dashboard/estadísticas, catálogo, usuarios,
                         // monedas, impuestos, partners, billing, afiliados…) es EXCLUSIVO de ADMIN.
                         .requestMatchers("/api/admin/orders/**").hasAnyRole(ADMIN, "OPERATOR")

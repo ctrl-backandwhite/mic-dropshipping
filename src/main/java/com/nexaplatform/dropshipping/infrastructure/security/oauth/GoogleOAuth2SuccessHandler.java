@@ -38,13 +38,16 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
     private final UserUseCase userUseCase;
     private final UserTokenService userTokenService;
     private final DeviceSessionService deviceSessionService;
+    private final com.nexaplatform.dropshipping.application.service.TotpService totpService;
     private final String frontBaseUrl;
 
     public GoogleOAuth2SuccessHandler(UserUseCase userUseCase, UserTokenService userTokenService,
-            DeviceSessionService deviceSessionService, String frontBaseUrl) {
+            DeviceSessionService deviceSessionService,
+            com.nexaplatform.dropshipping.application.service.TotpService totpService, String frontBaseUrl) {
         this.userUseCase = userUseCase;
         this.userTokenService = userTokenService;
         this.deviceSessionService = deviceSessionService;
+        this.totpService = totpService;
         this.frontBaseUrl = frontBaseUrl == null ? "" : Texts.stripTrailingSlashes(frontBaseUrl);
     }
 
@@ -90,6 +93,13 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         }
 
         User user = outcome.getUser();
+        // 2FA: si la cuenta tiene segundo factor activo, el login social NO puede emitir tokens (saltaría el
+        // OTP que sí exige el login por contraseña). Se rechaza y se pide entrar con contraseña + OTP.
+        if (totpService.isEnabled(user.getId())) {
+            log.info("::> [OAUTH2 {}] Login social rechazado: la cuenta tiene 2FA activo, se exige OTP", provider);
+            response.sendRedirect(frontBaseUrl + "/login?error=2fa_required");
+            return;
+        }
         UserTokenService.Tokens tokens = userTokenService.issue(user.getId(), user.getEmail(), user.getRole().name(),
                 Set.of(user.getRole().authority()));
         log.info("::> [OAUTH2 {}] Login success userId={}", provider, user.getId());

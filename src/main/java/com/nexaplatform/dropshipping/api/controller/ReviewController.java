@@ -37,21 +37,11 @@ public class ReviewController implements ReviewApi {
 
     @Override
     public ResponseEntity<ReviewItemDtoOut> create(UUID productId, CreateReviewDtoIn req, Authentication auth) {
+        // El nombre y el país del autor los pone el servidor desde el perfil del usuario autenticado (en el
+        // use case), NO el cuerpo de la petición: así no se puede publicar una reseña suplantando a otro.
+        UUID userId = UUID.fromString(auth.getName());
         ProductReview model = ProductReview.builder().rating(req.getRating()).title(req.getTitle()).body(req.getBody())
-                .language(req.getLanguage()).authorName(resolveAuthorName(req, auth))
-                .authorCountry(req.getAuthorCountry()).build();
-        return new ResponseEntity<>(mapper.toItem(useCase.create(productId, model)), HttpStatus.CREATED);
-    }
-
-    /**
-     * Firma de la reseña. El orden de comprobación es el importante: manda el nombre que escribió el
-     * autor y solo si lo dejó vacío se recurre al del usuario autenticado; una reseña anónima sin
-     * nombre se queda sin firmar en lugar de atribuirse a nadie.
-     */
-    private static String resolveAuthorName(CreateReviewDtoIn req, Authentication auth) {
-        if (req.getAuthorName() != null && !req.getAuthorName().isBlank()) {
-            return req.getAuthorName();
-        }
-        return auth != null ? auth.getName() : null;
+                .language(req.getLanguage()).build();
+        return new ResponseEntity<>(mapper.toItem(useCase.create(productId, model, userId)), HttpStatus.CREATED);
     }
 }

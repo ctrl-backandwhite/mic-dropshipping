@@ -164,12 +164,24 @@ public class SavedPaymentMethodsService {
     public void delete(UUID userId, String ref, String code) throws StripeException {
         assertOwned(userId, ref);
         UserEntity user = loadUser(userId);
-        boolean valid = code != null && !code.isBlank()
-                && code.equals(user.getPmDeleteCode())
-                && ref.equals(user.getPmDeleteRef())
-                && user.getPmDeleteCodeAt() != null
+        boolean refOk = ref.equals(user.getPmDeleteRef());
+        boolean fresh = user.getPmDeleteCodeAt() != null
                 && user.getPmDeleteCodeAt().isAfter(Instant.now().minusSeconds(900));
-        if (!valid) {
+        // Comparación en tiempo CONSTANTE del código (evita timing side-channels).
+        boolean codeOk = code != null && !code.isBlank() && user.getPmDeleteCode() != null
+                && java.security.MessageDigest.isEqual(
+                        code.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                        user.getPmDeleteCode().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        if (!(refOk && fresh && codeOk)) {
+            // Un intento con el código ERRÓNEO (con ref y ventana válidas) QUEMA el código: sin esto, el
+            // código de 6 dígitos se podía forzar por fuerza bruta durante los 15 min de validez. Hay que
+            // pedir uno nuevo. Un ref distinto o caducado no consume el código vigente.
+            if (refOk && fresh && !codeOk) {
+                user.setPmDeleteCode(null);
+                user.setPmDeleteRef(null);
+                user.setPmDeleteCodeAt(null);
+                userRepository.save(user);
+            }
             throw new BusinessException("PM_DELETE_CODE_INVALID", "El código no es válido o ha caducado.");
         }
         if (isPayPal(ref)) {

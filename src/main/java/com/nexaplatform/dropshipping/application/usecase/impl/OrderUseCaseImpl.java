@@ -171,6 +171,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
         int subtotal = 0;
         ParcelAggregator parcel = new ParcelAggregator();
         GrossSubtotal gross = new GrossSubtotal();
+        // Gross (precio de tarifa) acumulado POR PRODUCTO: base para acotar un cupón con alcance
+        // PRODUCT/CATEGORY solo a las líneas que alcanza (ver applyTotals).
+        Map<UUID, Integer> grossByProduct = new HashMap<>();
         UUID cuponAplicado = null;
         // Integridad de precio: el pedido SIEMPRE se precia por el país de ENVÍO (parte confiable del
         // pedido), NUNCA por el header X-Country del cliente. Sin esto, un comprador podía enviar
@@ -180,11 +183,12 @@ public class OrderUseCaseImpl implements OrderUseCase {
         PricingCountryHolder.set(order.getShippingCountry());
         try {
             for (OrderItemInput itemReq : req.items()) {
-                OrderItem line = buildLine(itemReq, orderLang, parcel, gross);
+                OrderItem line = buildLine(itemReq, orderLang, parcel, gross, grossByProduct);
                 order.getItems().add(line);
                 subtotal = Math.addExact(subtotal, line.getLineTotalCents());
             }
-            cuponAplicado = applyTotals(order, userId, subtotal, gross.cents(), parcel, req.couponCode());
+            cuponAplicado = applyTotals(order, userId, subtotal, gross.cents(), parcel, req.couponCode(),
+                    grossByProduct);
         } finally {
             PricingCountryHolder.set(prevPricingCountry);
         }
@@ -223,7 +227,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     }
 
     private OrderItem buildLine(OrderItemInput itemReq, String orderLang,
-            ParcelAggregator parcel, GrossSubtotal gross) {
+            ParcelAggregator parcel, GrossSubtotal gross, Map<UUID, Integer> grossByProduct) {
         // Cantidad dentro de un rango sano ANTES de calcular importes. Cierra el desbordamiento de
         // enteros del cobro (unitCents * quantity) y rechaza cantidades ≤ 0 aunque el DTO no valide.
         if (itemReq.quantity() <= 0 || itemReq.quantity() > MAX_LINE_QUANTITY) {
@@ -283,9 +287,11 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // Precio de tarifa (antes de la rebaja automática). Cuando el producto no está en promoción
         // coincide con el de venta, así que la resta que mide la rebaja da cero.
         BigDecimal sinRebaja = priced.originalRetailUsd() != null ? priced.originalRetailUsd() : unitPrice;
-        gross.add(Math.multiplyExact(
+        int lineGross = Math.multiplyExact(
                 sinRebaja.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact(),
-                itemReq.quantity()));
+                itemReq.quantity());
+        gross.add(lineGross);
+        grossByProduct.merge(product.getId(), lineGross, Integer::sum);
 
         parcel.add(product, variant, itemReq.quantity());
         return OrderItem.builder().productId(product.getId())
@@ -320,7 +326,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
      * coincida al céntimo con lo cobrado.
      */
     private UUID applyTotals(Order order, UUID userId, int subtotal, int grossSubtotal, ParcelAggregator parcel,
-            String couponCode) {
+            String couponCode, Map<UUID, Integer> grossByProduct) {
         // Envío: tarifa por destino del carrier. Si el país no está cubierto, el envío queda en 0 aquí
         // (el checkout del storefront bloquea antes el destino no soportado). El bulto se arma con el
         // MISMO agregador que la vista previa del checkout: peso, medidas del paquete y batería.
@@ -342,7 +348,10 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 // Lo que la rebaja automática YA descontó de las líneas. El cupón se mide sobre el precio
                 // de tarifa y solo se cobra la DIFERENCIA, igual que en la vista previa del checkout: si
                 // los dos números no se calcularan igual, se cobraría un total distinto del enseñado.
-                int cupon = couponDiscountCents(check.promotion(), grossSubtotal);
+                // ALCANCE: un cupón PRODUCT/CATEGORY solo descuenta sobre las líneas que alcanza, no sobre
+                // todo el carrito. reachableGrossCents devuelve el gross completo si el cupón es global.
+                int base = promotionService.reachableGrossCents(check.promotion(), grossByProduct);
+                int cupon = couponDiscountCents(check.promotion(), base);
                 int extra = couponExtraDiscountCents(cupon, grossSubtotal, subtotal, discount);
                 if (extra > 0) {
                     discount = extra;
@@ -778,9 +787,18 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // orden AÚN SIN PAGAR, la reutilizamos en vez de crear un duplicado. Así un intento
         // abandonado en la pasarela + un reintento no dejan dos órdenes.
         String idemKeyTrim = (idem != null && !idem.isBlank()) ? idem.trim() : null;
+        // Idempotencia REAL del checkout: incluimos también PAID. Un reintento del MISMO Idempotency-Key que
+        // ya produjo un pedido PAGADO debe devolver ESE pedido tal cual, nunca crear otro. Sin esto —como el
+        // cargo al wallet es idempotente por clave— reenviar el idem creaba un pedido nuevo que se marcaba
+        // PAID sin volver a cobrar (minteo de pedidos gratis ilimitados).
         CustomerOrderEntity reusable = idemKeyTrim == null ? null
                 : orderEntityRepository.findFirstByUserIdAndIdempotencyKeyAndStatusInOrderByCreatedAtDesc(
-                        userId, idemKeyTrim, List.of(OrderStatus.PENDING, OrderStatus.AWAITING_PAYMENT)).orElse(null);
+                        userId, idemKeyTrim,
+                        List.of(OrderStatus.PENDING, OrderStatus.AWAITING_PAYMENT, OrderStatus.PAID)).orElse(null);
+        if (reusable != null && reusable.getStatus() == OrderStatus.PAID) {
+            return orderRepository.findById(reusable.getId())
+                    .orElseThrow(() -> new NotFoundException(ORDER_RESOURCE));
+        }
         boolean reused = reusable != null;
 
         Order created;
@@ -801,7 +819,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 .orElseThrow(() -> new NotFoundException(ORDER_RESOURCE));
         if (WALLET.equals(method)) {
             long charge = created.getTotalCents();
-            String idemKey = idem != null ? idem : ("checkout-" + created.getId());
+            // Clave de idempotencia del cargo ACOTADA AL PEDIDO: el débito es único por pedido y no se puede
+            // reutilizar la clave del cliente entre pedidos distintos para colar cargos a cero.
+            String idemKey = "checkout-" + created.getId();
             walletUseCase.charge(userId, charge, created.getId(), idemKey, "Order " + created.getOrderNumber());
             o.setStatus(OrderStatus.PAID);
             // El dinero ya está cobrado: a la cola de compras de 1688. Los pagos externos (Stripe/PayPal)
