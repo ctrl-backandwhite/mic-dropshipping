@@ -150,14 +150,18 @@ public interface AdminCatalogApi {
     @PostMapping("/products/bulk")
     ResponseEntity<BulkResultDtoOut> bulkProducts(@Valid @RequestBody List<BulkProductDtoIn> rows);
 
-    @Operation(summary = "Export products in a 1-based range as the same bulk JSON shape (re-importable)")
+    @Operation(summary = "Export products in a 1-based range as the same bulk JSON shape (re-importable). "
+            + "Optional createdFrom/createdTo (yyyy-MM-dd) filter by upload date (ingestedAt).")
     @GetMapping("/products/export")
     ResponseEntity<List<BulkProductDtoIn>> exportProducts(@RequestParam(defaultValue = "1") int from,
-            @RequestParam(defaultValue = "1000") int to);
+            @RequestParam(defaultValue = "1000") int to,
+            @RequestParam(required = false) String createdFrom,
+            @RequestParam(required = false) String createdTo);
 
-    @Operation(summary = "Total product count (to compute export segments)")
+    @Operation(summary = "Total product count (to compute export segments); optional createdFrom/createdTo filter")
     @GetMapping("/products/export/count")
-    ResponseEntity<Map<String, Long>> exportCount();
+    ResponseEntity<Map<String, Long>> exportCount(@RequestParam(required = false) String createdFrom,
+            @RequestParam(required = false) String createdTo);
 
     @Operation(summary = "Export ONE product as the bulk JSON shape (to edit as JSON and re-import with upsert)")
     @GetMapping("/products/{id}/export")
@@ -166,7 +170,9 @@ public interface AdminCatalogApi {
     @Operation(summary = "Stream ALL products as NDJSON (one product per line), batched with bounded memory. "
             + "Scales to millions: the server keyset-paginates and flushes each batch instead of buffering everything.")
     @GetMapping(value = "/products/export/ndjson", produces = "application/x-ndjson")
-    ResponseEntity<StreamingResponseBody> exportProductsNdjson(@RequestParam(defaultValue = "200") int batch);
+    ResponseEntity<StreamingResponseBody> exportProductsNdjson(@RequestParam(defaultValue = "200") int batch,
+            @RequestParam(required = false) String createdFrom,
+            @RequestParam(required = false) String createdTo);
 
     @Operation(summary = "Import products from an NDJSON body (one product per line), processed in batches with "
             + "bounded memory. The request body is read as a stream and never fully loaded into memory.")

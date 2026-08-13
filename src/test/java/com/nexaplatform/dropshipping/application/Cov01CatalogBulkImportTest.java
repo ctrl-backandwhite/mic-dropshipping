@@ -1162,6 +1162,7 @@ class Cov01CatalogBulkImportTest {
     private TypedQuery<ProductEntity> stubExportQuery() {
         TypedQuery<ProductEntity> query = mock(TypedQuery.class);
         when(em.createQuery(anyString(), eq(ProductEntity.class))).thenReturn(query);
+        when(query.setParameter(anyString(), any())).thenReturn(query);
         when(query.setFirstResult(anyInt())).thenReturn(query);
         when(query.setMaxResults(anyInt())).thenReturn(query);
         when(query.getResultList()).thenReturn(new ArrayList<>());
@@ -1173,7 +1174,7 @@ class Cov01CatalogBulkImportTest {
         // setFirstResult(-1) revienta: el rango del operador empieza en la fila 1, no en la 0.
         TypedQuery<ProductEntity> query = stubExportQuery();
 
-        useCase.exportProducts(0, 10);
+        useCase.exportProducts(0, 10, null, null);
 
         verify(query).setFirstResult(0);
         verify(query).setMaxResults(10);
@@ -1184,7 +1185,7 @@ class Cov01CatalogBulkImportTest {
         // "de la 50 a la 10" no puede traducirse en un maxResults negativo, que la consulta rechaza.
         TypedQuery<ProductEntity> query = stubExportQuery();
 
-        useCase.exportProducts(50, 10);
+        useCase.exportProducts(50, 10, null, null);
 
         verify(query).setFirstResult(49);
         verify(query).setMaxResults(1);

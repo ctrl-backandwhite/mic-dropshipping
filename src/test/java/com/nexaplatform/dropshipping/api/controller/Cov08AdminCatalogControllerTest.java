@@ -66,7 +66,7 @@ class Cov08AdminCatalogControllerTest {
     }
 
     private String exportar(int batch) throws IOException {
-        ResponseEntity<StreamingResponseBody> response = controller.exportProductsNdjson(batch);
+        ResponseEntity<StreamingResponseBody> response = controller.exportProductsNdjson(batch, null, null);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         response.getBody().writeTo(out);
         return out.toString(StandardCharsets.UTF_8);
@@ -82,7 +82,7 @@ class Cov08AdminCatalogControllerTest {
 
     @Test
     void laExportacionEmiteUnProductoPorLinea() throws IOException {
-        when(catalogUseCase.exportBatchAfter(null, 200))
+        when(catalogUseCase.exportBatchAfter(null, 200, null, null))
                 .thenReturn(new ProductExportBatch(List.of(producto("Camiseta"), producto("Gorra")), null));
 
         String ndjson = exportar(200);
@@ -97,31 +97,31 @@ class Cov08AdminCatalogControllerTest {
         // siguientes a este id" en lugar de un OFFSET que se va degradando.
         UUID ultimoDeLaPrimera = UUID.randomUUID();
         List<BulkProductDtoIn> pagina = List.of(producto("A"), producto("B"));
-        when(catalogUseCase.exportBatchAfter(null, 2)).thenReturn(new ProductExportBatch(pagina, ultimoDeLaPrimera));
-        when(catalogUseCase.exportBatchAfter(ultimoDeLaPrimera, 2))
+        when(catalogUseCase.exportBatchAfter(null, 2, null, null)).thenReturn(new ProductExportBatch(pagina, ultimoDeLaPrimera));
+        when(catalogUseCase.exportBatchAfter(ultimoDeLaPrimera, 2, null, null))
                 .thenReturn(new ProductExportBatch(List.of(producto("C")), null));
 
         assertThat(exportar(2).lines()).hasSize(3);
 
-        verify(catalogUseCase).exportBatchAfter(null, 2);
-        verify(catalogUseCase).exportBatchAfter(ultimoDeLaPrimera, 2);
+        verify(catalogUseCase).exportBatchAfter(null, 2, null, null);
+        verify(catalogUseCase).exportBatchAfter(ultimoDeLaPrimera, 2, null, null);
     }
 
     @Test
     void laExportacionTerminaCuandoLlegaUnaPaginaIncompleta() throws IOException {
         // Una página con menos filas de las pedidas es el fin del catálogo. Sin esta condición el bucle
         // no pararía nunca.
-        when(catalogUseCase.exportBatchAfter(any(), eq(5)))
+        when(catalogUseCase.exportBatchAfter(any(), eq(5), any(), any()))
                 .thenReturn(new ProductExportBatch(List.of(producto("Único")), null));
 
         exportar(5);
 
-        verify(catalogUseCase, times(1)).exportBatchAfter(any(), anyInt());
+        verify(catalogUseCase, times(1)).exportBatchAfter(any(), anyInt(), any(), any());
     }
 
     @Test
     void unCatalogoVacioProduceUnaExportacionVacia() throws IOException {
-        when(catalogUseCase.exportBatchAfter(null, 200)).thenReturn(new ProductExportBatch(List.of(), null));
+        when(catalogUseCase.exportBatchAfter(null, 200, null, null)).thenReturn(new ProductExportBatch(List.of(), null));
 
         assertThat(exportar(200)).isEmpty();
     }
@@ -130,19 +130,19 @@ class Cov08AdminCatalogControllerTest {
     void elTamanoDeLoteSeAcotaAUnRangoRazonable() throws IOException {
         // Un 0 dejaría el bucle sin avanzar y un valor enorme se comería la memoria que precisamente se
         // quiere acotar.
-        when(catalogUseCase.exportBatchAfter(any(), anyInt())).thenReturn(new ProductExportBatch(List.of(), null));
+        when(catalogUseCase.exportBatchAfter(any(), anyInt(), any(), any())).thenReturn(new ProductExportBatch(List.of(), null));
 
         exportar(0);
         exportar(999_999);
 
         ArgumentCaptor<Integer> tamanos = ArgumentCaptor.forClass(Integer.class);
-        verify(catalogUseCase, times(2)).exportBatchAfter(any(), tamanos.capture());
+        verify(catalogUseCase, times(2)).exportBatchAfter(any(), tamanos.capture(), any(), any());
         assertThat(tamanos.getAllValues()).containsExactly(1, 1000);
     }
 
     @Test
     void laExportacionSeSirveComoDescargaNdjson() {
-        ResponseEntity<StreamingResponseBody> response = controller.exportProductsNdjson(200);
+        ResponseEntity<StreamingResponseBody> response = controller.exportProductsNdjson(200, null, null);
 
         assertThat(response.getHeaders().getContentType()).hasToString("application/x-ndjson");
         assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION))
@@ -273,9 +273,9 @@ class Cov08AdminCatalogControllerTest {
 
     @Test
     void elRecuentoDeExportacionSeDevuelveBajoLaClaveCount() {
-        when(catalogUseCase.countProducts()).thenReturn(1363L);
+        when(catalogUseCase.countProducts(null, null)).thenReturn(1363L);
 
-        assertThat(controller.exportCount().getBody()).containsEntry("count", 1363L);
+        assertThat(controller.exportCount(null, null).getBody()).containsEntry("count", 1363L);
     }
 
     // ─────────────────────── códigos de respuesta ───────────────────────
