@@ -233,3 +233,5 @@ databaseChangeLog:
       file: db/changelog/schema-v111-plan-eur-usd-anchor.sql
   - include:
       file: db/changelog/schema-v112-email-attachment.sql
+  - include:
+      file: db/changelog/schema-v113-backfill-free-trial-used.sql

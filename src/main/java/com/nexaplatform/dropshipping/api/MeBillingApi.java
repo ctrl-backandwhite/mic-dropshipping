@@ -34,7 +34,7 @@ public interface MeBillingApi {
     @Operation(summary = "Config pública de Stripe (publishable key) para el UI de facturación del perfil")
     @ApiResponse(responseCode = "200", description = "Config devuelta")
     @GetMapping("/billing/config")
-    ResponseEntity<BillingConfigDtoOut> billingConfig();
+    ResponseEntity<BillingConfigDtoOut> billingConfig(Authentication auth);
 
     @Operation(summary = "Crea un SetupIntent para guardar una tarjeta con Stripe Elements")
     @ApiResponse(responseCode = "200", description = "client_secret devuelto")

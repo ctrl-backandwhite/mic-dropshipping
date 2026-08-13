@@ -221,7 +221,11 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
      */
     private CustomerSubscription startFreeTrial(UUID userId, SubscriptionPlanEntity plan, Instant now) {
         UserEntity user = loadUser(userId);
-        if (user.isFreeTrialUsed()) {
+        // Un solo uso por cuenta: la marca es la fuente de verdad, pero además bloqueamos si ya EXISTE una
+        // suscripción FREE (cuentas antiguas cuya marca no se fijó) — defensa en profundidad.
+        boolean hadFree = customerSubscriptionRepository.findByUserId(userId).stream()
+                .anyMatch(s -> "FREE".equalsIgnoreCase(s.getPlanCode()));
+        if (user.isFreeTrialUsed() || hadFree) {
             throw new BusinessException("FREE_TRIAL_ALREADY_USED",
                     "Ya has utilizado tu prueba gratis de 15 días. Elige un plan de pago.");
         }
@@ -352,8 +356,13 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     // =============================================================================================
 
     @Override
-    public BillingConfigInfo billingConfig() {
-        return new BillingConfigInfo(stripeService.publishableKey(), stripeService.isEnabled());
+    @Transactional(readOnly = true)
+    public BillingConfigInfo billingConfig(UUID userId) {
+        boolean flag = userId != null && userRepository.findById(userId)
+                .map(UserEntity::isFreeTrialUsed).orElse(false);
+        boolean hadFree = userId != null && customerSubscriptionRepository.findByUserId(userId).stream()
+                .anyMatch(s -> "FREE".equalsIgnoreCase(s.getPlanCode()));
+        return new BillingConfigInfo(stripeService.publishableKey(), stripeService.isEnabled(), flag || hadFree);
     }
 
     @Override

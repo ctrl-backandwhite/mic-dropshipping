@@ -52,10 +52,11 @@ class Cov01MeBillingControllerTest {
 
     @Test
     void laConfigDeStripeViajaConLaClavePublicaYSuInterruptor() {
-        when(useCase.billingConfig())
-                .thenReturn(new CustomerSubscriptionUseCase.BillingConfigInfo("pk_test_123", true));
+        authenticatedAs(USER_ID);
+        when(useCase.billingConfig(USER_ID))
+                .thenReturn(new CustomerSubscriptionUseCase.BillingConfigInfo("pk_test_123", true, false));
 
-        ResponseEntity<BillingConfigDtoOut> resp = controller.billingConfig();
+        ResponseEntity<BillingConfigDtoOut> resp = controller.billingConfig(auth);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).isNotNull();

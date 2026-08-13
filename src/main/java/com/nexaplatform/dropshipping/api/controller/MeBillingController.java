@@ -36,10 +36,10 @@ public class MeBillingController implements MeBillingApi {
     private final SavedPaymentMethodsService savedMethods;
 
     @Override
-    public ResponseEntity<BillingConfigDtoOut> billingConfig() {
-        CustomerSubscriptionUseCase.BillingConfigInfo c = useCase.billingConfig();
+    public ResponseEntity<BillingConfigDtoOut> billingConfig(Authentication auth) {
+        CustomerSubscriptionUseCase.BillingConfigInfo c = useCase.billingConfig(UUID.fromString(auth.getName()));
         return ResponseEntity.ok(BillingConfigDtoOut.builder()
-                .publishableKey(c.publishableKey()).enabled(c.enabled()).build());
+                .publishableKey(c.publishableKey()).enabled(c.enabled()).freeTrialUsed(c.freeTrialUsed()).build());
     }
 
     @Override
