@@ -39,6 +39,13 @@ public class SubscriptionPlanEntity extends BaseEntity {
     @Column(name = "price_yearly_cents")
     private int priceYearlyCents;
 
+    // Ancla de precio en EUR para la UE (la base va en USD). 0 = sin override → se convierte desde USD.
+    @Column(name = "price_monthly_eur_cents")
+    private int priceMonthlyEurCents;
+
+    @Column(name = "price_yearly_eur_cents")
+    private int priceYearlyEurCents;
+
     @Column(length = 8)
     private String currency;
 

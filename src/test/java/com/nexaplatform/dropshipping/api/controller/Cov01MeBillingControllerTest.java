@@ -39,6 +39,8 @@ class Cov01MeBillingControllerTest {
     @Mock
     CustomerSubscriptionUseCase useCase;
     @Mock
+    com.nexaplatform.dropshipping.application.service.SavedPaymentMethodsService savedMethods;
+    @Mock
     Authentication auth;
 
     @InjectMocks
@@ -75,10 +77,13 @@ class Cov01MeBillingControllerTest {
 
     @Test
     void lasTarjetasSeProyectanConLaMarcaLosCuatroDigitosYCualEsLaPredeterminada() throws Exception {
+        // Tras la Fase 1, el listado unificado lo sirve SavedPaymentMethodsService (tarjetas Stripe + PayPal).
         authenticatedAs(USER_ID);
-        when(useCase.listCards(USER_ID)).thenReturn(List.of(
-                new CustomerSubscriptionUseCase.CardInfo("pm_1", "visa", "4242", 12L, 2030L, true),
-                new CustomerSubscriptionUseCase.CardInfo("pm_2", "mastercard", "5555", 1L, 2031L, false)));
+        when(savedMethods.list(USER_ID)).thenReturn(List.of(
+                PaymentMethodDtoOut.builder().id("pm_1").type("CARD").brand("visa").last4("4242")
+                        .expMonth(12L).expYear(2030L).isDefault(true).build(),
+                PaymentMethodDtoOut.builder().id("pm_2").type("CARD").brand("mastercard").last4("5555")
+                        .expMonth(1L).expYear(2031L).isDefault(false).build()));
 
         ResponseEntity<List<PaymentMethodDtoOut>> resp = controller.listPaymentMethods(auth);
 
@@ -102,8 +107,8 @@ class Cov01MeBillingControllerTest {
 
         assertThat(setDefault.getStatusCode().value()).isEqualTo(204);
         assertThat(deleted.getStatusCode().value()).isEqualTo(204);
-        verify(useCase).setDefaultCard(USER_ID, "pm_1");
-        verify(useCase).deleteCard(USER_ID, "pm_2");
+        verify(savedMethods).setDefault(USER_ID, "pm_1");
+        verify(savedMethods).delete(USER_ID, "pm_2");
     }
 
     @Test

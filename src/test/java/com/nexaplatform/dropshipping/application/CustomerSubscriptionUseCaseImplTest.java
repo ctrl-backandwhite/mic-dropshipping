@@ -59,6 +59,8 @@ class CustomerSubscriptionUseCaseImplTest {
     com.nexaplatform.dropshipping.application.service.CountryTaxService countryTaxService;
     @Mock
     com.nexaplatform.dropshipping.application.service.InvoiceService invoiceService;
+    @Mock
+    com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService subscriptionNotificationService;
 
     @InjectMocks
     CustomerSubscriptionUseCaseImpl useCase;

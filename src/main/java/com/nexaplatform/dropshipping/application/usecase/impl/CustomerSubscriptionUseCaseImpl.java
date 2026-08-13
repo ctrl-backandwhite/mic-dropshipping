@@ -470,11 +470,13 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
         // Stripe; la contratación incluye el IVA y aparece desglosado en la factura de Stripe.
         int taxBps = countryTaxService.rateBpsFor(user.getCountry());
         String taxRateId = stripeService.ensureTaxRate(user.getCountry(), taxBps);
-        // Precio del plan en CNY (moneda de 1688) → USD canónico (igual que los productos).
+        // Precio del plan: base en USD (ancla del "resto del mundo") → USD canónico. Para la UE se cobra el
+        // ancla FIJA en EUR (no una conversión del USD).
         String src = plan.getCurrency() != null && !plan.getCurrency().isBlank() ? plan.getCurrency() : "CNY";
         BigDecimal cny = BigDecimal.valueOf(cnyCents).movePointLeft(2);
         BigDecimal usdAmount = currencyService.toUsd(cny, src);
-        StripeCharge charge = chargeFor(usdAmount);
+        int eurAnchorCents = YEARLY.equals(billingPeriod) ? plan.getPriceYearlyEurCents() : plan.getPriceMonthlyEurCents();
+        StripeCharge charge = chargeFor(usdAmount, eurAnchorCents);
         String priceId = stripeService.ensureRecurringPrice(planCode, billingPeriod, charge.cents(),
                 charge.currency(), plan.getName());
 
@@ -503,17 +505,21 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
     /**
      * Moneda e importe de COBRO del plan a partir de su precio en USD canónico: MISMA regla que el
      * checkout y la recarga, y COINCIDE con el precio MOSTRADO —BillingController lo redondea a entero en
-     * la divisa activa—. EUR si la web está en EUR; USD si está en USD; y con cualquier otra divisa se
-     * muestra el precio en ella pero se cobra su equivalente en USD.
+     * la divisa activa—. La divisa activa la fija la detección por IP (geo: EUR para la UE, USD para el
+     * resto). En EUR se cobra el ANCLA fija en EUR ({@code eurAnchorCents}, p. ej. 50 €), no la conversión
+     * del USD; en USD se cobra el ancla USD; con cualquier otra divisa se muestra en ella pero se cobra su
+     * equivalente en USD.
      */
-    private StripeCharge chargeFor(BigDecimal usdAmount) {
+    private StripeCharge chargeFor(BigDecimal usdAmount, int eurAnchorCents) {
         String displayCode = CurrencyHolder.get();
         String chargeCurrency;
         long chargeCents;
         if ("EUR".equalsIgnoreCase(displayCode)) {
             chargeCurrency = "eur";
-            chargeCents = currencyService.usdTo(usdAmount, "EUR").setScale(0, RoundingMode.HALF_UP)
-                    .movePointRight(2).longValueExact();
+            chargeCents = eurAnchorCents > 0
+                    ? eurAnchorCents
+                    : currencyService.usdTo(usdAmount, "EUR").setScale(0, RoundingMode.HALF_UP)
+                            .movePointRight(2).longValueExact();
         } else if (displayCode == null || displayCode.isBlank() || "USD".equalsIgnoreCase(displayCode)) {
             chargeCurrency = "usd";
             chargeCents = usdAmount.setScale(0, RoundingMode.HALF_UP).movePointRight(2).longValueExact();
