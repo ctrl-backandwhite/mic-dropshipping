@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.service;
 
+import com.nexaplatform.dropshipping.domain.enums.SubscriptionCancelReminderEmailLabel;
 import com.nexaplatform.dropshipping.domain.enums.SubscriptionEmailLabel;
 import com.nexaplatform.dropshipping.domain.enums.SubscriptionPlanLabel;
 import com.nexaplatform.dropshipping.domain.model.CustomerSubscription;
@@ -105,6 +106,46 @@ public class SubscriptionNotificationService {
      */
     public void planActivated(UUID userId, String planCode, Instant periodEnd, boolean trial) {
         planActivated(userId, planCode, periodEnd, trial, null, null);
+    }
+
+    /**
+     * Recordatorio (uno al día en los 3 días previos) de que un plan CANCELADO a fin de periodo se acerca a
+     * su fecha de cancelación. Email + notificación in-app, en el idioma del usuario. Best-effort.
+     */
+    public void planCancelReminder(UUID userId, String planCode, Instant cancelAt) {
+        try {
+            UserEntity user = userRepository.findById(userId).orElse(null);
+            if (user == null || user.getEmail() == null || user.getEmail().isBlank()) {
+                return;
+            }
+            String lang = user.getLanguage();
+            String plan = SubscriptionPlanLabel.planName(planCode, lang);
+            String date = cancelAt != null ? DATE.format(cancelAt) : "";
+            String body = SubscriptionCancelReminderEmailLabel.BODY.of(lang).replace("{plan}", plan)
+                    .replace("{date}", date);
+            try {
+                notificationRepository.save(PlatformNotification.builder().userId(userId)
+                        .eventType("PLAN_CANCEL_REMINDER").channel("IN_APP")
+                        .title(SubscriptionCancelReminderEmailLabel.TITLE.of(lang)).body(body).build());
+            } catch (RuntimeException e) {
+                log.warn("::> [BILLING] no se pudo crear la notificación in-app de recordatorio user={}: {}",
+                        userId, e.getMessage());
+            }
+            Map<String, Object> vars = new HashMap<>();
+            vars.put("title", SubscriptionCancelReminderEmailLabel.TITLE.of(lang));
+            vars.put("preheader", SubscriptionCancelReminderEmailLabel.TITLE.of(lang));
+            vars.put("bodyHtml", body);
+            vars.put("ctaUrl", baseUrl + "/profile");
+            vars.put("ctaLabel", SubscriptionCancelReminderEmailLabel.CTA.of(lang));
+            vars.put("footer", "NX036");
+            emailQueue.enqueue(user.getEmail(), SubscriptionCancelReminderEmailLabel.SUBJECT.of(lang),
+                    "emails/notification", vars);
+            log.info("::> [BILLING] Recordatorio de cancelación enviado user={} plan={} cancelAt={}", userId, plan,
+                    cancelAt);
+        } catch (RuntimeException e) {
+            log.warn("::> [BILLING] no se pudo enviar el recordatorio de cancelación user={}: {}", userId,
+                    e.getMessage());
+        }
     }
 
     /**

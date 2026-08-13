@@ -37,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
@@ -645,6 +646,36 @@ public class CustomerSubscriptionUseCaseImpl implements CustomerSubscriptionUseC
                         .withBillingPeriod(sub.getBillingPeriod()).withPendingPlanCode(null).withPendingPlanAt(null));
                 log.info("::> [BILLING] Bajada de plan aplicada subId={} -> {}", sub.getId(), plan.getCode());
             });
+        }
+    }
+
+    /**
+     * Recordatorio de cancelación: en los 3 días PREVIOS a la fecha de cancelación de un plan, envía un email
+     * al día (máx 3). Si el cliente RENUEVA (deja de estar en cancelación → {@code cancelAt} null) no se envía
+     * ninguno más. Corre cada hora pero solo manda uno por día natural (guarda {@code cancelReminderLastAt}).
+     */
+    @Scheduled(fixedDelay = 3_600_000L)
+    @Transactional
+    public void sendPlanCancelReminders() {
+        Instant now = Instant.now();
+        for (CustomerSubscription sub : customerSubscriptionRepository.findAll()) {
+            Instant cancelAt = sub.getCancelAt();
+            // Sin cancelación programada (o el cliente renovó) → nada que recordar.
+            if (cancelAt == null || sub.getStatus() == SubscriptionStatus.CANCELED) {
+                continue;
+            }
+            // Solo dentro de la ventana de los 3 días previos [cancelAt-3d, cancelAt).
+            if (now.isBefore(cancelAt.minus(3, java.time.temporal.ChronoUnit.DAYS)) || !now.isBefore(cancelAt)) {
+                continue;
+            }
+            // Uno por día natural (UTC): si ya se envió hoy, no repetir.
+            Instant last = sub.getCancelReminderLastAt();
+            if (last != null && last.atZone(ZoneOffset.UTC).toLocalDate()
+                    .equals(now.atZone(ZoneOffset.UTC).toLocalDate())) {
+                continue;
+            }
+            subscriptionNotificationService.planCancelReminder(sub.getUserId(), sub.getPlanCode(), cancelAt);
+            customerSubscriptionRepository.save(sub.withCancelReminderLastAt(now));
         }
     }
 
