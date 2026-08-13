@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.application.usecase.impl;
 import java.time.Instant;
 
 import com.nexaplatform.dropshipping.api.dto.in.ActivateDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.ResendActivationDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.ChangePasswordDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.DeleteAccountConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.LoginDtoIn;
@@ -203,6 +204,11 @@ public class AuthUseCaseImpl implements AuthUseCase {
     @Override
     public void activate(ActivateDtoIn req) {
         userUseCase.activate(req.getCode());
+    }
+
+    @Override
+    public void resendActivation(ResendActivationDtoIn req) {
+        userUseCase.resendActivation(req.getEmail());
     }
 
     @Override

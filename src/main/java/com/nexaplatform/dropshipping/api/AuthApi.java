@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.api;
 
 import com.nexaplatform.dropshipping.api.dto.in.ActivateDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.ResendActivationDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.LoginDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetRequestDtoIn;
@@ -46,6 +47,10 @@ public interface AuthApi {
     @Operation(summary = "Activate an account with an activation code")
     @PostMapping("/activate")
     ResponseEntity<Void> activate(@Valid @RequestBody ActivateDtoIn req);
+
+    @Operation(summary = "Resend the activation code to an email (neutral response)")
+    @PostMapping("/activate/resend")
+    ResponseEntity<Void> resendActivation(@Valid @RequestBody ResendActivationDtoIn req);
 
     @Operation(summary = "Request a password reset email")
     @PostMapping("/password-reset/request")

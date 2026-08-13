@@ -23,6 +23,9 @@ public interface UserUseCase extends BaseUseCase<User, User, UUID> {
     /** Activate an account with a (non-expired) activation code. */
     User activate(String code);
 
+    /** Reenvía el código de activación (respuesta neutra: no revela si la cuenta existe o ya está activa). */
+    void resendActivation(String email);
+
     /* ============ Login-failure tracking ============ */
 
     /** Increment the failed-login counter and lock the account past the threshold. */

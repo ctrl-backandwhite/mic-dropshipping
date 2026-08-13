@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application.usecase;
 
 import com.nexaplatform.dropshipping.api.dto.in.ActivateDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.ResendActivationDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.ChangePasswordDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.DeleteAccountConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.LoginDtoIn;
@@ -37,6 +38,8 @@ public interface AuthUseCase {
 
     /** Activate an account with an activation code. */
     void activate(ActivateDtoIn req);
+
+    void resendActivation(ResendActivationDtoIn req);
 
     /** Request a password reset email. */
     void requestReset(PasswordResetRequestDtoIn req);

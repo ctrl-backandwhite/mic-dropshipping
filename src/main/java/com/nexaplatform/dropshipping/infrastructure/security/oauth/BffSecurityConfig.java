@@ -97,7 +97,8 @@ public class BffSecurityConfig {
                 .authorizeHttpRequests(reg -> reg.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         // Endpoints públicos de auth: aún no hay token.
                         .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/activate",
-                                "/api/auth/refresh", "/api/auth/password-reset/**", "/api/webhooks/**")
+                                "/api/auth/activate/resend", "/api/auth/refresh", "/api/auth/password-reset/**",
+                                "/api/webhooks/**")
                         .permitAll()
                         // Reto CAPTCHA (proof-of-work): el navegador lo pide antes de enviar un formulario público.
                         .requestMatchers(HttpMethod.GET, "/api/captcha/challenge").permitAll()

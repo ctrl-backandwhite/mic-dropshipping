@@ -158,6 +158,32 @@ public class UserUseCaseImpl implements UserUseCase {
 
     @Override
     @Transactional
+    public void resendActivation(String email) {
+        String normalized = normalizeEmail(email);
+        // Respuesta NEUTRA (anti-enumeración): el controlador siempre devuelve 204. Aquí solo reenviamos si
+        // la cuenta existe, aún no está activada y no está borrada; en cualquier otro caso, no hacemos nada.
+        userRepository.findByEmail(normalized).ifPresent(user -> {
+            if (user.isActive() || user.getDeletedAt() != null) {
+                return;
+            }
+            String activationCode = randomToken(32);
+            user.setActivationCode(activationCode);
+            user.setActivationCodeExpiresAt(Instant.now().plus(ACTIVATION_TTL_HOURS, ChronoUnit.HOURS));
+            userRepository.update(user);
+            String confirmLang = InvoiceLabel.lang(user.getLanguage());
+            emailQueueService.enqueue(user.getEmail(), AuthEmailLabel.CONFIRM_SUBJECT.of(confirmLang), EMAILS_WELCOME,
+                    Map.of(TITLE, AuthEmailLabel.CONFIRM_TITLE.of(confirmLang),
+                            BODYHTML, AuthEmailLabel.CONFIRM_BODY.of(confirmLang, user.getDisplayName()),
+                            CTALABEL, AuthEmailLabel.CONFIRM_CTA.of(confirmLang),
+                            CTAURL, storefrontBaseUrl + "/activate?code=" + activationCode,
+                            "icon", CIRCLE_CHECK,
+                            FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(confirmLang)));
+            auditLogger.log("auth.activation.resend", user.getEmail(), Map.of(USERID, user.getId()));
+        });
+    }
+
+    @Override
+    @Transactional
     public User activate(String code) {
         User user = userRepository.findByActivationCode(code)
                 .orElseThrow(() -> new BusinessException("Invalid or expired activation code"));
