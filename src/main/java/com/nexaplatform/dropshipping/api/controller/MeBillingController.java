@@ -9,6 +9,8 @@ import com.nexaplatform.dropshipping.api.dto.out.MySubscriptionDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.PaymentMethodDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SetupIntentDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SubscribeStatusDtoOut;
+import com.nexaplatform.dropshipping.api.dto.in.SavePayPalDtoIn;
+import com.nexaplatform.dropshipping.application.service.SavedPaymentMethodsService;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.domain.model.CustomerSubscription;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +33,7 @@ import java.util.UUID;
 public class MeBillingController implements MeBillingApi {
 
     private final CustomerSubscriptionUseCase useCase;
+    private final SavedPaymentMethodsService savedMethods;
 
     @Override
     public ResponseEntity<BillingConfigDtoOut> billingConfig() {
@@ -48,23 +51,26 @@ public class MeBillingController implements MeBillingApi {
 
     @Override
     public ResponseEntity<List<PaymentMethodDtoOut>> listPaymentMethods(Authentication auth) throws StripeException {
-        UUID userId = UUID.fromString(auth.getName());
-        List<PaymentMethodDtoOut> out = useCase.listCards(userId).stream()
-                .map(c -> PaymentMethodDtoOut.builder().id(c.id()).brand(c.brand()).last4(c.last4())
-                        .expMonth(c.expMonth()).expYear(c.expYear()).isDefault(c.isDefault()).build())
-                .toList();
-        return ResponseEntity.ok(out);
+        // Lista UNIFICADA: tarjetas (Stripe) + cuentas PayPal (locales), con el predeterminado marcado.
+        return ResponseEntity.ok(savedMethods.list(UUID.fromString(auth.getName())));
+    }
+
+    @Override
+    public ResponseEntity<Void> savePayPal(Authentication auth, SavePayPalDtoIn req) {
+        savedMethods.addPayPal(UUID.fromString(auth.getName()), req.getEmail());
+        return ResponseEntity.noContent().build();
     }
 
     @Override
     public ResponseEntity<Void> setDefault(Authentication auth, String id) throws StripeException {
-        useCase.setDefaultCard(UUID.fromString(auth.getName()), id);
+        // 'id' es la referencia unificada: pm_... (tarjeta) o 'paypal:<uuid>'.
+        savedMethods.setDefault(UUID.fromString(auth.getName()), id);
         return ResponseEntity.noContent().build();
     }
 
     @Override
     public ResponseEntity<Void> delete(Authentication auth, String id) throws StripeException {
-        useCase.deleteCard(UUID.fromString(auth.getName()), id);
+        savedMethods.delete(UUID.fromString(auth.getName()), id);
         return ResponseEntity.noContent().build();
     }
 

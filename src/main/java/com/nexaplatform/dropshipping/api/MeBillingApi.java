@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.api;
 
 import com.stripe.exception.StripeException;
+import com.nexaplatform.dropshipping.api.dto.in.SavePayPalDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.SubscribeDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BillingConfigDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.BillingInvoiceDtoOut;
@@ -41,11 +42,16 @@ public interface MeBillingApi {
     ResponseEntity<SetupIntentDtoOut> createSetupIntent(Authentication auth) throws StripeException;
 
     @Operation(summary = "Lista las tarjetas guardadas del usuario autenticado")
-    @ApiResponse(responseCode = "200", description = "Tarjetas listadas")
+    @ApiResponse(responseCode = "200", description = "Métodos listados (tarjetas + PayPal)")
     @GetMapping("/payment-methods")
     ResponseEntity<List<PaymentMethodDtoOut>> listPaymentMethods(Authentication auth) throws StripeException;
 
-    @Operation(summary = "Marca una tarjeta guardada como la predeterminada (la que cobra las suscripciones)")
+    @Operation(summary = "Guarda una cuenta PayPal como método de pago (correo cifrado)")
+    @ApiResponse(responseCode = "204", description = "PayPal guardado")
+    @PostMapping("/payment-methods/paypal")
+    ResponseEntity<Void> savePayPal(Authentication auth, @Valid @RequestBody SavePayPalDtoIn req);
+
+    @Operation(summary = "Marca un método guardado (tarjeta o PayPal) como el predeterminado")
     @ApiResponse(responseCode = "204", description = "Tarjeta por defecto fijada")
     @PostMapping("/payment-methods/{id}/default")
     ResponseEntity<Void> setDefault(Authentication auth, @PathVariable String id) throws StripeException;

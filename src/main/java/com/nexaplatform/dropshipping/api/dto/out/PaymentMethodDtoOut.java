@@ -6,15 +6,21 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** Tarjeta guardada del usuario (datos no sensibles que devuelve Stripe; nunca el PAN completo). */
+/** Método de pago guardado del usuario (tarjeta Stripe o PayPal); nunca datos sensibles completos. */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class PaymentMethodDtoOut {
 
-    @Schema(description = "Id del PaymentMethod en Stripe (pm_...)")
+    @Schema(description = "Referencia unificada del método: pm_... (tarjeta Stripe) o 'paypal:<uuid>'")
     private String id;
+
+    @Schema(description = "Tipo de método: CARD | PAYPAL")
+    private String type;
+
+    @Schema(description = "Correo de PayPal ENMASCARADO (solo PAYPAL). El correo real se guarda cifrado.")
+    private String paypalEmail;
 
     @Schema(description = "Marca de la tarjeta (visa, mastercard, ...)")
     private String brand;

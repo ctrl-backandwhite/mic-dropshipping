@@ -227,3 +227,5 @@ databaseChangeLog:
       file: db/changelog/schema-v108-eu-drop-vat-prepay.sql
   - include:
       file: db/changelog/schema-v109-activate-base-margin.sql
+  - include:
+      file: db/changelog/schema-v110-saved-payment-methods.sql
