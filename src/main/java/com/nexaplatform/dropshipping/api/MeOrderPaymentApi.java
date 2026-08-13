@@ -1,7 +1,10 @@
 package com.nexaplatform.dropshipping.api;
 
 import com.nexaplatform.dropshipping.api.dto.in.OrderPaymentIntentDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.SavedCardPayDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.OrderPaymentDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.SavedCardPayDtoOut;
+import com.stripe.exception.StripeException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -39,4 +42,15 @@ public interface MeOrderPaymentApi {
     @PostMapping("/{orderId}/payments/{paymentId}/confirm")
     ResponseEntity<OrderPaymentDtoOut> confirm(Authentication auth, @PathVariable UUID orderId,
             @PathVariable UUID paymentId);
+
+    @Operation(summary = "Cobrar el pedido con una tarjeta guardada (off-session; devuelve 3DS si hace falta)")
+    @PostMapping("/{orderId}/pay-saved-card")
+    ResponseEntity<SavedCardPayDtoOut> paySavedCard(Authentication auth, @PathVariable UUID orderId,
+            @Valid @RequestBody SavedCardPayDtoIn req,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) throws StripeException;
+
+    @Operation(summary = "Confirmar el cobro con tarjeta guardada tras completar el 3DS en el navegador")
+    @PostMapping("/{orderId}/pay-saved-card/{paymentId}/confirm")
+    ResponseEntity<OrderPaymentDtoOut> confirmSavedCard(Authentication auth, @PathVariable UUID orderId,
+            @PathVariable UUID paymentId) throws StripeException;
 }

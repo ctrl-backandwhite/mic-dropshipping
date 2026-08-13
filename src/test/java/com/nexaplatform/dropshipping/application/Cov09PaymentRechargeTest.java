@@ -100,7 +100,7 @@ class Cov09PaymentRechargeTest {
     @BeforeEach
     void buildSubject() {
         subject = new PaymentUseCaseImpl(List.of(gateway), paymentRepository, paymentJpaRepositoryAdapter,
-                userRepository, orderRepository, walletUseCase, auditLogger, partnerPlanSyncService,
+                userRepository, orderRepository, walletUseCase, org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class), auditLogger, partnerPlanSyncService,
                 customerSubscriptionUseCase, subscriptionNotificationService, new ObjectMapper(), orderEmailService,
                 currencyRateService, new OrderAmounts(currencyRateService), stockService, mock(SupplierPurchaseService.class), opsAlertService);
     }

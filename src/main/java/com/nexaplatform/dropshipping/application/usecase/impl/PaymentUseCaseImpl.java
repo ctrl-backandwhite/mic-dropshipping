@@ -33,7 +33,10 @@ import com.nexaplatform.dropshipping.domain.repository.PaymentRepository;
 import com.nexaplatform.dropshipping.infrastructure.integration.payment.PaymentGateway;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PaymentEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PaymentJpaRepositoryAdapter;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
+import com.stripe.exception.StripeException;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
+import com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -94,6 +97,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Value("${spring.profiles.active:}")
     private String activeProfiles;
     private final WalletUseCase walletUseCase;
+    private final StripeService stripeService;
     private final AuditLogger auditLogger;
     private final PartnerPlanSyncService partnerPlanSyncService;
     private final CustomerSubscriptionUseCase customerSubscriptionUseCase;
@@ -706,6 +710,88 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         // faltaba restar el descuento de referido: al cliente se le cobraba el descuento que se le acababa
         // de enseñar en pantalla.
         return orderAmounts.totalOf(order, ccy);
+    }
+
+    @Override
+    @Transactional(noRollbackFor = StripeException.class)
+    public SavedCardPayResult payOrderWithSavedCard(UUID userId, UUID orderId, String paymentMethodId,
+            String idempotencyKey) throws StripeException {
+        if (!stripeService.isEnabled()) {
+            throw new BusinessException("Los pagos con tarjeta no están activos en este entorno.");
+        }
+        Optional<Payment> existing = existingByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent()) {
+            Payment p0 = existing.get();
+            return new SavedCardPayResult(p0.getStatus() == PaymentStatus.SUCCEEDED ? "succeeded" : "pending", null,
+                    p0.getId());
+        }
+        Order order = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException("Order"));
+        assertOrderOwnedBy(order, userId);
+        if (order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.REFUNDED) {
+            throw new BusinessException("Order is " + order.getStatus() + " and cannot be paid");
+        }
+        if (order.getStatus() == OrderStatus.PAID) {
+            return new SavedCardPayResult("succeeded", null, null);
+        }
+        long amountUsdCents = order.getTotalCents();
+        if (amountUsdCents < 100) {
+            throw new BusinessException("Order total below $1.00 USD — refusing to charge");
+        }
+        UUID payerUserId = order.getUserId() != null ? order.getUserId() : userId;
+        UserEntity user = userRepository.findById(payerUserId).orElseThrow(() -> new NotFoundException("User"));
+        String customerId = user.getStripeCustomerId();
+        if (customerId == null || customerId.isBlank()) {
+            throw new BusinessException("No hay ninguna tarjeta guardada para cobrar.");
+        }
+        // IDOR: la tarjeta debe pertenecer al Customer de Stripe del usuario.
+        boolean owned = stripeService.listCards(customerId).stream().anyMatch(pm -> pm.getId().equals(paymentMethodId));
+        if (!owned) {
+            throw new NotFoundException("Tarjeta no encontrada para el usuario");
+        }
+        Wallet wallet = walletUseCase.getOrCreate(payerUserId);
+        String displayCcy = CurrencyHolder.get();
+        boolean stripeEur = "EUR".equalsIgnoreCase(displayCcy);
+        String settlementCcy = settlementCurrencyFor(PaymentMethod.CARD, stripeEur);
+        BigDecimal settlementAmount = perLineSettlementAmount(order, settlementCcy);
+        long minor = settlementAmount.setScale(2, RoundingMode.HALF_UP).movePointRight(2).longValueExact();
+
+        Payment p = Payment.builder().userId(payerUserId).walletId(wallet.getId()).method(PaymentMethod.CARD)
+                .status(PaymentStatus.PENDING).amountUsdCents(amountUsdCents)
+                .amountDisplay(perLineSettlementAmount(order, displayCcy)).currencyDisplay(displayCcy)
+                .settlementCurrency(settlementCcy).settlementAmount(settlementAmount).idempotencyKey(idempotencyKey)
+                .orderId(orderId).purpose(ORDER_PAYMENT).provider("stripe").build();
+        p = paymentRepository.save(p);
+
+        StripeService.OffSessionResult r = stripeService.chargeSavedCardOffSession(customerId, paymentMethodId, minor,
+                settlementCcy, orderId.toString());
+        p.setProviderRef(r.id());
+        paymentRepository.save(p);
+
+        if ("succeeded".equals(r.status())) {
+            // Éxito inmediato (sin 3DS): reutiliza la liquidación estándar → marca el pedido PAGADO.
+            doConfirmSucceeded(p.getId(), Map.of("stripe_payment_intent", r.id(), "off_session", true));
+            return new SavedCardPayResult("succeeded", null, p.getId());
+        }
+        // La tarjeta exige autenticación (3DS): el navegador la completa con el client_secret y luego confirma.
+        return new SavedCardPayResult("requires_action", r.clientSecret(), p.getId());
+    }
+
+    @Override
+    @Transactional(noRollbackFor = StripeException.class)
+    public Payment confirmSavedCardPayment(UUID userId, UUID orderId, UUID paymentId) throws StripeException {
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
+        if (p.getUserId() == null || !p.getUserId().equals(userId) || !orderId.equals(p.getOrderId())) {
+            throw new NotFoundException(PAYMENT); // no filtramos pagos ajenos
+        }
+        if (p.getStatus() == PaymentStatus.SUCCEEDED) {
+            return p;
+        }
+        String status = stripeService.paymentIntentStatus(p.getProviderRef());
+        if ("succeeded".equals(status)) {
+            return doConfirmSucceeded(p.getId(), Map.of("stripe_payment_intent", p.getProviderRef(), "confirmed_3ds",
+                    true));
+        }
+        throw new BusinessException("El pago con tarjeta no se completó (estado " + status + ")");
     }
 
     @Override

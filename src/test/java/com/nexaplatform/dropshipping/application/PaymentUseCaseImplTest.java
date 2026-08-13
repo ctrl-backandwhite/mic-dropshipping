@@ -59,6 +59,8 @@ class PaymentUseCaseImplTest {
     @Mock
     WalletUseCase walletUseCase;
     @Mock
+    com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService stripeService;
+    @Mock
     AuditLogger auditLogger;
     @Mock
     PartnerPlanSyncService partnerPlanSyncService;
@@ -77,7 +79,7 @@ class PaymentUseCaseImplTest {
 
     private PaymentUseCaseImpl useCase() {
         return new PaymentUseCaseImpl(List.<PaymentGateway>of(), paymentRepository, paymentJpaRepositoryAdapter,
-                userRepository, orderRepository, walletUseCase, auditLogger, partnerPlanSyncService,
+                userRepository, orderRepository, walletUseCase, stripeService, auditLogger, partnerPlanSyncService,
                 customerSubscriptionUseCase, subscriptionNotificationService, new ObjectMapper(), orderEmailService,
                 currencyRateService, new OrderAmounts(currencyRateService), stockService, mock(SupplierPurchaseService.class), mock(OpsAlertService.class));
     }
@@ -152,5 +154,55 @@ class PaymentUseCaseImplTest {
         assertThat(body).isEqualTo("ok");
         verify(partnerPlanSyncService).onSubscriptionEvent("sub_123", "active",
                 "customer.subscription.updated");
+    }
+
+    @Test
+    void payOrderWithSavedCard_stripeDisabled_throws() {
+        when(stripeService.isEnabled()).thenReturn(false);
+        PaymentUseCaseImpl svc = useCase();
+        UUID userId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> svc.payOrderWithSavedCard(userId, orderId, "pm_x", "idem-1"))
+                .isInstanceOf(com.nexaplatform.dropshipping.api.exception.BusinessException.class);
+    }
+
+    @Test
+    void payOrderWithSavedCard_cardNotOwned_throwsNotFound() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        when(stripeService.isEnabled()).thenReturn(true);
+        when(paymentRepository.findByIdempotencyKey("idem-2")).thenReturn(Optional.empty());
+        com.nexaplatform.dropshipping.domain.model.Order order = com.nexaplatform.dropshipping.domain.model.Order
+                .builder().userId(userId).status(com.nexaplatform.dropshipping.domain.enums.OrderStatus.AWAITING_PAYMENT)
+                .totalCents(5000).build();
+        order.setId(orderId);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity user =
+                new com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity();
+        user.setStripeCustomerId("cus_1");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        // El Customer tiene OTRA tarjeta, no la pm_hack solicitada → IDOR bloqueado.
+        com.stripe.model.PaymentMethod other = new com.stripe.model.PaymentMethod();
+        other.setId("pm_legit");
+        when(stripeService.listCards("cus_1")).thenReturn(List.of(other));
+        PaymentUseCaseImpl svc = useCase();
+
+        assertThatThrownBy(() -> svc.payOrderWithSavedCard(userId, orderId, "pm_hack", "idem-2"))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void confirmSavedCardPayment_mismatchedUser_throwsNotFound() {
+        UUID paymentId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        Payment p = Payment.builder().userId(UUID.randomUUID()).method(PaymentMethod.CARD)
+                .status(PaymentStatus.PENDING).amountUsdCents(5000).orderId(orderId).build();
+        p.setId(paymentId);
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(p));
+        PaymentUseCaseImpl svc = useCase();
+
+        assertThatThrownBy(() -> svc.confirmSavedCardPayment(UUID.randomUUID(), orderId, paymentId))
+                .isInstanceOf(NotFoundException.class);
     }
 }

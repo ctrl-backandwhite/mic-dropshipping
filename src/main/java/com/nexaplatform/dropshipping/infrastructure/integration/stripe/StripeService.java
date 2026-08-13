@@ -1,9 +1,11 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.stripe;
 
 import com.stripe.Stripe;
+import com.stripe.exception.CardException;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Customer;
+import com.stripe.model.PaymentIntent;
 import com.stripe.model.Event;
 import com.stripe.model.Invoice;
 import com.stripe.model.InvoiceLineItem;
@@ -16,6 +18,7 @@ import com.stripe.model.checkout.Session;
 import com.stripe.net.Webhook;
 import com.stripe.param.CustomerCreateParams;
 import com.stripe.param.CustomerUpdateParams;
+import com.stripe.param.PaymentIntentCreateParams;
 import com.stripe.param.PaymentMethodListParams;
 import com.stripe.param.PriceCreateParams;
 import com.stripe.param.PriceListParams;
@@ -183,6 +186,46 @@ public class StripeService {
         }
         List<PaymentMethod> cards = listCards(customerId);
         return cards.isEmpty() ? null : cards.get(0).getId();
+    }
+
+    /** Resultado de un cobro off-session: estado del PaymentIntent, su client_secret (para 3DS) y su id. */
+    public record OffSessionResult(String id, String status, String clientSecret) {
+    }
+
+    /**
+     * Cobra un pedido con una tarjeta GUARDADA sin interacción del usuario ({@code off_session + confirm}).
+     * Si la tarjeta exige autenticación (3DS), Stripe lanza {@link CardException} con el PaymentIntent en
+     * {@code requires_action}: se devuelve su {@code client_secret} para que el navegador complete la
+     * autenticación y luego se confirme. Metadata {@code purpose=order} + {@code orderId} para distinguirlo
+     * en el dashboard del ingreso por planes.
+     */
+    public OffSessionResult chargeSavedCardOffSession(String customerId, String paymentMethodId, long amountMinor,
+            String currency, String orderId) throws StripeException {
+        PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
+                .setCustomer(customerId)
+                .setPaymentMethod(paymentMethodId)
+                .setAmount(amountMinor)
+                .setCurrency(currency.toLowerCase())
+                .setConfirm(true)
+                .setOffSession(true)
+                .putMetadata(PLATFORM, platformId).putMetadata("env", platformEnv)
+                .putMetadata(PURPOSE, "order").putMetadata("orderId", orderId)
+                .build();
+        try {
+            PaymentIntent pi = PaymentIntent.create(params);
+            return new OffSessionResult(pi.getId(), pi.getStatus(), pi.getClientSecret());
+        } catch (CardException e) {
+            PaymentIntent pi = e.getStripeError() != null ? e.getStripeError().getPaymentIntent() : null;
+            if (pi != null) {
+                return new OffSessionResult(pi.getId(), "requires_action", pi.getClientSecret());
+            }
+            throw e;
+        }
+    }
+
+    /** Estado actual de un PaymentIntent (para confirmar tras completar el 3DS en el navegador). */
+    public String paymentIntentStatus(String paymentIntentId) throws StripeException {
+        return PaymentIntent.retrieve(paymentIntentId).getStatus();
     }
 
     // =================================================================================================
