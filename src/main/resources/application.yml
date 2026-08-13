@@ -165,8 +165,10 @@ server:
   http2:
     enabled: true
   error:
-    include-message: always
-    include-binding-errors: always
+    # No filtrar mensajes internos ni errores de binding al cliente por el error controller por defecto
+    # (fuera del DispatcherServlet). El GlobalExceptionHandler ya devuelve mensajes controlados (IS001).
+    include-message: never
+    include-binding-errors: never
   servlet:
     session:
       cookie:
@@ -404,7 +406,7 @@ nexadrop:
 
   usdt:
     enabled: ${USDT_ENABLED:true}
-    manual-address: ${USDT_MANUAL_ADDRESS:TBd5jH7XPM2QwG1pVxLqkRtjY8bD3sxA1Z}
+    manual-address: ${USDT_MANUAL_ADDRESS:}  # sin default: si no se define, el pago USDT manual no opera
     chain: ${USDT_DEFAULT_CHAIN:TRC20}
     expiry-minutes: 30
 

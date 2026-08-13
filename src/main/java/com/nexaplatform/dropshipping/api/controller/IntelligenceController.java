@@ -69,7 +69,8 @@ public class IntelligenceController implements IntelligenceApi {
     }
 
     @Override
-    public void deleteAlert(UUID id) {
-        intelligenceAlertUseCase.deactivate(id);
+    public void deleteAlert(Authentication auth, UUID id) {
+        UUID userId = UUID.fromString(auth.getName());
+        intelligenceAlertUseCase.deactivate(userId, id);
     }
 }

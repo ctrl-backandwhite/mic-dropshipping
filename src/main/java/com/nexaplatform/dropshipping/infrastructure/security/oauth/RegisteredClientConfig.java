@@ -8,6 +8,8 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
@@ -33,16 +35,21 @@ public class RegisteredClientConfig {
 
     // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
     private static final String SANDBOX = "sandbox";
+    /** Secreto de partner por defecto del yml: nunca debe usarse en un entorno real. */
+    private static final String DEFAULT_PARTNER_SECRET = "dev-partner-secret-change-me";
 
     @Value("${nexadrop.oauth.partner-api.default-secret}")
     private String partnerSecret;
 
     private final PasswordEncoder passwordEncoder;
     private final RegisteredClientRepository repo;
+    private final Environment environment;
 
-    public RegisteredClientConfig(PasswordEncoder passwordEncoder, RegisteredClientRepository repo) {
+    public RegisteredClientConfig(PasswordEncoder passwordEncoder, RegisteredClientRepository repo,
+            Environment environment) {
         this.passwordEncoder = passwordEncoder;
         this.repo = repo;
+        this.environment = environment;
     }
 
     @Bean
@@ -66,6 +73,15 @@ public class RegisteredClientConfig {
         // NOTA: los antiguos clientes SPA admin/storefront (authorization_code + PKCE) se
         // eliminaron al migrar el login del SPA a token Bearer propio (/api/auth/login).
         // El authorization server solo conserva el flujo partner (client_credentials).
+
+        // FAIL-CLOSED: en un entorno real (pro/pre) NO se puede arrancar con el secreto de partner por
+        // defecto ('dev-partner-secret-change-me'), o cualquiera obtendría un token con scopes de la API
+        // de integración usando una credencial pública. Se exige definir PARTNER_DEFAULT_SECRET.
+        if (environment.acceptsProfiles(Profiles.of("pro", "pre"))
+                && DEFAULT_PARTNER_SECRET.equals(partnerSecret)) {
+            throw new IllegalStateException("El secreto del cliente OAuth de partners es el valor por defecto "
+                    + "en un entorno pro/pre. Define PARTNER_DEFAULT_SECRET con un secreto único antes de arrancar.");
+        }
 
         // Free / sandbox tier — 1 req/min. UPSERT: re-aplicamos settings y TTL si ya existe.
         upsertPartnerClient("demo-partner", "Demo Partner — Sandbox / Free (server-to-server)", partnerSecret,

@@ -49,6 +49,8 @@ class Cov07MarginServiceRulesTest {
     ProductGroupMemberRepository groupMemberRepository;
     @Mock
     CategoryGroupMemberRepository categoryGroupMemberRepository;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.persistence.repository.MoqMarginSettingRepository moqRepository;
 
     @InjectMocks
     MarginService service;

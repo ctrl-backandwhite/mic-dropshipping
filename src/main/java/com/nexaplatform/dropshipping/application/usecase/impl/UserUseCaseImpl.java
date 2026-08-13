@@ -271,6 +271,9 @@ public class UserUseCaseImpl implements UserUseCase {
             String hash = sha256(raw);
             UserEntity managed = userJpaRepository.findById(user.getId())
                     .orElseThrow(() -> new NotFoundException("User not found"));
+            // Al emitir un token nuevo, invalidamos los anteriores del usuario: no deben quedar varios
+            // enlaces de reset válidos a la vez (reduce la ventana de un enlace filtrado).
+            resetTokenRepository.consumeAllActiveForUser(managed.getId(), Instant.now());
             resetTokenRepository.save(PasswordResetTokenEntity.builder().user(managed).tokenHash(hash)
                     .expiresAt(Instant.now().plus(RESET_TTL_MINUTES, ChronoUnit.MINUTES)).build());
             String resetLang = InvoiceLabel.lang(user.getLanguage());
@@ -347,9 +350,21 @@ public class UserUseCaseImpl implements UserUseCase {
     public void confirmAccountDeletion(UUID userId, String code) {
         User user = loadUser(userId);
         String provided = code == null ? null : code.trim();
-        if (user.getDeletionCode() == null || provided == null || !user.getDeletionCode().equals(provided)
-                || user.getDeletionCodeExpiresAt() == null
-                || user.getDeletionCodeExpiresAt().isBefore(Instant.now())) {
+        boolean fresh = user.getDeletionCodeExpiresAt() != null
+                && !user.getDeletionCodeExpiresAt().isBefore(Instant.now());
+        // Comparación en tiempo CONSTANTE del código.
+        boolean codeOk = user.getDeletionCode() != null && provided != null
+                && java.security.MessageDigest.isEqual(
+                        provided.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                        user.getDeletionCode().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        if (!(fresh && codeOk)) {
+            // Un intento con código ERRÓNEO (dentro de la ventana) QUEMA el código, para que no se pueda
+            // forzar por fuerza bruta el código de 6 dígitos durante su validez. Hay que solicitarlo de nuevo.
+            if (fresh && !codeOk && user.getDeletionCode() != null) {
+                user.setDeletionCode(null);
+                user.setDeletionCodeExpiresAt(null);
+                userRepository.update(user);
+            }
             throw new BusinessException("DELETION_CODE_INVALID",
                     "El código de eliminación no es válido o ha expirado.");
         }

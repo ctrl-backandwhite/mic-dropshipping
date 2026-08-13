@@ -14,6 +14,6 @@ public interface IntelligenceAlertUseCase {
     /** Creates an alert for the given user, applying channel/active defaults. */
     IntelligenceAlert create(UUID userId, IntelligenceAlert model);
 
-    /** Soft-deletes (deactivates) the alert with the given id. */
-    void deactivate(UUID id);
+    /** Soft-deletes (deactivates) the alert with the given id, only if it belongs to {@code userId}. */
+    void deactivate(UUID userId, UUID id);
 }

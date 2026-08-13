@@ -24,8 +24,10 @@ public class DefaultSecurityConfig {
 
     @Bean
     public GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler(UserUseCase userUseCase,
-            UserTokenService userTokenService, DeviceSessionService deviceSessionService) {
-        return new GoogleOAuth2SuccessHandler(userUseCase, userTokenService, deviceSessionService, frontBaseUrl);
+            UserTokenService userTokenService, DeviceSessionService deviceSessionService,
+            com.nexaplatform.dropshipping.application.service.TotpService totpService) {
+        return new GoogleOAuth2SuccessHandler(userUseCase, userTokenService, deviceSessionService, totpService,
+                frontBaseUrl);
     }
 
     @Bean
@@ -59,7 +61,10 @@ public class DefaultSecurityConfig {
                         // Swagger UI + OpenAPI JSON quedan tras login y solo accesibles a staff.
                         .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/v3/api-docs.yaml", "/v3/api-docs.yaml/**",
                                 "/swagger-ui.html", "/swagger-ui/**", "/swagger-resources/**", "/webjars/**")
-                        .hasAnyAuthority("ROLE_ADMIN", "ROLE_OPERATOR").anyRequest().authenticated())
+                        .hasAnyAuthority("ROLE_ADMIN", "ROLE_OPERATOR")
+                        // El resto de actuator (metrics/prometheus) NO debe quedar visible a cualquier usuario
+                        // autenticado: solo ADMIN. health/info siguen públicos (arriba).
+                        .requestMatchers("/actuator/**").hasAuthority("ROLE_ADMIN").anyRequest().authenticated())
                 .formLogin(form -> form.loginPage(LOGIN).permitAll())
                 .oauth2Login(oauth -> oauth.loginPage(LOGIN)
                         // GitHub no habla OIDC, así que su email verificado lo resuelve nuestro propio

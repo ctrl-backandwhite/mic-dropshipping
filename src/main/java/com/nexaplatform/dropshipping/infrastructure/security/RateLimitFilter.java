@@ -157,6 +157,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return new RateRule("auth.refresh", Scope.IP, 30, Duration.ofMinutes(1));
         if (path.equals("/api/auth/register"))
             return new RateRule("auth.register", Scope.IP, 5, Duration.ofHours(1));
+        // Reenvío del email de activación: sin freno se podía bombardear el buzón de una víctima (el CAPTCHA
+        // PoW es barato). 5/hora por IP, en línea con el registro.
+        if (path.equals("/api/auth/activate/resend"))
+            return new RateRule("auth.activate.resend", Scope.IP, 5, Duration.ofHours(1));
         if (path.equals("/api/auth/password-reset/request"))
             return new RateRule("auth.reset.req", Scope.IP, 20, Duration.ofHours(1));
         if (path.equals("/api/auth/password-reset/confirm"))
@@ -185,6 +189,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
         // Inbound webhooks signed with HMAC — per shop connection (path segment).
         if (path.startsWith("/api/v1/integrations/shops/"))
             return new RateRule("inbound.shop", Scope.PATH_SEG_3, 240, Duration.ofMinutes(1));
+
+        // Emisión de challenges CAPTCHA: sin freno, un bot puede pedir retos sin límite (el PoW es barato).
+        if (path.equals("/api/captcha/challenge"))
+            return new RateRule("captcha.challenge", Scope.IP, 60, Duration.ofMinutes(1));
 
         // Public versioned API (for developers) — per IP, generous but bounded.
         if (path.startsWith("/api/v1/rate-limits") || path.startsWith("/api/v1/invoices"))

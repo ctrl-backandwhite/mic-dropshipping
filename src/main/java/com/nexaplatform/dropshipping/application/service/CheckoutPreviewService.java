@@ -96,6 +96,9 @@ public class CheckoutPreviewService {
         int subtotalUsdCents = 0;
         // Subtotal SIN rebajas: la referencia contra la que se mide el cupón.
         int grossSubtotalUsdCents = 0;
+        // Gross por producto: base para acotar un cupón PRODUCT/CATEGORY solo a las líneas que alcanza
+        // (igual que en el cobro real, para que preview y cargo coincidan).
+        java.util.Map<UUID, Integer> grossByProduct = new java.util.HashMap<>();
         BigDecimal subDispAcc = BigDecimal.ZERO;
         for (Line it : lines) {
             Integer unitCents = unitPriceUsdCents(it);
@@ -105,8 +108,11 @@ public class CheckoutPreviewService {
             int qty = Math.clamp(it.quantity(), 1, MAX_LINE_QUANTITY);
             subtotalUsdCents = Math.addExact(subtotalUsdCents, Math.multiplyExact(unitCents, qty));
             Integer originalCents = unitOriginalUsdCents(it);
-            grossSubtotalUsdCents = Math.addExact(grossSubtotalUsdCents,
-                    Math.multiplyExact(originalCents != null ? originalCents : unitCents, qty));
+            int lineGross = Math.multiplyExact(originalCents != null ? originalCents : unitCents, qty);
+            grossSubtotalUsdCents = Math.addExact(grossSubtotalUsdCents, lineGross);
+            if (it.productId() != null) {
+                grossByProduct.merge(it.productId(), lineGross, Integer::sum);
+            }
             // El importe que se ENSEÑA sale del precio de la ficha (displayAmount), no de convertir el
             // canónico en dólares. Los dos caminos difieren en un céntimo: la ficha compone el precio en
             // la moneda del cliente —base, IVA y envío convertidos y redondeados por separado— mientras
@@ -136,7 +142,9 @@ public class CheckoutPreviewService {
                 // Lo que la promoción del producto YA está descontando. Sin medirlo, el cupón se
                 // aplicaría encima del precio rebajado y los dos se acumularían.
                 int alreadyOff = Math.max(0, grossSubtotalUsdCents - subtotalUsdCents);
-                int couponCents = couponDiscountCents(check.promotion(), grossSubtotalUsdCents);
+                // ALCANCE del cupón: solo descuenta sobre las líneas que alcanza (todo si es global).
+                int base = promotionService.reachableGrossCents(check.promotion(), grossByProduct);
+                int couponCents = couponDiscountCents(check.promotion(), base);
                 if (couponCents > Math.max(alreadyOff, discountUsdCents)) {
                     // El cupón gana: sustituye a la rebaja, no se suma. El descuento que se aplica es
                     // solo la DIFERENCIA, porque la rebaja ya está descontada del precio de línea.

@@ -44,7 +44,7 @@ public class CaptchaService {
     private byte[] hmacKey;
 
     /** Rango del proof-of-work: a mayor número, más coste para el cliente. 100k resuelve en <1 s. */
-    @Value("${nexadrop.captcha.max-number:100000}")
+    @Value("${nexadrop.captcha.max-number:1000000}")
     private long maxNumber;
 
     /** Validez del reto. Corto: el cliente lo resuelve en el acto. */

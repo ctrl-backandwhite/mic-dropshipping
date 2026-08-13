@@ -146,18 +146,27 @@ public class TotpService {
         return new EnableResult(codes);
     }
 
-    /** Verifica un OTP contra el secret ya activo (uso en login). */
+    /** Verifica un OTP contra el secret ya activo (uso en login). Rechaza la reutilización (replay). */
+    @Transactional
     public boolean verifyOtp(UUID userId, String otp) {
         TotpSecretEntity rec = repo.findById(userId).orElse(null);
         if (rec == null || !rec.isEnabled())
             return false;
         String secret = crypto.decrypt(rec.getSecretEnc());
-        boolean ok = verifyAtTime(secret, otp, System.currentTimeMillis() / 1000);
-        if (ok) {
-            rec.setLastUsedAt(Instant.now());
-            repo.save(rec);
+        long matched = matchingCounter(secret, otp, System.currentTimeMillis() / 1000);
+        if (matched < 0) {
+            return false;
         }
-        return ok;
+        // Anti-replay: el contador del último OTP consumido se guarda en lastUsedAt (inicio del step). Un
+        // código de un step YA usado (o anterior) se rechaza, aunque siga dentro de su ventana de validez.
+        long lastCounter = rec.getLastUsedAt() != null ? rec.getLastUsedAt().getEpochSecond() / PERIOD_SECONDS : -1L;
+        if (matched <= lastCounter) {
+            return false;
+        }
+        rec.setLastUsedAt(Instant.ofEpochSecond(matched * PERIOD_SECONDS));
+        rec.setUpdatedAt(Instant.now());
+        repo.save(rec);
+        return true;
     }
 
     /** Acepta un backup code (single-use). Invalida el code al consumirse. */
@@ -228,16 +237,26 @@ public class TotpService {
     /* ============================ Internals ============================ */
 
     private boolean verifyAtTime(String base32Secret, String otp, long epochSeconds) {
+        return matchingCounter(base32Secret, otp, epochSeconds) >= 0;
+    }
+
+    /**
+     * Devuelve el contador de time-step (epoch/30) para el que casa el OTP dentro de la ventana de drift,
+     * o -1 si no casa ninguno. Se expone el contador para poder RECHAZAR la reutilización del mismo código
+     * (replay): un OTP TOTP es válido durante toda su ventana (±30s), y sin esto se podía reenviar el mismo
+     * código varias veces (RFC 6238 §5.2 pide invalidar el paso ya consumido).
+     */
+    private long matchingCounter(String base32Secret, String otp, long epochSeconds) {
         if (otp == null || otp.length() != DIGITS)
-            return false;
+            return -1L;
         byte[] key = base32Decode(base32Secret);
         long counter = epochSeconds / PERIOD_SECONDS;
         // Window: cuenta actual + WINDOW pasadas/futuras (drift)
         for (int w = -WINDOW; w <= WINDOW; w++) {
             if (otp.equals(generate(key, counter + w)))
-                return true;
+                return counter + w;
         }
-        return false;
+        return -1L;
     }
 
     private String generate(byte[] key, long counter) {

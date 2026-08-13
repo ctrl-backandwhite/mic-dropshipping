@@ -46,10 +46,12 @@ public class IntelligenceAlertUseCaseImpl implements IntelligenceAlertUseCase {
 
     @Override
     @Transactional
-    public void deactivate(UUID id) {
+    public void deactivate(UUID userId, UUID id) {
         // Soft delete: mirror the legacy behaviour of silently ignoring a missing id.
         IntelligenceAlert existing = intelligenceAlertRepository.getById(id);
-        if (Objects.isNull(existing)) {
+        // IDOR: la alerta debe pertenecer al usuario. Si no existe o es de otro, se ignora en silencio
+        // (mismo 200 neutro que un id inexistente → no revela qué ids ajenos existen).
+        if (Objects.isNull(existing) || !Objects.equals(userId, existing.getUserId())) {
             return;
         }
         existing.setActive(false);

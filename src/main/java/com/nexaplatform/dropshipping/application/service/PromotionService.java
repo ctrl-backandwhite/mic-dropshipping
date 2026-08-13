@@ -52,6 +52,7 @@ public class PromotionService {
     private final PromotionTargetRepository targetRepository;
     private final CategoryRepository categoryRepository;
     private final PromotionRedemptionRepository redemptionRepository;
+    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository productRepository;
 
     /**
      * Precio rebajado y de dónde sale la rebaja.
@@ -277,6 +278,31 @@ public class PromotionService {
             return false;
         }
         return ancestorsOf(product.getCategory().getId()).stream().anyMatch(wanted::contains);
+    }
+
+    /**
+     * Céntimos de precio de tarifa (gross) del carrito que un cupón REALMENTE alcanza.
+     *
+     * <p>Para cupones con alcance PRODUCT/CATEGORY solo cuentan las líneas de productos que entran en el
+     * cupón; para alcance global (ALL) cuenta todo el carrito. Es la base sobre la que el checkout calcula
+     * el descuento del cupón, para que un cupón de "producto X / categoría Y" NO rebaje el carrito entero.
+     */
+    @Transactional(readOnly = true)
+    public int reachableGrossCents(PromotionEntity coupon, Map<UUID, Integer> grossByProduct) {
+        if (coupon == null || grossByProduct == null || grossByProduct.isEmpty()) {
+            return 0;
+        }
+        if (coupon.getScope() == PromotionScope.ALL) {
+            return grossByProduct.values().stream().mapToInt(Integer::intValue).sum();
+        }
+        int base = 0;
+        for (Map.Entry<UUID, Integer> e : grossByProduct.entrySet()) {
+            ProductEntity product = productRepository.findById(e.getKey()).orElse(null);
+            if (product != null && reaches(coupon, product)) {
+                base += e.getValue();
+            }
+        }
+        return base;
     }
 
     /**

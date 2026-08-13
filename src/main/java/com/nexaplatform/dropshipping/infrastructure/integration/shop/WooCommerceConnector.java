@@ -97,7 +97,11 @@ public class WooCommerceConnector implements ShopConnector {
             return null;
         }
         String h = Texts.stripTrailingSlashes(handle.trim());
-        if (!h.startsWith("http://") && !h.startsWith("https://")) {
+        // Forzamos HTTPS: la petición lleva las credenciales del partner en Authorization: Basic. Un
+        // http:// explícito las expondría en claro. Sin esquema o con http:// → https://.
+        if (h.startsWith("http://")) {
+            h = "https://" + h.substring("http://".length());
+        } else if (!h.startsWith("https://")) {
             h = "https://" + h;
         }
         // Anti-SSRF: el host lo controla el usuario. Rechazamos cualquier destino que resuelva a la red

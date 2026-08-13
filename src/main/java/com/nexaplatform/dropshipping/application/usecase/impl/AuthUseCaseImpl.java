@@ -114,7 +114,14 @@ public class AuthUseCaseImpl implements AuthUseCase {
         // registrar el login como correcto, emitir tokens o enviar el aviso "inicio de sesión detectado":
         // un OTP ausente/erróneo no puede dejar rastro de sesión válida ni acreditar el acceso. Sin este
         // control, activar 2FA no protegía nada (el token completo se emitía solo con la contraseña).
-        enforceTwoFactor(id, req.getOtp());
+        try {
+            enforceTwoFactor(id, req.getOtp());
+        } catch (TwoFactorInvalidException ex) {
+            // Un OTP incorrecto cuenta para el bloqueo por fuerza bruta (5→15 min), igual que una contraseña
+            // errónea: si no, con la contraseña ya conocida se podían probar los 10^6 códigos sin freno de cuenta.
+            userUseCase.recordFailedLogin(normalizedEmail);
+            throw ex;
+        }
         completePendingGoogleLink(httpRequest, user);
         // Vínculo social por TOKEN (cross-origin): la sesión PENDING_* no viaja, así que si el usuario
         // llegó desde el flujo OAuth (?link=required) y ahora prueba su contraseña, vinculamos aquí. El
