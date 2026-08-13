@@ -4,6 +4,7 @@ import com.nexaplatform.dropshipping.api.dto.in.CurrencyBulkActiveDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.UpdateRateDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.CurrencyDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CurrencySyncResultDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.CurrencySyncStatusDtoOut;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -53,4 +54,8 @@ public interface CurrencyApi {
     @Operation(summary = "Sync currency rates from the external provider")
     @PostMapping("/api/admin/currency/sync")
     ResponseEntity<CurrencySyncResultDtoOut> sync();
+
+    @Operation(summary = "Currency sync status: last sync + next scheduled run + cron (for the admin screen)")
+    @GetMapping("/api/admin/currency/sync-status")
+    ResponseEntity<CurrencySyncStatusDtoOut> syncStatus();
 }

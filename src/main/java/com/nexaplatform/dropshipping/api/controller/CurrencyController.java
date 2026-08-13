@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.api.dto.in.CurrencyBulkActiveDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.UpdateRateDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.CurrencyDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CurrencySyncResultDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.CurrencySyncStatusDtoOut;
 import com.nexaplatform.dropshipping.api.mapper.CurrencyDtoMapper;
 import com.nexaplatform.dropshipping.application.usecase.CurrencyRateUseCase;
 import com.nexaplatform.dropshipping.domain.model.CurrencyRate;
@@ -63,5 +64,11 @@ public class CurrencyController implements CurrencyApi {
     @Override
     public ResponseEntity<CurrencySyncResultDtoOut> sync() {
         return new ResponseEntity<>(mapper.toDtoOut(useCase.sync()), HttpStatus.OK);
+    }
+
+    @Override
+    public ResponseEntity<CurrencySyncStatusDtoOut> syncStatus() {
+        CurrencyRateUseCase.SyncStatus s = useCase.syncStatus();
+        return ResponseEntity.ok(new CurrencySyncStatusDtoOut(s.lastSyncedAt(), s.nextSyncAt(), s.cron()));
     }
 }
