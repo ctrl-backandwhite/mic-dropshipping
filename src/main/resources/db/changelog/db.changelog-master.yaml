@@ -265,3 +265,5 @@ databaseChangeLog:
       file: db/changelog/schema-v127-tallas-sin-imagen.sql
   - include:
       file: db/changelog/schema-v128-imagen-variante-que-no-distingue.sql
+  - include:
+      file: db/changelog/schema-v129-retirar-alusiones-a-marca.sql
