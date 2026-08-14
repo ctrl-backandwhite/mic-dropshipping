@@ -39,13 +39,26 @@ public class ProductIndexSchema {
     /**
      * Versión del esquema. Subirla ⇒ índice nuevo + reindexado (ver arriba).
      *
+     * <p>v4: singular y plural dejaban de encontrar lo mismo. Dos causas, ambas medidas sobre el catálogo:
+     * <ul>
+     *   <li><b>{@code nx_foreign} es un {@code stemmer_override}</b>, y un override marca el token como YA
+     *       PROCESADO: el stemmer posterior no vuelve a tocarlo. Las reglas estaban escritas como
+     *       «blazers ⇒ blazer», de modo que el plural se quedaba en {@code blazer} mientras el singular se
+     *       reducía a {@code blaz} — buscar «blazer» NO encontraba los «blazers» (265 resultados frente a
+     *       532). Ahora cada regla apunta a la RAÍZ del singular. Y las palabras que el stemmer español ya
+     *       unifica solo (polo, pijama, hoodie) se RETIRAN del override, donde únicamente estorbaban:
+     *       «pijama» devolvía 73 resultados y «pijamas», 1.</li>
+     *   <li><b>Los sinónimos estaban solo en plural</b>: «zapatillas» encontraba sneakers y tenis, y
+     *       «zapatilla» no encontraba ninguno. Se añaden las formas en singular.</li>
+     * </ul>
+     *
      * <p>v3: {@code titleAll} pasa del analizador {@code nx_plain} al nuevo {@code nx_all}, que sí filtra
      * palabras vacías. Antes no lo hacía, y como ese campo reúne los siete idiomas, cada "de", "con",
      * "with" o "mit" de la consulta contaba como término propio: buscar «de traje de» casaba con 5.247
      * productos por ese solo campo, frente a los 77 del campo del idioma. El resultado correcto seguía
      * saliendo, pero enterrado.
      */
-    public static final String VERSION = "v3";
+    public static final String VERSION = "v4";
 
     private static final String DEFINITION = "opensearch/products-index.json";
 

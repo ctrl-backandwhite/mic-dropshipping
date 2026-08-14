@@ -149,8 +149,39 @@ public class ProductSearchService {
                 b.should(s -> s.match(m -> m.field(titleField).query(FieldValue.of(needle))
                         .fuzziness("AUTO").boost(0.5f)));
             }
+            // ANCLA AL TÍTULO — lo que hace coherente el resultado.
+            //
+            // Las cláusulas de arriba puntúan; esta decide quién ENTRA. Sin ella, un producto podía
+            // aparecer casando solo por sus variantes o atributos, y eso devuelve cosas que no tienen nada
+            // que ver: «vaqueros verde» traía un vestido cuyo único vínculo era tener un color «verde» y
+            // otro «vaquero» — dos variantes distintas del mismo artículo, ningún vaquero por ninguna
+            // parte. Para el comprador, «no hay vaqueros verdes» es mejor respuesta que un vestido.
+            //
+            // La regla es: las variantes y los atributos REFINAN la búsqueda, no la originan. Al menos un
+            // término tiene que aparecer en algún título — el del idioma, el común o el chino—. Con eso
+            // «vaqueros azul» sigue funcionando (el «vaquero» está en el título y el «azul» lo aporta la
+            // variante), y el vestido de antes desaparece.
+            b.must(anclaEnTitulo(needle, titleField));
             return b.minimumShouldMatch("1");
         }));
+    }
+
+    /**
+     * Exige que la consulta toque el TÍTULO del producto, en cualquiera de sus formas.
+     *
+     * <p>Es un filtro de pertenencia, no de relevancia: basta UN término (así «vaqueros azul» entra por
+     * «vaqueros» aunque el color viva en la variante), pero sin ninguno el producto no es un resultado,
+     * por muchos atributos que casen.
+     */
+    private static Query anclaEnTitulo(String needle, String titleField) {
+        return Query.of(q -> q.bool(b -> b
+                .should(s -> s.match(m -> m.field(titleField).query(FieldValue.of(needle))))
+                .should(s -> s.match(m -> m.field("titleAll").query(FieldValue.of(needle))))
+                .should(s -> s.match(m -> m.field("titleZh").query(FieldValue.of(needle))))
+                // La categoría cuenta como título a estos efectos: buscar «vestidos» debe traer lo que
+                // vive en la categoría Vestido aunque su título diga «Prenda de tirantes».
+                .should(s -> s.match(m -> m.field("categoryName").query(FieldValue.of(needle))))
+                .minimumShouldMatch("1")));
     }
 
     /**
