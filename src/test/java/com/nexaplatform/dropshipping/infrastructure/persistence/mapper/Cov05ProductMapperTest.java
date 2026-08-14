@@ -63,6 +63,10 @@ class Cov05ProductMapperTest {
     MarginService marginService;
     @Mock
     com.nexaplatform.dropshipping.application.service.CustomsValuationService customsValuationService;
+    // Bloque de cumplimiento del Reglamento (UE) 2023/988 que la ficha adjunta. Estos casos miden el
+    // filtrado de coste y la resolución de idioma, así que basta con que el bean exista.
+    @Mock
+    com.nexaplatform.dropshipping.application.service.EuComplianceService euComplianceService;
 
     @InjectMocks
     ProductMapper mapper;

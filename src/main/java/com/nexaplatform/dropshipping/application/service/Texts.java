@@ -22,6 +22,21 @@ public final class Texts {
     }
 
     /**
+     * Recorta y devuelve {@code null} si no queda nada.
+     *
+     * <p>Para los campos de texto que el admin puede vaciar: distingue "no lo edito" (el DTO trae null y ni
+     * se llama a este método) de "bórralo" (trae cadena vacía). Guardar {@code ""} en vez de {@code null}
+     * haría que un campo vacío pareciera relleno en las comprobaciones de completitud.
+     */
+    public static String trimToNull(String s) {
+        if (s == null) {
+            return null;
+        }
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    /**
      * Primer candidato con contenido, en el orden dado.
      *
      * @return el primero utilizable, o {@code null} si ninguno lo es

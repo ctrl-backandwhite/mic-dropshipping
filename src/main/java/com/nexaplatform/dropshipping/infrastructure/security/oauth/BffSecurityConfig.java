@@ -101,6 +101,11 @@ public class BffSecurityConfig {
                 "/api/affiliate/**", "/api/search", "/api/search/**", "/api/shipping/**", "/api/currency/**",
                 "/api/languages", "/api/languages/**", "/api/warehouses", "/api/warehouses/**", "/api/academy/**",
                 "/api/mentors", "/api/mentors/**", "/api/pod/**", "/api/campaigns/**", "/api/geo",
+                // Cumplimiento del Reglamento (UE) 2023/988. Tiene que estar AQUÍ además de en las reglas
+                // de autorización de abajo: lo que no entra en este securityMatcher lo atiende la cadena
+                // del servidor de autorización, que responde 302 hacia /login — o sea, la ruta parece
+                // protegida pero en realidad ni siquiera llega a evaluarse como API.
+                "/api/compliance", "/api/compliance/**",
                 "/api/captcha/**")
                 .cors(Customizer.withDefaults())
                 // NOSONAR java:S4502 — Falso positivo verificado: con STATELESS (abajo) la sesión no se lee
@@ -142,7 +147,11 @@ public class BffSecurityConfig {
                                 "/api/contact/**", "/api/newsletter/**", "/api/affiliate/**", "/api/search",
                                 "/api/search/**", "/api/shipping/**", "/api/currency/**", "/api/languages",
                                 "/api/languages/**", "/api/warehouses", "/api/warehouses/**", "/api/academy/**",
-                                "/api/mentors", "/api/mentors/**", "/api/pod/**", "/api/geo")
+                                "/api/mentors", "/api/mentors/**", "/api/pod/**", "/api/geo",
+                                // Operador económico de la UE (art. 16.3 del Reglamento (UE) 2023/988): la
+                                // norma obliga a que el comprador pueda verlo, así que no puede quedar
+                                // detrás del muro de cuenta. No expone nada que no deba ser público.
+                                "/api/compliance", "/api/compliance/**")
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/catalog/shipping/quote").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/catalog/cart-quote").permitAll()

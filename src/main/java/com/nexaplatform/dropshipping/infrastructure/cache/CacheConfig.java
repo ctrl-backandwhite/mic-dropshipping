@@ -43,6 +43,8 @@ public class CacheConfig {
     public static final String CACHE_PRODUCT_SPECS = "product-specs";
     public static final String CACHE_PRODUCT_ATTRS = "product-attrs";
     public static final String CACHE_SEARCH = "search"; // resultados de /api/search por keyword+lang+page+size (TTL corto)
+    // Operador económico de la UE y advertencias por categoría: se leen en CADA ficha y cambian casi nunca.
+    public static final String CACHE_EU_COMPLIANCE = "eu-compliance";
 
     /**
      * Clave de caché que INCLUYE la moneda de display activa (X-Currency) además del método + args.
@@ -86,7 +88,8 @@ public class CacheConfig {
     public CacheManager caffeineCacheManager() {
         CaffeineCacheManager mgr = new CaffeineCacheManager(CACHE_PRODUCT_DETAIL, CACHE_PRODUCT_SUMMARY,
                 CACHE_PRODUCT_LIST, CACHE_CATEGORY_TREE, CACHE_CATEGORIES_FLAT, CACHE_SUPPLIERS_FLAT,
-                CACHE_PRICING_AMOUNT, CACHE_CURRENCY_RATES, CACHE_PRODUCT_SPECS, CACHE_PRODUCT_ATTRS, CACHE_SEARCH);
+                CACHE_PRICING_AMOUNT, CACHE_CURRENCY_RATES, CACHE_PRODUCT_SPECS, CACHE_PRODUCT_ATTRS,
+                CACHE_SEARCH, CACHE_EU_COMPLIANCE);
         mgr.setCaffeine(Caffeine.newBuilder().maximumSize(50_000).expireAfterWrite(5, TimeUnit.MINUTES).recordStats()); // expone métricas a Micrometer
         mgr.setAllowNullValues(false);
         return mgr;
