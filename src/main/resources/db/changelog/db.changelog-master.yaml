@@ -259,3 +259,5 @@ databaseChangeLog:
       file: db/changelog/schema-v124-retirar-no-enviables-ue.sql
   - include:
       file: db/changelog/schema-v125-retirar-navidenos-electricos.sql
+  - include:
+      file: db/changelog/schema-v126-retirar-sobre-2kg.sql
