@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.dto;
 
+import com.nexaplatform.dropshipping.application.service.EuComplianceService.ProductComplianceView;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -156,7 +157,11 @@ public final class CatalogDtos {
             String originalFormatted, Integer discountPercent, String promotionName,
             // SOLO ADMIN: arancel de aduana por artículo ya formateado (p. ej. "3,00 €") cuando el país
             // efectivo es de la UE; null en el resto. Informativo (no está en el total del producto).
-            String customsFormatted) {
+            String customsFormatted,
+            // Cumplimiento del Reglamento (UE) 2023/988: fabricante (art. 19.a), advertencias de seguridad
+            // (art. 19.d) y operador económico establecido en la Unión (art. 16.3). Va agrupado en un solo
+            // campo para no sumar seis más a un record que ya arrastra cuarenta.
+            ProductComplianceView compliance) {
 
         /** Sin promoción: atajo para los usos que no la calculan. */
         public ProductDetailView(UUID id, String slug, String source, String externalId, SupplierView supplier,
@@ -176,7 +181,7 @@ public final class CatalogDtos {
                     lastSyncedAt, images, variantOptions, variants, priceTiers, costUsd, retailUsd, displayPrice,
                     displayCurrency, displaySymbol, displayFormatted, appliedMarginPercent, baseFormatted,
                     ivaFormatted, shippingFormatted, metaTitle, metaDescription, verified, videoUrl, hasVideo,
-                    null, null, null, null);
+                    null, null, null, null, null);
         }
     }
 

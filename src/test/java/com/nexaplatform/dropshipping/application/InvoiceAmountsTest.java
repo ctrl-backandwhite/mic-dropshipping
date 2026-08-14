@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
 import com.nexaplatform.dropshipping.application.service.InvoiceService;
+import com.nexaplatform.dropshipping.application.service.EuComplianceService;
 import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
@@ -70,7 +71,8 @@ class InvoiceAmountsTest {
 
         // OrderAmounts real (no un doble): la factura tiene que hacer la MISMA cuenta que el cobro, y con
         // un doble el test dejaría de medir precisamente eso.
-        service = new InvoiceService(engine, currency, new OrderAmounts(currency), payments,
+        service = new InvoiceService(engine, currency, mock(EuComplianceService.class),
+                new OrderAmounts(currency), payments,
                 mock(ProductRepository.class), mock(ProductVariantRepository.class),
                 mock(ObjectStorageService.class));
     }

@@ -150,12 +150,25 @@ public class ProductIndexer {
         doc.put("source", p.getSource());
         doc.put("externalId", p.getExternalId());
         doc.put("status", p.getStatus() != null ? p.getStatus().name() : null);
-        doc.put("titleZh", p.getTitleZh());
+        // SOLO si de verdad es chino. La columna `title_zh` es el título de ORIGEN y hace de reserva
+        // cuando un producto no tiene traducción, así que en la práctica 4.791 de 5.659 referencias
+        // activas llevan ahí el título en español. Indexarlo tal cual en un campo con analizador `cjk`
+        // —que no conoce las palabras vacías españolas— convertía cada "de", "con" o "para" en ~4.300
+        // coincidencias con peso 3, y esas coincidencias sepultaban al producto correcto: buscar
+        // "Blazer de" devolvía 4.368 resultados y el blazer buscado caía al tercer puesto.
         // Las descripciones van TODAS a un único campo `descAll`. No entran en el match principal (una
         // falda cuya descripción dice "combina con botas" no es un resultado de "botas"); solo se rastrean
         // en el segundo intento, cuando el título/atributo/variante no ha encontrado nada.
         StringBuilder descriptions = new StringBuilder();
+        String tituloChino = null;
         for (ProductTranslationEntity t : p.getTranslations()) {
+            // El chino tiene su propio campo con analizador `cjk`, así que no pasa por normalizeLang.
+            // Antes se descartaba aquí y `titleZh` se llenaba solo desde la columna de origen: como esa
+            // columna guarda español en la mayoría de las referencias, el buscador en chino veía 868
+            // productos de los 5.292 traducidos, y teclear el nombre chino de un artículo no lo encontraba.
+            if ("zh".equalsIgnoreCase(t.getLanguage()) && esChino(t.getTitle())) {
+                tituloChino = t.getTitle();
+            }
             String lang = normalizeLang(t.getLanguage());
             if (lang == null) {
                 continue;
@@ -164,6 +177,12 @@ public class ProductIndexer {
             append(descriptions, t.getShortDescription());
             append(descriptions, t.getDescription());
         }
+        // Manda la traducción al chino; la columna de origen solo entra como reserva y SOLO si de verdad
+        // lleva ideogramas. Indexar texto español en un campo con analizador `cjk` —que no conoce las
+        // palabras vacías del español— convertía cada "de", "con" o "para" en ~4.300 coincidencias con
+        // peso 3: buscar "Blazer de" devolvía 4.368 resultados con el blazer buscado en tercer lugar.
+        doc.put("titleZh", tituloChino != null ? tituloChino
+                : (esChino(p.getTitleZh()) ? p.getTitleZh() : null));
         doc.put("descAll", descriptions.toString());
         // Atributos y variantes: son el otro sitio donde el usuario espera acertar ("Botas de nieve" vive
         // en un atributo del proveedor, "rojo"/"talla 38" en las variantes). Se indexan aplanados porque a
@@ -216,6 +235,21 @@ public class ProductIndexer {
      * escribir un campo que el mapping no conoce (el índice es {@code dynamic:false} y lo descartaría igual,
      * pero así queda explícito).
      */
+    /**
+     * ¿El texto lleva al menos un ideograma CJK?
+     *
+     * <p>Se comprueba por CONTENIDO y no por la procedencia del campo porque `title_zh` es el título de
+     * origen y también la reserva cuando falta traducción: su nombre promete chino, pero la mayoría de las
+     * veces guarda español. Lo que decide si algo debe ir al campo con analizador `cjk` es lo que hay
+     * escrito, no de qué columna viene.
+     */
+    private static boolean esChino(String texto) {
+        if (texto == null || texto.isBlank()) {
+            return false;
+        }
+        return texto.codePoints().anyMatch(cp -> Character.UnicodeScript.of(cp) == Character.UnicodeScript.HAN);
+    }
+
     private static String normalizeLang(String language) {
         if (language == null) {
             return null;

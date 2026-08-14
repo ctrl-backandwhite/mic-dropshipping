@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
 import com.nexaplatform.dropshipping.application.service.InvoiceService;
+import com.nexaplatform.dropshipping.application.service.EuComplianceService;
 import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
@@ -50,7 +51,8 @@ class InvoiceServiceTest {
         lenient().when(currencyRateService.usdTo(any(BigDecimal.class), anyString()))
                 .thenAnswer(i -> i.<BigDecimal>getArgument(0));
         lenient().when(currencyRateService.decimalsOf(anyString())).thenReturn(2);
-        service = new InvoiceService(templateEngine, currencyRateService, new OrderAmounts(currencyRateService),
+        service = new InvoiceService(templateEngine, currencyRateService, mock(EuComplianceService.class),
+                new OrderAmounts(currencyRateService),
                 mock(PaymentJpaRepositoryAdapter.class), mock(ProductRepository.class),
                 mock(ProductVariantRepository.class), mock(ObjectStorageService.class));
     }

@@ -6,6 +6,7 @@ import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
+import com.nexaplatform.dropshipping.application.service.EuComplianceService.ResponsiblePersonView;
 import com.nexaplatform.dropshipping.domain.enums.InvoiceLabel;
 import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
@@ -40,6 +41,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -66,6 +68,7 @@ public class InvoiceService {
 
     private final TemplateEngine templateEngine;
     private final CurrencyRateService currencyRateService;
+    private final EuComplianceService euComplianceService;
     /** La cuenta del pedido: la factura tiene que decir exactamente lo que se cobró, no recalcularlo. */
     private final OrderAmounts orderAmounts;
     private final PaymentJpaRepositoryAdapter paymentRepository;
@@ -547,6 +550,29 @@ public class InvoiceService {
         m.put("issuerEmail", nz(issuerEmail));
         m.put("issuerRegistry", nz(issuerRegistry));
         m.put("legalNote", nz(legalNote));
+        putEuResponsibleBlock(m, lang);
+    }
+
+    /**
+     * Operador económico establecido en la Unión, art. 16.3 del Reglamento (UE) 2023/988: sus datos deben
+     * figurar "en el producto o en su envase, en el paquete o en un documento de acompañamiento". El
+     * embalaje lo prepara el proveedor en origen y no se controla, de modo que la factura es el documento
+     * que hace de vehículo — y por eso el bloque va en las DOS facturas (pedido y suscripción), no solo en
+     * la ficha del escaparate.
+     *
+     * <p>Si no hay operador publicable el bloque no se pinta: una dirección a medias no cumple el requisito
+     * de datos de contacto, así que es preferible su ausencia visible en el panel a un dato inservible en la
+     * factura del cliente.
+     */
+    private void putEuResponsibleBlock(Map<String, Object> m, String lang) {
+        Optional<ResponsiblePersonView> responsable = euComplianceService.publishedResponsible(lang);
+        m.put("hasEuResponsible", responsable.isPresent());
+        m.put("labelEuResponsible", InvoiceLabel.EU_RESPONSIBLE.of(lang));
+        m.put("euResponsibleNote", InvoiceLabel.EU_RESPONSIBLE_NOTE.of(lang));
+        m.put("euResponsibleName", responsable.map(ResponsiblePersonView::name).orElse(""));
+        m.put("euResponsibleAddress", responsable.map(ResponsiblePersonView::formattedAddress).orElse(""));
+        m.put("euResponsibleEmail", responsable.map(ResponsiblePersonView::email).orElse(""));
+        m.put("euResponsibleRole", responsable.map(ResponsiblePersonView::roleLabel).orElse(""));
     }
 
     /**

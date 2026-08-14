@@ -59,4 +59,15 @@ public class AdminProductQuickEditDtoIn {
 
     @Schema(description = "Categoría del producto (id). Permite reasignar la categoría desde el admin.")
     private UUID categoryId;
+
+    // Identidad del fabricante exigida por el art. 19.a del Reglamento (UE) 2023/988 en la venta a
+    // distancia. `brand` no cubre esto: es una marca comercial, no una identidad con la que contactar.
+    @Schema(description = "Nombre o razón social del fabricante (Reg. (UE) 2023/988 art. 19.a)")
+    private String manufacturerName;
+
+    @Schema(description = "Dirección postal del fabricante (Reg. (UE) 2023/988 art. 19.a)")
+    private String manufacturerAddress;
+
+    @Schema(description = "Correo electrónico del fabricante (Reg. (UE) 2023/988 art. 19.a)")
+    private String manufacturerEmail;
 }

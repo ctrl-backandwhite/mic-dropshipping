@@ -63,6 +63,21 @@ public class ProductEntity extends BaseEntity {
     @Column(length = 200)
     private String brand;
 
+    /**
+     * Identidad del fabricante exigida por el art. 19.a del Reglamento (UE) 2023/988 en la venta a
+     * distancia: la oferta debe indicar su nombre, dirección postal y correo electrónico. {@link #brand} no
+     * vale para esto —es una marca comercial, no una identidad contactable— y además llega vacío de 1688 en
+     * la práctica totalidad del catálogo.
+     */
+    @Column(name = "manufacturer_name", length = 200)
+    private String manufacturerName;
+
+    @Column(name = "manufacturer_address", length = 300)
+    private String manufacturerAddress;
+
+    @Column(name = "manufacturer_email", length = 200)
+    private String manufacturerEmail;
+
     @Column(nullable = false)
     private int moq;
 

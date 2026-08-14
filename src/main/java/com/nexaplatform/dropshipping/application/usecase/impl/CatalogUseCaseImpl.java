@@ -672,6 +672,17 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (req.getBrand() != null) {
             p.setBrand(req.getBrand());
         }
+        // Fabricante (art. 19.a del Reglamento (UE) 2023/988). Cadena vacía sirve para BORRAR el dato, igual
+        // que en el resto de campos de texto de la ficha; null es "no lo edito".
+        if (req.getManufacturerName() != null) {
+            p.setManufacturerName(Texts.trimToNull(req.getManufacturerName()));
+        }
+        if (req.getManufacturerAddress() != null) {
+            p.setManufacturerAddress(Texts.trimToNull(req.getManufacturerAddress()));
+        }
+        if (req.getManufacturerEmail() != null) {
+            p.setManufacturerEmail(Texts.trimToNull(req.getManufacturerEmail()));
+        }
         if (req.getBasePrice() != null) {
             p.setBasePrice(req.getBasePrice());
         }

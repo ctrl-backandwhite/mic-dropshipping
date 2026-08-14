@@ -10,6 +10,7 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantValueView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
 import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
+import com.nexaplatform.dropshipping.application.service.EuComplianceService;
 import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount;
@@ -42,6 +43,7 @@ public class ProductMapper {
     private final CurrencyRateService currencyRateService;
     private final MarginService marginService;
     private final CustomsValuationService customsValuationService;
+    private final EuComplianceService euComplianceService;
 
     public ProductSummaryView toSummary(ProductEntity p, String language) {
         if (p == null)
@@ -129,7 +131,13 @@ public class ProductMapper {
                 tr != null ? tr.getMetaTitle() : null, tr != null ? tr.getMetaDescription() : null,
                 Boolean.TRUE.equals(p.getVerified()),
                 p.getVideoUrl(), Boolean.TRUE.equals(p.getHasVideo()),
-                priced.originalFormatted(), priced.discountPercent(), priced.promotionName(), customsFormatted);
+                priced.originalFormatted(), priced.discountPercent(), priced.promotionName(), customsFormatted,
+                // Cumplimiento del Reglamento (UE) 2023/988. Va en TODAS las fichas, también las del admin:
+                // el art. 19 obliga a mostrarlo en la oferta, y el panel necesita el mismo bloque para saber
+                // qué le falta a cada referencia.
+                euComplianceService.forProduct(p.getCategory() != null ? p.getCategory().getId() : null,
+                        p.getManufacturerName(), p.getManufacturerAddress(), p.getManufacturerEmail(),
+                        language));
     }
 
     public ProductImageView toImageView(ProductImageEntity img) {

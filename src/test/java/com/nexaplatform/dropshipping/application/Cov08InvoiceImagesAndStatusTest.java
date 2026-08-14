@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
 import com.nexaplatform.dropshipping.application.service.InvoiceService;
+import com.nexaplatform.dropshipping.application.service.EuComplianceService;
 import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
@@ -62,7 +63,8 @@ class Cov08InvoiceImagesAndStatusTest {
         when(currency.decimalsOf(anyString())).thenReturn(2);
         PaymentJpaRepositoryAdapter payments = mock(PaymentJpaRepositoryAdapter.class);
         when(payments.findByOrderIdOrderByCreatedAtDesc(any())).thenReturn(List.of());
-        service = new InvoiceService(templateEngine, currency, new OrderAmounts(currency), payments,
+        service = new InvoiceService(templateEngine, currency, mock(EuComplianceService.class),
+                new OrderAmounts(currency), payments,
                 mock(ProductRepository.class), variantRepository, storage);
     }
 

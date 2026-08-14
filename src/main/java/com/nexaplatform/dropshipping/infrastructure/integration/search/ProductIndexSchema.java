@@ -36,8 +36,16 @@ import java.nio.charset.StandardCharsets;
 @RequiredArgsConstructor
 public class ProductIndexSchema {
 
-    /** Versión del esquema. Subirla ⇒ índice nuevo + reindexado (ver arriba). */
-    public static final String VERSION = "v2";
+    /**
+     * Versión del esquema. Subirla ⇒ índice nuevo + reindexado (ver arriba).
+     *
+     * <p>v3: {@code titleAll} pasa del analizador {@code nx_plain} al nuevo {@code nx_all}, que sí filtra
+     * palabras vacías. Antes no lo hacía, y como ese campo reúne los siete idiomas, cada "de", "con",
+     * "with" o "mit" de la consulta contaba como término propio: buscar «de traje de» casaba con 5.247
+     * productos por ese solo campo, frente a los 77 del campo del idioma. El resultado correcto seguía
+     * saliendo, pero enterrado.
+     */
+    public static final String VERSION = "v3";
 
     private static final String DEFINITION = "opensearch/products-index.json";
 

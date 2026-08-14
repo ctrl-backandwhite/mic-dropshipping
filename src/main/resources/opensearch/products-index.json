@@ -87,7 +87,12 @@
         "nx_it": { "tokenizer": "standard", "filter": ["nx_elision_it", "lowercase", "asciifolding", "nx_foreign", "nx_stop_it", "nx_stem_it"] },
         "nx_de": { "tokenizer": "standard", "filter": ["lowercase", "asciifolding", "nx_foreign", "nx_stop_de", "nx_stem_de"] },
         "nx_nl": { "tokenizer": "standard", "filter": ["lowercase", "asciifolding", "nx_foreign", "nx_stop_nl", "nx_stem_nl"] },
-        "nx_plain": { "tokenizer": "standard", "filter": ["lowercase", "asciifolding"] }
+        "nx_plain": { "tokenizer": "standard", "filter": ["lowercase", "asciifolding"] },
+        "nx_all": {
+          "tokenizer": "standard",
+          "filter": ["lowercase", "asciifolding",
+            "nx_stop_es", "nx_stop_en", "nx_stop_pt", "nx_stop_fr", "nx_stop_it", "nx_stop_de", "nx_stop_nl"]
+        }
       }
     }
   },
@@ -125,7 +130,7 @@
       "titleIt": { "type": "text", "analyzer": "nx_it", "copy_to": "titleAll" },
       "titleDe": { "type": "text", "analyzer": "nx_de", "copy_to": "titleAll" },
       "titleNl": { "type": "text", "analyzer": "nx_nl", "copy_to": "titleAll" },
-      "titleAll": { "type": "text", "analyzer": "nx_plain" },
+      "titleAll": { "type": "text", "analyzer": "nx_all" },
 
       "attrs": { "type": "text", "analyzer": "nx_es", "search_analyzer": "nx_es_search" },
       "variants": { "type": "text", "analyzer": "nx_plain" },

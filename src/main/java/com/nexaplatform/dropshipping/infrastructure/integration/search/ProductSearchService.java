@@ -54,8 +54,15 @@ public class ProductSearchService {
     /** Tope de identificadores que se piden al índice para una búsqueda del escaparate. */
     public static final int MAX_IDS = 1000;
 
-    /** Idiomas con campo propio en el índice; para cualquier otro se usa el genérico multilingüe. */
-    private static final Set<String> INDEXED_LANGS = Set.of("es", "en", "pt", "fr", "it", "de", "nl");
+    /**
+     * Idiomas con campo propio en el índice; para cualquier otro se usa el genérico multilingüe.
+     *
+     * <p>El chino ESTÁ en la lista: {@code titleZh} existe y se analiza con {@code cjk}. Al faltar,
+     * {@code normalizeLang} lo degradaba a español y una búsqueda escrita en chino se lanzaba contra
+     * {@code titleEs}, cuyo analizador parte los ideogramas de cualquier manera — de ahí que teclear el
+     * nombre completo de un producto en chino no devolviera ese producto en ninguno de los casos medidos.
+     */
+    private static final Set<String> INDEXED_LANGS = Set.of("es", "en", "pt", "fr", "it", "de", "nl", "zh");
 
     private final OpenSearchClient client;
     private final ProductIndexer indexer;
@@ -121,7 +128,13 @@ public class ProductSearchService {
             // intencional (un usuario en español buscando "blazer"), pero no debe competir con su idioma.
             b.should(s -> s.match(m -> m.field("titleAll").query(FieldValue.of(needle))
                     .minimumShouldMatch(MOST_TERMS).boost(3f)));
-            b.should(s -> s.match(m -> m.field("titleZh").query(FieldValue.of(needle)).boost(3f)));
+            // CON minimumShouldMatch, igual que el resto. Sin él esta cláusula era un OR puro: bastaba
+            // que UNA palabra de la consulta apareciera en el campo para que el documento entrara con
+            // peso 3. Como el analizador `cjk` no filtra palabras vacías, "de" casaba con miles de
+            // productos y los colaba por delante del que se buscaba. Que un campo se llame "Zh" no
+            // garantiza que su contenido sea chino, así que la cláusula tiene que defenderse sola.
+            b.should(s -> s.match(m -> m.field("titleZh").query(FieldValue.of(needle))
+                    .minimumShouldMatch(MOST_TERMS).boost(3f)));
             b.should(s -> s.match(m -> m.field("attrs").query(FieldValue.of(needle))
                     .minimumShouldMatch(MOST_TERMS).boost(2f)));
             b.should(s -> s.match(m -> m.field("variants").query(FieldValue.of(needle))
