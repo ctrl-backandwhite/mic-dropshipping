@@ -320,9 +320,28 @@ class Cov02CatalogAdminReadTest {
         assertThatThrownBy(() -> useCase.getProductById(id, "es")).isInstanceOf(NotFoundException.class);
     }
 
+    /**
+     * Un producto que no está publicado no existe para el escaparate por NINGUNA puerta. El listado ya lo
+     * escondía y el cobro ya lo rechazaba, pero la ficha por slug —enlace directo, resultado indexado o
+     * correo antiguo— se servía entera y con su precio. Además se comprueba que ni siquiera se llega a
+     * mapear: la respuesta no puede llevar nada del producto retirado.
+     */
+    @Test
+    void laFichaPorSlugDeUnProductoRetiradoNoSeSirveAQuienNoEsAdmin() {
+        // El fixture está en DRAFT, y el mismo criterio vale para PAUSED y ARCHIVED.
+        when(productJpaRepository.findWithDetailsBySlug("zapatos-offer-1")).thenReturn(Optional.of(producto));
+
+        assertThatThrownBy(() -> useCase.getProductBySlug("zapatos-offer-1", "es"))
+                .isInstanceOf(NotFoundException.class);
+        verify(productMapper, never()).toDetail(any(), any(), any());
+    }
+
     @Test
     void laFichaPorSlugCargaLasColeccionesDentroDeLaTransaccion() {
         // open-in-view está desactivado: si no se fuerzan aquí, el mapeo revienta con LazyInitialization.
+        // El producto se publica porque la ficha por slug solo se sirve si está ACTIVE (o si pregunta un
+        // admin): con el DRAFT del fixture este caso mediría el 404, no la carga de las colecciones.
+        producto.setStatus(ProductStatus.ACTIVE);
         when(productJpaRepository.findWithDetailsBySlug("zapatos-offer-1")).thenReturn(Optional.of(producto));
 
         useCase.getProductBySlug("zapatos-offer-1", "es");

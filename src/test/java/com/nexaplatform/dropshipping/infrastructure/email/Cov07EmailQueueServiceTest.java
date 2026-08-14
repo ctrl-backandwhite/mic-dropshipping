@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
+import static org.mockito.Mockito.lenient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -72,6 +73,10 @@ class Cov07EmailQueueServiceTest {
         message = new MimeMessage(Session.getInstance(new Properties()));
         when(mailSender.createMimeMessage()).thenReturn(message);
         when(repo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        // El barrido RECLAMA la fila antes de enviar (UPDATE condicional que solo prospera si sigue en
+        // PENDING): es lo que impide que dos réplicas manden el mismo correo al cliente. Aquí se simula
+        // que la reclama siempre este barrido; el caso de perder la carrera se cubre aparte.
+        lenient().when(repo.reclamarParaEnvio(any())).thenReturn(1);
     }
 
     /* ==================== encolado ==================== */

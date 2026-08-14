@@ -23,6 +23,7 @@ import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
 import com.nexaplatform.dropshipping.api.mapper.ProductListFilters;
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.ProductDetailQueryService;
@@ -48,6 +49,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Produ
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShippingRateRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShippingZoneRepository;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -133,6 +135,19 @@ class Cov03StorefrontCatalogControllerTest {
     @InjectMocks
     StorefrontCatalogController controller;
 
+    /**
+     * {@link OrderAmounts} de verdad, no un doble: el carrito tiene que cotizar con la MISMA aritmética
+     * con la que se cobra —el importe de línea se multiplica en dólares y se convierte al final—, y con
+     * un doble estos casos dejarían de comprobarlo. Se inyecta a mano porque Mockito sólo sabe rellenar
+     * mocks, y la conversión se deja 1:1 para que los importes esperados se lean directamente.
+     */
+    @BeforeEach
+    void laCuentaDeLineaEsLaDeVerdad() {
+        when(currencyService.usdTo(any(BigDecimal.class), anyString())).thenAnswer(inv -> inv.getArgument(0));
+        when(currencyService.decimalsOf(anyString())).thenReturn(2);
+        ReflectionTestUtils.setField(controller, "orderAmounts", new OrderAmounts(currencyService));
+    }
+
     @AfterEach
     void limpiaSeguridad() {
         SecurityContextHolder.clearContext();
@@ -163,9 +178,15 @@ class Cov03StorefrontCatalogControllerTest {
                 .minWeightGrams(minGramos).maxWeightGrams(maxGramos).active(true).build();
     }
 
+    /**
+     * Precio tarificado con el MISMO importe en dólares y en la divisa mostrada: en esta clase la
+     * conversión es 1:1 (ver {@link #laCuentaDeLineaEsLaDeVerdad()}), así que los importes esperados se
+     * leen solos. El canónico en dólares no puede faltar: es la base del importe de línea, que se
+     * multiplica en dólares y se convierte al final.
+     */
     private static PricingService.PricedAmount precio(BigDecimal display) {
-        return new PricingService.PricedAmount(null, null, display, "EUR", "€", null, null, null, null, null, null,
-                null, null, null);
+        return new PricingService.PricedAmount(null, display, display, "EUR", "€", null, null, null, null, null,
+                null, null, null, null);
     }
 
     private static ProductSummaryView resumen(UUID id) {

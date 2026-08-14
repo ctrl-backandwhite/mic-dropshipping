@@ -14,6 +14,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.math.BigDecimal;
+import java.util.List;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import java.util.ArrayList;
 
 import static org.mockito.Mockito.lenient;
@@ -65,7 +69,29 @@ class ProductMapperTest {
 
         var view = productMapper.toSummary(p, "es");
         assertThat(view.title()).isEqualTo("Título");
-        assertThat(view.basePrice()).isEqualByComparingTo("9.99");
+        // Sin sesión de admin NO se devuelve el coste del proveedor: `basePrice` es lo que se paga en CNY,
+        // la base sobre la que se aplica el margen, y publicarlo junto al precio final deja calcular la
+        // ganancia exacta. El listado lo enviaba a todo el mundo mientras la ficha ya lo filtraba.
+        assertThat(view.basePrice()).as("el coste del proveedor no puede viajar a un no-admin").isNull();
+        assertThat(view.currency()).as("la etiqueta CNY delata el coste igual que el importe").isNull();
+    }
+
+    @Test
+    void summary_expone_el_coste_solo_cuando_quien_pregunta_es_admin() {
+        ProductEntity p = ProductEntity.builder().source("1688").externalId("X").titleZh("中文标题")
+                .basePrice(new BigDecimal("9.99")).currency("CNY").monthlySales(10).build();
+        p.setTranslations(new ArrayList<>());
+        p.setImages(new ArrayList<>());
+
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "admin", "n/a", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+        try {
+            var view = productMapper.toSummary(p, "es");
+            assertThat(view.basePrice()).isEqualByComparingTo("9.99");
+            assertThat(view.currency()).isEqualTo("CNY");
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
 import com.nexaplatform.dropshipping.application.service.InvoiceService;
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.application.service.InvoiceService.PlanInvoiceData;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService;
@@ -56,7 +57,7 @@ class PlanInvoiceRenderTest {
         CurrencyRateService currency = mock(CurrencyRateService.class);
         when(currency.formatDisplay(any(), anyString()))
                 .thenAnswer(i -> i.getArgument(0) + " " + i.getArgument(1));
-        service = new InvoiceService(engine, currency,
+        service = new InvoiceService(engine, currency, new OrderAmounts(currency),
                 mock(PaymentJpaRepositoryAdapter.class), mock(ProductRepository.class),
                 mock(ProductVariantRepository.class), mock(ObjectStorageService.class));
         ReflectionTestUtils.setField(service, "issuerLegalName", "NX036 Dropshipping S.L.");
