@@ -27,7 +27,11 @@ public class StartupSecretsValidator {
 
     private final Environment environment;
 
-    @Value("${crypto.token-keks:}")
+    // OJO con el prefijo: la propiedad cuelga de `nexadrop:` en application.yml, igual que las otras tres.
+    // Sin él la clave no existe, el validador la leía SIEMPRE vacía y abortaba el arranque en pro/pre por un
+    // secreto que sí estaba configurado — imposible de arreglar desde el entorno. Lo cubre
+    // StartupSecretsValidatorTest, que compara estas claves contra el application.yml real.
+    @Value("${nexadrop.crypto.token-keks:}")
     private String tokenKeks;
     @Value("${nexadrop.email.unsubscribe-secret:}")
     private String unsubscribeSecret;
