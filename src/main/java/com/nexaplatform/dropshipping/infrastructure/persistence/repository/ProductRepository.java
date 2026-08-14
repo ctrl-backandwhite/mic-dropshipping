@@ -66,7 +66,7 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             WHERE p.status = :status
               AND p.hasVideo = TRUE
               AND EXISTS (SELECT 1 FROM ProductImageEntity i WHERE i.product = p AND i.cdnUrl IS NOT NULL)
-            ORDER BY p.trendScore DESC NULLS LAST
+            ORDER BY p.trendScore DESC NULLS LAST, p.id ASC
             """)
     Page<ProductEntity> findVisibleWithVideo(@Param("status") ProductStatus status, Pageable pageable);
 
@@ -82,7 +82,7 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             SELECT p FROM ProductEntity p
             WHERE p.status = :status
               AND EXISTS (SELECT 1 FROM ProductImageEntity i WHERE i.product = p AND i.cdnUrl IS NOT NULL)
-            ORDER BY p.trendScore DESC NULLS LAST
+            ORDER BY p.trendScore DESC NULLS LAST, p.id ASC
             """)
     Page<ProductEntity> findTopByTrendScore(@Param("status") ProductStatus status, Pageable pageable);
 
@@ -90,7 +90,7 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             SELECT p FROM ProductEntity p
             WHERE p.status = :status AND p.category.id = :categoryId
               AND EXISTS (SELECT 1 FROM ProductImageEntity i WHERE i.product = p AND i.cdnUrl IS NOT NULL)
-            ORDER BY p.trendScore DESC NULLS LAST
+            ORDER BY p.trendScore DESC NULLS LAST, p.id ASC
             """)
     Page<ProductEntity> findByCategoryOrderByTrend(@Param("categoryId") UUID categoryId,
             @Param("status") ProductStatus status, Pageable pageable);
@@ -137,6 +137,7 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
               AND (:hasVideo   IS NULL OR p.hasVideo = :hasVideo)
               AND (:minRating  IS NULL OR p.rating >= :minRating)
               AND (:minInv     IS NULL OR p.inventoryCount >= :minInv)
+              AND (:verified   IS NULL OR COALESCE(p.verified, FALSE) = :verified)
               AND (CAST(:needle AS string) IS NULL
                    OR nx_norm(p.titleZh)    LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')
                    OR nx_norm(p.externalId) LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')
@@ -169,6 +170,11 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
                                          AND nx_norm(tr.title) LIKE CONCAT('%', nx_norm(CAST(:needle AS string)), '%')) THEN 0
                           ELSE 1 END ASC
             """)
+    // OJO: aquí NO se añade desempate por id. Esta consulta recibe el Sort del Pageable (lo construye
+    // `CatalogStorefrontReadService.sortFor`, que YA termina en id), y Spring Data CONCATENA ese Sort
+    // detrás del ORDER BY de la consulta. Un `p.id ASC` escrito aquí quedaría ANTES del criterio del
+    // usuario —`ORDER BY relevancia, id, basePrice`— y el id mandaría sobre el precio: ordenar por
+    // «precio ascendente» dejaba de ordenar por precio. Lo detectó CatalogFlowIT.ordenPorPrecio.
     // Un parámetro por filtro es una exigencia de Spring Data: cada :nombre de la consulta se enlaza con un
     // argumento del método. Agruparlos en un record obligaría a reescribir la consulta con expresiones SpEL
     // y a tocar el binding de nulos (los CAST de arriba), que es justo lo que rompía la búsqueda en DROP-556.
@@ -179,6 +185,7 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             @Param("shipFrom") String shipFrom, @Param("freeShipping") Boolean freeShipping,
             @Param("selfPickup") Boolean selfPickup, @Param("hasVideo") Boolean hasVideo,
             @Param("minRating") BigDecimal minRating, @Param("minInv") Integer minInv,
+            @Param("verified") Boolean verified,
             @Param("lang") String lang, @Param("wide") boolean wide, @Param("ranked") boolean ranked,
             Pageable pageable);
 

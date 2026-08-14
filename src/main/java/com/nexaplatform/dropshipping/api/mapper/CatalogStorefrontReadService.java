@@ -284,14 +284,18 @@ public class CatalogStorefrontReadService {
         // que devolver la página vacía cuando NADA casa por título/atributo/variante.
         BiFunction<Boolean, Pageable, Page<ProductEntity>> search = (wide, pg) -> productRepository
                 .searchStorefront(ProductStatus.ACTIVE, needle, categoryId, supplierId, null, null, shipCc,
-                        freeShipping, selfPickup, hasVideo, minRatingBd, inventoryMin, langCode, wide, ranked, pg);
+                        freeShipping, selfPickup, hasVideo, minRatingBd, inventoryMin,
+                        verifiedFilter ? verified : null, langCode, wide, ranked, pg);
 
         // Los filtros que NO se pueden delegar: promoción, certificación, verificado y precio. Este último
         // porque el número que ve el usuario (displayPrice) sale de la variante representativa → coste en
         // USD → margen (reglas) → conversión a la moneda activa (X-Currency), mientras que el SQL solo
         // conoce base_price en CNY: filtrar ahí daría rangos sin sentido para EUR/USD/etc.
         String certUp = certFilter ? certification.toUpperCase() : null;
-        InMemoryFilters postFilters = new InMemoryFilters(promoFilter, certUp, verifiedFilter, verified, minPrice,
+        // `verified` YA NO va aquí: lo resuelve el SQL. Filtrarlo en memoria obligaba a pasar por el
+        // camino del `scan` de 5.000 filas, que con un catálogo mayor deja fuera al resto — el filtro
+        // devolvía 0 resultados sin que nada fallara.
+        InMemoryFilters postFilters = new InMemoryFilters(promoFilter, certUp, false, null, minPrice,
                 maxPrice);
 
         // TEXTO LIBRE → OpenSearch, que es el motor principal de la búsqueda: entiende la morfología de los
@@ -308,7 +312,7 @@ public class CatalogStorefrontReadService {
             log.debug("Búsqueda '{}' resuelta por SQL — OpenSearch no disponible", needle);
         }
 
-        if (priceFilter || certFilter || verifiedFilter || promoFilter != null) {
+        if (priceFilter || certFilter || promoFilter != null) {
             Pageable scan = PageRequest.of(0, 5000, sortSpec);
             Page<ProductEntity> raw = search.apply(false, scan);
             if (needle != null && raw.isEmpty()) {
@@ -515,7 +519,7 @@ public class CatalogStorefrontReadService {
     }
 
     public Sort sortFor(String sort) {
-        return switch (sort == null ? "best_match" : sort) {
+        Sort criterio = switch (sort == null ? "best_match" : sort) {
             case "price_asc" -> Sort.by(Sort.Direction.ASC, "basePrice");
             case "price_desc" -> Sort.by(Sort.Direction.DESC, "basePrice");
             case "newest" -> Sort.by(Sort.Direction.DESC, "createdAt");
@@ -524,7 +528,24 @@ public class CatalogStorefrontReadService {
             case "inventory" -> Sort.by(Sort.Direction.DESC, "inventoryCount");
             default -> Sort.by(Sort.Direction.DESC, "trendScore");
         };
+        return criterio.and(DESEMPATE);
     }
+
+    /**
+     * Desempate final de TODA ordenación paginada. No es un adorno: sin él, la paginación del catálogo
+     * está rota.
+     *
+     * <p>Los siete criterios de arriba ordenan por campos donde el catálogo empata en masa —5.181 de 5.485
+     * productos tienen {@code trendScore = 0}, y otro tanto pasa con las ventas mensuales o el inventario—.
+     * Cuando miles de filas empatan y no hay más criterio, PostgreSQL las devuelve en el orden que le
+     * resulte más barato, y ese orden NO es estable entre consultas: basta un UPDATE en cualquier producto
+     * para que cambie. Medido sobre el catálogo real: la misma página (LIMIT 12 OFFSET 2400) pedida dos
+     * veces con un solo UPDATE en medio devolvió 12 productos DISTINTOS, cero coincidencias.
+     *
+     * <p>El efecto que ve el comprador es que, al bajar por el catálogo, unos productos le salen repetidos
+     * y otros no le salen NUNCA — quedan inalcanzables por más que siga bajando.
+     */
+    private static final Sort DESEMPATE = Sort.by(Sort.Direction.ASC, "id");
 
     /**
      * Nombre de la categoría en el idioma pedido, con el chino como respaldo.

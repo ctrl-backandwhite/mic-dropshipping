@@ -242,14 +242,17 @@ class Cov02CatalogAdminReadTest {
     }
 
     @Test
-    void unOrdenDesconocidoDejaElListadoSinOrdenar() {
+    void unOrdenDesconocidoIgualmenteSeOrdenaPorId() {
         when(productJpaRepository.findAll(any(Pageable.class))).thenReturn(pagina(producto));
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
 
         useCase.listProductsForAdmin(null, null, null, 0, 20, "es", "por_lo_que_sea", null);
 
         verify(productJpaRepository).findAll(captor.capture());
-        assertThat(captor.getValue().getSort().isSorted()).isFalse();
+        // Un criterio desconocido NO puede dejar el listado sin ordenar: paginar con LIMIT/OFFSET sin
+        // ORDER BY deja el orden a criterio de PostgreSQL, que no garantiza ser el mismo entre dos
+        // consultas — el admin se saltaría productos al pasar de página, sin que nada fallara.
+        assertThat(captor.getValue().getSort()).isEqualTo(Sort.by(Sort.Direction.ASC, "id"));
     }
 
     @Test
