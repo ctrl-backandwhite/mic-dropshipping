@@ -39,6 +39,14 @@ public class ProductIndexSchema {
     /**
      * Versión del esquema. Subirla ⇒ índice nuevo + reindexado (ver arriba).
      *
+     * <p>v5: el sinónimo «deportivas» sacaba resultados que no eran calzado. En español «deportivas» sí
+     * significa zapatillas, pero el stemmer la reduce a {@code deport} — exactamente la misma raíz que el
+     * ADJETIVO «deportivo/a», que llevan miles de prendas. Buscar «zapatilla» expandía a {@code deport} y
+     * devolvía conjuntos deportivos, sets de niño y pantalones de yoga. Se retira del grupo; quedan
+     * zapatillas, sneakers, tenis y «zapatos deportivos» (dos palabras, que solo casa como frase). Los
+     * demás sinónimos se comprobaron uno a uno y sí funcionan: «pollera» trae faldas, «casaca» chaquetas
+     * y «cartera» bolsos.
+     *
      * <p>v4: singular y plural dejaban de encontrar lo mismo. Dos causas, ambas medidas sobre el catálogo:
      * <ul>
      *   <li><b>{@code nx_foreign} es un {@code stemmer_override}</b>, y un override marca el token como YA
@@ -58,7 +66,7 @@ public class ProductIndexSchema {
      * productos por ese solo campo, frente a los 77 del campo del idioma. El resultado correcto seguía
      * saliendo, pero enterrado.
      */
-    public static final String VERSION = "v4";
+    public static final String VERSION = "v5";
 
     private static final String DEFINITION = "opensearch/products-index.json";
 
