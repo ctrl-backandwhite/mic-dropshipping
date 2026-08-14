@@ -331,11 +331,16 @@ public class WalletUseCaseImpl implements WalletUseCase {
         }
         long newBalance = w.getBalanceUsdCents();
         if (affectsBalance) {
-            newBalance += entry.signedAmount();
-            if (newBalance < 0)
+            // El saldo se mueve con UNA sentencia atómica que lleva la condición dentro ("no quedes en
+            // negativo"). Antes se leía el saldo, se comprobaba en Java y se guardaba: ocho checkouts
+            // simultáneos pasaban los ocho la comprobación sobre la misma lectura y cuatro pedidos
+            // quedaban PAID con un único débito (pentest del 14-ago-2026). Comprobado también que el
+            // bloqueo pesimista de la lectura no bastaba para impedirlo.
+            if (!walletRepository.applyBalanceDelta(entry.userId(), entry.signedAmount())) {
                 throw new BusinessException("Wallet balance would go negative");
+            }
+            newBalance = walletRepository.currentBalanceCents(entry.userId());
             w.setBalanceUsdCents(newBalance);
-            walletRepository.save(w);
         }
         WalletTransaction tx = WalletTransaction.builder().walletId(w.getId()).kind(entry.kind())
                 .amountUsdCents(entry.signedAmount()).balanceAfterCents(newBalance).paymentId(entry.paymentId())
