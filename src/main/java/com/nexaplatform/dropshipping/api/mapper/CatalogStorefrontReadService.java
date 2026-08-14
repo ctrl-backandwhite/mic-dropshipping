@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
+import com.nexaplatform.dropshipping.application.service.Texts;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.PromotionService;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
@@ -260,7 +261,7 @@ public class CatalogStorefrontReadService {
         Sort sortSpec = sortFor(sort);
         Pageable pageable = PageRequest.of(safePage, safeSize, sortSpec);
 
-        String needle = (q == null || q.isBlank()) ? null : q.trim().toLowerCase();
+        String needle = (q == null || q.isBlank()) ? null : Texts.escapeLikeWildcards(q.trim().toLowerCase());
         String shipCc = shipFrom == null ? null : shipFrom.toUpperCase();
         BigDecimal minRatingBd = minRating == null ? null : BigDecimal.valueOf(minRating);
         boolean certFilter = certification != null && !certification.isBlank();

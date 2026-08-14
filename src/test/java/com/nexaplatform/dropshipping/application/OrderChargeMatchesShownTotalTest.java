@@ -163,10 +163,12 @@ class OrderChargeMatchesShownTotalTest {
         verify(paymentRepository, atLeastOnce()).save(captor.capture());
         BigDecimal cobrado = captor.getValue().getSettlementAmount().setScale(2, RoundingMode.HALF_UP);
 
-        // 44,67 (3 × 14,89) − 4,46 + 8,41 + 10,21 = 58,83 €, que es la cifra que el cliente leyó en el
-        // resumen del checkout. Convertir el total canónico de una vez daría 58,84: un céntimo que no es
-        // el que se le enseñó. Sin restar el descuento salían 63,29 €.
-        assertThat(cobrado).isEqualByComparingTo(new BigDecimal("58.83"));
+        // 44,68 (la LÍNEA: 3 × 16,98 = 50,94 $ convertidos) − 4,46 + 8,41 + 10,21 = 58,84 €, que es la
+        // cifra que el cliente leyó en el resumen del checkout: la vista previa hace exactamente esta
+        // misma cuenta. Redondear el unitario y multiplicarlo (14,89 × 3 = 44,67) daba 58,83 €, un
+        // céntimo de menos aquí y hasta un 1,45 % de MÁS con importes pequeños y cantidades grandes.
+        // Sin restar el descuento salían 63,30 €.
+        assertThat(cobrado).isEqualByComparingTo(new BigDecimal("58.84"));
     }
 
     @Test
@@ -190,8 +192,8 @@ class OrderChargeMatchesShownTotalTest {
 
         ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
         verify(paymentRepository, atLeastOnce()).save(captor.capture());
-        // 44,67 + 8,41 + 10,21 = 63,29 €, la misma cuenta sin el descuento.
+        // 44,68 + 8,41 + 10,21 = 63,30 €, la misma cuenta sin el descuento.
         assertThat(captor.getValue().getSettlementAmount().setScale(2, RoundingMode.HALF_UP))
-                .isEqualByComparingTo(new BigDecimal("63.29"));
+                .isEqualByComparingTo(new BigDecimal("63.30"));
     }
 }

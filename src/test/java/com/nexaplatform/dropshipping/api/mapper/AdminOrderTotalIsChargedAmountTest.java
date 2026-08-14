@@ -89,16 +89,17 @@ class AdminOrderTotalIsChargedAmountTest {
 
     @Test
     void elSubtotalSeSumaLineaALineaComoLoHaceElCliente() {
-        // 4 uds de 16,98 USD: la unidad convertida da 14,89 € y cuatro son 59,56 €, lo que el cliente vio
-        // y pagó. Convertir los 67,92 USD de una vez daba 59,58 € y el total del panel se iba a 76,68 €
-        // frente a los 76,66 € cobrados.
+        // 4 uds de 16,98 USD: la LÍNEA son 67,92 $ y convertida da 59,58 €, que es lo que el cliente ve y
+        // lo que se le cobra. Redondear la unidad (14,89 €) y multiplicarla por cuatro daba 59,56 €: dos
+        // céntimos que el panel enseñaría de menos justo en la pantalla desde la que se atiende una
+        // reclamación. El total del panel = 59,58 − 5,96 + 9,75 + 13,31 = 76,68 €.
         Order pedido = Order.builder()
                 .subtotalCents(6792).shippingCents(1112).taxCents(1517).discountCents(679).totalCents(8742)
                 .currency("USD")
                 .items(List.of(OrderItem.builder().unitPriceCents(1698).quantity(4).build()))
                 .build();
 
-        assertThat(mapper.totalFormatted(pedido)).isEqualTo("76.66 €");
+        assertThat(mapper.totalFormatted(pedido)).isEqualTo("76.68 €");
     }
 
     @Test

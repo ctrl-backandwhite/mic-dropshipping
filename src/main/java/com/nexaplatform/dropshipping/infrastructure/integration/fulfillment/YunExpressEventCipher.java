@@ -29,6 +29,35 @@ import java.util.HexFormat;
  *
  * <p>Sin {@code encrypt-key} configurado el componente queda inactivo y el webhook rechaza los pushes:
  * es preferible perder eventos (el sondeo periódico los recupera) a procesar uno no verificado.
+ *
+ * <h2>Por qué CIPHER_INTEGRITY (Find Security Bugs) NO aplica aquí</h2>
+ *
+ * <p>El analizador marca {@code AES/CBC} sin MAC como «cifrado sin comprobación de integridad» y sugiere
+ * GCM. Aquí no procede, y no por comodidad sino por estas cuatro razones comprobables:
+ *
+ * <ol>
+ *   <li><b>El modo lo impone el proveedor.</b> El sobre lo cifra YunExpress con AES-256-CBC según su
+ *       contrato de 事件管理; no somos el emisor, así que no podemos migrar a GCM unilateralmente. Cambiarlo
+ *       sería, sencillamente, dejar de poder leer sus eventos.</li>
+ *   <li><b>La integridad ya está cubierta, y ANTES de descifrar.</b> {@link #verify} valida
+ *       {@code SHA-256(timestamp + encryptKey + cuerpoCrudo)} sobre el cuerpo <i>crudo</i>, que es el que
+ *       transporta el campo {@code encrypt} con el criptograma. Es decir: la firma <b>cubre el texto
+ *       cifrado completo</b>, con una clave secreta compartida, así que cualquier bit volteado en el
+ *       criptograma rompe la firma. {@code YunExpressWebhookController} corta con 401 antes de invocar
+ *       {@code FulfillmentService.applyYunExpressPush}, que es el ÚNICO camino que llega a
+ *       {@link #decrypt}. El orden verificar→descifrar es justo lo que exige la construcción
+ *       encrypt-then-MAC, y está fijado por test (ver {@code YunExpressWebhookIntegrityOrderTest}).</li>
+ *   <li><b>No hay oráculo de padding.</b> El descifrado usa {@code AES/CBC/NoPadding}: el JCE no valida
+ *       relleno, luego no puede lanzar {@code BadPaddingException} ni ninguna otra excepción que distinga
+ *       «relleno correcto» de «relleno incorrecto». El relleno se recorta a mano en {@link #stripPadding}.
+ *       Sin señal diferenciada no hay oráculo que interrogar, ni siquiera hipotéticamente.</li>
+ *   <li><b>No hay canal de respuesta que explotar.</b> Todo fallo de firma devuelve el mismo 401 con el
+ *       mismo cuerpo, y la comparación es en tiempo constante ({@link MessageDigest#isEqual}), así que no
+ *       se filtra información ni por el contenido ni por el tiempo.</li>
+ * </ol>
+ *
+ * <p>Conclusión: FALSO POSITIVO justificado. Si alguien reordena el controller para descifrar antes de
+ * verificar, deja de serlo — por eso ese orden está protegido por test y no solo por este comentario.
  */
 @Slf4j
 @Component
@@ -64,7 +93,13 @@ public class YunExpressEventCipher {
         }
     }
 
-    /** Descifra el contenido del evento (Base64 de IV + criptograma AES-256-CBC). */
+    /**
+     * Descifra el contenido del evento (Base64 de IV + criptograma AES-256-CBC).
+     *
+     * <p><b>PRECONDICIÓN</b>: solo se debe llamar sobre un cuerpo cuya firma ya haya pasado por
+     * {@link #verify}. Esa firma es la que aporta la integridad que CBC no trae (ver el javadoc de la
+     * clase); descifrar antes de verificar convertiría el aviso CIPHER_INTEGRITY en un fallo real.
+     */
     public String decrypt(String base64Content) {
         return decrypt(base64Content, encryptKey);
     }

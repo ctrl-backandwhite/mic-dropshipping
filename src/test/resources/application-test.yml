@@ -70,7 +70,13 @@ nexadrop:
     public-base-url: http://localhost:9000/test
     path-style-access: true
   opensearch:
-    uris: http://localhost:9200
+    # Puerto MUERTO a propósito. Apuntaba a localhost:9200 y, en cualquier máquina con un OpenSearch
+    # levantado —la de desarrollo lo tiene—, los tests de integración leían el índice REAL: aparecían
+    # pedidos y productos de otro conjunto de datos en respuestas que el test creía haber sembrado él.
+    # Un test que depende de qué haya arrancado en la máquina no certifica nada.
+    # Sin OpenSearch alcanzable, la búsqueda cae al fallback SQL, que es determinista y es justo lo que
+    # queremos ejercitar aquí; la ruta de OpenSearch se prueba aparte, con su propio contenedor.
+    uris: http://127.0.0.1:1
     products-index: products-test
   crawler:
     base-url: http://localhost:8001

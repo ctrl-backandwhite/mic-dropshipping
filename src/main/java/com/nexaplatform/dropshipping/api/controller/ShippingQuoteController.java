@@ -93,7 +93,26 @@ public class ShippingQuoteController {
             /** Envío SIN el recargo de aduana, ya formateado (para separarlo de "Aranceles UE" en el checkout). */
             String shippingBaseFormatted,
             /** Recargo de aduana ("Aranceles UE") ya formateado; "" si no aplica. */
-            String customsHandlingFormatted) {
+            String customsHandlingFormatted,
+            /**
+             * Subtotal de producto ya formateado en la divisa del comprador.
+             *
+             * <p>Es la contrapartida imprescindible del redondeo por línea: el importe de cada línea se
+             * calcula en dólares y se convierte UNA sola vez, así que ya NO es «unitario × cantidad». Sin
+             * publicar el subtotal y el importe de cada línea, el cliente que sume lo que ve en pantalla no
+             * llega al total y cree que le están cobrando de más.
+             */
+            String subtotalFormatted,
+            /** Una entrada por línea del carrito, con su unitario y su importe, ya formateados. */
+            List<QuoteLine> items) {
+    }
+
+    /**
+     * Línea del resumen. El importe NO es el unitario multiplicado por la cantidad: sale de convertir el
+     * canónico de la línea entera, redondeando una única vez. Por eso viaja calculado desde el servidor.
+     */
+    public record QuoteLine(UUID productId, UUID variantId, int quantity, String unitFormatted,
+            String lineTotalFormatted) {
     }
 
     @Operation(summary = "Cotizar envío + IVA + total del carrito para un país")
@@ -131,7 +150,12 @@ public class ShippingQuoteController {
                 preview.totals().customs().deMinimisLabel(),
                 preview.couponCode(), preview.couponError(),
                 preview.subtotalUsdCents(), preview.totals().customsHandlingCents(),
-                shippingBaseFmt, customsFmt);
+                shippingBaseFmt, customsFmt,
+                currencyService.formatDisplay(preview.subtotalDisplay(), code),
+                preview.lines().stream()
+                        .map(l -> new QuoteLine(l.productId(), l.variantId(), l.quantity(), l.unitFormatted(),
+                                l.lineSubtotalFormatted()))
+                        .toList());
         return ResponseEntity.ok(body);
     }
 

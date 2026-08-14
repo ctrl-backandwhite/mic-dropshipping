@@ -24,10 +24,14 @@ import java.util.UUID;
  * pedido del usuario, CONVERTIDO a la moneda activa (header {@code X-Currency}) y FORMATEADO en el
  * backend (el front solo pinta).
  *
- * <p>DROP-637: la conversión se hace <b>línea a línea</b> (cada línea {@code usdTo}, 2 dec hacia
- * arriba) y luego se SUMA — exactamente igual que el cobro ({@code PaymentUseCaseImpl
- * .perLineSettlementAmount}). Convertir el total USD de una sola vez daba 1–5 céntimos menos que lo
- * realmente cobrado (p.ej. el pedido mostraba 85,76 € mientras Stripe cobró 85,81 €).
+ * <p>DROP-637: la conversión se hace <b>línea a línea</b> y luego se SUMA — exactamente igual que el
+ * cobro ({@code PaymentUseCaseImpl.perLineSettlementAmount}). Convertir el total USD de una sola vez
+ * daba 1–5 céntimos menos que lo realmente cobrado (p.ej. el pedido mostraba 85,76 € mientras Stripe
+ * cobró 85,81 €).
+ *
+ * <p>Dentro de cada línea, el importe se multiplica en dólares y se convierte al final —una sola
+ * conversión, un solo redondeo—, que es lo que fija {@link OrderAmounts#lineSubtotal}. Redondear el
+ * unitario y multiplicarlo después inflaba el cargo hasta un 1,45 %.
  */
 @Component
 @RequiredArgsConstructor
@@ -70,12 +74,17 @@ public class MeOrderDtoMapper {
         BigDecimal discount = amounts.discount();
         BigDecimal total = amounts.total();
 
-        // Las líneas de la ficha repiten la misma conversión por unidad para poder enseñarlas una a una.
+        // Las líneas de la ficha: el unitario convertido (lo que el cliente reconoce) y el importe de la
+        // línea, que lo calcula OrderAmounts multiplicando en dólares y convirtiendo al final. Ojo: el
+        // unitario POR la cantidad ya no tiene por qué dar el importe de la línea —0,14 € × 100 son
+        // 13,80 €, no 14,00 €—, y por eso la ficha publica las dos cifras: la suma de los importes de
+        // línea es exactamente el subtotal de arriba.
         List<MeOrderItemDetailDtoOut> items = new ArrayList<>();
         for (OrderItem item : model.getItems() == null ? List.<OrderItem>of() : model.getItems()) {
             BigDecimal unit = currencyRateService.usdTo(
                     BigDecimal.valueOf(item.getUnitPriceCents()).movePointLeft(2), ccy);
-            items.add(toItemDetail(item, unit, unit.multiply(BigDecimal.valueOf(item.getQuantity())), ccy));
+            items.add(toItemDetail(item,
+                    unit, orderAmounts.lineSubtotal(item.getUnitPriceCents(), item.getQuantity(), ccy), ccy));
         }
         // Pedido ya pagado: mostramos EXACTAMENTE lo cobrado (settlement), no la re-conversión a la tasa
         // actual. Escalamos el desglose por settlement/total (la conversión es lineal) para que cuadre.
@@ -107,30 +116,19 @@ public class MeOrderDtoMapper {
     }
 
     /**
-     * Total del pedido en la moneda activa, calculado EXACTAMENTE igual que el detalle (conversión línea a
-     * línea + suma de componentes redondeados), para que la lista de pedidos muestre el MISMO total que el
-     * detalle (evita desfases de céntimos entre ambas vistas).
+     * Total del pedido en la moneda activa para la LISTA de pedidos.
+     *
+     * <p>La cuenta la hace {@link OrderAmounts}, la misma que el detalle, el cobro y el panel. Aquí estaba
+     * copiada línea por línea, y esa copia es exactamente la que se desvió cuando cambió el redondeo de
+     * los importes de línea: la lista seguía multiplicando el unitario ya convertido mientras el cobro
+     * había dejado de hacerlo.
      */
     public String formatOrderTotal(Order o) {
         if (o == null) {
             return null;
         }
         String ccy = CurrencyHolder.get();
-        BigDecimal subtotal = BigDecimal.ZERO;
-        if (o.getItems() != null) {
-            for (OrderItem item : o.getItems()) {
-                BigDecimal usdUnit = BigDecimal.valueOf(item.getUnitPriceCents()).movePointLeft(2);
-                subtotal = subtotal.add(currencyRateService.usdTo(usdUnit, ccy)
-                        .multiply(BigDecimal.valueOf(item.getQuantity())));
-            }
-        }
-        BigDecimal shipping = currencyRateService.usdTo(BigDecimal.valueOf(o.getShippingCents()).movePointLeft(2), ccy);
-        BigDecimal tax = currencyRateService.usdTo(BigDecimal.valueOf(o.getTaxCents()).movePointLeft(2), ccy);
-        BigDecimal discount = currencyRateService.usdTo(BigDecimal.valueOf(o.getDiscountCents()).movePointLeft(2), ccy);
-        BigDecimal total = subtotal.setScale(2, RoundingMode.HALF_UP)
-                .subtract(discount.setScale(2, RoundingMode.HALF_UP))
-                .add(shipping.setScale(2, RoundingMode.HALF_UP))
-                .add(tax.setScale(2, RoundingMode.HALF_UP));
+        BigDecimal total = orderAmounts.totalOf(o, ccy);
         // Pedido pagado: el total de la lista es EXACTAMENTE lo cobrado (settlement), igual que el detalle.
         BigDecimal settle = settlementTotal(o.getId(), ccy);
         return currencyRateService.formatDisplay(settle != null ? settle : total, ccy);

@@ -1,12 +1,17 @@
 package com.nexaplatform.dropshipping.application;
 
 import com.nexaplatform.dropshipping.application.service.InvoiceService;
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
+import com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PaymentJpaRepositoryAdapter;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -20,6 +25,8 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -29,8 +36,24 @@ class InvoiceServiceTest {
     TemplateEngine templateEngine;
     @Mock
     CurrencyRateService currencyRateService;
-    @InjectMocks
+
     InvoiceService service;
+
+    /**
+     * Se arma a mano en vez de con {@code @InjectMocks} porque {@link OrderAmounts} tiene que ser el
+     * servicio REAL: la factura debe hacer la misma cuenta de línea que el cobro, y con un doble el test
+     * dejaría de comprobar precisamente eso.
+     */
+    @BeforeEach
+    void setUp() {
+        // Conversión neutra por defecto (los casos que miden la divisa la sobreescriben con sus valores).
+        lenient().when(currencyRateService.usdTo(any(BigDecimal.class), anyString()))
+                .thenAnswer(i -> i.<BigDecimal>getArgument(0));
+        lenient().when(currencyRateService.decimalsOf(anyString())).thenReturn(2);
+        service = new InvoiceService(templateEngine, currencyRateService, new OrderAmounts(currencyRateService),
+                mock(PaymentJpaRepositoryAdapter.class), mock(ProductRepository.class),
+                mock(ProductVariantRepository.class), mock(ObjectStorageService.class));
+    }
 
     private static Order order(String currency, OrderItem... items) {
         return Order.builder().orderNumber("NX-100").currency(currency).shippingCents(500).taxCents(210)

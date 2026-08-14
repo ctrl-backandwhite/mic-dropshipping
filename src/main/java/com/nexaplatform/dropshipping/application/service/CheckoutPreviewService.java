@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.application.service;
 
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PromotionEntity;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
@@ -12,7 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -39,13 +44,29 @@ public class CheckoutPreviewService {
     public record Line(UUID productId, UUID variantId, int quantity) {
     }
 
+    /**
+     * Una línea ya cotizada, tal como se enseña en el resumen del checkout.
+     *
+     * <p>Lleva las DOS cifras a propósito: el unitario, que es el precio que el cliente eligió y
+     * reconoce, y el importe de la línea, que es lo que de verdad entra en el subtotal. Desde que el
+     * importe se calcula multiplicando en dólares y convirtiendo al final (ver {@link OrderAmounts}), el
+     * unitario mostrado por la cantidad ya no tiene por qué dar el importe de la línea: 0,14 € la unidad
+     * por 100 unidades no son 14,00 € sino 13,80 €. Publicar sólo el unitario dejaría al cliente con unas
+     * cuentas que no le cuadran; publicando los dos, sumar lo que se ve da el total que se paga.
+     */
+    public record PreviewLine(UUID productId, UUID variantId, int quantity, BigDecimal unitDisplay,
+            String unitFormatted, BigDecimal lineSubtotalDisplay, String lineSubtotalFormatted) {
+    }
+
     /** Desglose ya resuelto, en céntimos USD canónicos y en la divisa que ve el comprador. */
     public record Preview(ShippingQuote quote, int subtotalUsdCents, int discountUsdCents, int shippingUsdCents,
             int taxUsdCents, int taxRateBps, BigDecimal subtotalDisplay, BigDecimal discountDisplay,
             BigDecimal shippingDisplay, BigDecimal taxDisplay, BigDecimal totalDisplay,
             CheckoutTotalsService.CheckoutTotals totals,
             /** Cupón aplicado, o el motivo por el que no vale. Nulo cuando no se ha metido ninguno. */
-            String couponCode, String couponError, UUID couponId) {
+            String couponCode, String couponError, UUID couponId,
+            /** Las líneas con su importe, para que el resumen que se pinta sume el subtotal. */
+            List<PreviewLine> lines) {
 
         /** Sin cupón: el resto del sistema no tiene por qué pasar tres nulos. */
         public Preview(ShippingQuote quote, int subtotalUsdCents, int discountUsdCents, int shippingUsdCents,
@@ -54,7 +75,7 @@ public class CheckoutPreviewService {
                 CheckoutTotalsService.CheckoutTotals totals) {
             this(quote, subtotalUsdCents, discountUsdCents, shippingUsdCents, taxUsdCents, taxRateBps,
                     subtotalDisplay, discountDisplay, shippingDisplay, taxDisplay, totalDisplay, totals,
-                    null, null, null);
+                    null, null, null, List.of());
         }
     }
 
@@ -66,6 +87,8 @@ public class CheckoutPreviewService {
     private final CustomsDutyLinesService customsDutyLinesService;
     private final AffiliateProgramService affiliateProgramService;
     private final PromotionService promotionService;
+    /** La cuenta del pedido: el importe de línea lo decide ELLA, no esta clase (ver {@link OrderAmounts}). */
+    private final OrderAmounts orderAmounts;
 
     /**
      * Calcula el desglose del checkout para un carrito, destino y comprador dados.
@@ -90,17 +113,19 @@ public class CheckoutPreviewService {
                 .map(i -> new ShippingQuoteService.Line(i.productId(), i.variantId(), i.quantity())).toList());
 
         // Subtotal en CÉNTIMOS USD (canónico, para el descuento y la base del IVA), y subtotal en la
-        // MONEDA MOSTRADA calculado POR LÍNEA (unidad convertida y redondeada a 2 dec. × cantidad, sumado),
-        // EXACTAMENTE igual que el carrito (/cart-quote), el detalle del pedido, la lista y la factura. Así
-        // el desglose cuadra al céntimo en TODAS las vistas (antes el preview convertía el subtotal de una
-        // sola vez → "round(total)" ≠ "round(unidad)×qty" del resto, y salía 1 cént. de diferencia).
+        // MONEDA MOSTRADA como SUMA DE LOS IMPORTES DE LÍNEA, cada uno calculado por OrderAmounts —el
+        // mismo servicio que usa el cobro real, el carrito (/cart-quote), la ficha del pedido y la
+        // factura—. Con la cuenta escrita en un solo sitio, la vista previa y el cargo no pueden
+        // separarse ni un céntimo.
+        String displayCode = CurrencyHolder.get();
         int subtotalUsdCents = 0;
         // Subtotal SIN rebajas: la referencia contra la que se mide el cupón.
         int grossSubtotalUsdCents = 0;
         // Gross por producto: base para acotar un cupón PRODUCT/CATEGORY solo a las líneas que alcanza
         // (igual que en el cobro real, para que preview y cargo coincidan).
-        java.util.Map<UUID, Integer> grossByProduct = new java.util.HashMap<>();
+        Map<UUID, Integer> grossByProduct = new HashMap<>();
         BigDecimal subDispAcc = BigDecimal.ZERO;
+        List<PreviewLine> previewLines = new ArrayList<>();
         for (Line it : lines) {
             Integer unitCents = unitPriceUsdCents(it);
             if (unitCents == null) {
@@ -114,15 +139,26 @@ public class CheckoutPreviewService {
             if (it.productId() != null) {
                 grossByProduct.merge(it.productId(), lineGross, Integer::sum);
             }
-            // El importe que se ENSEÑA sale del precio de la ficha (displayAmount), no de convertir el
-            // canónico en dólares. Los dos caminos difieren en un céntimo: la ficha compone el precio en
-            // la moneda del cliente —base, IVA y envío convertidos y redondeados por separado— mientras
-            // que el canónico los suma en dólares y convierte al final. Con el resumen del checkout
-            // sumando 39,67 € y el total diciendo 39,65 €, el cliente ve unas cuentas que no cuadran.
+            // REGLA (14-ago-2026): el importe de la línea se obtiene multiplicando en DÓLARES y
+            // convirtiendo al final, no multiplicando el unitario ya redondeado. Antes se hacía al revés
+            // —se sumaba displayAmount × cantidad— para que el resumen del checkout cuadrase con lo que
+            // el carrito enseñaba unidad a unidad; el problema es que el redondeo del unitario se
+            // multiplicaba con él: 0,15 $ al cambio 0,92 son 0,138 €, en pantalla 0,14 €, y por 100
+            // unidades salían 14,00 € en vez de los 13,80 € que valen 15,00 $. Un 1,45 % de más, cobrado
+            // de verdad por la pasarela.
+            //
+            // El riesgo que motivaba el diseño anterior sigue siendo real: si el cliente multiplica el
+            // unitario que ve, no le da el subtotal. Por eso el importe de línea deja de ser un cálculo
+            // implícito y se PUBLICA junto al unitario (PreviewLine): el resumen enseña «0,14 € /ud ·
+            // 13,80 €» y sumando lo que se ve se llega exactamente al total que se cobra.
+            BigDecimal lineSubtotal = orderAmounts.lineSubtotal((long) unitCents, qty, displayCode);
+            subDispAcc = subDispAcc.add(lineSubtotal);
+            // El unitario que se PINTA sigue saliendo del precio de la ficha (displayAmount): es el que el
+            // cliente ha visto en el catálogo y en el carrito, y cambiarlo aquí sería enseñarle otro.
             BigDecimal unitDisplay = unitPriceDisplay(it);
-            if (unitDisplay != null) {
-                subDispAcc = subDispAcc.add(unitDisplay.multiply(BigDecimal.valueOf(qty)));
-            }
+            previewLines.add(new PreviewLine(it.productId(), it.variantId(), qty, unitDisplay,
+                    currencyService.formatDisplay(unitDisplay, displayCode), lineSubtotal,
+                    currencyService.formatDisplay(lineSubtotal, displayCode)));
         }
 
         // Descuento de referido del COMPRADOR (10% del subtotal de producto) si tiene atribución de
@@ -171,7 +207,9 @@ public class CheckoutPreviewService {
 
         // Importes en la moneda activa: cada componente convertido y REDONDEADO a 2 decimales; el total
         // es la SUMA de esos componentes redondeados (igual que el detalle del pedido), para que el
-        // desglose cuadre exactamente en pantalla (subtotal − descuento + envío + IVA = total).
+        // desglose cuadre exactamente en pantalla (subtotal − descuento + envío + IVA = total). El
+        // subtotal ya viene sumado de importes de línea redondeados, así que este setScale sólo fija la
+        // escala; no vuelve a redondear nada.
         BigDecimal subDisp = subDispAcc.setScale(2, RoundingMode.HALF_UP);
         BigDecimal discDisp = currencyService.usdToDisplay(usd(discountUsdCents)).setScale(2, RoundingMode.HALF_UP);
         BigDecimal shipDisp = currencyService.usdToDisplay(usd(totals.shippingCents())).setScale(2, RoundingMode.HALF_UP);
@@ -180,8 +218,8 @@ public class CheckoutPreviewService {
 
         return new Preview(quote, subtotalUsdCents, discountUsdCents, totals.shippingCents(), totals.taxCents(),
                 totals.taxRateBps(), subDisp, discDisp, shipDisp, taxDisp, totalDisp, totals,
-                couponId != null ? couponCode.trim().toUpperCase(java.util.Locale.ROOT) : null,
-                couponError, couponId);
+                couponId != null ? couponCode.trim().toUpperCase(Locale.ROOT) : null,
+                couponError, couponId, List.copyOf(previewLines));
     }
 
     /**
@@ -272,7 +310,7 @@ public class CheckoutPreviewService {
      * agrupar, y peso/medidas para repartir la mercancía en bultos igual que hará el transportista.
      */
     private List<CustomsDutyLinesService.Line> customsLines(List<Line> items) {
-        List<CustomsDutyLinesService.Line> out = new java.util.ArrayList<>();
+        List<CustomsDutyLinesService.Line> out = new ArrayList<>();
         for (Line it : items) {
             if (it == null || it.productId() == null) {
                 continue;

@@ -308,9 +308,20 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private record RateRule(String name, Scope scope, long capacity, Duration period) {
     }
 
-    /** Test hook to wipe state between tests. */
+    /**
+     * Gancho de pruebas: deja la cuota a cero entre casos.
+     *
+     * <p>Antes vaciaba SOLO el mapa local, que en la aplicación real no se rellena nunca: en cuanto hay
+     * una {@link BucketFactory} inyectada —siempre, salvo en las pruebas unitarias de este filtro, que
+     * usan el constructor sin argumentos— los cubos viven dentro de la factoría. El método prometía
+     * «wipe state between tests» y no vaciaba nada, así que la cuota que gastaba un caso se arrastraba
+     * al siguiente y aparecían 429 donde el caso medía 401/403.
+     */
     public void reset() {
         buckets.clear();
+        if (bucketFactory != null) {
+            bucketFactory.clear();
+        }
     }
 
     /** For dependency-free unit reflection. */

@@ -1,5 +1,8 @@
 package com.nexaplatform.dropshipping.config;
 
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.Cache;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -45,11 +48,52 @@ public abstract class BaseIntegration {
 
     protected WebTestClient client;
 
+    @Autowired(required = false)
+    private CacheManager cacheManager;
+
+    /** Su caché de tasas vive fuera del {@link CacheManager}; ver {@link #vaciarCaches()}. */
+    @Autowired(required = false)
+    private CurrencyRateService currencyRateService;
+
     @BeforeEach
     void setUpClientAndCleanDb() {
         client = WebTestClient.bindToServer().baseUrl("http://localhost:" + port)
                 .responseTimeout(Duration.ofSeconds(30)).build();
         cleanAllTables();
+        vaciarCaches();
+    }
+
+    /**
+     * Vacía las cachés de aplicación además de las tablas.
+     *
+     * <p>Vaciar solo la base NO deja el sistema limpio: Caffeine vive en la JVM y el contexto de Spring se
+     * comparte entre clases de prueba, así que lo que una dejó cacheado —listados, fichas, precios,
+     * resultados de búsqueda— sobrevive al TRUNCATE y la siguiente lo lee como si fuera suyo. Un test cuyo
+     * resultado depende de quién se ejecutó antes no certifica nada.
+     *
+     * <p>Y no basta con las del {@link CacheManager}: {@link CurrencyRateService} lleva su PROPIA caché en
+     * memoria, con una ventana de cinco minutos que ningún vaciado alcanzaba. Como {@link #cleanAllTables()}
+     * borra también {@code currency_rate}, la caché y la base quedaban descolgadas: durante los primeros
+     * cinco minutos de vida de la JVM el proceso seguía sirviendo las tasas que sembró la migración —así
+     * que una clase sola pasaba— y, al vencer la ventana dentro de una clase que no repone divisas, la
+     * recarga dejaba la caché VACÍA y con sello nuevo otros cinco minutos. A partir de ahí, toda lectura
+     * del catálogo con precio en yuanes respondía 404 «Unknown source currency: CNY»: eran los 12 casos de
+     * búsqueda y los 5 de la API de partners que solo fallaban con la suite entera. Invalidándola aquí, la
+     * siguiente lectura la reconstruye con las divisas que haya sembrado el test que está corriendo.
+     */
+    protected void vaciarCaches() {
+        if (currencyRateService != null) {
+            currencyRateService.invalidateCache();
+        }
+        if (cacheManager == null) {
+            return;
+        }
+        for (String nombre : cacheManager.getCacheNames()) {
+            Cache cache = cacheManager.getCache(nombre);
+            if (cache != null) {
+                cache.clear();
+            }
+        }
     }
 
     /** TRUNCATE de todas las tablas de negocio (deja fuera las de Liquibase). */

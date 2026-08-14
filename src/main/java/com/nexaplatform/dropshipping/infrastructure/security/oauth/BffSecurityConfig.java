@@ -65,6 +65,23 @@ public class BffSecurityConfig {
      * {@code Authorization: Bearer <token>}. Al no haber cookies no hay CSRF, y el resource server
      * valida el JWT (firmado por el JWKSource RSA compartido). Las autoridades salen del claim
      * {@code authorities} del token (p.ej. {@code ROLE_ADMIN}), sin prefijo extra.
+     *
+     * <h4>Por qué SPRING_CSRF_PROTECTION_DISABLED es falso positivo en esta cadena</h4>
+     *
+     * <p>El argumento no es «es una API, CSRF no aplica» —eso sería falso si algún endpoint aceptara la
+     * cookie—, sino que aquí la cookie <b>no puede autenticar nada</b>, y eso lo garantiza el propio
+     * framework: con {@link SessionCreationPolicy#STATELESS}, {@code SessionManagementConfigurer} sustituye
+     * el {@code SecurityContextRepository} de la cadena por {@code RequestAttributeSecurityContextRepository}
+     * y deja {@code NullSecurityContextRepository} en la gestión de sesión. La {@code HttpSession} nunca se
+     * lee, así que un {@code JSESSIONID} que el navegador enviara por su cuenta se ignora por completo: la
+     * ÚNICA credencial admitida es la cabecera {@code Authorization: Bearer}, que ningún formulario ni
+     * etiqueta {@code <img>} de un tercero puede hacer viajar. CSRF explota el envío AUTOMÁTICO de
+     * credenciales por el navegador; una cabecera no se manda sola.
+     *
+     * <p>Consecuencia práctica: TODA la superficie con efectos de esta cadena (POST/PUT/PATCH/DELETE de
+     * {@code /api/admin/**}, {@code /api/me/**}, checkout, wallet…) exige Bearer o responde 401, como
+     * comprueba {@code BffEndpointAuthorizationIT}. La única cadena con sesión —y por tanto con CSRF
+     * ACTIVO— es {@code DefaultSecurityConfig}.
      */
     @Bean
     @Order(2)
@@ -85,7 +102,9 @@ public class BffSecurityConfig {
                 "/api/languages", "/api/languages/**", "/api/warehouses", "/api/warehouses/**", "/api/academy/**",
                 "/api/mentors", "/api/mentors/**", "/api/pod/**", "/api/campaigns/**", "/api/geo",
                 "/api/captcha/**")
-                .cors(Customizer.withDefaults())// NOSONAR java:S4502 — API stateless con token Bearer: no hay cookie de sesión que un tercero pueda hacer viajar, que es lo que CSRF protege.
+                .cors(Customizer.withDefaults())
+                // NOSONAR java:S4502 — Falso positivo verificado: con STATELESS (abajo) la sesión no se lee
+                // nunca, así que ninguna ruta con efectos se autentica por cookie. Detalle en el javadoc.
                 .csrf(csrf -> csrf.disable()) // NOSONAR java:S4502 — API stateless con Bearer, sin cookie de sesión
                 .headers(h -> h
                         .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31536000))

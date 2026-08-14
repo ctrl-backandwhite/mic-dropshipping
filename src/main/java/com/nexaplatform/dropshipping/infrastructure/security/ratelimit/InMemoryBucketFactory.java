@@ -21,4 +21,10 @@ public class InMemoryBucketFactory implements BucketFactory {
         return buckets.computeIfAbsent(key, k -> Bucket.builder()
                 .addLimit(Bandwidth.builder().capacity(capacity).refillIntervally(capacity, period).build()).build());
     }
+
+    /** Aquí es donde vive de verdad la cuota consumida, así que aquí es donde hay que vaciarla. */
+    @Override
+    public void clear() {
+        buckets.clear();
+    }
 }
