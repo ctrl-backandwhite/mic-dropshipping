@@ -14,3 +14,6 @@ target/
 Dockerfile
 **/Dockerfile
 .env*.example
+
+# Copias de trabajo temporales de agentes: nunca se versionan.
+.claude/worktrees/

@@ -272,6 +272,14 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // El precio de línea debe COINCIDIR con el precio que ve el usuario en el catálogo/carrito. El
         // catálogo redondea a 2 decimales al céntimo MÁS CERCANO (HALF_UP, ver CurrencyRateService), así
         // que el cobro usa el MISMO redondeo → catálogo == carrito == cobro, sin céntimos de más ni de menos.
+        //
+        // Este setScale NO es un segundo redondeo: `retailUsd` ya llega con 2 decimales desde
+        // PricingService (base + IVA + envío, cada uno redondeado al céntimo). En dólares —la moneda
+        // canónica— el precio unitario ES el precio con dos decimales, y multiplicarlo por la cantidad da
+        // el importe exacto. Que sea así está fijado a propósito en CheckoutFlowIT: un coste de 10,0050 $
+        // vale 10,01 $ la unidad y 7 unidades cuestan 70,07 $, no 70,04 $. El redondeo que sí se
+        // multiplicaba —y cobraba de más— era el de la conversión a la moneda del cliente, y ese vive
+        // ahora en OrderAmounts.lineSubtotal, que convierte el importe de la línea entero.
         int unitCents = unitPrice.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
         int costCents = priced.costUsd() != null
                 ? priced.costUsd().multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).intValue()
@@ -283,6 +291,10 @@ public class OrderUseCaseImpl implements OrderUseCase {
         long costCnyCents = cnyUnit != null
                 ? cnyUnit.multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).longValueExact()
                 : 0L;
+        // Importe de la línea EN DÓLARES. Aquí no hay conversión de divisa, así que multiplicar el
+        // unitario canónico es exacto por definición (ver la nota de unitCents); el importe en la moneda
+        // del cliente se deriva de este número, una sola vez, en OrderAmounts.lineSubtotal.
+        //
         // multiplyExact: si el producto se saliera de rango (int), lanza en vez de envolver a un
         // valor pequeño (que se cobraría de menos). Con MAX_LINE_QUANTITY nunca ocurre en la práctica.
         int lineTotal = Math.multiplyExact(unitCents, itemReq.quantity());
@@ -594,12 +606,24 @@ public class OrderUseCaseImpl implements OrderUseCase {
     @Transactional
     public Order forwardOrder(UUID id) {
         Order o = orderRepository.findById(id).orElseThrow(() -> new NotFoundException(ORDER_NOT_FOUND));
-        if (o.getStatus() == OrderStatus.PENDING || o.getStatus() == OrderStatus.AWAITING_PAYMENT
-                || o.getStatus() == OrderStatus.PAID) {
-            o.setStatus(OrderStatus.FORWARDED);
-            o.setForwardedAt(Instant.now());
-            o = orderRepository.save(o);
+        // Ya enviado al proveedor: se devuelve tal cual (idempotente), que es lo razonable si el panel
+        // repite el clic o llegan dos peticiones.
+        if (o.getStatus() == OrderStatus.FORWARDED) {
+            return publishAndEnrich(o, "order.forwarded");
         }
+        // Cualquier otro estado se RECHAZA en vez de responder 200 sin hacer nada. Antes, reenviar un
+        // pedido ya entregado, cancelado o reembolsado devolvía el pedido intacto con un 200, así que el
+        // panel no podía distinguir «hecho» de «no se hizo nada» y el operador se quedaba creyendo que
+        // había avanzado. Sus hermanos (ship/deliver/refund) sí lanzan, y no había motivo para la excepción.
+        if (o.getStatus() != OrderStatus.PENDING && o.getStatus() != OrderStatus.AWAITING_PAYMENT
+                && o.getStatus() != OrderStatus.PAID) {
+            throw new BusinessException(
+                    "Solo se puede enviar al proveedor un pedido pendiente o pagado; este está "
+                            + o.getStatus());
+        }
+        o.setStatus(OrderStatus.FORWARDED);
+        o.setForwardedAt(Instant.now());
+        o = orderRepository.save(o);
         return publishAndEnrich(o, "order.forwarded");
     }
 

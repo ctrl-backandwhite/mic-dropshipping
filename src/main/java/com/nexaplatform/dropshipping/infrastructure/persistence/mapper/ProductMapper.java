@@ -57,9 +57,22 @@ public class ProductMapper {
         } catch (Exception ignored) {
             /* lazy init fuera de tx → fallback a null */ }
 
-        return new ProductSummaryView(p.getId(), p.getSlug(), title, image, p.getBasePrice(), p.getCurrency(),
+        // Coste del proveedor SOLO para ADMIN, igual que en toDetail. `basePrice` NO es un precio de venta:
+        // es el importe que se paga al proveedor en CNY, la base sobre la que PricingService aplica el
+        // margen. Publicarlo junto al precio final permite a cualquiera calcular la ganancia exacta por
+        // producto — y el listado lo devolvía a todo el mundo, incluida la API de partners, mientras la
+        // ficha sí lo filtraba desde el principio. El escaparate ya pinta `displayFormatted`, que es la
+        // única cifra que le corresponde ver.
+        boolean admin = SecurityUtils.isAdmin();
+        return new ProductSummaryView(p.getId(), p.getSlug(), title, image,
+                admin ? p.getBasePrice() : null, admin ? p.getCurrency() : null,
                 p.getRating(), p.getMonthlySales(), p.getTrendScore(),
-                p.getStatus() != null ? p.getStatus().name() : null, priced.retailUsd(), priced.displayAmount(),
+                // `retailUsd` también SOLO para admin, por el mismo motivo y con la misma incoherencia que
+                // `basePrice`: la ficha ya lo ocultaba a quien no es admin (línea ~84) y el listado lo
+                // publicaba a todo el mundo. Es el precio canónico en USD antes de convertir; al cliente le
+                // corresponde `displayFormatted`, en su divisa.
+                p.getStatus() != null ? p.getStatus().name() : null, admin ? priced.retailUsd() : null,
+                priced.displayAmount(),
                 priced.displayCurrency(), priced.displaySymbol(), priced.displayFormatted(), p.getInventoryCount(),
                 availableUnits, Boolean.TRUE.equals(p.getVerified()),
                 // La rebaja viaja YA resuelta desde el motor de precios: el escaparate solo la pinta.
@@ -75,6 +88,15 @@ public class ProductMapper {
         BigDecimal costUsd = admin ? priced.costUsd() : null;
         BigDecimal retailUsd = admin ? priced.retailUsd() : null;
         BigDecimal appliedMarginPercent = admin ? priced.appliedMarginPercent() : null;
+        // Coste del proveedor en la FICHA, con el mismo criterio que ya se aplicaba aquí a costUsd/retailUsd
+        // y que se aplicó al listado (toSummary). `basePrice` es lo que se paga al proveedor en CNY y
+        // `currency` la etiqueta que lo delata: publicados junto al precio de venta, una sola división deja
+        // a la vista la ganancia exacta de cada producto. Cerrar el listado y dejar la ficha abierta no
+        // tapaba nada, porque a la ficha se llega con un enlace directo. El escaparate no los necesita —solo
+        // pinta `displayFormatted`, que ya viene compuesto y formateado—, mientras que el editor del admin sí
+        // tarifica con ellos, así que siguen viajando para ADMIN.
+        BigDecimal basePrice = admin ? p.getBasePrice() : null;
+        String currency = admin ? p.getCurrency() : null;
         // Desglose base/IVA/envío: SOLO admin (el usuario final ve únicamente el total = displayFormatted).
         String baseFormatted = admin ? priced.baseFormatted() : null;
         String ivaFormatted = admin ? priced.ivaFormatted() : null;
@@ -94,7 +116,7 @@ public class ProductMapper {
                 p.getCategory() != null ? p.getCategory().getId() : null, tr != null ? tr.getTitle() : p.getTitleZh(),
                 tr != null ? tr.getShortDescription() : p.getShortDescriptionZh(),
                 tr != null ? tr.getDescription() : p.getDescriptionZh(), p.getTitleZh(), p.getShortDescriptionZh(),
-                p.getDescriptionZh(), p.getBrand(), p.getMoq(), p.getBasePrice(), p.getCurrency(), p.getRating(),
+                p.getDescriptionZh(), p.getBrand(), p.getMoq(), basePrice, currency, p.getRating(),
                 p.getReviewCount(), p.getMonthlySales(), p.getRepurchaseRate(), p.getTrendScore(),
                 p.getStatus() != null ? p.getStatus().name() : null, p.getSourceUrl(), p.getIngestedAt(),
                 p.getLastSyncedAt(), p.getImages().stream().map(this::toImageView).toList(),

@@ -22,11 +22,22 @@ import java.util.List;
  *
  * <p>El orden importa y es este:
  * <ol>
- *   <li>cada línea convierte su precio UNITARIO y lo multiplica por la cantidad —no se convierte el
- *       importe de la línea ya multiplicado—, porque es así como el cliente lee y comprueba el precio;
+ *   <li>cada línea multiplica en DÓLARES (precio unitario canónico × cantidad) y convierte DESPUÉS: se
+ *       redondea UNA sola vez, al final de la línea;
  *   <li>envío, impuestos y descuento se convierten por separado;
  *   <li>el total suma los componentes YA redondeados: subtotal − descuento + envío + impuestos.
  * </ol>
+ *
+ * <p>El punto 1 decía lo contrario hasta el 14-ago-2026: se convertía el unitario, se redondeaba y se
+ * multiplicaba después. Parecía lo más honesto —el cliente lee el precio de la unidad y lo multiplica—
+ * pero el redondeo se multiplicaba con él. Un artículo de 0,15 $ con el euro a 0,92 sale a 0,138 €, que
+ * en pantalla es 0,14 €; por cien unidades eso son 14,00 €, cuando lo que se compra son 15,00 $ = 13,80 €.
+ * Veinte céntimos de más, un 1,45 % sistemático que la pasarela liquidaba de verdad. Multiplicando en
+ * dólares y convirtiendo al final se cobra el importe exacto.
+ *
+ * <p>La contrapartida es que el unitario que se muestra ya NO multiplicado da el total de la línea, así
+ * que el importe de línea se publica junto al unitario ({@code 0,14 € /ud · 13,80 €}) y el subtotal es
+ * la suma de esos importes de línea: lo que el cliente ve sumado sigue dando el total que paga.
  *
  * <p>Cada conversión redondea a la unidad más pequeña que existe en esa moneda (el yen no tiene
  * céntimos), de lo que ya se encarga {@link CurrencyRateService#usdTo}.
@@ -63,7 +74,7 @@ public class OrderAmounts {
         return of(order, currency).total();
     }
 
-    /** Suma de las líneas: precio unitario convertido × cantidad. */
+    /** Suma de los importes de línea, cada uno redondeado una sola vez. */
     private BigDecimal subtotalOf(Order order, String currency) {
         List<OrderItem> items = order.getItems();
         if (items == null || items.isEmpty()) {
@@ -71,10 +82,38 @@ public class OrderAmounts {
         }
         BigDecimal sum = BigDecimal.ZERO;
         for (OrderItem item : items) {
-            sum = sum.add(convert(item.getUnitPriceCents(), currency)
-                    .multiply(BigDecimal.valueOf(item.getQuantity())));
+            sum = sum.add(lineSubtotal(item.getUnitPriceCents(), item.getQuantity(), currency));
         }
         return redondear(sum, currency);
+    }
+
+    /**
+     * Importe de UNA línea en la moneda pedida: el precio unitario canónico se multiplica en dólares —con
+     * precisión completa— y sólo entonces se convierte y se redondea.
+     *
+     * <p>Es EL sitio donde se decide el redondeo de una línea, y por eso lo llaman todos: el carrito, la
+     * vista previa del checkout, la ficha del pedido, la factura y el importe que se manda a cobrar.
+     * Redondear el unitario y multiplicar después inflaba el cargo hasta un 1,45 % (ver la nota de la
+     * clase); tenerlo escrito una sola vez es lo que impide que un camino se vuelva a desviar del otro.
+     *
+     * <p>La cantidad se toma como mínimo 1: una línea del carrito con cantidad 0 o negativa es un dato
+     * corrupto, y devolver un importe negativo la convertiría en dinero a favor del cliente.
+     */
+    public BigDecimal lineSubtotal(long unitPriceUsdCents, int quantity, String currency) {
+        return convert(Math.multiplyExact(unitPriceUsdCents, Math.max(1, quantity)), currency);
+    }
+
+    /**
+     * Misma cuenta, para quien tiene el precio unitario en dólares y no en céntimos (el catálogo lo
+     * tarifica como {@code BigDecimal}). Se pasa a céntimos con el MISMO redondeo que usa el pedido al
+     * congelar la línea, de modo que cotizar y cobrar parten del mismo número.
+     */
+    public BigDecimal lineSubtotal(BigDecimal unitPriceUsd, int quantity, String currency) {
+        if (unitPriceUsd == null) {
+            return null;
+        }
+        return lineSubtotal(unitPriceUsd.setScale(2, RoundingMode.HALF_UP).movePointRight(2).longValueExact(),
+                quantity, currency);
     }
 
     /**

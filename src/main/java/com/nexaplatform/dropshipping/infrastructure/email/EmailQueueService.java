@@ -173,6 +173,13 @@ public class EmailQueueService {
     public void dispatchPending() {
         Instant now = Instant.now();
         for (OutboundEmailEntity email : repo.findDispatchable(now, Limit.of(BATCH_SIZE))) {
+            // Se RECLAMA la fila antes de enviar: el UPDATE condicional solo prospera si sigue en PENDING,
+            // así que si otra réplica se le adelantó, este barrido la salta. La lectura de arriba no basta
+            // — con dos instancias, ambas leen la misma fila y el cliente recibe el correo dos veces, y un
+            // envío SMTP no se puede deshacer al descubrirlo.
+            if (repo.reclamarParaEnvio(email.getId()) == 0) {
+                continue;
+            }
             try {
                 String html = email.getBodyHtml();
                 // Iconos FontAwesome incrustados como adjuntos inline (CID): funcionan en Gmail sin

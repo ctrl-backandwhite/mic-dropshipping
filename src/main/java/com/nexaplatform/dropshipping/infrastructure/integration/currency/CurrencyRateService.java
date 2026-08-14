@@ -126,8 +126,15 @@ public class CurrencyRateService {
             return null;
         if ("USD".equalsIgnoreCase(sourceCode))
             return amount.setScale(4, RoundingMode.HALF_UP);
+        // Falta la tasa de la divisa en la que está guardado el producto: eso NO es «recurso no
+        // encontrado», es que al servidor le falta configuración. Lanzaba NotFoundException, que el
+        // manejador traduce a 404, así que el catálogo entero respondía «no existe» cuando lo que pasaba
+        // es que no había tasa de CNY — y ni el cliente ni el panel podían saber por qué. Como error de
+        // estado sale con 500 y queda registrado con log.error, que es donde tiene que verse.
         return find(sourceCode).map(r -> amount.divide(r.getRateVsUsd(), 4, RoundingMode.HALF_UP))
-                .orElseThrow(() -> new NotFoundException("Unknown source currency: " + sourceCode));
+                .orElseThrow(() -> new IllegalStateException(
+                        "Falta la tasa de cambio de la divisa de origen '" + sourceCode
+                                + "': revisa la tabla currency_rate"));
     }
 
     public String symbolOf(String code) {
@@ -254,6 +261,24 @@ public class CurrencyRateService {
     }
 
     /* ============ cache plumbing ============ */
+
+    /**
+     * Marca la caché en memoria como caducada para que la SIGUIENTE lectura la recargue de la base.
+     *
+     * <p>Hacía falta una puerta como esta porque este mapa NO lo gobierna el {@code CacheManager} de
+     * Spring: es una caché propia con una ventana de cinco minutos, y hasta ahora solo la refrescaban las
+     * escrituras que pasan por este mismo servicio ({@link #setActive}, {@link #overrideRate},
+     * {@link #applyBulkSync}). Cuando la tabla de tasas cambia por CUALQUIER otra vía —una migración, una
+     * carga por SQL, otra instancia del proceso o el vaciado de tablas de una prueba de integración— el
+     * proceso sigue sirviendo las tasas viejas hasta que vence la ventana, sin forma de forzar la
+     * relectura. Peor: si el vencimiento cae en un instante en el que la tabla está vacía, la recarga deja
+     * la caché VACÍA y con sello nuevo, así que durante los cinco minutos siguientes cualquier conversión
+     * desde yuanes revienta con «Unknown source currency: CNY» (un 404 en toda la lectura del catálogo).
+     * Con esta llamada, quien sabe que ha tocado las tasas por fuera puede dejar la caché consistente.
+     */
+    public void invalidateCache() {
+        cacheStamp = Instant.EPOCH;
+    }
 
     private synchronized void refreshCache() {
         cache.clear();

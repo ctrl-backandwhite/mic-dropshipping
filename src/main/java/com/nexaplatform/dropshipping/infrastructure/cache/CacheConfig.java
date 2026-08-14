@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.cache;
 
+import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
 import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
@@ -54,8 +55,16 @@ public class CacheConfig {
     public KeyGenerator currencyAwareKeyGenerator() {
         // Incluye moneda, canal Y PAÍS: el precio depende de los tres (el margen puede variar por país), así
         // que distintos países/canales/monedas NO deben compartir entrada de caché.
+        //
+        // Y el ROL, que es lo que faltaba: desde que el listado oculta el coste del proveedor y el precio
+        // canónico a quien no es admin, la respuesta ya NO es la misma para todos. Sin el rol en la clave,
+        // un admin navegando el escaparate dejaba cacheada la página CON esos campos y cualquier usuario
+        // —o un anónimo— con los mismos filtros la recibía tal cual durante los cinco minutos de TTL, lo
+        // que reabría la fuga por la puerta de atrás. Y al revés: el admin se quedaba sin las columnas de
+        // coste si otro había cacheado antes.
         return (target, method, params) -> method.getName() + ':' + CurrencyHolder.get() + ':'
-                + PricingChannelHolder.get() + ':' + PricingCountryHolder.get() + ':'
+                + PricingChannelHolder.get() + ':' + PricingCountryHolder.get()
+                + (SecurityUtils.isAdmin() ? ":admin" : ":user") + ':'
                 + Arrays.deepToString(params);
     }
 

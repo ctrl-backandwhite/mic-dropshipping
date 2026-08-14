@@ -66,6 +66,8 @@ public class InvoiceService {
 
     private final TemplateEngine templateEngine;
     private final CurrencyRateService currencyRateService;
+    /** La cuenta del pedido: la factura tiene que decir exactamente lo que se cobró, no recalcularlo. */
+    private final OrderAmounts orderAmounts;
     private final PaymentJpaRepositoryAdapter paymentRepository;
     private final ProductRepository productRepository;
     private final ProductVariantRepository variantRepository;
@@ -243,7 +245,10 @@ public class InvoiceService {
      * adjuntará.
      *
      * <p>El subtotal se SUMA línea a línea en vez de convertir el total de una vez, para que la factura
-     * cuadre consigo misma y con lo que el comprador vio en el carrito.
+     * cuadre consigo misma y con lo que el comprador vio en el carrito. Dentro de cada línea el importe
+     * se multiplica en dólares y se convierte al final ({@link OrderAmounts#lineSubtotal}), así que el
+     * unitario impreso por la cantidad puede diferir un céntimo del importe de la línea: manda el importe
+     * de la línea, que es lo que se cobró.
      *
      * <p>Si el pedido ya se cobró, manda el importe LIQUIDADO: la factura tiene que decir exactamente lo
      * que se cobró, no lo que costaría hoy —el tipo de cambio se mueve y una factura emitida semanas
@@ -258,7 +263,11 @@ public class InvoiceService {
             int idx = 0;
             for (OrderItem it : o.getItems()) {
                 BigDecimal unit = conv(it.getUnitPriceCents(), cur);
-                BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(it.getQuantity()));
+                // El importe de la línea lo calcula OrderAmounts —multiplica en dólares y convierte al
+                // final—, que es la misma cuenta con la que se cobró. Multiplicar aquí el unitario ya
+                // convertido daba una factura por encima del cargo real (hasta un 1,45 %), y una factura
+                // que no dice lo que se cobró no vale como documento.
+                BigDecimal lineTotal = orderAmounts.lineSubtotal(it.getUnitPriceCents(), it.getQuantity(), cur);
                 subtotal = subtotal.add(lineTotal);
                 items.add(Map.of(TITLE, it.getTitleSnapshot() != null ? it.getTitleSnapshot() : "—", "sku",
                         it.getSkuSnapshot() != null ? it.getSkuSnapshot() : "", "variant",

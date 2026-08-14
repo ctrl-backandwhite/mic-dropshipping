@@ -101,11 +101,20 @@ public class CustomsValuationService {
         CountryCustomsRuleEntity r = found.get();
         TaxMode mode = TaxMode.from(r.getTaxMode());
         OverThresholdPolicy policy = OverThresholdPolicy.from(r.getOverThresholdPolicy());
-        // El umbral se comprueba bulto a bulto: un pedido de 400 EUR repartido en cuatro bultos de 100 no
-        // supera la franquicia en ninguna de sus cuatro declaraciones. Si no hay bultos calculados (rutas
-        // que aún no los conocen), se cae al valor del pedido, que es el comportamiento anterior.
-        boolean exceeded = bultos.isEmpty() ? exceedsDeMinimis(r, intrinsic)
-                : bultos.stream().anyMatch(b -> exceedsDeMinimis(r, b.valueCents()));
+        // La franquicia se mide sobre el VALOR INTRÍNSECO DEL PEDIDO COMPLETO, nunca bulto a bulto.
+        //
+        // Se comprobaba por bulto, y eso abría dos agujeros. El fiscal: la UE AGREGA los envíos del mismo
+        // pedido al mismo destinatario, así que un pedido de 400 EUR repartido en cuatro bultos de 100 no
+        // deja de superar los 150 — declararlo como cuatro envíos de bajo valor es infradeclaración, y la
+        // deuda es del declarante. Es exactamente lo que advierte el javadoc de ParcelSplitter, que
+        // afirmaba que el umbral se evaluaba sobre el pedido entero mientras aquí se hacía lo contrario.
+        // Y el de negocio: los 52 países con umbral están en BLOCK, de modo que evaluar por bulto dejaba
+        // PASAR Y COBRAR pedidos que la política manda rechazar, con solo superar el tope de peso o de
+        // valor del canal para que se partieran.
+        //
+        // El reparto en bultos sigue importando para el DERECHO por partida (más abajo), que sí se cuenta
+        // por declaración. Son dos cosas distintas: la franquicia mira el envío; el derecho, cada bulto.
+        boolean exceeded = exceedsDeMinimis(r, intrinsic);
         boolean blocked = exceeded && policy == OverThresholdPolicy.BLOCK;
 
         // El recargo solo existe en DDP: en DDU el impuesto y su gestión los asume el destinatario.

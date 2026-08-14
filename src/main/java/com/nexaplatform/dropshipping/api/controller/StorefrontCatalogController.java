@@ -39,7 +39,9 @@ import com.nexaplatform.dropshipping.api.mapper.ProductListFilters;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
 import com.nexaplatform.dropshipping.application.service.ProductDetailQueryService;
 import com.nexaplatform.dropshipping.application.service.MarginService;
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount;
 import com.nexaplatform.dropshipping.application.service.PromotionShowcaseService;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
@@ -107,6 +109,8 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     private final MarginService marginService;
     private final CurrencyRateService currencyService;
     private final ProductPriceTierRepository priceTierRepository;
+    /** La cuenta del pedido: el carrito cotiza con la MISMA aritmética con la que se cobra. */
+    private final OrderAmounts orderAmounts;
     /** Comisión de plataforma (%). DROP-680: por defecto 0 — no se inventa una comisión. */
     @Value("${nexadrop.platform.commission-pct:0}")
     private BigDecimal platformCommissionPct;
@@ -379,10 +383,14 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
 
     /**
-     * Cotiza el carrito con el precio ACTUAL de cada producto (margen + tasa del día, 2 decimales hacia
-     * arriba por línea) en la moneda activa — EXACTAMENTE lo que se factura y se cobra. El carrito del
-     * cliente "congela" el precio al añadir, así que el checkout debe re-cotizar aquí para que lo mostrado
-     * coincida con lo cobrado (evita "veo X y me cobran Y" cuando el precio cambió tras añadir al carrito).
+     * Cotiza el carrito con el precio ACTUAL de cada producto (margen + tasa del día) en la moneda activa
+     * — EXACTAMENTE lo que se factura y se cobra. El carrito del cliente "congela" el precio al añadir,
+     * así que el checkout debe re-cotizar aquí para que lo mostrado coincida con lo cobrado (evita "veo X
+     * y me cobran Y" cuando el precio cambió tras añadir al carrito).
+     *
+     * <p>El subtotal es la suma de los importes de LÍNEA, cada uno redondeado una sola vez. Sumar
+     * unitarios redondeados es lo que hacía que el carrito anunciara —y la pasarela liquidara— hasta un
+     * 1,45 % de más.
      */
     @PostMapping("/cart-quote")
     @Transactional(readOnly = true)
@@ -416,11 +424,17 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         }
         ProductVariantEntity v = it.variantId() == null ? null
                 : p.getVariants().stream().filter(x -> it.variantId().equals(x.getId())).findFirst().orElse(null);
-        BigDecimal unit = pricingService.priceFor(p, v).displayAmount();
+        PricedAmount priced = pricingService.priceFor(p, v);
+        BigDecimal unit = priced.displayAmount();
         if (unit == null) {
             return null;
         }
-        BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(Math.max(1, it.quantity())));
+        // El importe de la línea lo decide OrderAmounts: multiplica en DÓLARES sobre el precio canónico y
+        // convierte al final, un solo redondeo. Multiplicar el unitario ya redondeado cobraba de más
+        // —0,14 € × 100 = 14,00 € donde 100 unidades de 0,15 $ valen 13,80 €— y esa cifra es la que
+        // acababa en la pasarela. El unitario se sigue enseñando redondeado porque es el precio que el
+        // cliente eligió, pero ya no es la base de la cuenta.
+        BigDecimal lineTotal = orderAmounts.lineSubtotal(priced.retailUsd(), it.quantity(), displayCode);
         return new CartQuoteLineOut(p.getId(), v != null ? v.getId() : null, unit, lineTotal,
                 currencyService.formatDisplay(unit, displayCode),
                 currencyService.formatDisplay(lineTotal, displayCode));

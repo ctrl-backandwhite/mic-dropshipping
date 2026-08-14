@@ -22,6 +22,35 @@ public class DefaultSecurityConfig {
     @Value("${nexadrop.storefront.base-url}")
     private String frontBaseUrl;
 
+    /**
+     * Se reutiliza el mismo interruptor que la cookie de sesión ({@code false} en local sobre HTTP,
+     * {@code true} en dev/pre/pro sobre HTTPS). Así la cookie CSRF y la de sesión no se pueden desalinear:
+     * marcar {@code Secure} a mano en local haría que el navegador descartara la cookie sobre HTTP y el
+     * formulario de login dejaría de validar el token.
+     */
+    @Value("${server.servlet.session.cookie.secure:false}")
+    private boolean secureCookies;
+
+    /**
+     * Repositorio del token CSRF (patrón de doble envío) con los atributos de cookie que faltaban.
+     *
+     * <p>OWASP ZAP levantó «cookie sin atributo SameSite» en {@code /login}. La cookie señalada NO es la de
+     * sesión —{@code JSESSIONID} ya sale con {@code SameSite=Lax} y {@code HttpOnly} por
+     * {@code server.servlet.session.cookie.*}—, sino {@code XSRF-TOKEN}: Spring Security construye esa
+     * cookie sin {@code SameSite} salvo que se le pase un customizer, y {@code login.html} la provoca al
+     * renderizar el campo {@code _csrf}.
+     *
+     * <p>Se fija {@code SameSite=Lax} (el navegador no la manda en peticiones cross-site con efectos, que
+     * es justo lo que quita valor a robarla) y {@code Secure} donde hay HTTPS. Sigue SIN {@code HttpOnly}
+     * a propósito: el patrón de doble envío exige que el JavaScript del cliente pueda leer el token para
+     * reenviarlo en la cabecera {@code X-XSRF-TOKEN}. Es el token CSRF, no la sesión.
+     */
+    CookieCsrfTokenRepository csrfTokenRepository() {
+        CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse(); // NOSONAR java:S3330 — legible por diseño del patrón de doble envío
+        repository.setCookieCustomizer(cookie -> cookie.sameSite("Lax").secure(secureCookies));
+        return repository;
+    }
+
     @Bean
     public GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler(UserUseCase userUseCase,
             UserTokenService userTokenService, DeviceSessionService deviceSessionService,
@@ -36,14 +65,24 @@ public class DefaultSecurityConfig {
             GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler,
             GithubOAuth2UserService githubOAuth2UserService) {
         http.cors(Customizer.withDefaults())
-                // Aquí CSRF está ACTIVO (esta cadena sí tiene formulario y sesión); solo se exceptúan
-                // rutas concretas. La cookie va sin HttpOnly a propósito: el patrón de doble envío exige
-                // que el navegador lea el token por JavaScript para reenviarlo en la cabecera. Es el
-                // token CSRF, no la sesión: la de sesión sí es HttpOnly.
-                // NOSONAR java:S4502 java:S3330 — CSRF habilitado; cookie legible por diseño del patrón.
-                .csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()) // NOSONAR
-                        // CSRF off for: OAuth2 token, OAuth callbacks, actuator, public storefront API,
-                        // inbound webhooks (signed HMAC), Stripe / PayPal payment callbacks.
+                // ÚNICA cadena con sesión y formulario, y por eso la ÚNICA con CSRF ACTIVO. Las otras tres
+                // (authorization server, partners y BFF) son stateless con Bearer y ahí sí se desactiva.
+                // Los atributos de la cookie XSRF-TOKEN (SameSite/Secure) se fijan en csrfTokenRepository().
+                // NOSONAR java:S4502 — CSRF habilitado en esta cadena.
+                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository())
+                        // Exenciones: ninguna de estas rutas se autentica por COOKIE, que es lo que CSRF
+                        // protege. /oauth2/token la resuelve la cadena del authorization server con
+                        // client_secret_basic; /login/oauth2/code/** es el callback GET del proveedor;
+                        // /api/v1/rate-limits y /api/v1/invoices son GET públicos (docs y verificación de
+                        // factura); /api/v1/integrations/** y /api/webhooks/** son pushes entrantes con
+                        // firma propia (HMAC del comercio, SHA-256 de YunExpress, firma de Stripe/PayPal),
+                        // que un navegador no puede fabricar.
+                        //
+                        // /actuator/** depende de una INVARIANTE: management.endpoints.web.exposure.include
+                        // solo publica health, info, metrics y prometheus, todos GET —y CSRF nunca exige
+                        // token en métodos seguros—. Si algún día se expone un endpoint con efectos
+                        // (loggers, shutdown, env POST), hay que sacar /actuator/** de esta lista: en esta
+                        // cadena se autentica por sesión y quedaría expuesto a CSRF.
                         .ignoringRequestMatchers("/oauth2/token", "/login/oauth2/code/**", "/actuator/**", // NOSONAR java:S4502 — rutas sin sesión: OAuth2, callbacks y webhooks con firma propia
                                 "/api/v1/rate-limits/**", "/api/v1/invoices/**", "/api/v1/integrations/**", "/api/webhooks/**"))
                 .headers(h -> h

@@ -56,6 +56,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierE
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantOptionEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
+import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductAttributeRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductImageRepository;
@@ -429,7 +430,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // substring over the current page.
         // needle "" (no nulo) evita el error de tipo de Postgres al bindear null en el LIKE; la query usa
         // (:needle = '' OR ...). searchAdmin también sirve como ruta del filtro `verified` (con o sin texto/categoría).
-        String needle = (query == null || query.isBlank()) ? "" : query.trim().toLowerCase();
+        String needle = (query == null || query.isBlank()) ? ""
+                : Texts.escapeLikeWildcards(query.trim().toLowerCase());
         if (!needle.isEmpty() || verified != null) {
             // El fuzzy se acota al idioma que está viendo el admin (contra los 8 a la vez, "botas" casaba
             // con el "botao" portugués). Las descripciones largas solo se rastrean si el match por
@@ -539,6 +541,14 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     public ProductDetailView getProductBySlug(String slug, String language) {
         ProductEntity p = productJpaRepository.findWithDetailsBySlug(slug)
                 .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND + slug));
+        // Un producto retirado no existe para el escaparate. El listado ya lo esconde (exige ACTIVE) y el
+        // cobro ya lo rechaza con PRODUCT_UNAVAILABLE, pero la ficha por slug —a la que se llega por enlace
+        // directo, por un resultado indexado o desde un correo antiguo— seguía sirviéndose entera, con su
+        // precio: enseñaba un escaparate de algo que no se puede comprar. Para el admin sí tiene que abrirse,
+        // porque desde el panel se revisa y se reactiva justo lo que está pausado o archivado.
+        if (!SecurityUtils.isAdmin() && p.getStatus() != ProductStatus.ACTIVE) {
+            throw new NotFoundException(PRODUCT_NOT_FOUND + slug);
+        }
         forceLoadCollections(p);
         return productMapper.toDetail(p, language, priceTierRepository.findByProductIdOrderByMinQtyAsc(p.getId()));
     }
