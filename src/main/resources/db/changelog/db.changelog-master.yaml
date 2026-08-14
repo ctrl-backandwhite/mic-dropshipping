@@ -257,3 +257,5 @@ databaseChangeLog:
       file: db/changelog/schema-v123-responsible-person-postal.sql
   - include:
       file: db/changelog/schema-v124-retirar-no-enviables-ue.sql
+  - include:
+      file: db/changelog/schema-v125-retirar-navidenos-electricos.sql
