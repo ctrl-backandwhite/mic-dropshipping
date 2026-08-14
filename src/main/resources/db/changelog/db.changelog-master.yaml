@@ -249,3 +249,11 @@ databaseChangeLog:
       file: db/changelog/schema-v119-search-trgm.sql
   - include:
       file: db/changelog/schema-v120-search-strict.sql
+  - include:
+      file: db/changelog/schema-v121-eu-compliance.sql
+  - include:
+      file: db/changelog/schema-v122-safety-warnings-seed.sql
+  - include:
+      file: db/changelog/schema-v123-responsible-person-postal.sql
+  - include:
+      file: db/changelog/schema-v124-retirar-no-enviables-ue.sql
