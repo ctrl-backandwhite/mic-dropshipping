@@ -16,7 +16,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
-import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Implementación servidor del protocolo <a href="https://altcha.org">ALTCHA</a> (proof-of-work),
@@ -89,7 +88,10 @@ public class CaptchaService {
         // El 'expires' viaja DENTRO del salt: entra en el hash y en la firma, así que no se puede alterar
         // sin invalidar el reto. En verify se relee de aquí.
         String salt = HexFormat.of().formatHex(saltBytes) + "?expires=" + expires;
-        long secretNumber = ThreadLocalRandom.current().nextLong(maxNumber + 1);
+        // Con SecureRandom, no con ThreadLocalRandom: el número no es un secreto —el cliente lo encuentra
+        // probando, para eso es la prueba de trabajo— pero un generador predecible permitiría adivinarlo
+        // sin gastar ese trabajo, que es justo lo único que el reto exige. Cuesta lo mismo y cierra la duda.
+        long secretNumber = secureRandom.nextLong(maxNumber + 1);
         String challenge = sha256Hex(salt + secretNumber);
         String signature = hmacHex(challenge);
         return CaptchaChallengeDtoOut.builder().algorithm(ALGORITHM).challenge(challenge)

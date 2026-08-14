@@ -78,6 +78,11 @@
         <postgresql.version>42.7.12</postgresql.version>
         <!-- 1 alta en httpcore5-h2. -->
         <httpcore5.version>5.4.3</httpcore5.version>
+
+        <!-- Análisis de seguridad (perfil `security`, al final del fichero). -->
+        <spotbugs.plugin.version>4.10.3.0</spotbugs.plugin.version>
+        <findsecbugs.version>1.14.0</findsecbugs.version>
+        <dependency.check.version>13.0.0</dependency.check.version>
     </properties>
 
     <dependencies>
@@ -545,4 +550,84 @@
             </plugin>
         </plugins>
     </build>
+
+    <!--
+      Análisis de seguridad. Va en un PERFIL aparte a propósito: SpotBugs tarda minutos y
+      Dependency-Check descarga la base de vulnerabilidades, así que meterlos en el build de cada día
+      solo conseguiría que se acabara saltando. Se lanzan cuando toca:
+
+        mvn -Psecurity spotbugs:check          → código (Find Security Bugs)
+        mvn -Psecurity dependency-check:check  → dependencias (CVE)
+        mvn -Psecurity verify                  → ambos, con el resto del build
+
+      Dependency-Check necesita una clave del NVD para descargar el catálogo a velocidad razonable; sin
+      ella la primera ejecución puede tardar horas o cortarse por límite de peticiones. Se coge de la
+      variable de entorno NVD_API_KEY (gratuita en nvd.nist.gov/developers/request-an-api-key).
+    -->
+    <profiles>
+        <profile>
+            <id>security</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>com.github.spotbugs</groupId>
+                        <artifactId>spotbugs-maven-plugin</artifactId>
+                        <version>${spotbugs.plugin.version}</version>
+                        <configuration>
+                            <!-- Max/Low: el análisis más exhaustivo. Es lento, pero este perfil no corre
+                                 en cada compilación, así que no hay razón para conformarse con menos. -->
+                            <effort>Max</effort>
+                            <threshold>Low</threshold>
+                            <includeFilterFile>spotbugs-security.xml</includeFilterFile>
+                            <xmlOutput>true</xmlOutput>
+                            <htmlOutput>true</htmlOutput>
+                            <failOnError>false</failOnError>
+                            <plugins>
+                                <plugin>
+                                    <groupId>com.h3xstream.findsecbugs</groupId>
+                                    <artifactId>findsecbugs-plugin</artifactId>
+                                    <version>${findsecbugs.version}</version>
+                                </plugin>
+                            </plugins>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <groupId>org.owasp</groupId>
+                        <artifactId>dependency-check-maven</artifactId>
+                        <version>${dependency.check.version}</version>
+                        <configuration>
+                            <!-- Corta el build a partir de ALTA (CVSS 7). Las medias y bajas salen en el
+                                 informe para revisarlas, pero no frenan el trabajo. -->
+                            <failBuildOnCVSS>7</failBuildOnCVSS>
+                            <nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
+                            <suppressionFiles>
+                                <suppressionFile>dependency-check-suppressions.xml</suppressionFile>
+                            </suppressionFiles>
+                            <formats>
+                                <format>HTML</format>
+                                <format>JSON</format>
+                            </formats>
+                            <!-- Las dependencias de prueba no viajan al artefacto desplegado. -->
+                            <skipTestScope>true</skipTestScope>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
