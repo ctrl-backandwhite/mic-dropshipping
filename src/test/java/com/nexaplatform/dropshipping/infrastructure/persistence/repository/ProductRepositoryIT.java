@@ -511,7 +511,7 @@ class ProductRepositoryIT extends PersistenceITBase {
         Pageable page = PageRequest.of(0, 20);
         List<String> encontrados = adminRepo
                 .searchStorefront(ProductStatus.ACTIVE, "botas", null, null, null, null, null, null, null, null, null,
-                        null, "es", false, true, page)
+                        null, null, "es", false, true, page)
                 .getContent().stream().map(ProductEntity::getSlug).toList();
 
         assertThat(encontrados).containsExactly("botas-martin");
@@ -531,7 +531,7 @@ class ProductRepositoryIT extends PersistenceITBase {
 
         Pageable page = PageRequest.of(0, 20);
         assertThat(adminRepo.searchStorefront(ProductStatus.ACTIVE, "botas", null, null, null, null, null, null, null,
-                null, null, null, "es", true, true, page).getContent()).hasSize(1);
+                null, null, null, null, "es", true, true, page).getContent()).hasSize(1);
     }
 
     /** Los identificadores que manda el buscador se filtran igual: publicado y con imagen utilizable. */

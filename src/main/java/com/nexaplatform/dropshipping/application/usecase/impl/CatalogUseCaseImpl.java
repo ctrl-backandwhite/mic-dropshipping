@@ -459,16 +459,20 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
      * ({@code basePrice}) — el margen es multiplicativo, así que el orden coincide con el de venta.
      */
     private static Sort adminSort(String sort) {
-        if (sort == null || sort.isBlank()) {
-            return Sort.unsorted();
-        }
-        return switch (sort) {
+        // NUNCA se devuelve Sort.unsorted(): paginar sin ORDER BY deja el orden a criterio de PostgreSQL,
+        // que con LIMIT/OFFSET no garantiza ser el mismo entre dos consultas. El resultado es que la misma
+        // fila puede salir en dos páginas y otra no salir en ninguna — el listado del admin se saltaría
+        // productos sin avisar. Ordenar por id es barato (clave primaria) y estable.
+        Sort criterio = switch (sort == null ? "" : sort) {
             case "price_asc" -> Sort.by(Sort.Direction.ASC, "basePrice");
             case "price_desc" -> Sort.by(Sort.Direction.DESC, "basePrice");
             case "newest" -> Sort.by(Sort.Direction.DESC, "ingestedAt");
             case "oldest" -> Sort.by(Sort.Direction.ASC, "ingestedAt");
             default -> Sort.unsorted();
         };
+        // Y el desempate va SIEMPRE, también sobre los criterios explícitos: `ingestedAt` y `basePrice`
+        // empatan de sobra en un catálogo cargado por lotes.
+        return criterio.and(Sort.by(Sort.Direction.ASC, "id"));
     }
 
     @Override
@@ -1068,7 +1072,20 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                     "DELETE FROM product_variant WHERE product_id = ? AND (options_json->>? = ? OR options_json->>? = ?)",
                     productId, optName, v.getValueZh(), optName, v.getValue());
         }
+        // Se saca de la colección del PADRE antes de borrarlo. No es redundante con el delete: la
+        // asociación es @OneToMany(cascade = ALL, orphanRemoval = true), así que mientras el valor siga
+        // dentro de `opt.values` Hibernate lo considera vivo. Y la colección se carga sí o sí unas líneas
+        // más abajo, cuando el indexador lee el producto ENTERO dentro de esta misma transacción: al
+        // materializarla, el valor marcado para borrar reaparecía y la cascada lo volvía a persistir.
+        // Resultado: el endpoint respondía 204 y la fila seguía en la base de datos.
+        if (opt != null && opt.getValues() != null) {
+            opt.getValues().remove(v);
+        }
         variantValueRepository.delete(v);
+        // Flush explícito: obliga a que el DELETE llegue a la base ANTES de que el indexador vuelva a leer
+        // el producto. Sin esto, el orden de las operaciones lo decide Hibernate y el indexado podía
+        // adelantarse al borrado.
+        variantValueRepository.flush();
         if (productId != null) {
             productIndexer.indexProduct(productId);
         }

@@ -94,7 +94,7 @@ class CatalogStorefrontSearchTest {
 
         assertThat(pagina.totalElements()).isEqualTo(1);
         verify(productRepository, never()).searchStorefront(any(), any(), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class));
+                any(), any(), any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class));
     }
 
     /** El orden del buscador ES la relevancia: la base de datos devuelve las filas en cualquier orden. */
@@ -159,7 +159,7 @@ class CatalogStorefrontSearchTest {
         ProductEntity botas = producto("botas");
         when(productSearchService.searchRelevantIds("botas", "es")).thenReturn(Optional.empty());
         when(productRepository.searchStorefront(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
-                any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
+                any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
                         .thenReturn(new PageImpl<>(List.of(botas)));
 
         PageResponse<ProductSummaryView> pagina = service.productListFull(0, 20, "es", filtros("botas"), null);
@@ -177,14 +177,14 @@ class CatalogStorefrontSearchTest {
         assertThat(pagina.totalElements()).isZero();
         assertThat(pagina.items()).isEmpty();
         verify(productRepository, never()).searchStorefront(any(), any(), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class));
+                any(), any(), any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class));
     }
 
     /** Sin texto no se molesta al buscador: navegar el catálogo es cosa del SQL. */
     @Test
     void sinTextoNoSeUsaElBuscador() {
         when(productRepository.searchStorefront(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
-                any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
+                any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
                         .thenReturn(new PageImpl<>(List.of(producto("cualquiera"))));
 
         service.productListFull(0, 20, "es", ProductListFilters.none(), null);
