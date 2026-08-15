@@ -361,6 +361,7 @@ class EmailContentIT extends EmailITSupport {
         cuerpo.put("password", PASSWORD);
         cuerpo.put("language", idioma);
         cuerpo.put("acceptedTerms", true);
+        cuerpo.put("acceptedTermsVersion", "2026-07-31");
         client.post().uri(REGISTRO).contentType(MediaType.APPLICATION_JSON)
                 .header("CF-Connecting-IP", ipDeCliente())
                 .bodyValue(cuerpo).exchange().expectStatus().isCreated();

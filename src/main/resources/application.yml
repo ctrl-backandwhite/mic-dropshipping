@@ -221,6 +221,25 @@ nexadrop:
     poll-ms: ${OUTBOX_POLL_MS:500}              # dispatcher polling interval
   storefront:
     base-url: ${STOREFRONT_BASE_URL:http://localhost:3003}  # for email CTA / unsubscribe links
+  trend:
+    # Puntuación de «Tendencia ahora», recalculada desde las ventas REALES de la tienda. Antes no la
+    # escribía nadie —solo el sembrador de demo, apagado— y 5.220 de 5.524 productos estaban a cero: la
+    # sección mostraba siempre los mismos 81, los únicos con dato.
+    recompute-enabled: ${TREND_RECOMPUTE_ENABLED:true}
+    recompute-cron: ${TREND_RECOMPUTE_CRON:0 20 3 * * *}
+    # El índice guarda su propia copia de la puntuación y desempata con ella: sin reindexar,
+    # base e índice divergen desde la primera pasada.
+    reindex-after-recompute: ${TREND_REINDEX_AFTER:true}
+  legal:
+    # Versión vigente de los términos y la política de privacidad, en formato fecha. Se guarda junto a la
+    # aceptación de cada usuario para poder acreditar QUÉ texto aceptó, no solo que aceptó algo.
+    # Al publicar una redacción nueva hay que subir este valor Y el LEGAL_UPDATED del escaparate a la vez:
+    # si se separan, unos usuarios quedan registrados contra una versión que nunca vieron.
+    version: ${LEGAL_VERSION:2026-08-15}
+    # Al desplegar una versión nueva se avisa por correo a TODAS las cuentas activas (no es publicidad: es
+    # un cambio en las condiciones, así que alcanza también a quien rechazó las campañas). Se envía UNA vez
+    # por versión — lo garantiza la tabla legal_version_notice, no esta bandera.
+    notify-on-change: ${LEGAL_NOTIFY_ON_CHANGE:true}
   captcha:
     # CAPTCHA proof-of-work (ALTCHA) en formularios públicos: registro, contacto, reset y newsletter.
     enabled: ${CAPTCHA_ENABLED:true}
@@ -233,13 +252,22 @@ nexadrop:
     # Datos fiscales del EMISOR para que la factura sea un documento legal. Rellénalos por
     # entorno (Railway). Si legal-name queda vacío, el bloque del emisor NO se pinta.
     issuer:
-      legal-name: ${INVOICE_ISSUER_LEGAL_NAME:}     # Razón social
-      tax-id: ${INVOICE_ISSUER_TAX_ID:}             # NIF/CIF/VAT
-      address: ${INVOICE_ISSUER_ADDRESS:}           # Domicilio fiscal (calle, nº)
-      city-line: ${INVOICE_ISSUER_CITY_LINE:}       # CP + ciudad + provincia
-      country: ${INVOICE_ISSUER_COUNTRY:}           # País
-      email: ${INVOICE_ISSUER_EMAIL:}               # Email de facturación
-      registry: ${INVOICE_ISSUER_REGISTRY:}         # Reg. Mercantil / datos registrales (opcional)
+      # Titular: PERSONA FÍSICA (empresario individual), no sociedad. Los mismos datos que figuran en el
+      # aviso legal y en los términos — quien contrata y responde es la persona, y «NX036» es el nombre
+      # comercial con el que opera. Al constituir la sociedad se cambia AQUÍ y en legalPages.ts.
+      #
+      # Estaban vacíos, y con legal-name vacío la plantilla NO pinta el bloque del emisor: se emitían
+      # facturas sin identificar a quien las emite, que es el requisito más básico del reglamento de
+      # facturación (RD 1619/2012, art. 6).
+      #
+      # ⚠ tax-id lleva un marcador. Una factura sin NIF del emisor no es válida.
+      legal-name: ${INVOICE_ISSUER_LEGAL_NAME:Jesús Enrique Finol Finol}
+      tax-id: ${INVOICE_ISSUER_TAX_ID:PENDIENTE-NIF}
+      address: ${INVOICE_ISSUER_ADDRESS:Calle Castelví 7, 1D}
+      city-line: ${INVOICE_ISSUER_CITY_LINE:50004 Zaragoza}
+      country: ${INVOICE_ISSUER_COUNTRY:España}
+      email: ${INVOICE_ISSUER_EMAIL:support@nx036.com}
+      registry: ${INVOICE_ISSUER_REGISTRY:}         # Vacío: un empresario individual no tiene datos registrales
     legal-note: ${INVOICE_LEGAL_NOTE:}              # Nota legal al pie (opcional)
   email:
     from: ${EMAIL_FROM:noreply@nexadrop.local}          # Remitente por defecto (transaccional/auth): no-reply@

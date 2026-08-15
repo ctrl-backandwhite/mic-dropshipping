@@ -211,6 +211,7 @@ public class InvoiceService {
         m.put("labelShipping", InvoiceLabel.SHIPPING.of(lang));
         m.put("labelDiscount", InvoiceLabel.DISCOUNT.of(lang));
         m.put("labelTax", InvoiceLabel.VAT.of(lang) + " (" + vatRate + "%)");
+        m.put("labelCustomsDuty", InvoiceLabel.CUSTOMS_DUTY.of(lang));
         m.put("labelTotal", InvoiceLabel.TOTAL.of(lang));
         m.put("subtotal", fmt(subtotalDisp, cur));
         m.put("shipping", fmt(shippingDisp, cur));
@@ -218,6 +219,9 @@ public class InvoiceService {
         m.put("hasDiscount", discountDisp.signum() > 0);
         m.put("discount", fmt(discountDisp, cur));
         m.put("tax", fmt(taxDisp, cur));
+        // Solo se pinta si el pedido llevaba arancel. Los anteriores a la v132 lo tienen a cero porque no
+        // se guardaba: su factura sigue mostrando el envío completo, que es lo que se les cobró.
+        m.put("customsDuty", amounts.customsDuty().signum() > 0 ? fmt(amounts.customsDuty(), cur) : null);
         m.put("total", fmt(totalDisp, cur));
 
         putIssuerBlock(m, locale, lang);
@@ -240,7 +244,7 @@ public class InvoiceService {
 
     /** Importes de la factura ya en la moneda en que se emite, más el tipo de IVA efectivo. */
     public record InvoiceAmounts(BigDecimal subtotal, BigDecimal shipping, BigDecimal tax, BigDecimal discount,
-            BigDecimal total, int vatRate) {
+            BigDecimal total, int vatRate, BigDecimal customsDuty) {
     }
 
     /**
@@ -281,6 +285,9 @@ public class InvoiceService {
             }
         }
         BigDecimal shipping = conv(o.getShippingCents(), cur);
+        // El arancel va DENTRO de `shipping`: se convierte aquí para poder enseñarlo desglosado, no para
+        // sumarlo otra vez.
+        BigDecimal customsDuty = conv(o.getCustomsDutyCents(), cur);
         BigDecimal tax = conv(o.getTaxCents(), cur);
         BigDecimal discount = conv(o.getDiscountCents(), cur);
         // Total = subtotal − DESCUENTO de referido + envío + IVA. total_cents del pedido ya resta el
@@ -293,6 +300,9 @@ public class InvoiceService {
             subtotal = subtotal.multiply(factor).setScale(2, RoundingMode.HALF_UP);
             shipping = shipping.multiply(factor).setScale(2, RoundingMode.HALF_UP);
             discount = discount.multiply(factor).setScale(2, RoundingMode.HALF_UP);
+            // El arancel lleva el MISMO factor que el envío del que forma parte: sin esto, una factura
+            // ajustada por la liquidación enseñaría un desglose que no suma.
+            customsDuty = customsDuty.multiply(factor).setScale(2, RoundingMode.HALF_UP);
             total = settled.setScale(2, RoundingMode.HALF_UP);
             tax = total.subtract(subtotal).add(discount).subtract(shipping);
         }
@@ -302,7 +312,7 @@ public class InvoiceService {
         int vatRate = taxableBase.signum() > 0
                 ? tax.multiply(BigDecimal.valueOf(100)).divide(taxableBase, 0, RoundingMode.HALF_UP).intValue()
                 : 0;
-        return new InvoiceAmounts(subtotal, shipping, tax, discount, total, vatRate);
+        return new InvoiceAmounts(subtotal, shipping, tax, discount, total, vatRate, customsDuty);
     }
 
     /** Renderiza la factura como HTML (cuerpo del email) en la moneda del pedido. */
@@ -494,6 +504,7 @@ public class InvoiceService {
         m.put("labelSubtotal", InvoiceLabel.SUBTOTAL.of(lang));
         m.put("labelShipping", InvoiceLabel.SHIPPING.of(lang));
         m.put("labelTax", InvoiceLabel.VAT.of(lang) + " (" + vatRate + "%)");
+        m.put("labelCustomsDuty", InvoiceLabel.CUSTOMS_DUTY.of(lang));
         m.put("labelTotal", InvoiceLabel.TOTAL.of(lang));
         m.put("subtotal", fmt(subtotal, cur));
         m.put("shipping", fmt(BigDecimal.ZERO, cur));

@@ -74,6 +74,14 @@ public class CustomerOrderEntity extends BaseEntity {
     @Column(name = "tax_cents", nullable = false)
     private int taxCents;
 
+    /**
+     * Derecho de aduana de la Unión cobrado en el pedido. Va INCLUIDO en {@link #shippingCents}: no se
+     * suma dos veces al total. Se guarda aparte para poder desglosarlo en la factura, donde un tributo que
+     * el vendedor recauda y entrega a la aduana no puede ir escondido dentro del precio del transporte.
+     */
+    @Column(name = "customs_duty_cents", nullable = false)
+    private int customsDutyCents;
+
     @Column(name = "total_cents", nullable = false)
     private int totalCents;
 

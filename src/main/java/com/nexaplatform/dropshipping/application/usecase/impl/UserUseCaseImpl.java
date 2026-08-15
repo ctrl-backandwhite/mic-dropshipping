@@ -94,6 +94,18 @@ public class UserUseCaseImpl implements UserUseCase {
     @Value("${nexadrop.storefront.base-url:http://localhost:3003}")
     private String storefrontBaseUrl;
 
+    /**
+     * Versión vigente de los textos legales, en formato fecha. Es lo que se guarda como constancia de QUÉ
+     * aceptó cada usuario, y no solo de que aceptó algo: sin versión, el día que el texto cambie no hay
+     * forma de saber a qué redacción dio su consentimiento.
+     *
+     * <p>Vive aquí porque el alta social no recibe nada del cliente —quien redirige es el proveedor de
+     * identidad, que no conoce nuestros textos—, así que el servidor tiene que saber cuál está publicada.
+     * Al actualizar los textos hay que subir también este valor y el del escaparate a la vez.
+     */
+    @Value("${nexadrop.legal.version:2026-07-31}")
+    private String legalVersion;
+
     /* ============ Registration / activation ============ */
 
     @Override
@@ -621,6 +633,15 @@ public class UserUseCaseImpl implements UserUseCase {
                 .displayName(display.isBlank() ? normalized.split("@")[0] : display)
                 .language("es")
                 .country(normalizeCountry(country))
+                // El alta social dejaba la cuenta SIN constancia de haber aceptado nada: la casilla se marca
+                // en la pantalla de registro antes de ir al proveedor, pero eso solo vivía en el navegador y
+                // aquí no llegaba nada. El resultado era un usuario en la base sin fecha ni versión, es decir
+                // sin nada que enseñar el día que haya que acreditar el consentimiento (RGPD art. 7.1).
+                // Se sella con el reloj del SERVIDOR y con la versión vigente que conoce el servidor, no la
+                // que diga el cliente: en este flujo el cliente es el proveedor de identidad, que no sabe
+                // nada de nuestros textos legales.
+                .termsAcceptedAt(Instant.now())
+                .termsAcceptedVersion(legalVersion)
                 .build();
         User saved = userRepository.save(user);
         auditLogger.log("auth.google.register", normalized, Map.of(USERID, saved.getId()));

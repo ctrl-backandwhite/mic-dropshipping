@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
+import com.nexaplatform.dropshipping.application.service.CountryCurrencyService;
 import com.nexaplatform.dropshipping.infrastructure.email.EmailQueueService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OutboundEmailRepository;
@@ -71,6 +72,8 @@ class Cov04NewProductsCampaignServiceTest {
     EmailQueueService emailQueue;
     @Mock
     MarketingUnsubscribeService unsubscribeService;
+    @Mock
+    CountryCurrencyService countryCurrencyService;
 
     private NewProductsCampaignService service;
     private UUID categoriaId;
@@ -78,7 +81,7 @@ class Cov04NewProductsCampaignServiceTest {
     @BeforeEach
     void setUp() {
         service = new NewProductsCampaignService(productRepository, userRepository, outboundEmailRepository,
-                storefrontRead, emailQueue, unsubscribeService, TIENDA, BACKEND);
+                storefrontRead, emailQueue, countryCurrencyService, unsubscribeService, TIENDA, BACKEND);
         categoriaId = UUID.randomUUID();
         when(unsubscribeService.tokenFor(any(UUID.class))).thenReturn("tok en+/=");
     }

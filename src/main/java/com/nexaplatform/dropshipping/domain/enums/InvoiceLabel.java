@@ -39,6 +39,13 @@ public enum InvoiceLabel {
             "Verzending")),
     DISCOUNT(new Translations("Descuento", "Discount", "Desconto", "折扣", "Remise", "Rabatt", "Sconto", "Korting")),
     VAT(new Translations("IVA", "VAT", "IVA", "增值税", "TVA", "MwSt.", "IVA", "btw")),
+    /**
+     * Derecho de aduana de la Unión. Se desglosa en la factura porque es un tributo que se recauda y se
+     * entrega a la aduana: sumarlo al envío hacía que la factura mostrara un transporte inflado y que no
+     * cuadrara con el desglose que el comprador vio al pagar.
+     */
+    CUSTOMS_DUTY(new Translations("Arancel UE", "EU customs duty", "Taxa aduaneira UE", "欧盟关税",
+            "Droit de douane UE", "EU-Zoll", "Dazio doganale UE", "EU-douanerechten")),
     TOTAL(new Translations(Word.TOTAL, Word.TOTAL, Word.TOTAL, "总计", Word.TOTAL, "Gesamt", "Totale", "Totaal")),
     // El emisor es una sociedad IRLANDESA: lo que se imprime es su número de IVA intracomunitario, no un
     // CIF ni un NIF, que son identificadores españoles y no existen en Irlanda.

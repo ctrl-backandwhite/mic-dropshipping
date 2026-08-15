@@ -1,8 +1,10 @@
 package com.nexaplatform.dropshipping.api.dto.in;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -59,14 +61,31 @@ public class RegisterDtoIn {
     private String language;
 
     /**
-     * Aceptación de términos y privacidad. Boolean con envoltorio y no primitivo a propósito: Spring
-     * Boot 4 activa {@code FAIL_ON_NULL_FOR_PRIMITIVES}, así que un primitivo ausente en el JSON
-     * rompería la deserialización entera —ya pasó con el login y dejó a todo el mundo fuera—.
+     * Aceptación de términos y privacidad. <b>Obligatoria</b>: sin ella no se crea la cuenta.
+     *
+     * <p>Antes era opcional y el alta seguía adelante sin dejar constancia. La casilla del formulario lleva
+     * {@code required}, pero eso solo lo hace cumplir el navegador: cualquiera que llamase a la API
+     * directamente —o con el JavaScript desactivado— se registraba y el usuario quedaba en la base sin
+     * ninguna prueba de haber aceptado nada. El RGPD (art. 7.1) exige poder DEMOSTRAR el consentimiento, y
+     * la demostración no puede depender de un atributo HTML.
+     *
+     * <p>Boolean con envoltorio y no primitivo a propósito: Spring Boot 4 activa
+     * {@code FAIL_ON_NULL_FOR_PRIMITIVES}, así que un primitivo ausente en el JSON rompería la
+     * deserialización entera —ya pasó con el login y dejó a todo el mundo fuera—. Con envoltorio, el campo
+     * ausente llega como {@code null} y lo rechaza {@link AssertTrue} con un error legible.
      */
-    @Schema(description = "Explicit acceptance of terms and privacy policy")
+    @NotNull(message = "acceptedTerms is required")
+    @AssertTrue(message = "You must accept the terms and the privacy policy to create an account")
+    @Schema(description = "Explicit acceptance of terms and privacy policy (required)")
     private Boolean acceptedTerms;
 
-    /** Qué versión del texto aceptó, para poder acreditar QUÉ se aceptó y no sólo que se aceptó algo. */
+    /**
+     * Qué versión del texto aceptó, para poder acreditar QUÉ se aceptó y no sólo que se aceptó algo.
+     *
+     * <p>Obligatoria por el mismo motivo: «aceptó los términos» sin decir cuáles no prueba nada el día que
+     * el texto cambie. La versión es la fecha de la última actualización de los textos legales.
+     */
+    @NotBlank(message = "acceptedTermsVersion is required")
     @Size(max = 20)
     @Schema(description = "Version (date) of the legal texts accepted", example = "2026-07-31")
     private String acceptedTermsVersion;

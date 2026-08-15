@@ -267,3 +267,9 @@ databaseChangeLog:
       file: db/changelog/schema-v128-imagen-variante-que-no-distingue.sql
   - include:
       file: db/changelog/schema-v129-retirar-alusiones-a-marca.sql
+  - include:
+      file: db/changelog/schema-v130-cobertura-real-yunexpress.sql
+  - include:
+      file: db/changelog/schema-v131-aviso-cambio-legal.sql
+  - include:
+      file: db/changelog/schema-v132-arancel-en-el-pedido.sql
