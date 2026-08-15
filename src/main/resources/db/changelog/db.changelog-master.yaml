@@ -273,3 +273,7 @@ databaseChangeLog:
       file: db/changelog/schema-v131-aviso-cambio-legal.sql
   - include:
       file: db/changelog/schema-v132-arancel-en-el-pedido.sql
+  - include:
+      file: db/changelog/schema-v133-documentos-legales.sql
+  - include:
+      file: db/changelog/schema-v134-borrador-legal.sql
