@@ -87,7 +87,7 @@
         "nx_plain": { "tokenizer": "standard", "filter": ["lowercase", "asciifolding"] },
         "nx_all": {
           "tokenizer": "standard",
-          "filter": ["lowercase", "asciifolding",
+          "filter": ["lowercase", "asciifolding", "nx_foreign",
             "nx_stop_es", "nx_stop_en", "nx_stop_pt", "nx_stop_fr", "nx_stop_it", "nx_stop_de", "nx_stop_nl"]
         }
       }

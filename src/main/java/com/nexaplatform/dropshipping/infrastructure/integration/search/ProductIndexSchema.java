@@ -39,6 +39,13 @@ public class ProductIndexSchema {
     /**
      * Versión del esquema. Subirla ⇒ índice nuevo + reindexado (ver arriba).
      *
+     * <p>v6: {@code titleAll} no unificaba los anglicismos. Ese campo reúne los siete idiomas y por eso no
+     * puede llevar stemmer —no sabe en qué lengua está cada texto—, pero {@code nx_foreign} sí le vale: son
+     * reglas sobre palabras inglesas (shorts, jeans, leggings, sneakers) que se escriben igual en todos los
+     * idiomas del catálogo. Sin él, «short» y «shorts» eran términos DISTINTOS en {@code titleAll} aunque el
+     * campo del idioma sí los unificara, y como la consulta pregunta a los dos, el plural encontraba una
+     * fracción de lo que encontraba el singular: en francés, 341 resultados frente a 1.022.
+     *
      * <p>v5: el sinónimo «deportivas» sacaba resultados que no eran calzado. En español «deportivas» sí
      * significa zapatillas, pero el stemmer la reduce a {@code deport} — exactamente la misma raíz que el
      * ADJETIVO «deportivo/a», que llevan miles de prendas. Buscar «zapatilla» expandía a {@code deport} y
@@ -66,7 +73,7 @@ public class ProductIndexSchema {
      * productos por ese solo campo, frente a los 77 del campo del idioma. El resultado correcto seguía
      * saliendo, pero enterrado.
      */
-    public static final String VERSION = "v5";
+    public static final String VERSION = "v6";
 
     private static final String DEFINITION = "opensearch/products-index.json";
 

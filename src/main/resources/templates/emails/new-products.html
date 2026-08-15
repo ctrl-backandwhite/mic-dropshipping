@@ -25,17 +25,19 @@
 
       <th:block th:each="cat : ${categories}">
         <tr><td style="padding:20px 24px 4px;">
-          <h2 style="margin:0;font-size:16px;font-weight:700;color:#14212e;" th:text="${cat.name}">Categoría</h2>
+          <a th:href="${cat.url}" style="text-decoration:none;">
+            <h2 style="margin:0;font-size:16px;font-weight:700;color:#14212e;" th:text="${cat.name}">Categoría</h2>
+          </a>
         </td></tr>
         <tr><td style="padding:0 18px;">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>
             <td th:each="p : ${cat.products}" width="180" valign="top" style="width:180px;padding:6px;">
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border:1px solid #e3e8ef;border-radius:12px;overflow:hidden;">
                 <tr><td style="background-color:#f4f6f9;padding:0;line-height:0;font-size:0;">
-                  <img th:src="${p.image}" width="180" height="168" alt="" border="0"
-                       style="display:block;width:100%;height:168px;object-fit:cover;border:0;outline:none;text-decoration:none;" /></td></tr>
+                  <a th:href="${p.url}" style="text-decoration:none;"><img th:src="${p.image}" width="180" height="168" alt="" border="0"
+                       style="display:block;width:100%;height:168px;object-fit:cover;border:0;outline:none;text-decoration:none;" /></a></td></tr>
                 <tr><td style="padding:8px 10px;">
-                  <div style="font-size:12px;line-height:1.35;color:#14212e;height:34px;overflow:hidden;" th:text="${p.title}">Producto</div>
+                  <a th:href="${p.url}" style="text-decoration:none;color:#14212e;"><div style="font-size:12px;line-height:1.35;color:#14212e;height:34px;overflow:hidden;" th:text="${p.title}">Producto</div></a>
                   <div style="margin-top:6px;font-size:15px;font-weight:700;color:#0c4a97;" th:text="${p.price}">$0.00</div>
                 </td></tr>
               </table>

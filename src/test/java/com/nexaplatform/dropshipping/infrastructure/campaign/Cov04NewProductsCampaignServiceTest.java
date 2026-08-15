@@ -210,6 +210,27 @@ class Cov04NewProductsCampaignServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void cadaCategoriaYCadaProductoLlevanSuEnlaceAlEscaparate() {
+        // El correo agrupaba las novedades por categoría pero no dejaba entrar en ninguna: el único enlace
+        // era el botón final, que lleva al catálogo entero y obliga a buscar otra vez lo que ya se enseñaba.
+        catalogoConNovedades();
+        when(userRepository.findByActiveTrueAndMarketingOptOutFalse())
+                .thenReturn(List.of(usuario("es@test", "ES", "es")));
+
+        service.sendForCountries(Set.of("ES"));
+
+        ArgumentCaptor<Map<String, Object>> captor = varsCaptor();
+        verify(emailQueue).enqueue(eq("es@test"), anyString(), eq(TEMPLATE), captor.capture());
+        List<Map<String, Object>> categorias = (List<Map<String, Object>>) captor.getValue().get("categories");
+        assertThat(categorias).hasSize(1);
+        assertThat(categorias.get(0)).containsEntry("url", TIENDA + "/catalog?categoryId=" + categoriaId);
+        List<Map<String, Object>> productos = (List<Map<String, Object>>) categorias.get(0).get("products");
+        assertThat(productos).hasSize(1);
+        assertThat(productos.get(0)).containsEntry("url", TIENDA + "/catalog/slug");
+    }
+
+    @Test
     void elCorreoVaEnElIdiomaDelUsuarioYSinIdiomaCaeAEspanol() {
         catalogoConNovedades();
         when(userRepository.findByActiveTrueAndMarketingOptOutFalse())
