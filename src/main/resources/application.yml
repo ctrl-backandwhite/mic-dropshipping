@@ -252,22 +252,22 @@ nexadrop:
     # Datos fiscales del EMISOR para que la factura sea un documento legal. Rellénalos por
     # entorno (Railway). Si legal-name queda vacío, el bloque del emisor NO se pinta.
     issuer:
-      # Titular: PERSONA FÍSICA (empresario individual), no sociedad. Los mismos datos que figuran en el
-      # aviso legal y en los términos — quien contrata y responde es la persona, y «NX036» es el nombre
-      # comercial con el que opera. Al constituir la sociedad se cambia AQUÍ y en legalPages.ts.
+      # Titular: NX036 LLC, sociedad de Wyoming (EE. UU.) de un solo miembro. Los mismos datos que
+      # figuran en el aviso legal y en los términos — «NX036» es el nombre comercial; quien contrata y
+      # responde es la sociedad. Si cambian, se tocan AQUÍ y en legalPages.ts, y nada más.
       #
       # Estaban vacíos, y con legal-name vacío la plantilla NO pinta el bloque del emisor: se emitían
       # facturas sin identificar a quien las emite, que es el requisito más básico del reglamento de
       # facturación (RD 1619/2012, art. 6).
       #
       # ⚠ tax-id lleva un marcador. Una factura sin NIF del emisor no es válida.
-      legal-name: ${INVOICE_ISSUER_LEGAL_NAME:Jesús Enrique Finol Finol}
-      tax-id: ${INVOICE_ISSUER_TAX_ID:PENDIENTE-NIF}
-      address: ${INVOICE_ISSUER_ADDRESS:Calle Castelví 7, 1D}
-      city-line: ${INVOICE_ISSUER_CITY_LINE:50004 Zaragoza}
-      country: ${INVOICE_ISSUER_COUNTRY:España}
+      legal-name: ${INVOICE_ISSUER_LEGAL_NAME:NX036 LLC}
+      tax-id: ${INVOICE_ISSUER_TAX_ID:PENDIENTE-EIN}
+      address: ${INVOICE_ISSUER_ADDRESS:30 N Gould St, Ste R}
+      city-line: ${INVOICE_ISSUER_CITY_LINE:Sheridan, WY 82801}
+      country: ${INVOICE_ISSUER_COUNTRY:Estados Unidos}
       email: ${INVOICE_ISSUER_EMAIL:support@nx036.com}
-      registry: ${INVOICE_ISSUER_REGISTRY:}         # Vacío: un empresario individual no tiene datos registrales
+      registry: ${INVOICE_ISSUER_REGISTRY:}         # Vacío hasta tener el número de registro de Wyoming
     legal-note: ${INVOICE_LEGAL_NOTE:}              # Nota legal al pie (opcional)
   email:
     from: ${EMAIL_FROM:noreply@nexadrop.local}          # Remitente por defecto (transaccional/auth): no-reply@
