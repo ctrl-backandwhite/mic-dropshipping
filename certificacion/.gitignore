@@ -1,0 +1,9 @@
+# Credenciales de los actores de prueba: tokens JWT y contraseñas reales del entorno local.
+# Se regeneran con `python3 setup_actores.py`; subirlos sería publicar credenciales válidas.
+actores.json
+recursos.json
+
+# Salidas de cada ejecución, no fuente.
+resultados/
+zap/
+*.html
