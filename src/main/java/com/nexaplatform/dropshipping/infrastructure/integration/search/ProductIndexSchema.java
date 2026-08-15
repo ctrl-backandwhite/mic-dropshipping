@@ -39,6 +39,21 @@ public class ProductIndexSchema {
     /**
      * Versión del esquema. Subirla ⇒ índice nuevo + reindexado (ver arriba).
      *
+     * <p>v6: {@code titleAll} no unificaba los anglicismos. Ese campo reúne los siete idiomas y por eso no
+     * puede llevar stemmer —no sabe en qué lengua está cada texto—, pero {@code nx_foreign} sí le vale: son
+     * reglas sobre palabras inglesas (shorts, jeans, leggings, sneakers) que se escriben igual en todos los
+     * idiomas del catálogo. Sin él, «short» y «shorts» eran términos DISTINTOS en {@code titleAll} aunque el
+     * campo del idioma sí los unificara, y como la consulta pregunta a los dos, el plural encontraba una
+     * fracción de lo que encontraba el singular: en francés, 341 resultados frente a 1.022.
+     *
+     * <p>v5: el sinónimo «deportivas» sacaba resultados que no eran calzado. En español «deportivas» sí
+     * significa zapatillas, pero el stemmer la reduce a {@code deport} — exactamente la misma raíz que el
+     * ADJETIVO «deportivo/a», que llevan miles de prendas. Buscar «zapatilla» expandía a {@code deport} y
+     * devolvía conjuntos deportivos, sets de niño y pantalones de yoga. Se retira del grupo; quedan
+     * zapatillas, sneakers, tenis y «zapatos deportivos» (dos palabras, que solo casa como frase). Los
+     * demás sinónimos se comprobaron uno a uno y sí funcionan: «pollera» trae faldas, «casaca» chaquetas
+     * y «cartera» bolsos.
+     *
      * <p>v4: singular y plural dejaban de encontrar lo mismo. Dos causas, ambas medidas sobre el catálogo:
      * <ul>
      *   <li><b>{@code nx_foreign} es un {@code stemmer_override}</b>, y un override marca el token como YA
@@ -58,7 +73,7 @@ public class ProductIndexSchema {
      * productos por ese solo campo, frente a los 77 del campo del idioma. El resultado correcto seguía
      * saliendo, pero enterrado.
      */
-    public static final String VERSION = "v4";
+    public static final String VERSION = "v6";
 
     private static final String DEFINITION = "opensearch/products-index.json";
 

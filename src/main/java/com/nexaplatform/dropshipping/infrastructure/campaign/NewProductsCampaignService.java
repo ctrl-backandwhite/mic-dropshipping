@@ -202,11 +202,16 @@ public class NewProductsCampaignService {
                 item.put(TITLE, p.title());
                 item.put("price", p.displayFormatted());
                 item.put("image", p.mainImage());
+                item.put("url", storefrontBaseUrl + "/catalog/" + p.slug());
                 products.add(item);
             }
             CategoryView category = storefrontRead.categoryDetail(categoryId.toString(), lang);
             Map<String, Object> group = new HashMap<>();
             group.put("name", category.name());
+            // Enlace a la categoría en el escaparate. Sin esto el correo enseñaba las novedades agrupadas por
+            // categoría pero no dejaba entrar en ninguna: el único enlace era el botón final, que lleva al
+            // catálogo entero ordenado por novedad y obliga a buscar otra vez lo que el correo ya mostraba.
+            group.put("url", storefrontBaseUrl + "/catalog?categoryId=" + categoryId);
             group.put("products", products);
             out.add(group);
         }
