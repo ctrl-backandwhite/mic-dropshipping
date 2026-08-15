@@ -221,6 +221,12 @@ nexadrop:
     poll-ms: ${OUTBOX_POLL_MS:500}              # dispatcher polling interval
   storefront:
     base-url: ${STOREFRONT_BASE_URL:http://localhost:3003}  # for email CTA / unsubscribe links
+  trend:
+    # Puntuación de «Tendencia ahora», recalculada desde las ventas REALES de la tienda. Antes no la
+    # escribía nadie —solo el sembrador de demo, apagado— y 5.220 de 5.524 productos estaban a cero: la
+    # sección mostraba siempre los mismos 81, los únicos con dato.
+    recompute-enabled: ${TREND_RECOMPUTE_ENABLED:true}
+    recompute-cron: ${TREND_RECOMPUTE_CRON:0 20 3 * * *}
   legal:
     # Versión vigente de los términos y la política de privacidad, en formato fecha. Se guarda junto a la
     # aceptación de cada usuario para poder acreditar QUÉ texto aceptó, no solo que aceptó algo.

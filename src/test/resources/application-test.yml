@@ -11,6 +11,10 @@ spring:
         jdbc:
           time_zone: UTC
     open-in-view: false
+  trend:
+    # En tests el recálculo se dispara a mano desde su propio test, no por cron.
+    recompute-enabled: true
+    recompute-cron: "-"
   legal:
     # Apagado en tests: el aviso recorre TODAS las cuentas activas y encolaría correos en cada caso que
     # levante el contexto. Quien lo prueba es Cov05LegalUpdateNoticeServiceTest, encendiéndolo a mano.
