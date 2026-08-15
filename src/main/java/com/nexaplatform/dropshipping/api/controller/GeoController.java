@@ -1,7 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
-import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
+import com.nexaplatform.dropshipping.application.service.CountryCurrencyService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CurrencyRateEntity;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,10 +28,10 @@ import java.util.Locale;
 @Tag(name = "Geo")
 public class GeoController {
 
-    private final CurrencyRateService currencyRateService;
+    private final CountryCurrencyService countryCurrencyService;
 
-    public GeoController(CurrencyRateService currencyRateService) {
-        this.currencyRateService = currencyRateService;
+    public GeoController(CountryCurrencyService countryCurrencyService) {
+        this.countryCurrencyService = countryCurrencyService;
     }
 
     /** Respuesta de geolocalización. {@code country} puede ser {@code null} si el CDN no lo aporta. */
@@ -53,21 +53,11 @@ public class GeoController {
     }
 
     /**
-     * Divisa oficial del país (via {@link Currency#getInstance(Locale)}) si la plataforma la tiene activa;
-     * en cualquier otro caso, USD. Nunca lanza: un país desconocido o sin divisa asociada cae en USD.
+     * Divisa del país. Delega en {@link CountryCurrencyService} porque los correos necesitan lo mismo y se
+     * generan sin petición HTTP: tener la regla dentro de un controlador la dejaba fuera de su alcance, y
+     * la campaña de novedades salía con los precios en dólares para todo el mundo.
      */
     private String resolveCurrency(String country) {
-        if (country == null || country.isBlank()) {
-            return "USD";
-        }
-        try {
-            Currency c = Currency.getInstance(Locale.of("", country.trim().toUpperCase()));
-            String code = c.getCurrencyCode();
-            boolean supported = currencyRateService.find(code)
-                    .filter(CurrencyRateEntity::isActive).isPresent();
-            return supported ? code : "USD";
-        } catch (IllegalArgumentException ex) {
-            return "USD";
-        }
+        return countryCurrencyService.forCountry(country);
     }
 }

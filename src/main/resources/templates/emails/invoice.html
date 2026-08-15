@@ -141,6 +141,13 @@
             <td align="left"  style="padding:5px 0;color:#5c6e7c;" th:text="${labelShipping}">Envío</td>
             <td align="right" style="padding:5px 0;color:#14212e;font-variant-numeric:tabular-nums;white-space:nowrap;" th:text="${shipping}">$0.00</td>
           </tr>
+          <!-- El arancel, en su propia línea y solo si lo hay. Va INCLUIDO en el importe de envío de
+               arriba, así que no se suma otra vez al total: se muestra para que la factura cuadre con el
+               desglose que el comprador vio al pagar. -->
+          <tr th:if="${customsDuty} != null">
+            <td align="left"  style="padding:5px 0;color:#5c6e7c;" th:text="${labelCustomsDuty}">Arancel UE</td>
+            <td align="right" style="padding:5px 0;color:#14212e;font-variant-numeric:tabular-nums;white-space:nowrap;" th:text="${customsDuty}">$0.00</td>
+          </tr>
           <tr>
             <td align="left"  style="padding:5px 0;color:#5c6e7c;" th:text="${labelTax}">IVA</td>
             <td align="right" style="padding:5px 0;color:#14212e;font-variant-numeric:tabular-nums;white-space:nowrap;" th:text="${tax}">$0.00</td>

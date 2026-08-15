@@ -38,6 +38,12 @@ public class Order {
     private int subtotalCents;
     private int shippingCents;
     private int taxCents;
+    /**
+     * Derecho de aduana de la Unión cobrado en el pedido, INCLUIDO ya en {@code shippingCents}. Viaja
+     * aparte para que la factura pueda desglosarlo: un tributo que se recauda y se entrega a la aduana no
+     * puede figurar escondido dentro del precio del transporte.
+     */
+    private int customsDutyCents;
     private int totalCents;
     // Descuento de referido aplicado al comprador (céntimos USD). totalCents ya lo resta.
     private int discountCents;

@@ -271,3 +271,5 @@ databaseChangeLog:
       file: db/changelog/schema-v130-cobertura-real-yunexpress.sql
   - include:
       file: db/changelog/schema-v131-aviso-cambio-legal.sql
+  - include:
+      file: db/changelog/schema-v132-arancel-en-el-pedido.sql

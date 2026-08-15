@@ -5,7 +5,9 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
 import com.nexaplatform.dropshipping.domain.enums.NewProductsEmailLabel;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
+import com.nexaplatform.dropshipping.application.service.CountryCurrencyService;
 import com.nexaplatform.dropshipping.infrastructure.email.EmailQueueService;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OutboundEmailRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
@@ -56,13 +58,15 @@ public class NewProductsCampaignService {
     private final OutboundEmailRepository outboundEmailRepository;
     private final CatalogStorefrontReadService storefrontRead;
     private final EmailQueueService emailQueue;
+    private final CountryCurrencyService countryCurrencyService;
     private final MarketingUnsubscribeService unsubscribeService;
     private final String storefrontBaseUrl;
     private final String backendBaseUrl;
 
     public NewProductsCampaignService(ProductRepository productRepository, UserRepository userRepository,
             OutboundEmailRepository outboundEmailRepository, CatalogStorefrontReadService storefrontRead,
-            EmailQueueService emailQueue, MarketingUnsubscribeService unsubscribeService,
+            EmailQueueService emailQueue, CountryCurrencyService countryCurrencyService,
+            MarketingUnsubscribeService unsubscribeService,
             @Value("${nexadrop.storefront.base-url:http://localhost:3003}") String storefrontBaseUrl,
             @Value("${nexadrop.oauth.issuer:http://localhost:18082}") String backendBaseUrl) {
         this.productRepository = productRepository;
@@ -70,6 +74,7 @@ public class NewProductsCampaignService {
         this.outboundEmailRepository = outboundEmailRepository;
         this.storefrontRead = storefrontRead;
         this.emailQueue = emailQueue;
+        this.countryCurrencyService = countryCurrencyService;
         this.unsubscribeService = unsubscribeService;
         this.storefrontBaseUrl = storefrontBaseUrl;
         this.backendBaseUrl = backendBaseUrl;
@@ -132,8 +137,13 @@ public class NewProductsCampaignService {
         String language = normalizeLang(lang);
         List<UUID> categoryIds = storefrontRead.categoriesFlat(language).stream()
                 .map(CategoryView::id).limit(12).toList();
-        List<Map<String, Object>> categories = buildCategories(categoryIds, language).stream()
-                .limit(4).toList();
+        // La prueba tiene que salir EXACTAMENTE como el envío real, divisa incluida: si aquí se vieran
+        // euros y en el envío real dólares, la prueba dejaría de servir para lo único que sirve.
+        String divisa = userRepository.findByEmail(email)
+                .map(u -> countryCurrencyService.forCountry(u.getCountry()))
+                .orElse("USD");
+        List<Map<String, Object>> categories = conDivisa(divisa,
+                () -> buildCategories(categoryIds, language)).stream().limit(4).toList();
         if (categories.isEmpty()) {
             return false;
         }
@@ -169,8 +179,16 @@ public class NewProductsCampaignService {
             return false;
         }
         String lang = normalizeLang(user.getLanguage());
-        List<Map<String, Object>> categories = categoriesByLang.computeIfAbsent(lang,
-                l -> buildCategories(categoryIds, l));
+        // Divisa del país con el que el usuario se dio de alta. Sin esto, el correo se genera fuera de
+        // cualquier petición HTTP, CurrencyHolder está vacío y los precios salen en dólares para todo el
+        // mundo: un usuario español recibía la campaña con importes que no puede comparar con lo que verá
+        // en la tienda.
+        String divisa = countryCurrencyService.forCountry(user.getCountry());
+        // La caché es por idioma Y DIVISA: el modelo lleva los precios ya formateados dentro, así que dos
+        // usuarios del mismo idioma en países con distinta divisa no pueden compartirlo.
+        String claveCache = lang + "|" + divisa;
+        List<Map<String, Object>> categories = categoriesByLang.computeIfAbsent(claveCache,
+                c -> conDivisa(divisa, () -> buildCategories(categoryIds, lang)));
         if (categories.isEmpty()) {
             return false;
         }
@@ -185,6 +203,23 @@ public class NewProductsCampaignService {
         vars.put("unsubscribeLabel", NewProductsEmailLabel.UNSUBSCRIBE.of(lang));
         emailQueue.enqueue(user.getEmail(), NewProductsEmailLabel.SUBJECT.of(lang), TEMPLATE, vars);
         return true;
+    }
+
+    /**
+     * Ejecuta la construcción del modelo con la divisa dada, y deja el hilo como estaba.
+     *
+     * <p>El precio formateado sale de {@code CurrencyHolder}, que normalmente rellena un filtro HTTP. Aquí
+     * no hay petición, así que se fija a mano — y se restaura en un {@code finally} porque el hilo se
+     * reutiliza: dejarlo apuntando a la divisa del último usuario contaminaría lo siguiente que corriera.
+     */
+    private <T> T conDivisa(String divisa, java.util.function.Supplier<T> accion) {
+        String anterior = CurrencyHolder.get();
+        try {
+            CurrencyHolder.set(divisa);
+            return accion.get();
+        } finally {
+            CurrencyHolder.set(anterior);
+        }
     }
 
     /** Modelo de categorías→productos para el idioma dado; solo categorías con al menos un producto visible. */

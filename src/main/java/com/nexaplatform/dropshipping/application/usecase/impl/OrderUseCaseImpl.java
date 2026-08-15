@@ -402,6 +402,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
         order.setSubtotalCents(subtotal);
         order.setDiscountCents(discount);
         order.setShippingCents(totals.shippingCents());
+        // El arancel viaja dentro del envío para el cobro, pero se guarda aparte: la factura lo desglosa y
+        // tiene que reflejar lo que se cobró ENTONCES, no lo que la tarifa diga al reimprimirla.
+        order.setCustomsDutyCents(totals.customsHandlingCents());
         order.setTaxCents(totals.taxCents());
         order.setTotalCents(totals.totalCents(discountedSubtotal));
         return cuponAplicado;
