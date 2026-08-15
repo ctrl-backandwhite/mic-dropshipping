@@ -37,6 +37,8 @@ class Cov06TrendScoreServiceTest {
 
     @Mock
     private JdbcTemplate jdbcTemplate;
+    @Mock
+    private com.nexaplatform.dropshipping.application.service.CatalogReindexRunner reindexRunner;
 
     @InjectMocks
     private TrendScoreService service;
@@ -45,6 +47,8 @@ class Cov06TrendScoreServiceTest {
     void setUp() {
         ReflectionTestUtils.setField(service, "habilitado", true);
         when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), any(Object[].class))).thenReturn(7);
+        // El recálculo encadena un reindexado para que el índice no se quede con la puntuación vieja.
+        when(reindexRunner.tryAcquire()).thenReturn(true);
     }
 
     @Test

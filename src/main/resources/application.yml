@@ -227,6 +227,9 @@ nexadrop:
     # sección mostraba siempre los mismos 81, los únicos con dato.
     recompute-enabled: ${TREND_RECOMPUTE_ENABLED:true}
     recompute-cron: ${TREND_RECOMPUTE_CRON:0 20 3 * * *}
+    # El índice guarda su propia copia de la puntuación y desempata con ella: sin reindexar,
+    # base e índice divergen desde la primera pasada.
+    reindex-after-recompute: ${TREND_REINDEX_AFTER:true}
   legal:
     # Versión vigente de los términos y la política de privacidad, en formato fecha. Se guarda junto a la
     # aceptación de cada usuario para poder acreditar QUÉ texto aceptó, no solo que aceptó algo.

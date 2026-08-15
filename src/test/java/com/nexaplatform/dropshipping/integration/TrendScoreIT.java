@@ -1,12 +1,17 @@
 package com.nexaplatform.dropshipping.integration;
 
 import com.nexaplatform.dropshipping.application.service.TrendScoreService;
-import com.nexaplatform.dropshipping.config.BaseIntegration;
+import com.nexaplatform.dropshipping.config.TestContainersConfiguration;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -26,7 +31,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * contando congela la sección igual que estaba antes del arreglo; y un producto inactivo que se cuele
  * enseña al comprador algo que no puede comprar.
  */
-class TrendScoreIT extends BaseIntegration {
+@SpringBootTest
+@ActiveProfiles("test")
+@Import(TestContainersConfiguration.class)
+class TrendScoreIT {
 
     @Autowired
     private TrendScoreService trendScoreService;
@@ -38,8 +46,22 @@ class TrendScoreIT extends BaseIntegration {
     private UUID usuario;
     private UUID direccion;
 
+    @AfterEach
+    void limpiar() {
+        jdbc.update("DELETE FROM order_item WHERE order_id IN"
+                + " (SELECT id FROM customer_order WHERE user_id = ?)", usuario);
+        jdbc.update("DELETE FROM customer_order WHERE user_id = ?", usuario);
+        jdbc.update("DELETE FROM product WHERE category_id = ?", categoria);
+        jdbc.update("DELETE FROM address WHERE id = ?", direccion);
+        jdbc.update("DELETE FROM users WHERE id = ?", usuario);
+        jdbc.update("DELETE FROM category WHERE id = ?", categoria);
+    }
+
     @BeforeEach
     void escenario() {
+        // El recálculo va apagado en el perfil de test para que el cron no compita con la limpieza de
+        // tablas entre casos; aquí se enciende porque es justo lo que se está probando.
+        ReflectionTestUtils.setField(trendScoreService, "habilitado", true);
         categoria = UUID.randomUUID();
         jdbc.update("INSERT INTO category (id, slug, name_zh, active, created_at, updated_at)"
                 + " VALUES (?, ?, ?, true, now(), now())", categoria, "cat-" + categoria, "分类");
@@ -86,135 +108,75 @@ class TrendScoreIT extends BaseIntegration {
     }
 
     @Test
-    @DisplayName("quien vende puntúa más que quien no vende, aunque el otro esté mejor valorado")
-    void lasVentasPesanMasQueLaValoracion() {
-        // Es la razón de ser del cambio: antes la sección la encabezaba quien tenía el dato de 1688, no
-        // quien vendía. Un producto con cinco estrellas y CERO ventas no puede ir por delante de uno que
-        // se está vendiendo.
+    @DisplayName("qué cuenta como venta: no lo cancelado, no lo reembolsado, no lo viejo")
+    void queCuentaComoVenta() {
+        UUID cancelado = producto("cancelado", BigDecimal.ZERO, "ACTIVE");
+        UUID reembolsado = producto("reembolsado", BigDecimal.ZERO, "ACTIVE");
+        UUID antiguo = producto("antiguo", BigDecimal.ZERO, "ACTIVE");
+        UUID enElBorde = producto("borde", BigDecimal.ZERO, "ACTIVE");
+        UUID vacio = producto("vacio", BigDecimal.ZERO, "ACTIVE");
+        pedido(cancelado, 25, "CANCELLED", 2);
+        pedido(reembolsado, 25, "REFUNDED", 2);
+        pedido(antiguo, 25, "DELIVERED", 40);
+        pedido(enElBorde, 10, "DELIVERED", 29);
+
+        trendScoreService.recompute();
+
+        // Un pedido cancelado o reembolsado no es una venta: contarlo pondría en «Tendencia ahora» algo
+        // que nadie se quedó. Y una venta de hace 40 días tampoco, o la sección se congelaría igual que
+        // estaba antes del arreglo.
+        assertThat(scoreDe(cancelado)).isEqualByComparingTo("0");
+        assertThat(scoreDe(reembolsado)).isEqualByComparingTo("0");
+        assertThat(scoreDe(antiguo)).isEqualByComparingTo("0");
+        assertThat(scoreDe(vacio)).isEqualByComparingTo("0");
+        // Valor límite por el otro lado: 29 días SÍ entra.
+        assertThat(scoreDe(enElBorde)).isGreaterThan(BigDecimal.ZERO);
+    }
+
+    @Test
+    @DisplayName("cómo se pondera: las ventas mandan, saturan y se suman entre pedidos")
+    void comoSePondera() {
         UUID vende = producto("vende", new BigDecimal("3.0"), "ACTIVE");
         UUID soloEstrellas = producto("estrellas", new BigDecimal("5.0"), "ACTIVE");
-        pedido(vende, 20, "DELIVERED", 3);
-
-        trendScoreService.recompute();
-
-        assertThat(scoreDe(vende)).isGreaterThan(scoreDe(soloEstrellas));
-    }
-
-    @Test
-    @DisplayName("un pedido CANCELADO no puntúa")
-    void elCanceladoNoPuntua() {
-        UUID p = producto("cancelado", BigDecimal.ZERO, "ACTIVE");
-        pedido(p, 25, "CANCELLED", 2);
-
-        trendScoreService.recompute();
-
-        // Sin rating y sin ventas válidas, el score tiene que ser exactamente cero.
-        assertThat(scoreDe(p)).isEqualByComparingTo("0");
-    }
-
-    @Test
-    @DisplayName("un pedido REEMBOLSADO no puntúa")
-    void elReembolsadoNoPuntua() {
-        // Contar un reembolso premiaría justo al producto que el comprador devolvió.
-        UUID p = producto("reembolsado", BigDecimal.ZERO, "ACTIVE");
-        pedido(p, 25, "REFUNDED", 2);
-
-        trendScoreService.recompute();
-
-        assertThat(scoreDe(p)).isEqualByComparingTo("0");
-    }
-
-    @Test
-    @DisplayName("una venta de hace más de 30 días ya no cuenta")
-    void fueraDeLaVentanaNoCuenta() {
-        // Sin esta caducidad, la sección se congelaría con los éxitos de siempre — el problema exacto
-        // que se estaba arreglando.
-        UUID p = producto("antiguo", BigDecimal.ZERO, "ACTIVE");
-        pedido(p, 25, "DELIVERED", 40);
-
-        trendScoreService.recompute();
-
-        assertThat(scoreDe(p)).isEqualByComparingTo("0");
-    }
-
-    @Test
-    @DisplayName("justo dentro de la ventana sí cuenta")
-    void enElBordeDeLaVentanaCuenta() {
-        // Valor límite por el otro lado: 29 días entra. Si el corte estuviera mal planteado, las ventas
-        // de la última semana del mes desaparecerían sin que nadie lo notara.
-        UUID p = producto("borde", BigDecimal.ZERO, "ACTIVE");
-        pedido(p, 10, "DELIVERED", 29);
-
-        trendScoreService.recompute();
-
-        assertThat(scoreDe(p)).isGreaterThan(BigDecimal.ZERO);
-    }
-
-    @Test
-    @DisplayName("a partir del tope de unidades la señal satura y no crece más")
-    void laSenalSatura() {
-        // Sin tope, un único pedido mayorista dejaría al resto del catálogo pegado al cero para siempre.
         UUID mucho = producto("mucho", BigDecimal.ZERO, "ACTIVE");
         UUID muchisimo = producto("muchisimo", BigDecimal.ZERO, "ACTIVE");
-        pedido(mucho, 25, "DELIVERED", 1);
-        pedido(muchisimo, 5000, "DELIVERED", 1);
-
-        trendScoreService.recompute();
-
-        assertThat(scoreDe(mucho)).isEqualByComparingTo(scoreDe(muchisimo));
-    }
-
-    @Test
-    @DisplayName("varios pedidos del mismo producto suman unidades")
-    void variosPedidosSuman() {
         UUID uno = producto("uno", BigDecimal.ZERO, "ACTIVE");
         UUID troceado = producto("troceado", BigDecimal.ZERO, "ACTIVE");
+        pedido(vende, 20, "DELIVERED", 3);
+        pedido(mucho, 25, "DELIVERED", 1);
+        pedido(muchisimo, 5000, "DELIVERED", 1);
         pedido(uno, 10, "DELIVERED", 1);
         pedido(troceado, 4, "DELIVERED", 1);
         pedido(troceado, 6, "DELIVERED", 2);
 
         trendScoreService.recompute();
 
+        // Vender gana a estar bien valorado: es la razón de ser del cambio. Antes encabezaba la sección
+        // quien tenía el dato de 1688, no quien vendía.
+        assertThat(scoreDe(vende)).isGreaterThan(scoreDe(soloEstrellas));
+        // Sin tope, un único pedido mayorista dejaría al resto del catálogo pegado al cero para siempre.
+        assertThat(scoreDe(mucho)).isEqualByComparingTo(scoreDe(muchisimo));
         // Diez unidades en un pedido o repartidas en dos: la demanda es la misma.
         assertThat(scoreDe(troceado)).isEqualByComparingTo(scoreDe(uno));
     }
 
     @Test
-    @DisplayName("un producto sin ventas ni valoración se queda en cero y no aparece en la sección")
-    void sinNadaSeQuedaEnCero() {
-        UUID p = producto("vacio", BigDecimal.ZERO, "ACTIVE");
+    @DisplayName("no toca los inactivos y recalcular dos veces da lo mismo")
+    void alcanceEIdempotencia() {
+        UUID inactivo = producto("inactivo", new BigDecimal("5.0"), "DRAFT");
+        UUID estable = producto("estable", new BigDecimal("4.0"), "ACTIVE");
+        jdbc.update("UPDATE product SET trend_score = 0.9999 WHERE id = ?", inactivo);
+        pedido(estable, 7, "DELIVERED", 5);
 
         trendScoreService.recompute();
-
-        assertThat(scoreDe(p)).isEqualByComparingTo("0");
-    }
-
-    @Test
-    @DisplayName("un producto INACTIVO no se recalcula")
-    void elInactivoNoSeToca() {
-        // Se le deja el valor que tuviera: no compite en el escaparate y gastar escrituras en él solo
-        // alarga la transacción sobre la tabla que sirve el catálogo.
-        UUID p = producto("inactivo", new BigDecimal("5.0"), "DRAFT");
-        jdbc.update("UPDATE product SET trend_score = 0.9999 WHERE id = ?", p);
-
+        BigDecimal primera = scoreDe(estable);
         trendScoreService.recompute();
 
-        assertThat(scoreDe(p)).isEqualByComparingTo("0.9999");
-    }
-
-    @Test
-    @DisplayName("recalcular dos veces seguidas da el mismo resultado")
-    void esIdempotente() {
+        // Un inactivo no compite en el escaparate: se le deja lo que tuviera.
+        assertThat(scoreDe(inactivo)).isEqualByComparingTo("0.9999");
         // El barrido corre cada noche sobre el catálogo entero: si cada pasada moviera los valores, el
         // orden del escaparate cambiaría solo, sin que nadie hubiera comprado nada.
-        UUID p = producto("estable", new BigDecimal("4.0"), "ACTIVE");
-        pedido(p, 7, "DELIVERED", 5);
-
-        trendScoreService.recompute();
-        BigDecimal primera = scoreDe(p);
-        trendScoreService.recompute();
-
-        assertThat(scoreDe(p)).isEqualByComparingTo(primera);
+        assertThat(scoreDe(estable)).isEqualByComparingTo(primera);
     }
 
     @Test

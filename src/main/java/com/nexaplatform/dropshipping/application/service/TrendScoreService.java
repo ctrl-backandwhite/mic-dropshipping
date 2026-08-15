@@ -6,7 +6,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Recalcula la puntuación de tendencia de cada producto a partir de las VENTAS REALES de la tienda.
@@ -44,9 +43,18 @@ public class TrendScoreService {
     private static final int SATURACION = 25;
 
     private final JdbcTemplate jdbcTemplate;
+    private final CatalogReindexRunner reindexRunner;
 
     @Value("${nexadrop.trend.recompute-enabled:true}")
     private boolean habilitado;
+
+    /**
+     * ¿Se reindexa después de recalcular? Sí en cualquier entorno real. En los tests se apaga: el barrido
+     * corre en segundo plano y choca con el TRUNCATE con el que los casos limpian las tablas entre pruebas
+     * — la puntuación acaba comprobándose igual, contra la base, que es donde se escribe.
+     */
+    @Value("${nexadrop.trend.reindex-after-recompute:true}")
+    private boolean reindexarDespues;
 
     /**
      * Recalcula la puntuación de todo el catálogo activo.
@@ -59,9 +67,13 @@ public class TrendScoreService {
      * historial. Los productos sin ventas quedan en cero y no aparecen en la sección: es correcto, no son
      * tendencia.
      *
+     * <p><b>Sin {@code @Transactional} a propósito.</b> Es UNA sentencia: PostgreSQL ya la ejecuta de forma
+     * atómica, y envolverla solo alargaba el tiempo que los bloqueos de fila del catálogo entero quedan
+     * tomados —lo suficiente para provocar interbloqueos con cualquier otra escritura que llegue a la vez—.
+     * El recuento posterior es solo informativo y no necesita ver la misma instantánea.
+     *
      * @return cuántos productos han quedado con puntuación mayor que cero, es decir, con ventas reales.
      */
-    @Transactional
     public int recompute() {
         if (!habilitado) {
             return 0;
@@ -96,6 +108,15 @@ public class TrendScoreService {
         int n = conVentas == null ? 0 : conVentas;
         log.info("::> [TREND] puntuación recalculada sobre ventas reales de {} días — {} productos con ventas",
                 DIAS, n);
+        // El índice de búsqueda guarda su propia copia de la puntuación y la usa para desempatar los
+        // resultados. Sin reindexar, la base y el índice divergen desde la primera pasada: medido, un
+        // producto con 0,9898 en base seguía valiendo 0,794 para el buscador. Va en segundo plano y
+        // respeta el cerrojo del reindexado manual, así que no se solapa ni bloquea el barrido nocturno.
+        if (reindexarDespues && reindexRunner.tryAcquire()) {
+            reindexRunner.runAsync();
+        } else {
+            log.info("::> [TREND] ya hay un reindexado en curso; el índice recogerá la puntuación nueva");
+        }
         return n;
     }
 
