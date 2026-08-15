@@ -178,7 +178,8 @@ class CustomerJourneyIT extends BaseIntegration {
                     emailCliente = "cert-cliente-" + UUID.randomUUID() + "@example.com";
                     Respuesta r = llamar(HttpMethod.POST, "/api/auth/register", null,
                             Map.of("email", emailCliente, "password", CONTRASENA, "firstName", "Ada",
-                                    "lastName1", "Lovelace", "country", "ES", "language", "es"));
+                                    "lastName1", "Lovelace", "country", "ES", "language", "es",
+                                    "acceptedTerms", true, "acceptedTermsVersion", "2026-07-31"));
                     assertThat(r.status()).as("alta correcta").isEqualTo(201);
                     idCliente = UUID.fromString(r.cuerpo().get("userId").asText());
                     // El estado REAL en base de datos, no solo el código HTTP: nace inactiva y con código.
@@ -205,7 +206,8 @@ class CustomerJourneyIT extends BaseIntegration {
                     // efímero) para que nadie pueda distinguir "correo registrado" de "correo libre". Lo
                     // que se certifica es que el disfraz es completo Y que no se crea una segunda cuenta.
                     Respuesta r = llamar(HttpMethod.POST, "/api/auth/register", null,
-                            Map.of("email", emailCliente, "password", CONTRASENA));
+                            Map.of("email", emailCliente, "password", CONTRASENA,
+                                    "acceptedTerms", true, "acceptedTermsVersion", "2026-07-31"));
                     assertThat(r.status()).as("mismo status que un alta correcta").isEqualTo(201);
                     assertThat(r.cuerpo().get("userId").asText())
                             .as("el id devuelto es de usar y tirar, no el real")

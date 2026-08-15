@@ -19,4 +19,14 @@ public interface UserRepository extends JpaRepository<UserEntity, UUID> {
 
     /** Audiencia de marketing: usuarios activos que no han optado por salir de campañas. */
     List<UserEntity> findByActiveTrueAndMarketingOptOutFalse();
+
+    /**
+     * Todas las cuentas activas, sin filtrar por el rechazo a la publicidad.
+     *
+     * <p>Es la audiencia de las comunicaciones de SERVICIO —un cambio en los términos o en la política de
+     * privacidad—, que no son marketing y por eso alcanzan también a quien desactivó las campañas: quien
+     * rechazó la publicidad no ha renunciado a enterarse de que cambian las condiciones que le vinculan.
+     * Para cualquier envío comercial hay que usar el método de arriba, no este.
+     */
+    List<UserEntity> findByActiveTrueAndDeletedAtIsNull();
 }
