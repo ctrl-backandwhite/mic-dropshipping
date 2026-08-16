@@ -66,11 +66,6 @@ public class DefaultSecurityConfig {
     }
 
     @Bean
-    public OAuthClientTargetFilter oauthClientTargetFilter() {
-        return new OAuthClientTargetFilter();
-    }
-
-    @Bean
     public GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler(UserUseCase userUseCase,
             UserTokenService userTokenService, DeviceSessionService deviceSessionService,
             com.nexaplatform.dropshipping.application.service.TotpService totpService,
@@ -84,8 +79,11 @@ public class DefaultSecurityConfig {
     public SecurityFilterChain defaultFilterChain(HttpSecurity http,
             GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler,
             GithubOAuth2UserService githubOAuth2UserService,
-            OAuthClientTargetFilter oauthClientTargetFilter,
             OAuthRedirectResolver oauthRedirectResolver) {
+        // Instancia local y no un @Bean: Spring Boot registra automáticamente en la cadena de filtros
+        // del contenedor cualquier bean de tipo Filter, con lo que este actuaría también sobre
+        // peticiones ajenas a esta cadena de seguridad. Aquí solo lo usa quien debe.
+        OAuthClientTargetFilter oauthClientTargetFilter = new OAuthClientTargetFilter();
         http.cors(Customizer.withDefaults())
                 // ÚNICA cadena con sesión y formulario, y por eso la ÚNICA con CSRF ACTIVO. Las otras tres
                 // (authorization server, partners y BFF) son stateless con Bearer y ahí sí se desactiva.
