@@ -8,6 +8,7 @@ import com.nexaplatform.dropshipping.api.dto.PartnerDtos.CreateOrderRequest;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.OrderItemInput;
 import com.nexaplatform.dropshipping.api.dto.in.MeCheckoutDtoIn;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
+import com.nexaplatform.dropshipping.api.exception.ErrorCode;
 import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
@@ -193,6 +194,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 order.getItems().add(line);
                 subtotal = Math.addExact(subtotal, line.getLineTotalCents());
             }
+            requireMinimumOrderQuantities(order.getItems());
             cuponAplicado = applyTotals(order, userId, subtotal, gross.cents(), parcel, req.couponCode(),
                     grossByProduct);
         } finally {
@@ -318,6 +320,32 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 .skuSnapshot(variant != null ? variant.getSku() : null).unitPriceCents(unitCents)
                 .costCents(costCents).costCnyCents(costCnyCents).quantity(itemReq.quantity())
                 .lineTotalCents(lineTotal).build();
+    }
+
+    /**
+     * Exige el pedido mínimo de cada producto, sumando TODAS sus líneas.
+     *
+     * <p>Se cuenta por producto y no por línea a propósito: el lote se compone mezclando variantes —dos
+     * colores, o dos tallas—, igual que en 1688, y el proveedor solo mira cuántas unidades van en total.
+     * Pedir el mínimo a cada variante obligaría a comprar mucho más de lo que exige el proveedor.
+     *
+     * <p>Y se comprueba aquí, en el alta del pedido, porque hasta ahora solo lo miraba la ficha: quien
+     * llamara a la API directamente —o llegara al pago con un carrito viejo— se saltaba el mínimo, y el
+     * pedido acababa en una compra que el proveedor no acepta.
+     */
+    private void requireMinimumOrderQuantities(List<OrderItem> items) {
+        Map<UUID, Integer> qtyByProduct = new HashMap<>();
+        for (OrderItem item : items) {
+            qtyByProduct.merge(item.getProductId(), item.getQuantity(), Integer::sum);
+        }
+        for (Map.Entry<UUID, Integer> e : qtyByProduct.entrySet()) {
+            int moq = productRepository.findById(e.getKey()).map(ProductEntity::getMoq).orElse(1);
+            if (moq > 1 && e.getValue() < moq) {
+                throw new BusinessException(ErrorCode.MOQ_NOT_REACHED.name(),
+                        "El pedido mínimo de este producto es de " + moq + " unidades y solo hay "
+                                + e.getValue() + ".");
+            }
+        }
     }
 
     /**

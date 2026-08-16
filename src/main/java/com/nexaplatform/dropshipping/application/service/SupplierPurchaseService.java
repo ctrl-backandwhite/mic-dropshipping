@@ -354,6 +354,23 @@ public class SupplierPurchaseService {
     }
 
     /**
+     * ¿Está ya comprada toda la mercancía del pedido?
+     *
+     * <p>Cierto cuando el pedido tiene compras y ninguna sigue pendiente de comprar. Las canceladas no
+     * cuentan: un proveedor descartado no puede dejar el pedido esperando para siempre.
+     *
+     * <p>Es lo que permite dar el pedido por enviado al proveedor sin que nadie tenga que acordarse de
+     * pulsar nada. Antes ese paso era manual, y olvidarlo dejaba al cliente viendo «pagado» con la
+     * mercancía ya comprada, y al admin sin poder exportar el fichero de re-empaquetado.
+     */
+    @Transactional(readOnly = true)
+    public boolean allPurchased(UUID orderId) {
+        return purchaseRepository.existsByOrderId(orderId)
+                && !purchaseRepository.existsByOrderIdAndStatusIn(orderId,
+                        EnumSet.of(SupplierPurchaseStatus.PENDING));
+    }
+
+    /**
      * ¿Se puede ya crear la guía internacional de este pedido?
      *
      * <p>Solo cuando TODOS sus bultos van camino del almacén. Un pedido de dos proveedores donde uno ha
