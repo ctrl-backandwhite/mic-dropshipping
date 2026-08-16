@@ -43,6 +43,9 @@ server:
 nexadrop:
   storefront:
     base-url: https://front-dropshipping-pro.up.railway.app
+  mobile:
+    # Enlace profundo de la app; debe coincidir con el `scheme` de app.config.ts.
+    oauth-callback-url: ${MOBILE_OAUTH_CALLBACK_URL:nx036://auth/callback}
   oauth:
     issuer: https://back-dropshipping-pro.up.railway.app
   cors:

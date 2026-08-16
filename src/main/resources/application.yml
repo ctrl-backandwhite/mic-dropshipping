@@ -221,6 +221,11 @@ nexadrop:
     poll-ms: ${OUTBOX_POLL_MS:500}              # dispatcher polling interval
   storefront:
     base-url: ${STOREFRONT_BASE_URL:http://localhost:3003}  # for email CTA / unsubscribe links
+  mobile:
+    # Enlace profundo con el que la app recupera el control tras el login social. Es un esquema propio
+    # porque el sistema operativo solo sabe devolver el foco a la aplicación por él. Debe coincidir con
+    # el `scheme` de app.config.ts en el repositorio de la app.
+    oauth-callback-url: ${MOBILE_OAUTH_CALLBACK_URL:nx036://auth/callback}
   trend:
     # Puntuación de «Tendencia ahora», recalculada desde las ventas REALES de la tienda. Antes no la
     # escribía nadie —solo el sembrador de demo, apagado— y 5.220 de 5.524 productos estaban a cero: la
