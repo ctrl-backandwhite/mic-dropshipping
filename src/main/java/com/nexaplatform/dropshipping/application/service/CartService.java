@@ -2,6 +2,8 @@ package com.nexaplatform.dropshipping.application.service;
 
 import com.nexaplatform.dropshipping.api.dto.CartItemDto;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.domain.model.Order;
+import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CartItemEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CartItemJpaRepository;
@@ -9,6 +11,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Produ
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -85,6 +88,43 @@ public class CartService {
     public List<CartItemDto> clear(UUID userId) {
         repo.deleteByUserId(userId);
         return List.of();
+    }
+
+    /**
+     * Saca de la cesta las líneas de un pedido que acaba de quedar PAGADO.
+     *
+     * <p><b>Solo al pasar a PAGADO, nunca al crear el pedido.</b> Con tarjeta, PayPal o USDT el pedido
+     * nace pendiente y el dinero puede no llegar jamás: vaciar ahí dejaría a la persona sin pedido y sin
+     * cesta. Con monedero el cobro es inmediato, así que los dos casos quedan cubiertos con el mismo
+     * disparador.
+     *
+     * <p><b>Se borra lo comprado, no la cesta entera.</b> Quien tramita solo una parte conserva el resto;
+     * como el checkout normalmente lleva todas las líneas, el resultado habitual es una cesta vacía.
+     *
+     * <p><b>El usuario sale del PEDIDO</b>, no de un parámetro de fuera: igual que el resto de la clase,
+     * no hay forma de tocar la cesta de otra persona. Un pedido sin dueño (partner/API) o sin líneas no
+     * borra nada, y quien compró desde un cliente antiguo —sin cesta en el servidor— simplemente no tiene
+     * filas que quitar.
+     *
+     * <p><b>Idempotente:</b> borrar una línea que ya no está es un no-op, así que una segunda confirmación
+     * del mismo cobro (un webhook repetido) no falla. Aun así, quien llama solo debe invocarlo en la
+     * transición real a PAGADO, para no borrar lo que la persona haya vuelto a añadir después.
+     *
+     * <p>Corre en su PROPIA transacción ({@code REQUIRES_NEW}) a propósito: si el borrado falla, el error
+     * no puede marcar como "rollback-only" la transacción del cobro y tumbar un pedido ya pagado. Los
+     * llamadores, además, registran el fallo y siguen.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void removePurchased(Order order) {
+        if (order == null || order.getUserId() == null || order.getItems() == null) {
+            return;
+        }
+        UUID userId = order.getUserId();
+        for (OrderItem item : order.getItems()) {
+            if (item != null && item.getProductId() != null) {
+                repo.deleteByUserIdAndProductIdAndVariantId(userId, item.getProductId(), item.getVariantId());
+            }
+        }
     }
 
     /**

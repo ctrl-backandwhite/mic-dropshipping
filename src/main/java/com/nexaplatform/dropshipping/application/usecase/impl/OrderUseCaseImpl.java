@@ -8,9 +8,11 @@ import com.nexaplatform.dropshipping.api.dto.PartnerDtos.CreateOrderRequest;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.OrderItemInput;
 import com.nexaplatform.dropshipping.api.dto.in.MeCheckoutDtoIn;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
+import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
+import com.nexaplatform.dropshipping.application.service.CartService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
 import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
@@ -129,6 +131,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final OrderTrackingEventRepository trackingRepository;
     private final OrderIndexer orderIndexer;
     private final OrderSearchService orderSearchService;
+    /** La cesta sincronizada: lo comprado sale de ella en cuanto el pedido queda PAGADO. */
+    private final CartService cartService;
 
     @Value("${nexadrop.demo.orders-enabled:false}")
     private boolean demoOrdersEnabled;
@@ -889,7 +893,33 @@ public class OrderUseCaseImpl implements OrderUseCase {
 
         notifyCheckout(userId, created, o, reused);
 
+        // Lo último del checkout: si el pedido ha quedado PAGADO (pago con saldo, que se cobra en el acto),
+        // lo comprado sale de la cesta. Con pago externo (tarjeta/PayPal/USDT) el pedido sale PENDIENTE y
+        // la cesta se queda INTACTA —el dinero puede no llegar nunca, y vaciarla aquí dejaría a la persona
+        // sin pedido y sin cesta—: esa limpieza la hace PaymentUseCaseImpl al confirmarse el cobro. Va al
+        // final porque el borrado se confirma en su propia transacción, y así ningún paso posterior puede
+        // tumbar el pedido dejando la cesta ya vacía.
+        if (o.getStatus() == OrderStatus.PAID) {
+            clearPurchasedFromCart(o);
+        }
+
         return o;
+    }
+
+    /**
+     * Saca de la cesta las líneas del pedido recién pagado con saldo.
+     *
+     * <p>Un fallo limpiando NUNCA puede tumbar el cobro: el dinero ya se ha debitado del monedero y el
+     * pedido está pagado. Dejar restos en la cesta es un mal mucho menor que perder un pago por no poder
+     * borrar una fila, así que se registra el motivo —en claro, sin SQL— y el checkout sigue.
+     */
+    private void clearPurchasedFromCart(Order order) {
+        try {
+            cartService.removePurchased(order);
+        } catch (RuntimeException e) {
+            log.warn("Pedido {} PAGADO pero no se pudo vaciar la cesta: {}", order.getId(),
+                    ErrorMessages.humanize(e), e);
+        }
     }
 
     /**

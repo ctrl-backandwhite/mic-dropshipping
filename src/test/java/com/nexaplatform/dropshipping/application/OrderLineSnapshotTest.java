@@ -6,6 +6,7 @@ import com.nexaplatform.dropshipping.api.dto.PartnerDtos.CreateOrderRequest;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.OrderItemInput;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
+import com.nexaplatform.dropshipping.application.service.CartService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
 import com.nexaplatform.dropshipping.application.service.PromotionService;
@@ -132,7 +133,7 @@ class OrderLineSnapshotTest {
                 userRepository, shopConnectionRepository, userAddressRepository, webhooks, walletUseCase,
                 notificationsPublisher, pricingService, affiliateProgramService, stockService, paymentUseCase,
                 orderEmailService, fulfillment, checkoutTotalsService, new CustomsDutyLinesService(), operatorCommissionService, promotionService, supplierPurchaseService, trackingRepository, orderIndexer,
-                orderSearchService);
+                orderSearchService, mock(CartService.class));
     }
 
     private ProductEntity product() {

@@ -14,6 +14,7 @@ import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService
 import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
+import com.nexaplatform.dropshipping.application.service.CartService;
 import com.nexaplatform.dropshipping.application.usecase.impl.PaymentUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
@@ -124,7 +125,7 @@ class Cov09PaymentGatewayFlowsTest {
         return new PaymentUseCaseImpl(gateways, paymentRepository, paymentJpaRepositoryAdapter, userRepository,
                 orderRepository, walletUseCase, org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class), auditLogger, partnerPlanSyncService, customerSubscriptionUseCase,
                 subscriptionNotificationService, new ObjectMapper(), orderEmailService, currencyRateService, new OrderAmounts(currencyRateService),
-                stockService, mock(SupplierPurchaseService.class), opsAlertService);
+                stockService, mock(SupplierPurchaseService.class), opsAlertService, mock(CartService.class));
     }
 
     private Payment payment(PaymentMethod method, PaymentStatus status, String providerRef, boolean forOrder) {

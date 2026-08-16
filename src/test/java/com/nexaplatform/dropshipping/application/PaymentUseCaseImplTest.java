@@ -12,6 +12,7 @@ import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.application.service.OpsAlertService;
+import com.nexaplatform.dropshipping.application.service.CartService;
 import com.nexaplatform.dropshipping.application.usecase.impl.PaymentUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
 import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
@@ -81,7 +82,7 @@ class PaymentUseCaseImplTest {
         return new PaymentUseCaseImpl(List.<PaymentGateway>of(), paymentRepository, paymentJpaRepositoryAdapter,
                 userRepository, orderRepository, walletUseCase, stripeService, auditLogger, partnerPlanSyncService,
                 customerSubscriptionUseCase, subscriptionNotificationService, new ObjectMapper(), orderEmailService,
-                currencyRateService, new OrderAmounts(currencyRateService), stockService, mock(SupplierPurchaseService.class), mock(OpsAlertService.class));
+                currencyRateService, new OrderAmounts(currencyRateService), stockService, mock(SupplierPurchaseService.class), mock(OpsAlertService.class), mock(CartService.class));
     }
 
     @Test

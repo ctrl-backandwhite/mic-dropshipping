@@ -2,6 +2,9 @@ package com.nexaplatform.dropshipping.application.service;
 
 import com.nexaplatform.dropshipping.api.dto.CartItemDto;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
+import com.nexaplatform.dropshipping.domain.model.Order;
+import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CartItemEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CartItemJpaRepository;
@@ -25,6 +28,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -224,6 +228,86 @@ class CartServiceTest {
         assertThat(service.clear(userId)).isEmpty();
 
         verify(repo).deleteByUserId(userId);
+    }
+
+    // ------------------------------------------------- vaciado de lo comprado al quedar el pedido PAGADO
+
+    /** Pedido del {@code userId} de la clase con las líneas indicadas. */
+    private Order pedido(OrderItem... lineas) {
+        Order o = Order.builder().userId(userId).status(OrderStatus.PAID).items(Arrays.asList(lineas)).build();
+        o.setId(UUID.randomUUID());
+        return o;
+    }
+
+    private static OrderItem linea(UUID producto, UUID variante) {
+        return OrderItem.builder().productId(producto).variantId(variante).quantity(1).build();
+    }
+
+    /**
+     * Lo que se compra desaparece de la cesta; lo que no se compró se queda. Quien tramita solo una parte
+     * de su cesta no puede perder el resto — y como el checkout suele llevarlo todo, lo habitual será que
+     * la cesta quede vacía.
+     */
+    @Test
+    @DisplayName("un pedido pagado saca de la cesta SOLO sus líneas, no la cesta entera")
+    void elPedidoPagadoSacaDeLaCestaSoloSusLineas() {
+        UUID otroProducto = UUID.randomUUID();
+
+        service.removePurchased(pedido(linea(productId, variantId), linea(otroProducto, null)));
+
+        verify(repo).deleteByUserIdAndProductIdAndVariantId(userId, productId, variantId);
+        verify(repo).deleteByUserIdAndProductIdAndVariantId(userId, otroProducto, null);
+        // La cesta entera NO se borra: el resto de líneas sobrevive al pedido.
+        verify(repo, never()).deleteByUserId(any());
+    }
+
+    /**
+     * El usuario sale del PEDIDO, nunca de un parámetro de fuera: es lo que impide vaciar la cesta de
+     * otra persona conociendo su identificador.
+     */
+    @Test
+    @DisplayName("se borra por el usuario DEL PEDIDO, no por ningún otro")
+    void seBorraPorElUsuarioDelPedido() {
+        UUID duenoDelPedido = UUID.randomUUID();
+        Order o = Order.builder().userId(duenoDelPedido).items(List.of(linea(productId, variantId))).build();
+
+        service.removePurchased(o);
+
+        verify(repo).deleteByUserIdAndProductIdAndVariantId(duenoDelPedido, productId, variantId);
+        verify(repo, never()).deleteByUserIdAndProductIdAndVariantId(eq(userId), any(), any());
+    }
+
+    /**
+     * Un webhook repetido vuelve a pasar por aquí: borrar una línea que ya no está es un no-op, así que
+     * la segunda vuelta no falla ni deja la cesta en un estado raro.
+     */
+    @Test
+    @DisplayName("repetir el vaciado del mismo pedido no falla (webhook duplicado)")
+    void repetirElVaciadoDelMismoPedidoNoFalla() {
+        Order o = pedido(linea(productId, variantId));
+
+        service.removePurchased(o);
+        service.removePurchased(o);
+
+        verify(repo, times(2)).deleteByUserIdAndProductIdAndVariantId(userId, productId, variantId);
+    }
+
+    /**
+     * Casos en los que no hay nada que quitar: pedido de partner/API sin dueño, pedido sin líneas, línea
+     * sin producto o quien compró desde un cliente antiguo y no tiene cesta en el servidor. Ninguno puede
+     * reventar el cobro que acaba de completarse.
+     */
+    @Test
+    @DisplayName("sin pedido, sin dueño, sin líneas o con líneas rotas no se toca la cesta")
+    void sinPedidoSinDuenoOSinLineasNoSeTocaLaCesta() {
+        service.removePurchased(null);
+        service.removePurchased(Order.builder().items(List.of(linea(productId, variantId))).build());
+        service.removePurchased(Order.builder().userId(userId).items(null).build());
+        service.removePurchased(Order.builder().userId(userId).items(List.of()).build());
+        service.removePurchased(pedido(linea(null, variantId)));
+
+        verify(repo, never()).deleteByUserIdAndProductIdAndVariantId(any(), any(), any());
+        verify(repo, never()).deleteByUserId(any());
     }
 
     @Test

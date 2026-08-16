@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -19,6 +20,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -54,7 +57,13 @@ class CheckoutFlowIT extends BaseIntegration {
     private static final String COTIZAR = "/api/shipping/quote";
     private static final String DIRECCIONES = "/api/me/addresses";
     private static final String MIS_PEDIDOS = "/api/me/orders";
+    /** Cesta sincronizada del usuario: la que tiene que quedar vacía al pagar. */
+    private static final String CESTA = "/api/me/cart";
     private static final String CABECERA_IDEMPOTENCIA = "Idempotency-Key";
+
+    private static final ParameterizedTypeReference<List<Map<String, Object>>> LINEAS_DE_CESTA =
+            new ParameterizedTypeReference<>() {
+            };
 
     /** País con cobertura sembrada en cada prueba. */
     private static final String PAIS = "ES";
@@ -1042,8 +1051,89 @@ class CheckoutFlowIT extends BaseIntegration {
     }
 
     /* ==================================================================================
+     *  L · La cesta se vacía al quedar el pedido PAGADO (y solo entonces)
+     * ================================================================================== */
+
+    /**
+     * Con saldo el cobro es inmediato: el pedido nace PAGADO y lo comprado desaparece de la cesta sin que
+     * el cliente tenga que limpiarla por su cuenta (si lo hiciera él, un cierre de pestaña entre el cobro
+     * y la limpieza dejaría la compra repetida en la cesta de todos sus dispositivos).
+     */
+    @Test
+    @DisplayName("pagando con saldo, la cesta del servidor queda vacía tras el pedido")
+    void pagandoConSaldoLaCestaQuedaVacia() {
+        meterEnLaCesta(productId, 3);
+        assertThat(lineasEnLaCesta()).hasSize(1);
+
+        JsonNode pedido = cuerpo(checkout(pedidoDe(3), null).expectStatus().isCreated());
+
+        assertThat(pedido.get("status").asText()).isEqualTo("PAID");
+        assertThat(lineasEnLaCesta()).as("lo comprado ya no está en la cesta").isEmpty();
+        assertThat(lineasDeLaCestaEnBd()).isZero();
+    }
+
+    /**
+     * El caso que obliga a esperar al PAGADO: con tarjeta el pedido nace PENDIENTE y el dinero se cobra
+     * fuera —puede no llegar nunca—. Vaciar aquí dejaría a la persona sin pedido y sin cesta.
+     */
+    @Test
+    @DisplayName("con pago externo el pedido nace PENDIENTE y la cesta sigue intacta")
+    void conPagoExternoLaCestaSigueIntacta() {
+        meterEnLaCesta(productId, 2);
+
+        String conTarjeta = """
+                {"shippingAddressId":"%s","paymentMethod":"CARD",
+                 "items":[{"productId":"%s","quantity":2}]}
+                """.formatted(direccionId, productId);
+        JsonNode pedido = cuerpo(checkout(conTarjeta, null).expectStatus().isCreated());
+
+        assertThat(pedido.get("status").asText()).isEqualTo("PENDING");
+        assertThat(lineasEnLaCesta()).as("el dinero aún no ha llegado: la cesta no se toca").hasSize(1);
+        assertThat(saldoEnBd()).as("con tarjeta el monedero no se toca").isEqualTo(SALDO_HOLGADO);
+    }
+
+    /** Quien tramita solo una parte de su cesta conserva el resto: se quita lo comprado, nada más. */
+    @Test
+    @DisplayName("comprando una sola línea, la otra sobrevive en la cesta")
+    void comprandoUnaLineaLaOtraSobrevive() {
+        UUID otroProducto = insertarProducto(PRECIO_BASE, "0");
+        meterEnLaCesta(productId, 1);
+        meterEnLaCesta(otroProducto, 1);
+        assertThat(lineasEnLaCesta()).hasSize(2);
+
+        cuerpo(checkout(pedidoDe(1), null).expectStatus().isCreated());
+
+        List<Map<String, Object>> cesta = lineasEnLaCesta();
+        assertThat(cesta).hasSize(1);
+        assertThat(cesta.get(0)).containsEntry("productId", otroProducto.toString());
+    }
+
+    /* ==================================================================================
      *  Utilidades de la prueba
      * ================================================================================== */
+
+    /** Sube una línea a la cesta del servidor tal como lo haría la web o la app. */
+    private void meterEnLaCesta(UUID producto, int cantidad) {
+        String linea = """
+                {"productId":"%s","variantId":null,"sku":"SKU-1","slug":"producto","title":"Producto",
+                 "image":"https://cdn.local/p.jpg","variantLabel":null,"unitPriceSource":10.00,
+                 "sourceCurrency":"USD","quantity":%d,"moq":1,"unitPriceDisplay":10.00,
+                 "displayCurrency":"USD","displaySymbol":"$"}
+                """.formatted(producto, cantidad);
+        client.put().uri(CESTA).header(HttpHeaders.AUTHORIZATION, bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(linea).exchange().expectStatus().isOk();
+    }
+
+    private List<Map<String, Object>> lineasEnLaCesta() {
+        return client.get().uri(CESTA).header(HttpHeaders.AUTHORIZATION, bearer(token)).exchange()
+                .expectStatus().isOk().expectBody(LINEAS_DE_CESTA).returnResult().getResponseBody();
+    }
+
+    private int lineasDeLaCestaEnBd() {
+        Integer total = jdbcTemplate.queryForObject("SELECT count(*) FROM cart_item WHERE user_id = ?",
+                Integer.class, userId);
+        return total == null ? 0 : total;
+    }
 
     /** Checkout del usuario de la prueba. {@code idem} nulo = sin cabecera de idempotencia. */
     private WebTestClient.ResponseSpec checkout(String cuerpo, String idem) {
