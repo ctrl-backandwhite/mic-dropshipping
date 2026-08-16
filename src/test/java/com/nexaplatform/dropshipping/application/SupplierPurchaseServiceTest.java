@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application;
 
+import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.domain.enums.SupplierPurchaseStatus;
@@ -26,6 +27,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -234,8 +236,11 @@ class SupplierPurchaseServiceTest {
     @Test
     void marcarRecibidoYReempaquetadoAvanzaLosEstados() {
         UUID id = UUID.randomUUID();
+        // Exportada: el número de orden que se teclea al re-empaquetar lo devuelve el OMS al importar
+        // el fichero, así que antes de eso no puede existir.
         SupplierPurchaseEntity p = SupplierPurchaseEntity.builder().id(id)
-                .status(SupplierPurchaseStatus.IN_TRANSIT).build();
+                .status(SupplierPurchaseStatus.IN_TRANSIT)
+                .exportedAt(java.time.Instant.parse("2026-08-01T00:00:00Z")).build();
         when(purchaseRepository.findById(id)).thenReturn(Optional.of(p));
         when(purchaseRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -244,6 +249,48 @@ class SupplierPurchaseServiceTest {
         assertThat(packed.getStatus()).isEqualTo(SupplierPurchaseStatus.PACKED);
         assertThat(packed.getPackOrderNo()).isEqualTo("PK-99");
         assertThat(packed.getPackSubmittedAt()).isNotNull();
+    }
+
+    /**
+     * Sin exportar no se puede re-empaquetar.
+     *
+     * <p>Dejarlo pasar metía el pedido en un callejón sin salida: la compra salía del tablero y, por
+     * tener ya orden de re-empaquetado, la validación del fichero la rechazaba para siempre. Y el
+     * almacén no recibía instrucción alguna sobre un bulto que allí sigue contando sus 30 días.
+     */
+    @Test
+    void noSePuedeReempaquetarSinHaberDescargadoElFichero() {
+        UUID id = UUID.randomUUID();
+        SupplierPurchaseEntity p = SupplierPurchaseEntity.builder().id(id)
+                .status(SupplierPurchaseStatus.AT_WAREHOUSE).build();
+        when(purchaseRepository.findById(id)).thenReturn(Optional.of(p));
+
+        assertThatThrownBy(() -> service.markPacked(id, "PK-99", "REPACKAGING"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Descarga antes el fichero");
+
+        assertThat(p.getStatus()).isEqualTo(SupplierPurchaseStatus.AT_WAREHOUSE);
+        assertThat(p.getPackOrderNo()).isNull();
+        verify(purchaseRepository, never()).save(any());
+    }
+
+    /** El tablero enseña también lo ya re-empaquetado; la cola de exportación, no. */
+    @Test
+    void elTableroSigueMostrandoLoReempaquetado() {
+        service.openQueue();
+
+        ArgumentCaptor<Set<SupplierPurchaseStatus>> captor = ArgumentCaptor.forClass(Set.class);
+        verify(purchaseRepository).findByStatusInOrderByCreatedAtAsc(captor.capture());
+        assertThat(captor.getValue()).contains(SupplierPurchaseStatus.PACKED);
+    }
+
+    @Test
+    void laColaDeExportacionNoRepiteLoYaReempaquetado() {
+        service.exportQueue();
+
+        ArgumentCaptor<Set<SupplierPurchaseStatus>> captor = ArgumentCaptor.forClass(Set.class);
+        verify(purchaseRepository).findByStatusInAndExportedAtIsNullOrderByCreatedAtAsc(captor.capture());
+        assertThat(captor.getValue()).doesNotContain(SupplierPurchaseStatus.PACKED);
     }
 
     @Test
