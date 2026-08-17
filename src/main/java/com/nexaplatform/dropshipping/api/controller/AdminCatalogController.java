@@ -13,6 +13,7 @@ import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AddProductImageDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.ReorderProductImagesDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.AdminProductSourceUrlDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
@@ -104,6 +105,11 @@ public class AdminCatalogController implements AdminCatalogApi {
     @Override
     public ProductDetailView quickEdit(UUID id, AdminProductQuickEditDtoIn req, String lang) {
         return catalogUseCase.quickEdit(id, req, lang);
+    }
+
+    @Override
+    public ProductDetailView updateSourceUrl(UUID id, AdminProductSourceUrlDtoIn req, String lang) {
+        return catalogUseCase.updateSourceUrl(id, req.getSourceUrl(), lang);
     }
 
     @Override

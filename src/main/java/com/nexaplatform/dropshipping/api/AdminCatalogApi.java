@@ -11,6 +11,7 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AddProductImageDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.AdminProductSourceUrlDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
@@ -74,6 +75,13 @@ public interface AdminCatalogApi {
     @PutMapping("/products/{id}")
     ProductDetailView quickEdit(@PathVariable UUID id,
             @Valid @RequestBody AdminProductQuickEditDtoIn req,
+            @RequestParam(defaultValue = "es") String lang);
+
+    @Operation(summary = "Update the supplier listing URL (1688/Alibaba) of a product. "
+            + "Rejects any other domain or scheme with 422 PRODUCT_SOURCE_URL_INVALID.")
+    @PutMapping("/products/{id}/source-url")
+    ProductDetailView updateSourceUrl(@PathVariable UUID id,
+            @Valid @RequestBody AdminProductSourceUrlDtoIn req,
             @RequestParam(defaultValue = "es") String lang);
 
     @Operation(summary = "Duplicate a product")

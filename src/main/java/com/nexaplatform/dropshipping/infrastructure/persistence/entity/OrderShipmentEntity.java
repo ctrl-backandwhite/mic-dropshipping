@@ -10,8 +10,11 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -70,6 +73,19 @@ public class OrderShipmentEntity {
 
     @Column(name = "label_url", columnDefinition = "text")
     private String labelUrl;
+
+    /**
+     * Copia de la declaración que se le transmitió al transportista para ESTE bulto: destinatario y
+     * líneas declaradas (descripción EN/ZH, partida arancelaria, cantidad, valor y peso).
+     *
+     * <p>Sin ella, un rechazo de aduana obligaba a entrar al panel del transportista para averiguar qué
+     * se había declarado. Nunca guarda credenciales ni cabeceras de firma: solo el contenido declarado.
+     *
+     * <p>Es {@code null} en los envíos creados antes de v139, y quien la lee debe contar con ello.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "declaration_json", columnDefinition = "jsonb")
+    private Map<String, Object> declaration;
 
     @Column(name = "estimated_delivery_at")
     private Instant estimatedDeliveryAt;

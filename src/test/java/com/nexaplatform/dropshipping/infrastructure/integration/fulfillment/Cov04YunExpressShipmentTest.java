@@ -356,6 +356,56 @@ class Cov04YunExpressShipmentTest {
         assertThat(payload.customsNumber()).isNull();
     }
 
+    // ── Constancia de lo declarado ───────────────────────────────────────────────────────────────
+
+    @Test
+    void laGuiaArchivaLaMismaDeclaracionQueSeLeTransmitioAlTransportista() {
+        // Antes solo quedaba el RESULTADO (guía, canal, peso y valor): ante un rechazo de aduana no había
+        // forma de comprobar qué se declaró sin entrar al panel del transportista.
+        OrderItem item = linea(2, 1500);
+        ProductEntity producto = ProductEntity.builder().hsCode("610910").weightGrams(400)
+                .customsMaterial("cotton").customsUsage("daily use").build();
+        producto.setId(item.getProductId());
+        when(productRepository.findById(item.getProductId())).thenReturn(Optional.of(producto));
+        when(client.post(eq(PATH_CREATE), any(Object.class)))
+                .thenReturn(ok("{\"success\":true,\"result\":{\"waybill_number\":\"YT-A\"}}"));
+
+        List<FulfillmentResult> results = service.createShipments(pedido(item));
+
+        ArgumentCaptor<Object> captor = payloadCaptor();
+        verify(client).post(eq(PATH_CREATE), captor.capture());
+        YunExpressRequests.CreateShipment enviado = (YunExpressRequests.CreateShipment) captor.getValue();
+        FulfillmentProvider.ShipmentDeclaration archivada = results.get(0).declaration();
+        assertThat(archivada.receiver().firstName()).isEqualTo(enviado.receiver().firstName());
+        assertThat(archivada.receiver().lastName()).isEqualTo(enviado.receiver().lastName());
+        assertThat(archivada.receiver().countryCode()).isEqualTo("ES");
+        assertThat(archivada.receiver().city()).isEqualTo("Zaragoza");
+        assertThat(archivada.receiver().addressLines()).isEqualTo(enviado.receiver().addressLines());
+        assertThat(archivada.lines()).hasSameSizeAs(enviado.declarationInfo());
+        assertThat(archivada.lines().get(0).nameEn()).isEqualTo("Cotton T-shirt");
+        assertThat(archivada.lines().get(0).nameLocal()).isEqualTo("棉T恤");
+        assertThat(archivada.lines().get(0).hsCode()).isEqualTo("610910");
+        assertThat(archivada.lines().get(0).quantity()).isEqualTo(2);
+        assertThat(archivada.lines().get(0).material()).isEqualTo("cotton");
+    }
+
+    @Test
+    void cadaBultoArchivaSoloLasUnidadesQueViajanEnEl() {
+        // La declaración de una guía tiene que cuadrar con lo que hay dentro de ESE paquete: archivar el
+        // pedido entero en los dos bultos haría creer que se declaró el doble de mercancía.
+        ReflectionTestUtils.setField(service, "maxParcelWeightGrams", 1200);
+        when(client.post(eq(PATH_CREATE), any(Object.class))).thenReturn(
+                ok("{\"success\":true,\"result\":{\"waybill_number\":\"YT-A\"}}"),
+                ok("{\"success\":true,\"result\":{\"waybill_number\":\"YT-B\"}}"));
+
+        List<FulfillmentResult> results = service.createShipments(pedido(linea(3, 1000)));
+
+        assertThat(results.get(0).declaration().lines()).singleElement()
+                .extracting(FulfillmentProvider.DeclaredLine::quantity).isEqualTo(2);
+        assertThat(results.get(1).declaration().lines()).singleElement()
+                .extracting(FulfillmentProvider.DeclaredLine::quantity).isEqualTo(1);
+    }
+
     @Test
     void elDestinatarioSeMontaConLaDireccionDelPedidoYElPaisEnMayusculas() {
         Order order = pedido(linea(1, 1000));

@@ -283,3 +283,7 @@ databaseChangeLog:
       file: db/changelog/schema-v136-contenido-del-bulto.sql
   - include:
       file: db/changelog/schema-v137-operador-economico-empresa.sql
+  - include:
+      file: db/changelog/schema-v138-historial-visitas.sql
+  - include:
+      file: db/changelog/schema-v139-declaracion-enviada.sql

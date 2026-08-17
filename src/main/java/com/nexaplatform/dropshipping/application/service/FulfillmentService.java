@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
@@ -206,12 +207,35 @@ public class FulfillmentService {
                     .productCode(r.productCode()).waybillNumber(r.fulfillmentRef())
                     .trackingNumber(r.trackingNumber()).status(OrderStatus.FORWARDED.name())
                     .weightGrams(r.weightGrams()).declaredValueCents(r.declaredValueCents())
+                    .declaration(declarationJson(r))
                     .estimatedDeliveryAt(Instant.now().plus(Duration.ofDays(r.etaMaxDays())))
                     .createdAt(Instant.now()).build());
             persistShipmentContents(o, shipment, r);
         }
         if (results.size() > 1) {
             log.info("::> [FULFILLMENT] Pedido {} despachado en {} bultos", o.getOrderNumber(), results.size());
+        }
+    }
+
+    /**
+     * La declaración transmitida al transportista, lista para archivarse como jsonb.
+     *
+     * <p>Es lo único que deja constancia de QUÉ se declaró: destinatario y líneas con su partida
+     * arancelaria. Si aduana rechaza el envío, sin esto habría que ir al panel del transportista.
+     *
+     * <p>Un fallo al convertirla NO tumba el despacho: la guía ya existe en el transportista y perder el
+     * envío por no poder archivar una copia sería mucho peor que quedarse sin la copia.
+     */
+    private Map<String, Object> declarationJson(FulfillmentResult r) {
+        if (r.declaration() == null) {
+            return null;
+        }
+        try {
+            return objectMapper.convertValue(r.declaration(), new TypeReference<Map<String, Object>>() { });
+        } catch (IllegalArgumentException e) {
+            log.warn("Fulfillment: no se pudo archivar la declaración del bulto {}: {}", r.sequenceNo(),
+                    e.getMessage());
+            return null;
         }
     }
 
@@ -501,11 +525,25 @@ public class FulfillmentService {
     }
 
     /**
+     * Lo que se le declaró al transportista para UN bulto, con la guía a la que corresponde.
+     *
+     * <p>Solo se devuelve en la vista del admin: lleva partidas arancelarias, valores declarados y la
+     * referencia del proveedor, que no son datos del comprador.
+     */
+    public record ShipmentDeclarationView(int sequenceNo, String trackingNumber, String waybillNumber,
+            FulfillmentProvider.ShipmentDeclaration declaration) {
+    }
+
+    /**
      * Seguimiento del pedido. {@code events} mantiene la lista completa —lo que ya consumía la interfaz—
      * y {@code shipments} añade el desglose por bulto para los pedidos repartidos en varias guías.
+     *
+     * <p>{@code declarations} es lo que se transmitió al transportista por cada bulto y va SIEMPRE vacío
+     * fuera del panel de administración.
      */
     public record TrackingView(String status, String carrier, String trackingNumber, Instant estimatedDeliveryAt,
-            Instant lastTrackedAt, List<TrackingEventView> events, List<ShipmentTrackingView> shipments) {
+            Instant lastTrackedAt, List<TrackingEventView> events, List<ShipmentTrackingView> shipments,
+            List<ShipmentDeclarationView> declarations) {
     }
 
     /** Vista de tracking del pedido del usuario (valida propiedad). */
@@ -515,30 +553,70 @@ public class FulfillmentService {
         if (o.getUserId() == null || !o.getUserId().equals(userId)) {
             throw new NotFoundException(ORDER);
         }
-        return view(o);
+        return view(o, false);
     }
 
-    /** Vista de tracking para el admin. */
+    /** Vista de tracking para el admin: la única que incluye la declaración enviada al transportista. */
     @Transactional(readOnly = true)
     public TrackingView adminTrackingView(UUID orderId) {
         Order o = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException(ORDER));
-        return view(o);
+        return view(o, true);
     }
 
-    private TrackingView view(Order o) {
+    private TrackingView view(Order o, boolean forAdmin) {
         List<OrderTrackingEventEntity> all = trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId());
         List<TrackingEventView> events = trackingViewMapper.toEventViews(all);
+        // Los bultos se leen una sola vez y se reparten entre el desglose y las declaraciones: son la
+        // misma pantalla, y pedirlos dos veces sería una consulta de más por cada visita a la ficha.
+        List<OrderShipmentEntity> shipments = shipmentRepository.findByOrderIdOrderBySequenceNoAsc(o.getId());
         return new TrackingView(o.getStatus() != null ? o.getStatus().name() : null, o.getCarrier(),
                 o.getTrackingNumber(), o.getEstimatedDeliveryAt(), o.getLastTrackedAt(), events,
-                shipmentViews(o, all));
+                shipmentViews(o, all, shipments), forAdmin ? declarationViews(shipments) : List.of());
+    }
+
+    /**
+     * Lo declarado al transportista, bulto a bulto, para que el admin pueda comprobar desde la ficha del
+     * pedido que la guía salió completa y a la dirección correcta.
+     *
+     * <p>Los envíos anteriores a que esto se archivara no aportan entrada: la ficha no pinta el bloque y
+     * ya está, igual que hace el contenido del bulto.
+     */
+    private List<ShipmentDeclarationView> declarationViews(List<OrderShipmentEntity> shipments) {
+        List<ShipmentDeclarationView> out = new ArrayList<>();
+        for (OrderShipmentEntity shipment : shipments) {
+            FulfillmentProvider.ShipmentDeclaration declared = readDeclaration(shipment);
+            if (declared != null) {
+                out.add(new ShipmentDeclarationView(shipment.getSequenceNo(), shipment.getTrackingNumber(),
+                        shipment.getWaybillNumber(), declared));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Relee la declaración archivada. Un json que ya no encaje con el modelo se ignora en lugar de tumbar
+     * la ficha del pedido: el admin necesita poder abrirla sobre todo cuando algo ha ido mal.
+     */
+    private FulfillmentProvider.ShipmentDeclaration readDeclaration(OrderShipmentEntity shipment) {
+        Map<String, Object> stored = shipment.getDeclaration();
+        if (stored == null || stored.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.convertValue(stored, FulfillmentProvider.ShipmentDeclaration.class);
+        } catch (IllegalArgumentException e) {
+            log.warn("Fulfillment: declaración archivada ilegible en el bulto {}: {}",
+                    shipment.getSequenceNo(), e.getMessage());
+            return null;
+        }
     }
 
     /**
      * Desglose por bulto. Se devuelve vacío cuando el pedido viaja en un solo paquete: en ese caso la
      * lista global ya lo dice todo y añadir un "Paquete 1 de 1" solo sería ruido.
      */
-    private List<ShipmentTrackingView> shipmentViews(Order o, List<OrderTrackingEventEntity> allEvents) {
-        List<OrderShipmentEntity> shipments = shipmentRepository.findByOrderIdOrderBySequenceNoAsc(o.getId());
+    private List<ShipmentTrackingView> shipmentViews(Order o, List<OrderTrackingEventEntity> allEvents,
+            List<OrderShipmentEntity> shipments) {
         if (shipments.size() <= 1) {
             return List.of();
         }

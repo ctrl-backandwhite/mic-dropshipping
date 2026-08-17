@@ -232,6 +232,9 @@ public interface CatalogUseCase {
 
     ProductDetailView quickEdit(UUID id, AdminProductQuickEditDtoIn req, String lang);
 
+    /** Corrige el enlace a la ficha del proveedor (1688/Alibaba); rechaza cualquier otro dominio o esquema. */
+    ProductDetailView updateSourceUrl(UUID id, String sourceUrl, String lang);
+
     /** Elimina un tramo de precio (price break) de un producto, identificado por su cantidad mínima. */
     void deletePriceTier(UUID productId, int minQty);
 
