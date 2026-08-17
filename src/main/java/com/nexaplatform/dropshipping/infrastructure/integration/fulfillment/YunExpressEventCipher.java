@@ -11,6 +11,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.util.Base64;
 import java.util.HexFormat;
 
@@ -63,6 +67,9 @@ import java.util.HexFormat;
 @Component
 public class YunExpressEventCipher {
 
+    /** Solo se usa para mirar dentro del sobre; el contenido real lo interpreta el servicio. */
+    private static final ObjectMapper JSON = new ObjectMapper();
+
     private static final int IV_LENGTH = 16;
 
     @Value("${nexadrop.yunexpress.encrypt-key:}")
@@ -102,6 +109,34 @@ public class YunExpressEventCipher {
      */
     public String decrypt(String base64Content) {
         return decrypt(base64Content, encryptKey);
+    }
+
+    /**
+     * El {@code ack} del saludo con el que YunExpress comprueba la dirección del webhook, o
+     * {@code null} si el sobre no es un saludo sino un aviso de trazabilidad.
+     *
+     * <p>Al guardar la URL en el console mandan un POST <b>firmado y cifrado igual que los avisos
+     * reales</b> —capturado el 17-ago-2026— cuyo contenido descifrado es {@code {"ack":"<valor>"}}. Hay
+     * que devolver ese valor; con cualquier otra respuesta el console contesta {@code URL校验失败} y la
+     * dirección no se puede registrar. (Su documentación dice que esa comprobación va sin firma; no es
+     * cierto, y menos mal: así no hace falta abrir ninguna puerta.)
+     *
+     * <p>Vive aquí, junto al descifrado, por la misma <b>PRECONDICIÓN</b> que {@link #decrypt}: se llama
+     * solo sobre un cuerpo cuya firma ya pasó por {@link #verify}. Reconocer el saludo obliga a abrir el
+     * sobre, y abrir sobres es de esta clase, no del controlador.
+     */
+    public String ackOf(String rawBody) {
+        try {
+            JsonNode sobre = JSON.readTree(rawBody);
+            String contenido = sobre.hasNonNull("encrypt")
+                    ? decrypt(sobre.get("encrypt").asText())
+                    : rawBody;
+            String ack = JSON.readTree(contenido).path("ack").asText("");
+            return ack.isBlank() ? null : ack;
+        } catch (JsonProcessingException | RuntimeException e) {
+            // Lo que no se puede leer como sobre no es un saludo: que siga su camino.
+            return null;
+        }
     }
 
     static String decrypt(String base64Content, String key) {

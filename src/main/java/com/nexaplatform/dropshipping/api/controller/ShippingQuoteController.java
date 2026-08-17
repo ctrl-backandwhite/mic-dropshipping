@@ -4,6 +4,7 @@ import com.nexaplatform.dropshipping.application.service.CountryTaxService;
 import com.nexaplatform.dropshipping.application.service.CheckoutPreviewService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.ShippingQuoteService;
+import com.nexaplatform.dropshipping.domain.enums.PostalCodeFormat;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.SupportedCountry;
@@ -197,6 +198,33 @@ public class ShippingQuoteController {
     @GetMapping("/countries")
     public ResponseEntity<List<SupportedCountry>> supportedCountries() {
         return ResponseEntity.ok(shippingQuoteService.supportedCountries());
+    }
+
+    /**
+     * Qué código postal espera un país: la expresión que lo describe y un ejemplo real.
+     *
+     * <p>{@code pattern} y {@code example} van vacíos, y {@code required} a false, cuando el país no
+     * tiene formato conocido —hay países sin código postal— y por tanto no hay nada que exigir.
+     */
+    public record PostalFormatOut(String countryCode, boolean required, String pattern, String example) {
+    }
+
+    /**
+     * El formato del código postal del país, para que el formulario avise ANTES de enviar.
+     *
+     * <p>Se publica desde aquí en vez de copiar la tabla en el navegador: si hubiera dos, una acabaría
+     * corregida y la otra no, y el formulario rechazaría direcciones que el servidor acepta —o al revés,
+     * que es peor—. La comprobación que manda sigue siendo la del servidor; esto solo es cortesía.
+     */
+    @Operation(summary = "Formato de código postal esperado por el país (para validar el formulario)")
+    @GetMapping("/postal-format")
+    public ResponseEntity<PostalFormatOut> postalFormat(@RequestParam(required = false) String country) {
+        PostalCodeFormat format = PostalCodeFormat.of(country);
+        String code = country == null ? "" : country.trim().toUpperCase(java.util.Locale.ROOT);
+        if (format == null) {
+            return ResponseEntity.ok(new PostalFormatOut(code, false, "", ""));
+        }
+        return ResponseEntity.ok(new PostalFormatOut(code, true, format.pattern(), format.example()));
     }
 
     @Operation(summary = "Regiones (estado/provincia) de un país para el dropdown del checkout")

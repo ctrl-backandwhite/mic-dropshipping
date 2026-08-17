@@ -27,6 +27,7 @@ import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.PromotionService;
 import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.application.service.RefundPolicy;
+import com.nexaplatform.dropshipping.application.service.PostalCodeCheck;
 import com.nexaplatform.dropshipping.application.service.ShippingOptionResolver;
 import com.nexaplatform.dropshipping.application.service.UnserviceableZoneService;
 import com.nexaplatform.dropshipping.domain.model.ShippingOption;
@@ -995,6 +996,10 @@ public class OrderUseCaseImpl implements OrderUseCase {
             throw new BusinessException(
                     "No realizamos envíos a este destino (" + addr.country() + "). Elige un país soportado.");
         }
+        // El código postal tiene que ser el del país elegido. Va ANTES del bloqueo de zonas y no es un
+        // detalle de formulario: las zonas excluidas se comparan por número, así que un código con una
+        // letra de más («07001A») quedaba fuera de la comparación y colaba un envío a Baleares.
+        PostalCodeCheck.require(addr.country(), addr.postalCode());
         // Dentro de un país servible hay zonas que el transportista excluye —en España, Baleares,
         // Canarias, Ceuta y Melilla—. Se comprueba AQUÍ, antes de cobrar: aceptarlo dejaría un pedido
         // pagado que nadie puede despachar.
