@@ -35,6 +35,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class YunExpressWebhookController {
 
+    /** Lo que hay que contestar a un aviso procesado para que no lo reintenten (ver el javadoc de abajo). */
+    private static final String SUCCESS = "success";
+
     private final YunExpressEventCipher cipher;
     private final FulfillmentService fulfillmentService;
 
@@ -53,12 +56,21 @@ public class YunExpressWebhookController {
             log.warn("YunExpress webhook: firma inválida o clave de cifrado sin configurar — rechazado");
             return ResponseEntity.status(401).body("{\"success\":false}");
         }
+        String ack = cipher.ackOf(rawBody);
+        if (ack != null) {
+            log.info("YunExpress webhook: comprobación de dirección respondida");
+            return ResponseEntity.ok("{\"ack\":\"" + ack + "\"}");
+        }
         try {
             fulfillmentService.applyYunExpressPush(rawBody);
         } catch (RuntimeException e) {
             log.error("YunExpress webhook: error al procesar el push", e);
             return ResponseEntity.status(500).body("{\"success\":false}");
         }
-        return ResponseEntity.ok("{\"success\":true}");
+        // Su documentación es explícita: «After receiving the data, the docking party returns the string
+        // "success". OpenApi receives this message and considers the push successful.» Contestar otra
+        // cosa —un JSON, por ejemplo— deja el aviso por fallido y lo reintentan.
+        return ResponseEntity.ok(SUCCESS);
     }
+
 }

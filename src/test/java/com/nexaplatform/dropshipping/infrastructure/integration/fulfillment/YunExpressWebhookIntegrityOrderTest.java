@@ -66,9 +66,18 @@ class YunExpressWebhookIntegrityOrderTest {
     }
 
     /**
-     * Con firma válida: PRIMERO se verifica y DESPUÉS se entrega el cuerpo al servicio, que es el único
-     * camino hasta el descifrado. El {@link InOrder} es lo que fija el orden; sin él, un controller que
-     * descifrara primero pasaría igual.
+     * Con firma válida: PRIMERO se verifica, y solo DESPUÉS se abre el sobre y se entrega el cuerpo al
+     * servicio. El {@link InOrder} es lo que fija el orden; sin él, un controller que descifrara primero
+     * pasaría igual.
+     *
+     * <p>Este caso decía antes «el controller nunca descifra por su cuenta» ({@code never().decrypt()}).
+     * Dejó de ser cierto el 17-ago-2026, cuando se implementó el saludo con el que YunExpress comprueba
+     * la dirección del webhook: ese saludo llega firmado y cifrado como cualquier aviso, y reconocerlo
+     * obliga a abrir el sobre ({@code cipher.ackOf}). <b>El invariante que sostiene el falso positivo de
+     * CIPHER_INTEGRITY no ha cambiado</b> —no se descifra nada cuya firma no se haya comprobado—, así
+     * que lo que se fija aquí es exactamente eso, y no un detalle de quién llama a quién: cualquier
+     * descifrado ocurre DESPUÉS de la verificación. Es más estricto que la formulación anterior, porque
+     * también cubre el descifrado que hace el propio controller.
      */
     @Test
     void conFirmaValidaVerificaAntesDeEntregarElCuerpoAlDescifrado() {
@@ -80,9 +89,9 @@ class YunExpressWebhookIntegrityOrderTest {
         assertThat(respuesta.getStatusCode().value()).isEqualTo(200);
         InOrder orden = inOrder(cipher, fulfillment);
         orden.verify(cipher).verify(TIMESTAMP, cuerpo, firma);
+        // Todo lo que toca el criptograma va después de la firma: primero abrir el sobre, luego procesar.
+        orden.verify(cipher).decrypt(CRIPTOGRAMA);
         orden.verify(fulfillment).applyYunExpressPush(cuerpo);
-        // El controller nunca descifra por su cuenta: el descifrado vive detrás de la verificación.
-        verify(cipher, never()).decrypt(anyString());
     }
 
     /** Con firma inválida NADA se descifra ni se procesa: 401 y punto. */
