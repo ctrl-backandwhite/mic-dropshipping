@@ -33,6 +33,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -40,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Proveedor de fulfillment con <b>YunExpress</b> (云途) — carrier ACTIVO del sistema.
@@ -134,6 +136,17 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
      */
     @Value("${nexadrop.yunexpress.product-group-code:}")
     private String productGroupCode;
+    /**
+     * Canales que el contrato permite usar, separados por comas (p. ej. {@code FZZXR,THPHR}). Vacío = no
+     * se filtra, que es lo que necesita el entorno de pruebas —su canal {@code BPA} no existe en
+     * producción— y cualquier cuenta sin esta restricción.
+     *
+     * <p>Existe porque el transportista cotiza más líneas de las que se pueden usar y cada una admite
+     * una clase de mercancía: la de ropa solo textil, las económicas carga general, y las hay de
+     * cosmética o de artículos con batería. Ver {@link #contractedRates}.
+     */
+    @Value("${nexadrop.yunexpress.allowed-product-codes:}")
+    private String allowedProductCodes;
     /** Formato de la etiqueta que se pide al crear el envío: PDF, ZPL o PNG. */
     @Value("${nexadrop.yunexpress.label-type:PDF}")
     private String labelType;
@@ -387,8 +400,13 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
             // Solo entre los canales que pueden cumplir lo que se le prometió al cliente: donde el
             // transportista prepaga el IVA, los postales y los de Amazon quedan fuera aunque sean más
             // baratos. Si no queda ninguno, se devuelve null y el llamante cae a la tabla de zonas.
-            return deliverableRates(parseRates(response.path(RESULT)),
-                    customsValuation.carrierPrepaysVatFor(countryCode));
+            // Dos filtros, en este orden: primero fuera los que no pueden cumplir lo prometido al cliente
+            // (postales y Amazon donde el transportista prepaga el IVA), y después los que el contrato
+            // no permite usar. Si no queda ninguno, el llamante cae a la tabla de zonas.
+            return contractedRates(
+                    deliverableRates(parseRates(response.path(RESULT)),
+                            customsValuation.carrierPrepaysVatFor(countryCode)),
+                    contractedChannels());
         } catch (RuntimeException e) {
             log.warn("YunExpress: fallo simulando tarifa para {} -> {}", countryCode, e.getMessage());
             return List.of();
@@ -423,6 +441,54 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         return rates.stream()
                 .filter(r -> !prepaidVat || isCompatibleWithPrepaidVat(r.productCode()))
                 .sorted(Comparator.comparing(RateOption::amount))
+                .toList();
+    }
+
+    /**
+     * Deja solo los canales que el contrato permite usar, conservando el orden por precio.
+     *
+     * <p>El transportista cotiza para la cuenta más líneas de las que se pueden usar, y cada una admite
+     * una clase de mercancía distinta: la de ropa ({@code FZZXR}) solo textil en bolsa, las de carga
+     * general ({@code THPHR}) mercancía normal sin batería, y las hay de cosmética, de artículos con
+     * batería o de gran volumen. Ofrecer en el checkout un canal que luego no acepta lo que va dentro
+     * es cobrar un envío y descubrir en el almacén que no se puede despachar.
+     *
+     * <p>La lista es CONFIGURACIÓN, no código: al ampliar el contrato se añade el canal en una variable
+     * de entorno, sin desplegar. <b>Vacía = no se filtra nada</b>, que es lo que necesitan el entorno de
+     * pruebas —cuyo canal {@code BPA} no existe en producción— y cualquier cuenta sin esta restricción.
+     *
+     * <p>La comparación es exacta: {@code FZZXR-AMZ} es la misma línea por la red de Amazon y exige SU
+     * número de IOSS, así que parecerse no basta para poder usarla.
+     */
+    /** Los canales contratados, leídos de la configuración. Conjunto vacío = sin restricción. */
+    private Set<String> contractedChannels() {
+        if (allowedProductCodes == null || allowedProductCodes.isBlank()) {
+            return Set.of();
+        }
+        return Arrays.stream(allowedProductCodes.split(","))
+                .map(String::trim)
+                .filter(c -> !c.isEmpty())
+                .map(c -> c.toUpperCase(Locale.ROOT))
+                .collect(Collectors.toSet());
+    }
+
+    static List<RateOption> contractedRates(List<RateOption> rates, Set<String> allowed) {
+        if (rates == null || rates.isEmpty()) {
+            return List.of();
+        }
+        if (allowed == null || allowed.isEmpty()) {
+            return rates;
+        }
+        Set<String> normalizados = allowed.stream()
+                .filter(c -> c != null && !c.isBlank())
+                .map(c -> c.trim().toUpperCase(Locale.ROOT))
+                .collect(Collectors.toSet());
+        if (normalizados.isEmpty()) {
+            return rates;
+        }
+        return rates.stream()
+                .filter(r -> r.productCode() != null
+                        && normalizados.contains(r.productCode().trim().toUpperCase(Locale.ROOT)))
                 .toList();
     }
 
@@ -1303,6 +1369,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
             }
             ProductVariantEntity variant = variantOf(product, item);
             lines.add(new CustomsDutyLinesService.Line(product.getId(), product.getHsCode(),
+                    CustomsDutyLinesService.declaredDescriptionOf(product), product.getCountryOfOrigin(),
                     Math.max(1, item.getQuantity()), item.getUnitPriceCents(),
                     ParcelAggregator.unitWeightGrams(product, variant), dimension(product, variant, Dimension.LENGTH),
                     dimension(product, variant, Dimension.WIDTH), dimension(product, variant, Dimension.HEIGHT),

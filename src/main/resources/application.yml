@@ -403,6 +403,12 @@ nexadrop:
     product-code: ${YUNEXPRESS_PRODUCT_CODE:}
     # Grupo al que se restringe la simulación de tarifa (DH快递, EM经济, MA挂号, SP专线...). Vacío = todos.
     product-group-code: ${YUNEXPRESS_PRODUCT_GROUP:}
+    # Canales que el CONTRATO permite usar, separados por comas. El transportista cotiza más líneas de las
+    # que se pueden usar y cada una admite una mercancía distinta: FZZXR es la de ropa (solo textil en
+    # bolsa) y THPHR la económica de carga general. Ofrecer una que no acepta lo que va dentro es cobrar un
+    # envío que el almacén no puede despachar. Vacío = sin filtro: lo necesita el sandbox, cuyo canal BPA no
+    # existe en producción. En PRE/PRO: YUNEXPRESS_ALLOWED_PRODUCT_CODES=FZZXR,THPHR
+    allowed-product-codes: ${YUNEXPRESS_ALLOWED_PRODUCT_CODES:}
     # Formato de etiqueta pedido al crear el envío: PDF, ZPL o PNG.
     label-type: ${YUNEXPRESS_LABEL_TYPE:PDF}
     # Suscribir cada guía al push de trazabilidad al crearla (requiere el webhook registrado en 事件管理).

@@ -1288,7 +1288,20 @@ public class OrderUseCaseImpl implements OrderUseCase {
             ProductVariantEntity v = p.getVariants().stream()
                     .filter(x -> item.getVariantId() != null && item.getVariantId().equals(x.getId())).findFirst()
                     .orElse(null);
-            lines.add(new CustomsDutyLinesService.Line(p.getId(), p.getHsCode(), Math.max(1, item.getQuantity()),
+            // La descripción tiene que ser la MISMA que se le transmite al transportista, o el arancel
+            // que se cobra y el que se declara cuentan líneas distintas. Allí manda el título inglés
+            // CONGELADO en el pedido y solo a falta de él el del producto (ver `englishName` en
+            // YunExpressFulfillmentService); aquí se replica ese orden, que además es el correcto: un
+            // pedido antiguo debe seguir contando por lo que se declaró, no por cómo se llame el
+            // producto hoy.
+            String descripcionDeclarada = item.getProductTitles() != null
+                    && item.getProductTitles().get("en") != null
+                    && !item.getProductTitles().get("en").isBlank()
+                    ? item.getProductTitles().get("en")
+                    : CustomsDutyLinesService.declaredDescriptionOf(p);
+            lines.add(new CustomsDutyLinesService.Line(p.getId(), p.getHsCode(),
+                    descripcionDeclarada, p.getCountryOfOrigin(),
+                    Math.max(1, item.getQuantity()),
                     item.getUnitPriceCents(), ParcelAggregator.unitWeightGrams(p, v), 0, 0, 0,
                     ParcelAggregator.hasBattery(p)));
         }

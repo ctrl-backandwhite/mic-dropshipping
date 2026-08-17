@@ -148,7 +148,10 @@ class CustomsRegulationIT extends BaseIntegration {
                 + "status) VALUES (?, ?, ?, ?, ?, 500, 'ACTIVE')",
                 id, "producto-" + sufijo, "ext-" + sufijo, "测试商品", hsCode);
         String leido = jdbcTemplate.queryForObject("SELECT hs_code FROM product WHERE id = ?", String.class, id);
-        return new Line(id, leido, cantidad, precioUnitarioCentimos, 500, 0, 0, 0, false);
+        // Sin descripción declarada: el producto se siembra sin traducciones, que es lo que
+        // CustomsDutyLinesService.declaredDescriptionOf leería de él. Así estos casos siguen midiendo lo
+        // que afirman —la clasificación arancelaria— y no el texto del título.
+        return new Line(id, leido, null, "CN", cantidad, precioUnitarioCentimos, 500, 0, 0, 0, false);
     }
 
     /** Valor intrínseco del pedido: lo que el cliente paga por los bienes, sin envío ni impuestos. */

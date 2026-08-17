@@ -1,5 +1,7 @@
 package com.nexaplatform.dropshipping.application.service;
 
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -7,6 +9,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
@@ -25,9 +28,11 @@ import java.util.UUID;
  * <p>De ahí las tres consecuencias que implementa esta clase:
  * <ol>
  *   <li><b>La cantidad no multiplica.</b> Cinco unidades de la misma referencia son UNA línea: 3 EUR.</li>
- *   <li><b>Productos distintos con la misma clasificación son UNA línea.</b> El ejemplo oficial es
- *       explícito: un anorak, un cortavientos y una cazadora que comparten la subpartida 6104 19 pagan
- *       3 EUR en total, no 9. Antes se contaban productos distintos, y ahí es donde se cobraba de más.</li>
+ *   <li><b>Lo que agrupa es la TERNA completa</b>, no solo la partida: clasificación, descripción y origen.
+ *       Dos productos distintos que comparten subpartida <i>y</i> se declaran con la misma descripción son
+ *       una sola línea —el ejemplo oficial del anorak, el cortavientos y la cazadora bajo la 6104 19, que
+ *       pagan 3 EUR y no 9—; si cada uno viaja con SU descripción, son líneas distintas y pagan una cada
+ *       uno, porque así es como se transmiten y así es como las cuenta la aduana.</li>
  *   <li><b>Se cuenta por envío, no por pedido.</b> Un «consignment» es lo que ampara un mismo contrato de
  *       transporte; cada bulto lleva su propia declaración. Por eso se reparte primero la mercancía en
  *       bultos con el MISMO criterio que usará el transportista ({@link ParcelSplitter}) y se cuentan las
@@ -36,8 +41,12 @@ import java.util.UUID;
  *
  * <p><b>Nivel de la clasificación.</b> Se agrupa por los 6 primeros dígitos (subpartida del Sistema
  * Armonizado), que es lo que se declara en el H7 —la declaración reducida de los envíos de bajo valor con
- * IOSS, que es nuestro caso—. Si algún día se declarase en H1 habría que afinar a 10 dígitos TARIC y separar
- * además por país de origen, porque allí cada combinación es una línea distinta.
+ * IOSS, que es nuestro caso—. Si algún día se declarase en H1 habría que afinar a 10 dígitos TARIC.
+ *
+ * <p><b>Por qué la descripción cuenta.</b> Porque la declaración que de verdad se transmite
+ * ({@code declaration_info[]} de YunExpress) lleva el título del producto en cada línea: dos artículos de la
+ * misma partida con títulos distintos salen como DOS líneas en la guía. Contarlos aquí como una sola dejaba
+ * sin cobrar el derecho de la segunda, y esos 3 EUR los ponía el comercio al despachar.
  *
  * <p><b>Sin clasificación no se agrupa.</b> Un producto sin código HS cuenta como línea propia: se cobra de
  * más en el peor caso, nunca de menos. Agruparlo con otros sería atribuirle una clasificación que nadie ha
@@ -54,9 +63,17 @@ public class CustomsDutyLinesService {
      */
     private static final int MAX_UNITS = 10_000;
 
-    /** Una línea del carrito o del pedido, con lo que hace falta para clasificarla y para pesarla. */
-    public record Line(UUID productId, String hsCode, int quantity, int unitPriceCents, int unitWeightGrams,
-                       int lengthMm, int widthMm, int heightMm, boolean withBattery) {
+    /**
+     * Una línea del carrito o del pedido, con lo que hace falta para clasificarla y para pesarla.
+     *
+     * <p>{@code description} y {@code originCountry} no son adorno: son, junto a la partida, lo que
+     * distingue una línea de declaración de otra (ver {@link #classificationKey(Line)}). Van aquí y no se
+     * deducen dentro del servicio para que quien construye la línea sea quien garantice que coinciden con
+     * lo que se le va a transmitir al transportista.
+     */
+    public record Line(UUID productId, String hsCode, String description, String originCountry, int quantity,
+                       int unitPriceCents, int unitWeightGrams, int lengthMm, int widthMm, int heightMm,
+                       boolean withBattery) {
     }
 
     /** Un bulto ya formado: lo que declara y cuántas partidas arancelarias distintas contiene. */
@@ -118,14 +135,57 @@ public class CustomsDutyLinesService {
     }
 
     /**
-     * Clave por la que se agrupan dos mercancías en la misma línea de declaración: la subpartida del SA.
-     * Sin código, la clave es el propio producto (no se agrupa con nadie).
+     * Clave por la que se agrupan dos mercancías en la misma línea de declaración: subpartida del SA +
+     * descripción + país de origen, que es <b>exactamente</b> la terna del art. 1(61) del Reglamento
+     * Delegado (UE) 2015/2446 y, sobre todo, la terna con la que el transportista arma cada línea de
+     * {@code declaration_info[]}.
+     *
+     * <p>Antes se agrupaba solo por la subpartida. Dos productos con la misma partida y distinta
+     * descripción salían como UNA línea aquí y como DOS en la declaración transmitida: el derecho de esa
+     * segunda línea no se le cobraba a nadie y lo acababa poniendo el comercio al despachar.
+     *
+     * <p>Sin código HS la clave es el propio producto (no se agrupa con nadie). Y si NO hay descripción no
+     * se separa por ella: sin dato no hay nada que permita afirmar que dos mercancías de la misma partida
+     * se declaran por separado, y inventarse la separación cobraría 3 EUR de más al cliente. En el flujo
+     * real la descripción siempre existe —el transportista rechaza la guía sin {@code EName}—, así que esa
+     * rama solo cubre catálogo incompleto.
      */
     private static String classificationKey(Line line) {
         String hs = line.hsCode() == null ? "" : line.hsCode().replaceAll("[^0-9]", "");
         if (hs.length() < 6) {
             return "SIN-HS:" + line.productId();
         }
-        return hs.substring(0, 6);
+        return hs.substring(0, 6) + "|" + normalize(line.description()) + "|" + normalize(line.originCountry());
+    }
+
+    /**
+     * Deja el texto comparable: sin espacios de sobra y sin distinguir mayúsculas. Un «Cotton T-Shirt» y un
+     * «cotton  t-shirt» son la misma mercancía descrita por dos personas distintas, y cobrar dos derechos
+     * por una diferencia de tecleo sería cobrar de más.
+     */
+    private static String normalize(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.trim().replaceAll("\\s+", " ").toUpperCase(Locale.ROOT);
+    }
+
+    /**
+     * Descripción con la que el producto viajará en la declaración: su título en inglés, que es el
+     * {@code EName} que se le transmite al transportista.
+     *
+     * <p>Vive aquí, y no en cada llamante, porque la vista previa del checkout, el pedido y el despacho
+     * TIENEN que contar las mismas líneas: si uno resolviera el título de otra forma, el cliente vería un
+     * importe y se le cobraría otro. Todos leen el mismo producto, así que todos obtienen el mismo texto.
+     */
+    public static String declaredDescriptionOf(ProductEntity product) {
+        if (product == null || product.getTranslations() == null) {
+            return null;
+        }
+        return product.getTranslations().stream()
+                .filter(t -> "en".equalsIgnoreCase(t.getLanguage()))
+                .map(ProductTranslationEntity::getTitle)
+                .filter(t -> t != null && !t.isBlank())
+                .findFirst().orElse(null);
     }
 }
