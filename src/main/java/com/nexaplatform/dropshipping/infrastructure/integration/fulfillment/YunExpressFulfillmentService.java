@@ -501,7 +501,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
             }
             String hex = order.getId().toString().replace("-", "").substring(0, 10).toUpperCase() + sequenceNo;
             return new FulfillmentResult(CARRIER_NAME, "YT" + hex + "YE", "YE" + hex, etaMax, sequenceNo,
-                    bin.spec().weightGrams(), bin.valueCents(), productCode);
+                    bin.spec().weightGrams(), bin.valueCents(), productCode, contentsOf(bin));
         }
         String channel = resolveProductCode(order.getShippingCountry(), bin.spec());
         // El número de cliente debe ser único por guía: el mismo para dos envíos lo rechaza el carrier.
@@ -527,7 +527,25 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         }
         subscribeTracking(waybill);
         return new FulfillmentResult(CARRIER_NAME, trackingOf(result, waybill), waybill, etaMax, sequenceNo,
-                bin.spec().weightGrams(), bin.valueCents(), channel);
+                bin.spec().weightGrams(), bin.valueCents(), channel, contentsOf(bin));
+    }
+
+    /**
+     * Qué líneas del pedido —y cuántas unidades de cada una— viajan en este bulto.
+     *
+     * <p>El reparto ya está hecho: cada unidad colocada recuerda de qué línea salió. Se agrupa aquí para
+     * que el seguimiento pueda enseñar las fotos de lo que lleva cada paquete, en lugar de un «Paquete
+     * 1/2» a ciegas.
+     */
+    private static List<FulfillmentProvider.ParcelContent> contentsOf(ParcelSplitter.Bin bin) {
+        Map<Integer, Integer> porLinea = new LinkedHashMap<>();
+        for (ParcelSplitter.Unit unit : bin.units()) {
+            porLinea.merge(unit.lineIndex(), 1, Integer::sum);
+        }
+        List<FulfillmentProvider.ParcelContent> out = new ArrayList<>();
+        porLinea.forEach((linea, cantidad) ->
+                out.add(new FulfillmentProvider.ParcelContent(linea, cantidad)));
+        return out;
     }
 
     /** Declaración aduanera limitada a lo que viaja en ESTE bulto. */

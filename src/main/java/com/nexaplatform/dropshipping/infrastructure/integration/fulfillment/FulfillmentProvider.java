@@ -27,12 +27,29 @@ public interface FulfillmentProvider {
      * máx en días. {@code sequenceNo} indica qué bulto del pedido es (1..N) y {@code weightGrams} /
      * {@code declaredValueCents} lo que finalmente viajó en él, que es lo que se enseña al cliente.
      */
+    /**
+     * Unidades de una línea del pedido que van dentro de un bulto.
+     *
+     * <p>Una misma línea puede repartirse entre bultos cuando el peso no cabe en una sola guía, así que
+     * no basta con saber qué líneas van: hace falta cuántas de cada una.
+     */
+    record ParcelContent(int lineIndex, int quantity) {
+    }
+
     record FulfillmentResult(String carrier, String trackingNumber, String fulfillmentRef, int etaMaxDays,
-            int sequenceNo, int weightGrams, int declaredValueCents, String productCode) {
+            int sequenceNo, int weightGrams, int declaredValueCents, String productCode,
+            List<ParcelContent> contents) {
 
         /** Bulto único de un pedido que no hizo falta repartir. */
         public FulfillmentResult(String carrier, String trackingNumber, String fulfillmentRef, int etaMaxDays) {
-            this(carrier, trackingNumber, fulfillmentRef, etaMaxDays, 1, 0, 0, null);
+            this(carrier, trackingNumber, fulfillmentRef, etaMaxDays, 1, 0, 0, null, List.of());
+        }
+
+        /** Bulto del que no se conoce el reparto: el seguimiento no podrá enseñar su contenido. */
+        public FulfillmentResult(String carrier, String trackingNumber, String fulfillmentRef, int etaMaxDays,
+                int sequenceNo, int weightGrams, int declaredValueCents, String productCode) {
+            this(carrier, trackingNumber, fulfillmentRef, etaMaxDays, sequenceNo, weightGrams,
+                    declaredValueCents, productCode, List.of());
         }
     }
 

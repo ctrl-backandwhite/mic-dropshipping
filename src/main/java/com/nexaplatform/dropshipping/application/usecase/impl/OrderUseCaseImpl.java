@@ -659,6 +659,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         o.setStatus(OrderStatus.FORWARDED);
         o.setForwardedAt(Instant.now());
         o = orderRepository.save(o);
+        notificarAvance(o, "FORWARDED");
         return publishAndEnrich(o, "order.forwarded");
     }
 
@@ -678,6 +679,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // justo cuando alguien escribe preguntando dónde está su pedido.
         appendManualStep(o, OrderStatus.SHIPPED, "Paquete recogido por el transportista");
         sendOrderEmail(o, "shipped");
+        notificarAvance(o, "SHIPPED");
         return publishAndEnrich(o, "order.shipped");
     }
 
@@ -696,6 +698,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // Acredita al operador que entrega la comisión del 15% (CNY) y registra la operación (histórico).
         operatorCommissionService.recordDelivery(o);
         sendOrderEmail(o, "delivered");
+        notificarAvance(o, "DELIVERED");
         return publishAndEnrich(o, "order.delivered");
     }
 
@@ -984,6 +987,37 @@ public class OrderUseCaseImpl implements OrderUseCase {
      * carrito ya existente se envió antes—, y el de pago confirmado con su factura solo cuando la orden ya
      * sale PAID, que es el caso de haber pagado con el saldo del monedero.
      */
+    /**
+     * Avisa a quien compró de que su pedido ha avanzado.
+     *
+     * <p>Los avisos de enviado y entregado existían desde hacía tiempo y no los llamaba nadie: el
+     * cliente veía su pedido moverse en la pantalla del pedido —si entraba a mirar— pero no recibía
+     * nada. Ahora se avisa en cada paso que la pantalla enseña.
+     *
+     * <p>Un fallo al avisar no puede tumbar el avance del pedido, que ya está guardado: la mercancía se
+     * movió de verdad y volver atrás por no haber podido mandar un correo sería peor que el silencio.
+     */
+    private void notificarAvance(Order o, String estado) {
+        if (o.getUserId() == null) {
+            return;
+        }
+        try {
+            userRepository.findById(o.getUserId()).ifPresent(u -> {
+                switch (estado) {
+                    case "SHIPPED" -> notificationsPublisher.orderShipped(o.getUserId(), u.getEmail(),
+                            o.getOrderNumber(), o.getCarrier(), o.getTrackingNumber(), u.getLanguage());
+                    case "DELIVERED" -> notificationsPublisher.orderDelivered(o.getUserId(), u.getEmail(),
+                            o.getOrderNumber(), u.getLanguage());
+                    default -> notificationsPublisher.dispatch("ORDER_FORWARDED", o.getUserId(),
+                            u.getEmail(), Map.of("orderNumber", o.getOrderNumber()), u.getLanguage());
+                }
+            });
+        } catch (RuntimeException e) {
+            log.warn("No se pudo avisar del avance a {} del pedido {}: {}", estado, o.getOrderNumber(),
+                    e.getMessage());
+        }
+    }
+
     private void notifyCheckout(UUID userId, Order created, Order placed, boolean reused) {
         String totalPlain = BigDecimal.valueOf(created.getTotalCents())
                 .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP).toPlainString();

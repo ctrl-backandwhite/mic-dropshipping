@@ -3,6 +3,9 @@ package com.nexaplatform.dropshipping.application;
 import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
+import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderShipmentItemEntity;
+import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService.ShipmentTrackingView;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService.TrackingProgress;
@@ -21,6 +24,7 @@ import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.Fulf
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressEventCipher;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderShipmentEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderTrackingEventEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentItemRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderTrackingEventRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +38,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -58,6 +63,7 @@ class Cov08FulfillmentShipmentsTest {
     private OrderTrackingEventRepository trackingRepository;
     private FulfillmentProvider provider;
     private OrderShipmentRepository shipmentRepository;
+    private OrderShipmentItemRepository shipmentItemRepository;
     private TrackingViewMapper trackingViewMapper;
     private FulfillmentService service;
 
@@ -69,10 +75,11 @@ class Cov08FulfillmentShipmentsTest {
         trackingRepository = mock(OrderTrackingEventRepository.class);
         provider = mock(FulfillmentProvider.class);
         shipmentRepository = mock(OrderShipmentRepository.class);
+        shipmentItemRepository = mock(OrderShipmentItemRepository.class);
         trackingViewMapper = mock(TrackingViewMapper.class);
-        service = new FulfillmentService(orderRepository, trackingRepository, provider, mock(UserRepository.class),
+        service = new FulfillmentService(orderRepository, trackingRepository, provider, mock(UserRepository.class), mock(NotificationsPublisher.class),
                 mock(OrderEmailService.class), new ObjectMapper(), mock(YunExpressEventCipher.class),
-                mock(OpsAlertService.class), mock(NotificationUseCase.class), shipmentRepository, trackingViewMapper, readyPurchases());
+                mock(OpsAlertService.class), mock(NotificationUseCase.class), shipmentRepository, shipmentItemRepository, trackingViewMapper, readyPurchases());
 
         order = new Order();
         order.setId(UUID.randomUUID());
@@ -272,7 +279,7 @@ class Cov08FulfillmentShipmentsTest {
         TrackingView view = service.adminTrackingView(order.getId());
 
         assertThat(view.shipments()).isEmpty();
-        verify(trackingViewMapper, never()).toShipmentView(any(), anyList());
+        verify(trackingViewMapper, never()).toShipmentView(any(), anyList(), anyList());
     }
 
     @Test
@@ -285,13 +292,13 @@ class Cov08FulfillmentShipmentsTest {
         when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(order.getId())).thenReturn(List.of(deUno));
         when(trackingViewMapper.toEventViews(anyList())).thenReturn(List.of());
         when(shipmentRepository.findByOrderIdOrderBySequenceNoAsc(order.getId())).thenReturn(List.of(uno, dos));
-        when(trackingViewMapper.toShipmentView(any(), anyList()))
-                .thenReturn(new ShipmentTrackingView(1, "YunExpress", "YT-1", "SHIPPED", 500, null, List.of()));
+        when(trackingViewMapper.toShipmentView(any(), anyList(), anyList()))
+                .thenReturn(new ShipmentTrackingView(1, "YunExpress", "YT-1", "SHIPPED", 500, null, List.of(), List.of()));
 
         TrackingView view = service.adminTrackingView(order.getId());
 
         assertThat(view.shipments()).hasSize(2);
-        verify(trackingViewMapper, times(2)).toShipmentView(any(), anyList());
+        verify(trackingViewMapper, times(2)).toShipmentView(any(), anyList(), anyList());
     }
 
     // ─────────────────────── consultas del panel ───────────────────────
@@ -360,5 +367,69 @@ class Cov08FulfillmentShipmentsTest {
         SupplierPurchaseService s = mock(SupplierPurchaseService.class);
         lenient().when(s.readyForInternationalShipment(any())).thenReturn(true);
         return s;
+    }
+
+    /* ─────────────────── contenido del bulto y aviso por paquete ─────────────────── */
+
+    /**
+     * El seguimiento enseña qué va dentro de cada paquete.
+     *
+     * <p>Sin esto, «Paquete 1/2» no decía nada: quien recibía uno no sabía a qué le estaba siguiendo la
+     * pista. El reparto ya se calculaba al crear los envíos, pero se tiraba.
+     */
+    @Test
+    void cadaBultoEnsenaLoQueLleva() {
+        order.setStatus(OrderStatus.SHIPPED);
+        UUID lineaId = UUID.randomUUID();
+        OrderItem linea = OrderItem.builder().productId(UUID.randomUUID()).quantity(3)
+                .titleSnapshot("Chaqueta").imageUrlSnapshot("http://img/1.jpg").variantName("Caño 872 / M")
+                .build();
+        linea.setId(lineaId);
+        order.setItems(List.of(linea));
+        OrderShipmentEntity uno = shipment(1, "WB-1", "YT-1");
+        OrderShipmentEntity dos = shipment(2, "WB-2", "YT-2");
+        when(shipmentRepository.findByOrderIdOrderBySequenceNoAsc(order.getId())).thenReturn(List.of(uno, dos));
+        when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(order.getId())).thenReturn(List.of());
+        when(trackingViewMapper.toEventViews(anyList())).thenReturn(List.of());
+        when(shipmentItemRepository.findByShipmentIdIn(anyCollection())).thenReturn(List.of(
+                OrderShipmentItemEntity.builder().shipmentId(uno.getId()).orderItemId(lineaId).quantity(2).build()));
+
+        ArgumentCaptor<List<FulfillmentService.ParcelItemView>> captor = ArgumentCaptor.forClass(List.class);
+        when(trackingViewMapper.toShipmentView(any(), anyList(), captor.capture()))
+                .thenReturn(new ShipmentTrackingView(1, "YunExpress", "YT-1", "SHIPPED", 500, null,
+                        List.of(), List.of()));
+
+        service.adminTrackingView(order.getId());
+
+        List<FulfillmentService.ParcelItemView> delPrimero = captor.getAllValues().get(0);
+        assertThat(delPrimero).hasSize(1);
+        assertThat(delPrimero.get(0).title()).isEqualTo("Chaqueta");
+        assertThat(delPrimero.get(0).imageUrl()).isEqualTo("http://img/1.jpg");
+        // Dos de las tres unidades de la línea: el resto viaja en el otro bulto.
+        assertThat(delPrimero.get(0).quantity()).isEqualTo(2);
+        assertThat(captor.getAllValues().get(1)).as("el segundo bulto no tiene contenido registrado").isEmpty();
+    }
+
+    /**
+     * Un envío anterior a que se guardara el reparto no rompe el seguimiento.
+     *
+     * <p>Se pinta sin fotos, como siempre, en vez de fallar: es un seguimiento menos rico, no un error.
+     */
+    @Test
+    void unBultoSinContenidoRegistradoSePintaIgual() {
+        order.setStatus(OrderStatus.SHIPPED);
+        order.setItems(List.of());
+        when(shipmentRepository.findByOrderIdOrderBySequenceNoAsc(order.getId()))
+                .thenReturn(List.of(shipment(1, "WB-1", "YT-1"), shipment(2, "WB-2", "YT-2")));
+        when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(order.getId())).thenReturn(List.of());
+        when(trackingViewMapper.toEventViews(anyList())).thenReturn(List.of());
+        when(shipmentItemRepository.findByShipmentIdIn(anyCollection())).thenReturn(List.of());
+        when(trackingViewMapper.toShipmentView(any(), anyList(), anyList()))
+                .thenReturn(new ShipmentTrackingView(1, "YunExpress", "YT-1", "SHIPPED", 500, null,
+                        List.of(), List.of()));
+
+        TrackingView view = service.adminTrackingView(order.getId());
+
+        assertThat(view.shipments()).hasSize(2);
     }
 }

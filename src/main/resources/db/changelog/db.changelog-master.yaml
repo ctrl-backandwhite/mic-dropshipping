@@ -279,3 +279,5 @@ databaseChangeLog:
       file: db/changelog/schema-v134-borrador-legal.sql
   - include:
       file: db/changelog/schema-v135-cart-item.sql
+  - include:
+      file: db/changelog/schema-v136-contenido-del-bulto.sql

@@ -4,6 +4,7 @@ import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
+import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService;
 import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
@@ -18,6 +19,7 @@ import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.Fulf
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressEventCipher;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressFulfillmentService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderTrackingEventEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentItemRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderTrackingEventRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -81,8 +83,9 @@ class Cov08FulfillmentPushTest {
 
     private FulfillmentService build(FulfillmentProvider activeProvider) {
         return new FulfillmentService(orderRepository, trackingRepository, activeProvider, userRepository,
-                orderEmailService, new ObjectMapper(), cipher, mock(OpsAlertService.class),
-                mock(NotificationUseCase.class), mock(OrderShipmentRepository.class), mock(TrackingViewMapper.class), readyPurchases());
+                mock(NotificationsPublisher.class), orderEmailService, new ObjectMapper(), cipher, mock(OpsAlertService.class),
+                mock(NotificationUseCase.class), mock(OrderShipmentRepository.class), mock(OrderShipmentItemRepository.class),
+                mock(TrackingViewMapper.class), readyPurchases());
     }
 
     private void providerReturns(TrackingStep... steps) {

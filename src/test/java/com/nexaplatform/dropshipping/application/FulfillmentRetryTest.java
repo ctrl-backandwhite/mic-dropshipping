@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.application;
 import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
+import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService;
 import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
@@ -15,6 +16,7 @@ import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.Fulf
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.FulfillmentResult;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressEventCipher;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentItemRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderTrackingEventRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,9 +66,9 @@ class FulfillmentRetryTest {
         notificationUseCase = mock(NotificationUseCase.class);
         shipmentRepository = mock(OrderShipmentRepository.class);
         service = new FulfillmentService(orderRepository, mock(OrderTrackingEventRepository.class),
-                provider, mock(UserRepository.class), mock(OrderEmailService.class),
+                provider, mock(UserRepository.class), mock(NotificationsPublisher.class), mock(OrderEmailService.class),
                 new ObjectMapper(), new YunExpressEventCipher(), opsAlertService, notificationUseCase, shipmentRepository,
-                mock(TrackingViewMapper.class), readyPurchases());
+                mock(OrderShipmentItemRepository.class), mock(TrackingViewMapper.class), readyPurchases());
 
         order = new Order();
         order.setId(UUID.randomUUID());
