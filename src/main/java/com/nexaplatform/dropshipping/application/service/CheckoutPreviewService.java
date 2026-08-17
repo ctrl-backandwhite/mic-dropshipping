@@ -352,7 +352,9 @@ public class CheckoutPreviewService {
                     : p.getVariants().stream().filter(x -> it.variantId().equals(x.getId())).findFirst()
                             .orElse(null);
             Integer unit = unitPriceUsdCents(it);
-            out.add(new CustomsDutyLinesService.Line(p.getId(), p.getHsCode(), Math.max(1, it.quantity()),
+            out.add(new CustomsDutyLinesService.Line(p.getId(), p.getHsCode(),
+                    CustomsDutyLinesService.declaredDescriptionOf(p), p.getCountryOfOrigin(),
+                    Math.max(1, it.quantity()),
                     unit == null ? 0 : unit, ParcelAggregator.unitWeightGrams(p, v), dimension(p, v, 0),
                     dimension(p, v, 1), dimension(p, v, 2), ParcelAggregator.hasBattery(p)));
         }

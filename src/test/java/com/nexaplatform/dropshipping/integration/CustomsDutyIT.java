@@ -334,7 +334,11 @@ class CustomsDutyIT extends BaseIntegration {
             CustomsValuation v = valoracion.valuate(pais, umbral - 1, 0, List.of(new DutyParcel(umbral - 1, 1)));
 
             anota(descuadres, pais, "umbral-1 debía quedar dentro", false, v.deMinimisExceeded());
-            anota(descuadres, pais, "umbral-1 no debía bloquear", false, v.blocked());
+            // La franquicia no bloquea aquí; el transportista puede, y son cosas distintas: en la UE no
+            // acepta a partir de 155 USD, que con el euro por debajo de 1,033 se alcanza ANTES que los
+            // 150 EUR de la norma. Ver `limiteDelTransportistaEnCentimosUsd`.
+            anota(descuadres, pais, "bloqueo en umbral-1",
+                    rechazaElTransportista(regla, umbral - 1), v.blocked());
             anota(descuadres, pais, "recargo con una línea", derecho, v.handlingFeeCents());
         }
         assertThat(descuadres).as("países cuyo importe no cuadra").isEmpty();
@@ -355,7 +359,11 @@ class CustomsDutyIT extends BaseIntegration {
             CustomsValuation v = valoracion.valuate(pais, umbral, 0, List.of(new DutyParcel(umbral, 1)));
 
             anota(descuadres, pais, "umbral exacto debía quedar dentro", false, v.deMinimisExceeded());
-            anota(descuadres, pais, "umbral exacto no debía bloquear", false, v.blocked());
+            // Fiscalmente está DENTRO —«does not exceed»— y aun así el pedido puede no venderse: el
+            // transportista rechaza «igual o mayor» que SU tope, y el borde exacto es justo el caso que
+            // su condición nombra. Una cosa es que no haya que pagar impuestos y otra que alguien lo lleve.
+            anota(descuadres, pais, "bloqueo en el umbral exacto",
+                    rechazaElTransportista(regla, umbral), v.blocked());
             anota(descuadres, pais, "recargo en el umbral exacto", derecho, v.handlingFeeCents());
         }
         assertThat(descuadres).as("países cuyo borde exacto no cuadra").isEmpty();
@@ -420,14 +428,22 @@ class CustomsDutyIT extends BaseIntegration {
     @Test
     @DisplayName("El borde se mueve con el tipo de cambio: el mismo pedido cambia de lado si el euro sube")
     void elBordeSeMueveConElTipoDeCambio() {
-        // 160,00 USD de valor intrínseco. Con EUR = 0,92 el umbral son 16.304 céntimos → DENTRO.
-        assertThat(valoracion.valuate("ES", 16000, 0, List.of(new DutyParcel(16000, 1))).blocked()).isFalse();
+        // 160,00 USD de valor intrínseco. Con EUR = 0,92 el umbral son 16.304 céntimos → DENTRO de la
+        // franquicia. Se mira `deMinimisExceeded` y no `blocked` porque lo que este caso mide es el borde
+        // FISCAL: el bloqueo lleva desde el 17-ago otra regla encima —el tope del transportista, 155 USD—
+        // que a 160 USD salta siempre y taparía el movimiento que se quiere observar.
+        assertThat(valoracion.valuate("ES", 16000, 0, List.of(new DutyParcel(16000, 1))).deMinimisExceeded())
+                .isFalse();
 
         // Con EUR = 0,95 el mismo umbral legal (150 EUR) vale 15.789 céntimos USD → el MISMO pedido queda
-        // FUERA y se bloquea. No es un fallo: es que el borde está en euros y el cobro en dólares. Queda
-        // documentado para que nadie lo lea como una regresión cuando cambie la cotización del día.
+        // FUERA. No es un fallo: es que el borde está en euros y el cobro en dólares. Queda documentado
+        // para que nadie lo lea como una regresión cuando cambie la cotización del día.
         divisas.overrideRate("EUR", new BigDecimal("0.95"));
         assertThat(aCentimosUsd(new BigDecimal("150.00"), "EUR")).isEqualTo(15789);
+        assertThat(valoracion.valuate("ES", 16000, 0, List.of(new DutyParcel(16000, 1))).deMinimisExceeded())
+                .isTrue();
+        // Y con cualquiera de las dos cotizaciones el transportista ya lo había rechazado por su cuenta:
+        // 160 USD supera sus 155 USD. Que el pedido no se pueda vender no depende de la tasa del día.
         assertThat(valoracion.valuate("ES", 16000, 0, List.of(new DutyParcel(16000, 1))).blocked()).isTrue();
 
         // Y el derecho por línea también se mueve: 3 EUR ÷ 0,95 = 3,1579 USD → 316 céntimos.
@@ -641,18 +657,55 @@ class CustomsDutyIT extends BaseIntegration {
      * Utilidades
      * ================================================================================== */
 
-    /** Una línea de pedido lista para clasificar y pesar. Sin dimensiones ni batería: no influyen aquí. */
+    /**
+     * Una línea de pedido lista para clasificar y pesar. Sin dimensiones ni batería: no influyen aquí.
+     *
+     * <p>Tampoco lleva descripción: lo que estos casos miden es el reparto en bultos y la agrupación por
+     * subpartida, y dejarla fuera mantiene la partida como único criterio, que es justo lo que afirman.
+     */
     private static Line linea(String hs, int cantidad, int precioUnitarioCents, int pesoGramos) {
-        return new Line(UUID.randomUUID(), hs, cantidad, precioUnitarioCents, pesoGramos, 0, 0, 0, false);
+        return new Line(UUID.randomUUID(), hs, null, "CN", cantidad, precioUnitarioCents, pesoGramos,
+                0, 0, 0, false);
     }
 
     /** Las reglas con franquicia configurada, que son las que tienen borde que comprobar. */
     private List<Map<String, Object>> reglasConUmbral() {
         return jdbcTemplate.queryForList("SELECT country_code, de_minimis_amount, de_minimis_currency, "
                 + "per_article_fee_amount, per_article_fee_currency, over_threshold_policy, "
-                + "handling_fee_cents, handling_percent_bps, vat_prepay_percent_bps "
+                + "handling_fee_cents, handling_percent_bps, vat_prepay_percent_bps, "
+                + "carrier_max_amount, carrier_max_currency, carrier_max_alt_amount, carrier_max_alt_currency "
                 + "FROM country_customs_rule WHERE active = TRUE AND de_minimis_amount > 0 "
                 + "ORDER BY country_code");
+    }
+
+    /**
+     * Valor a partir del cual el TRANSPORTISTA no acepta el paquete, en céntimos USD, o 0 si no tiene
+     * límite. Manda el MENOR de los dos que publica, porque se alcanza antes.
+     *
+     * <p>No es la franquicia aduanera y no hay que confundirlos: la franquicia dice cuándo hay que pagar
+     * impuestos, y esto dice cuándo el paquete <b>no se transporta en absoluto</b>. En la UE su condición
+     * es «不接受等于和大于150欧元或155美金的包裹» —ni iguales ni mayores a 150 EUR o 155 USD—, así que es
+     * más estricta que la norma por partida doble: rechaza el borde exacto y, con el euro por debajo de
+     * 1,033 USD, el que manda de hecho es el de 155 USD.
+     */
+    private int limiteDelTransportistaEnCentimosUsd(Map<String, Object> regla) {
+        int principal = aCentimosUsd((BigDecimal) regla.get("carrier_max_amount"),
+                (String) regla.get("carrier_max_currency"));
+        int alternativo = aCentimosUsd((BigDecimal) regla.get("carrier_max_alt_amount"),
+                (String) regla.get("carrier_max_alt_currency"));
+        if (principal <= 0) {
+            return Math.max(0, alternativo);
+        }
+        if (alternativo <= 0) {
+            return principal;
+        }
+        return Math.min(principal, alternativo);
+    }
+
+    /** ¿Rechaza el transportista ese valor declarado? Su condición es «igual o mayor», no «mayor». */
+    private boolean rechazaElTransportista(Map<String, Object> regla, int valorCentimosUsd) {
+        int limite = limiteDelTransportistaEnCentimosUsd(regla);
+        return limite > 0 && valorCentimosUsd >= limite;
     }
 
     private int umbralEnCentimosUsd(Map<String, Object> regla) {
