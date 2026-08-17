@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -19,6 +20,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -54,7 +57,13 @@ class CheckoutFlowIT extends BaseIntegration {
     private static final String COTIZAR = "/api/shipping/quote";
     private static final String DIRECCIONES = "/api/me/addresses";
     private static final String MIS_PEDIDOS = "/api/me/orders";
+    /** Cesta sincronizada del usuario: la que tiene que quedar vacía al pagar. */
+    private static final String CESTA = "/api/me/cart";
     private static final String CABECERA_IDEMPOTENCIA = "Idempotency-Key";
+
+    private static final ParameterizedTypeReference<List<Map<String, Object>>> LINEAS_DE_CESTA =
+            new ParameterizedTypeReference<>() {
+            };
 
     /** País con cobertura sembrada en cada prueba. */
     private static final String PAIS = "ES";
@@ -1042,10 +1051,157 @@ class CheckoutFlowIT extends BaseIntegration {
     }
 
     /* ==================================================================================
+     *  L · La cesta se vacía al quedar el pedido PAGADO (y solo entonces)
+     * ================================================================================== */
+
+    /**
+     * Con saldo el cobro es inmediato: el pedido nace PAGADO y lo comprado desaparece de la cesta sin que
+     * el cliente tenga que limpiarla por su cuenta (si lo hiciera él, un cierre de pestaña entre el cobro
+     * y la limpieza dejaría la compra repetida en la cesta de todos sus dispositivos).
+     */
+    @Test
+    @DisplayName("pagando con saldo, la cesta del servidor queda vacía tras el pedido")
+    void pagandoConSaldoLaCestaQuedaVacia() {
+        meterEnLaCesta(productId, 3);
+        assertThat(lineasEnLaCesta()).hasSize(1);
+
+        JsonNode pedido = cuerpo(checkout(pedidoDe(3), null).expectStatus().isCreated());
+
+        assertThat(pedido.get("status").asText()).isEqualTo("PAID");
+        assertThat(lineasEnLaCesta()).as("lo comprado ya no está en la cesta").isEmpty();
+        assertThat(lineasDeLaCestaEnBd()).isZero();
+    }
+
+    /**
+     * El caso que obliga a esperar al PAGADO: con tarjeta el pedido nace PENDIENTE y el dinero se cobra
+     * fuera —puede no llegar nunca—. Vaciar aquí dejaría a la persona sin pedido y sin cesta.
+     */
+    @Test
+    @DisplayName("con pago externo el pedido nace PENDIENTE y la cesta sigue intacta")
+    void conPagoExternoLaCestaSigueIntacta() {
+        meterEnLaCesta(productId, 2);
+
+        String conTarjeta = """
+                {"shippingAddressId":"%s","paymentMethod":"CARD",
+                 "items":[{"productId":"%s","quantity":2}]}
+                """.formatted(direccionId, productId);
+        JsonNode pedido = cuerpo(checkout(conTarjeta, null).expectStatus().isCreated());
+
+        assertThat(pedido.get("status").asText()).isEqualTo("PENDING");
+        assertThat(lineasEnLaCesta()).as("el dinero aún no ha llegado: la cesta no se toca").hasSize(1);
+        assertThat(saldoEnBd()).as("con tarjeta el monedero no se toca").isEqualTo(SALDO_HOLGADO);
+    }
+
+    /** Quien tramita solo una parte de su cesta conserva el resto: se quita lo comprado, nada más. */
+    @Test
+    @DisplayName("comprando una sola línea, la otra sobrevive en la cesta")
+    void comprandoUnaLineaLaOtraSobrevive() {
+        UUID otroProducto = insertarProducto(PRECIO_BASE, "0");
+        meterEnLaCesta(productId, 1);
+        meterEnLaCesta(otroProducto, 1);
+        assertThat(lineasEnLaCesta()).hasSize(2);
+
+        cuerpo(checkout(pedidoDe(1), null).expectStatus().isCreated());
+
+        List<Map<String, Object>> cesta = lineasEnLaCesta();
+        assertThat(cesta).hasSize(1);
+        assertThat(cesta.get(0)).containsEntry("productId", otroProducto.toString());
+    }
+
+    /* ==================================================================================
      *  Utilidades de la prueba
      * ================================================================================== */
 
+    /** Sube una línea a la cesta del servidor tal como lo haría la web o la app. */
+    private void meterEnLaCesta(UUID producto, int cantidad) {
+        String linea = """
+                {"productId":"%s","variantId":null,"sku":"SKU-1","slug":"producto","title":"Producto",
+                 "image":"https://cdn.local/p.jpg","variantLabel":null,"unitPriceSource":10.00,
+                 "sourceCurrency":"USD","quantity":%d,"moq":1,"unitPriceDisplay":10.00,
+                 "displayCurrency":"USD","displaySymbol":"$"}
+                """.formatted(producto, cantidad);
+        client.put().uri(CESTA).header(HttpHeaders.AUTHORIZATION, bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(linea).exchange().expectStatus().isOk();
+    }
+
+    private List<Map<String, Object>> lineasEnLaCesta() {
+        return client.get().uri(CESTA).header(HttpHeaders.AUTHORIZATION, bearer(token)).exchange()
+                .expectStatus().isOk().expectBody(LINEAS_DE_CESTA).returnResult().getResponseBody();
+    }
+
+    private int lineasDeLaCestaEnBd() {
+        Integer total = jdbcTemplate.queryForObject("SELECT count(*) FROM cart_item WHERE user_id = ?",
+                Integer.class, userId);
+        return total == null ? 0 : total;
+    }
+
     /** Checkout del usuario de la prueba. {@code idem} nulo = sin cabecera de idempotencia. */
+    /* ==================================================================================
+     *  H · Pedido mínimo por producto (lote mixto)
+     * ================================================================================== */
+
+    /**
+     * El mínimo se cumple sumando variantes distintas, como el lote mixto de 1688.
+     *
+     * <p>Dos colores de una unidad cada uno cubren un mínimo de dos: al proveedor solo le importa el
+     * total. Exigirlo por variante obligaría a comprar el doble de lo necesario.
+     */
+    @Test
+    @DisplayName("el pedido mínimo se cumple mezclando variantes distintas del mismo producto")
+    void elMinimoSeCumpleMezclandoVariantes() {
+        UUID lote = insertarProductoConMoq("10.00", 2);
+        UUID rojo = insertarVariante(lote, "10.00");
+        UUID azul = insertarVariante(lote, "10.00");
+        String cuerpo = "{\"shippingAddressId\":\"" + direccionId + "\",\"paymentMethod\":\"WALLET\","
+                + "\"items\":[{\"productId\":\"" + lote + "\",\"variantId\":\"" + rojo + "\",\"quantity\":1},"
+                + "{\"productId\":\"" + lote + "\",\"variantId\":\"" + azul + "\",\"quantity\":1}]}";
+
+        checkout(cuerpo, null).expectStatus().isCreated();
+    }
+
+    /** Por debajo del mínimo el pedido se rechaza, y antes de mover dinero. */
+    @Test
+    @DisplayName("por debajo del pedido mínimo el checkout se rechaza sin cobrar")
+    void porDebajoDelMinimoSeRechaza() {
+        UUID lote = insertarProductoConMoq("10.00", 3);
+        long saldoAntes = saldoEnBd();
+        String cuerpo = "{\"shippingAddressId\":\"" + direccionId + "\",\"paymentMethod\":\"WALLET\","
+                + "\"items\":[{\"productId\":\"" + lote + "\",\"quantity\":2}]}";
+
+        checkout(cuerpo, null).expectStatus().is4xxClientError();
+
+        assertThat(saldoEnBd()).as("no se cobra un pedido que no llega al mínimo").isEqualTo(saldoAntes);
+    }
+
+    /** Justo en el mínimo: el borde exacto se acepta. */
+    @Test
+    @DisplayName("justo en el pedido mínimo el checkout pasa")
+    void justoEnElMinimoSeAcepta() {
+        UUID lote = insertarProductoConMoq("10.00", 3);
+        String cuerpo = "{\"shippingAddressId\":\"" + direccionId + "\",\"paymentMethod\":\"WALLET\","
+                + "\"items\":[{\"productId\":\"" + lote + "\",\"quantity\":3}]}";
+
+        checkout(cuerpo, null).expectStatus().isCreated();
+    }
+
+    /**
+     * El mínimo es de cada producto, no del pedido.
+     *
+     * <p>Dos productos con una unidad cada uno suman dos, pero ninguno llega a su propio mínimo:
+     * contar el total del pedido dejaría pasar compras que el proveedor rechaza.
+     */
+    @Test
+    @DisplayName("el mínimo no se comparte entre productos distintos")
+    void elMinimoNoSeComparteEntreProductos() {
+        UUID uno = insertarProductoConMoq("10.00", 2);
+        UUID otro = insertarProductoConMoq("10.00", 2);
+        String cuerpo = "{\"shippingAddressId\":\"" + direccionId + "\",\"paymentMethod\":\"WALLET\","
+                + "\"items\":[{\"productId\":\"" + uno + "\",\"quantity\":1},"
+                + "{\"productId\":\"" + otro + "\",\"quantity\":1}]}";
+
+        checkout(cuerpo, null).expectStatus().is4xxClientError();
+    }
+
     private WebTestClient.ResponseSpec checkout(String cuerpo, String idem) {
         return checkoutComo(token, cuerpo, idem);
     }
@@ -1161,6 +1317,18 @@ class CheckoutFlowIT extends BaseIntegration {
                 + " VALUES (?, ?, ?, 'TEST', 'Producto de prueba', 'ACTIVE', 1, ?::numeric,"
                 + " 'USD', ?::numeric, 0, 500, now(), now())",
                 id, "producto-" + sufijo, "ext-" + sufijo, basePrice, shippingCny);
+        return id;
+    }
+
+    /** Como {@link #insertarProducto}, pero con pedido mínimo: el producto se vende por lotes. */
+    private UUID insertarProductoConMoq(String basePrice, int moq) {
+        UUID id = UUID.randomUUID();
+        String sufijo = id.toString().substring(0, 8);
+        jdbcTemplate.update("INSERT INTO product (id, slug, external_id, source, title_zh, status, moq,"
+                + " base_price, currency, shipping_cny, iva_cny, weight_grams, created_at, updated_at)"
+                + " VALUES (?, ?, ?, 'TEST', 'Producto por lotes', 'ACTIVE', ?, ?::numeric,"
+                + " 'USD', 0, 0, 500, now(), now())",
+                id, "lote-" + sufijo, "extlote-" + sufijo, moq, basePrice);
         return id;
     }
 

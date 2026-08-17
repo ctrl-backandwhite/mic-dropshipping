@@ -35,6 +35,22 @@ public class AdminSupplierPurchaseDtoOut {
     BigDecimal shippingCny;
     Instant purchasedAt;
 
+    /**
+     * Las cuentas de la compra, ya formateadas.
+     *
+     * <p>Van como texto porque el importe se calcula y se escribe en el backend: el panel solo pinta.
+     * Son null mientras no haya con qué compararlas —sin coste registrado no hay realidad que
+     * contrastar—, y entonces el bloque no se pinta.
+     */
+    String expectedCostCnyFormatted;
+    String realCostCnyFormatted;
+    /** Diferencia con signo: positiva si se pagó de más. */
+    String costVarianceCnyFormatted;
+    boolean overBudget;
+    String expectedMarginFormatted;
+    String realMarginFormatted;
+    Integer realMarginPct;
+
     String domesticTracking;
     String domesticCarrier;
     Instant shippedAt;

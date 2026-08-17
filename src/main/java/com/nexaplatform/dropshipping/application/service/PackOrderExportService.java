@@ -156,7 +156,12 @@ public class PackOrderExportService {
             }
         }
         if (isBlank(order.getTrackingNumber())) {
-            problems.add("El pedido no tiene número YT: falta crear la guía internacional");
+            // Decir solo «falta la guía» dejaba al admin sin saber qué hacer: la guía no se emite al
+            // registrar el seguimiento chino, sino al despachar el pedido, y eso ocurre en otra
+            // pantalla. Sin esta indicación el fichero no se activaba nunca y no había forma de
+            // averiguar por qué.
+            problems.add("El pedido no tiene número YT: despáchalo en Órdenes y la guía "
+                    + "internacional se emite sola en cuanto todos sus bultos van al almacén");
         } else if (!order.getTrackingNumber().startsWith(YT_PREFIX)) {
             problems.add("El número de seguimiento " + order.getTrackingNumber()
                     + " no parece un YT de YunExpress");

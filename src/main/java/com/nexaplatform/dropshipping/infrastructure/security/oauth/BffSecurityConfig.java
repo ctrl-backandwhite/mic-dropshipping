@@ -106,6 +106,8 @@ public class BffSecurityConfig {
                 // del servidor de autorización, que responde 302 hacia /login — o sea, la ruta parece
                 // protegida pero en realidad ni siquiera llega a evaluarse como API.
                 "/api/compliance", "/api/compliance/**",
+                // Textos legales: cualquiera debe poder leerlos ANTES de registrarse.
+                "/api/legal", "/api/legal/**",
                 "/api/captcha/**")
                 .cors(Customizer.withDefaults())
                 // NOSONAR java:S4502 — Falso positivo verificado: con STATELESS (abajo) la sesión no se lee
@@ -151,7 +153,10 @@ public class BffSecurityConfig {
                                 // Operador económico de la UE (art. 16.3 del Reglamento (UE) 2023/988): la
                                 // norma obliga a que el comprador pueda verlo, así que no puede quedar
                                 // detrás del muro de cuenta. No expone nada que no deba ser público.
-                                "/api/compliance", "/api/compliance/**")
+                                "/api/compliance", "/api/compliance/**",
+                                // Términos, privacidad, cookies, aviso legal y desistimiento. Exigir cuenta
+                                // para leer las condiciones que uno va a aceptar no tendría sentido.
+                                "/api/legal", "/api/legal/**")
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/catalog/shipping/quote").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/catalog/cart-quote").permitAll()

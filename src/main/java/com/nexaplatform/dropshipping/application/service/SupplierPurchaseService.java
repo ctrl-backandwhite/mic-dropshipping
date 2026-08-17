@@ -1,5 +1,7 @@
 package com.nexaplatform.dropshipping.application.service;
 
+import com.nexaplatform.dropshipping.api.exception.BusinessException;
+import com.nexaplatform.dropshipping.api.exception.ErrorCode;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.domain.enums.SupplierPurchaseStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
@@ -51,6 +53,20 @@ public class SupplierPurchaseService {
     private static final Set<SupplierPurchaseStatus> OPEN =
             EnumSet.of(SupplierPurchaseStatus.PENDING, SupplierPurchaseStatus.PURCHASED,
                     SupplierPurchaseStatus.IN_TRANSIT, SupplierPurchaseStatus.AT_WAREHOUSE);
+
+    /**
+     * Lo que se ve en el tablero: lo pendiente y además lo ya re-empaquetado.
+     *
+     * <p>No coincide con {@link #OPEN} a propósito. Una compra re-empaquetada ya no da trabajo, pero
+     * desaparecía de la pantalla en cuanto se marcaba y no había forma de volver a verla: preguntar
+     * «¿qué pasó con el bulto que mandé a empaquetar?» obligaba a rehacer el camino desde el pedido.
+     * La cola de exportación sigue usando {@code OPEN}, porque lo re-empaquetado no debe volver a
+     * salir en el fichero.
+     */
+    private static final Set<SupplierPurchaseStatus> BOARD =
+            EnumSet.of(SupplierPurchaseStatus.PENDING, SupplierPurchaseStatus.PURCHASED,
+                    SupplierPurchaseStatus.IN_TRANSIT, SupplierPurchaseStatus.AT_WAREHOUSE,
+                    SupplierPurchaseStatus.PACKED);
 
     /**
      * El almacén destruye sin compensación un bulto que lleve 30 días sin instrucciones. Se avisa a los
@@ -138,10 +154,10 @@ public class SupplierPurchaseService {
                 .orElse(null);
     }
 
-    /** La cola de trabajo: todo lo que aún no ha salido del almacén. */
+    /** Lo que se pinta en el tablero: la cola de trabajo y, además, lo ya re-empaquetado. */
     @Transactional(readOnly = true)
     public List<SupplierPurchaseEntity> openQueue() {
-        return purchaseRepository.findByStatusInOrderByCreatedAtAsc(OPEN);
+        return purchaseRepository.findByStatusInOrderByCreatedAtAsc(BOARD);
     }
 
     /**
@@ -195,7 +211,7 @@ public class SupplierPurchaseService {
      */
     public record PurchaseView(SupplierPurchaseEntity purchase, String orderNumber, String orderTracking,
                                int parcelsInOrder, String supplierName, List<OrderItem> lines,
-                               List<Integer> quantities) {
+                               List<Integer> quantities, String orderCurrency) {
     }
 
     @Transactional(readOnly = true)
@@ -251,7 +267,7 @@ public class SupplierPurchaseService {
             int parcels = purchaseRepository.findByOrderId(p.getOrderId()).size();
             out.add(new PurchaseView(p, order != null ? order.getOrderNumber() : null,
                     order != null ? order.getTrackingNumber() : null, parcels, supplierName,
-                    lines, quantities));
+                    lines, quantities, order != null ? order.getCurrency() : null));
         }
         return out;
     }
@@ -304,10 +320,24 @@ public class SupplierPurchaseService {
         return save(p);
     }
 
-    /** Orden de re-empaquetado dada de alta en Yunfulfillment: el bulto ya tiene instrucciones. */
+    /**
+     * Orden de re-empaquetado dada de alta en Yunfulfillment: el bulto ya tiene instrucciones.
+     *
+     * <p>Exige haber descargado antes el fichero, y no es burocracia: el número que se teclea aquí lo
+     * devuelve el OMS al importar ese fichero, así que sin exportar no puede existir. Marcarlo igual
+     * dejaba el pedido en un callejón sin salida —la compra salía del tablero y, al tener ya orden de
+     * re-empaquetado, la validación la rechazaba para siempre—, y encima sin haber mandado al almacén
+     * ninguna instrucción sobre un bulto que allí sigue contando sus 30 días.
+     */
     @Transactional
     public SupplierPurchaseEntity markPacked(UUID id, String packOrderNo, String serviceType) {
         SupplierPurchaseEntity p = require(id);
+        if (p.getExportedAt() == null) {
+            // Con código catalogado, no con mensaje suelto: el manejador traduce por el código y un
+            // texto libre acabaría sustituido por el genérico «no se pudo completar la operación».
+            throw new BusinessException(ErrorCode.PURCHASE_NOT_EXPORTED.name(),
+                    "Descarga antes el fichero de re-empaquetado y súbelo a Yunfulfillment.");
+        }
         p.setPackOrderNo(packOrderNo);
         p.setPackServiceType(serviceType);
         p.setPackSubmittedAt(Instant.now());
@@ -321,6 +351,23 @@ public class SupplierPurchaseService {
         p.setStatus(SupplierPurchaseStatus.CANCELLED);
         p.setNotes(reason);
         return save(p);
+    }
+
+    /**
+     * ¿Está ya comprada toda la mercancía del pedido?
+     *
+     * <p>Cierto cuando el pedido tiene compras y ninguna sigue pendiente de comprar. Las canceladas no
+     * cuentan: un proveedor descartado no puede dejar el pedido esperando para siempre.
+     *
+     * <p>Es lo que permite dar el pedido por enviado al proveedor sin que nadie tenga que acordarse de
+     * pulsar nada. Antes ese paso era manual, y olvidarlo dejaba al cliente viendo «pagado» con la
+     * mercancía ya comprada, y al admin sin poder exportar el fichero de re-empaquetado.
+     */
+    @Transactional(readOnly = true)
+    public boolean allPurchased(UUID orderId) {
+        return purchaseRepository.existsByOrderId(orderId)
+                && !purchaseRepository.existsByOrderIdAndStatusIn(orderId,
+                        EnumSet.of(SupplierPurchaseStatus.PENDING));
     }
 
     /**

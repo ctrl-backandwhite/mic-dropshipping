@@ -394,4 +394,125 @@ class OrderUseCaseImplTest {
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
         org.mockito.Mockito.verifyNoInteractions(walletUseCase);
     }
+
+    /* ======================= pedido mínimo por producto (lote mixto) ======================= */
+
+    /**
+     * Producto con el mínimo que se le indique, listo para pedir.
+     *
+     * <p>Los dobles van en modo indulgente porque los casos de rechazo cortan antes de tarificar ni
+     * guardar: exigir que se usen convertiría «se rechazó pronto» en un fallo del test.
+     */
+    private UUID productoConMoq(int moq) {
+        UUID id = UUID.randomUUID();
+        ProductEntity product = ProductEntity.builder().status(ProductStatus.ACTIVE)
+                .basePrice(new BigDecimal("10.00")).moq(moq).titleZh("Lote").build();
+        product.setId(id);
+        lenient().when(productRepository.findById(id)).thenReturn(Optional.of(product));
+        lenient().when(pricingService.priceFor(any(), any())).thenReturn(priced("10.00"));
+        lenient().when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+        return id;
+    }
+
+    /** Variante comprable de un producto, para componer lotes mixtos. */
+    private UUID varianteDe(String sku) {
+        UUID id = UUID.randomUUID();
+        ProductVariantEntity variant = ProductVariantEntity.builder().price(new BigDecimal("10"))
+                .sku(sku).stock(10).active(true).build();
+        variant.setId(id);
+        lenient().when(variantRepository.findById(id)).thenReturn(Optional.of(variant));
+        return id;
+    }
+
+    private CreateOrderRequest pedidoCon(List<OrderItemInput> items) {
+        return new CreateOrderRequest("EXT-MOQ",
+                new AddressInput("John Doe", "555", "j@x.com", "Line 1", null, "Madrid", "M", "28001", "ES"),
+                null, items, null);
+    }
+
+    /**
+     * El mínimo se cumple sumando variantes distintas, como el lote mixto de 1688.
+     *
+     * <p>Dos colores de una unidad cada uno cubren un mínimo de dos: al proveedor le da igual el reparto,
+     * solo mira el total. Exigirlo por variante obligaría a comprar el doble de lo necesario.
+     */
+    @Test
+    void elMinimoSeCumpleMezclandoVariantes() {
+        UUID producto = productoConMoq(2);
+
+        Order order = orderUseCase.createOrder(UUID.randomUUID(), null, pedidoCon(List.of(
+                new OrderItemInput(producto, varianteDe("ROJO-M"), 1),
+                new OrderItemInput(producto, varianteDe("AZUL-L"), 1))));
+
+        assertThat(order.getItems()).hasSize(2);
+    }
+
+    /** Justo en el mínimo con una sola línea: pasa. Es el borde exacto. */
+    @Test
+    void elMinimoJustoEnElBordeSeAcepta() {
+        UUID producto = productoConMoq(3);
+
+        Order order = orderUseCase.createOrder(UUID.randomUUID(), null,
+                pedidoCon(List.of(new OrderItemInput(producto, null, 3))));
+
+        assertThat(order.getItems()).hasSize(1);
+    }
+
+    /** Una unidad por debajo del mínimo: se rechaza antes de cobrar. */
+    @Test
+    void unaUnidadPorDebajoDelMinimoSeRechaza() {
+        UUID producto = productoConMoq(3);
+
+        assertThatThrownBy(() -> orderUseCase.createOrder(UUID.randomUUID(), null,
+                pedidoCon(List.of(new OrderItemInput(producto, null, 2)))))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("mínimo");
+    }
+
+    /**
+     * El mínimo es de cada producto por separado.
+     *
+     * <p>Dos productos distintos con una unidad cada uno suman dos, pero ninguno llega a su propio
+     * mínimo: contar el total del pedido dejaría pasar compras que el proveedor rechaza.
+     */
+    @Test
+    void elMinimoNoSeCompartEntreProductosDistintos() {
+        UUID uno = UUID.randomUUID();
+        UUID otro = UUID.randomUUID();
+        for (UUID id : List.of(uno, otro)) {
+            ProductEntity p = ProductEntity.builder().status(ProductStatus.ACTIVE)
+                    .basePrice(new BigDecimal("10.00")).moq(2).titleZh("Lote").build();
+            p.setId(id);
+            lenient().when(productRepository.findById(id)).thenReturn(Optional.of(p));
+        }
+        lenient().when(pricingService.priceFor(any(), any())).thenReturn(priced("10.00"));
+        lenient().when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThatThrownBy(() -> orderUseCase.createOrder(UUID.randomUUID(), null, pedidoCon(List.of(
+                new OrderItemInput(uno, null, 1),
+                new OrderItemInput(otro, null, 1)))))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    /** Un producto sin mínimo (moq = 1) no impone nada: una unidad basta. */
+    @Test
+    void sinMinimoUnaUnidadBasta() {
+        UUID producto = productoConMoq(1);
+
+        Order order = orderUseCase.createOrder(UUID.randomUUID(), null,
+                pedidoCon(List.of(new OrderItemInput(producto, null, 1))));
+
+        assertThat(order.getItems()).hasSize(1);
+    }
+
+    /** Pasarse del mínimo no es problema: el mínimo es suelo, no cupo. */
+    @Test
+    void pasarseDelMinimoSeAcepta() {
+        UUID producto = productoConMoq(2);
+
+        Order order = orderUseCase.createOrder(UUID.randomUUID(), null,
+                pedidoCon(List.of(new OrderItemInput(producto, null, 50))));
+
+        assertThat(order.getItems()).hasSize(1);
+    }
 }

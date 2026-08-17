@@ -49,6 +49,9 @@ server:
 nexadrop:
   storefront:
     base-url: https://nx036.com   # CTA / unsubscribe de los emails + redirect post-login Google
+  mobile:
+    # Enlace profundo de la app; debe coincidir con el `scheme` de app.config.ts.
+    oauth-callback-url: ${MOBILE_OAUTH_CALLBACK_URL:nx036://auth/callback}
   oauth:
     # Identidad del authorization server y emisor de los JWT de usuario (este backend).
     issuer: https://mic-dropshipping-pre.up.railway.app

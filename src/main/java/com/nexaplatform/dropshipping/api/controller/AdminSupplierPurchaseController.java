@@ -7,8 +7,11 @@ import com.nexaplatform.dropshipping.api.dto.in.AdminPurchaseShippedDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.AdminSupplierPurchaseDtoOut;
 import com.nexaplatform.dropshipping.application.service.PackOrderExportService;
 import com.nexaplatform.dropshipping.application.service.PackOrderExportService.PackOrderPlan;
+import com.nexaplatform.dropshipping.application.service.PurchaseEconomics;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService.PurchaseView;
+import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
 import com.nexaplatform.dropshipping.domain.enums.PackServiceType;
 import java.time.format.DateTimeFormatter;
 import java.time.ZoneId;
@@ -47,8 +50,13 @@ public class AdminSupplierPurchaseController implements AdminSupplierPurchaseApi
 
     private static final DateTimeFormatter FILE_STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmm");
 
+    /** Los importes se compran y se pagan en yuanes; la comparación se enseña en su moneda. */
+    private static final String CNY = "CNY";
+
     private final SupplierPurchaseService purchaseService;
     private final PackOrderExportService packOrderExportService;
+    private final CurrencyRateService currencyRateService;
+    private final OrderUseCase orderUseCase;
 
     /** Código de cliente en Yunfulfillment: va en el destinatario y pegado al final de la dirección. */
     @Value("${nexadrop.fulfillment.customer-code:CNHC459832}")
@@ -76,19 +84,53 @@ public class AdminSupplierPurchaseController implements AdminSupplierPurchaseApi
 
     @Override
     public ResponseEntity<AdminSupplierPurchaseDtoOut> bought(UUID id, AdminPurchaseBoughtDtoIn body) {
-        return ResponseEntity.ok(reload(purchaseService.markPurchased(id, body.getPurchaseRef(),
-                toCents(body.getCostCny()), toCents(body.getShippingCny()))));
+        SupplierPurchaseEntity purchase = purchaseService.markPurchased(id, body.getPurchaseRef(),
+                toCents(body.getCostCny()), toCents(body.getShippingCny()));
+        forwardIfFullyPurchased(purchase.getOrderId());
+        return ResponseEntity.ok(reload(purchase));
+    }
+
+    /**
+     * Con toda la mercancía comprada, el pedido pasa a «enviado a proveedor» por su cuenta.
+     *
+     * <p>Ese salto era manual y en otra pantalla, y saltárselo tenía dos consecuencias que no parecían
+     * relacionadas: el cliente seguía viendo «pagado» aunque su pedido estuviera comprado y de camino,
+     * y el fichero de re-empaquetado no se activaba nunca, porque la guía internacional solo se emite
+     * sobre pedidos despachados.
+     *
+     * <p>No adelanta la guía: esa tiene su propia condición —que TODOS los bultos vayan ya camino del
+     * almacén—, así que comprar no basta para emitirla.
+     *
+     * <p>Un fallo aquí no puede tumbar el registro de la compra, que es lo que el admin acaba de hacer
+     * y ya está guardado: se deja anotado y se sigue.
+     */
+    private void forwardIfFullyPurchased(UUID orderId) {
+        if (orderId == null || !purchaseService.allPurchased(orderId)) {
+            return;
+        }
+        try {
+            orderUseCase.forwardOrder(orderId);
+        } catch (RuntimeException e) {
+            log.warn("No se pudo dar por enviado al proveedor el pedido {}: {}", orderId, e.getMessage());
+        }
     }
 
     @Override
     public ResponseEntity<AdminSupplierPurchaseDtoOut> shipped(UUID id, AdminPurchaseShippedDtoIn body) {
-        return ResponseEntity.ok(reload(purchaseService.markShipped(id, body.getDomesticTracking(),
-                body.getDomesticCarrier())));
+        SupplierPurchaseEntity purchase = purchaseService.markShipped(id, body.getDomesticTracking(),
+                body.getDomesticCarrier());
+        // También aquí, y no solo al comprar: un pedido que se quedara atrás —porque sus compras se
+        // registraron antes de que esto existiera— se pone al día en el siguiente avance en lugar de
+        // quedarse colgado para siempre.
+        forwardIfFullyPurchased(purchase.getOrderId());
+        return ResponseEntity.ok(reload(purchase));
     }
 
     @Override
     public ResponseEntity<AdminSupplierPurchaseDtoOut> received(UUID id) {
-        return ResponseEntity.ok(reload(purchaseService.markReceived(id)));
+        SupplierPurchaseEntity purchase = purchaseService.markReceived(id);
+        forwardIfFullyPurchased(purchase.getOrderId());
+        return ResponseEntity.ok(reload(purchase));
     }
 
     @Override
@@ -200,6 +242,11 @@ public class AdminSupplierPurchaseController implements AdminSupplierPurchaseApi
         PackWarehouse warehouse = PackWarehouse.fromCode(p.getWarehouseCode());
         int parcels = Math.max(1, view.parcelsInOrder());
         String supplierName = view.supplierName();
+        // Lo que el catálogo decía frente a lo que costó. Sin esto, el coste y el envío que el admin
+        // teclea al comprar se guardaban y no los leía nadie.
+        PurchaseEconomics economics = PurchaseEconomics.of(view.lines(), view.quantities(),
+                p.getCostCnyCents(), p.getShippingCnyCents());
+        String currency = view.orderCurrency();
         return AdminSupplierPurchaseDtoOut.builder()
                 .id(p.getId())
                 .orderId(p.getOrderId())
@@ -212,6 +259,13 @@ public class AdminSupplierPurchaseController implements AdminSupplierPurchaseApi
                 .purchaseRef(p.getPurchaseRef())
                 .costCny(fromCents(p.getCostCnyCents()))
                 .shippingCny(fromCents(p.getShippingCnyCents()))
+                .expectedCostCnyFormatted(cny(economics.expectedCostCnyCents()))
+                .realCostCnyFormatted(cny(economics.realCostCnyCents()))
+                .costVarianceCnyFormatted(signed(economics.varianceCnyCents(), CNY))
+                .overBudget(economics.overBudget())
+                .expectedMarginFormatted(money(economics.expectedMarginCents(), currency))
+                .realMarginFormatted(money(economics.realMarginCents(), currency))
+                .realMarginPct(economics.realMarginPct())
                 .purchasedAt(p.getPurchasedAt())
                 .domesticTracking(p.getDomesticTracking())
                 .domesticCarrier(p.getDomesticCarrier())
@@ -232,6 +286,32 @@ public class AdminSupplierPurchaseController implements AdminSupplierPurchaseApi
     /** Días que el bulto lleva en el almacén; a los 30 se destruye sin compensación. */
     private static Integer daysInWarehouse(Instant receivedAt) {
         return receivedAt == null ? null : (int) Duration.between(receivedAt, Instant.now()).toDays();
+    }
+
+    /** Importe en la divisa del pedido; null si no hay cantidad o no se sabe en qué moneda se cobró. */
+    private String money(Long cents, String currency) {
+        if (cents == null || currency == null) {
+            return null;
+        }
+        return currencyRateService.formatDisplay(fromCents(cents), currency);
+    }
+
+    private String cny(Long cents) {
+        return money(cents, CNY);
+    }
+
+    /**
+     * Como {@link #money}, pero deja ver el signo del desvío.
+     *
+     * <p>El formato de moneda escribe los negativos con paréntesis o con el signo pegado según el
+     * idioma, y aquí lo que importa de un vistazo es si se pagó de más o de menos.
+     */
+    private String signed(Long cents, String currency) {
+        if (cents == null) {
+            return null;
+        }
+        String texto = money(Math.abs(cents), currency);
+        return texto == null ? null : (cents < 0 ? "−" : "+") + texto;
     }
 
     /** El dinero se guarda en céntimos para no arrastrar errores de coma flotante. */

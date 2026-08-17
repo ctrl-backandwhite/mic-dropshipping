@@ -67,22 +67,35 @@ public class LegalUpdateNoticeService {
         if (!notifyOnChange || legalVersion == null || legalVersion.isBlank()) {
             return;
         }
-        if (yaAvisada(legalVersion)) {
-            return;
+        avisarDeVersion(legalVersion);
+    }
+
+    /**
+     * Avisa de la versión dada si no se ha avisado ya. Lo llama el arranque —cuando se despliega una
+     * versión nueva— y el botón de publicar del admin, que es el camino por el que ahora se cambian los
+     * textos. Ambos pasan por la misma marca, así que publicar y desplegar no duplican el correo.
+     *
+     * @return a cuántas cuentas se ha encolado; 0 si esa versión ya estaba avisada.
+     */
+    @Transactional
+    public int avisarDeVersion(String version) {
+        if (version == null || version.isBlank() || yaAvisada(version)) {
+            return 0;
         }
         // TODAS las cuentas activas, no la audiencia de marketing: quien rechazó la publicidad no ha
         // renunciado a enterarse de que cambian las condiciones que le vinculan.
         List<UserEntity> audiencia = userRepository.findByActiveTrueAndDeletedAtIsNull();
 
-        marcarAvisada(legalVersion, audiencia.size());
+        marcarAvisada(version, audiencia.size());
         int encolados = 0;
         for (UserEntity user : audiencia) {
-            if (encolar(user)) {
+            if (encolar(user, version)) {
                 encolados++;
             }
         }
         log.info("::> [LEGAL] textos legales en versión {} — aviso encolado a {} de {} cuentas activas",
-                legalVersion, encolados, audiencia.size());
+                version, encolados, audiencia.size());
+        return encolados;
     }
 
     /** ¿Ya se avisó de esta versión? La tabla es lo único que distingue un cambio real de un reinicio. */
@@ -97,7 +110,7 @@ public class LegalUpdateNoticeService {
                 + " ON CONFLICT (version) DO NOTHING", version, destinatarios);
     }
 
-    private boolean encolar(UserEntity user) {
+    private boolean encolar(UserEntity user, String version) {
         if (user.getEmail() == null || user.getEmail().isBlank() || user.getDeletedAt() != null) {
             return false;
         }
@@ -111,7 +124,7 @@ public class LegalUpdateNoticeService {
         vars.put("privacyLabel", LegalUpdateEmailLabel.CTA_PRIVACY.of(lang));
         vars.put("termsUrl", storefrontBaseUrl + "/legal/terms");
         vars.put("termsLabel", LegalUpdateEmailLabel.CTA_TERMS.of(lang));
-        vars.put("version", legalVersion);
+        vars.put("version", version);
         vars.put("footerNote", LegalUpdateEmailLabel.FOOTER.of(lang));
         emailQueue.enqueue(user.getEmail(), LegalUpdateEmailLabel.SUBJECT.of(lang), TEMPLATE, vars);
         return true;

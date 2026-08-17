@@ -1,7 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.security.oauth;
 
 import com.nexaplatform.dropshipping.application.service.DeviceSessionService;
-import com.nexaplatform.dropshipping.application.service.Texts;
 import com.nexaplatform.dropshipping.application.usecase.GoogleLoginOutcome;
 import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
 import com.nexaplatform.dropshipping.domain.model.User;
@@ -39,16 +38,24 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
     private final UserTokenService userTokenService;
     private final DeviceSessionService deviceSessionService;
     private final com.nexaplatform.dropshipping.application.service.TotpService totpService;
-    private final String frontBaseUrl;
+    private final OAuthRedirectResolver redirects;
 
     public GoogleOAuth2SuccessHandler(UserUseCase userUseCase, UserTokenService userTokenService,
             DeviceSessionService deviceSessionService,
             com.nexaplatform.dropshipping.application.service.TotpService totpService, String frontBaseUrl) {
+        this(userUseCase, userTokenService, deviceSessionService, totpService,
+                new OAuthRedirectResolver(frontBaseUrl, ""));
+    }
+
+    public GoogleOAuth2SuccessHandler(UserUseCase userUseCase, UserTokenService userTokenService,
+            DeviceSessionService deviceSessionService,
+            com.nexaplatform.dropshipping.application.service.TotpService totpService,
+            OAuthRedirectResolver redirects) {
         this.userUseCase = userUseCase;
         this.userTokenService = userTokenService;
         this.deviceSessionService = deviceSessionService;
         this.totpService = totpService;
-        this.frontBaseUrl = frontBaseUrl == null ? "" : Texts.stripTrailingSlashes(frontBaseUrl);
+        this.redirects = redirects;
     }
 
 
@@ -58,10 +65,13 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         OAuth2User principal = (OAuth2User) authentication.getPrincipal();
         String provider = authentication instanceof OAuth2AuthenticationToken token
                 ? token.getAuthorizedClientRegistrationId() : "oauth2";
+        // Quién arrancó el flujo (web o aplicación móvil). Se anotó en la sesión al iniciarlo, porque el
+        // parámetro original se pierde en el viaje de ida y vuelta al proveedor.
+        OAuthClientTarget target = OAuthClientTargetFilter.resolve(request);
         String email = principal.getAttribute("email");
         if (email == null || email.isBlank()) {
             log.warn("::> [OAUTH2 {}] Login failed: no email in provider response", provider);
-            response.sendRedirect(frontBaseUrl + "/login?error=google_no_email");
+            response.sendRedirect(redirects.error(target, "google_no_email"));
             return;
         }
 
@@ -71,7 +81,7 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         // resolved in GithubOAuth2UserService; Google asserts email_verified in its OIDC token.
         if (!Boolean.TRUE.equals(principal.getAttribute("email_verified"))) {
             log.warn("::> [OAUTH2 {}] Login refused: email not verified by provider", provider);
-            response.sendRedirect(frontBaseUrl + "/login?error=google_email_unverified");
+            response.sendRedirect(redirects.error(target, "google_email_unverified"));
             return;
         }
 
@@ -88,7 +98,7 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
             // instead of signing in. The link is completed on the next successful password login.
             request.getSession(true).setAttribute(PENDING_GOOGLE_LINK_EMAIL, outcome.getEmail());
             log.info("::> [OAUTH2 {}] Link confirmation required, redirecting to login", provider);
-            response.sendRedirect(frontBaseUrl + "/login?link=required");
+            response.sendRedirect(redirects.linkRequired(target));
             return;
         }
 
@@ -97,7 +107,7 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         // OTP que sí exige el login por contraseña). Se rechaza y se pide entrar con contraseña + OTP.
         if (totpService.isEnabled(user.getId())) {
             log.info("::> [OAUTH2 {}] Login social rechazado: la cuenta tiene 2FA activo, se exige OTP", provider);
-            response.sendRedirect(frontBaseUrl + "/login?error=2fa_required");
+            response.sendRedirect(redirects.error(target, "2fa_required"));
             return;
         }
         UserTokenService.Tokens tokens = userTokenService.issue(user.getId(), user.getEmail(), user.getRole().name(),
@@ -107,8 +117,7 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         // Google/GitHub no aparecían en "Sesiones activas" del perfil (solo lo hacía el login por contraseña).
         deviceSessionService.recordLogin(user.getId(), request, response);
         // Tokens en el fragmento (#) — no llega al servidor ni a los logs del proxy.
-        response.sendRedirect(frontBaseUrl + "/auth/callback#token=" + tokens.accessToken() + "&refresh="
-                + tokens.refreshToken());
+        response.sendRedirect(redirects.success(target, tokens.accessToken(), tokens.refreshToken()));
     }
 
     /** Cabeceras de país por IP que inyectan los CDN/proxys (mismas que usa PricingCountryFilter). */

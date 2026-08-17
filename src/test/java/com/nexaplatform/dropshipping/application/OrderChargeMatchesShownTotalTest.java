@@ -10,6 +10,7 @@ import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService
 import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
+import com.nexaplatform.dropshipping.application.service.CartService;
 import com.nexaplatform.dropshipping.application.usecase.impl.PaymentUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
@@ -106,7 +107,7 @@ class OrderChargeMatchesShownTotalTest {
                 orderRepository, walletUseCase, org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class), auditLogger, mock(PartnerPlanSyncService.class),
                 mock(CustomerSubscriptionUseCase.class), mock(SubscriptionNotificationService.class),
                 new ObjectMapper(), mock(OrderEmailService.class), currencyRateService, new OrderAmounts(currencyRateService), mock(StockService.class),
-                mock(SupplierPurchaseService.class), mock(OpsAlertService.class));
+                mock(SupplierPurchaseService.class), mock(OpsAlertService.class), mock(CartService.class));
 
         when(currencyRateService.usdTo(any(BigDecimal.class), anyString()))
                 .thenAnswer(inv -> inv.<BigDecimal>getArgument(0).multiply(USD_A_EUR));

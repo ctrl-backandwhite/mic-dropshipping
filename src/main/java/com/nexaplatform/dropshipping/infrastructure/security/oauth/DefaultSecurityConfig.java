@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
@@ -21,6 +22,14 @@ public class DefaultSecurityConfig {
 
     @Value("${nexadrop.storefront.base-url}")
     private String frontBaseUrl;
+
+    /**
+     * Enlace profundo con el que la aplicación móvil recupera el control tras el login social. Es un
+     * esquema propio ({@code nx036://}) porque el sistema operativo solo sabe devolver el foco a la
+     * aplicación por él; la web no lo entiende y por eso no puede compartir destino.
+     */
+    @Value("${nexadrop.mobile.oauth-callback-url}")
+    private String mobileOauthCallbackUrl;
 
     /**
      * Se reutiliza el mismo interruptor que la cookie de sesión ({@code false} en local sobre HTTP,
@@ -52,18 +61,29 @@ public class DefaultSecurityConfig {
     }
 
     @Bean
+    public OAuthRedirectResolver oauthRedirectResolver() {
+        return new OAuthRedirectResolver(frontBaseUrl, mobileOauthCallbackUrl);
+    }
+
+    @Bean
     public GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler(UserUseCase userUseCase,
             UserTokenService userTokenService, DeviceSessionService deviceSessionService,
-            com.nexaplatform.dropshipping.application.service.TotpService totpService) {
+            com.nexaplatform.dropshipping.application.service.TotpService totpService,
+            OAuthRedirectResolver oauthRedirectResolver) {
         return new GoogleOAuth2SuccessHandler(userUseCase, userTokenService, deviceSessionService, totpService,
-                frontBaseUrl);
+                oauthRedirectResolver);
     }
 
     @Bean
     @Order(3)
     public SecurityFilterChain defaultFilterChain(HttpSecurity http,
             GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler,
-            GithubOAuth2UserService githubOAuth2UserService) {
+            GithubOAuth2UserService githubOAuth2UserService,
+            OAuthRedirectResolver oauthRedirectResolver) {
+        // Instancia local y no un @Bean: Spring Boot registra automáticamente en la cadena de filtros
+        // del contenedor cualquier bean de tipo Filter, con lo que este actuaría también sobre
+        // peticiones ajenas a esta cadena de seguridad. Aquí solo lo usa quien debe.
+        OAuthClientTargetFilter oauthClientTargetFilter = new OAuthClientTargetFilter();
         http.cors(Customizer.withDefaults())
                 // ÚNICA cadena con sesión y formulario, y por eso la ÚNICA con CSRF ACTIVO. Las otras tres
                 // (authorization server, partners y BFF) son stateless con Bearer y ahí sí se desactiva.
@@ -110,8 +130,15 @@ public class DefaultSecurityConfig {
                         // servicio de usuario. Google sí lo habla y se queda con el que trae Spring.
                         .userInfoEndpoint(userInfo -> userInfo.userService(githubOAuth2UserService))
                         .successHandler(googleOAuth2SuccessHandler)
-                        .failureHandler((req, res, ex) -> res.sendRedirect(frontBaseUrl + "/login?error=google"))
-                        .permitAll());
+                        // El fallo también tiene que volver al cliente que arrancó: si no, la aplicación
+                        // móvil se quedaría esperando en el navegador del sistema sin recuperar el foco.
+                        .failureHandler((req, res, ex) -> res
+                                .sendRedirect(oauthRedirectResolver.error(OAuthClientTargetFilter.resolve(req),
+                                        "google")))
+                        .permitAll())
+                // Anota el cliente de origen ANTES de que Spring redirija al proveedor; después ya no
+                // habría ocasión, porque la vuelta llega en otra petición.
+                .addFilterBefore(oauthClientTargetFilter, OAuth2AuthorizationRequestRedirectFilter.class);
         return http.build();
     }
 }

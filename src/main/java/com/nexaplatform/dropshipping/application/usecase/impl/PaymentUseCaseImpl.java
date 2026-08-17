@@ -5,7 +5,9 @@ import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import org.springframework.beans.factory.annotation.Value;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.api.exception.WebhookProcessingException;
+import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
+import com.nexaplatform.dropshipping.application.service.CartService;
 import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
@@ -112,6 +114,8 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     private final SupplierPurchaseService supplierPurchaseService;
     /** Avisos al responsable cuando una pasarela deja de cobrar. */
     private final OpsAlertService opsAlertService;
+    /** La cesta sincronizada: lo comprado sale de ella en cuanto el pedido queda PAGADO. */
+    private final CartService cartService;
 
     @Override
     @Transactional
@@ -333,12 +337,16 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
      *
      * <p>El paso a PAID solo se da desde PENDING/AWAITING_PAYMENT. Así una segunda confirmación (webhook
      * duplicado o reproceso) encuentra la orden ya avanzada, no la hace retroceder y NO vuelve a descontar
-     * stock; el audit y el email, en cambio, se emiten aunque la orden ya estuviera pagada.
+     * stock ni a tocar la cesta; el audit y el email, en cambio, se emiten aunque la orden ya estuviera
+     * pagada.
      */
     private void settleOrderPayment(Payment p) {
         Order order = orderRepository.findById(p.getOrderId()).orElse(null);
-        if (order != null && (order.getStatus() == OrderStatus.PENDING
-                || order.getStatus() == OrderStatus.AWAITING_PAYMENT)) {
+        // ¿Es ESTA confirmación la que paga el pedido? Distinguirlo de "el pedido ya estaba pagado" es lo
+        // que hace que un webhook repetido no vuelva a tocar la cesta.
+        boolean acabaDePagarse = order != null && (order.getStatus() == OrderStatus.PENDING
+                || order.getStatus() == OrderStatus.AWAITING_PAYMENT);
+        if (acabaDePagarse) {
             order.setStatus(OrderStatus.PAID);
             order = orderRepository.save(order);
             stockService.deductForOrder(order);
@@ -353,6 +361,29 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 p.getOrderId(), METHOD, p.getMethod(), AMOUNT_USD_CENTS, p.getAmountUsdCents()));
         if (order != null) {
             sendPaymentConfirmedEmail(p, order);
+        }
+        // La cesta, al final y solo si el pedido acaba de quedar PAGADO. Al final porque el borrado se
+        // confirma en su propia transacción: si se hiciera antes y algo posterior tumbara la del cobro,
+        // la persona se quedaría sin pedido Y sin cesta. Y solo en la transición real, para que una
+        // segunda confirmación no borre lo que haya vuelto a añadir después de comprar.
+        if (acabaDePagarse) {
+            clearPurchasedFromCart(order);
+        }
+    }
+
+    /**
+     * Saca de la cesta las líneas del pedido recién pagado.
+     *
+     * <p>Un fallo limpiando NUNCA puede tumbar el cobro: el pedido ya está pagado y eso es lo que cuenta.
+     * Perder un pago por no poder borrar una fila sería mucho peor que dejar restos en la cesta, así que
+     * el problema se registra —con el motivo en claro, sin SQL— y el cobro sigue su curso.
+     */
+    private void clearPurchasedFromCart(Order order) {
+        try {
+            cartService.removePurchased(order);
+        } catch (RuntimeException e) {
+            log.warn("Pedido {} PAGADO pero no se pudo vaciar la cesta: {}", order.getId(),
+                    ErrorMessages.humanize(e), e);
         }
     }
 
@@ -857,6 +888,10 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         String email = userRepository.findById(payerUserId).map(u -> u.getEmail()).orElse(null);
         String locale = userRepository.findById(payerUserId).map(u -> u.getLanguage()).orElse(null);
         orderEmailService.paymentConfirmed(order, email, locale, "WALLET");
+        // Con saldo el cobro es inmediato: el pedido ya está PAGADO y lo comprado sale de la cesta. Va al
+        // final por lo mismo que en el cobro externo, y el guard de arriba (un pedido PAID no se vuelve a
+        // cobrar) hace que este punto solo se alcance una vez por pedido.
+        clearPurchasedFromCart(order);
         return p;
     }
 
