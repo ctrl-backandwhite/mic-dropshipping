@@ -494,19 +494,27 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     private FulfillmentResult createShipmentForBin(Order order, ParcelSplitter.Bin bin, int sequenceNo) {
         int etaMax = zone(order.getShippingCountry()).map(CainiaoZoneEntity::getEtaMaxDays).orElse(20);
         CustomsValuation valuation = declarationFor(order);
+        // Destinatario y líneas se arman UNA vez y sirven para dos cosas: mandarlos y dejar constancia de
+        // lo mandado. Construirlos dos veces abriría la puerta a que lo archivado no fuese lo transmitido,
+        // que es justo lo que este registro viene a evitar.
+        YunExpressRequests.Receiver receiver = receiverOf(order);
+        List<YunExpressRequests.DeclarationLine> lines = declarationInfoOfBin(order, bin);
+        FulfillmentProvider.ShipmentDeclaration declared = declaredCopy(receiver, lines);
         if (!isActive()) {
             if (!mockAllowed()) {
                 throw new FulfillmentFailure(FulfillmentFailure.Kind.TRANSIENT,
                         "YunExpress no está operativo y en producción no se generan envíos simulados");
             }
+            // El simulado también archiva la declaración: es la única forma de probar la ficha del pedido
+            // en desarrollo, y el mock está prohibido en pre/pro, así que no puede confundir a nadie.
             String hex = order.getId().toString().replace("-", "").substring(0, 10).toUpperCase() + sequenceNo;
             return new FulfillmentResult(CARRIER_NAME, "YT" + hex + "YE", "YE" + hex, etaMax, sequenceNo,
-                    bin.spec().weightGrams(), bin.valueCents(), productCode);
+                    bin.spec().weightGrams(), bin.valueCents(), productCode, contentsOf(bin), declared);
         }
         String channel = resolveProductCode(order.getShippingCountry(), bin.spec());
         // El número de cliente debe ser único por guía: el mismo para dos envíos lo rechaza el carrier.
         YunExpressRequests.CreateShipment payload = createPayload(order, bin.spec(), channel, valuation,
-                order.getOrderNumber() + "-" + sequenceNo, declarationInfoOfBin(order, bin));
+                order.getOrderNumber() + "-" + sequenceNo, lines, receiver);
         JsonNode response;
         try {
             response = client.post(pathCreate(), payload);
@@ -527,7 +535,49 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         }
         subscribeTracking(waybill);
         return new FulfillmentResult(CARRIER_NAME, trackingOf(result, waybill), waybill, etaMax, sequenceNo,
-                bin.spec().weightGrams(), bin.valueCents(), channel);
+                bin.spec().weightGrams(), bin.valueCents(), channel, contentsOf(bin), declared);
+    }
+
+    /**
+     * Copia de lo que se transmite al transportista, en los tipos del puerto.
+     *
+     * <p>No se archiva el cuerpo de YunExpress tal cual porque lo que el administrador tiene que poder
+     * comprobar es la DECLARACIÓN, no el formato de un transportista concreto: el día que se cambie de
+     * carrier, lo ya archivado tiene que seguir leyéndose igual. Y por lo mismo se copia campo a campo y
+     * no se serializa la petición entera: así no hay forma de que un dato de la llamada (credenciales,
+     * firma) acabe en la base de datos por descuido.
+     */
+    static FulfillmentProvider.ShipmentDeclaration declaredCopy(YunExpressRequests.Receiver receiver,
+            List<YunExpressRequests.DeclarationLine> lines) {
+        List<FulfillmentProvider.DeclaredLine> declared = new ArrayList<>();
+        for (YunExpressRequests.DeclarationLine line : lines) {
+            declared.add(new FulfillmentProvider.DeclaredLine(line.nameEn(), line.nameLocal(), line.hsCode(),
+                    line.quantity(), line.unitPrice(), line.currency(), line.unitWeight(), line.material(),
+                    line.purpose(), line.skuCode(), line.salesUrl()));
+        }
+        FulfillmentProvider.DeclaredReceiver to = new FulfillmentProvider.DeclaredReceiver(
+                receiver.firstName(), receiver.lastName(), receiver.countryCode(), receiver.province(),
+                receiver.city(), receiver.addressLines(), receiver.postalCode(), receiver.phoneNumber(),
+                receiver.email());
+        return new FulfillmentProvider.ShipmentDeclaration(to, declared);
+    }
+
+    /**
+     * Qué líneas del pedido —y cuántas unidades de cada una— viajan en este bulto.
+     *
+     * <p>El reparto ya está hecho: cada unidad colocada recuerda de qué línea salió. Se agrupa aquí para
+     * que el seguimiento pueda enseñar las fotos de lo que lleva cada paquete, en lugar de un «Paquete
+     * 1/2» a ciegas.
+     */
+    private static List<FulfillmentProvider.ParcelContent> contentsOf(ParcelSplitter.Bin bin) {
+        Map<Integer, Integer> porLinea = new LinkedHashMap<>();
+        for (ParcelSplitter.Unit unit : bin.units()) {
+            porLinea.merge(unit.lineIndex(), 1, Integer::sum);
+        }
+        List<FulfillmentProvider.ParcelContent> out = new ArrayList<>();
+        porLinea.forEach((linea, cantidad) ->
+                out.add(new FulfillmentProvider.ParcelContent(linea, cantidad)));
+        return out;
     }
 
     /** Declaración aduanera limitada a lo que viaja en ESTE bulto. */
@@ -804,16 +854,17 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     YunExpressRequests.CreateShipment createPayload(Order order, ParcelSpec parcel, String channel,
             CustomsValuation valuation) {
         return createPayload(order, parcel, channel, valuation, order.getOrderNumber(),
-                declarationInfoOf(order));
+                declarationInfoOf(order), receiverOf(order));
     }
 
     /**
-     * Cuerpo del alta de envío. El número de cliente y la declaración se pasan aparte porque, al repartir
-     * un pedido en varios bultos, cada guía lleva su propio sufijo y solo lo que viaja en ese bulto.
+     * Cuerpo del alta de envío. El número de cliente, la declaración y el destinatario se pasan aparte
+     * porque, al repartir un pedido en varios bultos, cada guía lleva su propio sufijo y solo lo que
+     * viaja en ese bulto — y porque de esos mismos objetos se saca la copia que queda archivada.
      */
     YunExpressRequests.CreateShipment createPayload(Order order, ParcelSpec parcel, String channel,
             CustomsValuation valuation, String customerOrderNumber,
-            List<YunExpressRequests.DeclarationLine> declaration) {
+            List<YunExpressRequests.DeclarationLine> declaration, YunExpressRequests.Receiver receiver) {
         YunExpressRequests.Parcel box = new YunExpressRequests.Parcel(
                 new BigDecimal(Math.max(1, parcel.weightGrams()))
                         .divide(BigDecimal.valueOf(1000), 3, RoundingMode.HALF_UP),
@@ -828,7 +879,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
                 ? new YunExpressRequests.CustomsNumber(ioss) : null;
 
         return new YunExpressRequests.CreateShipment(channel, customerOrderNumber, "KG", "CM", "W", labelType,
-                List.of(box), receiverOf(order), declaration, customs);
+                List.of(box), receiver, declaration, customs);
     }
 
     /** Destinatario a partir del snapshot de dirección del pedido. */

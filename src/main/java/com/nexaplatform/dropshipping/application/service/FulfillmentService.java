@@ -1,13 +1,16 @@
 package com.nexaplatform.dropshipping.application.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
 import com.nexaplatform.dropshipping.application.usecase.NotificationUseCase;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
+import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.domain.model.Order;
+import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.domain.model.User;
 import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
 import com.nexaplatform.dropshipping.domain.repository.UserRepository;
@@ -20,7 +23,9 @@ import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.Fulf
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressEventCipher;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressFulfillmentService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderShipmentEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderShipmentItemEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderTrackingEventEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentItemRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderTrackingEventRepository;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +38,9 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -71,6 +79,7 @@ public class FulfillmentService {
     private final OrderTrackingEventRepository trackingRepository;
     private final FulfillmentProvider fulfillment;
     private final UserRepository userRepository;
+    private final NotificationsPublisher notificationsPublisher;
     private final OrderEmailService orderEmailService;
     private final ObjectMapper objectMapper;
     /** Verificación de firma y descifrado de los pushes de YunExpress (事件管理). */
@@ -81,6 +90,7 @@ public class FulfillmentService {
     private final NotificationUseCase notificationUseCase;
     /** Bultos del pedido: un pedido puede viajar en varias guías. */
     private final OrderShipmentRepository shipmentRepository;
+    private final OrderShipmentItemRepository shipmentItemRepository;
     /** Proyección de entidades de seguimiento a las vistas de la API (MapStruct). */
     private final TrackingViewMapper trackingViewMapper;
     /** Compras al proveedor: sin mercancía comprada y en camino no se emite guía internacional. */
@@ -161,19 +171,71 @@ public class FulfillmentService {
         log.info("Fulfillment: envío {} creado para pedido {}", r.trackingNumber(), o.getOrderNumber());
     }
 
-    /** Da de alta en {@code order_shipment} cada bulto creado en el transportista. */
+    /**
+     * Guarda qué líneas del pedido —y cuántas unidades— van dentro del bulto.
+     *
+     * <p>El transportista devuelve el reparto por índice de línea, que es como lo calculó el repartidor;
+     * aquí se traduce al identificador real de la línea para que el seguimiento pueda pintar su foto.
+     *
+     * <p>Un índice fuera de rango se descarta en lugar de reventar: dejar el bulto sin detalle es un
+     * seguimiento menos rico, pero perder la guía por eso sería perder el envío entero.
+     */
+    private void persistShipmentContents(Order o, OrderShipmentEntity shipment, FulfillmentResult r) {
+        List<OrderItem> items = o.getItems();
+        if (items == null || r.contents() == null) {
+            return;
+        }
+        for (FulfillmentProvider.ParcelContent content : r.contents()) {
+            if (content.lineIndex() < 0 || content.lineIndex() >= items.size()) {
+                log.warn("Fulfillment: el bulto {} referencia una línea inexistente ({}) del pedido {}",
+                        shipment.getSequenceNo(), content.lineIndex(), o.getOrderNumber());
+                continue;
+            }
+            shipmentItemRepository.save(OrderShipmentItemEntity.builder()
+                    .shipmentId(shipment.getId())
+                    .orderItemId(items.get(content.lineIndex()).getId())
+                    .quantity(content.quantity())
+                    .build());
+        }
+    }
+
+    /** Da de alta en {@code order_shipment} cada bulto creado en el transportista, con su contenido. */
     private void persistShipments(Order o, List<FulfillmentResult> results) {
         for (FulfillmentResult r : results) {
-            shipmentRepository.save(OrderShipmentEntity.builder()
+            OrderShipmentEntity shipment = shipmentRepository.save(OrderShipmentEntity.builder()
                     .orderId(o.getId()).sequenceNo(r.sequenceNo()).carrier(r.carrier())
                     .productCode(r.productCode()).waybillNumber(r.fulfillmentRef())
                     .trackingNumber(r.trackingNumber()).status(OrderStatus.FORWARDED.name())
                     .weightGrams(r.weightGrams()).declaredValueCents(r.declaredValueCents())
+                    .declaration(declarationJson(r))
                     .estimatedDeliveryAt(Instant.now().plus(Duration.ofDays(r.etaMaxDays())))
                     .createdAt(Instant.now()).build());
+            persistShipmentContents(o, shipment, r);
         }
         if (results.size() > 1) {
             log.info("::> [FULFILLMENT] Pedido {} despachado en {} bultos", o.getOrderNumber(), results.size());
+        }
+    }
+
+    /**
+     * La declaración transmitida al transportista, lista para archivarse como jsonb.
+     *
+     * <p>Es lo único que deja constancia de QUÉ se declaró: destinatario y líneas con su partida
+     * arancelaria. Si aduana rechaza el envío, sin esto habría que ir al panel del transportista.
+     *
+     * <p>Un fallo al convertirla NO tumba el despacho: la guía ya existe en el transportista y perder el
+     * envío por no poder archivar una copia sería mucho peor que quedarse sin la copia.
+     */
+    private Map<String, Object> declarationJson(FulfillmentResult r) {
+        if (r.declaration() == null) {
+            return null;
+        }
+        try {
+            return objectMapper.convertValue(r.declaration(), new TypeReference<Map<String, Object>>() { });
+        } catch (IllegalArgumentException e) {
+            log.warn("Fulfillment: no se pudo archivar la declaración del bulto {}: {}", r.sequenceNo(),
+                    e.getMessage());
+            return null;
         }
     }
 
@@ -334,6 +396,40 @@ public class FulfillmentService {
      * cliente aún espera algo. Los eventos de cada guía se etiquetan con su bulto para poder enseñarlos
      * por separado.
      */
+    /**
+     * Avisa de la entrega de UN bulto cuando el pedido viaja en varios.
+     *
+     * <p>El aviso de «entregado» es del pedido entero y solo salta cuando ha llegado el último. Con dos
+     * paquetes que llegan con días de diferencia, quien compró recibe uno y no le llega nada: cree que
+     * falta y escribe. Este aviso es por bulto y solo existe si hay más de uno; con un único paquete
+     * sería el mismo mensaje dos veces.
+     *
+     * <p>Un fallo al avisar no interrumpe el sondeo del resto de bultos.
+     */
+    private void avisarBultoEntregado(Order o, OrderShipmentEntity shipment, String anterior,
+            OrderStatus ahora, int totalBultos) {
+        if (totalBultos <= 1 || ahora != OrderStatus.DELIVERED || o.getUserId() == null
+                || OrderStatus.DELIVERED.name().equals(anterior)) {
+            return;
+        }
+        try {
+            User u = userRepository.getById(o.getUserId());
+            if (u == null) {
+                return;
+            }
+            notificationsPublisher.dispatch("ORDER_PARCEL_DELIVERED", o.getUserId(), u.getEmail(),
+                    Map.of("orderNumber", o.getOrderNumber(),
+                            "parcel", shipment.getSequenceNo(),
+                            "parcels", totalBultos,
+                            "trackingNumber", shipment.getTrackingNumber() != null
+                                    ? shipment.getTrackingNumber() : ""),
+                    u.getLanguage());
+        } catch (RuntimeException e) {
+            log.warn("No se pudo avisar de la entrega del bulto {} del pedido {}: {}",
+                    shipment.getSequenceNo(), o.getOrderNumber(), e.getMessage());
+        }
+    }
+
     private TrackingSnapshot pollShipments(Order o, List<OrderShipmentEntity> shipments) {
         if (shipments.isEmpty()) {
             // Pedido anterior al reparto en guías: se sondea con el número del pedido, como siempre.
@@ -348,11 +444,13 @@ public class FulfillmentService {
                 continue;
             }
             TrackingSnapshot own = fulfillment.track(reference, o.getForwardedAt(), o.getShippingCountry());
+            String anterior = shipment.getStatus();
             shipment.setStatus(own.currentStatus().name());
             shipment.setLastTrackedAt(Instant.now());
             shipment.setUpdatedAt(Instant.now());
             shipmentRepository.save(shipment);
             appendShipmentEvents(o, shipment, own);
+            avisarBultoEntregado(o, shipment, anterior, own.currentStatus(), shipments.size());
             all.addAll(own.steps());
             // El pedido va tan atrasado como su bulto más atrasado. Se compara por progress() y no por
             // ordinal(): CANCELLED y REFUNDED están declarados DETRÁS de DELIVERED, así que por posición
@@ -413,15 +511,39 @@ public class FulfillmentService {
      * en reparto—, así que el seguimiento se enseña por paquete y no todo mezclado en una sola lista.
      */
     public record ShipmentTrackingView(int sequenceNo, String carrier, String trackingNumber, String status,
-            int weightGrams, Instant estimatedDeliveryAt, List<TrackingEventView> events) {
+            int weightGrams, Instant estimatedDeliveryAt, List<TrackingEventView> events,
+            List<ParcelItemView> items) {
+    }
+
+    /**
+     * Un artículo dentro de un bulto: lo justo para reconocerlo de un vistazo.
+     *
+     * <p>Sin esto el seguimiento decía «Paquete 1/2» y nada más, y quien recibía uno no sabía a qué le
+     * estaba siguiendo la pista.
+     */
+    public record ParcelItemView(String title, String imageUrl, String variantName, int quantity) {
+    }
+
+    /**
+     * Lo que se le declaró al transportista para UN bulto, con la guía a la que corresponde.
+     *
+     * <p>Solo se devuelve en la vista del admin: lleva partidas arancelarias, valores declarados y la
+     * referencia del proveedor, que no son datos del comprador.
+     */
+    public record ShipmentDeclarationView(int sequenceNo, String trackingNumber, String waybillNumber,
+            FulfillmentProvider.ShipmentDeclaration declaration) {
     }
 
     /**
      * Seguimiento del pedido. {@code events} mantiene la lista completa —lo que ya consumía la interfaz—
      * y {@code shipments} añade el desglose por bulto para los pedidos repartidos en varias guías.
+     *
+     * <p>{@code declarations} es lo que se transmitió al transportista por cada bulto y va SIEMPRE vacío
+     * fuera del panel de administración.
      */
     public record TrackingView(String status, String carrier, String trackingNumber, Instant estimatedDeliveryAt,
-            Instant lastTrackedAt, List<TrackingEventView> events, List<ShipmentTrackingView> shipments) {
+            Instant lastTrackedAt, List<TrackingEventView> events, List<ShipmentTrackingView> shipments,
+            List<ShipmentDeclarationView> declarations) {
     }
 
     /** Vista de tracking del pedido del usuario (valida propiedad). */
@@ -431,40 +553,110 @@ public class FulfillmentService {
         if (o.getUserId() == null || !o.getUserId().equals(userId)) {
             throw new NotFoundException(ORDER);
         }
-        return view(o);
+        return view(o, false);
     }
 
-    /** Vista de tracking para el admin. */
+    /** Vista de tracking para el admin: la única que incluye la declaración enviada al transportista. */
     @Transactional(readOnly = true)
     public TrackingView adminTrackingView(UUID orderId) {
         Order o = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException(ORDER));
-        return view(o);
+        return view(o, true);
     }
 
-    private TrackingView view(Order o) {
+    private TrackingView view(Order o, boolean forAdmin) {
         List<OrderTrackingEventEntity> all = trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId());
         List<TrackingEventView> events = trackingViewMapper.toEventViews(all);
+        // Los bultos se leen una sola vez y se reparten entre el desglose y las declaraciones: son la
+        // misma pantalla, y pedirlos dos veces sería una consulta de más por cada visita a la ficha.
+        List<OrderShipmentEntity> shipments = shipmentRepository.findByOrderIdOrderBySequenceNoAsc(o.getId());
         return new TrackingView(o.getStatus() != null ? o.getStatus().name() : null, o.getCarrier(),
                 o.getTrackingNumber(), o.getEstimatedDeliveryAt(), o.getLastTrackedAt(), events,
-                shipmentViews(o, all));
+                shipmentViews(o, all, shipments), forAdmin ? declarationViews(shipments) : List.of());
+    }
+
+    /**
+     * Lo declarado al transportista, bulto a bulto, para que el admin pueda comprobar desde la ficha del
+     * pedido que la guía salió completa y a la dirección correcta.
+     *
+     * <p>Los envíos anteriores a que esto se archivara no aportan entrada: la ficha no pinta el bloque y
+     * ya está, igual que hace el contenido del bulto.
+     */
+    private List<ShipmentDeclarationView> declarationViews(List<OrderShipmentEntity> shipments) {
+        List<ShipmentDeclarationView> out = new ArrayList<>();
+        for (OrderShipmentEntity shipment : shipments) {
+            FulfillmentProvider.ShipmentDeclaration declared = readDeclaration(shipment);
+            if (declared != null) {
+                out.add(new ShipmentDeclarationView(shipment.getSequenceNo(), shipment.getTrackingNumber(),
+                        shipment.getWaybillNumber(), declared));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Relee la declaración archivada. Un json que ya no encaje con el modelo se ignora en lugar de tumbar
+     * la ficha del pedido: el admin necesita poder abrirla sobre todo cuando algo ha ido mal.
+     */
+    private FulfillmentProvider.ShipmentDeclaration readDeclaration(OrderShipmentEntity shipment) {
+        Map<String, Object> stored = shipment.getDeclaration();
+        if (stored == null || stored.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.convertValue(stored, FulfillmentProvider.ShipmentDeclaration.class);
+        } catch (IllegalArgumentException e) {
+            log.warn("Fulfillment: declaración archivada ilegible en el bulto {}: {}",
+                    shipment.getSequenceNo(), e.getMessage());
+            return null;
+        }
     }
 
     /**
      * Desglose por bulto. Se devuelve vacío cuando el pedido viaja en un solo paquete: en ese caso la
      * lista global ya lo dice todo y añadir un "Paquete 1 de 1" solo sería ruido.
      */
-    private List<ShipmentTrackingView> shipmentViews(Order o, List<OrderTrackingEventEntity> allEvents) {
-        List<OrderShipmentEntity> shipments = shipmentRepository.findByOrderIdOrderBySequenceNoAsc(o.getId());
+    private List<ShipmentTrackingView> shipmentViews(Order o, List<OrderTrackingEventEntity> allEvents,
+            List<OrderShipmentEntity> shipments) {
         if (shipments.size() <= 1) {
             return List.of();
+        }
+        // Contenido de todos los bultos de una vez: pedirlo dentro del bucle sería una consulta por
+        // paquete para pintar una sola pantalla.
+        Map<UUID, List<OrderShipmentItemEntity>> contenidos = shipmentItemRepository
+                .findByShipmentIdIn(shipments.stream().map(OrderShipmentEntity::getId).toList()).stream()
+                .collect(Collectors.groupingBy(OrderShipmentItemEntity::getShipmentId));
+        Map<UUID, OrderItem> lineas = new HashMap<>();
+        if (o.getItems() != null) {
+            o.getItems().forEach(i -> lineas.put(i.getId(), i));
         }
         List<ShipmentTrackingView> views = new ArrayList<>();
         for (OrderShipmentEntity shipment : shipments) {
             List<TrackingEventView> own = trackingViewMapper.toEventViews(allEvents.stream()
                     .filter(e -> shipment.getId().equals(e.getShipmentId())).toList());
-            views.add(trackingViewMapper.toShipmentView(shipment, own));
+            views.add(trackingViewMapper.toShipmentView(shipment, own,
+                    parcelItems(contenidos.getOrDefault(shipment.getId(), List.of()), lineas)));
         }
         return views;
+    }
+
+    /**
+     * Traduce el contenido guardado del bulto a lo que se pinta.
+     *
+     * <p>Los envíos creados antes de que esto existiera no tienen contenido registrado: devuelven lista
+     * vacía y el seguimiento se pinta como siempre, sin fotos, en vez de fallar.
+     */
+    private List<ParcelItemView> parcelItems(List<OrderShipmentItemEntity> contenido,
+            Map<UUID, OrderItem> lineas) {
+        List<ParcelItemView> out = new ArrayList<>();
+        for (OrderShipmentItemEntity item : contenido) {
+            OrderItem linea = lineas.get(item.getOrderItemId());
+            if (linea == null) {
+                continue;
+            }
+            out.add(new ParcelItemView(linea.getTitleSnapshot(), linea.getImageUrlSnapshot(),
+                    linea.getVariantName(), item.getQuantity()));
+        }
+        return out;
     }
 
     /** Registra un evento del timeline a mano (p.ej. desde el admin). */

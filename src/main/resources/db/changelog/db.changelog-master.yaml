@@ -279,3 +279,11 @@ databaseChangeLog:
       file: db/changelog/schema-v134-borrador-legal.sql
   - include:
       file: db/changelog/schema-v135-cart-item.sql
+  - include:
+      file: db/changelog/schema-v136-contenido-del-bulto.sql
+  - include:
+      file: db/changelog/schema-v137-operador-economico-empresa.sql
+  - include:
+      file: db/changelog/schema-v138-historial-visitas.sql
+  - include:
+      file: db/changelog/schema-v139-declaracion-enviada.sql

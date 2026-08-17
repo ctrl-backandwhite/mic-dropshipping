@@ -25,6 +25,7 @@ import com.nexaplatform.dropshipping.application.service.CatalogReindexRunner;
 import com.nexaplatform.dropshipping.application.service.BulkProductRules;
 import com.nexaplatform.dropshipping.application.service.BulkProductStructure;
 import com.nexaplatform.dropshipping.application.service.ProductSeoMetadata;
+import com.nexaplatform.dropshipping.application.service.SupplierSourceUrl;
 import com.nexaplatform.dropshipping.application.service.Texts;
 import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
@@ -666,6 +667,20 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         applyQuickEditScalars(p, req);
         applyQuickEditVideo(p, req);
         applyQuickEditTranslation(p, req, lang);
+        productJpaRepository.save(p);
+        productIndexer.indexProduct(id);
+        return productMapper.toDetail(p, lang, priceTierRepository.findByProductIdOrderByMinQtyAsc(p.getId()));
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
+    public ProductDetailView updateSourceUrl(UUID id, String sourceUrl, String lang) {
+        ProductEntity p = productJpaRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND + id));
+        p.setSourceUrl(SupplierSourceUrl.requireValid(sourceUrl));
         productJpaRepository.save(p);
         productIndexer.indexProduct(id);
         return productMapper.toDetail(p, lang, priceTierRepository.findByProductIdOrderByMinQtyAsc(p.getId()));

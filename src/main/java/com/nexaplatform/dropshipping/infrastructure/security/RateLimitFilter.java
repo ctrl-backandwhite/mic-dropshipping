@@ -67,6 +67,19 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Value("${nexadrop.security.trusted-proxy-count:1}")
     private int trustedProxyCount;
 
+    /**
+     * Interruptor del límite. Por defecto ENCENDIDO: apagarlo deja la API sin defensa contra abuso, así
+     * que solo debe apagarse en el perfil de pruebas, donde una batería de integración dispara cientos de
+     * peticiones seguidas desde la misma IP y el límite las corta con 429 sin que nada esté mal.
+     *
+     * <p>Se inicializa a {@code true} en la propia declaración y no solo por configuración: un
+     * {@code boolean} sin inicializar vale {@code false}, así que quien construya el filtro sin Spring
+     * —los tests unitarios lo hacen— se quedaría sin límite y sin enterarse. El fallo por defecto tiene
+     * que ser hacia el lado seguro.
+     */
+    @Value("${nexadrop.ratelimit.enabled:true}")
+    private boolean rateLimitEnabled = true;
+
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
     /**
@@ -86,6 +99,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
+        if (!rateLimitEnabled) {
+            chain.doFilter(req, res);
+            return;
+        }
         String path = req.getRequestURI();
         // El plan se lee del JWT (claim `plan`); por defecto SANDBOX para
         // requests no-partner o JWT sin claim.

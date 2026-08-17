@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
+import com.nexaplatform.dropshipping.application.service.FulfillmentService.ParcelItemView;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService.ShipmentTrackingView;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService.TrackingEventView;
 import com.nexaplatform.dropshipping.domain.model.Order;
@@ -36,7 +37,9 @@ public interface TrackingViewMapper {
     @Mapping(target = "status", source = "shipment.status")
     @Mapping(target = "weightGrams", source = "shipment.weightGrams")
     @Mapping(target = "estimatedDeliveryAt", source = "shipment.estimatedDeliveryAt")
-    ShipmentTrackingView toShipmentView(OrderShipmentEntity shipment, List<TrackingEventView> events);
+    @Mapping(target = "items", source = "items")
+    ShipmentTrackingView toShipmentView(OrderShipmentEntity shipment, List<TrackingEventView> events,
+            List<ParcelItemView> items);
 
     /** Fila de la bandeja de incidencias: qué pedido, cuántos intentos y por qué se abandonó. */
     @Mapping(target = "orderId", source = "id")

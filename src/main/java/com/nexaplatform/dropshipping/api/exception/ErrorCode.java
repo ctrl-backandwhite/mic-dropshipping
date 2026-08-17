@@ -147,7 +147,15 @@ public enum ErrorCode {
             "Le code de suppression est invalide ou a expiré.",
             "Der Löschcode ist ungültig oder abgelaufen.",
             "Il codice di eliminazione non è valido o è scaduto.",
-            "De verwijdercode is ongeldig of verlopen.");
+            "De verwijdercode is ongeldig of verlopen."),
+    PRODUCT_SOURCE_URL_INVALID("El enlace de origen no es válido: debe ser una dirección http(s) de 1688 o Alibaba.",
+            "The source link is not valid: it must be an http(s) address from 1688 or Alibaba.",
+            "A ligação de origem não é válida: tem de ser um endereço http(s) do 1688 ou da Alibaba.",
+            "来源链接无效：必须是 1688 或 Alibaba 的 http(s) 网址。",
+            "Le lien d'origine n'est pas valide : il doit s'agir d'une adresse http(s) de 1688 ou Alibaba.",
+            "Der Herkunftslink ist ungültig: Es muss eine http(s)-Adresse von 1688 oder Alibaba sein.",
+            "Il link di origine non è valido: deve essere un indirizzo http(s) di 1688 o Alibaba.",
+            "De bronlink is niet geldig: het moet een http(s)-adres van 1688 of Alibaba zijn.");
 
     /**
      * Orden EXACTO en el que cada constante declara sus textos. Añadir un idioma es añadirlo aquí y en

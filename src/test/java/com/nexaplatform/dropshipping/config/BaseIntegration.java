@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.config;
 
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
+import com.nexaplatform.dropshipping.infrastructure.security.RateLimitFilter;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.Cache;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,12 +56,26 @@ public abstract class BaseIntegration {
     @Autowired(required = false)
     private CurrencyRateService currencyRateService;
 
+    /**
+     * El filtro de límite de peticiones, para devolverle la cuota entre pruebas.
+     *
+     * <p>Los buckets viven en la JVM y el contexto de Spring se comparte entre clases: sin reiniciarlo,
+     * una clase que hace muchas peticiones agota la cuota de la IP y la SIGUIENTE recibe 429 sin que nada
+     * esté mal en lo que prueba. No se apaga el límite: hay pruebas que verifican justamente que corta al
+     * pasar del tope, y apagarlo las dejaría sin objeto.
+     */
+    @Autowired(required = false)
+    private RateLimitFilter rateLimitFilter;
+
     @BeforeEach
     void setUpClientAndCleanDb() {
         client = WebTestClient.bindToServer().baseUrl("http://localhost:" + port)
                 .responseTimeout(Duration.ofSeconds(30)).build();
         cleanAllTables();
         vaciarCaches();
+        if (rateLimitFilter != null) {
+            rateLimitFilter.reset();
+        }
     }
 
     /**
