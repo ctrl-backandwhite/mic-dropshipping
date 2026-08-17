@@ -287,3 +287,13 @@ databaseChangeLog:
       file: db/changelog/schema-v138-historial-visitas.sql
   - include:
       file: db/changelog/schema-v139-declaracion-enviada.sql
+  - include:
+      file: db/changelog/schema-v140-arancel-no-reembolsable.sql
+  - include:
+      file: db/changelog/schema-v141-limite-aceptacion-carrier.sql
+  - include:
+      file: db/changelog/schema-v142-canal-elegido-en-el-pedido.sql
+  - include:
+      file: db/changelog/schema-v143-destinos-no-servibles.sql
+  - include:
+      file: db/changelog/schema-v144-cobertura-verificada.sql

@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.service;
 
+import com.nexaplatform.dropshipping.domain.model.ShippingOption;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PromotionEntity;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
@@ -66,7 +67,14 @@ public class CheckoutPreviewService {
             /** Cupón aplicado, o el motivo por el que no vale. Nulo cuando no se ha metido ninguno. */
             String couponCode, String couponError, UUID couponId,
             /** Las líneas con su importe, para que el resumen que se pinta sume el subtotal. */
-            List<PreviewLine> lines) {
+            List<PreviewLine> lines,
+            /**
+             * La forma de envío con la que está calculado ESTE desglose: la que eligió el cliente si
+             * sigue cotizando, y si no la más barata. Se publica para que el checkout marque la que de
+             * verdad se está cobrando en vez de dejar señalada una que ya no vale. Nula cuando la
+             * tarifa sale de la tabla de zonas: ahí no hay entre qué elegir.
+             */
+            ShippingOption shippingOption) {
 
         /** Sin cupón: el resto del sistema no tiene por qué pasar tres nulos. */
         public Preview(ShippingQuote quote, int subtotalUsdCents, int discountUsdCents, int shippingUsdCents,
@@ -75,7 +83,7 @@ public class CheckoutPreviewService {
                 CheckoutTotalsService.CheckoutTotals totals) {
             this(quote, subtotalUsdCents, discountUsdCents, shippingUsdCents, taxUsdCents, taxRateBps,
                     subtotalDisplay, discountDisplay, shippingDisplay, taxDisplay, totalDisplay, totals,
-                    null, null, null, List.of());
+                    null, null, null, List.of(), null);
         }
     }
 
@@ -108,6 +116,22 @@ public class CheckoutPreviewService {
      * descuento, que es la regla del sistema. Encadenarlos daría un porcentaje que nadie ha decidido.
      */
     public Preview compute(String country, String region, List<Line> items, UUID userId, String couponCode) {
+        return compute(country, region, items, userId, couponCode, null);
+    }
+
+    /**
+     * Vista previa del checkout con la forma de envío que el cliente ha elegido.
+     *
+     * <p>El envío entra en la base del impuesto, así que el desglose entero depende de qué canal se
+     * aplique: se resuelve aquí y no restando en el navegador. El código llega del cliente y se
+     * revalida contra la cotización recién hecha, con el MISMO criterio que el cobro
+     * ({@link ShippingOptionResolver}): un canal que ya no cotiza se ignora y se cae a la más barata,
+     * en vez de tumbar la compra por algo que cambió mientras el cliente rellenaba la dirección.
+     *
+     * @param shippingOptionCode canal elegido en el checkout; nulo o desconocido = el más barato
+     */
+    public Preview compute(String country, String region, List<Line> items, UUID userId, String couponCode,
+            String shippingOptionCode) {
         List<Line> lines = items == null ? List.of() : items;
         ShippingQuote quote = shippingQuoteService.quote(country, lines.stream()
                 .map(i -> new ShippingQuoteService.Line(i.productId(), i.variantId(), i.quantity())).toList());
@@ -196,7 +220,12 @@ public class CheckoutPreviewService {
         }
         int discountedSubtotalUsdCents = subtotalUsdCents - discountUsdCents;
 
-        int shippingBaseUsdCents = quote.supported() ? quote.amountUsdCents() : 0;
+        // La forma de envío que se está cotizando: la elegida si sigue viva, si no la más barata. Su
+        // tarifa manda sobre la de la cotización, que es siempre la de la opción más barata.
+        ShippingOption shippingOption = ShippingOptionResolver.resolve(quote, shippingOptionCode);
+        int shippingBaseUsdCents = quote.supported()
+                ? (shippingOption != null ? shippingOption.amountUsdCents() : quote.amountUsdCents())
+                : 0;
         // Bultos con sus partidas arancelarias: el derecho fijo de la UE se cobra por línea de declaración
         // dentro de cada bulto, no por producto ni por unidad (ver CustomsDutyLinesService).
         List<CustomsDutyLinesService.DutyParcel> parcels = customsDutyLinesService.parcelsOf(customsLines(items));
@@ -219,7 +248,7 @@ public class CheckoutPreviewService {
         return new Preview(quote, subtotalUsdCents, discountUsdCents, totals.shippingCents(), totals.taxCents(),
                 totals.taxRateBps(), subDisp, discDisp, shipDisp, taxDisp, totalDisp, totals,
                 couponId != null ? couponCode.trim().toUpperCase(Locale.ROOT) : null,
-                couponError, couponId, List.copyOf(previewLines));
+                couponError, couponId, List.copyOf(previewLines), shippingOption);
     }
 
     /**

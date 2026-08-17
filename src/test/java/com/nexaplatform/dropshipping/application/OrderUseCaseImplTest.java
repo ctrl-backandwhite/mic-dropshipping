@@ -122,7 +122,7 @@ class OrderUseCaseImplTest {
      */
     private static CheckoutTotalsService.CheckoutTotals noCustomsTotals(int shippingBaseCents) {
         CustomsValuationService.CustomsValuation customs = new CustomsValuationService.CustomsValuation("XX",
-                TaxMode.DDP, 0, false, OverThresholdPolicy.SURCHARGE, 0, false, "");
+                TaxMode.DDP, 0, false, OverThresholdPolicy.SURCHARGE, 0, false, "", false);
         return new CheckoutTotalsService.CheckoutTotals(shippingBaseCents, 0, shippingBaseCents, 0, 0, customs);
     }
 
@@ -170,7 +170,7 @@ class OrderUseCaseImplTest {
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
         when(pricingService.priceFor(any(), any())).thenReturn(priced("12.50"));
         CustomsValuationService.CustomsValuation blocked = new CustomsValuationService.CustomsValuation("MX",
-                TaxMode.DDP, 0, true, OverThresholdPolicy.BLOCK, 0, true, "150 EUR");
+                TaxMode.DDP, 0, true, OverThresholdPolicy.BLOCK, 0, true, "150 EUR", false);
         when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList()))
                 .thenReturn(new CheckoutTotalsService.CheckoutTotals(0, 0, 0, 0, 0, blocked));
 

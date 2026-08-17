@@ -68,6 +68,10 @@ public class CustomerOrderEntity extends BaseEntity {
     @Column(name = "subtotal_cents", nullable = false)
     private int subtotalCents;
 
+    /** Canal del transportista que eligió el cliente al pagar; vacío si no eligió. */
+    @Column(name = "shipping_channel_code", length = 32)
+    private String shippingChannelCode;
+
     @Column(name = "shipping_cents", nullable = false)
     private int shippingCents;
 

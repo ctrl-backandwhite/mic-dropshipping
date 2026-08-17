@@ -58,7 +58,13 @@ public class ShippingQuoteController {
     /** {@code region} = código del estado/provincia (p. ej. "CA", "ON", "SP") para el IVA por región. */
     public record QuoteRequest(String country, String region, List<QuoteItem> items,
             /** Código de cupón que el cliente ha tecleado. Nulo o vacío = sin cupón. */
-            String couponCode) {
+            String couponCode,
+            /**
+             * Forma de envío elegida en el selector del checkout. Nulo = la más barata, que es lo que
+             * cotiza la primera vez. Se revalida contra la cotización recién hecha: un canal que ya no
+             * está no abarata el envío, se cae a la más barata (ver {@code ShippingOptionResolver}).
+             */
+            String shippingOptionCode) {
     }
 
     /** Región (estado/provincia) para el dropdown del checkout. */
@@ -86,6 +92,18 @@ public class ShippingQuoteController {
              * el checkout distinga «canjeado» de «rechazado y por qué» sin adivinarlo del importe.
              */
             String couponCode, String couponError,
+            /**
+             * Formas de envío entre las que el cliente puede elegir, de más barata a más cara y ya sin
+             * las que no pueden cumplir el DDP. Vacía cuando la tarifa sale de la tabla de zonas: ahí no
+             * hay entre qué elegir. El precio de cada una ya va en la divisa del comprador.
+             */
+            List<ShippingOptionOut> options,
+            /**
+             * La forma de envío con la que está calculado ESTE desglose. No tiene por qué ser la que
+             * pidió el cliente: si el canal ya no cotiza se cobra la más barata, y el checkout necesita
+             * saberlo para marcar la que de verdad se está pagando. Nulo cuando no hay opciones.
+             */
+            String selectedShippingOptionCode,
             /** Subtotal de producto (con el margen del país ya aplicado), céntimos USD. */
             int subtotalUsdCents,
             /** Recargo de despacho de aduana incluido en el envío (p. ej. 3 EUR/artículo en la UE), céntimos USD. */
@@ -111,6 +129,15 @@ public class ShippingQuoteController {
      * Línea del resumen. El importe NO es el unitario multiplicado por la cantidad: sale de convertir el
      * canónico de la línea entera, redondeando una única vez. Por eso viaja calculado desde el servidor.
      */
+    /**
+     * Una forma de envío ofrecida al cliente. {@code code} es lo que hay que devolver al pagar; el
+     * nombre del canal del transportista NO se enseña —«云途全球服装专线挂号» no le dice nada a nadie—,
+     * lo pinta el front con su propio texto a partir del plazo y el precio.
+     */
+    public record ShippingOptionOut(String code, int amountUsdCents, String amountFormatted,
+            int etaMinDays, int etaMaxDays) {
+    }
+
     public record QuoteLine(UUID productId, UUID variantId, int quantity, String unitFormatted,
             String lineTotalFormatted) {
     }
@@ -124,7 +151,7 @@ public class ShippingQuoteController {
         CheckoutPreviewService.Preview preview = checkoutPreview.compute(req.country(), req.region(),
                 items.stream().map(i -> new CheckoutPreviewService.Line(i.productId(), i.variantId(), i.quantity()))
                         .toList(),
-                userId, req.couponCode());
+                userId, req.couponCode(), req.shippingOptionCode());
 
         ShippingQuote q = preview.quote();
         String code = pricingService.displayCurrencyCode();
@@ -149,6 +176,13 @@ public class ShippingQuoteController {
                 preview.totals().customs().taxMode().name(),
                 preview.totals().customs().deMinimisLabel(),
                 preview.couponCode(), preview.couponError(),
+                q.options().stream()
+                        .map(o -> new ShippingOptionOut(o.code(), o.amountUsdCents(),
+                                currencyService.formatDisplay(currencyService.usdToDisplay(
+                                        java.math.BigDecimal.valueOf(o.amountUsdCents(), 2)), code),
+                                o.etaMinDays(), o.etaMaxDays()))
+                        .toList(),
+                preview.shippingOption() != null ? preview.shippingOption().code() : null,
                 preview.subtotalUsdCents(), preview.totals().customsHandlingCents(),
                 shippingBaseFmt, customsFmt,
                 currencyService.formatDisplay(preview.subtotalDisplay(), code),

@@ -10,6 +10,7 @@ import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.enums.TaxMode;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
+import com.nexaplatform.dropshipping.domain.model.ShippingOption;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CainiaoZoneEntity;
@@ -34,9 +35,11 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Proveedor de fulfillment con <b>YunExpress</b> (云途) — carrier ACTIVO del sistema.
@@ -78,6 +81,9 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     /** Nombre de cara al cliente (sin exponer marca del carrier), igual que hacía Cainiao. */
     private static final String CARRIER_NAME = "Standard Shipping";
 
+    /** Etiqueta del servicio de prepago tal y como la nombra el transportista en su documentación. */
+    private static final String PREPAID_VAT_LABEL = "云途预缴";
+
     /** Prefijo de las propiedades que permiten reapuntar una ruta de la Open Platform sin tocar código. */
     private static final String ROUTE_PROPERTY_PREFIX = "nexadrop.yunexpress.path.";
 
@@ -100,6 +106,13 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     /** Número IOSS del comercio para despacho de IVA en la UE (pedidos <=150 EUR). Vacío = sin IOSS. */
     @Value("${nexadrop.yunexpress.ioss-number:}")
     private String iossNumber;
+
+    /**
+     * Código del servicio adicional con el que se le pide al transportista que prepague el IVA con su
+     * propio IOSS ({@code V1} = 云途预缴). Vaciarlo desactiva la petición.
+     */
+    @Value("${nexadrop.yunexpress.prepaid-vat-service-code:V1}")
+    private String prepaidVatServiceCode = "V1";
     /** Minutos por etapa del tracking simulado (mock) — pon un valor pequeño para ver el avance en demo. */
     @Value("${nexadrop.yunexpress.mock-stage-minutes:2}")
     private long mockStageMinutes;
@@ -236,16 +249,47 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         CainiaoZoneEntity zn = z.get();
         int chargeableGrams = chargeableWeightGrams(parcel);
         if (isActive()) {
-            Integer cents = tryRealShippingCents(zn, parcel, chargeableGrams);
-            if (cents != null) {
-                return new ShippingQuote(true, zn.getCountryCode(), cents, CARRIER_NAME, CARRIER_NAME,
-                        zn.getEtaMinDays(), zn.getEtaMaxDays(), zn.getZone());
+            // Todas las formas de envío utilizables, no solo la más barata: el cliente elige en el
+            // checkout entre precio y plazo, que es lo que cambia de un canal a otro.
+            List<ShippingOption> options = shippingOptions(zn, parcel, chargeableGrams);
+            if (!options.isEmpty()) {
+                // Sin elección explícita se cobra la primera, que es la más barata utilizable.
+                ShippingOption cheapest = options.getFirst();
+                return new ShippingQuote(true, zn.getCountryCode(), cheapest.amountUsdCents(), CARRIER_NAME,
+                        CARRIER_NAME, cheapest.etaMinDays(), cheapest.etaMaxDays(), zn.getZone(), options);
             }
         }
         double kg = Math.max(0.1, chargeableGrams / 1000.0);
         int amount = zn.getBaseCents() + (int) Math.round(zn.getPerKgCents() * kg);
         return new ShippingQuote(true, zn.getCountryCode(), amount, CARRIER_NAME, CARRIER_NAME,
                 zn.getEtaMinDays(), zn.getEtaMaxDays(), zn.getZone());
+    }
+
+    /**
+     * Las formas de envío que se le pueden ofrecer al cliente para ese destino y bulto, de más barata a
+     * más cara y ya sin las que no pueden cumplir el DDP.
+     *
+     * <p>El plazo sale del propio canal, no de la tabla de zonas: cada uno tarda lo suyo y enseñar el de
+     * la tabla prometería una fecha que no es la del envío que se está cobrando.
+     *
+     * <p>Lista vacía si el transportista no cotiza nada utilizable o si falla la llamada — nunca una
+     * excepción: la cotización no puede tumbar el checkout, y el llamante cae a la tabla de zonas.
+     */
+    List<ShippingOption> shippingOptions(CainiaoZoneEntity zone, ParcelSpec parcel, int chargeableGrams) {
+        List<RateOption> rates = rateOptions(zone.getCountryCode(), parcel, chargeableGrams);
+        List<ShippingOption> out = new ArrayList<>();
+        for (RateOption rate : rates) {
+            BigDecimal usd = currencyRateService.toUsd(rate.amount(), rate.currency());
+            if (usd == null) {
+                log.warn("YunExpress: no se pudo convertir {} {} a USD para {}",
+                        rate.amount(), rate.currency(), zone.getCountryCode());
+                continue;
+            }
+            int cents = usd.multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).intValue();
+            out.add(new ShippingOption(rate.productCode(), rate.productName(), cents,
+                    rate.etaMinDays(), rate.etaMaxDays()));
+        }
+        return out;
     }
 
     /**
@@ -308,6 +352,16 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
      * YunExpress no recomienda ninguno: la cotización nunca debe tumbar el checkout.
      */
     RateOption cheapestRate(String countryCode, ParcelSpec parcel, int chargeableGrams) {
+        List<RateOption> options = rateOptions(countryCode, parcel, chargeableGrams);
+        return options.isEmpty() ? null : options.getFirst();
+    }
+
+    /**
+     * Todas las tarifas utilizables del destino, de más barata a más cara. Devuelve lista vacía —nunca
+     * excepción— si el transportista no recomienda ninguna o la llamada falla: la cotización no puede
+     * tumbar el checkout.
+     */
+    List<RateOption> rateOptions(String countryCode, ParcelSpec parcel, int chargeableGrams) {
         Map<String, String> query = new LinkedHashMap<>();
         query.put("country_code", countryCode);
         query.put("weight", BigDecimal.valueOf(Math.max(1, chargeableGrams))
@@ -328,14 +382,56 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
             if (!response.path(SUCCESS).asBoolean(false)) {
                 log.warn("YunExpress: sin tarifa para {} ({} g) -> {} {}", countryCode, chargeableGrams,
                         response.path("code").asText(""), response.path("msg").asText(""));
-                return null;
+                return List.of();
             }
-            List<RateOption> options = parseRates(response.path(RESULT));
-            return options.stream().min(Comparator.comparing(RateOption::amount)).orElse(null);
+            // Solo entre los canales que pueden cumplir lo que se le prometió al cliente: donde el
+            // transportista prepaga el IVA, los postales y los de Amazon quedan fuera aunque sean más
+            // baratos. Si no queda ninguno, se devuelve null y el llamante cae a la tabla de zonas.
+            return deliverableRates(parseRates(response.path(RESULT)),
+                    customsValuation.carrierPrepaysVatFor(countryCode));
         } catch (RuntimeException e) {
             log.warn("YunExpress: fallo simulando tarifa para {} -> {}", countryCode, e.getMessage());
-            return null;
+            return List.of();
         }
+    }
+
+    /**
+     * Canales de correo postal. Son <b>DAP y no admiten declaración IOSS</b>
+     * («邮局渠道为DAP模式（税费由收件人支付），暂不支持IOSS申报»), así que con ellos el IVA se lo
+     * reclaman al destinatario aunque ya lo haya pagado en la tienda.
+     */
+    private static final Set<String> POSTAL_CHANNELS = Set.of("CNDWA", "EUB-SZ", "SZEMS", "SNETK");
+
+    /** Sufijo de los canales que solo aceptan el IOSS de Amazon («该产品只支持使用亚马逊平台IOSS号下单»). */
+    private static final String AMAZON_ONLY_SUFFIX = "-AMZ";
+
+    /**
+     * Canales que se le pueden ofrecer al cliente, del más barato al más caro.
+     *
+     * <p>Cuando el destino lleva el <b>IVA prepagado</b> por el transportista hay que descartar los que
+     * no pueden cumplir esa promesa: los postales, que van DAP, y los de Amazon, que exigen un IOSS que
+     * no es el nuestro. Y son de los más baratos, así que quedarse con «el más barato que cotice» los
+     * elige a menudo —en Alemania, Italia, México, Brasil, Colombia y Argentina, medido contra la API—.
+     *
+     * <p>Fuera de ese régimen no se descarta nada: allí el impuesto lo paga el destinatario con cualquier
+     * canal, y quitar los baratos solo encarecería el envío sin ganar nada a cambio.
+     */
+    static List<RateOption> deliverableRates(List<RateOption> rates, boolean prepaidVat) {
+        if (rates == null || rates.isEmpty()) {
+            return List.of();
+        }
+        return rates.stream()
+                .filter(r -> !prepaidVat || isCompatibleWithPrepaidVat(r.productCode()))
+                .sorted(Comparator.comparing(RateOption::amount))
+                .toList();
+    }
+
+    private static boolean isCompatibleWithPrepaidVat(String productCode) {
+        if (productCode == null || productCode.isBlank()) {
+            return false;
+        }
+        String code = productCode.trim().toUpperCase(Locale.ROOT);
+        return !POSTAL_CHANNELS.contains(code) && !code.endsWith(AMAZON_ONLY_SUFFIX);
     }
 
     /** Agrupa las líneas de coste por canal y suma sus importes; el plazo viene como "3-8" días. */
@@ -511,7 +607,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
             return new FulfillmentResult(CARRIER_NAME, "YT" + hex + "YE", "YE" + hex, etaMax, sequenceNo,
                     bin.spec().weightGrams(), bin.valueCents(), productCode, contentsOf(bin), declared);
         }
-        String channel = resolveProductCode(order.getShippingCountry(), bin.spec());
+        String channel = channelFor(order, bin.spec());
         // El número de cliente debe ser único por guía: el mismo para dos envíos lo rechaza el carrier.
         YunExpressRequests.CreateShipment payload = createPayload(order, bin.spec(), channel, valuation,
                 order.getOrderNumber() + "-" + sequenceNo, lines, receiver);
@@ -787,7 +883,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
      */
     private FulfillmentResult realCreateShipment(Order order, int etaMax, CustomsValuation valuation) {
         ParcelSpec parcel = parcelOf(order);
-        String channel = resolveProductCode(order.getShippingCountry(), parcel);
+        String channel = channelFor(order, parcel);
         YunExpressRequests.CreateShipment payload = createPayload(order, parcel, channel, valuation);
         JsonNode response;
         try {
@@ -879,7 +975,32 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
                 ? new YunExpressRequests.CustomsNumber(ioss) : null;
 
         return new YunExpressRequests.CreateShipment(channel, customerOrderNumber, "KG", "CM", "W", labelType,
-                List.of(box), receiver, declaration, customs);
+                List.of(box), receiver, declaration, customs, prepaidVatServices(valuation));
+    }
+
+    /**
+     * Servicios adicionales del envío. Hoy solo el prepago del IVA por el transportista.
+     *
+     * <p>Se pide cuando el destino tiene marcado que <b>el transportista liquida su IVA</b> —hoy los 27
+     * de la UE vía IOSS—, el pedido va <b>DDP</b> —el impuesto ya se le cobró al cliente en el checkout—
+     * y <b>no supera el umbral</b> de minimis, que es donde el régimen simplificado aplica. En DDU lo
+     * paga el destinatario, así que pedirlo lo cobraría dos veces; por encima del umbral el despacho es
+     * formal y el prepago no tiene dónde liquidarse. Y sin la marca del país se pediría para destinos sin
+     * ese régimen —todos están en DDP—, lo que tumbaría el alta del envío.
+     *
+     * <p>El código es configurable y vaciarlo desactiva el servicio: si la cuenta del transportista no lo
+     * tiene dado de alta, mandarlo hace fallar la creación del envío, y eso debe poder apagarse sin
+     * desplegar.
+     */
+    private List<YunExpressRequests.ExtraService> prepaidVatServices(CustomsValuation valuation) {
+        boolean aplica = prepaidVatServiceCode != null && !prepaidVatServiceCode.isBlank()
+                && valuation != null && valuation.carrierPrepaysVat()
+                && valuation.taxMode() == TaxMode.DDP && !valuation.deMinimisExceeded();
+        // null y no lista vacía: así el campo desaparece del JSON en vez de viajar como `[]`, que algunas
+        // validaciones del transportista rechazan.
+        return aplica
+                ? List.of(new YunExpressRequests.ExtraService(prepaidVatServiceCode.trim(), PREPAID_VAT_LABEL))
+                : null;
     }
 
     /** Destinatario a partir del snapshot de dirección del pedido. */
@@ -935,6 +1056,20 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     }
 
     /** Canal a usar: el fijado en configuración o, si no hay, el más barato que cotice el destino. */
+    /**
+     * Canal por el que se emite la guía. Manda lo que <b>eligió el cliente</b>: entre el pedido y el
+     * despacho la tarifa cambia, así que recalcular «el más barato» ahora significaría cobrar una forma
+     * de envío y usar otra, con otro plazo. Si no eligió, se usa el fijado en configuración y, en su
+     * defecto, el más barato utilizable del momento.
+     */
+    String channelFor(Order order, ParcelSpec parcel) {
+        String chosen = order.getShippingChannelCode();
+        if (chosen != null && !chosen.isBlank()) {
+            return chosen.trim();
+        }
+        return resolveProductCode(order.getShippingCountry(), parcel);
+    }
+
     private String resolveProductCode(String countryCode, ParcelSpec parcel) {
         if (productCode != null && !productCode.isBlank()) {
             return productCode.trim();

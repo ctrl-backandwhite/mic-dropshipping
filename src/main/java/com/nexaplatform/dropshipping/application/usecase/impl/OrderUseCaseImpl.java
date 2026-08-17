@@ -26,6 +26,10 @@ import com.nexaplatform.dropshipping.application.service.ParcelAggregator;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.PromotionService;
 import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
+import com.nexaplatform.dropshipping.application.service.RefundPolicy;
+import com.nexaplatform.dropshipping.application.service.ShippingOptionResolver;
+import com.nexaplatform.dropshipping.application.service.UnserviceableZoneService;
+import com.nexaplatform.dropshipping.domain.model.ShippingOption;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
@@ -125,6 +129,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final FulfillmentProvider fulfillment;
     private final CheckoutTotalsService checkoutTotalsService;
     private final CustomsDutyLinesService customsDutyLinesService;
+    private final UnserviceableZoneService unserviceableZoneService;
     private final OperatorCommissionService operatorCommissionService;
     private final PromotionService promotionService;
     private final SupplierPurchaseService supplierPurchaseService;
@@ -196,7 +201,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
             }
             requireMinimumOrderQuantities(order.getItems());
             cuponAplicado = applyTotals(order, userId, subtotal, gross.cents(), parcel, req.couponCode(),
-                    grossByProduct);
+                    grossByProduct, req.shippingOptionCode());
         } finally {
             PricingCountryHolder.set(prevPricingCountry);
         }
@@ -372,12 +377,21 @@ public class OrderUseCaseImpl implements OrderUseCase {
      * coincida al céntimo con lo cobrado.
      */
     private UUID applyTotals(Order order, UUID userId, int subtotal, int grossSubtotal, ParcelAggregator parcel,
-            String couponCode, Map<UUID, Integer> grossByProduct) {
+            String couponCode, Map<UUID, Integer> grossByProduct, String shippingOptionCode) {
         // Envío: tarifa por destino del carrier. Si el país no está cubierto, el envío queda en 0 aquí
         // (el checkout del storefront bloquea antes el destino no soportado). El bulto se arma con el
         // MISMO agregador que la vista previa del checkout: peso, medidas del paquete y batería.
         ShippingQuote quote = fulfillment.quote(order.getShippingCountry(), parcel.build());
-        int shippingCents = quote.supported() ? quote.amountUsdCents() : 0;
+        // La forma de envío que eligió el cliente, revalidada contra lo que cotiza AHORA: el código
+        // llega del navegador y aceptarlo sin comprobar dejaría pagar el precio de un canal más barato
+        // —o colarse por uno postal, fuera del IVA prepagado—. El importe sale de la cotización.
+        ShippingOption chosen = ShippingOptionResolver.resolve(quote, shippingOptionCode);
+        if (chosen != null) {
+            order.setShippingChannelCode(chosen.code());
+        }
+        int shippingCents = quote.supported()
+                ? (chosen != null ? chosen.amountUsdCents() : quote.amountUsdCents())
+                : 0;
 
         // Descuento de referido para el COMPRADOR: 10% del subtotal de producto si tiene una atribución
         // de afiliado viva (y no es su propio código). El envío y el IVA se calculan sobre (subtotal −
@@ -801,7 +815,10 @@ public class OrderUseCaseImpl implements OrderUseCase {
             }
             // Sin pago externo (pago con wallet): no hay nada que reembolsar en proveedor → wallet.
         }
-        long amountCents = o.getTotalCents();
+        // El arancel de la UE no lo reintegra el transportista una vez el paquete entra en su almacén.
+        // En desistimiento lo asume el comercio —la Directiva obliga a devolver todo—; si la devolución
+        // nace de una causa del cliente, se descuenta. Así está escrito en las condiciones (v140).
+        long amountCents = RefundPolicy.refundableCents(o, RefundPolicy.Reason.WITHDRAWAL);
         if (o.getUserId() != null && amountCents > 0) {
             walletUseCase.deposit(o.getUserId(), amountCents, o.getId(), refPrefix + o.getId(),
                     "Refund order " + o.getOrderNumber());
@@ -870,7 +887,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
                     .orElseThrow(() -> new NotFoundException(ORDER_RESOURCE));
         } else {
             CreateOrderRequest orderReq = new CreateOrderRequest("ME-" + Instant.now().getEpochSecond(), addr, null,
-                    items, req.getNotes(), req.getCouponCode());
+                    items, req.getNotes(), req.getCouponCode(), req.getShippingOptionCode());
             created = newOrder(null, userId, orderReq);
         }
 
@@ -977,6 +994,14 @@ public class OrderUseCaseImpl implements OrderUseCase {
         if (!fulfillment.isSupported(addr.country())) {
             throw new BusinessException(
                     "No realizamos envíos a este destino (" + addr.country() + "). Elige un país soportado.");
+        }
+        // Dentro de un país servible hay zonas que el transportista excluye —en España, Baleares,
+        // Canarias, Ceuta y Melilla—. Se comprueba AQUÍ, antes de cobrar: aceptarlo dejaría un pedido
+        // pagado que nadie puede despachar.
+        if (unserviceableZoneService.isUnserviceable(addr.country(), addr.postalCode())) {
+            throw new BusinessException("UNSERVICEABLE_POSTAL_CODE",
+                    "El transportista no entrega en el código postal " + addr.postalCode()
+                            + ". Prueba con otra dirección.");
         }
         return addr;
     }

@@ -36,6 +36,13 @@ public class Order {
     private UUID billingAddressId;
     private OrderStatus status;
     private int subtotalCents;
+    /**
+     * Canal del transportista con el que se cotizó el envío que eligió el cliente. La guía se emite por
+     * este y no por el que resulte más barato al despachar: entre el pedido y el despacho la tarifa
+     * cambia, y entonces se cobraría una cosa y se enviaría otra.
+     */
+    private String shippingChannelCode;
+
     private int shippingCents;
     private int taxCents;
     /**

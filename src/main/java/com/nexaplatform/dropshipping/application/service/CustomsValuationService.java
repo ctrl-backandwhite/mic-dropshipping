@@ -60,11 +60,12 @@ public class CustomsValuationService {
      * @param policy              qué hacer al superar el umbral
      * @param handlingFeeCents    recargo total del despacho a sumar al envío, céntimos USD
      * @param blocked             true si la política del país impide vender ese pedido a ese destino
-     * @param deMinimisLabel      el umbral del país en su divisa legal, ya formateado ("150 EUR"); "" si no hay
+     * @param deMinimisLabel      el límite que bloquea, ya formateado ("150 EUR"); "" si no hay
+     * @param carrierPrepaysVat   true si el transportista liquida el IVA del destino con SU número fiscal
      */
     public record CustomsValuation(String countryCode, TaxMode taxMode, int intrinsicValueCents,
             boolean deMinimisExceeded, OverThresholdPolicy policy, int handlingFeeCents, boolean blocked,
-            String deMinimisLabel) {
+            String deMinimisLabel, boolean carrierPrepaysVat) {
 
         /** Valor a declarar en aduana (céntimos USD). Hoy coincide con el valor intrínseco de los bienes. */
         public int declaredValueCents() {
@@ -75,7 +76,7 @@ public class CustomsValuationService {
     /** Valoración neutra: sin regla configurada para el país no se altera nada del cálculo actual. */
     private static CustomsValuation neutral(String countryCode, int intrinsicValueCents) {
         return new CustomsValuation(countryCode, TaxMode.DDP, intrinsicValueCents, false,
-                OverThresholdPolicy.SURCHARGE, 0, false, "");
+                OverThresholdPolicy.SURCHARGE, 0, false, "", false);
     }
 
     /**
@@ -115,7 +116,11 @@ public class CustomsValuationService {
         // El reparto en bultos sigue importando para el DERECHO por partida (más abajo), que sí se cuenta
         // por declaración. Son dos cosas distintas: la franquicia mira el envío; el derecho, cada bulto.
         boolean exceeded = exceedsDeMinimis(r, intrinsic);
-        boolean blocked = exceeded && policy == OverThresholdPolicy.BLOCK;
+        // Dos motivos independientes para no dejar comprar: que la política del país lo prohíba por
+        // encima de la franquicia, o que el TRANSPORTISTA no acepte ese valor. El segundo es más
+        // estricto —rechaza «igual o mayor», no «mayor»—, así que un pedido en el borde exacto de la
+        // franquicia está dentro del régimen fiscal y fuera de lo que el carrier transporta.
+        boolean blocked = (exceeded && policy == OverThresholdPolicy.BLOCK) || carrierRejects(r, intrinsic);
 
         // El recargo solo existe en DDP: en DDU el impuesto y su gestión los asume el destinatario.
         int handling = 0;
@@ -139,7 +144,7 @@ public class CustomsValuationService {
             }
         }
         return new CustomsValuation(countryCode, mode, intrinsic, exceeded, policy, Math.max(0, handling),
-                blocked, thresholdLabel(r));
+                blocked, blockingLimitLabel(r, intrinsic), r.isCarrierPrepaysVat());
     }
 
     /**
@@ -148,11 +153,35 @@ public class CustomsValuationService {
      * la UE), no en la divisa activa del comprador.
      */
     private static String thresholdLabel(CountryCustomsRuleEntity rule) {
-        if (rule.getDeMinimisAmount() == null || rule.getDeMinimisAmount().signum() <= 0) {
+        return amountLabel(rule.getDeMinimisAmount(), rule.getDeMinimisCurrency());
+    }
+
+    /**
+     * Etiqueta del límite que hay que enseñarle al cliente cuando NO puede comprar.
+     *
+     * <p>No siempre es la franquicia aduanera: si quien rechaza es el transportista, el importe que
+     * bloquea es el suyo, y es MENOR o igual. Enseñar el fiscal en ese caso escribiría un mensaje que se
+     * contradice solo —«tu pedido supera el límite de 150 EUR» sobre un pedido de exactamente 150 EUR—,
+     * así que se muestra el tope que de verdad lo ha impedido.
+     */
+    private String blockingLimitLabel(CountryCustomsRuleEntity rule, int intrinsicValueCents) {
+        if (!carrierRejects(rule, intrinsicValueCents)) {
+            return thresholdLabel(rule);
+        }
+        int primary = toUsdCents(rule.getCarrierMaxAmount(), rule.getCarrierMaxCurrency());
+        int alternate = toUsdCents(rule.getCarrierMaxAltAmount(), rule.getCarrierMaxAltCurrency());
+        boolean mandaElAlternativo = alternate > 0 && (primary <= 0 || alternate < primary);
+        return mandaElAlternativo
+                ? amountLabel(rule.getCarrierMaxAltAmount(), rule.getCarrierMaxAltCurrency())
+                : amountLabel(rule.getCarrierMaxAmount(), rule.getCarrierMaxCurrency());
+    }
+
+    /** "150 EUR" a partir de importe y divisa; vacío si no hay importe. */
+    private static String amountLabel(BigDecimal amount, String currency) {
+        if (amount == null || amount.signum() <= 0) {
             return "";
         }
-        return rule.getDeMinimisAmount().stripTrailingZeros().toPlainString() + " "
-                + (rule.getDeMinimisCurrency() != null ? rule.getDeMinimisCurrency() : "EUR");
+        return amount.stripTrailingZeros().toPlainString() + " " + (currency != null ? currency : "EUR");
     }
 
     /** Arancel por artículo del país en céntimos USD (0 si no aplica). Para el desglose admin de la ficha. */
@@ -167,6 +196,16 @@ public class CustomsValuationService {
     @Transactional(readOnly = true)
     public TaxMode taxModeFor(String countryCode) {
         return activeRule(countryCode).map(r -> TaxMode.from(r.getTaxMode())).orElse(TaxMode.DDP);
+    }
+
+    /**
+     * ¿El transportista liquida el IVA de este destino con su propio número fiscal? Lo consulta la
+     * cotización para descartar los canales que no pueden cumplir esa promesa —los postales y los de
+     * Amazon—, que además suelen ser los más baratos.
+     */
+    @Transactional(readOnly = true)
+    public boolean carrierPrepaysVatFor(String countryCode) {
+        return activeRule(countryCode).map(CountryCustomsRuleEntity::isCarrierPrepaysVat).orElse(false);
     }
 
     /** Regla activa del país, o vacío si no está configurado o está desactivado. */
@@ -197,6 +236,23 @@ public class CustomsValuationService {
     private boolean exceedsDeMinimis(CountryCustomsRuleEntity rule, int intrinsicValueCents) {
         int thresholdCents = toUsdCents(rule.getDeMinimisAmount(), rule.getDeMinimisCurrency());
         return thresholdCents > 0 && intrinsicValueCents > thresholdCents;
+    }
+
+    /**
+     * ¿El transportista rechaza un envío de ese valor?
+     *
+     * <p>Nada que ver con la franquicia aduanera. El contrato de YunExpress no acepta paquetes
+     * «iguales o mayores» a sus topes —hoy 150 EUR y 155 USD a la vez en la UE—, así que la comparación
+     * es {@code >=} y gana el más restrictivo de los dos. Sin topes configurados no bloquea nada: 0
+     * significa «no configurado», igual que en el resto de la tabla, y no se inventa un límite que nadie
+     * ha facilitado.
+     */
+    private boolean carrierRejects(CountryCustomsRuleEntity rule, int intrinsicValueCents) {
+        int primary = toUsdCents(rule.getCarrierMaxAmount(), rule.getCarrierMaxCurrency());
+        int alternate = toUsdCents(rule.getCarrierMaxAltAmount(), rule.getCarrierMaxAltCurrency());
+        int limit = Math.min(primary > 0 ? primary : Integer.MAX_VALUE,
+                alternate > 0 ? alternate : Integer.MAX_VALUE);
+        return limit != Integer.MAX_VALUE && intrinsicValueCents >= limit;
     }
 
     /**

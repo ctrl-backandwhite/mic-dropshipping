@@ -33,7 +33,21 @@ public final class YunExpressRequests {
             @JsonProperty("packages") List<Parcel> packages,
             @JsonProperty("receiver") Receiver receiver,
             @JsonProperty("declaration_info") List<DeclarationLine> declarationInfo,
-            @JsonProperty("customs_number") CustomsNumber customsNumber) {
+            @JsonProperty("customs_number") CustomsNumber customsNumber,
+            @JsonProperty("extra_services") List<ExtraService> extraServices) {
+    }
+
+    /**
+     * Servicio adicional del envío. El que importa aquí es {@code V1} (云途预缴, «prepago YunExpress»):
+     * es como se le pide al transportista que liquide el IVA de la UE con SU número IOSS.
+     *
+     * <p>La tienda vende DDP —cobra el impuesto en el checkout y al cliente no le reclaman nada al
+     * recibir—, y esa promesa solo se cumple si el envío lleva este extra: sin él el paquete se despacha
+     * como si el impuesto no estuviera pagado y quien acaba pagándolo en destino es el cliente.
+     */
+    public record ExtraService(
+            @JsonProperty("extra_code") String extraCode,
+            @JsonProperty("extra_value") String extraValue) {
     }
 
     /** Medidas y peso del bulto. Las dimensiones son opcionales: no todo el catálogo las tiene. */

@@ -131,6 +131,9 @@ class Cov06OrderUseCaseImplTest {
     @org.mockito.Spy
     com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService customsDutyLinesService =
             new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService();
+    @org.mockito.Mock
+    com.nexaplatform.dropshipping.application.service.UnserviceableZoneService unserviceableZoneService;
+
 
     @InjectMocks
     OrderUseCaseImpl useCase;
@@ -705,7 +708,7 @@ class Cov06OrderUseCaseImplTest {
     /** Desglose neutro: sin impuesto ni recargo de despacho, para que el total sea subtotal + envío. */
     private static CheckoutTotalsService.CheckoutTotals totalesNeutros(int envioCents) {
         CustomsValuationService.CustomsValuation customs = new CustomsValuationService.CustomsValuation("XX",
-                TaxMode.DDP, 0, false, OverThresholdPolicy.SURCHARGE, 0, false, "");
+                TaxMode.DDP, 0, false, OverThresholdPolicy.SURCHARGE, 0, false, "", false);
         return new CheckoutTotalsService.CheckoutTotals(envioCents, 0, envioCents, 0, 0, customs);
     }
 

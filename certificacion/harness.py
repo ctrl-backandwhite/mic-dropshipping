@@ -120,8 +120,12 @@ def register(email, password, extra=None):
     una certificación— devolvía 429 al segundo usuario y dejaba el pentest entero sin ejecutar. El límite
     funciona: quien lo comprueba es SEC-INFRA-04, con su propia ráfaga. Aquí solo estorbaba.
     """
+    # La aceptación es OBLIGATORIA desde que el registro dejó de admitir altas sin constancia. El campo se
+    # llama `acceptedTerms` (no `acceptTerms`, que era el nombre del formulario y aquí no se validaba
+    # nunca), y hay que mandar también la versión: sin ella el alta responde 400 y la certificación entera
+    # se queda sin actores.
     body = {"email": email, "password": password, "firstName": "Cert", "lastName": "Test",
-            "acceptTerms": True, "country": "ES"}
+            "acceptedTerms": True, "acceptedTermsVersion": "2026-08-15", "country": "ES"}
     if extra:
         body.update(extra)
     cap = solve_captcha()

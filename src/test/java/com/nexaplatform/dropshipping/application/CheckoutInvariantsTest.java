@@ -121,6 +121,9 @@ class CheckoutInvariantsTest {
     @org.mockito.Spy
     com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService customsDutyLinesService =
             new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService();
+    @org.mockito.Mock
+    com.nexaplatform.dropshipping.application.service.UnserviceableZoneService unserviceableZoneService;
+
 
     @InjectMocks
     private OrderUseCaseImpl subject;
