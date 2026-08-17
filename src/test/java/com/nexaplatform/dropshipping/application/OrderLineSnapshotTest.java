@@ -38,6 +38,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserR
 import org.junit.jupiter.api.BeforeEach;
 import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService.DutyParcel;
 import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
+import com.nexaplatform.dropshipping.application.service.UnserviceableZoneService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -132,7 +133,7 @@ class OrderLineSnapshotTest {
         return new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository,
                 userRepository, shopConnectionRepository, userAddressRepository, webhooks, walletUseCase,
                 notificationsPublisher, pricingService, affiliateProgramService, stockService, paymentUseCase,
-                orderEmailService, fulfillment, checkoutTotalsService, new CustomsDutyLinesService(), operatorCommissionService, promotionService, supplierPurchaseService, trackingRepository, orderIndexer,
+                orderEmailService, fulfillment, checkoutTotalsService, new CustomsDutyLinesService(), mock(UnserviceableZoneService.class), operatorCommissionService, promotionService, supplierPurchaseService, trackingRepository, orderIndexer,
                 orderSearchService, mock(CartService.class));
     }
 

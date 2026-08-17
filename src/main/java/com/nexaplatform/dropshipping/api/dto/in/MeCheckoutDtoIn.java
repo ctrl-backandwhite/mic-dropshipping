@@ -45,6 +45,17 @@ public class MeCheckoutDtoIn {
     @Size(max = 40)
     private String couponCode;
 
+    /**
+     * Forma de envío elegida por el cliente, con el código de canal que devolvió la cotización. Vacío =
+     * no eligió, y se usa la más barata utilizable.
+     *
+     * <p>Se revalida contra las opciones que cotizan AHORA antes de cobrar: si no, bastaría con mandar
+     * el código de un canal más barato —o de uno que no admite IOSS— para pagar de menos o romper el
+     * DDP. No se acepta lo que diga el cliente sin comprobarlo.
+     */
+    @Size(max = 32)
+    private String shippingOptionCode;
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

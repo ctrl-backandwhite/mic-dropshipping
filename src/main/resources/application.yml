@@ -421,7 +421,14 @@ nexadrop:
     # DDU (los paga el destinatario). Se puede sobreescribir por país en yunexpress_channel (futuro).
     default-tax-mode: ${YUNEXPRESS_TAX_MODE:DDP}
     # Número IOSS del comercio para despacho de IVA en la UE (pedidos <=150 EUR). Vacío = sin IOSS.
+    # Se deja vacío A PROPÓSITO: no tenemos IOSS propio, el IVA lo liquida YunExpress con el suyo.
     ioss-number: ${YUNEXPRESS_IOSS:}
+    # Servicio adicional con el que se le pide a YunExpress que prepague el IVA con SU IOSS: V1 = 云途预缴.
+    # La tienda vende DDP —cobra el impuesto en el checkout— y esa promesa solo se cumple si el envío lleva
+    # este extra; sin él el paquete se despacha como si nadie hubiera pagado y se lo reclaman al cliente.
+    # VACIARLO lo desactiva: si la cuenta del transportista no tuviera el servicio de alta, mandarlo hace
+    # fallar la creación del envío, y eso debe poder apagarse sin desplegar.
+    prepaid-vat-service-code: ${YUNEXPRESS_PREPAID_VAT_CODE:V1}
     # Peso VOLUMÉTRICO: el transportista factura el mayor entre peso real y L×W×H(cm)/divisor, y solo
     # aplica el volumétrico a partir de cierto volumen (los bultos pequeños en bolsa van por peso real).
     # Ajustar ambos al rate card del contrato cuando YunExpress lo facilite.

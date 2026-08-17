@@ -109,7 +109,7 @@ class Cov04YunExpressShipmentTest {
 
     private static CustomsValuation valoracion(boolean deMinimisExceeded) {
         return new CustomsValuation("ES", TaxMode.DDP, 4500, deMinimisExceeded, OverThresholdPolicy.ALLOW, 0,
-                false, "");
+                false, "", true);
     }
 
     private JsonNode ok(String raw) {
@@ -354,6 +354,93 @@ class Cov04YunExpressShipmentTest {
                 ParcelSpec.ofWeight(500), "BPA", valoracion(false));
 
         assertThat(payload.customsNumber()).isNull();
+    }
+
+    // ── El canal que eligió el cliente ───────────────────────────────────────────────────────────
+
+    @Test
+    void laGuiaSeEmitePorElCanalQueEligioElCliente() {
+        // Entre el pedido y el despacho la tarifa cambia: recalcular «el más barato» ahora sería cobrar
+        // una forma de envío y usar otra, con otro plazo del prometido.
+        Order order = pedido(linea(1, 4500));
+        order.setShippingChannelCode("FZZXR");
+
+        YunExpressRequests.CreateShipment payload = service.createPayload(order, ParcelSpec.ofWeight(500),
+                service.channelFor(order, ParcelSpec.ofWeight(500)), valoracion(false));
+
+        assertThat(payload.productCode()).isEqualTo("FZZXR");
+    }
+
+    @Test
+    void sinEleccionDelClienteSeUsaElCanalDeConfiguracion() {
+        Order order = pedido(linea(1, 4500));   // sin canal elegido
+
+        assertThat(service.channelFor(order, ParcelSpec.ofWeight(500))).isEqualTo("BPA");
+    }
+
+    // ── Prepago del IVA por el transportista ─────────────────────────────────────────────────────
+    //
+    // La tienda vende DDP: cobra el IVA al cliente y nadie le reclama nada al recibir. Para que eso se
+    // cumpla, YunExpress tiene que liquidarlo con SU IOSS, y ese servicio se pide envío a envío con el
+    // extra `V1` (云途预缴). Sin él, el envío se despacha como si nadie hubiera pagado el impuesto y
+    // quien acaba pagándolo en destino es el cliente —que ya pagó en la tienda—.
+
+    @Test
+    void pideElPrepagoDelIvaEnLosEnviosDdpQueNoSuperanElUmbral() {
+        YunExpressRequests.CreateShipment payload = service.createPayload(pedido(linea(1, 4500)),
+                ParcelSpec.ofWeight(500), "BPA", valoracion(false));
+
+        assertThat(payload.extraServices()).hasSize(1);
+        assertThat(payload.extraServices().getFirst().extraCode()).isEqualTo("V1");
+        assertThat(payload.extraServices().getFirst().extraValue()).isEqualTo("云途预缴");
+    }
+
+    @Test
+    void noPideElPrepagoPorEncimaDelUmbralDeMinimis() {
+        // Por encima de 150 EUR el régimen simplificado deja de aplicar: el despacho es formal y el
+        // prepago del transportista no tiene dónde liquidarse.
+        YunExpressRequests.CreateShipment payload = service.createPayload(pedido(linea(1, 4500)),
+                ParcelSpec.ofWeight(500), "BPA", valoracion(true));
+
+        assertThat(payload.extraServices()).isNullOrEmpty();
+    }
+
+    @Test
+    void noPideElPrepagoEnDestinosSinRegimenDePrepago() {
+        // El servicio V1 liquida el IVA de la UE con el IOSS del transportista: fuera de ahí no hay nada
+        // que prepagar. Y TODOS los destinos activos están en DDP, así que sin este filtro se pediría
+        // también para Estados Unidos o Brasil y el alta del envío fallaría.
+        CustomsValuation fueraDeLaUe = new CustomsValuation("US", TaxMode.DDP, 4500, false,
+                OverThresholdPolicy.ALLOW, 0, false, "", false);
+
+        YunExpressRequests.CreateShipment payload = service.createPayload(pedido(linea(1, 4500)),
+                ParcelSpec.ofWeight(500), "BPA", fueraDeLaUe);
+
+        assertThat(payload.extraServices()).isNullOrEmpty();
+    }
+
+    @Test
+    void noPideElPrepagoCuandoElDestinoPagaElImpuesto() {
+        // DDU: el impuesto lo paga el destinatario. Pedir prepago aquí lo cobraría dos veces.
+        CustomsValuation ddu = new CustomsValuation("MX", TaxMode.DDU, 4500, false,
+                OverThresholdPolicy.ALLOW, 0, false, "", true);
+
+        YunExpressRequests.CreateShipment payload = service.createPayload(pedido(linea(1, 4500)),
+                ParcelSpec.ofWeight(500), "BPA", ddu);
+
+        assertThat(payload.extraServices()).isNullOrEmpty();
+    }
+
+    @Test
+    void elPrepagoSePuedeApagarSinTocarCodigo() {
+        // Si la cuenta del transportista no tiene el servicio dado de alta, mandarlo hace fallar la
+        // creación del envío. Vaciar el código lo desactiva sin desplegar.
+        ReflectionTestUtils.setField(service, "prepaidVatServiceCode", "");
+
+        YunExpressRequests.CreateShipment payload = service.createPayload(pedido(linea(1, 4500)),
+                ParcelSpec.ofWeight(500), "BPA", valoracion(false));
+
+        assertThat(payload.extraServices()).isNullOrEmpty();
     }
 
     // ── Constancia de lo declarado ───────────────────────────────────────────────────────────────

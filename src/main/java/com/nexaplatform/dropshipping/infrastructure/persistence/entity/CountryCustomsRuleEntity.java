@@ -81,6 +81,34 @@ public class CountryCustomsRuleEntity extends BaseEntity {
     @Column(name = "per_article_fee_currency", nullable = false, length = 3)
     private String perArticleFeeCurrency;
 
+    /**
+     * Valor a partir del cual —inclusive— el TRANSPORTISTA no acepta el envío. No es el umbral fiscal:
+     * el régimen de bajo valor aplica cuando el valor «no excede» la franquicia, mientras que el
+     * transportista rechaza «igual o mayor». Un pedido de 150,00 EUR exactos está dentro del régimen y
+     * fuera de lo que YunExpress transporta. 0 = sin límite.
+     */
+    @Column(name = "carrier_max_amount", nullable = false, precision = 12, scale = 2)
+    private BigDecimal carrierMaxAmount;
+
+    @Column(name = "carrier_max_currency", nullable = false, length = 3)
+    private String carrierMaxCurrency;
+
+    /** Segundo tope simultáneo en otra divisa (el contrato impone 150 EUR Y 155 USD); gana el menor. */
+    @Column(name = "carrier_max_alt_amount", nullable = false, precision = 12, scale = 2)
+    private BigDecimal carrierMaxAltAmount;
+
+    @Column(name = "carrier_max_alt_currency", nullable = false, length = 3)
+    private String carrierMaxAltCurrency;
+
+    /**
+     * ¿El transportista liquida el IVA de este destino con SU número fiscal? Solo tiene sentido donde
+     * existe un régimen de importación prepagable —hoy el IOSS de la UE—, y es lo que se le pide envío a
+     * envío con el servicio adicional correspondiente. Todos los destinos activos están en DDP, así que
+     * sin esta marca se pediría el prepago también para Estados Unidos o Brasil, donde no existe.
+     */
+    @Column(name = "carrier_prepays_vat", nullable = false)
+    private boolean carrierPrepaysVat;
+
     @Column(nullable = false)
     private boolean active;
 }
