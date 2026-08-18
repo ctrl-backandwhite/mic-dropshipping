@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class YunExpressCustomsDeclarationTest {
 
     private final YunExpressFulfillmentService service =
-            new YunExpressFulfillmentService(null, null, null, new CustomsDutyLinesService(), null, null, null);
+            new YunExpressFulfillmentService(null, null, null, new CustomsDutyLinesService(null), null, null, null, null);
 
     private static ParcelDeclaration linea(String eName, String cName) {
         return new ParcelDeclaration(eName, cName, "6109100000", 1, 12.5, "USD", 0.3,

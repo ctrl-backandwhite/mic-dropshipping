@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api;
 
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.CustomsAuditView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
@@ -62,6 +63,17 @@ public interface AdminCatalogApi {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "30") int size, @RequestParam(defaultValue = "es") String lang,
             @RequestParam(required = false) String sort, @RequestParam(required = false) Boolean verified);
+
+    /**
+     * Repaso del catálogo en busca de productos que la aduana no aceptaría.
+     *
+     * <p>Va ANTES de {@code /products/{id}} porque comparten prefijo: declarado después, Spring intentaría
+     * interpretar «customs-gaps» como un identificador.
+     */
+    @Operation(summary = "Products missing mandatory customs data (EName, CName, HSCode, weight, value)")
+    @GetMapping("/products/customs-gaps")
+    CustomsAuditView customsGaps(@RequestParam(defaultValue = "ACTIVE") String status,
+            @RequestParam(defaultValue = "500") int max);
 
     @Operation(summary = "Get product detail by id")
     @GetMapping("/products/{id}")

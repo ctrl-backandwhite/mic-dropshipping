@@ -120,7 +120,7 @@ class CheckoutInvariantsTest {
 
     @org.mockito.Spy
     com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService customsDutyLinesService =
-            new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService();
+            new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService(null);
     @org.mockito.Mock
     com.nexaplatform.dropshipping.application.service.UnserviceableZoneService unserviceableZoneService;
 

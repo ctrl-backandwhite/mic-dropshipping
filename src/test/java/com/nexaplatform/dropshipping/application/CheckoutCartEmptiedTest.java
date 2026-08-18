@@ -139,7 +139,7 @@ class CheckoutCartEmptiedTest {
         subject = new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository,
                 userRepository, shopConnectionRepository, userAddressRepository, webhooks, walletUseCase,
                 notificationsPublisher, pricingService, affiliateProgramService, stockService, paymentUseCase,
-                orderEmailService, fulfillment, checkoutTotalsService, new CustomsDutyLinesService(), mock(UnserviceableZoneService.class),
+                orderEmailService, fulfillment, checkoutTotalsService, new CustomsDutyLinesService(null), mock(UnserviceableZoneService.class),
                 operatorCommissionService, promotionService, supplierPurchaseService, trackingRepository, orderIndexer,
                 orderSearchService, cartService);
 

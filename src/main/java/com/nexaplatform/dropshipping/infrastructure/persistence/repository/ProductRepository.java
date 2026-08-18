@@ -38,6 +38,31 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
 
     Page<ProductEntity> findByStatus(ProductStatus status, Pageable pageable);
 
+    /**
+     * Identificadores a repasar en la auditoría aduanera, de los más nuevos a los más viejos.
+     *
+     * <p>Se piden solo los ids, y luego los productos en tandas: cargar el catálogo entero con sus
+     * traducciones y variantes de una vez es justo lo que no se puede hacer con miles de referencias.
+     * {@code status} nulo repasa todo el catálogo.
+     */
+    @Query("SELECT p.id FROM ProductEntity p WHERE (:status IS NULL OR p.status = :status)")
+    Page<UUID> findIdsForCustomsAudit(@Param("status") ProductStatus status, Pageable pageable);
+
+    /**
+     * Productos de una tanda con sus traducciones ya cargadas.
+     *
+     * <p>Va aparte de {@link #findWithVariantsByIds} a propósito: traer las dos colecciones en el mismo
+     * {@code JOIN FETCH} es un producto cartesiano que Hibernate rechaza (dos bolsas). Ejecutadas
+     * seguidas dentro de la misma transacción, la segunda rellena las variantes sobre estas mismas
+     * instancias, que es lo que necesita la comprobación.
+     */
+    @Query("SELECT DISTINCT p FROM ProductEntity p LEFT JOIN FETCH p.translations WHERE p.id IN :ids")
+    List<ProductEntity> findWithTranslationsByIds(@Param("ids") List<UUID> ids);
+
+    /** La otra mitad de la tanda: las variantes, que son las que llevan peso y precio propios. */
+    @Query("SELECT DISTINCT p FROM ProductEntity p LEFT JOIN FETCH p.variants WHERE p.id IN :ids")
+    List<ProductEntity> findWithVariantsByIds(@Param("ids") List<UUID> ids);
+
     /** Total publicado: la portada lo enseña sin necesidad de abrir el listado. */
     long countByStatus(ProductStatus status);
 

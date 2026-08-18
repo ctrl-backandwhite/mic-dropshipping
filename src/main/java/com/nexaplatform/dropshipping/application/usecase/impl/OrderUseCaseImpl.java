@@ -17,10 +17,10 @@ import com.nexaplatform.dropshipping.application.service.CartService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
 import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
-import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
 import com.nexaplatform.dropshipping.application.service.StockService;
 import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
+import com.nexaplatform.dropshipping.application.service.CustomsDataCheck;
 import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import com.nexaplatform.dropshipping.application.service.ParcelAggregator;
 import com.nexaplatform.dropshipping.application.service.PricingService;
@@ -188,24 +188,37 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // PRODUCT/CATEGORY solo a las líneas que alcanza (ver applyTotals).
         Map<UUID, Integer> grossByProduct = new HashMap<>();
         UUID cuponAplicado = null;
-        // Integridad de precio: el pedido SIEMPRE se precia por el país de ENVÍO (parte confiable del
-        // pedido), NUNCA por el header X-Country del cliente. Sin esto, un comprador podía enviar
-        // X-Country=<país con menor margen> y pagar menos que uno legítimo, ya que el margen se resolvía por
-        // PricingCountryHolder (cabecera manipulable). Así el MARGEN y la ADUANA usan el mismo país destino.
-        String prevPricingCountry = PricingCountryHolder.get();
-        PricingCountryHolder.set(order.getShippingCountry());
-        try {
-            for (OrderItemInput itemReq : req.items()) {
-                OrderItem line = buildLine(itemReq, orderLang, parcel, gross, grossByProduct);
-                order.getItems().add(line);
-                subtotal = Math.addExact(subtotal, line.getLineTotalCents());
-            }
-            requireMinimumOrderQuantities(order.getItems());
-            cuponAplicado = applyTotals(order, userId, subtotal, gross.cents(), parcel, req.couponCode(),
-                    grossByProduct, req.shippingOptionCode());
-        } finally {
-            PricingCountryHolder.set(prevPricingCountry);
+        // EL MARGEN VA POR EL PAÍS DEL COMPRADOR, NO POR EL DEL DESTINO. NO LO CAMBIES SIN LEER ESTO.
+        //
+        // Regla de negocio (decisión del dueño, 18-ago-2026): quien se registra en México ve y paga
+        // precio de México aunque envíe el paquete a España; para pagar el precio español hay que
+        // registrarse en España. El país del comprador es el que trae la cabecera `X-Country` que pone
+        // el front, y ya está en PricingCountryHolder cuando se llega aquí (PricingCountryFilter), que
+        // es exactamente el mismo que usan la ficha del catálogo y la vista previa del checkout. Por eso
+        // aquí NO se toca: preciar el pedido con otro país es lo que hacía que se enseñara un total y se
+        // cobrara otro (23,19 $ enseñados contra 22,66 $ cobrados, visto certificando en local).
+        //
+        // Antes esto pisaba el holder con `order.getShippingCountry()`. Se hizo por seguridad, y el
+        // riesgo que describía es REAL y sigue vivo: `X-Country` la manda el navegador, así que un
+        // comprador puede declarar el país de menor margen y pagar de menos. Se acepta a propósito,
+        // porque la alternativa —cobrar por el destino— rompe la regla de negocio de arriba y deja al
+        // cliente pagando algo distinto de lo que se le enseñó, que es peor. Si algún día pesa más el
+        // abuso que la coherencia, la solución NO es volver al país de envío: es leer el país de
+        // registro de `users.country` (dato de la base, no manipulable) y usarlo en los TRES sitios
+        // —ficha, vista previa y cobro— a la vez.
+        //
+        // El IVA y el arancel son otra cosa y NO dependen de esto: los fija la aduana del destino y se
+        // calculan con `order.getShippingCountry()` explícito, más abajo, en checkoutTotalsService.
+        //
+        // Lo fija PedidoPaisDelMargenTest; ese test falla si alguien vuelve a pisar el país aquí.
+        for (OrderItemInput itemReq : req.items()) {
+            OrderItem line = buildLine(itemReq, orderLang, parcel, gross, grossByProduct);
+            order.getItems().add(line);
+            subtotal = Math.addExact(subtotal, line.getLineTotalCents());
         }
+        requireMinimumOrderQuantities(order.getItems());
+        cuponAplicado = applyTotals(order, userId, subtotal, gross.cents(), parcel, req.couponCode(),
+                grossByProduct, req.shippingOptionCode());
 
         Order saved = orderRepository.save(order);
         // El canje se apunta con el pedido ya guardado: si el guardado falla, el cupón no se gasta.
@@ -671,11 +684,63 @@ public class OrderUseCaseImpl implements OrderUseCase {
                     "Solo se puede enviar al proveedor un pedido pendiente o pagado; este está "
                             + o.getStatus());
         }
+        requireCustomsDataOnItems(o);
         o.setStatus(OrderStatus.FORWARDED);
         o.setForwardedAt(Instant.now());
         o = orderRepository.save(o);
         notificarAvance(o, "FORWARDED");
         return publishAndEnrich(o, "order.forwarded");
+    }
+
+    /**
+     * Corta el despacho si a algún producto del pedido le faltan los datos que exige la aduana.
+     *
+     * <p>Se comprueba AQUÍ, en el paso «enviar al proveedor», porque es el último momento en que un
+     * administrador está mirando: a partir de aquí la guía se emite sola desde el sondeo y lo que falle
+     * lo descubre el cliente. Bloquear deja el pedido cobrado tal y como estaba —sigue PAGADO y el mismo
+     * botón vuelve a funcionar en cuanto se corrija el catálogo—, mientras que despacharlo con la
+     * declaración coja arriesga que el transportista rechace la guía o que la aduana retenga el paquete,
+     * y eso ya no tiene arreglo barato.
+     *
+     * <p>NO se comprueba en el checkout a propósito: lo que falta es un dato de nuestro catálogo, así que
+     * cortarle la compra al cliente sería castigarle por un fallo que no es suyo.
+     *
+     * <p>Una línea cuyo producto ya no está en el catálogo —pedidos manuales, referencias retiradas— no
+     * bloquea: no hay ficha que corregir y dejaríamos el pedido sin salida. Ese caso lo sigue cubriendo el
+     * corte de la transmisión, que mira la declaración realmente construida.
+     */
+    private void requireCustomsDataOnItems(Order o) {
+        if (o.getItems() == null || o.getItems().isEmpty()) {
+            return;
+        }
+        List<String> problemas = new ArrayList<>();
+        for (OrderItem item : o.getItems()) {
+            if (item.getProductId() == null) {
+                continue;
+            }
+            ProductEntity product = productRepository.findById(item.getProductId()).orElse(null);
+            if (product == null) {
+                continue;
+            }
+            List<CustomsDataCheck.CustomsField> faltantes = CustomsDataCheck.faltantesDe(product);
+            if (!faltantes.isEmpty()) {
+                problemas.add(CustomsDataCheck.describe(nombreDeLinea(item, product), faltantes));
+            }
+        }
+        if (!problemas.isEmpty()) {
+            throw new BusinessException("INCOMPLETE_CUSTOMS_DATA",
+                    "No se puede enviar al proveedor: faltan datos obligatorios de aduana. "
+                            + String.join(". ", problemas)
+                            + ". Complétalos en la ficha del producto y vuelve a intentarlo.");
+        }
+    }
+
+    /** Cómo se nombra el producto en el aviso: por lo que el administrador ve en el pedido. */
+    private static String nombreDeLinea(OrderItem item, ProductEntity product) {
+        String titulo = item.getTitleSnapshot() != null && !item.getTitleSnapshot().isBlank()
+                ? item.getTitleSnapshot() : product.getTitleZh();
+        String sku = item.getSkuSnapshot();
+        return sku != null && !sku.isBlank() ? titulo + " (" + sku + ")" : String.valueOf(titulo);
     }
 
     @Override
@@ -1258,9 +1323,24 @@ public class OrderUseCaseImpl implements OrderUseCase {
      * <p>Se etiqueta como ADMIN para que el timeline distinga lo que informó el carrier de lo que se
      * anotó a mano, y se escribe en un try-catch: perder una línea del seguimiento es un incordio, pero
      * tumbar la transición del pedido por ello sería peor.
+     *
+     * <p><b>Sólo si el hito no está ya contado.</b> Estas transiciones no las dispara únicamente el botón
+     * del panel: {@code FulfillmentSyncScheduler} llama a {@code shipOrder}/{@code deliverOrder} cuando el
+     * transportista informa del avance, precisamente para que salgan el correo y el webhook. Por ese
+     * camino el hito llega dos veces —el evento del carrier y esta anotación— y el cliente lo lee dos
+     * veces en su seguimiento: se vio en la certificación del 18-ago-2026, con «Entregado al destinatario»
+     * repetido con dos segundos de diferencia, y antes «Recogido por el transportista» seguido de
+     * «Paquete recogido por el transportista», que es el mismo hecho con otras palabras.
+     *
+     * <p>La anotación no se puede quitar sin más: hay pedidos que avanzan a mano, sin transportista que
+     * informe, y sin ella el cliente ve la barra en «Entregado» y el detalle parado en «Envío registrado»
+     * —que es justo cuando escribe preguntando dónde está su pedido—.
      */
     private void appendManualStep(Order o, OrderStatus status, String description) {
         try {
+            if (yaLoContoElTransportista(o, status)) {
+                return;
+            }
             trackingRepository.save(OrderTrackingEventEntity.builder()
                     .orderId(o.getId()).status(status.name()).description(description)
                     .location(o.getShippingCountry()).source("ADMIN")
@@ -1269,6 +1349,28 @@ public class OrderUseCaseImpl implements OrderUseCase {
             log.warn("No se pudo anotar el paso {} en el seguimiento del pedido {}: {}",
                     status, o.getOrderNumber(), e.getMessage());
         }
+    }
+
+    /**
+     * ¿El transportista ya contó este hito en el seguimiento?
+     *
+     * <p>Se compara por ESTADO y no por el texto: la descripción la escribe el carrier en sus términos
+     * y en su idioma —«Delivered to recipient», «Entregado al destinatario»—, así que cotejar
+     * descripciones daría por nuevo lo que ya está contado en cuanto cambie una palabra.
+     *
+     * <p>Sólo cuentan los eventos del carrier: los {@code ADMIN} son estas mismas anotaciones y los
+     * {@code SYSTEM} son transiciones internas, así que tomarlos por información del transportista
+     * silenciaría el paso en los pedidos que avanzan a mano, que son los que más lo necesitan.
+     */
+    private boolean yaLoContoElTransportista(Order o, OrderStatus status) {
+        for (OrderTrackingEventEntity evento : trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId())) {
+            boolean delCarrier = evento.getSource() != null
+                    && !"ADMIN".equals(evento.getSource()) && !"SYSTEM".equals(evento.getSource());
+            if (delCarrier && status.name().equals(evento.getStatus())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -1305,7 +1407,11 @@ public class OrderUseCaseImpl implements OrderUseCase {
                     item.getUnitPriceCents(), ParcelAggregator.unitWeightGrams(p, v), 0, 0, 0,
                     ParcelAggregator.hasBattery(p)));
         }
-        return customsDutyLinesService.parcelsOf(lines);
+        // Mismo canal y mismo país que usará el despacho: el peso máximo por bulto sale de ese par y, si
+        // aquí se contasen menos bultos, el derecho por partida cobrado se quedaría corto respecto al que
+        // liquida la aduana — y la diferencia la pone el comercio.
+        return customsDutyLinesService.parcelsOf(lines, order.getShippingChannelCode(),
+                order.getShippingCountry());
     }
 
 }

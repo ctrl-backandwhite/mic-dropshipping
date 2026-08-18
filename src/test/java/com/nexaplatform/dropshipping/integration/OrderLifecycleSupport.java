@@ -129,14 +129,22 @@ abstract class OrderLifecycleSupport extends BaseIntegration {
         UUID productoId = UUID.randomUUID();
         // La divisa es USD a propósito (ver javadoc de la clase): la conversión es la identidad y el
         // precio de venta queda clavado en PRECIO_UNITARIO_CENTS sin depender de cachés.
+        // Lleva partida arancelaria y peso porque el pedido no se despacha sin los datos con los que se
+        // declara en aduana: un producto sin ellos ya no pasa de «pagado», que es justo lo que este
+        // recorrido no viene a comprobar.
         jdbcTemplate.update("INSERT INTO product (id, slug, external_id, source, supplier_id, title_zh, moq,"
-                + " base_price, currency, status, weight_grams, created_at, updated_at)"
-                + " VALUES (?, ?, ?, '1688', ?, '测试商品', 1, ?, 'USD', 'ACTIVE', 500, now(), now())",
+                + " base_price, currency, status, weight_grams, hs_code, created_at, updated_at)"
+                + " VALUES (?, ?, ?, '1688', ?, '测试商品', 1, ?, 'USD', 'ACTIVE', 500, '6109100000', now(), now())",
                 productoId, "producto-ciclo-" + productoId, "ext-" + productoId, proveedorId,
                 BigDecimal.valueOf(PRECIO_UNITARIO_CENTS, 2));
 
         jdbcTemplate.update("INSERT INTO product_translation (id, product_id, language, title, created_at,"
                 + " updated_at) VALUES (?, ?, 'es', 'Producto de prueba', now(), now())",
+                UUID.randomUUID(), productoId);
+
+        // El nombre en inglés es el EName de la declaración: sin él la guía no se puede emitir.
+        jdbcTemplate.update("INSERT INTO product_translation (id, product_id, language, title, created_at,"
+                + " updated_at) VALUES (?, ?, 'en', 'Test product', now(), now())",
                 UUID.randomUUID(), productoId);
 
         // Misma tarifa que la base: el precio del pedido es idéntico se compre con variante o sin ella,

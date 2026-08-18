@@ -334,6 +334,23 @@ public class CustomsValuationService {
         if (e.getPerArticleFeeCurrency() == null || e.getPerArticleFeeCurrency().isBlank()) {
             e.setPerArticleFeeCurrency("EUR");
         }
+        // Y los del límite de aceptación del transportista, por el mismo motivo: la columna tiene valor
+        // por defecto en la BASE, pero el ORM nombra todas las columnas en el INSERT, así que el defecto
+        // nunca llega a aplicarse y una regla nueva viajaba con nulos. Daba 409 al dar de alta un país —
+        // editar uno existente funcionaba, y por eso pasó inadvertido—. CERO significa «sin límite»: un
+        // país nuevo no hereda el tope de la UE, que quizá su línea no tiene.
+        if (e.getCarrierMaxAmount() == null) {
+            e.setCarrierMaxAmount(BigDecimal.ZERO);
+        }
+        if (e.getCarrierMaxCurrency() == null || e.getCarrierMaxCurrency().isBlank()) {
+            e.setCarrierMaxCurrency("USD");
+        }
+        if (e.getCarrierMaxAltAmount() == null) {
+            e.setCarrierMaxAltAmount(BigDecimal.ZERO);
+        }
+        if (e.getCarrierMaxAltCurrency() == null || e.getCarrierMaxAltCurrency().isBlank()) {
+            e.setCarrierMaxAltCurrency("USD");
+        }
         e.setActive(input.isActive());
         return repository.save(e);
     }

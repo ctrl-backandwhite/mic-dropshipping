@@ -55,6 +55,28 @@ public final class CatalogDtos {
 
     /* ============================ RESPONSES ============================ */
 
+    /**
+     * Un producto al que le faltan datos obligatorios de aduana, con la lista de lo que le falta.
+     *
+     * <p>{@code missing} viene ya redactado ("partida arancelaria (HSCode)") porque quien lo lee es el
+     * administrador que tiene que corregirlo, y son los mismos nombres que usan el aviso del despacho y
+     * el fichero de carga.
+     */
+    public record ProductCustomsGapView(UUID id, String slug, String title, String externalId,
+            String status, List<String> missing) {
+    }
+
+    /**
+     * Resultado de repasar el catálogo buscando productos que no se podrían declarar en aduana.
+     *
+     * <p>Con miles de referencias, abrirlas una a una no es viable: esta vista las enumera de golpe.
+     * {@code truncated} avisa de que se alcanzó el tope pedido y quedan más por revisar, para que nadie
+     * lea una lista corta como «ya no queda nada».
+     */
+    public record CustomsAuditView(long scanned, long incomplete, boolean truncated,
+            List<ProductCustomsGapView> products) {
+    }
+
     public record SupplierView(UUID id, String source, String externalId, String name, String nameZh, String country,
             String city, BigDecimal rating, Integer yearsActive, boolean verified, boolean trustPass,
             String profileUrl) {

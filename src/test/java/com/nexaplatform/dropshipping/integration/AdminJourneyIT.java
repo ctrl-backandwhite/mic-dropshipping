@@ -1700,6 +1700,13 @@ class AdminJourneyIT extends BaseIntegration {
             cuerpo.put("titleEs", titulo);
         }
         cuerpo.put("descriptionEs", "Artículo usado por la certificación de extremo a extremo.");
+        // Nombre en inglés, nombre en chino y partida arancelaria: son los datos con los que se declara
+        // en aduana y sin ellos el producto ya no se puede poner a la venta ni despachar su pedido.
+        if (titulo != null) {
+            cuerpo.put("titleEn", "Certification item");
+            cuerpo.put("titleZh", "认证商品");
+        }
+        cuerpo.put("hsCode", "6109100000");
         cuerpo.put("price", precioCny);
         cuerpo.put("shippingCny", 16.0);
         cuerpo.put("ivaCny", 8.0);

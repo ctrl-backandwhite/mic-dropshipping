@@ -228,7 +228,11 @@ public class CheckoutPreviewService {
                 : 0;
         // Bultos con sus partidas arancelarias: el derecho fijo de la UE se cobra por línea de declaración
         // dentro de cada bulto, no por producto ni por unidad (ver CustomsDutyLinesService).
-        List<CustomsDutyLinesService.DutyParcel> parcels = customsDutyLinesService.parcelsOf(customsLines(items));
+        // Con el canal que se está cotizando: el peso máximo por bulto lo fija el par (canal, país), así
+        // que la vista previa tiene que repartir igual que después el despacho o el derecho por partida
+        // mostrado y el liquidado contarían bultos distintos.
+        List<CustomsDutyLinesService.DutyParcel> parcels = customsDutyLinesService.parcelsOf(
+                customsLines(items), shippingOption != null ? shippingOption.code() : null, country);
         // Impuesto + despacho aduanero por el MISMO servicio que usa el cobro (CheckoutTotalsService), para
         // que el desglose mostrado coincida al céntimo con el pedido.
         CheckoutTotalsService.CheckoutTotals totals = checkoutTotalsService.compute(country, region,

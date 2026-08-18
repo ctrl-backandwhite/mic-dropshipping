@@ -29,7 +29,7 @@ class CustomsDutyLinesServiceTest {
 
     @BeforeEach
     void sinLimitesDeBulto() {
-        service = new CustomsDutyLinesService();
+        service = new CustomsDutyLinesService(null);
         // 0 = sin límite: todo viaja en un bulto. Los límites reales del canal se prueban aparte.
         ReflectionTestUtils.setField(service, "maxParcelWeightGrams", 0);
         ReflectionTestUtils.setField(service, "maxParcelValueCents", 0);

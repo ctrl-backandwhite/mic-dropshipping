@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase;
 
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.CustomsAuditView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
@@ -223,6 +224,14 @@ public interface CatalogUseCase {
     List<CatalogImageDtoOut> listProductImages(UUID productId);
 
     List<CatalogPriceTierDtoOut> listProductPriceTiers(UUID productId);
+
+    /**
+     * Productos del catálogo que no se podrían declarar en aduana, con el detalle de qué les falta.
+     *
+     * @param status estado a repasar ({@code ACTIVE}, {@code DRAFT}…); vacío o desconocido repasa todo
+     * @param max    tope de filas devueltas; el resultado avisa si se quedaron más fuera
+     */
+    CustomsAuditView auditCustomsData(String status, int max);
 
     /* ============ Products: mutate (admin) ============ */
 

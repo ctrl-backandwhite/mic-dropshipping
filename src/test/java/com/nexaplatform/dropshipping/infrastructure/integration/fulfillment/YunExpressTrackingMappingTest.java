@@ -25,7 +25,7 @@ class YunExpressTrackingMappingTest {
 
     @BeforeEach
     void setUp() {
-        service = new YunExpressFulfillmentService(null, null, null, new CustomsDutyLinesService(), null, null, null);
+        service = new YunExpressFulfillmentService(null, null, null, new CustomsDutyLinesService(null), null, null, null, null);
         mapper = new ObjectMapper();
     }
 
