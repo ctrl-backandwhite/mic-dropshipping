@@ -117,6 +117,20 @@ public interface FulfillmentProvider {
         }
     }
 
+    /**
+     * Cómo se llama este transportista dentro de la plataforma: {@code YUNEXPRESS}, {@code CJ}.
+     *
+     * <p>Hace falta desde que hay más de uno (18-ago-2026). Es lo que se guarda en el pedido al cobrar y
+     * lo que decide, al despachar, a quién se le pide la guía: los códigos de línea de dos
+     * transportistas no se parecen en nada y no se pueden distinguir mirándolos.
+     *
+     * <p>Tiene valor por defecto para no obligar a tocar las implementaciones antiguas, pero quien tenga
+     * que aparecer en un pedido debe devolver el suyo.
+     */
+    default String nombre() {
+        return "DESCONOCIDO";
+    }
+
     /** ¿El proveedor envía a este país? */
     boolean isSupported(String countryCode);
 
