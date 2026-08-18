@@ -299,3 +299,5 @@ databaseChangeLog:
       file: db/changelog/schema-v144-cobertura-verificada.sql
   - include:
       file: db/changelog/schema-v145-limites-canal.sql
+  - include:
+      file: db/changelog/schema-v146-token-del-transportista.sql
