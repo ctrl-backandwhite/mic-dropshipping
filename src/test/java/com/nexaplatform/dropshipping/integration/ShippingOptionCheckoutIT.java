@@ -245,10 +245,14 @@ class ShippingOptionCheckoutIT extends BaseIntegration {
     private UUID insertarProducto(String basePrice) {
         UUID id = UUID.randomUUID();
         String sufijo = id.toString().substring(0, 8);
+        // La partida 6109 (camisetas de punto) no es decorativa: desde que hay dos transportistas, el
+        // enrutador solo ofrece la línea de ropa —la más barata de las dos de esta prueba— si TODO el
+        // pedido es textil. Un producto sin partida perdería esa opción y aquí se cotizaría la cara.
         jdbcTemplate.update("INSERT INTO product (id, slug, external_id, source, title_zh, status, moq,"
-                + " base_price, currency, shipping_cny, iva_cny, weight_grams, created_at, updated_at)"
+                + " base_price, currency, shipping_cny, iva_cny, weight_grams, hs_code, created_at,"
+                + " updated_at)"
                 + " VALUES (?, ?, ?, 'TEST', 'Producto de prueba', 'ACTIVE', 1, ?::numeric,"
-                + " 'USD', 0, 0, 500, now(), now())",
+                + " 'USD', 0, 0, 500, '610910', now(), now())",
                 id, "producto-" + sufijo, "ext-" + sufijo, basePrice);
         return id;
     }

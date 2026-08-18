@@ -7,6 +7,7 @@ import com.nexaplatform.dropshipping.application.service.AffiliateProgramService
 import com.nexaplatform.dropshipping.application.service.CartService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
 import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
+import com.nexaplatform.dropshipping.application.service.FulfillmentRouter;
 import com.nexaplatform.dropshipping.application.service.UnserviceableZoneService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
@@ -110,6 +111,8 @@ class CheckoutCartEmptiedTest {
     @Mock
     FulfillmentProvider fulfillment;
     @Mock
+    FulfillmentRouter router;
+    @Mock
     CheckoutTotalsService checkoutTotalsService;
     @Mock
     OperatorCommissionService operatorCommissionService;
@@ -139,7 +142,7 @@ class CheckoutCartEmptiedTest {
         subject = new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository,
                 userRepository, shopConnectionRepository, userAddressRepository, webhooks, walletUseCase,
                 notificationsPublisher, pricingService, affiliateProgramService, stockService, paymentUseCase,
-                orderEmailService, fulfillment, checkoutTotalsService, new CustomsDutyLinesService(null), mock(UnserviceableZoneService.class),
+                orderEmailService, fulfillment, router, checkoutTotalsService, new CustomsDutyLinesService(null), mock(UnserviceableZoneService.class),
                 operatorCommissionService, promotionService, supplierPurchaseService, trackingRepository, orderIndexer,
                 orderSearchService, cartService);
 
@@ -155,7 +158,7 @@ class CheckoutCartEmptiedTest {
                 null, null, null, null));
 
         when(fulfillment.isSupported("ES")).thenReturn(true);
-        when(fulfillment.quote(anyString(), any()))
+        when(router.cotizar(anyString(), any(), anyList()))
                 .thenReturn(new ShippingQuote(true, "ES", 0, "YunExpress", "Standard", 7, 15, "EU"));
         when(affiliateProgramService.referralDiscountCents(any(), anyLong())).thenReturn(0L);
         CheckoutTotalsService.CheckoutTotals totals = mock(CheckoutTotalsService.CheckoutTotals.class);

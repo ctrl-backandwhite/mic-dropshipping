@@ -15,6 +15,7 @@ import com.nexaplatform.dropshipping.application.service.StockService;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
+import com.nexaplatform.dropshipping.application.service.FulfillmentRouter;
 import com.nexaplatform.dropshipping.application.usecase.impl.OrderUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
@@ -107,6 +108,8 @@ class CheckoutInvariantsTest {
     @Mock
     FulfillmentProvider fulfillment;
     @Mock
+    FulfillmentRouter router;
+    @Mock
     CheckoutTotalsService checkoutTotalsService;
     @Mock
     OperatorCommissionService operatorCommissionService;
@@ -167,7 +170,7 @@ class CheckoutInvariantsTest {
         when(pricingService.priceFor(any(), any())).thenReturn(new PricingService.PricedAmount(
                 new BigDecimal("10.00"), new BigDecimal("40.00"), null, "USD", "$", null, null, null,
                 null, null, null, null, null, null));
-        when(fulfillment.quote(anyString(), any()))
+        when(router.cotizar(anyString(), any(), anyList()))
                 .thenReturn(new ShippingQuote(true, "ES", 0, "YunExpress", "Standard", 7, 15, "EU"));
         when(affiliateProgramService.referralDiscountCents(any(), anyLong())).thenReturn(0L);
         CheckoutTotalsService.CheckoutTotals totals = mock(CheckoutTotalsService.CheckoutTotals.class);

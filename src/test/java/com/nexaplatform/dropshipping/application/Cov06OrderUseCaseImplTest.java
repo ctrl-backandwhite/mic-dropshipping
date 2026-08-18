@@ -19,6 +19,7 @@ import com.nexaplatform.dropshipping.application.service.WebhookDispatcherServic
 import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
+import com.nexaplatform.dropshipping.application.service.FulfillmentRouter;
 import com.nexaplatform.dropshipping.application.usecase.impl.OrderUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.enums.OverThresholdPolicy;
@@ -117,6 +118,8 @@ class Cov06OrderUseCaseImplTest {
     @Mock
     FulfillmentProvider fulfillment;
     @Mock
+    FulfillmentRouter router;
+    @Mock
     CheckoutTotalsService checkoutTotalsService;
     @Mock
     OperatorCommissionService operatorCommissionService;
@@ -144,7 +147,7 @@ class Cov06OrderUseCaseImplTest {
     @BeforeEach
     void preparar() {
         when(fulfillment.isSupported(anyString())).thenReturn(true);
-        when(fulfillment.quote(any(), any(FulfillmentProvider.ParcelSpec.class)))
+        when(router.cotizar(any(), any(FulfillmentProvider.ParcelSpec.class), anyList()))
                 .thenReturn(ShippingQuote.unsupported("XX"));
         when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList()))
                 .thenAnswer(inv -> totalesNeutros(inv.getArgument(3)));
@@ -258,7 +261,7 @@ class Cov06OrderUseCaseImplTest {
         ProductEntity producto = producto("100.00");
         prepararCatalogo(producto, "100.00");
         when(affiliateProgramService.referralDiscountCents(userId, 10000L)).thenReturn(1000L);
-        when(fulfillment.quote(any(), any(FulfillmentProvider.ParcelSpec.class)))
+        when(router.cotizar(any(), any(FulfillmentProvider.ParcelSpec.class), anyList()))
                 .thenReturn(new ShippingQuote(true, "ES", 500, "YUN", "STD", 5, 10, "EU"));
 
         useCase.checkout(userId, checkout(producto.getId(), 1, "CARD"), null);

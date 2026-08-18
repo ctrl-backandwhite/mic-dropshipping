@@ -301,3 +301,5 @@ databaseChangeLog:
       file: db/changelog/schema-v145-limites-canal.sql
   - include:
       file: db/changelog/schema-v146-token-del-transportista.sql
+  - include:
+      file: db/changelog/schema-v147-transportista-del-pedido.sql

@@ -6,9 +6,9 @@ import com.nexaplatform.dropshipping.application.notifications.NotificationsPubl
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
 import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
+import com.nexaplatform.dropshipping.application.service.FulfillmentRouter;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
-import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.StockService;
 import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
@@ -16,10 +16,10 @@ import com.nexaplatform.dropshipping.application.service.UnserviceableZoneServic
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
-import com.nexaplatform.dropshipping.application.service.FulfillmentRouter;
 import com.nexaplatform.dropshipping.application.usecase.impl.OrderUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
+import com.nexaplatform.dropshipping.domain.model.ShippingOption;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.OrderIndexer;
@@ -31,13 +31,10 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Produ
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopConnectionRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserAddressRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -61,23 +58,23 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * Con qué país se calcula el MARGEN del pedido, y con cuántos céntimos exactos se cobra.
+ * El pedido recuerda POR QUIÉN se cobró el envío.
  *
- * <p>Regla de negocio (decisión del dueño, 18-ago-2026): <b>el margen va por el país del COMPRADOR</b>
- * —el que manda el front en {@code X-Country}, que es su país de registro—, no por el destino del
- * paquete. Quien se registra en México ve y paga precio de México aunque mande el paquete a España; para
- * pagar precio español hay que registrarse en España. El IVA y el arancel son otra cosa y siguen yendo
- * por el país de ENTREGA, porque los fija la aduana del destino.
+ * <p>Con un solo transportista bastaba con guardar el código de la línea. Con dos no: un {@code FZZXR}
+ * de YunExpress y un {@code 1868922929754472449} de CJ no se distinguen mirándolos, y despachar por el
+ * que no era significa cobrar un porte y pagar otro.
  *
- * <p>Esto se descubrió certificando en local: el mismo carrito enseñaba 23,19 $ y cobraba 22,66 $. La
- * ficha y la vista previa ya tarificaban por el país del comprador, pero el cobro lo pisaba con el país
- * de la dirección de envío, así que en cuanto los dos países se separaban el cargo dejaba de coincidir
- * con lo enseñado. Ninguna de las 4.448 pruebas lo vio porque todas cotizaban y cobraban con el mismo
- * país: el descuadre sólo aparece cuando se separan, que es justo lo que estos casos hacen.
+ * <p>Y hay un fallo más silencioso todavía. Al cobrar, la forma de envío elegida se <b>revalida contra
+ * una cotización nueva</b> —el código llega del navegador y aceptarlo a ciegas dejaría pagar el precio
+ * de un canal más barato—. Si esa cotización solo le pregunta a un transportista, la opción de CJ que el
+ * cliente eligió no aparece, el resolutor la da por inválida y cae a la más barata de YunExpress: el
+ * cliente elige una cosa y se le cobra y se le envía otra. Es la misma familia de fallo que el descuadre
+ * de esta mañana, por otra puerta, así que aquí se fija que el cobro cotiza con el mismo enrutador que
+ * la vista previa.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-class PedidoPaisDelMargenTest {
+class PedidoGuardaElTransportistaTest {
 
     @Mock com.nexaplatform.dropshipping.domain.repository.OrderRepository orderRepository;
     @Mock com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderRepository orderEntityRepository;
@@ -94,10 +91,8 @@ class PedidoPaisDelMargenTest {
     @Mock StockService stockService;
     @Mock PaymentUseCase paymentUseCase;
     @Mock OrderEmailService orderEmailService;
-    @Mock
-    FulfillmentProvider fulfillment;
-    @Mock
-    FulfillmentRouter router;
+    @Mock FulfillmentProvider fulfillment;
+    @Mock FulfillmentRouter router;
     @Mock CheckoutTotalsService checkoutTotalsService;
     @Mock OperatorCommissionService operatorCommissionService;
     @Mock OrderIndexer orderIndexer;
@@ -111,27 +106,33 @@ class PedidoPaisDelMargenTest {
 
     private static final UUID USUARIO = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID PRODUCTO = UUID.fromString("22222222-2222-2222-2222-222222222222");
-    private static final String DESTINO = "ES";
 
-    /** Qué país veía el tarificador en cada consulta de precio del pedido. */
-    private final List<String> paisesAlTarificar = new ArrayList<>();
-    private Order pedidoGuardado;
+    /** Las dos opciones que ve el cliente: la de CJ es más barata que la de YunExpress. */
+    private static final ShippingOption DE_CJ =
+            new ShippingOption("1868922929754472449", "YunExpress Ordinary", 767, 8, 15, "CJ");
+    private static final ShippingOption DE_YUNEXPRESS =
+            new ShippingOption("FZZXR", "Apparel line", 785, 5, 8, "YUNEXPRESS");
+
+    private Order guardado;
 
     @BeforeEach
-    void catalogoYCobroListos() {
-        precioUnitario(new BigDecimal("10.00"));
-        when(fulfillment.isSupported(anyString())).thenReturn(true);
-        when(router.cotizar(anyString(), any(), anyList()))
-                .thenReturn(new ShippingQuote(true, DESTINO, 0, "YunExpress", "Standard", 7, 15, "EU"));
-        when(affiliateProgramService.referralDiscountCents(any(), anyLong())).thenReturn(0L);
-
+    void carritoListoParaPagar() {
         ProductEntity p = new ProductEntity();
         p.setId(PRODUCTO);
-        p.setSlug("gafas");
+        p.setSlug("camiseta");
         p.setBasePrice(new BigDecimal("9.00"));
+        p.setHsCode("610910");
         p.setImages(new ArrayList<>());
         p.setStatus(ProductStatus.ACTIVE);
         when(productRepository.findById(PRODUCTO)).thenReturn(Optional.of(p));
+        when(pricingService.priceFor(any(), any())).thenReturn(new PricingService.PricedAmount(
+                new BigDecimal("1.34"), new BigDecimal("10.00"), new BigDecimal("10.00"),
+                "USD", "$", null, null, null, null, null, null, null, null, null));
+
+        when(fulfillment.isSupported(anyString())).thenReturn(true);
+        when(router.cotizar(anyString(), any(), anyList())).thenReturn(new ShippingQuote(true, "ES",
+                767, "Transportista", "Standard", 8, 15, "EU", List.of(DE_CJ, DE_YUNEXPRESS)));
+        when(affiliateProgramService.referralDiscountCents(any(), anyLong())).thenReturn(0L);
 
         CheckoutTotalsService.CheckoutTotals totals = mock(CheckoutTotalsService.CheckoutTotals.class);
         when(totals.blocked()).thenReturn(false);
@@ -145,7 +146,7 @@ class PedidoPaisDelMargenTest {
             if (o.getId() == null) {
                 o.setId(UUID.randomUUID());
             }
-            pedidoGuardado = o;
+            guardado = o;
             when(orderRepository.findById(o.getId())).thenReturn(Optional.of(o));
             return o;
         });
@@ -156,99 +157,68 @@ class PedidoPaisDelMargenTest {
         when(userRepository.findById(USUARIO)).thenReturn(Optional.of(user));
     }
 
-    @AfterEach
-    void limpiaElHilo() {
-        PricingCountryHolder.clear();
-    }
-
-    /** El tarificador anota el país que ve y devuelve el precio pedido. */
-    private void precioUnitario(BigDecimal retailUsd) {
-        when(pricingService.priceFor(any(), any())).thenAnswer(inv -> {
-            paisesAlTarificar.add(PricingCountryHolder.get());
-            return new PricingService.PricedAmount(new BigDecimal("1.34"), retailUsd, retailUsd,
-                    "USD", "$", null, null, null, null, null, null, null, null, null);
-        });
-    }
-
-    private void comprar(int unidades) {
+    private void comprarEligiendo(String codigoDeEnvio) {
         MeCheckoutDtoIn req = new MeCheckoutDtoIn();
         req.setPaymentMethod("WALLET");
+        req.setShippingOptionCode(codigoDeEnvio);
         req.setShippingAddressInline(new AddressInput("Nombre Apellido", "+34600000000",
-                "comprador@example.com", "Calle 1", null, "Madrid", "Madrid", "28001", DESTINO));
+                "comprador@example.com", "Calle 1", null, "Madrid", "Madrid", "28001", "ES"));
         MeCheckoutDtoIn.Item item = new MeCheckoutDtoIn.Item();
         item.setProductId(PRODUCTO);
-        item.setQuantity(unidades);
+        item.setQuantity(1);
         req.setItems(List.of(item));
         subject.checkout(USUARIO, req, null);
     }
 
-    // ------------------------------------------------------------------ el país que manda
-
     @Test
-    @DisplayName("el margen se cobra por el país del COMPRADOR, no por el destino del paquete")
-    void elMargenVaPorElPaisDelComprador() {
-        // Comprador registrado en México que manda el paquete a España.
-        PricingCountryHolder.set("MX");
+    @DisplayName("elegir una opción de CJ deja el pedido marcado como de CJ")
+    void guardaElTransportistaDeLaOpcionElegida() {
+        comprarEligiendo(DE_CJ.code());
 
-        comprar(2);
-
-        assertThat(paisesAlTarificar)
-                .as("con MX manda la regla global (120 %) y con ES la de la UE (104 %): 53 céntimos "
-                        + "de diferencia en este carrito, y lo enseñado deja de ser lo cobrado")
-                .containsOnly("MX");
+        assertThat(guardado.getShippingCarrier())
+                .as("sin esto, al despachar no se sabe a quién pedirle la guía")
+                .isEqualTo("CJ");
+        assertThat(guardado.getShippingChannelCode()).isEqualTo(DE_CJ.code());
     }
 
     @Test
-    @DisplayName("sin país del comprador no se usa el del destino: se cae a la regla global")
-    void sinPaisDelCompradorNoMandaElDestino() {
-        PricingCountryHolder.clear();
+    @DisplayName("elegir una opción de YunExpress deja el pedido marcado como de YunExpress")
+    void tambienGuardaElOtroTransportista() {
+        comprarEligiendo(DE_YUNEXPRESS.code());
 
-        comprar(1);
-
-        assertThat(paisesAlTarificar)
-                .as("un invitado sin geolocalizar paga la tarifa global, no la del sitio al que envía")
-                .containsOnlyNulls();
+        assertThat(guardado.getShippingCarrier()).isEqualTo("YUNEXPRESS");
+        assertThat(guardado.getShippingChannelCode()).isEqualTo("FZZXR");
     }
 
     @Test
-    @DisplayName("al terminar, el hilo queda como estaba: el pedido no contamina la petición")
-    void elHiloQuedaComoEstaba() {
-        PricingCountryHolder.set("MX");
+    @DisplayName("el cobro cotiza con el enrutador, o la opción del otro transportista no existiría")
+    void elCobroPreguntaALosDosTransportistas() {
+        comprarEligiendo(DE_CJ.code());
 
-        comprar(1);
-
-        assertThat(PricingCountryHolder.get())
-                .as("los hilos vienen de un pool: dejarlo cambiado tarifica mal la SIGUIENTE petición")
-                .isEqualTo("MX");
+        // Si el cobro cotizara solo contra un transportista, la opción de CJ no aparecería en la
+        // cotización de revalidación, se daría por inválida y se caería a la más barata de YunExpress:
+        // el cliente elige una cosa y se le cobra y se le envía otra.
+        assertThat(guardado.getShippingCarrier()).isEqualTo("CJ");
+        assertThat(guardado.getShippingChannelCode()).isEqualTo(DE_CJ.code());
     }
 
-    // ------------------------------------------------------------------ el céntimo exacto
+    @Test
+    @DisplayName("un código inventado no cuela: se cae a la más barata, con su transportista")
+    void unCodigoInventadoCaeALaMasBarata() {
+        comprarEligiendo("CANAL-QUE-NO-EXISTE");
 
-    @ParameterizedTest(name = "{0} $/ud × {1} = {2} céntimos")
-    @CsvSource({
-            // Redondeo del céntimo: HALF_UP, el mismo que el catálogo y la vista previa. La mitad
-            // exacta sube, que es lo que el cliente ha visto en la ficha.
-            "5.475, 1, 548",
-            "5.474, 1, 547",
-            "5.005, 1, 501",
-            "0.005, 1, 1",
-            "9.995, 1, 1000",
-            // Y el importe de línea multiplica el céntimo ya redondeado, no el decimal crudo: si se
-            // multiplicara antes, 5,475 × 4 daría 2.190 y el cliente vería cuatro veces 5,48 = 21,92.
-            "5.475, 4, 2192",
-            "0.005, 100, 100",
-            // Céntimo exacto sin decimales que redondear: no puede desviarse ni por arriba ni por abajo.
-            "12.00, 3, 3600",
-    })
-    @DisplayName("el céntimo cobrado sale de redondear el precio al alza en la mitad exacta")
-    void elCentimoCobradoEsElDeLaFicha(String retailUsd, int unidades, int lineaEsperadaCents) {
-        PricingCountryHolder.set("MX");
-        precioUnitario(new BigDecimal(retailUsd));
+        assertThat(guardado.getShippingChannelCode())
+                .as("el código llega del navegador: aceptarlo sin revalidar dejaría elegir precio")
+                .isEqualTo(DE_CJ.code());
+        assertThat(guardado.getShippingCarrier()).isEqualTo("CJ");
+    }
 
-        comprar(unidades);
+    @Test
+    @DisplayName("sin elegir nada se cobra la más barata y queda anotado quién la lleva")
+    void sinElegirSeCobraLaMasBarata() {
+        comprarEligiendo(null);
 
-        assertThat(pedidoGuardado.getItems().get(0).getLineTotalCents())
-                .as("lo que se cobra por la línea tiene que ser lo que el cliente sumó en pantalla")
-                .isEqualTo(lineaEsperadaCents);
+        assertThat(guardado.getShippingChannelCode()).isEqualTo(DE_CJ.code());
+        assertThat(guardado.getShippingCarrier()).isEqualTo("CJ");
     }
 }
