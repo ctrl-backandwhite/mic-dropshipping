@@ -100,7 +100,7 @@ class OrderUseCaseImplTest {
 
     @org.mockito.Spy
     com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService customsDutyLinesService =
-            new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService();
+            new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService(null);
 
     @InjectMocks
     OrderUseCaseImpl orderUseCase;

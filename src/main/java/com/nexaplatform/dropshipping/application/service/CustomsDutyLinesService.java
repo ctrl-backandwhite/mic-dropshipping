@@ -1,7 +1,9 @@
 package com.nexaplatform.dropshipping.application.service;
 
+import com.nexaplatform.dropshipping.application.service.CarrierChannelLimitService.ChannelLimit;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -54,6 +56,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class CustomsDutyLinesService {
 
     /**
@@ -62,6 +65,16 @@ public class CustomsDutyLinesService {
      * pueda agotar la memoria del proceso.
      */
     private static final int MAX_UNITS = 10_000;
+
+    /**
+     * De dónde sale el peso máximo por bulto: del canal y del país, no de un escalar.
+     *
+     * <p>Puede llegar nulo en pruebas unitarias que no tocan la tabla —igual que {@code Environment} en
+     * {@link com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressFulfillmentService}—,
+     * y entonces se usa la configuración global. Es el mismo último recurso que aplica el resolutor, así
+     * que el resultado no cambia por prescindir de él.
+     */
+    private final CarrierChannelLimitService channelLimits;
 
     /**
      * Una línea del carrito o del pedido, con lo que hace falta para clasificarla y para pesarla.
@@ -88,11 +101,28 @@ public class CustomsDutyLinesService {
     private int maxParcelUnits;
 
     /**
-     * Reparte las líneas en bultos y devuelve, por bulto, su valor y su número de partidas arancelarias.
-     *
-     * <p>Si no hay nada que declarar devuelve la lista vacía: sin mercancía no hay envío ni derecho.
+     * Reparte las líneas en bultos sin saber por qué canal van a viajar: se usa el peso máximo de la
+     * configuración global. Solo para llamantes que de verdad no conocen el destino ni el canal.
      */
     public List<DutyParcel> parcelsOf(List<Line> lines) {
+        return parcelsOf(lines, null, null);
+    }
+
+    /**
+     * Reparte las líneas en bultos y devuelve, por bulto, su valor y su número de partidas arancelarias.
+     *
+     * <p>El reparto tiene que ser el MISMO que hará el transportista, porque el derecho fijo de la UE se
+     * cobra por línea de declaración <i>dentro de cada bulto</i>: contar con dos bultos lo que va a viajar
+     * en tres cobra de menos, y la diferencia la pone el comercio al despachar. Por eso el peso máximo
+     * sale de {@code (canal, país)} y no de un escalar: la línea de ropa admite 30 kg a España y 15 kg a
+     * Dinamarca, así que el mismo carrito se parte distinto según a dónde vaya.
+     *
+     * <p>Si no hay nada que declarar devuelve la lista vacía: sin mercancía no hay envío ni derecho.
+     *
+     * @param channelCode canal del transportista; vacío = todavía no se sabe, se usa la configuración
+     * @param countryCode país de destino (ISO-2)
+     */
+    public List<DutyParcel> parcelsOf(List<Line> lines, String channelCode, String countryCode) {
         if (lines == null || lines.isEmpty()) {
             return List.of();
         }
@@ -113,13 +143,26 @@ public class CustomsDutyLinesService {
             }
         }
         List<ParcelSplitter.Bin> bins = ParcelSplitter.split(units,
-                new ParcelSplitter.Limits(maxParcelWeightGrams, maxParcelValueCents, maxParcelUnits));
+                new ParcelSplitter.Limits(maxWeightGramsFor(channelCode, countryCode), maxParcelValueCents,
+                        maxParcelUnits));
 
         List<DutyParcel> parcels = new ArrayList<>(bins.size());
         for (ParcelSplitter.Bin bin : bins) {
             parcels.add(new DutyParcel(bin.valueCents(), tariffLinesIn(bin, lines)));
         }
         return parcels;
+    }
+
+    /**
+     * Peso máximo por bulto de ese canal en ese destino, con la configuración global como último recurso
+     * (canal sin sembrar, o resolutor ausente en pruebas unitarias).
+     */
+    private int maxWeightGramsFor(String channelCode, String countryCode) {
+        if (channelLimits == null) {
+            return maxParcelWeightGrams;
+        }
+        ChannelLimit limite = channelLimits.resolve(channelCode, countryCode);
+        return limite.maxWeightGrams();
     }
 
     /** Partidas distintas dentro de un bulto: las clasificaciones que de verdad viajan en ÉL, no en el pedido. */

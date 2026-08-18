@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.AdminCatalogApi;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.CustomsAuditView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
@@ -89,6 +90,11 @@ public class AdminCatalogController implements AdminCatalogApi {
             String lang, String sort, Boolean verified) {
         return PageResponse
                 .from(catalogUseCase.listProductsForAdmin(status, categoryId, q, page, size, lang, sort, verified));
+    }
+
+    @Override
+    public CustomsAuditView customsGaps(String status, int max) {
+        return catalogUseCase.auditCustomsData(status, max);
     }
 
     @Override

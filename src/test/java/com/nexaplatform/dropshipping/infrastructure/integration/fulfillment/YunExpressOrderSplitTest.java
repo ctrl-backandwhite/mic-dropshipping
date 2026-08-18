@@ -42,7 +42,7 @@ class YunExpressOrderSplitTest {
     /** Servicio con los topes del canal de pruebas: 2 kg, 24 $ y 10 unidades por bulto. */
     private YunExpressFulfillmentService service(int maxWeightGrams, int maxValueCents, int maxUnits) {
         YunExpressFulfillmentService s =
-                new YunExpressFulfillmentService(null, null, null, new CustomsDutyLinesService(), productRepository, null, null);
+                new YunExpressFulfillmentService(null, null, null, new CustomsDutyLinesService(null), productRepository, null, null, null);
         ReflectionTestUtils.setField(s, "maxParcelWeightGrams", maxWeightGrams);
         ReflectionTestUtils.setField(s, "maxParcelValueCents", maxValueCents);
         ReflectionTestUtils.setField(s, "maxParcelUnits", maxUnits);

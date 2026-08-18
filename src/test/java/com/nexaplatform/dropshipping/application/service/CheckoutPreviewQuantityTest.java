@@ -53,7 +53,7 @@ class CheckoutPreviewQuantityTest {
     private final PromotionService promociones = mock(PromotionService.class);
 
     private final com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService dutyLines =
-            new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService();
+            new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService(null);
 
     /** La cuenta real, no un doble: es justo la aritmética de línea que estos casos miden. */
     private final OrderAmounts orderAmounts = new OrderAmounts(currency);

@@ -44,7 +44,7 @@ class YunExpressDeclarationSourcesTest {
     ProductRepository productRepository;
 
     private YunExpressFulfillmentService service() {
-        return new YunExpressFulfillmentService(null, null, null, new CustomsDutyLinesService(), productRepository, null, null);
+        return new YunExpressFulfillmentService(null, null, null, new CustomsDutyLinesService(null), productRepository, null, null, null);
     }
 
     private final UUID productId = UUID.randomUUID();

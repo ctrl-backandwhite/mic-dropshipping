@@ -52,7 +52,7 @@ class YunExpressMockGuardTest {
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles(activeProfiles);
         YunExpressFulfillmentService service =
-                new YunExpressFulfillmentService(zones, client, customs, new CustomsDutyLinesService(), null, null, environment);
+                new YunExpressFulfillmentService(zones, client, customs, new CustomsDutyLinesService(null), null, null, environment, null);
         ReflectionTestUtils.setField(service, "enabled", false);
         ReflectionTestUtils.setField(service, "mockStageMinutes", 2L);
         return service;

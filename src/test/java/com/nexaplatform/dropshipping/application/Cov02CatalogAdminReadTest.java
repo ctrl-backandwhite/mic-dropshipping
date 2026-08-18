@@ -394,6 +394,12 @@ class Cov02CatalogAdminReadTest {
     void publicarUnProductoGeneraSuSeoYReindexa() {
         producto.getTranslations().add(ProductTranslationEntity.builder().product(producto).language("es")
                 .title("Bailarinas planas de mujer").description("Cómodas y ligeras.").build());
+        // Poner a la venta exige los datos con los que se declara en aduana; sin ellos el producto ya no
+        // se publica, así que el que se usa aquí tiene que ser vendible de verdad.
+        producto.getTranslations().add(ProductTranslationEntity.builder().product(producto).language("en")
+                .title("Women's flat ballerinas").build());
+        producto.setHsCode("6402990000");
+        producto.setWeightGrams(400);
         when(productJpaRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
 
         useCase.updateStatus(producto.getId(), "active");

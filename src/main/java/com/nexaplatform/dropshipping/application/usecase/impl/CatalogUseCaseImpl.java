@@ -14,6 +14,8 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariantValue;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
 import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.CustomsAuditView;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductCustomsGapView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
@@ -33,6 +35,7 @@ import com.nexaplatform.dropshipping.domain.enums.ReviewSource;
 import com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontMapper;
+import com.nexaplatform.dropshipping.application.service.CustomsDataCheck;
 import com.nexaplatform.dropshipping.application.service.CustomsProfileService;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
@@ -154,6 +157,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private static final String GALLERY = "GALLERY";
 
     private static final Slugify SLUG = Slugify.builder().lowerCase(true).build();
+
+    /** Cuántos productos se traen por tanda al auditar la aduana. Ni una consulta por producto, ni todos. */
+    private static final int AUDIT_BATCH_SIZE = 300;
 
     private final ProductRepository productRepository;
     private final SupplierRepository supplierRepository;
@@ -630,6 +636,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private void applyStatus(UUID id, ProductStatus status) {
         ProductEntity p = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND + id));
+        requireCustomsDataToPublish(p, status);
         p.setStatus(status);
         // DROP-679: al publicar se generan los metadatos SEO por idioma a partir del contenido real
         // (título/descripción ya traducidos), sin sobrescribir los que el operador haya definido.
@@ -638,6 +645,96 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         }
         productJpaRepository.save(p);
         productIndexer.indexProduct(id);
+    }
+
+    /**
+     * Un producto no entra a la venta sin los datos que la aduana exige para poder declararlo.
+     *
+     * <p>Este es el sitio barato de descubrirlo. Si el producto llega al escaparate incompleto, el fallo
+     * no aparece hasta que alguien lo compra y hay que despachar su pedido, y entonces ya hay dinero
+     * cobrado: o el transportista rechaza la guía, o la aduana retiene el paquete. Publicar es una acción
+     * deliberada del administrador, así que es el momento natural para exigírselos.
+     *
+     * <p>Solo se comprueba al ACTIVAR: retirar del escaparate un producto defectuoso —pausarlo o
+     * archivarlo— es precisamente lo que hay que poder hacer siempre, faltándole lo que le falte.
+     */
+    private void requireCustomsDataToPublish(ProductEntity p, ProductStatus status) {
+        if (status != ProductStatus.ACTIVE) {
+            return;
+        }
+        List<CustomsDataCheck.CustomsField> faltantes = CustomsDataCheck.faltantesDe(p);
+        if (faltantes.isEmpty()) {
+            return;
+        }
+        String nombre = p.getSlug() != null && !p.getSlug().isBlank() ? p.getSlug() : p.getExternalId();
+        throw new BusinessException("INCOMPLETE_CUSTOMS_DATA",
+                "No se puede poner a la venta sin los datos obligatorios de aduana. "
+                        + CustomsDataCheck.describe(String.valueOf(nombre), faltantes)
+                        + ". Complétalos y vuelve a publicarlo.");
+    }
+
+    /**
+     * Repasa el catálogo y devuelve qué productos no se podrían declarar en aduana y qué les falta.
+     *
+     * <p>Existe porque con miles de referencias abrirlas una a una para ver cuál está coja no es viable:
+     * el administrador necesita la lista de golpe para arreglarlas en bloque. Se lee en tandas —ids
+     * primero, luego los productos con sus traducciones y variantes— para no traerse el catálogo entero
+     * a memoria, y se corta en {@code max} filas avisando de que quedan más.
+     *
+     * <p>El veredicto lo da {@link CustomsDataCheck}, el mismo que bloquea la publicación y el despacho:
+     * lo que aquí sale como incompleto es exactamente lo que allí no va a pasar.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public CustomsAuditView auditCustomsData(String status, int max) {
+        ProductStatus filtro = parseStatusTolerant(status);
+        int tope = Math.max(1, max);
+        List<ProductCustomsGapView> incompletos = new ArrayList<>();
+        long revisados = 0;
+        long totalIncompletos = 0;
+        boolean quedanMas = false;
+        int pagina = 0;
+        boolean hayMasPaginas = true;
+        while (hayMasPaginas) {
+            Page<UUID> ids = productJpaRepository.findIdsForCustomsAudit(filtro,
+                    // Ordenado por id: la paginación tiene que ser estable mientras se recorre el
+                    // catálogo, o un producto se repetiría en dos tandas y otro no saldría en ninguna.
+                    PageRequest.of(pagina, AUDIT_BATCH_SIZE, Sort.by(Sort.Direction.ASC, "id")));
+            List<UUID> lote = ids.getContent();
+            if (!lote.isEmpty()) {
+                // Las traducciones y las variantes van en dos consultas porque no se pueden traer las dos
+                // colecciones en el mismo JOIN FETCH; la segunda rellena las mismas instancias.
+                List<ProductEntity> productos = productJpaRepository.findWithTranslationsByIds(lote);
+                productJpaRepository.findWithVariantsByIds(lote);
+                for (ProductEntity p : productos) {
+                    revisados++;
+                    List<CustomsDataCheck.CustomsField> faltantes = CustomsDataCheck.faltantesDe(p);
+                    if (faltantes.isEmpty()) {
+                        continue;
+                    }
+                    totalIncompletos++;
+                    if (incompletos.size() < tope) {
+                        incompletos.add(toCustomsGapView(p, faltantes));
+                    } else {
+                        quedanMas = true;
+                    }
+                }
+            }
+            hayMasPaginas = ids.hasNext();
+            pagina++;
+        }
+        return new CustomsAuditView(revisados, totalIncompletos, quedanMas, incompletos);
+    }
+
+    /** Una fila de la auditoría: lo justo para reconocer el producto y saber qué corregirle. */
+    private static ProductCustomsGapView toCustomsGapView(ProductEntity p,
+            List<CustomsDataCheck.CustomsField> faltantes) {
+        List<String> etiquetas = new ArrayList<>();
+        for (CustomsDataCheck.CustomsField campo : faltantes) {
+            etiquetas.add(campo.etiqueta());
+        }
+        return new ProductCustomsGapView(p.getId(), p.getSlug(), p.getTitleZh(), p.getExternalId(),
+                p.getStatus() != null ? p.getStatus().name() : null, etiquetas);
     }
 
     /** DROP-679: rellena meta_title/meta_description (solo si están vacíos) desde el contenido real. */

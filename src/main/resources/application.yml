@@ -420,6 +420,10 @@ nexadrop:
     quote-timeout-seconds: ${YUNEXPRESS_QUOTE_TIMEOUT:5}
     # Límites del canal contratado para repartir el pedido en bultos. 0 = no se reparte (todo en uno).
     # El reparto es SOLO por límites físicos: el umbral fiscal se evalúa sobre el pedido completo.
+    # OJO: el PESO máximo ya no sale de aquí salvo como último recurso. Lo fija la tabla
+    # `carrier_channel_limit` por (canal, país) —la línea de ropa admite 30 kg a España y 15 kg a
+    # Dinamarca—, y este escalar solo se usa cuando el canal no está sembrado, que hoy es el caso del
+    # canal BPA del sandbox. Se mantiene por eso: sin él, el entorno de pruebas dejaría de partir.
     max-parcel-weight-grams: ${YUNEXPRESS_MAX_PARCEL_WEIGHT_GRAMS:0}
     max-parcel-value-cents: ${YUNEXPRESS_MAX_PARCEL_VALUE_CENTS:0}
     max-parcel-units: ${YUNEXPRESS_MAX_PARCEL_UNITS:0}
@@ -437,7 +441,9 @@ nexadrop:
     prepaid-vat-service-code: ${YUNEXPRESS_PREPAID_VAT_CODE:V1}
     # Peso VOLUMÉTRICO: el transportista factura el mayor entre peso real y L×W×H(cm)/divisor, y solo
     # aplica el volumétrico a partir de cierto volumen (los bultos pequeños en bolsa van por peso real).
-    # Ajustar ambos al rate card del contrato cuando YunExpress lo facilite.
+    # El DIVISOR tampoco sale ya de aquí salvo como último recurso: está en `carrier_channel_limit` por
+    # canal, porque no todas las líneas lo aplican —la de ropa factura el peso real en todos los países—
+    # y las que lo aplican no dividen por lo mismo (la de carga general, entre 8000).
     volumetric-divisor: ${YUNEXPRESS_VOLUMETRIC_DIVISOR:6000}
     volumetric-min-cm3: ${YUNEXPRESS_VOLUMETRIC_MIN_CM3:6000}
 

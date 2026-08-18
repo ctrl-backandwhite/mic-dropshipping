@@ -1,6 +1,9 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.fulfillment;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.nexaplatform.dropshipping.application.service.CarrierChannelLimitService;
+import com.nexaplatform.dropshipping.application.service.CarrierChannelLimitService.ChannelLimit;
+import com.nexaplatform.dropshipping.application.service.CustomsDataCheck;
 import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService.CustomsValuation;
@@ -99,6 +102,13 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     private final CurrencyRateService currencyRateService;
     /** Para saber si el entorno es productivo y, por tanto, si el modo simulado está permitido. */
     private final Environment environment;
+    /**
+     * Peso máximo por bulto y divisor volumétrico de cada canal en cada país. Puede llegar nulo en
+     * pruebas unitarias que no tocan la tabla —como {@link #environment}—, y entonces se usan los
+     * escalares de configuración, que es exactamente lo que hace el propio resolutor con un canal que no
+     * está sembrado.
+     */
+    private final CarrierChannelLimitService channelLimits;
 
     @Value("${nexadrop.yunexpress.enabled:false}")
     private boolean enabled;
@@ -118,7 +128,12 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     /** Minutos por etapa del tracking simulado (mock) — pon un valor pequeño para ver el avance en demo. */
     @Value("${nexadrop.yunexpress.mock-stage-minutes:2}")
     private long mockStageMinutes;
-    /** Divisor del peso volumétrico: kg = L×W×H(cm) / divisor. 6000 es el estándar de aéreo/small parcel. */
+    /**
+     * Divisor del peso volumétrico <b>de reserva</b>: kg = L×W×H(cm) / divisor. 6000 es el estándar de
+     * aéreo/small parcel, pero no vale para todas las líneas —la de ropa no aplica volumétrico y la de
+     * carga general divide entre 8000—, así que el divisor real sale de {@link CarrierChannelLimitService}
+     * y éste solo cubre los canales que no están en la tabla.
+     */
     @Value("${nexadrop.yunexpress.volumetric-divisor:6000}")
     private double volumetricDivisor;
     /** Volumen (cm³) a partir del cual el transportista aplica peso volumétrico. Por debajo, factura el real. */
@@ -164,9 +179,11 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     @Value("${nexadrop.yunexpress.quote-timeout-seconds:5}")
     private long quoteTimeoutSeconds;
     /**
-     * Límites del canal para repartir el pedido en bultos. Son los del producto logístico contratado
-     * (el canal de pruebas BPA no admite más de 2 kg ni más de 24 $). Con 0 no se reparte: todo el
-     * pedido viaja en un único envío, que es el comportamiento anterior.
+     * Peso máximo por bulto <b>de reserva</b>. El bueno sale de {@link CarrierChannelLimitService}, que
+     * lo resuelve por (canal, país) porque el transportista lo publica así: 30 kg a España y 15 kg a
+     * Dinamarca en la misma línea de ropa. Este escalar solo se usa cuando el canal no está en la tabla
+     * —el {@code BPA} del entorno de pruebas, que no admite más de 2 kg— o en pruebas unitarias sin
+     * resolutor. Con 0 no se reparte: todo el pedido viaja en un único envío.
      */
     @Value("${nexadrop.yunexpress.max-parcel-weight-grams:0}")
     private int maxParcelWeightGrams;
@@ -260,7 +277,9 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
             return ShippingQuote.unsupported(countryCode);
         }
         CainiaoZoneEntity zn = z.get();
-        int chargeableGrams = chargeableWeightGrams(parcel);
+        // Al cotizar todavía no hay canal elegido —se pregunta justo para saber cuáles hay—, así que se
+        // pesa con el canal fijado en configuración; sin él, con la configuración global.
+        int chargeableGrams = chargeableWeightGrams(parcel, defaultChannel(), zn.getCountryCode());
         if (isActive()) {
             // Todas las formas de envío utilizables, no solo la más barata: el cliente elige en el
             // checkout entre precio y plazo, que es lo que cambia de un canal a otro.
@@ -306,22 +325,53 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     }
 
     /**
-     * Peso FACTURABLE del bulto en gramos: el mayor entre el peso real y el volumétrico
-     * ({@code L×W×H cm / divisor}), que es como tarifa el transportista.
-     *
-     * <p>El volumétrico solo entra a partir de {@link #volumetricMinCm3} porque las líneas de small
-     * parcel no lo aplican a bultos pequeños comprimidos en bolsa; por encima de ese volumen sí, y si
-     * no lo repercutimos aquí el transportista repesa en almacén y nos factura la diferencia contra el
-     * margen. Divisor y umbral son configurables: hay que ajustarlos al rate card del contrato.
+     * Peso FACTURABLE sin saber por qué canal viaja: se usa el divisor de la configuración. Queda para
+     * los llamantes que de verdad no lo conocen.
      */
     int chargeableWeightGrams(ParcelSpec parcel) {
+        return chargeableWeightGrams(parcel, null, null);
+    }
+
+    /**
+     * Peso FACTURABLE del bulto en gramos: el mayor entre el peso real y el volumétrico
+     * ({@code L×W×H cm / divisor}), que es como tarifa el transportista, y nunca por debajo del mínimo
+     * facturable del destino.
+     *
+     * <p><b>El volumétrico no se aplica en todos los canales, y donde se aplica no siempre divide entre
+     * lo mismo.</b> La línea de ropa factura el peso real en todos los países
+     * («所有国家：包裹实际重量不计材积») y la de carga general divide entre 8000, no entre los 6000 del aéreo
+     * estándar. Por eso el divisor sale de {@code (canal, país)}: aplicarlo donde el transportista no lo
+     * cobra encarece el envío al cliente por un dato que dice lo contrario, y usar un divisor menor del
+     * real deja la diferencia contra el margen cuando el carrier repesa en almacén.
+     *
+     * <p>El volumétrico sigue entrando solo a partir de {@link #volumetricMinCm3}: las líneas de small
+     * parcel no lo aplican a bultos pequeños comprimidos en bolsa.
+     *
+     * @param channelCode canal del transportista; vacío = todavía no se sabe, manda la configuración
+     * @param countryCode país de destino (ISO-2)
+     */
+    int chargeableWeightGrams(ParcelSpec parcel, String channelCode, String countryCode) {
+        ChannelLimit limite = limitsFor(channelCode, countryCode);
         int real = Math.max(1, parcel.weightGrams());
+        int facturable = Math.max(real, limite.minBillableGrams());
         double volumeCm3 = parcel.volumeCm3();
-        if (volumeCm3 < volumetricMinCm3 || volumetricDivisor <= 0) {
-            return real;
+        if (volumeCm3 < volumetricMinCm3 || !limite.aplicaVolumetrico()) {
+            return facturable;
         }
-        int volumetric = (int) Math.round(volumeCm3 / volumetricDivisor * 1000.0);
-        return Math.max(real, volumetric);
+        int volumetric = (int) Math.round(volumeCm3 / limite.volumetricDivisor() * 1000.0);
+        return Math.max(facturable, volumetric);
+    }
+
+    /**
+     * Límites del canal en ese destino. Sin resolutor (pruebas unitarias) se responde con los escalares
+     * de configuración, que es el mismo último recurso que aplica él con un canal sin sembrar.
+     */
+    private ChannelLimit limitsFor(String channelCode, String countryCode) {
+        if (channelLimits != null) {
+            return channelLimits.resolve(channelCode, countryCode);
+        }
+        return new ChannelLimit(channelCode, countryCode, maxParcelWeightGrams, (int) volumetricDivisor, 0,
+                0, 0, 0, false, CarrierChannelLimitService.Origen.GLOBAL);
     }
 
     /**
@@ -579,6 +629,9 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
      */
     @Override
     public List<FulfillmentResult> createShipments(Order order) {
+        // Lo PRIMERO, antes de repartir bultos y antes de llamar a nadie: una declaración incompleta no
+        // sale. Antes solo se dejaba un aviso en el registro y la guía se transmitía igual.
+        requireCompleteCustoms(order);
         List<ParcelSplitter.Bin> bins = splitOrder(order);
         if (bins.size() > 1) {
             log.info("YunExpress: pedido {} repartido en {} bultos por los límites del canal",
@@ -586,7 +639,6 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         }
         // También con un solo bulto se pasa por createShipmentForBin: así el envío guarda su peso y su
         // valor declarado. Delegar en createShipment() los dejaba a cero y el dato se perdía.
-        warnCustomsGaps(order);
         List<FulfillmentResult> results = new ArrayList<>();
         for (int i = 0; i < bins.size(); i++) {
             results.add(createShipmentForBin(order, bins.get(i), i + 1));
@@ -620,8 +672,29 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
                         dimension(product, variant, Dimension.HEIGHT), battery));
             }
         }
+        // El peso máximo NO es el escalar de configuración: lo fija el canal por el que va a salir la
+        // guía y el país al que va. Los topes de valor y de unidades siguen siendo de configuración
+        // porque el transportista no los publica por país.
+        ChannelLimit limite = limitsFor(limitChannelOf(order), order.getShippingCountry());
         return ParcelSplitter.split(units,
-                new ParcelSplitter.Limits(maxParcelWeightGrams, maxParcelValueCents, maxParcelUnits));
+                new ParcelSplitter.Limits(limite.maxWeightGrams(), maxParcelValueCents, maxParcelUnits));
+    }
+
+    /**
+     * Canal con el que se resuelven los límites del reparto.
+     *
+     * <p>Manda el que <b>eligió el cliente</b> y que se va a usar para emitir la guía. Si el pedido aún
+     * no lo lleva —entre la cotización y el despacho hay pasos donde todavía no está decidido— se usa el
+     * canal fijado en configuración, que es por el que saldría el envío. Y si tampoco lo hay, se devuelve
+     * vacío y la resolución cae a la configuración global: NO se llama aquí a la simulación de tarifa
+     * para averiguarlo, porque repartir bultos no puede depender de que el transportista conteste.
+     */
+    private String limitChannelOf(Order order) {
+        String chosen = order.getShippingChannelCode();
+        if (chosen != null && !chosen.isBlank()) {
+            return chosen.trim();
+        }
+        return defaultChannel();
     }
 
     /** Qué medida del paquete se está pidiendo; el producto manda sobre la variante. */
@@ -755,13 +828,27 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         return lines;
     }
 
-    /** Deja constancia de lo que le falta a la declaración para pasar aduana sin fricción. */
-    private void warnCustomsGaps(Order order) {
+    /**
+     * Corta el envío si a la declaración le falta cualquiera de los datos obligatorios.
+     *
+     * <p>Antes esto solo escribía un aviso en el registro y el envío se transmitía igual, con la
+     * declaración coja: el transportista podía rechazar la guía —y a esas alturas el pedido ya está
+     * cobrado— o la aduana retener el paquete. Nadie leía ese aviso hasta que reclamaba el cliente.
+     *
+     * <p>El fallo se marca PERMANENTE porque reintentarlo no va a hacer aparecer una partida arancelaria:
+     * así el pedido cae de inmediato en la bandeja de incidencias del panel —con correo y aviso al
+     * administrador— en lugar de gastar tres intentos en silencio. Corregido el producto, el botón de
+     * relanzar del panel vuelve a intentarlo, de modo que el pedido cobrado nunca se queda sin salida.
+     */
+    void requireCompleteCustoms(Order order) {
         List<String> gaps = customsGaps(declaredParcels(order));
-        if (!gaps.isEmpty()) {
-            log.warn("Pedido {}: declaración aduanera incompleta para YunExpress -> {}",
-                    order.getOrderNumber(), gaps);
+        if (gaps.isEmpty()) {
+            return;
         }
+        throw new FulfillmentFailure(FulfillmentFailure.Kind.PERMANENT,
+                "El pedido " + order.getOrderNumber() + " no se puede declarar en aduana porque faltan datos"
+                        + " obligatorios del catálogo: " + String.join("; ", gaps)
+                        + ". Corrige el producto y relanza el envío.");
     }
 
     /**
@@ -773,7 +860,7 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         int etaMax = zone(order.getShippingCountry()).map(CainiaoZoneEntity::getEtaMaxDays).orElse(20);
         CustomsValuation valuation = declarationFor(order);
         List<ParcelDeclaration> parcels = declaredParcels(order);
-        warnCustomsGaps(order);
+        requireCompleteCustoms(order);
         if (!isActive()) {
             if (!mockAllowed()) {
                 throw new FulfillmentFailure(FulfillmentFailure.Kind.TRANSIENT,
@@ -825,27 +912,20 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         return out;
     }
 
-    /** Qué le falta a la declaración para pasar aduana sin fricción (vacío = completa). */
+    /**
+     * Qué le falta a la declaración para pasar aduana sin fricción (vacío = completa).
+     *
+     * <p>Los cinco datos obligatorios los decide {@link CustomsDataCheck} y no este servicio: son los
+     * mismos que el panel exige para dar un producto por listo para vender, y tenerlos escritos dos veces
+     * era pedir que un día dejaran de coincidir. Aquí solo se les pone nombre y dueño para el mensaje.
+     */
     public List<String> customsGaps(List<ParcelDeclaration> parcels) {
         List<String> gaps = new ArrayList<>();
         for (ParcelDeclaration p : parcels) {
             String who = p.sku() != null ? p.sku() : p.eName();
-            if (p.eName() == null || p.eName().isBlank()) {
-                gaps.add("sin nombre en inglés (EName): " + who);
-            }
-            // YunExpress RECHAZA la guía si el CName falta o no lleva ideogramas, así que es un hueco
-            // bloqueante, no una mejora de despacho.
-            if (!hasChinese(p.cName())) {
-                gaps.add("sin nombre en chino (CName): " + who);
-            }
-            if (p.hsCode() == null || p.hsCode().isBlank()) {
-                gaps.add("sin partida arancelaria (HSCode): " + who);
-            }
-            if (p.unitWeightKg() <= 0) {
-                gaps.add("sin peso unitario (UnitWeight): " + who);
-            }
-            if (p.unitPrice() <= 0) {
-                gaps.add("sin valor declarado (UnitPrice): " + who);
+            for (CustomsDataCheck.CustomsField campo : CustomsDataCheck.faltantesEnLinea(p.eName(), p.cName(),
+                    p.hsCode(), p.unitWeightKg(), p.unitPrice())) {
+                gaps.add("sin " + campo.etiqueta() + ": " + who);
             }
         }
         return gaps;
@@ -895,12 +975,14 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         return product != null && hasChinese(product.getTitleZh()) ? product.getTitleZh() : null;
     }
 
-    /** ¿El texto lleva algún ideograma? Es lo que YunExpress comprueba para dar por válido el CName. */
+    /**
+     * ¿El texto lleva algún ideograma? Es lo que YunExpress comprueba para dar por válido el CName.
+     *
+     * <p>Delega en {@link CustomsDataCheck} para que el catálogo y el despacho apliquen literalmente el
+     * mismo criterio: un título que el panel dé por chino tiene que serlo también al declarar.
+     */
     static boolean hasChinese(String text) {
-        if (text == null || text.isBlank()) {
-            return false;
-        }
-        return text.codePoints().anyMatch(cp -> Character.UnicodeScript.of(cp) == Character.UnicodeScript.HAN);
+        return CustomsDataCheck.tieneIdeogramas(text);
     }
 
     /** Peso unitario declarado en kg: el de la variante comprada si la hay, si no el del producto. */
@@ -1136,11 +1218,17 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         return resolveProductCode(order.getShippingCountry(), parcel);
     }
 
+    /** Canal fijado en configuración, o vacío si se deja elegir al transportista. */
+    private String defaultChannel() {
+        return productCode != null ? productCode.trim() : "";
+    }
+
     private String resolveProductCode(String countryCode, ParcelSpec parcel) {
         if (productCode != null && !productCode.isBlank()) {
             return productCode.trim();
         }
-        RateOption best = cheapestRate(countryCode, parcel, chargeableWeightGrams(parcel));
+        RateOption best = cheapestRate(countryCode, parcel,
+                chargeableWeightGrams(parcel, defaultChannel(), countryCode));
         if (best == null) {
             throw new FulfillmentFailure(FulfillmentFailure.Kind.PERMANENT,
                     "YunExpress no ofrece ningún canal para " + countryCode
@@ -1375,7 +1463,9 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
                     dimension(product, variant, Dimension.WIDTH), dimension(product, variant, Dimension.HEIGHT),
                     ParcelAggregator.hasBattery(product)));
         }
-        return customsDutyLines.parcelsOf(lines);
+        // Con el MISMO canal y país que usa el reparto real: si el derecho se contase sobre otro número de
+        // bultos, lo cobrado al cliente y lo liquidado en aduana dejarían de coincidir.
+        return customsDutyLines.parcelsOf(lines, limitChannelOf(order), order.getShippingCountry());
     }
 
 }

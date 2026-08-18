@@ -68,8 +68,8 @@ class Cov04YunExpressQuoteTest {
 
     @BeforeEach
     void setUp() {
-        service = new YunExpressFulfillmentService(zoneRepository, client, customsValuation, new CustomsDutyLinesService(), null,
-                currencyRateService, new MockEnvironment());
+        service = new YunExpressFulfillmentService(zoneRepository, client, customsValuation, new CustomsDutyLinesService(null), null,
+                currencyRateService, new MockEnvironment(), null);
         ReflectionTestUtils.setField(service, "enabled", false);
         ReflectionTestUtils.setField(service, "quoteTimeoutSeconds", 5L);
         ReflectionTestUtils.setField(service, "volumetricDivisor", 6000.0);

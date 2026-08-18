@@ -337,10 +337,17 @@ public class FulfillmentService {
             return new TrackingProgress(o.getStatus(), o.getStatus());
         }
         List<OrderShipmentEntity> shipments = shipmentRepository.findByOrderIdOrderBySequenceNoAsc(o.getId());
+        // El timeline TAL COMO ESTABA ANTES de sondear. Se lee aquí y no dentro de collectNewSteps porque
+        // pollShipments ya guarda los eventos nuevos de cada guía: releerlo después devolvía también los
+        // que acababan de llegar, todos los pasos salían por «ya conocidos» y no se avisaba de NINGUNO. Con
+        // el reparto en bultos —que hoy usan todos los pedidos— eso dejó al comprador sin un solo correo de
+        // «en tránsito»: llegada al país, en aduana o en reparto se guardaban en silencio. Es el mismo
+        // fallo que ya se corrigió en el push entrante y que aquí seguía vivo.
+        List<OrderTrackingEventEntity> anteriores = trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId());
         TrackingSnapshot snap = pollShipments(o, shipments);
         // Con bultos, los eventos ya se guardaron etiquetados por guía en pollShipments; aquí solo se
         // decide a quién notificar. Sin bultos (pedidos anteriores al reparto) hay que guardarlos.
-        List<TrackingStep> toNotify = collectNewSteps(o, snap, !shipments.isEmpty());
+        List<TrackingStep> toNotify = collectNewSteps(o, snap, !shipments.isEmpty(), anteriores);
         o.setLastTrackedAt(Instant.now());
         advanceTrackingStatus(o, snap.currentStatus());
         OrderStatus current = o.getStatus();
@@ -361,9 +368,11 @@ public class FulfillmentService {
      *
      * @param alreadyPersisted {@code true} cuando el pedido tiene bultos y {@code pollShipments} ya
      *        guardó sus eventos etiquetados por guía; entonces aquí solo se decide a quién notificar.
+     * @param existing el timeline tal como estaba ANTES de sondear al transportista. Lo pasa el llamante
+     *        justamente porque leerlo aquí llegaría tarde: ver la nota de {@link #pollEvents}.
      */
-    private List<TrackingStep> collectNewSteps(Order o, TrackingSnapshot snap, boolean alreadyPersisted) {
-        List<OrderTrackingEventEntity> existing = trackingRepository.findByOrderIdOrderByOccurredAtAsc(o.getId());
+    private List<TrackingStep> collectNewSteps(Order o, TrackingSnapshot snap, boolean alreadyPersisted,
+            List<OrderTrackingEventEntity> existing) {
         Set<String> seen = new HashSet<>();
         for (OrderTrackingEventEntity e : existing) {
             seen.add(e.getStatus() + "|" + e.getDescription());

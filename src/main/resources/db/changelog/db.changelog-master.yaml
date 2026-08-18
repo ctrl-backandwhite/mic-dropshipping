@@ -297,3 +297,5 @@ databaseChangeLog:
       file: db/changelog/schema-v143-destinos-no-servibles.sql
   - include:
       file: db/changelog/schema-v144-cobertura-verificada.sql
+  - include:
+      file: db/changelog/schema-v145-limites-canal.sql

@@ -79,8 +79,8 @@ class Cov04YunExpressShipmentTest {
 
     @BeforeEach
     void setUp() {
-        service = new YunExpressFulfillmentService(zoneRepository, client, customsValuation, new CustomsDutyLinesService(), productRepository,
-                currencyRateService, new MockEnvironment());
+        service = new YunExpressFulfillmentService(zoneRepository, client, customsValuation, new CustomsDutyLinesService(null), productRepository,
+                currencyRateService, new MockEnvironment(), null);
         ReflectionTestUtils.setField(service, "enabled", true);
         ReflectionTestUtils.setField(service, "productCode", "BPA");
         ReflectionTestUtils.setField(service, "productGroupCode", "");
@@ -131,7 +131,31 @@ class Cov04YunExpressShipmentTest {
         return item;
     }
 
-    private static Order pedido(OrderItem... items) {
+    /**
+     * Da por declarable el producto de una línea, salvo que el test haya puesto ya el suyo.
+     *
+     * <p>Sin ficha en el catálogo la línea sale sin partida arancelaria ni peso, y desde que un envío con
+     * la declaración incompleta se corta antes de llamar al transportista, estos pedidos de prueba ni
+     * siquiera llegarían a la parte que quieren comprobar. El producto por defecto es el mínimo declarable;
+     * los tests que miran QUÉ se declara siguen poniendo el suyo y este no lo pisa.
+     */
+    private void declarable(OrderItem item) {
+        Optional<ProductEntity> yaPuesto = productRepository.findById(item.getProductId());
+        if (yaPuesto != null && yaPuesto.isPresent()) {
+            return;
+        }
+        // 500 g a propósito: es el peso que ParcelAggregator da por supuesto cuando el producto no lo
+        // trae, así que el reparto en bultos sale igual que cuando estos pedidos no tenían ficha y las
+        // cuentas de peso que comprueban los tests siguen valiendo.
+        ProductEntity producto = ProductEntity.builder().hsCode("610910").weightGrams(500).build();
+        producto.setId(item.getProductId());
+        when(productRepository.findById(item.getProductId())).thenReturn(Optional.of(producto));
+    }
+
+    private Order pedido(OrderItem... items) {
+        for (OrderItem item : items) {
+            declarable(item);
+        }
         Order order = new Order();
         order.setId(UUID.fromString("11112222-3333-4444-5555-666677778888"));
         order.setOrderNumber("NX-1");

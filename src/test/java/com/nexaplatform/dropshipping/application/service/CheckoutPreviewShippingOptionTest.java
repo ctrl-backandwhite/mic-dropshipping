@@ -51,7 +51,7 @@ class CheckoutPreviewShippingOptionTest {
     private final ProductRepository products = mock(ProductRepository.class);
     private final AffiliateProgramService affiliate = mock(AffiliateProgramService.class);
     private final PromotionService promociones = mock(PromotionService.class);
-    private final CustomsDutyLinesService dutyLines = new CustomsDutyLinesService();
+    private final CustomsDutyLinesService dutyLines = new CustomsDutyLinesService(null);
     private final OrderAmounts orderAmounts = new OrderAmounts(currency);
 
     private final CheckoutPreviewService service = new CheckoutPreviewService(shipping, totals, pricing,
