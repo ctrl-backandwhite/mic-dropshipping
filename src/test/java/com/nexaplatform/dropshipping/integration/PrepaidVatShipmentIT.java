@@ -136,6 +136,40 @@ class PrepaidVatShipmentIT extends BaseIntegration {
     }
 
     @Test
+    @DisplayName("donde el canal YA va DDP, el transportista prepaga y NO se le pide ningún servicio")
+    void elDestinoConCanalDdpPrepagaSinPedirServicio() {
+        // Emiratos, Arabia Saudí, Canadá y México (19-ago-2026): el contrato de YunExpress dice que
+        // nuestros canales FZZXR y THPHR ya van DDP en esos destinos y que el transportista cobra el
+        // impuesto al remitente —5 %, 15 %, 18 % y 33,5 % del valor declarado—. O sea que SÍ prepaga,
+        // pero NO por el IOSS: pedirle allí el servicio V1, que está definido como «prepago del IOSS de
+        // la reforma fiscal de la UE», haría fallar el alta del envío y el pedido se quedaría sin guía.
+        //
+        // Por eso la marca de «prepaga» y el código del servicio son dos cosas distintas y viajan en dos
+        // columnas: la primera dice que al cliente se le cobra aquí, la segunda qué hay que pedirle al
+        // transportista, si es que hay que pedirle algo.
+        sembrarRegla("AE", "DDP", true, null);
+
+        YunExpressRequests.CreateShipment alta = altaDeEnvio(pedido("AE", 1, VALOR_BAJO_CENTS));
+
+        assertThat(alta.extraServices())
+                .as("el canal ya va DDP por contrato: pedir V1 aquí tumba el alta del envío")
+                .isNullOrEmpty();
+    }
+
+    @Test
+    @DisplayName("el servicio que se pide sale del PAÍS, no de una constante global")
+    void elServicioSaleDelPais() {
+        // Si el código viviera solo en la configuración, activar un país nuevo obligaría a desplegar, y
+        // peor: se mandaría el mismo servicio a todos, que es justo lo que no se puede hacer.
+        sembrarRegla("ES", "DDP", true, "V1");
+
+        YunExpressRequests.CreateShipment alta = altaDeEnvio(pedido("ES", 1, VALOR_BAJO_CENTS));
+
+        assertThat(alta.extraServices()).hasSize(1);
+        assertThat(alta.extraServices().getFirst().extraCode()).isEqualTo("V1");
+    }
+
+    @Test
     @DisplayName("a un destino sin esa marca NO se pide el prepago: allí el transportista no liquida nada")
     void elDestinoSinLaMarcaNoPideElPrepago() {
         // Estados Unidos está en DDP como todos los destinos activos, pero fuera del régimen IOSS: pedir
@@ -367,11 +401,22 @@ class PrepaidVatShipmentIT extends BaseIntegration {
      * umbral cae el pedido, no cuánto vale el umbral, que ya certifica {@code CustomsDutyIT}.
      */
     private void sembrarRegla(String pais, String modoFiscal, boolean prepagaElTransportista) {
+        sembrarRegla(pais, modoFiscal, prepagaElTransportista, "V1");
+    }
+
+    /**
+     * @param servicioDePrepago código que hay que pedirle al transportista, o {@code null} si el canal ya
+     *                          va DDP por contrato y no hay que pedirle nada
+     */
+    private void sembrarRegla(String pais, String modoFiscal, boolean prepagaElTransportista,
+            String servicioDePrepago) {
         jdbcTemplate.update("INSERT INTO country_customs_rule (id, country_code, tax_mode,"
                 + " de_minimis_amount, de_minimis_currency, over_threshold_policy, handling_fee_cents,"
-                + " handling_percent_bps, carrier_prepays_vat, active, created_at, updated_at)"
-                + " VALUES (?, ?, ?, ?, 'USD', 'SURCHARGE', 0, 0, ?, true, now(), now())",
-                UUID.randomUUID(), pais, modoFiscal, FRANQUICIA_USD, prepagaElTransportista);
+                + " handling_percent_bps, carrier_prepays_vat, vat_prepay_service_code, active,"
+                + " created_at, updated_at)"
+                + " VALUES (?, ?, ?, ?, 'USD', 'SURCHARGE', 0, 0, ?, ?, true, now(), now())",
+                UUID.randomUUID(), pais, modoFiscal, FRANQUICIA_USD, prepagaElTransportista,
+                servicioDePrepago);
     }
 
     /**

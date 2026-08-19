@@ -109,6 +109,17 @@ public class CountryCustomsRuleEntity extends BaseEntity {
     @Column(name = "carrier_prepays_vat", nullable = false)
     private boolean carrierPrepaysVat;
 
+    /**
+     * Qué servicio adicional hay que pedirle al transportista para que prepague, o {@code null} si el
+     * canal ya va DDP por contrato y no hay que pedirle nada.
+     *
+     * <p>Vive por país y no en la configuración porque NO es el mismo en todas partes: {@code V1} es, por
+     * definición del transportista, el prepago del IOSS de la UE, y mandarlo a un destino de fuera hace
+     * fallar el alta del envío. En Emiratos, Arabia Saudí, Canadá y México el canal liquida solo.
+     */
+    @Column(name = "vat_prepay_service_code", length = 16)
+    private String vatPrepayServiceCode;
+
     @Column(nullable = false)
     private boolean active;
 }

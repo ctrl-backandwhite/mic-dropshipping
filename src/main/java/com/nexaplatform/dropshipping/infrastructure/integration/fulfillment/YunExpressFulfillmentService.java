@@ -1148,13 +1148,22 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
      * desplegar.
      */
     private List<YunExpressRequests.ExtraService> prepaidVatServices(CustomsValuation valuation) {
-        boolean aplica = prepaidVatServiceCode != null && !prepaidVatServiceCode.isBlank()
-                && valuation != null && valuation.carrierPrepaysVat()
+        // EL CÓDIGO SALE DEL PAÍS, no de la configuración. `V1` está definido por el transportista como
+        // «prepago del IOSS de la reforma fiscal de la UE» (云途预缴IOSS附加服务费), así que mandarlo a un
+        // destino de fuera hace fallar el alta del envío y deja el pedido cobrado y sin guía.
+        //
+        // Y hay destinos donde el transportista SÍ prepaga y NO hay que pedirle nada, porque el canal ya
+        // va DDP por contrato: Emiratos, Arabia Saudí, Canadá y México con nuestras líneas FZZXR y THPHR
+        // (v149). Ahí la marca está puesta y el código es nulo, y eso es exactamente lo que significa.
+        String servicioDelPais = valuation == null ? null : valuation.vatPrepayServiceCode();
+        boolean aplica = servicioDelPais != null && !servicioDelPais.isBlank()
+                && prepaidVatServiceCode != null && !prepaidVatServiceCode.isBlank()
+                && valuation.carrierPrepaysVat()
                 && valuation.taxMode() == TaxMode.DDP && !valuation.deMinimisExceeded();
         // null y no lista vacía: así el campo desaparece del JSON en vez de viajar como `[]`, que algunas
         // validaciones del transportista rechazan.
         return aplica
-                ? List.of(new YunExpressRequests.ExtraService(prepaidVatServiceCode.trim(), PREPAID_VAT_LABEL))
+                ? List.of(new YunExpressRequests.ExtraService(servicioDelPais.trim(), PREPAID_VAT_LABEL))
                 : null;
     }
 

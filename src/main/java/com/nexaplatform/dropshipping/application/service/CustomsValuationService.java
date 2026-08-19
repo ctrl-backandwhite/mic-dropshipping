@@ -62,10 +62,27 @@ public class CustomsValuationService {
      * @param blocked             true si la política del país impide vender ese pedido a ese destino
      * @param deMinimisLabel      el límite que bloquea, ya formateado ("150 EUR"); "" si no hay
      * @param carrierPrepaysVat   true si el transportista liquida el IVA del destino con SU número fiscal
+     * @param vatPrepayServiceCode servicio adicional que hay que pedirle para ello, o {@code null} si el
+     *                             canal ya va DDP por contrato y no hay que pedirle nada
      */
     public record CustomsValuation(String countryCode, TaxMode taxMode, int intrinsicValueCents,
             boolean deMinimisExceeded, OverThresholdPolicy policy, int handlingFeeCents, boolean blocked,
-            String deMinimisLabel, boolean carrierPrepaysVat) {
+            String deMinimisLabel, boolean carrierPrepaysVat, String vatPrepayServiceCode) {
+
+        /**
+         * Valoración sin servicio de prepago que pedir.
+         *
+         * <p>Es lo que corresponde a la inmensa mayoría de los destinos —los que no tienen prepago— y a
+         * los que lo tienen por contrato del canal, donde el transportista liquida sin que haya que
+         * pedirle nada. Mantiene además funcionando lo escrito cuando el código del servicio salía de la
+         * configuración global y no de la fila del país.
+         */
+        public CustomsValuation(String countryCode, TaxMode taxMode, int intrinsicValueCents,
+                boolean deMinimisExceeded, OverThresholdPolicy policy, int handlingFeeCents,
+                boolean blocked, String deMinimisLabel, boolean carrierPrepaysVat) {
+            this(countryCode, taxMode, intrinsicValueCents, deMinimisExceeded, policy, handlingFeeCents,
+                    blocked, deMinimisLabel, carrierPrepaysVat, null);
+        }
 
         /** Valor a declarar en aduana (céntimos USD). Hoy coincide con el valor intrínseco de los bienes. */
         public int declaredValueCents() {
@@ -76,7 +93,7 @@ public class CustomsValuationService {
     /** Valoración neutra: sin regla configurada para el país no se altera nada del cálculo actual. */
     private static CustomsValuation neutral(String countryCode, int intrinsicValueCents) {
         return new CustomsValuation(countryCode, TaxMode.DDP, intrinsicValueCents, false,
-                OverThresholdPolicy.SURCHARGE, 0, false, "", false);
+                OverThresholdPolicy.SURCHARGE, 0, false, "", false, null);
     }
 
     /**
@@ -144,7 +161,8 @@ public class CustomsValuationService {
             }
         }
         return new CustomsValuation(countryCode, mode, intrinsic, exceeded, policy, Math.max(0, handling),
-                blocked, blockingLimitLabel(r, intrinsic), r.isCarrierPrepaysVat());
+                blocked, blockingLimitLabel(r, intrinsic), r.isCarrierPrepaysVat(),
+                r.getVatPrepayServiceCode());
     }
 
     /**

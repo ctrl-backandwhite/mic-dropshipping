@@ -107,9 +107,17 @@ class Cov04YunExpressShipmentTest {
         when(client.post(eq(PATH_SUBSCRIBE), any(Object.class))).thenReturn(ok("{\"success\":true}"));
     }
 
+    /**
+     * Valoración de un destino de la UE, donde el prepago se pide con el servicio {@code V1}.
+     *
+     * <p>El código del servicio viaja en la valoración porque desde v149 sale de la fila del PAÍS y no de
+     * una constante: hay destinos —Emiratos, Arabia Saudí, Canadá, México— donde el transportista prepaga
+     * y NO hay que pedirle nada, porque el canal ya va DDP por contrato. Dejarlo nulo aquí sería describir
+     * uno de esos, y entonces no debe pedirse ningún extra.
+     */
     private static CustomsValuation valoracion(boolean deMinimisExceeded) {
         return new CustomsValuation("ES", TaxMode.DDP, 4500, deMinimisExceeded, OverThresholdPolicy.ALLOW, 0,
-                false, "", true);
+                false, "", true, "V1");
     }
 
     private JsonNode ok(String raw) {

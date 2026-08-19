@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
+import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
 import com.nexaplatform.dropshipping.api.exception.ConflictException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
@@ -507,6 +508,19 @@ public class UserUseCaseImpl implements UserUseCase {
     public User changeRole(UUID id, String role) {
         if (role == null) {
             throw new BusinessException("role required");
+        }
+        // NADIE SE CAMBIA EL ROL A SÍ MISMO. Tres líneas más abajo se revocan TODOS los tokens del
+        // usuario —hace falta, o el rol viejo seguiría vivo en su token hasta una hora—, así que un
+        // administrador que se degrade queda expulsado en el acto y sin forma de volver a entrar a
+        // deshacerlo: la única salida sería tocar la base de datos a mano. Y si era el último
+        // administrador, la plataforma se queda sin nadie que pueda administrarla.
+        //
+        // `deleteUser` ya se niega a borrar cuentas de administrador por lo mismo; esto cierra la otra
+        // puerta, que lleva al mismo sitio y encima no tiene vuelta atrás desde la aplicación.
+        String enSesion = SecurityUtils.currentSubject();
+        if (enSesion != null && enSesion.equals(id.toString())) {
+            throw new BusinessException("No puedes cambiar tu propio rol: perderías el acceso al panel "
+                    + "en el acto y no podrías deshacerlo. Pídeselo a otro administrador.");
         }
         User u = loadUser(id);
         u.setRole(UserRole.valueOf(role.toUpperCase()));
