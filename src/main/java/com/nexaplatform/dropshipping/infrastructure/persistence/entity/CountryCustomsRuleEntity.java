@@ -61,7 +61,17 @@ public class CountryCustomsRuleEntity extends BaseEntity {
     @Column(name = "over_threshold_surcharge_cents", nullable = false)
     private int overThresholdSurchargeCents;
 
-    /** Arancel estimado sobre el valor intrínseco cuando se supera el umbral (puntos básicos). */
+    /**
+     * Arancel estimado sobre el valor intrínseco cuando se supera el umbral (puntos básicos).
+     *
+     * <p><b>Solo surte efecto si se cumplen dos condiciones a la vez</b>, y hoy no se cumplen en ningún
+     * país: que el pedido supere la franquicia del destino y que la política sea {@code SURCHARGE}. Los 52
+     * países con franquicia real están en {@code BLOCK} (por encima no se vende) y los 34 de
+     * {@code SURCHARGE} tienen la franquicia a 0, que el cálculo lee como «no configurada». Así que
+     * teclear aquí un porcentaje desde el panel de administración <b>no cambia lo que se cobra</b> hasta
+     * que se arregle eso. Está a 0 en los 86 países (19-ago-2026). El por qué completo, en el javadoc de
+     * {@code CustomsValuationService}.
+     */
     @Column(name = "duty_rate_bps", nullable = false)
     private int dutyRateBps;
 
