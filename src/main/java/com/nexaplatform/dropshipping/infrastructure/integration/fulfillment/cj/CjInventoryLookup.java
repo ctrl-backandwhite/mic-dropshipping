@@ -12,7 +12,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,15 +25,28 @@ import java.util.concurrent.ConcurrentMap;
  *
  * <p><b>Por qué hace falta.</b> Nuestro catálogo viene de 1688 y no sabe nada del catálogo de CJ, pero
  * CJ no emite una guía sin el {@code vid} de la variante que sale del almacén. El puente lo pone la
- * operativa, no el código: el dueño deposita la mercancía en CJ <b>a mano</b> y la da de alta con el
- * <b>mismo SKU</b> que ya tiene la variante aquí. Por eso basta con preguntarle a CJ por ese SKU.
+ * operativa: la mercancía se compra al proveedor cuando entra el pedido y se manda al almacén de CJ, que
+ * la registra <b>con el mismo SKU</b> que ya tiene la variante aquí. Por eso basta con preguntarle a CJ
+ * por ese SKU.
+ *
+ * <p><b>Y por qué se pregunta en el momento de despachar.</b> Porque hasta que CJ no ha recibido el lote,
+ * su API no lo devuelve: no hay forma de saberlo antes. El dueño mira en el panel de CJ si ya está
+ * recibido y libera el pedido; esta consulta es la que lo confirma contra la API antes de emitir la guía,
+ * y la que destapa el caso en que el SKU registrado no coincide con el nuestro.
  *
  * <p><b>Por qué se cachea.</b> El {@code vid} de un SKU no cambia, y CJ limita a <b>una petición por
  * segundo</b>. Un despacho de seis líneas resolviendo cada línea contra la red tardaría seis segundos
- * en el mejor caso y chocaría con el límite en cuanto haya dos pedidos a la vez. Solo se guarda lo
- * encontrado: una ausencia no se cachea a propósito, porque su causa habitual es una errata al depositar
- * el lote y, en cuanto se corrige en el panel de CJ, el siguiente intento tiene que verlo sin esperar a
- * un reinicio.
+ * en el mejor caso y chocaría con el límite en cuanto haya dos pedidos a la vez.
+ *
+ * <p><b>Y por qué los ausentes también, pero solo un rato.</b> Al principio no se guardaban: la causa
+ * habitual de una ausencia es una errata al depositar el lote, y al corregirla en el panel de CJ el
+ * siguiente intento tenía que verlo sin esperar. El problema apareció al empezar a preguntar por esto en
+ * cada despacho: el planificador reintenta <b>cada minuto</b> los pedidos que esperan mercancía, y como la
+ * mercancía tarda días en llegar, eso son días preguntando una vez por minuto y por SKU contra un límite
+ * de una petición por segundo —el mismo que usa el checkout para cotizar, que sí está delante del
+ * cliente—. Así que ahora se recuerda que no estaba durante {@value #MINUTOS_DE_MEMORIA} minutos: la
+ * corrección de una errata sigue viéndose sola, con ese retraso como máximo, y las preguntas bajan a una
+ * de cada cinco pasadas.
  *
  * <p><b>Lo que se asume de la API, y por qué está aislado.</b> El endpoint es
  * {@code POST /api2.0/v1/product/stock/privateInventory/querySkuDetailPage}, que según la documentación
@@ -70,7 +85,19 @@ public class CjInventoryLookup {
      */
     private static final int FILAS_POR_PAGINA = 50;
 
+    /** Minutos que se recuerda que un SKU todavía no estaba depositado. Ver el javadoc de la clase. */
+    public static final int MINUTOS_DE_MEMORIA = 5;
+
+    private static final Duration MEMORIA_DE_LOS_AUSENTES = Duration.ofMinutes(MINUTOS_DE_MEMORIA);
+
     private final ConcurrentMap<String, String> cache = new ConcurrentHashMap<>();
+
+    /** Cuándo se preguntó por última vez por un SKU que no estaba. */
+    private final ConcurrentMap<String, Instant> ausentes = new ConcurrentHashMap<>();
+
+    /** Inyectable para poder comprobar la caducidad sin esperar de verdad. */
+    private Clock reloj = Clock.systemUTC();
+
     private final ConsultaDeInventario consulta;
     private final CjAuthService auth;
 
@@ -91,8 +118,14 @@ public class CjInventoryLookup {
 
     /** Para las pruebas: sustituye la llamada de red sin tocar ni la caché ni el parseo. */
     CjInventoryLookup(ConsultaDeInventario consulta) {
+        this(consulta, Clock.systemUTC());
+    }
+
+    /** Para las pruebas que necesitan mover el reloj sin esperar de verdad. */
+    CjInventoryLookup(ConsultaDeInventario consulta, Clock reloj) {
         this.auth = null;
         this.consulta = consulta;
+        this.reloj = reloj;
     }
 
     /** La consulta al inventario de CJ, aparte para poder probar el resto sin red. */
@@ -119,12 +152,25 @@ public class CjInventoryLookup {
         if (cacheado != null) {
             return Optional.of(cacheado);
         }
+        if (seguiaSinEstarHaceNada(buscado)) {
+            return Optional.empty();
+        }
         Optional<String> encontrado = preguntar(buscado);
-        encontrado.ifPresent(variantId -> cache.put(buscado, variantId));
+        encontrado.ifPresent(variantId -> {
+            cache.put(buscado, variantId);
+            ausentes.remove(buscado);
+        });
         if (encontrado.isEmpty()) {
+            ausentes.put(buscado, reloj.instant());
             log.warn("{}", mensajeDeSkuNoEncontrado(buscado));
         }
         return encontrado;
+    }
+
+    /** ¿Se preguntó ya por este SKU hace poco y CJ dijo que no lo tenía? */
+    private boolean seguiaSinEstarHaceNada(String sku) {
+        Instant ultimaVez = ausentes.get(sku);
+        return ultimaVez != null && reloj.instant().isBefore(ultimaVez.plus(MEMORIA_DE_LOS_AUSENTES));
     }
 
     /**

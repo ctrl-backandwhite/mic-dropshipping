@@ -165,6 +165,12 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
         // El transportista cotiza dos canales, del más barato al más caro, y `amountUsdCents` es el del
         // más barato: es exactamente lo que devuelve el servicio real.
         when(fulfillment.isSupported(anyString())).thenReturn(true);
+        // Cómo se llama y que ya puede emitir la guía. Lo primero es lo que el pedido guarda al cobrar y
+        // lo que decide después a quién pedírsela; lo segundo, lo que solo el transportista sabe —CJ no
+        // puede hasta tener la mercancía dada de alta—. Un simulacro contesta null y false a las dos
+        // cosas, y entonces esta compra se quedaría sin despachar por un motivo ajeno a lo que prueba.
+        when(fulfillment.nombre()).thenReturn(TRANSPORTISTA);
+        when(fulfillment.readyToShip(any())).thenReturn(true);
         when(fulfillment.quote(anyString(), any())).thenReturn(new ShippingQuote(true, PAIS, PORTE_BARATO,
                 "Standard Shipping", "Standard Shipping", 5, 8, "EU", CANALES_COTIZADOS));
         when(fulfillment.createShipments(any())).thenReturn(List.of(new FulfillmentResult(TRANSPORTISTA,

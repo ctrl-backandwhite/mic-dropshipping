@@ -85,6 +85,17 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class YunExpressFulfillmentService implements FulfillmentProvider {
 
+    /**
+     * Cómo se llama este transportista dentro de la plataforma. Es lo que se guarda en el pedido al cobrar
+     * y lo que decide, al despachar, a quién se le pide la guía.
+     *
+     * <p>Hay que declararlo aunque parezca redundante: {@code FulfillmentProvider.nombre()} trae
+     * {@code DESCONOCIDO} por defecto, y con ese valor el pedido no sabría de quién es, la pantalla
+     * enseñaría «Transporte estándar» en vez del nombre real y el despacho no encontraría a nadie a quien
+     * pedirle la guía. El mismo texto que ya usan la migración v147 y el enum de la pantalla.
+     */
+    public static final String NOMBRE = "YUNEXPRESS";
+
     // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
     private static final String SHIPPED = "SHIPPED";
     private static final String SUCCESS = "success";
@@ -256,6 +267,11 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     }
 
     // ── Cobertura ────────────────────────────────────────────────────────────────────────────────
+
+    @Override
+    public String nombre() {
+        return NOMBRE;
+    }
 
     @Override
     public boolean isSupported(String countryCode) {

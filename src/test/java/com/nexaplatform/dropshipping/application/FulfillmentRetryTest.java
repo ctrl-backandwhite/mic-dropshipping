@@ -1,5 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
+import static com.nexaplatform.dropshipping.config.FulfillmentTestUtil.unSoloTransportista;
+
 import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
@@ -66,7 +68,7 @@ class FulfillmentRetryTest {
         notificationUseCase = mock(NotificationUseCase.class);
         shipmentRepository = mock(OrderShipmentRepository.class);
         service = new FulfillmentService(orderRepository, mock(OrderTrackingEventRepository.class),
-                provider, mock(UserRepository.class), mock(NotificationsPublisher.class), mock(OrderEmailService.class),
+                unSoloTransportista(provider), mock(UserRepository.class), mock(NotificationsPublisher.class), mock(OrderEmailService.class),
                 new ObjectMapper(), new YunExpressEventCipher(), opsAlertService, notificationUseCase, shipmentRepository,
                 mock(OrderShipmentItemRepository.class), mock(TrackingViewMapper.class), readyPurchases());
 

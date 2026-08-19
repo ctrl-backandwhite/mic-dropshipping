@@ -66,6 +66,36 @@ import java.util.concurrent.ConcurrentMap;
  * «aquí no llego»—. {@link #supportedCountries()} devuelve vacío a propósito: inventar una lista sería
  * prometerle al cliente destinos que nadie ha comprobado, y el banner de cobertura ya se pinta con la
  * tabla de zonas del otro transportista.
+ *
+ * <h2>Estado a 19-ago-2026: cotiza, pero todavía no puede despachar</h2>
+ *
+ * <p>El circuito está entero —cotización, creación del pedido, seguimiento y webhook firmado— y la
+ * autenticación funciona contra la API de verdad (hay token en {@code carrier_token} con refresco válido
+ * hasta feb-2027). Lo que falta no es código:
+ *
+ * <ul>
+ *   <li><b>No hay mercancía en el inventario privado de CJ.</b> Confirmado por el dueño. El circuito es
+ *       bajo demanda: entra el pedido, se compra la mercancía al proveedor y se manda al almacén de CJ,
+ *       que la registra con nuestro SKU. Hasta que CJ no la ha recibido, <b>su API no la devuelve</b>, así
+ *       que no hay forma de saberlo antes de tiempo. Por eso el despacho pregunta en el último momento
+ *       ({@link #readyToShip}) y el pedido espera en vez de fallar: antes se intentaba la guía, fallaba en
+ *       firme y el pedido caía en la bandeja de incidencias con el cliente ya cobrado.</li>
+ *   <li><b>En local se despacha en modo prueba</b> ({@code CJ_SANDBOX=true}, {@code isSandbox=1}): CJ
+ *       responde que todo fue bien y no envía nada. Real solo en {@code pre} y {@code pro}, donde el
+ *       entorno fuerza el 0 pase lo que pase con la propiedad.</li>
+ *   <li><b>En producción está apagado.</b> {@code nexadrop.cj.enabled} vale {@code false} salvo que se
+ *       ponga {@code CJ_ENABLED} en las variables de Railway, junto con {@code CJ_API_KEY}.</li>
+ *   <li><b>Sin certificar de punta a punta.</b> Falta recorrer el circuito con un SKU real y contrastar a
+ *       mano una tarifa contra el panel de CJ, que es lo único que descubre si lo que cotizamos es lo que
+ *       CJ cobra.</li>
+ * </ul>
+ *
+ * <p><b>Fiscalidad: lo que CJ cotiza es solo transporte.</b> Su {@code freightCalculateTip} devuelve
+ * {@code taxesFee}, {@code clearanceOperationFee} y {@code tariff} a nulo, y sigue así aunque se le pase un
+ * número de IOSS —lo único que cambia es que desaparece el aviso {@code 7001}—. El IVA y el arancel del
+ * destino los calcula la plataforma y se cobran en el checkout; el porte, CJ. Ver {@link #iossTypeDe} para
+ * el régimen que se declara y para el límite de 150 EUR de su IOSS, y el javadoc de
+ * {@code CustomsValuationService} para lo que se está cobrando de verdad en cada destino.
  */
 @Slf4j
 @Service
@@ -278,6 +308,46 @@ public class CjFulfillmentService implements FulfillmentProvider {
      * cobrado, así que lo que toca es dejarlo en la bandeja de incidencias con el motivo escrito, no
      * propagar una excepción cruda que el admin no pueda leer.
      */
+    /**
+     * CJ solo puede emitir la guía cuando ya tiene la mercancía dada de alta.
+     *
+     * <p>{@code createOrderV3} exige el identificador de variante del inventario privado, y ese
+     * identificador nace cuando CJ <b>recibe e inventaría</b> el lote con nuestro SKU. Preguntárselo antes
+     * de emitir es lo que separa «esperar a que llegue» de «cobrarle al cliente una guía que no va a
+     * salir», que es lo que ocurría hasta ahora: se intentaba, fallaba en firme y el pedido caía en la
+     * bandeja de incidencias con el cliente ya cobrado.
+     *
+     * <p>No sirve mirar el estado de la compra en nuestra base. Puede decir «en el almacén» y CJ no tener
+     * nada dado de alta —es justo lo que pasa cuando el SKU se teclea mal al depositar el lote—, así que
+     * la única respuesta que vale es la suya. Se apoya en la caché de {@link CjInventoryLookup}, que no
+     * guarda los ausentes: un SKU que aún no está se vuelve a preguntar, y uno que ya apareció no gasta
+     * más llamadas contra un límite de una por segundo.
+     */
+    @Override
+    public boolean readyToShip(Order order) {
+        if (!habilitado) {
+            return false;
+        }
+        List<OrderItem> lineas = lineasDe(order);
+        if (lineas.isEmpty()) {
+            return false;
+        }
+        for (OrderItem linea : lineas) {
+            String sku = linea.getSkuSnapshot();
+            if (sku == null || sku.isBlank()) {
+                log.warn("::> [CJ] El pedido {} tiene una línea sin SKU: no se puede saber qué mercancía "
+                        + "sacar del almacén de CJ", order.getOrderNumber());
+                return false;
+            }
+            if (inventario.variantIdDe(sku).isEmpty()) {
+                log.info("::> [CJ] El pedido {} espera: el SKU {} todavía no está en el inventario de CJ",
+                        order.getOrderNumber(), sku);
+                return false;
+            }
+        }
+        return true;
+    }
+
     @Override
     public List<FulfillmentResult> createShipments(Order order) {
         if (!habilitado) {
@@ -438,6 +508,21 @@ public class CjFulfillmentService implements FulfillmentProvider {
      * <p>Se pregunta a la tabla de países y no a una lista de la UE escrita aquí: el régimen prepagable
      * de hoy es el IOSS de la UE, pero es la misma marca que ya decide si se le pide el prepago a
      * YunExpress, y dos listas distintas del mismo hecho acaban divergiendo.
+     *
+     * <p><b>Por qué se usa el IOSS de CJ y no el nuestro.</b> Es lo que sostiene la promesa de que al
+     * cliente no le reclamen nada al recibir: el IVA de importación lo liquida CJ con su número fiscal, y
+     * el cliente lo ha pagado antes, dentro del precio del checkout. CJ nos factura ese IVA más un 3 % de
+     * ese IVA como comisión de gestión, que hoy se absorbe en el margen a sabiendas (ver
+     * {@code CustomsValuationService}, donde está la decisión y el campo que la repercutiría).
+     *
+     * <p><b>CUIDADO: esto depende de una regla que vive en otro sitio.</b> El IOSS de CJ <b>no cubre
+     * pedidos de más de 150 EUR</b>, y aquí no se comprueba el importe: se manda {@code iossType=3}
+     * siempre que el país tenga el prepago marcado. Hoy es correcto porque los 52 países con franquicia
+     * están en política {@code BLOCK} y un pedido que pase de su umbral no se puede comprar, así que nunca
+     * llega uno de más de 150 EUR a este punto. Si alguien pasa un país de la UE a {@code SURCHARGE} o
+     * sube su franquicia, esta línea empezará a declarar como prepagado un IVA que CJ no puede liquidar, y
+     * el cargo aparecerá en la aduana del cliente sin que nada falle por aquí. Si ese día llega, el arreglo
+     * es comprobar el valor declarado antes de pedir el IOSS, no relajar el umbral.
      */
     private int iossTypeDe(String pais) {
         return aduana.carrierPrepaysVatFor(pais) ? IOSS_DE_CJ : SIN_IOSS;

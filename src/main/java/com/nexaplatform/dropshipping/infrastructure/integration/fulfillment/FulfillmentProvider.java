@@ -163,6 +163,23 @@ public interface FulfillmentProvider {
      */
     List<FulfillmentResult> createShipments(Order order);
 
+    /**
+     * ¿Puede este transportista emitir ya la guía de este pedido?
+     *
+     * <p>No sustituye a las comprobaciones que hace la plataforma —que el pedido esté liberado y que la
+     * mercancía vaya camino del almacén—, sino que añade lo que <b>solo el transportista sabe</b>. Para
+     * quien recibe y reexpide basta con que la mercancía esté en camino, y por eso el valor por defecto es
+     * que sí; para quien exige tener la mercancía dada de alta en su propio inventario antes de emitir
+     * nada, no.
+     *
+     * <p>Un «no» aquí significa <b>todavía no</b>, no un error: el pedido espera y se reintenta. Lo que
+     * evita es emitir una guía —que se paga y arranca el reloj del seguimiento del cliente— sobre
+     * mercancía que el transportista no tiene.
+     */
+    default boolean readyToShip(Order order) {
+        return true;
+    }
+
     /** Consulta el tracking del envío (estado actual + pasos). */
     TrackingSnapshot track(String trackingNumber, Instant forwardedAt, String countryCode);
 

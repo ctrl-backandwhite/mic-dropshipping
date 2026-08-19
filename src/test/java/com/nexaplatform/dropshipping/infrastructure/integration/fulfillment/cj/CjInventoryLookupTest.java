@@ -3,6 +3,11 @@ package com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.cj;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.ZoneOffset;
+import java.time.ZoneId;
+import java.time.Instant;
+import java.time.Duration;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -15,9 +20,10 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 /**
  * Del SKU nuestro al identificador de variante que CJ exige para emitir la guía.
  *
- * <p>El dueño deposita la mercancía en el almacén de CJ <b>a mano</b> y la da de alta con el
+ * <p>La mercancía se compra cuando entra el pedido y se manda al almacén de CJ, que la registra con el
  * <b>mismo SKU</b> que ya tienen nuestras variantes. Ese es todo el puente entre los dos catálogos: el
  * nuestro viene de 1688 y no sabe nada del {@code vid} de CJ, y {@code createOrderV3} no despacha sin él.
+ * Mientras CJ no haya recibido el lote, su API no lo devuelve.
  *
  * <p>Las respuestas de aquí <b>no son capturas reales</b>: al 18-ago-2026 el inventario privado de CJ
  * está vacío, así que están reconstruidas a partir de la lista de campos que publica la documentación de
@@ -218,15 +224,60 @@ class CjInventoryLookupTest {
     }
 
     @Test
-    @DisplayName("un SKU que no está no se cachea: al corregir la errata en CJ vuelve a preguntarse")
-    void noCacheaLoQueNoEncontro() {
+    @DisplayName("al corregir la errata en CJ vuelve a preguntarse, pasada la ventana de los ausentes")
+    void vuelveAPreguntarPorLoQueNoEncontro() {
+        // Antes no se recordaban los ausentes en absoluto, y la corrección se veía en el intento
+        // siguiente. Ahora se recuerdan unos minutos para no preguntar una vez por minuto durante los
+        // días que tarda la mercancía en llegar (ver el javadoc de la clase). Lo que no puede pasar es
+        // que se recuerden para siempre: entonces un lote depositado después no se vería nunca y el
+        // pedido no saldría jamás.
         InventarioFalso inventario = new InventarioFalso();
-        CjInventoryLookup buscador = new CjInventoryLookup(inventario);
+        RelojDePrueba reloj = new RelojDePrueba();
+        CjInventoryLookup buscador = new CjInventoryLookup(inventario, reloj);
+
+        assertThat(buscador.variantIdDe(SKU)).isEmpty();
+        inventario.responde(SKU, RESPUESTA_CON_LA_VARIANTE);
+        reloj.avanza(Duration.ofMinutes(CjInventoryLookup.MINUTOS_DE_MEMORIA + 1L));
+
+        assertThat(buscador.variantIdDe(SKU)).contains("1564849338719199233");
+    }
+
+    @Test
+    @DisplayName("dentro de la ventana no se vuelve a molestar a CJ por un SKU que no tenía")
+    void dentroDeLaVentanaNoRepregunta() {
+        // Es lo que evita martillear una API de una petición por segundo mientras un pedido espera.
+        InventarioFalso inventario = new InventarioFalso();
+        CjInventoryLookup buscador = new CjInventoryLookup(inventario, new RelojDePrueba());
 
         assertThat(buscador.variantIdDe(SKU)).isEmpty();
         inventario.responde(SKU, RESPUESTA_CON_LA_VARIANTE);
 
-        assertThat(buscador.variantIdDe(SKU)).contains("1564849338719199233");
+        assertThat(buscador.variantIdDe(SKU)).isEmpty();
+    }
+
+    /** Un reloj que solo avanza cuando la prueba lo dice: en esta batería no se espera por tiempo. */
+    private static final class RelojDePrueba extends Clock {
+
+        private Instant ahora = Instant.parse("2026-08-19T10:00:00Z");
+
+        void avanza(Duration cuanto) {
+            ahora = ahora.plus(cuanto);
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return ahora;
+        }
     }
 
     @Test
