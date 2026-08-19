@@ -41,6 +41,47 @@ import java.util.Optional;
  *
  * <p>Sin fila para el país el resultado es neutro: DDP, sin umbral evaluado y sin recargos. Es decir, el
  * comportamiento previo a esta funcionalidad — nunca encarece un destino por falta de configuración.
+ *
+ * <h2>Qué se está cobrando de verdad hoy (medido el 19-ago-2026)</h2>
+ *
+ * <p>El código de esta clase cubre los tres cargos, pero <b>los datos de la tabla no los activan todos</b>.
+ * Esto es el estado real, no el diseño, y conviene leerlo antes de tocar cualquier tarifa. Son 86 países
+ * activos, todos en {@link TaxMode#DDP}, repartidos en dos grupos que se comportan de forma distinta:
+ *
+ * <ul>
+ *   <li><b>52 con franquicia real y política {@code BLOCK}</b> — la UE-27, GB, CH, NO, CA, AU, NZ, MX, BR,
+ *       AR, CL, CO, PE, UY, EC, DO, IL, TR y el Golfo. Por encima de su umbral <b>no se vende</b>, y hay
+ *       tres motivos que apuntan al mismo sitio: por encima de 150 EUR la UE exige despacho formal con
+ *       arancel; el canal contratado a YunExpress no acepta bultos de 150 EUR / 155 USD o más (así está
+ *       cargado en {@code carrier_max_amount} en esos 27 países); y el IOSS de CJ <b>no cubre pedidos de
+ *       más de 150 EUR</b>, de modo que por encima no podría prepagar el IVA y el envío dejaría de ser
+ *       DDP. Por debajo del umbral sí se cobra el derecho por partida de la UE (3 EUR por línea de
+ *       declaración y bulto).</li>
+ *   <li><b>34 con franquicia 0 y política {@code SURCHARGE}</b> — AD AL BA BB BO BS BZ CR FJ GT GY HN HT
+ *       IS JM LB MD ME MK NI OM PA PG PR PY RS SM SR SV TT UA US VE XK. Aquí está el hueco: ver abajo.</li>
+ * </ul>
+ *
+ * <p><b>Hueco 1: el arancel <i>ad valorem</i> no se cobra en ningún destino.</b> No es que falte el
+ * cálculo —está en {@code valuate}, {@code percentOf(intrinsic, dutyRateBps)}—, es que ninguna combinación
+ * de datos llega a ejecutarlo. En los 52 de {@code BLOCK} porque el pedido se rechaza antes de superar la
+ * franquicia; en los 34 de {@code SURCHARGE} porque {@link #exceedsDeMinimis} exige un umbral mayor que
+ * cero y el suyo es cero, así que nunca se consideran «por encima». Y aunque se ejecutara, cobraría cero:
+ * {@code duty_rate_bps} está a 0 en los 86 países. El destino más expuesto es <b>EE. UU.</b> (con Puerto
+ * Rico): franquicia 0, {@code SURCHARGE} y {@code carrier_prepays_vat = false}, es decir, ni arancel ni
+ * IVA prepagado, justo donde EE. UU. eliminó su franquicia para los envíos procedentes de China.
+ *
+ * <p><b>Hueco 2: la comisión del transportista por prepagar el IVA se absorbe en el margen.</b>
+ * {@code vat_prepay_percent_bps} está a 0 en los 86 países, y es el campo que la repercutiría. YunExpress
+ * cobra el <b>2 % del valor declarado</b>; CJ cobra el IVA liquidado <b>más un 3 % de ese IVA</b> (sobre 25
+ * EUR de mercancía al 21 % son 0,16 EUR frente a 0,50 EUR, así que CJ sale más barato porque la base es
+ * mucho menor). Decisión del dueño el 19-ago-2026: <b>se absorbe a sabiendas</b>, igual que se hizo con el
+ * 2 % de YunExpress. Queda escrito aquí para que no aparezca como una sorpresa al conciliar la factura: no
+ * es un olvido, es una decisión, y el campo está listo para el día en que se quiera repercutir.
+ *
+ * <p><b>Lo que CJ cotiza es solo transporte.</b> Su {@code freightCalculateTip} devuelve {@code taxesFee},
+ * {@code clearanceOperationFee} y {@code tariff} a nulo, y sigue igual aunque se le pase un número de
+ * IOSS. El impuesto y el arancel del destino los pone esta clase; el porte, el transportista. Si algún día
+ * eso cambia, se cobraría dos veces.
  */
 @Slf4j
 @Service
@@ -62,10 +103,27 @@ public class CustomsValuationService {
      * @param blocked             true si la política del país impide vender ese pedido a ese destino
      * @param deMinimisLabel      el límite que bloquea, ya formateado ("150 EUR"); "" si no hay
      * @param carrierPrepaysVat   true si el transportista liquida el IVA del destino con SU número fiscal
+     * @param vatPrepayServiceCode servicio adicional que hay que pedirle para ello, o {@code null} si el
+     *                             canal ya va DDP por contrato y no hay que pedirle nada
      */
     public record CustomsValuation(String countryCode, TaxMode taxMode, int intrinsicValueCents,
             boolean deMinimisExceeded, OverThresholdPolicy policy, int handlingFeeCents, boolean blocked,
-            String deMinimisLabel, boolean carrierPrepaysVat) {
+            String deMinimisLabel, boolean carrierPrepaysVat, String vatPrepayServiceCode) {
+
+        /**
+         * Valoración sin servicio de prepago que pedir.
+         *
+         * <p>Es lo que corresponde a la inmensa mayoría de los destinos —los que no tienen prepago— y a
+         * los que lo tienen por contrato del canal, donde el transportista liquida sin que haya que
+         * pedirle nada. Mantiene además funcionando lo escrito cuando el código del servicio salía de la
+         * configuración global y no de la fila del país.
+         */
+        public CustomsValuation(String countryCode, TaxMode taxMode, int intrinsicValueCents,
+                boolean deMinimisExceeded, OverThresholdPolicy policy, int handlingFeeCents,
+                boolean blocked, String deMinimisLabel, boolean carrierPrepaysVat) {
+            this(countryCode, taxMode, intrinsicValueCents, deMinimisExceeded, policy, handlingFeeCents,
+                    blocked, deMinimisLabel, carrierPrepaysVat, null);
+        }
 
         /** Valor a declarar en aduana (céntimos USD). Hoy coincide con el valor intrínseco de los bienes. */
         public int declaredValueCents() {
@@ -76,7 +134,7 @@ public class CustomsValuationService {
     /** Valoración neutra: sin regla configurada para el país no se altera nada del cálculo actual. */
     private static CustomsValuation neutral(String countryCode, int intrinsicValueCents) {
         return new CustomsValuation(countryCode, TaxMode.DDP, intrinsicValueCents, false,
-                OverThresholdPolicy.SURCHARGE, 0, false, "", false);
+                OverThresholdPolicy.SURCHARGE, 0, false, "", false, null);
     }
 
     /**
@@ -139,12 +197,19 @@ public class CustomsValuationService {
                     }
                 }
             }
+            // El arancel ad valorem del destino. Es la ÚNICA línea que lo cobra, y hoy no se ejecuta en
+            // ningún país: los 52 con franquicia real están en BLOCK —el pedido se rechaza antes de
+            // superarla— y los 34 de SURCHARGE la tienen a 0, con lo que `exceeded` nunca es true (ver
+            // exceedsDeMinimis). Aunque se ejecutara, sumaría cero: `duty_rate_bps` está a 0 en los 86
+            // países. Es decir, el arancel está implementado y sin cobrar, y hacen falta las dos cosas
+            // —activar la rama y cargar las tasas— para que empiece a cobrarse. Medido el 19-ago-2026.
             if (exceeded && policy == OverThresholdPolicy.SURCHARGE) {
                 handling += r.getOverThresholdSurchargeCents() + percentOf(intrinsic, r.getDutyRateBps());
             }
         }
         return new CustomsValuation(countryCode, mode, intrinsic, exceeded, policy, Math.max(0, handling),
-                blocked, blockingLimitLabel(r, intrinsic), r.isCarrierPrepaysVat());
+                blocked, blockingLimitLabel(r, intrinsic), r.isCarrierPrepaysVat(),
+                r.getVatPrepayServiceCode());
     }
 
     /**
@@ -232,6 +297,18 @@ public class CustomsValuationService {
      *
      * <p>Un umbral de 0 significa "no configurado": no se evalúa y devuelve false, para no encarecer todos
      * los pedidos de un destino por falta de dato.
+     *
+     * <p><b>Ese cero es hoy el que desactiva el arancel en 34 países.</b> Es prudente como respaldo —más
+     * vale no cobrar de más por un dato que nadie cargó—, pero mezcla dos situaciones que no son la misma:
+     * «aquí no hay franquicia, todo tributa desde el primer céntimo», que es el caso de EE. UU. desde que
+     * eliminó la suya para los envíos procedentes de China, y «todavía no sabemos cuál es», que es el caso
+     * de los Balcanes y el Caribe de esa misma lista. Las dos se escriben 0 y las dos se comportan como la
+     * segunda, así que en EE. UU. no se cobra arancel y nadie lo ve.
+     *
+     * <p>Para cerrarlo hay que poder distinguirlas: un país marcado como «sin franquicia» debe entrar en la
+     * rama de {@code SURCHARGE} desde el primer céntimo, y uno «sin datos» debe seguir sin evaluarse pero
+     * dejando constancia. Mientras no exista esa distinción, subir {@code duty_rate_bps} en esos 34 países
+     * no cambia nada: el porcentaje se calcula solo cuando {@code exceeded} es true.
      */
     private boolean exceedsDeMinimis(CountryCustomsRuleEntity rule, int intrinsicValueCents) {
         int thresholdCents = toUsdCents(rule.getDeMinimisAmount(), rule.getDeMinimisCurrency());

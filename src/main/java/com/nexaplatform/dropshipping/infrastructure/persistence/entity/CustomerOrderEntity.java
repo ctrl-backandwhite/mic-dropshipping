@@ -72,6 +72,18 @@ public class CustomerOrderEntity extends BaseEntity {
     @Column(name = "shipping_channel_code", length = 32)
     private String shippingChannelCode;
 
+    /**
+     * Qué transportista lo lleva. Los pedidos anteriores al 18-ago-2026 son todos de YunExpress, que es
+     * lo que la migración deja escrito: dejarlo vacío obligaría a adivinarlo al despachar un pedido
+     * antiguo.
+     */
+    @Column(name = "shipping_carrier", length = 32)
+    private String shippingCarrier;
+
+    /** Nombre de la línea contratada. CJ lo exige para emitir la guía; el código no le vale. */
+    @Column(name = "shipping_channel_name", length = 96)
+    private String shippingChannelName;
+
     @Column(name = "shipping_cents", nullable = false)
     private int shippingCents;
 

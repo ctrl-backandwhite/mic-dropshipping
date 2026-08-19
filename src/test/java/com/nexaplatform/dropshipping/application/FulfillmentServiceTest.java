@@ -1,5 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
+import org.junit.jupiter.api.BeforeEach;
+import com.nexaplatform.dropshipping.application.service.FulfillmentProviderSelector;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService;
@@ -30,6 +32,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.mockito.Mockito.lenient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -51,6 +54,8 @@ class FulfillmentServiceTest {
     @Mock
     FulfillmentProvider cainiao;
     @Mock
+    FulfillmentProviderSelector transportistas;
+    @Mock
     UserRepository userRepository;
     @Mock
     OrderEmailService orderEmailService;
@@ -62,6 +67,18 @@ class FulfillmentServiceTest {
     SupplierPurchaseService supplierPurchaseService;
     @InjectMocks
     FulfillmentService service;
+
+    /**
+     * El escenario de estas pruebas es el de un solo transportista. Desde que el servicio elige a quién
+     * pedirle la guía según lo que el pedido tenga anotado, hay que decirle que ese único transportista
+     * es el que atiende a todos y que puede despachar ya; si no, un simulacro contesta «no» a las dos
+     * cosas y ninguna de estas pruebas llegaría a ejercitar lo que quiere comprobar.
+     */
+    @BeforeEach
+    void unSoloTransportistaQuePuedeDespachar() {
+        lenient().when(transportistas.para(any())).thenReturn(Optional.of(cainiao));
+        lenient().when(cainiao.readyToShip(any())).thenReturn(true);
+    }
 
     private static Order order(OrderStatus status, String trackingNumber) {
         return Order.builder().id(UUID.randomUUID()).orderNumber("NX-1").status(status)

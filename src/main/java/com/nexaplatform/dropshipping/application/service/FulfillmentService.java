@@ -77,7 +77,14 @@ public class FulfillmentService {
 
     private final OrderRepository orderRepository;
     private final OrderTrackingEventRepository trackingRepository;
-    private final FulfillmentProvider fulfillment;
+    /**
+     * A quién se le pide la guía y el seguimiento de cada pedido.
+     *
+     * <p>Antes aquí había un {@code FulfillmentProvider} suelto, y con dos transportistas eso significaba
+     * usar siempre el primario: un pedido cobrado por CJ se despachaba por YunExpress y se seguía
+     * preguntándole a YunExpress por una guía que no era suya.
+     */
+    private final FulfillmentProviderSelector transportistas;
     private final UserRepository userRepository;
     private final NotificationsPublisher notificationsPublisher;
     private final OrderEmailService orderEmailService;
@@ -134,9 +141,29 @@ public class FulfillmentService {
         if (!readyForAttempt(o)) {
             return; // rendido, o aún dentro de la espera del backoff
         }
+        // La guía se le pide a quien cobró el porte. Si ese transportista no está —CJ apagado, o un valor
+        // que ya no existe—, NO se despacha por el otro: sería pagar un porte distinto del cobrado y
+        // enviar por quien el cliente no eligió. Se deja en la bandeja para que alguien lo mire.
+        FulfillmentProvider transportista = transportistas.para(o).orElse(null);
+        if (transportista == null) {
+            recordFailure(o, new FulfillmentFailure(FulfillmentFailure.Kind.PERMANENT,
+                    "El pedido " + o.getOrderNumber() + " se cobró por el transportista "
+                            + o.getShippingCarrier() + ", que ahora mismo no está disponible. No se despacha"
+                            + " por otro: habría que cobrar de nuevo. Actívalo o corrige el pedido."));
+            return;
+        }
+        // Lo que solo el transportista sabe: CJ no puede emitir la guía mientras no tenga la mercancía
+        // dada de alta en su inventario. Es «todavía no», no un fallo, así que se espera al siguiente
+        // intento sin ensuciar la bandeja de incidencias. Va detrás del backoff a propósito: CJ admite
+        // una petición por segundo y así el ritmo lo marca la espera que ya existe.
+        if (!transportista.readyToShip(o)) {
+            log.debug("Fulfillment: {} aún no puede emitir la guía del pedido {}; se reintentará",
+                    transportista.nombre(), o.getOrderNumber());
+            return;
+        }
         List<FulfillmentResult> results;
         try {
-            results = fulfillment.createShipments(o);
+            results = transportista.createShipments(o);
         } catch (RuntimeException e) {
             recordFailure(o, FulfillmentFailure.of(e));
             return;
@@ -440,9 +467,18 @@ public class FulfillmentService {
     }
 
     private TrackingSnapshot pollShipments(Order o, List<OrderShipmentEntity> shipments) {
+        // Al transportista del pedido, no al primario: preguntarle a YunExpress por una guía de CJ no da
+        // error, devuelve «no sé nada» —y el cliente se queda mirando un seguimiento que nunca avanza—.
+        FulfillmentProvider transportista = transportistas.para(o).orElse(null);
+        if (transportista == null) {
+            // Sin transportista no se inventa nada: un hito falso en el timeline es peor que ninguno.
+            log.warn("Seguimiento: el pedido {} se cobró por {}, que no está disponible; no se sondea",
+                    o.getOrderNumber(), o.getShippingCarrier());
+            return new TrackingSnapshot(o.getStatus(), List.of());
+        }
         if (shipments.isEmpty()) {
             // Pedido anterior al reparto en guías: se sondea con el número del pedido, como siempre.
-            return fulfillment.track(o.getTrackingNumber(), o.getForwardedAt(), o.getShippingCountry());
+            return transportista.track(o.getTrackingNumber(), o.getForwardedAt(), o.getShippingCountry());
         }
         List<TrackingStep> all = new ArrayList<>();
         OrderStatus aggregated = OrderStatus.DELIVERED;
@@ -452,7 +488,7 @@ public class FulfillmentService {
             if (reference == null) {
                 continue;
             }
-            TrackingSnapshot own = fulfillment.track(reference, o.getForwardedAt(), o.getShippingCountry());
+            TrackingSnapshot own = transportista.track(reference, o.getForwardedAt(), o.getShippingCountry());
             String anterior = shipment.getStatus();
             shipment.setStatus(own.currentStatus().name());
             shipment.setLastTrackedAt(Instant.now());
@@ -850,9 +886,15 @@ public class FulfillmentService {
         }
     }
 
-    /** El proveedor activo, cuando es YunExpress (única implementación cableada hoy). */
+    /**
+     * YunExpress, cuando hace falta su implementación concreta.
+     *
+     * <p>Lo piden sus propios mensajes —el webhook llega con su formato y su cifrado—, que no traen
+     * pedido con el que decidir. Se le pregunta al selector por su nombre en vez de mirar «el» proveedor
+     * inyectado: desde que hay dos, ese ya no es necesariamente él.
+     */
     private Optional<YunExpressFulfillmentService> yunExpressProvider() {
-        return fulfillment instanceof YunExpressFulfillmentService yun ? Optional.of(yun) : Optional.empty();
+        return transportistas.deTipo(YunExpressFulfillmentService.class);
     }
 
     private static String firstNodeText(JsonNode node, String... keys) {

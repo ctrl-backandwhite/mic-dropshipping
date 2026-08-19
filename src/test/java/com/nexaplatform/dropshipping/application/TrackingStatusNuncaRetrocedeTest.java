@@ -1,5 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
+import static com.nexaplatform.dropshipping.config.FulfillmentTestUtil.unSoloTransportista;
+
 import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -60,7 +62,7 @@ class TrackingStatusNuncaRetrocedeTest {
     void setUp() {
         orderRepository = mock(OrderRepository.class);
         provider = mock(YunExpressFulfillmentService.class);
-        service = new FulfillmentService(orderRepository, mock(OrderTrackingEventRepository.class), provider,
+        service = new FulfillmentService(orderRepository, mock(OrderTrackingEventRepository.class), unSoloTransportista(provider),
                 mock(UserRepository.class), mock(NotificationsPublisher.class), mock(OrderEmailService.class), new ObjectMapper(),
                 mock(YunExpressEventCipher.class), mock(OpsAlertService.class), mock(NotificationUseCase.class),
                 mock(OrderShipmentRepository.class), mock(OrderShipmentItemRepository.class),

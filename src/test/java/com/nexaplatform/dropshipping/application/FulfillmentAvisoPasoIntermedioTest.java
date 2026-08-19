@@ -1,5 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
+import static com.nexaplatform.dropshipping.config.FulfillmentTestUtil.unSoloTransportista;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
@@ -94,7 +96,7 @@ class FulfillmentAvisoPasoIntermedioTest {
         SupplierPurchaseService compras = mock(SupplierPurchaseService.class);
         lenient().when(compras.readyForInternationalShipment(any())).thenReturn(true);
 
-        service = new FulfillmentService(orderRepository, trackingRepository, provider, userRepository,
+        service = new FulfillmentService(orderRepository, trackingRepository, unSoloTransportista(provider), userRepository,
                 mock(NotificationsPublisher.class), orderEmailService, new ObjectMapper(),
                 mock(YunExpressEventCipher.class), mock(OpsAlertService.class), mock(NotificationUseCase.class),
                 shipmentRepository, mock(OrderShipmentItemRepository.class), mock(TrackingViewMapper.class),

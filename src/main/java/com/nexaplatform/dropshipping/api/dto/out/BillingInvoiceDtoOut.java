@@ -22,6 +22,16 @@ public class BillingInvoiceDtoOut {
     @Schema(description = "Moneda de cobro")
     private String currency;
 
+    /**
+     * Importe YA formateado en la divisa en que se emitió la factura ("99,00 €", "￥5.000"). El frontend
+     * SÓLO pinta esta cadena: ningún cálculo ni formateo de precio vive en el cliente.
+     *
+     * <p>Lo componía el navegador con {@code (total / 100)} más el código de divisa, y en las divisas sin
+     * céntimos (yen, won) Stripe manda unidades enteras, así que la factura salía cien veces más barata.
+     */
+    @Schema(description = "Importe total ya formateado en la divisa de la factura, listo para pintar")
+    private String totalFormatted;
+
     @Schema(description = "Estado: paid / open / void / ...")
     private String status;
 

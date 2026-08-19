@@ -16,6 +16,7 @@ import com.nexaplatform.dropshipping.application.service.UnserviceableZoneServic
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
+import com.nexaplatform.dropshipping.application.service.FulfillmentRouter;
 import com.nexaplatform.dropshipping.application.usecase.impl.OrderUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
@@ -93,7 +94,10 @@ class PedidoPaisDelMargenTest {
     @Mock StockService stockService;
     @Mock PaymentUseCase paymentUseCase;
     @Mock OrderEmailService orderEmailService;
-    @Mock FulfillmentProvider fulfillment;
+    @Mock
+    FulfillmentProvider fulfillment;
+    @Mock
+    FulfillmentRouter router;
     @Mock CheckoutTotalsService checkoutTotalsService;
     @Mock OperatorCommissionService operatorCommissionService;
     @Mock OrderIndexer orderIndexer;
@@ -117,7 +121,7 @@ class PedidoPaisDelMargenTest {
     void catalogoYCobroListos() {
         precioUnitario(new BigDecimal("10.00"));
         when(fulfillment.isSupported(anyString())).thenReturn(true);
-        when(fulfillment.quote(anyString(), any()))
+        when(router.cotizar(anyString(), any(), anyList()))
                 .thenReturn(new ShippingQuote(true, DESTINO, 0, "YunExpress", "Standard", 7, 15, "EU"));
         when(affiliateProgramService.referralDiscountCents(any(), anyLong())).thenReturn(0L);
 

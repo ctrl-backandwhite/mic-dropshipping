@@ -22,6 +22,7 @@ import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.CustomsDataCheck;
 import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
+import com.nexaplatform.dropshipping.application.service.FulfillmentRouter;
 import com.nexaplatform.dropshipping.application.service.ParcelAggregator;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.PromotionService;
@@ -128,6 +129,11 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final PaymentUseCase paymentUseCase;
     private final OrderEmailService orderEmailService;
     private final FulfillmentProvider fulfillment;
+    /**
+     * Cotiza preguntando a TODOS los transportistas que puedan llevar el pedido. El proveedor de arriba
+     * se queda para lo que todavía va por uno solo; la cotización ya no puede ir por ahí.
+     */
+    private final FulfillmentRouter router;
     private final CheckoutTotalsService checkoutTotalsService;
     private final CustomsDutyLinesService customsDutyLinesService;
     private final UnserviceableZoneService unserviceableZoneService;
@@ -395,13 +401,24 @@ public class OrderUseCaseImpl implements OrderUseCase {
         // Envío: tarifa por destino del carrier. Si el país no está cubierto, el envío queda en 0 aquí
         // (el checkout del storefront bloquea antes el destino no soportado). El bulto se arma con el
         // MISMO agregador que la vista previa del checkout: peso, medidas del paquete y batería.
-        ShippingQuote quote = fulfillment.quote(order.getShippingCountry(), parcel.build());
+        // Se cotiza con el ENRUTADOR, el mismo que usó la vista previa, y no con un transportista
+        // suelto. Preguntarle solo a uno tiene una consecuencia que no se ve venir: la opción que el
+        // cliente eligió del OTRO no aparecería en esta cotización, el resolutor la daría por inválida y
+        // caería a la más barata de quien sí contestó. El cliente elegiría una cosa y se le cobraría y
+        // enviaría otra — la misma familia de fallo que el descuadre del 18-ago-2026, por otra puerta.
+        ShippingQuote quote = router.cotizar(order.getShippingCountry(), parcel.build(),
+                productosDe(order));
         // La forma de envío que eligió el cliente, revalidada contra lo que cotiza AHORA: el código
         // llega del navegador y aceptarlo sin comprobar dejaría pagar el precio de un canal más barato
         // —o colarse por uno postal, fuera del IVA prepagado—. El importe sale de la cotización.
         ShippingOption chosen = ShippingOptionResolver.resolve(quote, shippingOptionCode);
         if (chosen != null) {
             order.setShippingChannelCode(chosen.code());
+            // Sin esto, al despachar habría que adivinar a quién pedirle la guía: los códigos de dos
+            // transportistas no se parecen en nada y no hay forma de deducirlo del código.
+            order.setShippingCarrier(chosen.carrier());
+            // El nombre, además del código: es lo que CJ exige para emitir la guía.
+            order.setShippingChannelName(chosen.name());
         }
         int shippingCents = quote.supported()
                 ? (chosen != null ? chosen.amountUsdCents() : quote.amountUsdCents())
@@ -1371,6 +1388,25 @@ public class OrderUseCaseImpl implements OrderUseCase {
             }
         }
         return false;
+    }
+
+    /**
+     * Los productos del pedido, que el enrutador necesita para decidir qué líneas admiten la mercancía:
+     * la de ropa de YunExpress solo lleva textil. Las líneas cuyo producto ya no está en el catálogo se
+     * omiten en vez de bloquear: no hay ficha que consultar y dejar el pedido sin envío sería peor.
+     */
+    private java.util.List<ProductEntity> productosDe(Order order) {
+        java.util.List<ProductEntity> productos = new java.util.ArrayList<>();
+        if (order.getItems() == null) {
+            return productos;
+        }
+        for (OrderItem item : order.getItems()) {
+            if (item.getProductId() == null) {
+                continue;
+            }
+            productRepository.findById(item.getProductId()).ifPresent(productos::add);
+        }
+        return productos;
     }
 
     /**

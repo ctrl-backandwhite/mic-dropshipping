@@ -10,6 +10,7 @@ import com.nexaplatform.dropshipping.api.dto.out.PaymentMethodDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SetupIntentDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SubscribeStatusDtoOut;
 import com.nexaplatform.dropshipping.api.dto.in.SavePayPalDtoIn;
+import com.nexaplatform.dropshipping.api.mapper.BillingInvoiceDtoMapper;
 import com.nexaplatform.dropshipping.application.service.SavedPaymentMethodsService;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.domain.model.CustomerSubscription;
@@ -34,6 +35,7 @@ public class MeBillingController implements MeBillingApi {
 
     private final CustomerSubscriptionUseCase useCase;
     private final SavedPaymentMethodsService savedMethods;
+    private final BillingInvoiceDtoMapper invoiceMapper;
 
     @Override
     public ResponseEntity<BillingConfigDtoOut> billingConfig(Authentication auth) {
@@ -109,10 +111,8 @@ public class MeBillingController implements MeBillingApi {
 
     @Override
     public ResponseEntity<List<BillingInvoiceDtoOut>> invoices(Authentication auth) throws StripeException {
-        List<BillingInvoiceDtoOut> out = useCase.listInvoices(UUID.fromString(auth.getName())).stream()
-                .map(i -> BillingInvoiceDtoOut.builder().number(i.number()).total(i.total()).currency(i.currency())
-                        .status(i.status()).created(i.created()).pdfUrl(i.pdfUrl()).hostedUrl(i.hostedUrl()).build())
-                .toList();
-        return ResponseEntity.ok(out);
+        // El importe formateado lo pone el mapper con el servicio central de divisas: el navegador ya no
+        // hace cuentas con el total, que en las divisas sin céntimos venía cien veces mal.
+        return ResponseEntity.ok(invoiceMapper.toDtoOutList(useCase.listInvoices(UUID.fromString(auth.getName()))));
     }
 }

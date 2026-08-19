@@ -117,6 +117,20 @@ public interface FulfillmentProvider {
         }
     }
 
+    /**
+     * Cómo se llama este transportista dentro de la plataforma: {@code YUNEXPRESS}, {@code CJ}.
+     *
+     * <p>Hace falta desde que hay más de uno (18-ago-2026). Es lo que se guarda en el pedido al cobrar y
+     * lo que decide, al despachar, a quién se le pide la guía: los códigos de línea de dos
+     * transportistas no se parecen en nada y no se pueden distinguir mirándolos.
+     *
+     * <p>Tiene valor por defecto para no obligar a tocar las implementaciones antiguas, pero quien tenga
+     * que aparecer en un pedido debe devolver el suyo.
+     */
+    default String nombre() {
+        return "DESCONOCIDO";
+    }
+
     /** ¿El proveedor envía a este país? */
     boolean isSupported(String countryCode);
 
@@ -148,6 +162,23 @@ public interface FulfillmentProvider {
      * repartir devuelve una lista de un elemento —con sus datos completos.
      */
     List<FulfillmentResult> createShipments(Order order);
+
+    /**
+     * ¿Puede este transportista emitir ya la guía de este pedido?
+     *
+     * <p>No sustituye a las comprobaciones que hace la plataforma —que el pedido esté liberado y que la
+     * mercancía vaya camino del almacén—, sino que añade lo que <b>solo el transportista sabe</b>. Para
+     * quien recibe y reexpide basta con que la mercancía esté en camino, y por eso el valor por defecto es
+     * que sí; para quien exige tener la mercancía dada de alta en su propio inventario antes de emitir
+     * nada, no.
+     *
+     * <p>Un «no» aquí significa <b>todavía no</b>, no un error: el pedido espera y se reintenta. Lo que
+     * evita es emitir una guía —que se paga y arranca el reloj del seguimiento del cliente— sobre
+     * mercancía que el transportista no tiene.
+     */
+    default boolean readyToShip(Order order) {
+        return true;
+    }
 
     /** Consulta el tracking del envío (estado actual + pasos). */
     TrackingSnapshot track(String trackingNumber, Instant forwardedAt, String countryCode);

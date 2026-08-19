@@ -22,7 +22,9 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.util.List;
@@ -52,12 +54,31 @@ class UserTokenServiceTest {
     private JwtDecoder jwtDecoder;
     private UserTokenService service;
 
+    /**
+     * El par RSA se genera UNA VEZ para toda la clase, no una por prueba.
+     *
+     * <p>Generar una clave de 2048 bits cuesta unos 0,7 s, y en `@BeforeEach` eso se pagaba en cada
+     * una de las pruebas: 6,5 s de los 128 s de toda la batería se iban aquí. La clave es dato de
+     * prueba inmutable —se firma y se valida con ella, no se modifica—, así que compartirla no
+     * cambia ninguna aserción. El `kid` sí se sigue sorteando en cada prueba, que es lo único que
+     * alguna comprueba que sea distinto.
+     */
+    private static final KeyPair PAR_RSA = generarParRsa();
+
+    private static KeyPair generarParRsa() {
+        try {
+            KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
+            gen.initialize(2048);
+            return gen.generateKeyPair();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("sin RSA no se puede firmar nada en las pruebas", e);
+        }
+    }
+
     @BeforeEach
     void setUp() throws Exception {
         // JWKSource RSA real en memoria → firma y validación reales (NimbusJwtEncoder/Decoder).
-        KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
-        gen.initialize(2048);
-        java.security.KeyPair pair = gen.generateKeyPair();
+        KeyPair pair = PAR_RSA;
         kid = UUID.randomUUID().toString();
         RSAKey rsaKey = new RSAKey.Builder((RSAPublicKey) pair.getPublic())
                 .privateKey((RSAPrivateKey) pair.getPrivate())

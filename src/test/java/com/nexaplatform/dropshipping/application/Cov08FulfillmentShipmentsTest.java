@@ -1,5 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
+import static com.nexaplatform.dropshipping.config.FulfillmentTestUtil.unSoloTransportista;
+
 import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -80,7 +82,7 @@ class Cov08FulfillmentShipmentsTest {
         shipmentRepository = mock(OrderShipmentRepository.class);
         shipmentItemRepository = mock(OrderShipmentItemRepository.class);
         trackingViewMapper = mock(TrackingViewMapper.class);
-        service = new FulfillmentService(orderRepository, trackingRepository, provider, mock(UserRepository.class), mock(NotificationsPublisher.class),
+        service = new FulfillmentService(orderRepository, trackingRepository, unSoloTransportista(provider), mock(UserRepository.class), mock(NotificationsPublisher.class),
                 mock(OrderEmailService.class), new ObjectMapper(), mock(YunExpressEventCipher.class),
                 mock(OpsAlertService.class), mock(NotificationUseCase.class), shipmentRepository, shipmentItemRepository, trackingViewMapper, readyPurchases());
 

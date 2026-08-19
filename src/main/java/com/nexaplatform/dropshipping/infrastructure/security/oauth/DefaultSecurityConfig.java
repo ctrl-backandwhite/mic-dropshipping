@@ -9,7 +9,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
+import org.springframework.security.oauth2.jwt.JwtDecoderFactory;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
@@ -65,6 +67,23 @@ public class DefaultSecurityConfig {
         return new OAuthRedirectResolver(frontBaseUrl, mobileOauthCallbackUrl);
     }
 
+    /**
+     * Descodificador del ID token de los logins sociales. Spring lo recoge de aquí por su tipo
+     * ({@code OAuth2LoginConfigurer.getJwtDecoderFactoryBean()}) y con él sustituye al suyo, que descarga
+     * las claves públicas del proveedor en cada intento y solo le concede medio segundo —de ahí que el
+     * acceso con Google fallara de forma intermitente—. El detalle está en
+     * {@link ResilientOidcIdTokenDecoderFactory}.
+     */
+    @Bean
+    public JwtDecoderFactory<ClientRegistration> idTokenDecoderFactory() {
+        return new ResilientOidcIdTokenDecoderFactory();
+    }
+
+    @Bean
+    public OAuthLoginFailureHandler oauthLoginFailureHandler(OAuthRedirectResolver oauthRedirectResolver) {
+        return new OAuthLoginFailureHandler(oauthRedirectResolver);
+    }
+
     @Bean
     public GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler(UserUseCase userUseCase,
             UserTokenService userTokenService, DeviceSessionService deviceSessionService,
@@ -79,7 +98,7 @@ public class DefaultSecurityConfig {
     public SecurityFilterChain defaultFilterChain(HttpSecurity http,
             GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler,
             GithubOAuth2UserService githubOAuth2UserService,
-            OAuthRedirectResolver oauthRedirectResolver) {
+            OAuthLoginFailureHandler oauthLoginFailureHandler) {
         // Instancia local y no un @Bean: Spring Boot registra automáticamente en la cadena de filtros
         // del contenedor cualquier bean de tipo Filter, con lo que este actuaría también sobre
         // peticiones ajenas a esta cadena de seguridad. Aquí solo lo usa quien debe.
@@ -130,11 +149,10 @@ public class DefaultSecurityConfig {
                         // servicio de usuario. Google sí lo habla y se queda con el que trae Spring.
                         .userInfoEndpoint(userInfo -> userInfo.userService(githubOAuth2UserService))
                         .successHandler(googleOAuth2SuccessHandler)
-                        // El fallo también tiene que volver al cliente que arrancó: si no, la aplicación
-                        // móvil se quedaría esperando en el navegador del sistema sin recuperar el foco.
-                        .failureHandler((req, res, ex) -> res
-                                .sendRedirect(oauthRedirectResolver.error(OAuthClientTargetFilter.resolve(req),
-                                        "google")))
+                        // El fallo vuelve al cliente que arrancó (si no, la aplicación móvil se quedaría
+                        // esperando en el navegador del sistema sin recuperar el foco) y, sobre todo, queda
+                        // anotado en el registro con el motivo que da el proveedor.
+                        .failureHandler(oauthLoginFailureHandler)
                         .permitAll())
                 // Anota el cliente de origen ANTES de que Spring redirija al proveedor; después ya no
                 // habría ocasión, porque la vuelta llega en otra petición.

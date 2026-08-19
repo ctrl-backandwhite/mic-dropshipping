@@ -15,6 +15,7 @@ import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
+import com.nexaplatform.dropshipping.application.service.FulfillmentRouter;
 import com.nexaplatform.dropshipping.application.usecase.impl.OrderUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.enums.OverThresholdPolicy;
@@ -89,6 +90,8 @@ class OrderUseCaseImplTest {
     @Mock
     FulfillmentProvider cainiao;
     @Mock
+    FulfillmentRouter router;
+    @Mock
     CheckoutTotalsService checkoutTotalsService;
 
     @Mock
@@ -108,7 +111,7 @@ class OrderUseCaseImplTest {
     @BeforeEach
     void setup() {
         // Por defecto, sin envío en los tests de billing (no altera el total = subtotal).
-        lenient().when(cainiao.quote(any(), any(FulfillmentProvider.ParcelSpec.class)))
+        lenient().when(router.cotizar(any(), any(FulfillmentProvider.ParcelSpec.class), anyList()))
                 .thenReturn(ShippingQuote.unsupported("XX"));
         // Por defecto, sin impuesto ni recargo de despacho: total = subtotal + envío, como en los
         // tests de billing existentes. El envío devuelto es el mismo que entra (sin handling fee).

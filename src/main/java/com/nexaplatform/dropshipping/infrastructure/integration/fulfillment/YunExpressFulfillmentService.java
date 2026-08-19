@@ -25,6 +25,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Produ
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Service;
@@ -75,8 +76,25 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
+// Desde que hay un segundo transportista (CJ, 18-ago-2026) hay DOS beans de FulfillmentProvider, y tres
+// sitios lo inyectan por tipo: OrderUseCaseImpl, FulfillmentService y ShippingQuoteService. Sin este
+// @Primary el contexto no arranca por ambigüedad. Manda YunExpress porque es quien tiene la tabla de
+// zonas —de ahí sale el banner de cobertura— y quien ya despachaba todo lo anterior; lo que decide de
+// verdad qué transportista lleva cada pedido es FulfillmentRouter, que los recibe a los dos en lista.
+@Primary
 @RequiredArgsConstructor
 public class YunExpressFulfillmentService implements FulfillmentProvider {
+
+    /**
+     * Cómo se llama este transportista dentro de la plataforma. Es lo que se guarda en el pedido al cobrar
+     * y lo que decide, al despachar, a quién se le pide la guía.
+     *
+     * <p>Hay que declararlo aunque parezca redundante: {@code FulfillmentProvider.nombre()} trae
+     * {@code DESCONOCIDO} por defecto, y con ese valor el pedido no sabría de quién es, la pantalla
+     * enseñaría «Transporte estándar» en vez del nombre real y el despacho no encontraría a nadie a quien
+     * pedirle la guía. El mismo texto que ya usan la migración v147 y el enum de la pantalla.
+     */
+    public static final String NOMBRE = "YUNEXPRESS";
 
     // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
     private static final String SHIPPED = "SHIPPED";
@@ -249,6 +267,11 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
     }
 
     // ── Cobertura ────────────────────────────────────────────────────────────────────────────────
+
+    @Override
+    public String nombre() {
+        return NOMBRE;
+    }
 
     @Override
     public boolean isSupported(String countryCode) {
@@ -1141,13 +1164,22 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
      * desplegar.
      */
     private List<YunExpressRequests.ExtraService> prepaidVatServices(CustomsValuation valuation) {
-        boolean aplica = prepaidVatServiceCode != null && !prepaidVatServiceCode.isBlank()
-                && valuation != null && valuation.carrierPrepaysVat()
+        // EL CÓDIGO SALE DEL PAÍS, no de la configuración. `V1` está definido por el transportista como
+        // «prepago del IOSS de la reforma fiscal de la UE» (云途预缴IOSS附加服务费), así que mandarlo a un
+        // destino de fuera hace fallar el alta del envío y deja el pedido cobrado y sin guía.
+        //
+        // Y hay destinos donde el transportista SÍ prepaga y NO hay que pedirle nada, porque el canal ya
+        // va DDP por contrato: Emiratos, Arabia Saudí, Canadá y México con nuestras líneas FZZXR y THPHR
+        // (v149). Ahí la marca está puesta y el código es nulo, y eso es exactamente lo que significa.
+        String servicioDelPais = valuation == null ? null : valuation.vatPrepayServiceCode();
+        boolean aplica = servicioDelPais != null && !servicioDelPais.isBlank()
+                && prepaidVatServiceCode != null && !prepaidVatServiceCode.isBlank()
+                && valuation.carrierPrepaysVat()
                 && valuation.taxMode() == TaxMode.DDP && !valuation.deMinimisExceeded();
         // null y no lista vacía: así el campo desaparece del JSON en vez de viajar como `[]`, que algunas
         // validaciones del transportista rechazan.
         return aplica
-                ? List.of(new YunExpressRequests.ExtraService(prepaidVatServiceCode.trim(), PREPAID_VAT_LABEL))
+                ? List.of(new YunExpressRequests.ExtraService(servicioDelPais.trim(), PREPAID_VAT_LABEL))
                 : null;
     }
 

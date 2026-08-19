@@ -299,3 +299,11 @@ databaseChangeLog:
       file: db/changelog/schema-v144-cobertura-verificada.sql
   - include:
       file: db/changelog/schema-v145-limites-canal.sql
+  - include:
+      file: db/changelog/schema-v146-token-del-transportista.sql
+  - include:
+      file: db/changelog/schema-v147-transportista-del-pedido.sql
+  - include:
+      file: db/changelog/schema-v148-iva-destinos-restantes.sql
+  - include:
+      file: db/changelog/schema-v149-prepago-iva-por-pais.sql
