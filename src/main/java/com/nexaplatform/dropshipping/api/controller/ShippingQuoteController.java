@@ -123,7 +123,20 @@ public class ShippingQuoteController {
              */
             String subtotalFormatted,
             /** Una entrada por línea del carrito, con su unitario y su importe, ya formateados. */
-            List<QuoteLine> items) {
+            List<QuoteLine> items,
+            /**
+             * Total del pedido en céntimos de DÓLAR: producto + envío + impuesto.
+             *
+             * <p>Va además del total formateado porque el checkout necesita compararlo con el saldo del
+             * monedero, que se lleva en céntimos de dólar. Sin este número, la única salida sería que el
+             * navegador convirtiera —o interpretara el texto «21,60 €»— para decidir si el saldo llega, y
+             * eso es exactamente lo que la norma de precios prohíbe: el front pinta, no calcula.
+             *
+             * <p>Y es el TOTAL, no el subtotal. Comparar el saldo contra el subtotal deja pasar pedidos
+             * que el cobro rechaza después: el cliente confirma, se crea el pedido y el cargo falla con
+             * el envío y el impuesto por medio.
+             */
+            int totalUsdCents) {
     }
 
     /**
@@ -131,12 +144,55 @@ public class ShippingQuoteController {
      * canónico de la línea entera, redondeando una única vez. Por eso viaja calculado desde el servidor.
      */
     /**
-     * Una forma de envío ofrecida al cliente. {@code code} es lo que hay que devolver al pagar; el
-     * nombre del canal del transportista NO se enseña —«云途全球服装专线挂号» no le dice nada a nadie—,
-     * lo pinta el front con su propio texto a partir del plazo y el precio.
+     * Una forma de envío ofrecida al cliente. {@code code} es lo que hay que devolver al pagar.
+     *
+     * <p>El nombre del canal NO se enseña —«云途全球服装专线挂号» no le dice nada a nadie—; el rótulo
+     * comercial lo pone el front a partir del precio y el plazo. Lo que sí se enseña es
+     * {@code carrierName}: <b>con qué empresa viaja el paquete</b> (decisión del dueño, 19-ago-2026).
+     * Lo compone el backend y no el navegador para que se llame igual en todas las pantallas y en los
+     * correos.
      */
     public record ShippingOptionOut(String code, int amountUsdCents, String amountFormatted,
-            int etaMinDays, int etaMaxDays) {
+            int etaMinDays, int etaMaxDays, String carrierName) {
+    }
+
+    /**
+     * Cómo se le presenta al cliente cada transportista.
+     *
+     * <p>En un enum y no en un {@code Map} porque son constantes de negocio con nombre propio, y porque
+     * así añadir un transportista obliga a decidir cómo se llama en vez de dejar que se cuele su
+     * identificador interno en la pantalla.
+     */
+    public enum NombreDelTransportista {
+
+        YUNEXPRESS("YUNEXPRESS", "YunExpress"),
+        CJ("CJ", "CJ Dropshipping");
+
+        private final String interno;
+        private final String visible;
+
+        NombreDelTransportista(String interno, String visible) {
+            this.interno = interno;
+            this.visible = visible;
+        }
+
+        /**
+         * El nombre que ve el cliente.
+         *
+         * <p>Un transportista todavía sin rótulo cae en «Transporte estándar» en vez de dejar el hueco
+         * o soltar su identificador interno: la pantalla sigue siendo comprensible el día que se añada
+         * uno nuevo y nadie se acuerde de pasar por aquí.
+         */
+        public static String visibleDe(String interno) {
+            if (interno != null) {
+                for (NombreDelTransportista nombre : values()) {
+                    if (nombre.interno.equalsIgnoreCase(interno)) {
+                        return nombre.visible;
+                    }
+                }
+            }
+            return "Transporte estándar";
+        }
     }
 
     public record QuoteLine(UUID productId, UUID variantId, int quantity, String unitFormatted,
@@ -181,7 +237,8 @@ public class ShippingQuoteController {
                         .map(o -> new ShippingOptionOut(o.code(), o.amountUsdCents(),
                                 currencyService.formatDisplay(currencyService.usdToDisplay(
                                         java.math.BigDecimal.valueOf(o.amountUsdCents(), 2)), code),
-                                o.etaMinDays(), o.etaMaxDays()))
+                                o.etaMinDays(), o.etaMaxDays(),
+                                NombreDelTransportista.visibleDe(o.carrier())))
                         .toList(),
                 preview.shippingOption() != null ? preview.shippingOption().code() : null,
                 preview.subtotalUsdCents(), preview.totals().customsHandlingCents(),
@@ -190,7 +247,8 @@ public class ShippingQuoteController {
                 preview.lines().stream()
                         .map(l -> new QuoteLine(l.productId(), l.variantId(), l.quantity(), l.unitFormatted(),
                                 l.lineSubtotalFormatted()))
-                        .toList());
+                        .toList(),
+                preview.totals().totalCents(preview.subtotalUsdCents() - preview.discountUsdCents()));
         return ResponseEntity.ok(body);
     }
 

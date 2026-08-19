@@ -5,9 +5,12 @@ import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.cj.C
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.cj.CjToken;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.cj.CjTokenClient;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CarrierTokenRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -58,6 +61,39 @@ class CjTokenPersistidoIT extends BaseIntegration {
     private CjAuthService servicio;
     @Autowired
     private CarrierTokenRepository repositorio;
+
+    /** Una transacción de solo lectura, igual que la que abre el checkout al cotizar. */
+    private TransactionTemplate plantilla;
+
+    @BeforeEach
+    void transaccionDeSoloLectura() {
+        plantilla = new TransactionTemplate(gestorDeTransacciones);
+        plantilla.setReadOnly(true);
+    }
+
+    @Autowired
+    private PlatformTransactionManager gestorDeTransacciones;
+
+    @Test
+    @DisplayName("el token se guarda aunque quien lo pida esté en una transacción de SOLO LECTURA")
+    void seGuardaDesdeUnaTransaccionDeSoloLectura() {
+        // Este es el caso real, y por eso está aquí y no en una prueba unitaria: la cotización del
+        // checkout entra por `CheckoutPreviewService.compute`, que es `@Transactional(readOnly = true)`.
+        // Con la propagación por defecto, pedir el token se une a ESA transacción, y Hibernate descarta
+        // las escrituras de una transacción de lectura: el token se guardaba en el aire, sin error, y en
+        // cada cotización se pedía uno nuevo contra un límite de UNA petición por segundo.
+        //
+        // Se comprobó en el entorno local el 19-ago-2026: 18 opciones cotizadas y la tabla con cero filas.
+        when(clienteDeCj.obtenerConApiKey(anyString())).thenReturn(
+                new CjToken(TOKEN_LARGO, REFRESCO, OPEN_ID, Instant.now().plus(Duration.ofDays(90))));
+
+        String token = plantilla.execute(estado -> servicio.tokenVigente());
+
+        assertThat(token).isEqualTo(TOKEN_LARGO);
+        assertThat(repositorio.findByCarrier("CJ"))
+                .as("si no se guarda, cada cotización del checkout gasta una autenticación")
+                .isPresent();
+    }
 
     @Test
     @DisplayName("un token de 566 caracteres se guarda y se relee sin recortarse")

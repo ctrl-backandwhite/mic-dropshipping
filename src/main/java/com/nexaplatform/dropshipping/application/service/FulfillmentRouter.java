@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 
 /**
  * Una sola lista de formas de envío, preguntando a todos los transportistas que puedan llevar el pedido.
@@ -112,23 +111,31 @@ public class FulfillmentRouter {
     }
 
     /**
-     * Deja una sola línea por nombre comercial, la más barata.
+     * Deja una sola opción por PLAZO, la más barata.
      *
-     * <p>Se compara por NOMBRE y no por código porque el mismo servicio tiene identificadores distintos
-     * en cada transportista que lo revende: es el nombre lo único que delata que son el mismo camión.
-     * Dos líneas con nombres distintos no se funden aunque cuesten igual, porque no hay razón para creer
-     * que sean la misma.
+     * <p>Al cliente le da igual quién lleve el paquete: mira cuánto cuesta y cuándo llega. Si dos
+     * opciones prometen exactamente lo mismo, la cara no le aporta nada — solo le obliga a elegir entre
+     * dos cosas que para él son idénticas y deja la tienda con pinta de estar cobrando de más.
+     *
+     * <p><b>Y NO se compara por nombre, aunque sea tentador.</b> Se midió con tarifas reales el
+     * 19-ago-2026: lo que CJ revende como «YunExpress Ordinary» tarda 8-15 días, mientras que la línea
+     * FZZXR contratada directamente con YunExpress tarda 5-8. Los dos nombres mencionan a YunExpress y
+     * NO son el mismo servicio: CJ sale más barato porque vende uno más lento. Fundirlas por el nombre
+     * habría borrado la opción rápida, que además es la más barata de su tramo (10,79 $ frente a los
+     * 11,45 $ que pide CJ por un 4-8 días).
+     *
+     * <p>Gana la barata venga de quien venga: la regla es el precio, no el transportista.
      */
     private static List<ShippingOption> sinLineasRepetidas(List<ShippingOption> opciones) {
-        LinkedHashMap<String, ShippingOption> porNombre = new LinkedHashMap<>();
+        LinkedHashMap<String, ShippingOption> porPlazo = new LinkedHashMap<>();
         for (ShippingOption opcion : opciones) {
-            String clave = opcion.name() == null ? "" : opcion.name().trim().toLowerCase(Locale.ROOT);
-            ShippingOption anterior = porNombre.get(clave);
+            String clave = opcion.etaMinDays() + "-" + opcion.etaMaxDays();
+            ShippingOption anterior = porPlazo.get(clave);
             if (anterior == null || opcion.amountUsdCents() < anterior.amountUsdCents()) {
-                porNombre.put(clave, opcion);
+                porPlazo.put(clave, opcion);
             }
         }
-        return new ArrayList<>(porNombre.values());
+        return new ArrayList<>(porPlazo.values());
     }
 
     /**

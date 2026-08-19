@@ -39,8 +39,8 @@ import static org.mockito.Mockito.when;
 class ShippingQuoteOptionsControllerTest {
 
     private static final List<ShippingOption> OPCIONES = List.of(
-            new ShippingOption("FZZXR", "Apparel line", 785, 5, 8),
-            new ShippingOption("THPHR", "Global line", 821, 6, 10));
+            new ShippingOption("FZZXR", "Apparel line", 785, 5, 8, "YUNEXPRESS"),
+            new ShippingOption("THPHR", "Global line", 821, 6, 10, "YUNEXPRESS"));
 
     private final CheckoutPreviewService checkoutPreview = mock(CheckoutPreviewService.class);
     private final ShippingQuoteService shippingQuoteService = mock(ShippingQuoteService.class);
@@ -77,6 +77,66 @@ class ShippingQuoteOptionsControllerTest {
     private ShippingQuoteController.QuoteResponse cotizar(String shippingOptionCode) {
         return controller.quote(new ShippingQuoteController.QuoteRequest("ES", null, List.of(), null,
                 shippingOptionCode), null).getBody();
+    }
+
+    @Test
+    @DisplayName("cada opción dice qué empresa lleva el paquete, con un nombre presentable")
+    void cadaOpcionDiceQuienLoLleva() {
+        // Decisión del dueño (19-ago-2026): el cliente ve con quién viaja su pedido. Se enseña el nombre
+        // de la EMPRESA, no el código del canal («FZZXR» o «1868922929754472449» no le dicen nada a
+        // nadie), y lo compone el backend: si lo maquillara el navegador, cada pantalla acabaría
+        // llamándolo de una manera.
+        ShippingQuoteController.QuoteResponse res = cotizar(null);
+
+        assertThat(res.options().getFirst().carrierName()).isEqualTo("YunExpress");
+    }
+
+    @Test
+    @DisplayName("un transportista sin nombre conocido no deja la opción sin rótulo")
+    void transportistaDesconocido() {
+        // Si mañana se añade un tercero y nadie se acuerda de darle nombre, la opción tiene que seguir
+        // siendo comprensible en vez de enseñar un hueco o un identificador interno.
+        ShippingQuote quote = new ShippingQuote(true, "ES", 785, "Standard Shipping", "Standard Shipping",
+                5, 8, "EU", List.of(new ShippingOption("X", "Otra", 785, 5, 8, "TRANSPORTISTA_NUEVO")));
+        CustomsValuation customs = new CustomsValuation("ES", TaxMode.DDP, 1000, false, null, 0, false,
+                "150 EUR", true);
+        CheckoutTotalsService.CheckoutTotals totals = new CheckoutTotalsService.CheckoutTotals(785, 0, 785,
+                375, 2100, customs);
+        lenient().when(checkoutPreview.compute(anyString(), nullable(String.class), any(),
+                nullable(java.util.UUID.class), nullable(String.class), nullable(String.class)))
+                .thenReturn(new CheckoutPreviewService.Preview(quote, 1000, 0, 785, 375, 2100,
+                        new BigDecimal("10.00"), BigDecimal.ZERO, new BigDecimal("7.85"),
+                        new BigDecimal("3.75"), new BigDecimal("21.60"), totals, null, null, null,
+                        List.of(), null));
+
+        ShippingQuoteController.QuoteResponse res = cotizar(null);
+
+        assertThat(res.options().getFirst().carrierName()).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("la cotización publica el TOTAL en céntimos de dólar, no solo formateado")
+    void publicaElTotalEnCentimosDeDolar() {
+        // El checkout tiene que decidir si el monedero llega para pagar, y el saldo vive en céntimos de
+        // DÓLAR. Con solo el total formateado («21,60 €») la única salida sería que el navegador
+        // convirtiera o interpretara ese texto, que es justo lo que la norma de precios prohíbe: el
+        // front pinta, no calcula. Publicando el canónico, comparar es restar dos números de la misma
+        // unidad, sin que nadie los toque por el camino.
+        ShippingQuoteController.QuoteResponse res = cotizar(null);
+
+        // 1.000 de producto + 785 de envío + 375 de impuesto.
+        assertThat(res.totalUsdCents()).isEqualTo(2160);
+    }
+
+    @Test
+    @DisplayName("el total en céntimos incluye envío e impuesto, no es el subtotal")
+    void elTotalNoEsElSubtotal() {
+        ShippingQuoteController.QuoteResponse res = cotizar(null);
+
+        assertThat(res.totalUsdCents())
+                .as("comparar el saldo contra el SUBTOTAL deja pasar pedidos que el cobro luego rechaza: "
+                        + "el cliente confirma, se crea el pedido y el cargo falla")
+                .isGreaterThan(res.subtotalUsdCents());
     }
 
     @Test

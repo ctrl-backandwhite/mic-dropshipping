@@ -181,12 +181,13 @@ class FulfillmentRouterTest {
     // ------------------------------------------------------------------ la línea repetida
 
     @Test
-    @DisplayName("la misma línea vendida por los dos se ofrece una vez, por el precio más barato")
-    void noSeRepiteLaMismaLinea() {
-        // CJ revende YunExpress. Si nuestra línea directa y la suya se llaman igual, enseñar las dos a
-        // precios distintos parece un fallo de la tienda —y en la práctica es el mismo camión—.
+    @DisplayName("dos opciones con el MISMO plazo se ofrecen una vez, la más barata")
+    void noSeRepiteElMismoPlazo() {
+        // Al cliente le da igual quién lleve el paquete: mira cuánto cuesta y cuándo llega. Si dos
+        // opciones prometen lo mismo, la cara no le aporta nada — solo le hace elegir entre dos cosas
+        // que para él son idénticas, y deja la tienda con pinta de estar cobrando de más.
         when(yunexpress.quote(anyString(), any())).thenReturn(cotizacion(
-                new ShippingOption("FZZXR", "YunExpress Ordinary", 850, 8, 15)));
+                new ShippingOption("FZZXR", "Apparel line", 850, 8, 15)));
         when(cj.quote(anyString(), any())).thenReturn(cotizacion(
                 new ShippingOption("1868922929754472449", "YunExpress Ordinary", 767, 8, 15)));
 
@@ -194,19 +195,46 @@ class FulfillmentRouterTest {
 
         assertThat(opciones).hasSize(1);
         assertThat(opciones.get(0).amountUsdCents())
-                .as("si la misma línea la venden los dos, se queda la barata")
+                .as("mismo plazo, precios distintos: se queda la barata")
                 .isEqualTo(767);
         assertThat(opciones.get(0).carrier()).isEqualTo("CJ");
     }
 
     @Test
-    @DisplayName("nombres distintos NO se funden aunque cuesten lo mismo")
-    void lineasDistintasNoSeFunden() {
+    @DisplayName("el nombre parecido NO basta para fundir: lo que manda es el plazo")
+    void elNombreNoDecide() {
+        // Medido el 19-ago-2026 con tarifas reales para España: lo que CJ revende como «YunExpress
+        // Ordinary» tarda 8-15 días, mientras que la línea FZZXR contratada directamente tarda 5-8. NO
+        // son el mismo servicio: CJ es más barato porque vende uno más lento. Fundirlas por el nombre
+        // —que menciona a YunExpress en las dos— le quitaría al cliente la opción rápida, que además
+        // es la más barata de su tramo.
         when(yunexpress.quote(anyString(), any())).thenReturn(cotizacion(
-                new ShippingOption("FZZXR", "Apparel line", 767, 8, 15)));
+                new ShippingOption("FZZXR", "YunExpress Apparel", 1079, 5, 8)));
         when(cj.quote(anyString(), any())).thenReturn(cotizacion(
-                new ShippingOption("otra", "CJPacket Ordinary", 767, 8, 15)));
+                new ShippingOption("1868922929754472449", "YunExpress Ordinary", 960, 8, 15)));
 
-        assertThat(opcionesPara(List.of(camiseta()))).hasSize(2);
+        List<ShippingOption> opciones = opcionesPara(List.of(camiseta()));
+
+        assertThat(opciones)
+                .as("plazos distintos son servicios distintos, aunque el nombre se parezca")
+                .hasSize(2);
+        assertThat(opciones.get(0).amountUsdCents()).isEqualTo(960);
+    }
+
+    @Test
+    @DisplayName("misma línea vendida por los dos al mismo plazo: gana la barata, venga de quien venga")
+    void ganaLaBarataSeaDeQuienSea() {
+        // Y al revés que en el caso anterior: si el directo es el barato, se queda el directo. La regla
+        // es el precio, no el transportista.
+        when(yunexpress.quote(anyString(), any())).thenReturn(cotizacion(
+                new ShippingOption("FZZXR", "Apparel line", 700, 5, 8)));
+        when(cj.quote(anyString(), any())).thenReturn(cotizacion(
+                new ShippingOption("otra", "CJPacket Ordinary", 900, 5, 8)));
+
+        List<ShippingOption> opciones = opcionesPara(List.of(camiseta()));
+
+        assertThat(opciones).hasSize(1);
+        assertThat(opciones.get(0).carrier()).isEqualTo("YUNEXPRESS");
+        assertThat(opciones.get(0).amountUsdCents()).isEqualTo(700);
     }
 }

@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
@@ -59,7 +60,20 @@ public class CjAuthService {
      * <p>Es {@code synchronized} porque dos peticiones simultáneas que encuentren el token caducado
      * pedirían dos tokens a la vez, y eso es exactamente lo que el límite de una por segundo castiga.
      */
-    @Transactional
+    /**
+     * <b>Transacción PROPIA ({@code REQUIRES_NEW}), y esto no es un adorno.</b> Quien pide el token suele
+     * ser la cotización del checkout, que entra por {@code CheckoutPreviewService.compute} — anotado
+     * {@code @Transactional(readOnly = true)}. Con la propagación por defecto, guardar el token se unía a
+     * ESA transacción, y Hibernate descarta las escrituras de una transacción de lectura: el token se
+     * guardaba en el aire, <b>sin error ninguno</b>, y cada cotización volvía a pedir uno nuevo contra un
+     * límite de UNA petición por segundo. Se vio en local el 19-ago-2026: 18 opciones cotizadas y la
+     * tabla con cero filas.
+     *
+     * <p>Con transacción propia el token se persiste aunque la operación que lo pidió sea de lectura, y
+     * aunque esa operación falle después: el token seguiría siendo válido igual, así que no hay ninguna
+     * razón para deshacerlo con ella.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public synchronized String tokenVigente() {
         Optional<CarrierTokenEntity> guardado = repositorio.findByCarrier(CARRIER);
         if (guardado.isPresent() && !tocaRenovar(guardado.get())) {
