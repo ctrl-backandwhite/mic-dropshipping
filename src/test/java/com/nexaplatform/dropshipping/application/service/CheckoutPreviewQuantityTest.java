@@ -57,9 +57,15 @@ class CheckoutPreviewQuantityTest {
 
     /** La cuenta real, no un doble: es justo la aritmética de línea que estos casos miden. */
     private final OrderAmounts orderAmounts = new OrderAmounts(currency);
+    /**
+     * La agrupación arancelaria no es lo que miden estas pruebas: el doble devuelve el título de
+     * siempre, que es como se declaraba antes de que existieran los grupos.
+     */
+    private final CustomsDeclarationGroupService declarationGroups = mock(CustomsDeclarationGroupService.class);
+
 
     private final CheckoutPreviewService service = new CheckoutPreviewService(shipping, totals, pricing,
-            currency, products, dutyLines, affiliate, promociones, orderAmounts);
+            currency, products, dutyLines, affiliate, promociones, orderAmounts, declarationGroups);
 
     private final UUID productId = UUID.randomUUID();
 

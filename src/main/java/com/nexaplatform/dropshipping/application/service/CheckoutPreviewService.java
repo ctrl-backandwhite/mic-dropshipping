@@ -97,6 +97,8 @@ public class CheckoutPreviewService {
     private final PromotionService promotionService;
     /** La cuenta del pedido: el importe de línea lo decide ELLA, no esta clase (ver {@link OrderAmounts}). */
     private final OrderAmounts orderAmounts;
+    /** De dónde sale la descripción con la que se declarará cada línea: el grupo aprobado, o el título. */
+    private final CustomsDeclarationGroupService declarationGroups;
 
     /**
      * Calcula el desglose del checkout para un carrito, destino y comprador dados.
@@ -232,7 +234,8 @@ public class CheckoutPreviewService {
         // que la vista previa tiene que repartir igual que después el despacho o el derecho por partida
         // mostrado y el liquidado contarían bultos distintos.
         List<CustomsDutyLinesService.DutyParcel> parcels = customsDutyLinesService.parcelsOf(
-                customsLines(items), shippingOption != null ? shippingOption.code() : null, country);
+                customsLines(items, country), shippingOption != null ? shippingOption.code() : null,
+                country);
         // Impuesto + despacho aduanero por el MISMO servicio que usa el cobro (CheckoutTotalsService), para
         // que el desglose mostrado coincida al céntimo con el pedido.
         CheckoutTotalsService.CheckoutTotals totals = checkoutTotalsService.compute(country, region,
@@ -342,7 +345,7 @@ public class CheckoutPreviewService {
      * Traduce las líneas del carrito a lo que necesita el cálculo aduanero: clasificación arancelaria para
      * agrupar, y peso/medidas para repartir la mercancía en bultos igual que hará el transportista.
      */
-    private List<CustomsDutyLinesService.Line> customsLines(List<Line> items) {
+    List<CustomsDutyLinesService.Line> customsLines(List<Line> items, String country) {
         List<CustomsDutyLinesService.Line> out = new ArrayList<>();
         for (Line it : items) {
             if (it == null || it.productId() == null) {
@@ -357,7 +360,7 @@ public class CheckoutPreviewService {
                             .orElse(null);
             Integer unit = unitPriceUsdCents(it);
             out.add(new CustomsDutyLinesService.Line(p.getId(), p.getHsCode(),
-                    CustomsDutyLinesService.declaredDescriptionOf(p), p.getCountryOfOrigin(),
+                    declarationGroups.describeFor(p, country), p.getCountryOfOrigin(),
                     Math.max(1, it.quantity()),
                     unit == null ? 0 : unit, ParcelAggregator.unitWeightGrams(p, v), dimension(p, v, 0),
                     dimension(p, v, 1), dimension(p, v, 2), ParcelAggregator.hasBattery(p)));
