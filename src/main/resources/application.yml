@@ -395,6 +395,18 @@ nexadrop:
     # Código de cliente en Yunfulfillment. Va en el destinatario Y pegado al final de la dirección:
     # sin él el almacén recibe un bulto que no sabe de quién es («地址选择错误，仓库无法查询操作»).
     customer-code: ${FULFILLMENT_CUSTOMER_CODE:CNHC459832}
+  customs:
+    # ¿Los productos de la misma terna (partida + material + uso) se declaran en UNA sola línea?
+    #
+    # El derecho de 3 EUR de la Unión se cobra por línea de declaración, así que agrupar convierte un
+    # carrito de dos productos de 5,99 EUR de arancel en 3,00 EUR. Solo agrupan los grupos APROBADOS a
+    # mano en /admin/declaration-groups: aprobar es firmar lo que se declara ante 27 aduanas.
+    #
+    # Este es el interruptor GENERAL, para apagarlo en caliente si alguna aduana contase distinto. Hay
+    # otros dos más finos: `country_customs_rule.group_declaration_lines` saca un país concreto, y poner
+    # `per_article_fee_amount` a cero lo apaga solo — que es lo que hará falta cuando el régimen caduque
+    # el 1-jul-2028 (Reglamento (UE) 2026/382).
+    group-declaration-lines: ${CUSTOMS_GROUP_DECLARATION_LINES:true}
   yunexpress:
     enabled: ${YUNEXPRESS_ENABLED:false}
     # 应用ID / 应用秘钥(AK) de 开发配置 → 沙盒应用, y sourcekey de 用户中心 → 用户信息.

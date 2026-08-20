@@ -273,6 +273,17 @@ public class CustomsValuationService {
         return activeRule(countryCode).map(CountryCustomsRuleEntity::isCarrierPrepaysVat).orElse(false);
     }
 
+    /**
+     * ¿Se agrupan en este destino los productos de la misma terna en UNA sola línea de declaración?
+     *
+     * <p>Falso si el país no está configurado: sin regla no se sabe qué cuenta esa aduana, y suponer que
+     * agrupa cobraría de menos con la diferencia a cargo del comercio.
+     */
+    @Transactional(readOnly = true)
+    public boolean groupsDeclarationLinesFor(String countryCode) {
+        return activeRule(countryCode).map(CountryCustomsRuleEntity::isGroupDeclarationLines).orElse(false);
+    }
+
     /** Regla activa del país, o vacío si no está configurado o está desactivado. */
     @Transactional(readOnly = true)
     public Optional<CountryCustomsRuleEntity> rule(String countryCode) {

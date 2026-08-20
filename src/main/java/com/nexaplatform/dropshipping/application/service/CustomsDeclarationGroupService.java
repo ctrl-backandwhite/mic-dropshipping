@@ -4,6 +4,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomsDe
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CustomsDeclarationGroupRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.Locale;
@@ -31,9 +32,47 @@ import java.util.Locale;
 public class CustomsDeclarationGroupService {
 
     private final CustomsDeclarationGroupRepository groupRepository;
+    private final CustomsValuationService customsValuation;
 
     /**
-     * La descripción con la que se declarará este producto.
+     * Interruptor general. Existe para apagar la agrupación en caliente —por variable de entorno, sin
+     * desplegar— si una aduana empezara a contar distinto de lo previsto.
+     */
+    @Value("${nexadrop.customs.group-declaration-lines:true}")
+    private boolean agrupacionActiva;
+
+    /**
+     * La descripción con la que se declarará este producto en un destino concreto.
+     *
+     * <p>Se comprueban tres apagados <b>antes</b> de tocar la base de datos, del más grueso al más fino:
+     *
+     * <ol>
+     *   <li><b>El interruptor general</b>, para sacarlo entero sin desplegar.</li>
+     *   <li><b>El del país</b>, para sacar un destino sin parar los otros 26.</li>
+     *   <li><b>El importe por artículo</b>: si el país no cobra nada por línea, no hay nada que agrupar.
+     *       Es el que hará desaparecer esto solo cuando el régimen de 3 EUR caduque el 1-jul-2028
+     *       (Reglamento (UE) 2026/382) — bastará con poner el importe a cero en los 27. Deliberadamente
+     *       NO hay un interruptor aparte para la interfaz: sería una segunda fuente de verdad que
+     *       alguien olvidaría mover.</li>
+     * </ol>
+     *
+     * <p>Apagar <b>nunca</b> borra los grupos aprobados: quedan en la tabla y vuelven a funcionar al
+     * encenderlo, sin repetir la aprobación de 185 descripciones.
+     */
+    public String describeFor(ProductEntity product, String countryCode) {
+        if (!agrupacionActiva
+                || !customsValuation.groupsDeclarationLinesFor(countryCode)
+                || customsValuation.perArticleFeeUsdCents(countryCode) <= 0) {
+            return CustomsDutyLinesService.declaredDescriptionOf(product);
+        }
+        return describeFor(product);
+    }
+
+    /**
+     * La descripción con la que se declarará este producto, sin mirar el destino.
+     *
+     * <p>Para llamantes que de verdad no conocen el país todavía. Quien lo sepa debe usar
+     * {@link #describeFor(ProductEntity, String)}: sin país no se pueden aplicar los apagados.
      *
      * @return la del grupo si su terna está aprobada; su propio título en inglés en cualquier otro caso
      */

@@ -1,15 +1,18 @@
 package com.nexaplatform.dropshipping.application;
 
 import com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService;
+import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomsDeclarationGroupEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CustomsDeclarationGroupRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.util.List;
@@ -18,6 +21,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -38,9 +43,16 @@ class CustomsDeclarationGroupServiceTest {
 
     @Mock
     CustomsDeclarationGroupRepository groupRepository;
+    @Mock
+    CustomsValuationService customsValuation;
 
     @InjectMocks
     CustomsDeclarationGroupService service;
+
+    @BeforeEach
+    void encendido() {
+        ReflectionTestUtils.setField(service, "agrupacionActiva", true);
+    }
 
     @Test
     void usaLaDescripcionDelGrupoCuandoEstaAprobado() {
@@ -93,6 +105,64 @@ class CustomsDeclarationGroupServiceTest {
                         .ename("Men's woven cotton trousers").approvedAt(Instant.now()).build()));
 
         assertThat(service.describeFor(p)).isEqualTo("Men's woven cotton trousers");
+    }
+
+    // ---------- apagado: por país, general, y por fin del régimen ----------
+
+    @Test
+    void conElInterruptorDelPaisApagadoEseDestinoNoAgrupa() {
+        // Si una aduana concreta contase distinto hay que poder sacar ese destino sin parar los otros 26.
+        ProductEntity p = productoCon("620443", "Cotton", "Casual wear", "Blue denim jeans");
+        when(customsValuation.groupsDeclarationLinesFor("FR")).thenReturn(false);
+
+        assertThat(service.describeFor(p, "FR")).isEqualTo("Blue denim jeans");
+        verifyNoInteractions(groupRepository);
+    }
+
+    @Test
+    void conElInterruptorGeneralApagadoNoAgrupaEnNingunDestino() {
+        // Para apagarlo en caliente por variable de entorno, sin desplegar.
+        ReflectionTestUtils.setField(service, "agrupacionActiva", false);
+        ProductEntity p = productoCon("620443", "Cotton", "Casual wear", "Blue denim jeans");
+
+        assertThat(service.describeFor(p, "ES")).isEqualTo("Blue denim jeans");
+        verifyNoInteractions(groupRepository);
+    }
+
+    @Test
+    void siElPaisNoCobraPorArticuloSeApagaSolo() {
+        // El derecho de 3 EUR CADUCA el 1-jul-2028. Cuando termine bastará con poner el importe a cero
+        // en los 27 países: sin importe no hay nada que agrupar. Un interruptor de interfaz aparte sería
+        // una segunda fuente de verdad que alguien olvidaría mover.
+        when(customsValuation.groupsDeclarationLinesFor("ES")).thenReturn(true);
+        when(customsValuation.perArticleFeeUsdCents("ES")).thenReturn(0);
+        ProductEntity p = productoCon("620443", "Cotton", "Casual wear", "Blue denim jeans");
+
+        assertThat(service.describeFor(p, "ES")).isEqualTo("Blue denim jeans");
+        verifyNoInteractions(groupRepository);
+    }
+
+    @Test
+    void apagarNoBorraLosGruposAprobados() {
+        // Al volver a encenderlo tiene que seguir funcionando sin repetir la aprobación de 185 grupos.
+        ReflectionTestUtils.setField(service, "agrupacionActiva", false);
+
+        service.describeFor(productoCon("620443", "Cotton", "Casual wear", "Blue denim jeans"), "ES");
+
+        verify(groupRepository, never()).delete(any());
+        verify(groupRepository, never()).save(any());
+    }
+
+    @Test
+    void conTodoEncendidoYGrupoAprobadoSiAgrupa() {
+        when(customsValuation.groupsDeclarationLinesFor("ES")).thenReturn(true);
+        when(customsValuation.perArticleFeeUsdCents("ES")).thenReturn(350);
+        when(groupRepository.findByHs6AndMaterialAndUsageCode("620443", "COTTON", "CASUAL WEAR"))
+                .thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder()
+                        .ename("Men's woven cotton trousers").approvedAt(Instant.now()).build()));
+        ProductEntity p = productoCon("620443", "Cotton", "Casual wear", "Blue denim jeans");
+
+        assertThat(service.describeFor(p, "ES")).isEqualTo("Men's woven cotton trousers");
     }
 
     private static ProductEntity productoCon(String hs, String material, String uso, String tituloEn) {
