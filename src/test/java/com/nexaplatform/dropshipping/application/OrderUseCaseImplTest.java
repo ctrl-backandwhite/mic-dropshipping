@@ -97,6 +97,8 @@ class OrderUseCaseImplTest {
     @Mock
     com.nexaplatform.dropshipping.application.service.OperatorCommissionService operatorCommissionService;
     @Mock
+    com.nexaplatform.dropshipping.application.service.SupplierPurchaseService supplierPurchaseService;
+    @Mock
     com.nexaplatform.dropshipping.infrastructure.integration.search.OrderIndexer orderIndexer;
     @Mock
     com.nexaplatform.dropshipping.infrastructure.integration.search.OrderSearchService orderSearchService;
@@ -362,6 +364,68 @@ class OrderUseCaseImplTest {
 
         assertThatThrownBy(() -> orderUseCase.cancelMyOrder(buyer, id, true))
                 .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void cancelMyOrder_rejectsWhenSupplierAlreadyBought() {
+        // Lo que se vio el 20-ago-2026: el tablero de compras marcaba «COMPRADO» y el pedido seguía
+        // ofreciendo «Cancelar pedido», porque el estado del PEDIDO sigue siendo PAGADO hasta que salen
+        // TODAS las compras. Cancelar ahí devuelve el dinero al cliente con el género ya pagado en 1688:
+        // la pérdida es íntegra y no hay a quién reclamarla.
+        UUID id = UUID.randomUUID();
+        UUID buyer = UUID.randomUUID();
+        Order order = Order.builder().status(OrderStatus.PAID).userId(buyer).orderNumber("NX-6").totalCents(1500)
+                .build();
+        order.setId(id);
+        when(orderRepository.findById(id)).thenReturn(Optional.of(order));
+        when(supplierPurchaseService.anyBought(id)).thenReturn(true);
+
+        assertThatThrownBy(() -> orderUseCase.cancelMyOrder(buyer, id, true))
+                .isInstanceOf(BusinessException.class)
+                // El CÓDIGO es el contrato: es lo que el front traduce al idioma del comprador.
+                .hasFieldOrPropertyWithValue("code", "ORDER_NOT_CANCELLABLE")
+                .hasMessageContaining("already purchased");
+
+        assertThat(order.getStatus()).as("el pedido no se toca").isEqualTo(OrderStatus.PAID);
+        verify(walletUseCase, never()).deposit(any(), org.mockito.ArgumentMatchers.anyLong(), any(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void cancelMyOrder_allowsWhenNothingBoughtYet() {
+        // Mientras la compra siga en «por comprar» no se ha gastado nada: el cliente puede echarse atrás.
+        UUID id = UUID.randomUUID();
+        UUID buyer = UUID.randomUUID();
+        Order order = Order.builder().status(OrderStatus.PAID).userId(buyer).orderNumber("NX-5").totalCents(1500)
+                .build();
+        order.setId(id);
+        when(orderRepository.findById(id)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(supplierPurchaseService.anyBought(id)).thenReturn(false);
+
+        orderUseCase.cancelMyOrder(buyer, id, true);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+    }
+
+    @Test
+    void cancelMyOrder_retiraLasComprasDelTablero() {
+        // El tablero de compras se pinta por el estado de la COMPRA, no por el del pedido: si al
+        // cancelar no se retiran, el admin sigue viendo la tarjeta y compra en 1688 género de una venta
+        // que ya no existe.
+        UUID id = UUID.randomUUID();
+        UUID buyer = UUID.randomUUID();
+        Order order = Order.builder().status(OrderStatus.PAID).userId(buyer).orderNumber("NX-8").totalCents(1500)
+                .build();
+        order.setId(id);
+        when(orderRepository.findById(id)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(supplierPurchaseService.anyBought(id)).thenReturn(false);
+
+        orderUseCase.cancelMyOrder(buyer, id, true);
+
+        verify(supplierPurchaseService).cancelUnbought(org.mockito.ArgumentMatchers.eq(id),
+                org.mockito.ArgumentMatchers.anyString());
     }
 
     // ---------------- cancelación por el admin (cancelOrder): reembolsa si estaba pagado ----------------

@@ -65,7 +65,7 @@ class FulfillmentRouterTest {
 
     @BeforeEach
     void dosTransportistasQueCotizan() {
-        enrutador = new FulfillmentRouter(List.of(yunexpress, cj), elegibilidad);
+        enrutador = new FulfillmentRouter(List.of(yunexpress, cj), elegibilidad, 5);
         lenient().when(yunexpress.nombre()).thenReturn("YUNEXPRESS");
         lenient().when(cj.nombre()).thenReturn("CJ");
         lenient().when(yunexpress.isSupported(anyString())).thenReturn(true);
@@ -236,5 +236,93 @@ class FulfillmentRouterTest {
         assertThat(opciones).hasSize(1);
         assertThat(opciones.get(0).carrier()).isEqualTo("YUNEXPRESS");
         assertThat(opciones.get(0).amountUsdCents()).isEqualTo(700);
+    }
+
+    // ------------------------------------------------------------------ cuántas se le enseñan
+
+    /** Ocho canales con plazos distintos —para que la deduplicación por plazo no se lleve ninguno—. */
+    private static ShippingQuote ochoCanales() {
+        return cotizacion(
+                new ShippingOption("c900", "Canal 900", 900, 1, 2),
+                new ShippingOption("c800", "Canal 800", 800, 2, 3),
+                new ShippingOption("c700", "Canal 700", 700, 3, 4),
+                new ShippingOption("c600", "Canal 600", 600, 4, 5),
+                new ShippingOption("c500", "Canal 500", 500, 5, 6),
+                new ShippingOption("c400", "Canal 400", 400, 6, 7),
+                new ShippingOption("c300", "Canal 300", 300, 7, 8),
+                new ShippingOption("c200", "Canal 200", 200, 8, 9));
+    }
+
+    @Test
+    @DisplayName("de una lista larga solo se le ofrecen al cliente las cinco más baratas")
+    void soloLasCincoMasBaratas() {
+        // Con quince opciones —lo que devuelve CJ para España— la pantalla se vuelve un catálogo y el
+        // cliente abandona. Se le enseña un abanico corto, y el criterio del recorte es el precio.
+        when(yunexpress.quote(anyString(), any())).thenReturn(cotizacion(
+                new ShippingOption("cara", "Canal caro", 1500, 10, 12)));
+        when(cj.quote(anyString(), any())).thenReturn(ochoCanales());
+
+        List<ShippingOption> opciones = opcionesPara(List.of(camiseta()));
+
+        assertThat(opciones).extracting(ShippingOption::amountUsdCents)
+                .containsExactly(200, 300, 400, 500, 600);
+    }
+
+    @Test
+    @DisplayName("el recorte se queda con las baratas, no con las que respondieron primero")
+    void elRecorteEsPorPrecioNoPorOrdenDeLlegada() {
+        // Si el transportista que contesta antes trae las caras, sus opciones NO pueden desplazar a las
+        // baratas del otro: el recorte va después de ordenar, nunca sobre la lista sin ordenar.
+        when(yunexpress.quote(anyString(), any())).thenReturn(cotizacion(
+                new ShippingOption("y1", "Cara 1", 2000, 1, 3),
+                new ShippingOption("y2", "Cara 2", 2100, 2, 4),
+                new ShippingOption("y3", "Cara 3", 2200, 3, 5),
+                new ShippingOption("y4", "Cara 4", 2300, 4, 6),
+                new ShippingOption("y5", "Cara 5", 2400, 5, 7)));
+        when(cj.quote(anyString(), any())).thenReturn(cotizacion(
+                new ShippingOption("barata", "Barata", 300, 9, 14)));
+
+        List<ShippingOption> opciones = opcionesPara(List.of(camiseta()));
+
+        assertThat(opciones).hasSize(5);
+        assertThat(opciones.get(0).code()).isEqualTo("barata");
+        assertThat(opciones).extracting(ShippingOption::code).doesNotContain("y5");
+    }
+
+    @Test
+    @DisplayName("con menos opciones que el tope se ofrecen todas")
+    void conPocasOpcionesNoSeRecortaNada() {
+        List<ShippingOption> opciones = opcionesPara(List.of(camiseta()));
+
+        assertThat(opciones).hasSize(4);
+    }
+
+    @Test
+    @DisplayName("la cotización que se publica sigue siendo la de la opción más barata de todas")
+    void laCabeceraSigueSiendoLaMasBarata() {
+        // El recorte no puede mover el importe que el resto del checkout ya usaba: la más barata
+        // sobrevive siempre al recorte, porque el recorte empieza justo por ella.
+        when(yunexpress.quote(anyString(), any())).thenReturn(cotizacion(
+                new ShippingOption("cara", "Canal caro", 1500, 10, 12)));
+        when(cj.quote(anyString(), any())).thenReturn(ochoCanales());
+
+        ShippingQuote cotizacion = enrutador.cotizar(PAIS, FulfillmentProvider.ParcelSpec.ofWeight(500),
+                List.of(camiseta()));
+
+        assertThat(cotizacion.options().get(0).amountUsdCents()).isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("un tope de cero deja pasar todas: es la vía de escape para depurar")
+    void unTopeDeCeroNoRecorta() {
+        FulfillmentRouter sinTope = new FulfillmentRouter(List.of(yunexpress, cj), elegibilidad, 0);
+        when(yunexpress.quote(anyString(), any())).thenReturn(cotizacion(
+                new ShippingOption("cara", "Canal caro", 1500, 10, 12)));
+        when(cj.quote(anyString(), any())).thenReturn(ochoCanales());
+
+        List<ShippingOption> opciones = sinTope
+                .cotizar(PAIS, FulfillmentProvider.ParcelSpec.ofWeight(500), List.of(camiseta())).options();
+
+        assertThat(opciones).hasSize(9);
     }
 }

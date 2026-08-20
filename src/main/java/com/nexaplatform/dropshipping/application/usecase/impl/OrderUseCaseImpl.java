@@ -814,6 +814,9 @@ public class OrderUseCaseImpl implements OrderUseCase {
             issueRefund(o, "cancel-", false); // admin: reembolso al método original del cliente
             stockService.restoreForOrder(o); // la venta no se concretó → devolvemos el stock descontado
         }
+        // Solo lo que aún no se ha comprado: lo ya pagado al proveedor sigue en el tablero porque esa
+        // mercancía existe y hay que decidir qué se hace con ella antes de que el almacén la destruya.
+        supplierPurchaseService.cancelUnbought(id, "Pedido cancelado por el administrador");
         o.setStatus(OrderStatus.CANCELLED);
         o.setCancelledAt(Instant.now());
         o = orderRepository.save(o);
@@ -836,6 +839,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
         }
         issueRefund(o, "refund-", false); // admin: reembolso al método original del cliente
         stockService.restoreForOrder(o); // la venta no se concretó → devolvemos el stock descontado
+        supplierPurchaseService.cancelUnbought(id, "Pedido reembolsado");
         o.setStatus(OrderStatus.REFUNDED);
         o = orderRepository.save(o);
         affiliateProgramService.rejectForOrder(o.getId()); // DROP-646: void any affiliate commission
@@ -864,9 +868,19 @@ public class OrderUseCaseImpl implements OrderUseCase {
             throw new BusinessException("ORDER_NOT_CANCELLABLE",
                     "The order can no longer be cancelled because it is already being processed.");
         }
+        // El estado PAID no basta: el tablero de compras avanza por su cuenta y marcar «COMPRADO» NO
+        // mueve el pedido, que sigue en PAID hasta que salen TODAS sus compras. Un pedido con el género
+        // ya pagado en 1688 seguía ofreciendo cancelar, y ese reembolso salía entero de la caja del
+        // comercio sin nadie a quien reclamárselo.
+        if (supplierPurchaseService.anyBought(orderId)) {
+            throw new BusinessException("ORDER_NOT_CANCELLABLE",
+                    "The order can no longer be cancelled: the goods were already purchased from the supplier.");
+        }
         // El cliente elige: wallet (inmediato) o su método original (tarjeta/PayPal, con sus tiempos).
         issueRefund(o, "cancel-", refundToWallet);
         stockService.restoreForOrder(o); // estaba PAID (stock ya descontado) → lo devolvemos al no concretarse
+        // Sin esto la compra se quedaba en el tablero y el admin acababa comprándola en 1688.
+        supplierPurchaseService.cancelUnbought(orderId, "Pedido cancelado por el cliente");
         o.setStatus(OrderStatus.CANCELLED);
         o.setCancelledAt(Instant.now());
         o = orderRepository.save(o);

@@ -23,6 +23,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -354,6 +356,38 @@ public class SupplierPurchaseService {
     }
 
     /**
+     * Retira del tablero las compras de un pedido que todavía no se han comprado al proveedor.
+     *
+     * <p>El tablero se pinta por el estado de la COMPRA y no mira el del pedido, así que un pedido
+     * cancelado dejaba sus tarjetas ahí: el admin acababa comprando en 1688 género de una venta que ya
+     * no existe, y ese dinero no se recupera de nadie.
+     *
+     * <p><b>Solo toca {@link SupplierPurchaseStatus#PENDING}</b>, que es el único estado en el que no ha
+     * salido dinero. Lo ya comprado sigue en el tablero a propósito aunque el pedido esté cancelado:
+     * esa mercancía existe, va camino del almacén y allí <b>se destruye sin compensación a los 30
+     * días</b> si nadie da instrucciones. Esconderla sería perder el rastro de un bulto real.
+     *
+     * @return cuántas compras se retiraron, para dejarlo dicho en el registro
+     */
+    @Transactional
+    public int cancelUnbought(UUID orderId, String reason) {
+        if (orderId == null) {
+            return 0;
+        }
+        int retiradas = 0;
+        for (SupplierPurchaseEntity p : purchaseRepository.findByOrderId(orderId)) {
+            if (p.getStatus() != SupplierPurchaseStatus.PENDING) {
+                continue;
+            }
+            p.setStatus(SupplierPurchaseStatus.CANCELLED);
+            p.setNotes(reason);
+            save(p);
+            retiradas++;
+        }
+        return retiradas;
+    }
+
+    /**
      * ¿Está ya comprada toda la mercancía del pedido?
      *
      * <p>Cierto cuando el pedido tiene compras y ninguna sigue pendiente de comprar. Las canceladas no
@@ -363,6 +397,45 @@ public class SupplierPurchaseService {
      * pulsar nada. Antes ese paso era manual, y olvidarlo dejaba al cliente viendo «pagado» con la
      * mercancía ya comprada, y al admin sin poder exportar el fichero de re-empaquetado.
      */
+    /**
+     * ¿Se ha comprado ya algo de este pedido en 1688?
+     *
+     * <p>Es el freno del desistimiento del cliente, y hace falta porque el tablero de compras avanza
+     * por su cuenta: marcar «COMPRADO» NO mueve el estado del pedido, que sigue en PAGADO hasta que
+     * salen TODAS sus compras. Sin esta comprobación, un pedido con el género ya pagado en 1688 seguía
+     * ofreciendo «Cancelar pedido» y el reembolso salía entero de la caja del comercio.
+     *
+     * <p>Basta con que UNA compra haya avanzado: en un pedido de dos proveedores, que uno siga sin
+     * comprar no devuelve lo que ya pagó el otro.
+     */
+    @Transactional(readOnly = true)
+    public boolean anyBought(UUID orderId) {
+        return purchaseRepository.existsByOrderIdAndStatusIn(orderId, YA_COMPRADAS);
+    }
+
+    /**
+     * Estados en los que el dinero ya salió hacia el proveedor.
+     *
+     * <p>Se deriva del propio enum en vez de enumerarlos a mano: un estado nuevo entra solo por su
+     * avance y no se queda fuera del freno por despiste.
+     */
+    private static final Set<SupplierPurchaseStatus> YA_COMPRADAS = Arrays
+            .stream(SupplierPurchaseStatus.values()).filter(SupplierPurchaseStatus::alreadyBought)
+            .collect(Collectors.toCollection(() -> EnumSet.noneOf(SupplierPurchaseStatus.class)));
+
+    /**
+     * De los pedidos dados, cuáles tienen ya género comprado. Misma regla que {@link #anyBought(UUID)},
+     * en una sola consulta, para poder marcar una lista entera sin ir pedido por pedido.
+     */
+    @Transactional(readOnly = true)
+    public Set<UUID> ordersAlreadyBought(Collection<UUID> orderIds) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return Set.of();
+        }
+        return purchaseRepository.findByOrderIdInAndStatusIn(orderIds, YA_COMPRADAS).stream()
+                .map(SupplierPurchaseEntity::getOrderId).collect(Collectors.toSet());
+    }
+
     @Transactional(readOnly = true)
     public boolean allPurchased(UUID orderId) {
         return purchaseRepository.existsByOrderId(orderId)

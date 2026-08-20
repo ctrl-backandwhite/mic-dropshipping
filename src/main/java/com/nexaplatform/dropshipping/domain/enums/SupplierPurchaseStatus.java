@@ -43,4 +43,19 @@ public enum SupplierPurchaseStatus {
     public boolean merchandiseOnTheMove() {
         return progress >= IN_TRANSIT.progress;
     }
+
+    /**
+     * ¿El dinero ya ha salido hacia el proveedor?
+     *
+     * <p>Es la frontera del desistimiento del cliente. Mientras la compra sigue en {@link #PENDING} no
+     * se ha gastado nada y cancelar solo cuesta devolver el cobro; a partir de {@link #PURCHASED} el
+     * género está pagado en 1688 y ya no se puede recuperar, así que un reembolso ahí es pérdida
+     * íntegra para el comercio.
+     *
+     * <p>{@link #CANCELLED} queda fuera por su avance negativo: una compra descartada no compromete
+     * nada.
+     */
+    public boolean alreadyBought() {
+        return progress >= PURCHASED.progress;
+    }
 }

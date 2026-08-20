@@ -88,6 +88,13 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     private static final String ORDERID = "orderId";
     private static final String METHOD = "method";
     private static final String STATUS = "status";
+    private static final String ERROR = "error";
+    private static final String PAYMENT_INTENT = "paymentIntent";
+    /**
+     * El dinero no se ha podido devolver al método original. El texto que lee el cliente lo resuelve
+     * {@code ErrorCode} en su idioma; el motivo literal de la pasarela viaja en el detalle y en el log.
+     */
+    private static final String REFUND_NOT_POSSIBLE = "REFUND_NOT_POSSIBLE";
 
     private final List<PaymentGateway> gateways;
     private final PaymentRepository paymentRepository;
@@ -501,7 +508,10 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         }
 
         p.setStatus(PaymentStatus.REFUNDED);
-        Map<String, Object> merged = new HashMap<>(pr);
+        // Se RELEE la respuesta del proveedor en vez de reusar `pr`: al resolver el PaymentIntent contra
+        // Stripe puede haberse completado con el identificador que faltaba, y ese dato debe persistirse.
+        Map<String, Object> merged = new HashMap<>(
+                p.getProviderResponse() != null ? p.getProviderResponse() : Map.of());
         merged.put("refund", result);
         merged.put("refunded_at", Instant.now().toString());
         p.setProviderResponse(merged);
@@ -536,24 +546,98 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     }
 
     /**
-     * Devolución por Stripe: se reembolsa el PaymentIntent guardado en la respuesta del proveedor (con el
-     * providerRef como respaldo). Igual que en PayPal, un estado distinto de succeeded/pending aborta para
-     * no dar por devuelto un dinero que Stripe no ha devuelto.
+     * Devolución por Stripe: se reembolsa el PaymentIntent que resuelve
+     * {@link #resolveStripePaymentIntent(Payment, Map, StripeGateway)}. Igual que en PayPal, un estado
+     * distinto de succeeded/pending aborta para no dar por devuelto un dinero que Stripe no ha devuelto.
      */
     private Map<String, Object> refundWithStripe(Payment p, Map<String, Object> providerResponse, long amountCents) {
         PaymentGateway gw = resolveGateway(PaymentMethod.CARD);
         if (!(gw instanceof StripeGateway sg)) {
             throw new BusinessException("Stripe gateway not configured");
         }
-        String paymentIntentId = String.valueOf(providerResponse.getOrDefault("paymentIntent", p.getProviderRef()));
+        String paymentIntentId = resolveStripePaymentIntent(p, providerResponse, sg);
         Map<String, Object> result = sg.refund(paymentIntentId, amountCents);
         String status = String.valueOf(result.getOrDefault(STATUS, ""));
         boolean ok = "succeeded".equalsIgnoreCase(status) || "pending".equalsIgnoreCase(status)
                 || Boolean.TRUE.equals(result.get("mock"));
         if (!ok) {
-            throw new BusinessException("Stripe refund failed: " + status);
+            // El motivo que da Stripe («No such payment_intent», «charge_already_refunded»…) viaja en la
+            // excepción: antes solo se escribía en el log del servidor y quien cancelaba veía un 422 mudo,
+            // imposible de diagnosticar sin acceso a la infraestructura.
+            Object reason = result.get(ERROR);
+            throw new BusinessException(REFUND_NOT_POSSIBLE,
+                    "Stripe refund failed: " + status + (reason != null ? " — " + reason : ""),
+                    reason != null ? List.of(String.valueOf(reason)) : null);
         }
         return result;
+    }
+
+    /**
+     * Identificador con el que Stripe puede devolver el dinero. SIEMPRE tiene que ser un PaymentIntent:
+     * el {@code cs_…} de una sesión de Checkout no es reembolsable.
+     *
+     * <p>El cobro con tarjeta va por Checkout hospedado y Stripe <b>no</b> crea el PaymentIntent al crear
+     * la sesión, así que al iniciar el pago no hay nada que guardar. El {@code pi_…} solo se conocía al
+     * confirmar desde la vuelta del navegador; si ganaba la carrera el webhook {@code payment_intent
+     * .succeeded} —que llega en el mismo segundo del cobro— la confirmación posterior se saltaba por
+     * idempotencia y el identificador no llegaba a guardarse nunca. Al reembolsar se le mandaba a Stripe
+     * la cadena {@code "null"} (o el {@code cs_…} de respaldo) y respondía {@code resource_missing}.
+     *
+     * <p>Por eso se busca en todas las claves donde puede haber quedado, y como último recurso se le
+     * pregunta a Stripe por la sesión. Lo recuperado se guarda en el pago, de forma que los cobros
+     * antiguos se curan solos la primera vez que se reembolsan.
+     */
+    private String resolveStripePaymentIntent(Payment p, Map<String, Object> providerResponse, StripeGateway sg) {
+        String ref = p.getProviderRef() != null ? p.getProviderRef() : "";
+        if (ref.startsWith(CS_MOCK) || ref.startsWith(PI_MOCK)) {
+            return ref; // mock-mode: la pasarela responde con un éxito sintético, no llega a llamar a Stripe
+        }
+        String stored = firstPaymentIntent(providerResponse.get(PAYMENT_INTENT),
+                providerResponse.get("stripe_payment_intent"), providerResponse.get("id"), ref);
+        if (stored != null) {
+            return stored;
+        }
+        String sessionId = firstCheckoutSession(ref, providerResponse.get("id"));
+        if (sessionId == null) {
+            throw new BusinessException(REFUND_NOT_POSSIBLE,
+                    "No hay ningún PaymentIntent asociado a este cobro: no se puede reembolsar en Stripe.");
+        }
+        Map<String, Object> session = sg.retrieveCheckoutSession(sessionId);
+        String recovered = asPaymentIntent(session.get(PAYMENT_INTENT));
+        if (recovered == null) {
+            throw new BusinessException(REFUND_NOT_POSSIBLE,
+                    "Stripe no devuelve el PaymentIntent de la sesión " + sessionId + ": "
+                            + session.getOrDefault(ERROR, session.getOrDefault(STATUS, "sin detalle")));
+        }
+        Map<String, Object> healed = new HashMap<>(providerResponse);
+        healed.put(PAYMENT_INTENT, recovered);
+        p.setProviderResponse(healed);
+        return recovered;
+    }
+
+    /** Primer valor de los candidatos que sea un PaymentIntent de Stripe, o {@code null} si no hay ninguno. */
+    private static String firstPaymentIntent(Object... candidates) {
+        for (Object candidate : candidates) {
+            String intent = asPaymentIntent(candidate);
+            if (intent != null) {
+                return intent;
+            }
+        }
+        return null;
+    }
+
+    /** Primer valor de los candidatos que sea una sesión de Checkout, o {@code null} si no hay ninguna. */
+    private static String firstCheckoutSession(Object... candidates) {
+        for (Object candidate : candidates) {
+            if (candidate instanceof String value && value.startsWith("cs_")) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private static String asPaymentIntent(Object value) {
+        return value instanceof String text && text.startsWith("pi_") ? text : null;
     }
 
     @Override
@@ -1101,7 +1185,13 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             }
             UUID paymentId = UUID.fromString(paymentIdStr);
             if ("payment_intent.succeeded".equals(eventType)) {
-                doConfirmSucceeded(paymentId, data);
+                // El evento trae el PaymentIntent en `id`, no bajo la clave que luego busca el reembolso.
+                // Se anota explícitamente: si este webhook gana la carrera a la vuelta del navegador —lo
+                // habitual, llega en el mismo segundo del cobro—, es la ÚNICA ocasión de guardarlo, porque
+                // la confirmación posterior se salta por idempotencia y ya no consulta la sesión.
+                Map<String, Object> confirmed = new HashMap<>(data);
+                confirmed.put(PAYMENT_INTENT, intentId);
+                doConfirmSucceeded(paymentId, confirmed);
             } else if ("payment_intent.payment_failed".equals(eventType)) {
                 doMarkFailed(paymentId, "Stripe: payment_failed", data);
             }

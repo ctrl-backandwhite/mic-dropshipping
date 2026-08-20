@@ -6,7 +6,9 @@ import com.nexaplatform.dropshipping.api.dto.out.MeOrderDetailDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MeOrderRowDtoOut;
 import com.nexaplatform.dropshipping.api.mapper.AdminOrderMapper;
 import com.nexaplatform.dropshipping.api.mapper.MeOrderDtoMapper;
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
+import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
 import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -37,6 +40,7 @@ public class MeOrderController implements MeOrderApi {
     private final MeOrderDtoMapper meOrderDtoMapper;
     private final AdminOrderMapper adminOrderMapper;
     private final PaymentJpaRepositoryAdapter paymentRepository;
+    private final SupplierPurchaseService supplierPurchaseService;
 
     @Override
     public ResponseEntity<MeOrderDetailDtoOut> checkout(Authentication auth, MeCheckoutDtoIn req, String idem) {
@@ -52,12 +56,18 @@ public class MeOrderController implements MeOrderApi {
         List<MeOrderRowDtoOut> rows = adminOrderMapper.toMeRows(orders);
         // El total de la fila se formatea en la moneda activa EXACTAMENTE como en el detalle (mismo
         // método del mapper), para que lista y detalle muestren el mismo importe. toMeRows preserva el orden.
+        // De una sola consulta: qué pedidos tienen ya género comprado en 1688. Uno por uno serían tantas
+        // consultas como pedidos en pantalla.
+        Set<UUID> conGeneroComprado = supplierPurchaseService
+                .ordersAlreadyBought(orders.stream().map(Order::getId).toList());
         List<MeOrderRowDtoOut> out = new ArrayList<>(rows.size());
         for (int i = 0; i < rows.size(); i++) {
             Order order = orders.get(i);
             out.add(rows.get(i).toBuilder()
                     .totalFormatted(meOrderDtoMapper.formatOrderTotal(order))
                     .paymentMethod(resolvePaymentMethod(order.getId())) // para el botón de cancelar de la lista
+                    .cancellable(order.getStatus() == OrderStatus.PAID
+                            && !conGeneroComprado.contains(order.getId()))
                     .build());
         }
         return ResponseEntity.ok(out);
@@ -84,7 +94,13 @@ public class MeOrderController implements MeOrderApi {
      * pago externo (se pagó con saldo), es WALLET. El front lo usa para decidir a dónde ofrecer el reembolso.
      */
     private MeOrderDetailDtoOut withPaymentMethod(MeOrderDetailDtoOut dto, UUID orderId) {
-        return dto.toBuilder().paymentMethod(resolvePaymentMethod(orderId)).build();
+        // «Cancelable» NO se deduce del estado: un pedido PAGADO deja de serlo en cuanto se compra el
+        // género en 1688, y esa compra avanza en su propio tablero sin mover el estado del pedido. La
+        // regla que manda es la de OrderUseCaseImpl.cancelMyOrder; esto solo la publica para que la
+        // pantalla no ofrezca un botón que el servidor va a rechazar.
+        boolean cancelable = OrderStatus.PAID.name().equals(dto.getStatus())
+                && !supplierPurchaseService.anyBought(orderId);
+        return dto.toBuilder().paymentMethod(resolvePaymentMethod(orderId)).cancellable(cancelable).build();
     }
 
     /** Método de pago ORIGINAL (CARD/PAYPAL/USDT) del pago satisfactorio; WALLET si no hubo pago externo. */
