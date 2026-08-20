@@ -98,6 +98,9 @@ class PedidoGuardaElTransportistaTest {
     @Mock OrderIndexer orderIndexer;
     @Mock OrderSearchService orderSearchService;
     @Mock SupplierPurchaseService supplierPurchaseService;
+
+    @org.mockito.Mock
+    com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService declarationGroups;
     @Mock UnserviceableZoneService unserviceableZoneService;
     @Spy CustomsDutyLinesService customsDutyLinesService = new CustomsDutyLinesService(null);
 

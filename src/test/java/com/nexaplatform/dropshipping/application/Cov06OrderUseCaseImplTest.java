@@ -131,6 +131,9 @@ class Cov06OrderUseCaseImplTest {
     @Mock
     com.nexaplatform.dropshipping.application.service.SupplierPurchaseService supplierPurchaseService;
 
+    @org.mockito.Mock
+    com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService declarationGroups;
+
     @org.mockito.Spy
     com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService customsDutyLinesService =
             new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService(null);
