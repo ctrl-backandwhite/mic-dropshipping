@@ -130,13 +130,18 @@ class OrderLineSnapshotTest {
     @Mock
     OrderTrackingEventRepository trackingRepository;
 
+    private final com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService
+            declarationGroups =
+            mock(com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService.class);
+
     private final UUID productId = UUID.randomUUID();
 
     private OrderUseCaseImpl useCase() {
         return new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository,
                 userRepository, shopConnectionRepository, userAddressRepository, webhooks, walletUseCase,
                 notificationsPublisher, pricingService, affiliateProgramService, stockService, paymentUseCase,
-                orderEmailService, fulfillment, router, checkoutTotalsService, new CustomsDutyLinesService(null), mock(UnserviceableZoneService.class), operatorCommissionService, promotionService, supplierPurchaseService, trackingRepository, orderIndexer,
+                orderEmailService, fulfillment, router, checkoutTotalsService, new CustomsDutyLinesService(null), mock(UnserviceableZoneService.class), operatorCommissionService, promotionService, supplierPurchaseService, declarationGroups,
+                trackingRepository, orderIndexer,
                 orderSearchService, mock(CartService.class));
     }
 
@@ -378,5 +383,18 @@ class OrderLineSnapshotTest {
         when(trackingRepository.save(any())).thenThrow(new IllegalStateException("timeline caído"));
 
         assertThat(useCase().shipOrder(id).getStatus()).isEqualTo(OrderStatus.SHIPPED);
+    }
+
+    @Test
+    void seCongelaLaDescripcionConLaQueSeVaADeclarar() {
+        // Si el grupo se aprueba DESPUÉS de cobrar, este pedido tiene que seguir contando por lo que se
+        // declaró. Sin congelarlo, la vista previa contaría UNA línea (con la descripción del grupo) y el
+        // despacho contaría DOS (con el título del producto): esos 3 EUR los pondría el comercio.
+        product();
+        pricedAt("100.00");
+        when(declarationGroups.describeFor(any(), any())).thenReturn("Men's woven cotton trousers");
+
+        assertThat(firstLine(null, 1).getDeclaredDescription())
+                .isEqualTo("Men's woven cotton trousers");
     }
 }

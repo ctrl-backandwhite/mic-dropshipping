@@ -143,7 +143,9 @@ class CheckoutCartEmptiedTest {
                 userRepository, shopConnectionRepository, userAddressRepository, webhooks, walletUseCase,
                 notificationsPublisher, pricingService, affiliateProgramService, stockService, paymentUseCase,
                 orderEmailService, fulfillment, router, checkoutTotalsService, new CustomsDutyLinesService(null), mock(UnserviceableZoneService.class),
-                operatorCommissionService, promotionService, supplierPurchaseService, trackingRepository, orderIndexer,
+                operatorCommissionService, promotionService, supplierPurchaseService,
+                mock(com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService.class),
+                trackingRepository, orderIndexer,
                 orderSearchService, cartService);
 
         ProductEntity p = new ProductEntity();

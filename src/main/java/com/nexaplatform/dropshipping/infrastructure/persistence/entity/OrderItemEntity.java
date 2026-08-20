@@ -70,4 +70,18 @@ public class OrderItemEntity {
 
     @Column(name = "line_total_cents", nullable = false)
     private int lineTotalCents;
+
+    /**
+     * Con qué descripción se declaró esta línea en la aduana.
+     *
+     * <p>Es un snapshot de verdad, no un dato derivado: si el grupo se aprueba DESPUÉS de cobrar, este
+     * pedido tiene que seguir contando por lo que se declaró. Sin él la vista previa contaría una línea
+     * (con la descripción del grupo) y el despacho contaría dos (con el título del producto), y esos
+     * 3 EUR de diferencia los pondría el comercio.
+     *
+     * <p>Nulo en los pedidos anteriores a la agrupación: esos se resuelven por el título, que es como se
+     * declararon.
+     */
+    @Column(name = "declared_description", length = 512)
+    private String declaredDescription;
 }

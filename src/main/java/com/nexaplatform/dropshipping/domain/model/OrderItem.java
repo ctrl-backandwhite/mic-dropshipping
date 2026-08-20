@@ -54,4 +54,12 @@ public class OrderItem {
     // Language -> product translation title, resolved by the adapter; the use case
     // picks the request-language title with the legacy fallback chain.
     private Map<String, String> productTitles;
+
+    /**
+     * Con qué descripción se declaró esta línea en la aduana. Ver {@code OrderItemEntity}.
+     *
+     * <p>A diferencia de {@link #productTitles}, que se resuelve del producto ACTUAL, este se persiste:
+     * un pedido cuenta por lo que se declaró, no por cómo se agrupe hoy.
+     */
+    private String declaredDescription;
 }

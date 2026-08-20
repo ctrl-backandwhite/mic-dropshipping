@@ -21,6 +21,7 @@ import com.nexaplatform.dropshipping.application.service.StockService;
 import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.CustomsDataCheck;
+import com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService;
 import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import com.nexaplatform.dropshipping.application.service.FulfillmentRouter;
 import com.nexaplatform.dropshipping.application.service.ParcelAggregator;
@@ -140,6 +141,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final OperatorCommissionService operatorCommissionService;
     private final PromotionService promotionService;
     private final SupplierPurchaseService supplierPurchaseService;
+    /** De dónde sale la descripción con la que se declara cada línea: el grupo aprobado, o el título. */
+    private final CustomsDeclarationGroupService declarationGroups;
     /** Timeline del pedido: los pasos que marca una persona también tienen que verse ahí. */
     private final OrderTrackingEventRepository trackingRepository;
     private final OrderIndexer orderIndexer;
@@ -218,7 +221,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
         //
         // Lo fija PedidoPaisDelMargenTest; ese test falla si alguien vuelve a pisar el país aquí.
         for (OrderItemInput itemReq : req.items()) {
-            OrderItem line = buildLine(itemReq, orderLang, parcel, gross, grossByProduct);
+            OrderItem line = buildLine(itemReq, orderLang, parcel, gross, grossByProduct,
+                    order.getShippingCountry());
             order.getItems().add(line);
             subtotal = Math.addExact(subtotal, line.getLineTotalCents());
         }
@@ -260,7 +264,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
     }
 
     private OrderItem buildLine(OrderItemInput itemReq, String orderLang,
-            ParcelAggregator parcel, GrossSubtotal gross, Map<UUID, Integer> grossByProduct) {
+            ParcelAggregator parcel, GrossSubtotal gross, Map<UUID, Integer> grossByProduct,
+            String shippingCountry) {
         // Cantidad dentro de un rango sano ANTES de calcular importes. Cierra el desbordamiento de
         // enteros del cobro (unitCents * quantity) y rechaza cantidades ≤ 0 aunque el DTO no valide.
         if (itemReq.quantity() <= 0 || itemReq.quantity() > MAX_LINE_QUANTITY) {
@@ -344,7 +349,12 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 .imageUrlSnapshot(snapshotImage(product, variant))
                 .skuSnapshot(variant != null ? variant.getSku() : null).unitPriceCents(unitCents)
                 .costCents(costCents).costCnyCents(costCnyCents).quantity(itemReq.quantity())
-                .lineTotalCents(lineTotal).build();
+                .lineTotalCents(lineTotal)
+                // Se congela AQUÍ la descripción con la que se va a declarar, con el mismo país del
+                // arancel que usa checkoutTotalsService. Si el grupo se aprueba después de cobrar, este
+                // pedido seguirá contando por lo que se declaró: es lo que impide que la vista previa
+                // cuente una línea y el despacho cuente dos.
+                .declaredDescription(declarationGroups.describeFor(product, shippingCountry)).build();
     }
 
     /**
@@ -1446,11 +1456,17 @@ public class OrderUseCaseImpl implements OrderUseCase {
             // YunExpressFulfillmentService); aquí se replica ese orden, que además es el correcto: un
             // pedido antiguo debe seguir contando por lo que se declaró, no por cómo se llame el
             // producto hoy.
-            String descripcionDeclarada = item.getProductTitles() != null
-                    && item.getProductTitles().get("en") != null
-                    && !item.getProductTitles().get("en").isBlank()
-                    ? item.getProductTitles().get("en")
-                    : CustomsDutyLinesService.declaredDescriptionOf(p);
+            // El SNAPSHOT manda sobre todo lo demás: si el grupo se aprobó después de cobrar, este
+            // pedido sigue contando por lo que se declaró. Sin esta prioridad, la vista previa habría
+            // contado una línea y el despacho contaría dos, y esos 3 EUR los pondría el comercio.
+            String descripcionDeclarada = item.getDeclaredDescription() != null
+                    && !item.getDeclaredDescription().isBlank()
+                    ? item.getDeclaredDescription()
+                    : item.getProductTitles() != null
+                            && item.getProductTitles().get("en") != null
+                            && !item.getProductTitles().get("en").isBlank()
+                            ? item.getProductTitles().get("en")
+                            : CustomsDutyLinesService.declaredDescriptionOf(p);
             lines.add(new CustomsDutyLinesService.Line(p.getId(), p.getHsCode(),
                     descripcionDeclarada, p.getCountryOfOrigin(),
                     Math.max(1, item.getQuantity()),

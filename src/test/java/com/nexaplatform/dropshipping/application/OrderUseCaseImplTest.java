@@ -98,6 +98,9 @@ class OrderUseCaseImplTest {
     com.nexaplatform.dropshipping.application.service.OperatorCommissionService operatorCommissionService;
     @Mock
     com.nexaplatform.dropshipping.application.service.SupplierPurchaseService supplierPurchaseService;
+
+    @org.mockito.Mock
+    com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService declarationGroups;
     @Mock
     com.nexaplatform.dropshipping.infrastructure.integration.search.OrderIndexer orderIndexer;
     @Mock
