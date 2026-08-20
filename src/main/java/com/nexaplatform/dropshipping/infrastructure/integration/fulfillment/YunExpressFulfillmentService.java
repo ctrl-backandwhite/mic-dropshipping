@@ -911,28 +911,96 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
                                     String invoicePart, String invoiceUsage, String productUrl, String sku) {
     }
 
-    /** Declaración aduanera del pedido: una entrada de {@code Parcels[]} por línea. */
+    /**
+     * Declaración aduanera del pedido: una entrada de {@code Parcels[]} <b>por línea de declaración</b>,
+     * no por artículo del pedido.
+     *
+     * <p>El derecho de 3 EUR se cobra por línea, y lo que separa una línea de otra es la terna
+     * clasificación + descripción + origen. Emitir una entrada por artículo hacía que dos productos que
+     * el checkout contó como UNA línea —porque comparten grupo aprobado y viajan con la misma
+     * descripción— llegaran a la aduana como DOS: el segundo derecho lo acababa poniendo el comercio al
+     * despachar. Aquí se fusiona con la misma clave con la que cuenta
+     * {@code CustomsDutyLinesService}, para que lo cobrado y lo declarado coincidan.
+     *
+     * <p>Al fusionar, la <b>cantidad se suma</b> y el <b>unitario se promedia</b> — una línea de la API
+     * lleva un solo {@code UnitPrice}—. Lo que NO cambia es el valor declarado total: sobre él se miden
+     * el umbral de 150 EUR del régimen y la base del IVA. Repartirlo distinto entre líneas está bien;
+     * alterar la suma, no.
+     */
     public List<ParcelDeclaration> declaredParcels(Order order) {
-        List<ParcelDeclaration> out = new ArrayList<>();
         String currency = order.getCurrency() != null && !order.getCurrency().isBlank()
                 ? order.getCurrency().toUpperCase() : "USD";
+        Map<String, DeclarationAccumulator> porLinea = new LinkedHashMap<>();
         for (OrderItem item : order.getItems()) {
             ProductEntity product = item.getProductId() != null
                     ? productRepository.findById(item.getProductId()).orElse(null) : null;
-            out.add(new ParcelDeclaration(
-                    englishName(item, product),
-                    chineseName(item, product),
-                    product != null ? product.getHsCode() : null,
-                    Math.max(1, item.getQuantity()),
-                    item.getUnitPriceCents() / 100.0,
-                    currency,
-                    unitWeightKg(product, item),
-                    product != null ? product.getCustomsMaterial() : null,
-                    product != null ? product.getCustomsUsage() : null,
-                    item.getProductSourceUrl(),
-                    item.getSkuSnapshot()));
+            String eName = englishName(item, product);
+            String hs = product != null ? product.getHsCode() : null;
+            String origen = product != null ? product.getCountryOfOrigin() : null;
+            int cantidad = Math.max(1, item.getQuantity());
+            porLinea.computeIfAbsent(declarationKey(hs, eName, origen),
+                    clave -> new DeclarationAccumulator(new ParcelDeclaration(
+                            eName, chineseName(item, product), hs, 0, 0.0, currency,
+                            unitWeightKg(product, item),
+                            product != null ? product.getCustomsMaterial() : null,
+                            product != null ? product.getCustomsUsage() : null,
+                            item.getProductSourceUrl(), item.getSkuSnapshot())))
+                    .add(cantidad, (long) item.getUnitPriceCents() * cantidad);
+        }
+        List<ParcelDeclaration> out = new ArrayList<>();
+        for (DeclarationAccumulator acumulado : porLinea.values()) {
+            out.add(acumulado.toDeclaration());
         }
         return out;
+    }
+
+    /**
+     * Clave por la que dos mercancías van en la MISMA línea de declaración: subpartida + descripción +
+     * origen. Es la terna del art. 1(61) del Reglamento Delegado (UE) 2015/2446, la misma que usa
+     * {@code CustomsDutyLinesService} para contar. Si las dos divergieran, el cliente pagaría un número
+     * de derechos y la aduana cobraría otro.
+     *
+     * <p>Sin código HS la clave es la propia descripción: no se agrupa con nadie por clasificación,
+     * porque atribuirle una que nadie ha verificado es responsabilidad del declarante.
+     */
+    private static String declarationKey(String hsCode, String eName, String originCountry) {
+        String digits = hsCode == null ? "" : hsCode.replaceAll("[^0-9]", "");
+        String hs6 = digits.length() >= 6 ? digits.substring(0, 6) : "SIN-HS";
+        return hs6 + "|" + normalizeDeclared(eName) + "|" + normalizeDeclared(originCountry);
+    }
+
+    private static String normalizeDeclared(String text) {
+        return text == null ? "" : text.trim().replaceAll("\\s+", " ").toUpperCase(Locale.ROOT);
+    }
+
+    /**
+     * Va sumando lo que cae en una misma línea de declaración.
+     *
+     * <p>Guarda el valor en céntimos y solo divide al final: promediar unitarios sobre la marcha
+     * arrastraría el redondeo de cada paso al valor declarado, que es justo lo que no puede moverse.
+     */
+    private static final class DeclarationAccumulator {
+
+        private final ParcelDeclaration plantilla;
+        private int cantidad;
+        private long valorCents;
+
+        private DeclarationAccumulator(ParcelDeclaration plantilla) {
+            this.plantilla = plantilla;
+        }
+
+        private DeclarationAccumulator add(int cantidad, long valorCents) {
+            this.cantidad += cantidad;
+            this.valorCents += valorCents;
+            return this;
+        }
+
+        private ParcelDeclaration toDeclaration() {
+            double unitario = cantidad == 0 ? 0.0 : valorCents / 100.0 / cantidad;
+            return new ParcelDeclaration(plantilla.eName(), plantilla.cName(), plantilla.hsCode(), cantidad,
+                    unitario, plantilla.currencyCode(), plantilla.unitWeightKg(), plantilla.invoicePart(),
+                    plantilla.invoiceUsage(), plantilla.productUrl(), plantilla.sku());
+        }
     }
 
     /**
@@ -956,6 +1024,12 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
 
     /** Nombre declarado en inglés: traducción EN del pedido, luego la del producto, luego el título guardado. */
     private String englishName(OrderItem item, ProductEntity product) {
+        // El snapshot manda: es la descripción con la que el checkout CONTÓ los derechos. Si aquí se
+        // transmitiera otra, la aduana armaría otras líneas y el número de derechos dejaría de cuadrar
+        // con lo que se le cobró al cliente.
+        if (item.getDeclaredDescription() != null && !item.getDeclaredDescription().isBlank()) {
+            return item.getDeclaredDescription();
+        }
         if (item.getProductTitles() != null) {
             String fromOrder = item.getProductTitles().get("en");
             if (fromOrder != null && !fromOrder.isBlank()) {
