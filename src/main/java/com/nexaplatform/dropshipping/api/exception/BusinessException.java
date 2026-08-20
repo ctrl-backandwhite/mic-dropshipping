@@ -18,4 +18,13 @@ public class BusinessException extends BaseException {
     public BusinessException(String code, List<String> detail) {
         super(code, detail);
     }
+
+    /**
+     * Código catalogado + mensaje técnico + detalle. El usuario ve el texto localizado que
+     * {@link ErrorCode} resuelve a partir del código; el mensaje y el detalle son para el registro y
+     * para quien diagnostica —ahí es donde va el motivo literal que devuelve la pasarela—.
+     */
+    public BusinessException(String code, String message, List<String> detail) {
+        super(message, code, detail);
+    }
 }

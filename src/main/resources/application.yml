@@ -376,6 +376,13 @@ nexadrop:
   fulfillment:
     sync-enabled: ${FULFILLMENT_SYNC_ENABLED:true}
     sync-interval-ms: ${FULFILLMENT_SYNC_INTERVAL_MS:60000}
+    # Cuántas formas de envío se le ofrecen al cliente, de la más barata a la más cara.
+    #
+    # CJ devuelve QUINCE opciones para España y YunExpress añade las suyas: esa lista deja de ser
+    # elección y pasa a ser un catálogo en mitad del pago. El recorte se aplica DESPUÉS de ordenar por
+    # precio, así que lo que sobrevive son siempre las más baratas. Cero o menos = sin recorte, para
+    # depurar una cotización completa sin tocar el código.
+    max-shipping-options: ${FULFILLMENT_MAX_SHIPPING_OPTIONS:5}
     # Almacén chino de Yunfulfillment donde el proveedor de 1688 entrega la mercancía.
     #
     # CNCHASHAN (Dongguan, Guangdong) es el almacén DEFINITIVO del negocio, decidido el 8-ago-2026.

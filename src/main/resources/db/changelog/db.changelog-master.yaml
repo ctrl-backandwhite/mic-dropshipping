@@ -307,3 +307,5 @@ databaseChangeLog:
       file: db/changelog/schema-v148-iva-destinos-restantes.sql
   - include:
       file: db/changelog/schema-v149-prepago-iva-por-pais.sql
+  - include:
+      file: db/changelog/schema-v150-compras-huerfanas-de-pedidos-cancelados.sql

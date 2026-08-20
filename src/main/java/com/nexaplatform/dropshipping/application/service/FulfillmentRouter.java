@@ -4,8 +4,8 @@ import com.nexaplatform.dropshipping.domain.model.ShippingOption;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -38,11 +38,19 @@ import java.util.List;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class FulfillmentRouter {
 
     private final List<FulfillmentProvider> transportistas;
     private final CarrierEligibilityService elegibilidad;
+    /** Cuántas formas de envío se le llegan a ofrecer al cliente. Cero o menos = todas. */
+    private final int maxOpciones;
+
+    public FulfillmentRouter(List<FulfillmentProvider> transportistas, CarrierEligibilityService elegibilidad,
+            @Value("${nexadrop.fulfillment.max-shipping-options:5}") int maxOpciones) {
+        this.transportistas = transportistas;
+        this.elegibilidad = elegibilidad;
+        this.maxOpciones = maxOpciones;
+    }
 
     /**
      * Lo que se le puede ofrecer al cliente para este pedido y este destino.
@@ -66,7 +74,7 @@ public class FulfillmentRouter {
             }
             todas.addAll(suya.options());
         }
-        List<ShippingOption> ofrecibles = ordenar(sinLineasRepetidas(todas));
+        List<ShippingOption> ofrecibles = lasMasBaratas(ordenar(sinLineasRepetidas(todas)));
         if (cabecera == null) {
             return new ShippingQuote(false, pais, 0, null, null, 0, 0, null, ofrecibles);
         }
@@ -151,5 +159,26 @@ public class FulfillmentRouter {
                 .thenComparingInt(ShippingOption::etaMaxDays)
                 .thenComparingInt(ShippingOption::etaMinDays));
         return ordenadas;
+    }
+
+    /**
+     * Se queda con el principio de la lista ya ordenada: las más baratas.
+     *
+     * <p>CJ devuelve quince formas de envío para España y YunExpress añade las suyas. Una lista así no
+     * es más elección, es un catálogo en mitad del pago: el cliente que tenía que decidir entre dos
+     * cosas acaba comparando quince y se va. Se le ofrece un abanico corto, y el criterio del corte es
+     * el precio porque es lo que se le está pidiendo que compare.
+     *
+     * <p><b>Va después de ordenar, nunca antes.</b> Recortar la lista cruda dejaría fuera opciones
+     * baratas solo porque su transportista contestó el segundo.
+     *
+     * <p>Un tope de cero o menos no recorta nada: es la vía de escape para depurar una cotización
+     * completa sin tocar el código.
+     */
+    private List<ShippingOption> lasMasBaratas(List<ShippingOption> ordenadas) {
+        if (maxOpciones <= 0 || ordenadas.size() <= maxOpciones) {
+            return ordenadas;
+        }
+        return new ArrayList<>(ordenadas.subList(0, maxOpciones));
     }
 }

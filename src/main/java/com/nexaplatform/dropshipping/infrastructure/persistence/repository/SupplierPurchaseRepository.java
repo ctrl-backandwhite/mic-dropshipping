@@ -29,6 +29,15 @@ public interface SupplierPurchaseRepository extends JpaRepository<SupplierPurcha
     boolean existsByOrderId(UUID orderId);
 
     /**
+     * Las compras de VARIOS pedidos en los estados dados, en una sola consulta.
+     *
+     * <p>Es lo que permite marcar la lista de «Mis pedidos» sin preguntar una vez por pedido: con
+     * treinta pedidos en pantalla, treinta consultas se notan.
+     */
+    List<SupplierPurchaseEntity> findByOrderIdInAndStatusIn(Collection<UUID> orderIds,
+            Collection<SupplierPurchaseStatus> statuses);
+
+    /**
      * ¿Queda alguna compra de este pedido sin salir hacia el almacén?
      *
      * <p>Es el freno de la guía internacional: mientras haya un bulto sin comprar o sin despachar, no

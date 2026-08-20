@@ -368,4 +368,52 @@ class SupplierPurchaseServiceTest {
 
         assertThat(out.getExportedAt()).isNull();
     }
+
+    // ------- cancelar el pedido retira del tablero SOLO lo que todavía no se ha comprado -------
+
+    @Test
+    void cancelarElPedidoRetiraLasComprasQueAunNoSeHabianComprado() {
+        // Un pedido cancelado dejaba sus compras en PENDING y el tablero las seguía pintando: el admin
+        // acababa comprando en 1688 género de una venta que ya no existe, y ese dinero no se recupera.
+        SupplierPurchaseEntity porComprar = SupplierPurchaseEntity.builder().id(UUID.randomUUID())
+                .orderId(ORDER_ID).status(SupplierPurchaseStatus.PENDING).build();
+        when(purchaseRepository.findByOrderId(ORDER_ID)).thenReturn(List.of(porComprar));
+        when(purchaseRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        int retiradas = service.cancelUnbought(ORDER_ID, "pedido cancelado");
+
+        assertThat(retiradas).isEqualTo(1);
+        assertThat(porComprar.getStatus()).isEqualTo(SupplierPurchaseStatus.CANCELLED);
+        assertThat(porComprar.getNotes()).isEqualTo("pedido cancelado");
+    }
+
+    @Test
+    void cancelarElPedidoNoRetiraLaMercanciaYaCompradaAlProveedor() {
+        // Aquí hay género real pagado y en camino. Esconderlo del tablero es perder el rastro de un
+        // bulto que el almacén DESTRUYE sin compensación a los 30 días si nadie da instrucciones.
+        SupplierPurchaseEntity yaComprada = SupplierPurchaseEntity.builder().id(UUID.randomUUID())
+                .orderId(ORDER_ID).status(SupplierPurchaseStatus.PURCHASED).build();
+        SupplierPurchaseEntity enCamino = SupplierPurchaseEntity.builder().id(UUID.randomUUID())
+                .orderId(ORDER_ID).status(SupplierPurchaseStatus.IN_TRANSIT).build();
+        when(purchaseRepository.findByOrderId(ORDER_ID)).thenReturn(List.of(yaComprada, enCamino));
+
+        int retiradas = service.cancelUnbought(ORDER_ID, "pedido cancelado");
+
+        assertThat(retiradas).isZero();
+        assertThat(yaComprada.getStatus()).isEqualTo(SupplierPurchaseStatus.PURCHASED);
+        assertThat(enCamino.getStatus()).isEqualTo(SupplierPurchaseStatus.IN_TRANSIT);
+        verify(purchaseRepository, never()).save(any());
+    }
+
+    @Test
+    void cancelarDosVecesElMismoPedidoNoVuelveAContarLoYaRetirado() {
+        // El admin puede cancelar un pedido ya cancelado (la operación es idempotente): no debe volver
+        // a tocar lo que ya estaba retirado ni inflar el recuento.
+        SupplierPurchaseEntity yaRetirada = SupplierPurchaseEntity.builder().id(UUID.randomUUID())
+                .orderId(ORDER_ID).status(SupplierPurchaseStatus.CANCELLED).build();
+        when(purchaseRepository.findByOrderId(ORDER_ID)).thenReturn(List.of(yaRetirada));
+
+        assertThat(service.cancelUnbought(ORDER_ID, "pedido cancelado")).isZero();
+        verify(purchaseRepository, never()).save(any());
+    }
 }
