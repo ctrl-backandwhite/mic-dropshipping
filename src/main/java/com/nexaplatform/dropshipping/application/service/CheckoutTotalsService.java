@@ -52,17 +52,35 @@ public class CheckoutTotalsService {
      *                              «descuento en el envío»; lo que sobre de la bolsa se queda como ganancia
      */
     public record CheckoutTotals(int shippingBaseCents, int customsHandlingCents, int shippingCents,
-            int taxCents, int taxRateBps, CustomsValuation customs, int shippingSubsidyCents) {
+            int taxCents, int taxRateBps, CustomsValuation customs, int shippingSubsidyCents,
+            int customsSubsidyCents) {
 
         /** Sin subvención: el atajo de los llamantes y las pruebas que no la usan. */
         public CheckoutTotals(int shippingBaseCents, int customsHandlingCents, int shippingCents,
                 int taxCents, int taxRateBps, CustomsValuation customs) {
-            this(shippingBaseCents, customsHandlingCents, shippingCents, taxCents, taxRateBps, customs, 0);
+            this(shippingBaseCents, customsHandlingCents, shippingCents, taxCents, taxRateBps, customs, 0, 0);
         }
 
-        /** ¿La bolsa cubrió el envío entero? Es lo que decide si al cliente se le dice «envío gratis». */
+        /** Lo que se gasta de la bolsa en total: porte más arancel. */
+        public int subsidyCents() {
+            return Math.addExact(shippingSubsidyCents, customsSubsidyCents);
+        }
+
+        /** Qué parte del PORTE estamos cubriendo (0-100). */
+        public int shippingSubsidyPercent() {
+            return shippingBaseCents <= 0 ? 0
+                    : (int) Math.round(shippingSubsidyCents * 100.0 / shippingBaseCents);
+        }
+
+        /** Qué parte del ARANCEL estamos cubriendo (0-100). */
+        public int customsSubsidyPercent() {
+            return customsHandlingCents <= 0 ? 0
+                    : (int) Math.round(customsSubsidyCents * 100.0 / customsHandlingCents);
+        }
+
+        /** ¿La bolsa cubrió el PORTE entero? Es lo que decide si al cliente se le dice «envío gratis». */
         public boolean freeShipping() {
-            return shippingCents == 0 && shippingSubsidyCents > 0;
+            return shippingBaseCents > 0 && shippingSubsidyCents >= shippingBaseCents;
         }
 
         /**
@@ -74,7 +92,7 @@ public class CheckoutTotalsService {
          */
         public int subsidyPercent() {
             int sinBolsa = Math.addExact(shippingBaseCents, customsHandlingCents);
-            return sinBolsa <= 0 ? 0 : (int) Math.round(shippingSubsidyCents * 100.0 / sinBolsa);
+            return sinBolsa <= 0 ? 0 : (int) Math.round(subsidyCents() * 100.0 / sinBolsa);
         }
 
         /** Total a cobrar = (subtotal − descuento) + envío (con recargo) + impuesto. */
@@ -138,11 +156,22 @@ public class CheckoutTotalsService {
             log.debug("Despacho {}: modo={} declarado={} umbralSuperado={} recargo={}", country,
                     customs.taxMode(), customs.declaredValueCents(), customs.deMinimisExceeded(), handling);
         }
-        // El impuesto ya está calculado sobre la base REAL, así que la bolsa solo toca lo que se cobra.
-        int aCobrar = Math.addExact(base, handling);
+        // La bolsa se reparte por conceptos y en este orden: PRIMERO el porte y, si sobra, el arancel.
+        // Se lleva la cuenta separada porque el resumen enseña el porcentaje cubierto DE CADA UNO —«envío
+        // gratis, subsidio 100 %» y «arancel, subsidio 40 %»—, y con un solo número no se puede.
         int bolsa = Math.max(0, shippingSubsidyCents);
-        int aplicado = Math.min(bolsa, aCobrar);
-        return new CheckoutTotals(base, handling, aCobrar - aplicado, taxCents, taxRateBps, customs,
-                aplicado);
+        int subvencionPorte = Math.min(bolsa, base);
+        int subvencionArancel = Math.min(bolsa - subvencionPorte, handling);
+        int porteCobrado = base - subvencionPorte;
+
+        // El IVA se recalcula sobre lo que de VERDAD se cobra de porte. Un descuento concedido en el
+        // momento de la operación no forma parte de la base imponible: si el envío sale gratis no hay
+        // envío que gravar, y seguir cobrando su IVA sería repercutirle al cliente el impuesto de un
+        // importe que no ha pagado. El arancel nunca estuvo en esta base y sigue sin estarlo.
+        int taxCentsFinal = porteCobrado == base ? taxCents
+                : taxService.taxCentsFor(country, region, Math.addExact(intrinsic, porteCobrado));
+
+        return new CheckoutTotals(base, handling, porteCobrado + (handling - subvencionArancel),
+                taxCentsFinal, taxRateBps, customs, subvencionPorte, subvencionArancel);
     }
 }

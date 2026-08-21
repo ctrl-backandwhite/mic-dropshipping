@@ -198,8 +198,253 @@ class SubvencionEnvioRedondeoTest {
             CheckoutTotals t = totals.compute("ES", null, 100_00, 17_00,
                     List.of(new DutyParcel(100_00, 1)), 500_00);
 
-            assertThat(t.shippingSubsidyCents()).isEqualTo(17_00 + 3_00);
+            assertThat(t.subsidyCents()).isEqualTo(17_00 + 3_00);
             assertThat(t.shippingCents()).isZero();
+        }
+    }
+
+    @Nested
+    @DisplayName("El escenario del dueño, con sus números")
+    class EscenarioDelDueno {
+
+        /**
+         * Carrito de 120 €, envío 30 €, arancel 24 €, ganancia 70 €.
+         *
+         * <p>De los 70 se apartan 5 para el negocio: quedan 65 de bolsa. Cubren el envío entero (30) y
+         * el arancel entero (24) = 54, y los 11 que sobran <b>no se gastan</b>: vuelven a la ganancia.
+         * El negocio se lleva 5 + 11 = 16 y el cliente no paga ni envío ni aduana.
+         */
+        @Test
+        void conSetentaDeGananciaElEnvioYElArancelSalenGRATISYSobranOnce() {
+            org.mockito.Mockito.doReturn(new BigDecimal("5.00")).when(currencyService).toUsd(any(), anyString());
+            org.mockito.Mockito.doReturn(new CustomsValuation("ES", TaxMode.DDP, 0, false,
+                    OverThresholdPolicy.SURCHARGE, 24_00, false, "", false))
+                    .when(customsValuation).valuate(any(), anyInt(), anyInt(), anyList());
+            org.mockito.Mockito.doAnswer(i -> (int) Math.round((int) i.getArgument(2) * 0.21))
+                    .when(taxService).taxCentsFor(any(), any(), anyInt());
+
+            int bolsa = subsidy.subsidyUsdCents(List.of(new Linea(PRODUCTO, 1, 70_00, 0)), "ES");
+            assertThat(bolsa).as("70 de ganancia menos los 5 del suelo").isEqualTo(65_00);
+
+            CheckoutTotals t = totals.compute("ES", null, 120_00, 30_00,
+                    List.of(new DutyParcel(120_00, 8)), bolsa);
+
+            assertThat(t.shippingSubsidyPercent()).as("envío cubierto entero").isEqualTo(100);
+            assertThat(t.customsSubsidyPercent()).as("arancel cubierto entero").isEqualTo(100);
+            assertThat(t.freeShipping()).isTrue();
+            assertThat(t.shippingCents()).as("el cliente no paga ni envío ni aduana").isZero();
+
+            assertThat(bolsa - t.subsidyCents()).as("lo que sobra NO se gasta: vuelve a la ganancia")
+                    .isEqualTo(11_00);
+
+            // El IVA va sobre lo que de verdad se cobra: la mercancía, sin envío que gravar.
+            assertThat(t.taxCents()).isEqualTo(25_20);
+            assertThat(t.totalCents(120_00)).isEqualTo(120_00 + 25_20);
+        }
+
+        @Test
+        void siLaBolsaNoLlegaACubrirloTodoSeEnsenaElPORCENTAJEQueCubre() {
+            // Con menos ganancia el envío se cubre a medias y el arancel no se toca: cada concepto lleva
+            // su propio porcentaje, que es lo que el comprador necesita para entender qué está pagando.
+            org.mockito.Mockito.doReturn(new BigDecimal("5.00")).when(currencyService).toUsd(any(), anyString());
+            org.mockito.Mockito.doReturn(new CustomsValuation("ES", TaxMode.DDP, 0, false,
+                    OverThresholdPolicy.SURCHARGE, 24_00, false, "", false))
+                    .when(customsValuation).valuate(any(), anyInt(), anyInt(), anyList());
+
+            int bolsa = subsidy.subsidyUsdCents(List.of(new Linea(PRODUCTO, 1, 17_00, 0)), "ES");
+            assertThat(bolsa).isEqualTo(12_00);
+
+            CheckoutTotals t = totals.compute("ES", null, 120_00, 30_00,
+                    List.of(new DutyParcel(120_00, 8)), bolsa);
+
+            assertThat(t.shippingSubsidyPercent()).isEqualTo(40);
+            assertThat(t.customsSubsidyPercent()).as("no llega al arancel: nada").isZero();
+            assertThat(t.freeShipping()).isFalse();
+            assertThat(t.shippingCents()).isEqualTo(18_00 + 24_00);
+        }
+
+        @Test
+        void laBolsaSeAgotaEnElENVIOAntesDeTocarElARANCEL() {
+            // El orden es el que pidió el dueño: primero el envío entero, y solo lo que sobre al arancel.
+            org.mockito.Mockito.doReturn(new BigDecimal("5.00")).when(currencyService).toUsd(any(), anyString());
+            org.mockito.Mockito.doReturn(new CustomsValuation("ES", TaxMode.DDP, 0, false,
+                    OverThresholdPolicy.SURCHARGE, 24_00, false, "", false))
+                    .when(customsValuation).valuate(any(), anyInt(), anyInt(), anyList());
+
+            int bolsa = subsidy.subsidyUsdCents(List.of(new Linea(PRODUCTO, 1, 41_00, 0)), "ES");
+            assertThat(bolsa).isEqualTo(36_00);
+
+            CheckoutTotals t = totals.compute("ES", null, 120_00, 30_00,
+                    List.of(new DutyParcel(120_00, 8)), bolsa);
+
+            assertThat(t.shippingSubsidyCents()).isEqualTo(30_00);
+            assertThat(t.customsSubsidyCents()).as("los 6 que sobran van al arancel").isEqualTo(6_00);
+            assertThat(t.customsSubsidyPercent()).isEqualTo(25);
+        }
+    }
+
+    @Nested
+    @DisplayName("Con decimales incómodos el desglose sigue cuadrando al céntimo")
+    class Decimales {
+
+        /** Deja el escenario montado con el arancel indicado y el IVA al 21 % de lo que se le pase. */
+        private void escenario(int arancelCents) {
+            org.mockito.Mockito.doReturn(new BigDecimal("5.00")).when(currencyService).toUsd(any(), anyString());
+            org.mockito.Mockito.doReturn(new CustomsValuation("ES", TaxMode.DDP, 0, false,
+                    OverThresholdPolicy.SURCHARGE, arancelCents, false, "", false))
+                    .when(customsValuation).valuate(any(), anyInt(), anyInt(), anyList());
+            org.mockito.Mockito.doAnswer(i -> (int) Math.round((int) i.getArgument(2) * 0.21))
+                    .when(taxService).taxCentsFor(any(), any(), anyInt());
+        }
+
+        /** Comprueba la identidad que ve el comprador: lo que suma en pantalla ES lo que se cobra. */
+        private void cuadra(CheckoutTotals t, int subtotal) {
+            int porteCobrado = t.shippingBaseCents() - t.shippingSubsidyCents();
+            int arancelCobrado = t.customsHandlingCents() - t.customsSubsidyCents();
+            assertThat(t.shippingCents()).as("envío cobrado = porte + arancel, ya subvencionados")
+                    .isEqualTo(porteCobrado + arancelCobrado);
+            assertThat(t.totalCents(subtotal))
+                    .as("subtotal + porte + arancel − subvenciones + IVA")
+                    .isEqualTo(subtotal + porteCobrado + arancelCobrado + t.taxCents());
+            assertThat(porteCobrado).isNotNegative();
+            assertThat(arancelCobrado).isNotNegative();
+            assertThat(t.subsidyCents()).isEqualTo(t.shippingSubsidyCents() + t.customsSubsidyCents());
+        }
+
+        @Test
+        void carritoDe11999ConPorteDe2997YArancelDe2399() {
+            // Todo con céntimos impares: el sitio donde un redondeo mal puesto se lleva un céntimo.
+            escenario(23_99);
+            int bolsa = subsidy.subsidyUsdCents(List.of(new Linea(PRODUCTO, 1, 70_03, 0)), "ES");
+            assertThat(bolsa).as("70,03 menos el suelo de 5,00").isEqualTo(65_03);
+
+            CheckoutTotals t = totals.compute("ES", null, 119_99, 29_97,
+                    List.of(new DutyParcel(119_99, 8)), bolsa);
+
+            assertThat(t.shippingSubsidyCents()).isEqualTo(29_97);
+            assertThat(t.customsSubsidyCents()).isEqualTo(23_99);
+            assertThat(t.shippingCents()).isZero();
+            assertThat(t.taxCents()).as("IVA sobre la mercancía sola: 21 % de 119,99").isEqualTo(25_20);
+            cuadra(t, 119_99);
+        }
+
+        @Test
+        void laBolsaSeQuedaAUNCENTIMODeCubrirElPorte() {
+            // El borde exacto por abajo: 99,99 % no es 100 %, y el envío NO puede decir «gratis».
+            escenario(23_99);
+            CheckoutTotals t = totals.compute("ES", null, 119_99, 29_97,
+                    List.of(new DutyParcel(119_99, 8)), 29_96);
+
+            assertThat(t.shippingSubsidyCents()).isEqualTo(29_96);
+            assertThat(t.customsSubsidyCents()).isZero();
+            assertThat(t.freeShipping()).as("falta un céntimo: no es gratis").isFalse();
+            assertThat(t.shippingSubsidyPercent()).isEqualTo(100);
+            cuadra(t, 119_99);
+        }
+
+        @Test
+        void laBolsaCubreElPorteJUSTOYNiUnCentimoMas() {
+            escenario(23_99);
+            CheckoutTotals t = totals.compute("ES", null, 119_99, 29_97,
+                    List.of(new DutyParcel(119_99, 8)), 29_97);
+
+            assertThat(t.freeShipping()).isTrue();
+            assertThat(t.customsSubsidyCents()).isZero();
+            assertThat(t.shippingCents()).isEqualTo(23_99);
+            cuadra(t, 119_99);
+        }
+
+        @Test
+        void unSobranteImparSeVaEnteroAlArancel() {
+            // 40,00 de bolsa: 29,97 al porte y los 10,03 restantes al arancel, sin perder el céntimo.
+            escenario(23_99);
+            CheckoutTotals t = totals.compute("ES", null, 119_99, 29_97,
+                    List.of(new DutyParcel(119_99, 8)), 40_00);
+
+            assertThat(t.shippingSubsidyCents()).isEqualTo(29_97);
+            assertThat(t.customsSubsidyCents()).isEqualTo(10_03);
+            assertThat(t.customsSubsidyPercent()).as("10,03 de 23,99 es el 42 %").isEqualTo(42);
+            cuadra(t, 119_99);
+        }
+
+        @Test
+        void unTercioDeUnImporteImparRedondeaAlEnteroMasCercano() {
+            escenario(23_99);
+            CheckoutTotals t = totals.compute("ES", null, 119_99, 29_97,
+                    List.of(new DutyParcel(119_99, 8)), 9_99);
+
+            assertThat(t.shippingSubsidyPercent()).as("9,99 de 29,97 es exactamente un tercio").isEqualTo(33);
+            cuadra(t, 119_99);
+        }
+    }
+
+    @Nested
+    @DisplayName("Los bordes que nadie mira")
+    class Bordes {
+
+        private void escenario(int arancelCents) {
+            org.mockito.Mockito.doReturn(new BigDecimal("5.00")).when(currencyService).toUsd(any(), anyString());
+            org.mockito.Mockito.doReturn(new CustomsValuation("ES", TaxMode.DDP, 0, false,
+                    OverThresholdPolicy.SURCHARGE, arancelCents, false, "", false))
+                    .when(customsValuation).valuate(any(), anyInt(), anyInt(), anyList());
+            org.mockito.Mockito.doAnswer(i -> (int) Math.round((int) i.getArgument(2) * 0.21))
+                    .when(taxService).taxCentsFor(any(), any(), anyInt());
+        }
+
+        @Test
+        void sinPorteQueCobrarLaBolsaVaDIRECTAAlArancel() {
+            // Envío gratis de fábrica (el transportista no cobra): la bolsa no se pierde, va al arancel.
+            escenario(23_99);
+            CheckoutTotals t = totals.compute("ES", null, 119_99, 0,
+                    List.of(new DutyParcel(119_99, 8)), 10_00);
+
+            assertThat(t.shippingSubsidyCents()).isZero();
+            assertThat(t.customsSubsidyCents()).isEqualTo(10_00);
+            assertThat(t.freeShipping()).as("sin porte que cubrir no se anuncia «envío gratis»").isFalse();
+            assertThat(t.shippingSubsidyPercent()).isZero();
+        }
+
+        @Test
+        void sinArancelLaBolsaSoloPuedeIrAlPorteYElSobranteNoSeGasta() {
+            escenario(0);
+            CheckoutTotals t = totals.compute("ES", null, 119_99, 29_97,
+                    List.of(new DutyParcel(119_99, 0)), 99_00);
+
+            assertThat(t.shippingSubsidyCents()).isEqualTo(29_97);
+            assertThat(t.customsSubsidyCents()).isZero();
+            assertThat(t.customsSubsidyPercent()).as("sin arancel, ni porcentaje ni división por cero").isZero();
+            assertThat(t.subsidyCents()).isEqualTo(29_97);
+        }
+
+        @Test
+        void sinNadaQueCobrarNoSeGastaNiUnCentimoDeLaBolsa() {
+            escenario(0);
+            CheckoutTotals t = totals.compute("ES", null, 119_99, 0, List.of(), 99_00);
+
+            assertThat(t.subsidyCents()).isZero();
+            assertThat(t.shippingCents()).isZero();
+            assertThat(t.freeShipping()).isFalse();
+        }
+
+        @Test
+        void unaBolsaNEGATIVANoSumaNiResta() {
+            // No debería llegar nunca, pero este cálculo no puede ser quien invente un cobro de más.
+            escenario(23_99);
+            CheckoutTotals t = totals.compute("ES", null, 119_99, 29_97,
+                    List.of(new DutyParcel(119_99, 8)), -50_00);
+
+            assertThat(t.subsidyCents()).isZero();
+            assertThat(t.shippingCents()).isEqualTo(29_97 + 23_99);
+        }
+
+        @Test
+        void elIVASoloSeRECALCULACuandoElPorteDeVerdadCambia() {
+            // Sin subvención el impuesto es el de siempre: ni una consulta de más ni un céntimo distinto.
+            escenario(23_99);
+            CheckoutTotals conBolsa = totals.compute("ES", null, 119_99, 29_97,
+                    List.of(new DutyParcel(119_99, 8)), 0);
+
+            assertThat(conBolsa.taxCents()).isEqualTo((int) Math.round((119_99 + 29_97) * 0.21));
         }
     }
 }

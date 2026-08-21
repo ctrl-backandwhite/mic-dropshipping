@@ -159,9 +159,11 @@ class CheckoutTotalsServiceTest {
                 List.of(new DutyParcel(100_00, 1)), 999_00);
 
         assertThat(t.shippingCents()).isZero();
-        assertThat(t.shippingSubsidyCents())
-                .as("solo se apunta lo que de verdad se ha gastado de la bolsa")
+        assertThat(t.subsidyCents())
+                .as("solo se apunta lo que de verdad se ha gastado de la bolsa, repartido en sus dos conceptos")
                 .isEqualTo(20_00 + t.customsHandlingCents());
+        assertThat(t.shippingSubsidyCents()).isEqualTo(20_00);
+        assertThat(t.customsSubsidyCents()).isEqualTo(t.customsHandlingCents());
     }
 
     @Test
