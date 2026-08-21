@@ -9,6 +9,7 @@ import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
+import com.nexaplatform.dropshipping.application.service.ShippingSubsidyService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
@@ -93,6 +94,8 @@ class OrderUseCaseImplTest {
     FulfillmentRouter router;
     @Mock
     CheckoutTotalsService checkoutTotalsService;
+    @Mock
+    ShippingSubsidyService shippingSubsidyService;
 
     @Mock
     com.nexaplatform.dropshipping.application.service.OperatorCommissionService operatorCommissionService;
@@ -120,7 +123,7 @@ class OrderUseCaseImplTest {
                 .thenReturn(ShippingQuote.unsupported("XX"));
         // Por defecto, sin impuesto ni recargo de despacho: total = subtotal + envío, como en los
         // tests de billing existentes. El envío devuelto es el mismo que entra (sin handling fee).
-        lenient().when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList()))
+        lenient().when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList(), anyInt()))
                 .thenAnswer(inv -> noCustomsTotals(inv.getArgument(3)));
     }
 
@@ -179,7 +182,7 @@ class OrderUseCaseImplTest {
         when(pricingService.priceFor(any(), any())).thenReturn(priced("12.50"));
         CustomsValuationService.CustomsValuation blocked = new CustomsValuationService.CustomsValuation("MX",
                 TaxMode.DDP, 0, true, OverThresholdPolicy.BLOCK, 0, true, "150 EUR", false);
-        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList()))
+        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList(), anyInt()))
                 .thenReturn(new CheckoutTotalsService.CheckoutTotals(0, 0, 0, 0, 0, blocked));
 
         var req = new CreateOrderRequest("EXT-002",

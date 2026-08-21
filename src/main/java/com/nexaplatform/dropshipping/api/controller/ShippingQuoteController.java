@@ -125,6 +125,23 @@ public class ShippingQuoteController {
             /** Una entrada por línea del carrito, con su unitario y su importe, ya formateados. */
             List<QuoteLine> items,
             /**
+             * Descuento en el envío que estamos poniendo nosotros, ya formateado; "" si no hay.
+             *
+             * <p>Sale de dos sitios: el porte del proveedor que se cobra por cada unidad repetida del
+             * mismo producto y no se gasta —el proveedor manda un solo bulto—, y la ganancia del pedido
+             * por encima de 5 EUR en la Unión Europea.
+             */
+            String shippingSubsidyFormatted,
+            /**
+             * Qué PORCENTAJE del envío y la aduana estamos cubriendo (0-100).
+             *
+             * <p>Lo calcula el backend, como todos los importes: el frontend no hace cuentas. 100 significa
+             * que el envío le sale gratis al cliente.
+             */
+            int shippingSubsidyPercent,
+            /** true cuando la subvención cubre el envío entero y hay que decir «envío gratis». */
+            boolean freeShipping,
+            /**
              * Total del pedido en céntimos de DÓLAR: producto + envío + impuesto.
              *
              * <p>Va además del total formateado porque el checkout necesita compararlo con el saldo del
@@ -222,6 +239,15 @@ public class ShippingQuoteController {
                 preview.shippingDisplay().subtract(customsDisplay), code);
         // amountUsdCents = envío TOTAL (tarifa + recargo de despacho), que es lo que se cobrará. Si se
         // devolviera la tarifa sin recargo, el front pintaría un envío distinto del facturado.
+        // Descuento en el envío: importe y porcentaje cubierto. El porcentaje se mide sobre lo que el
+        // cliente habría pagado de envío y aduana SIN la bolsa, que es lo que da sentido a «te cubrimos el
+        // 43 %»; medirlo sobre lo que queda por pagar daría un número que sube cuanto menos se cubre.
+        int subsidy = preview.totals().shippingSubsidyCents();
+        String subsidyFmt = subsidy <= 0 ? ""
+                : currencyService.formatDisplay(currencyService.usdToDisplay(
+                        java.math.BigDecimal.valueOf(subsidy, 2)), code);
+        int subsidyPercent = preview.totals().subsidyPercent();
+
         QuoteResponse body = new QuoteResponse(q.supported(), q.countryCode(), preview.shippingUsdCents(),
                 q.carrier(), q.serviceName(), q.etaMinDays(), q.etaMaxDays(), q.zone(), preview.taxRateBps(),
                 currencyService.formatDisplay(preview.shippingDisplay(), code),
@@ -248,6 +274,7 @@ public class ShippingQuoteController {
                         .map(l -> new QuoteLine(l.productId(), l.variantId(), l.quantity(), l.unitFormatted(),
                                 l.lineSubtotalFormatted()))
                         .toList(),
+                subsidyFmt, subsidyPercent, preview.totals().freeShipping(),
                 preview.totals().totalCents(preview.subtotalUsdCents() - preview.discountUsdCents()));
         return ResponseEntity.ok(body);
     }

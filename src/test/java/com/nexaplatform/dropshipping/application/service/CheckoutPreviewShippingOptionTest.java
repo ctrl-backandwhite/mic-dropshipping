@@ -60,7 +60,7 @@ class CheckoutPreviewShippingOptionTest {
     private final CustomsDeclarationGroupService declarationGroups = mock(CustomsDeclarationGroupService.class);
 
 
-    private final CheckoutPreviewService service = new CheckoutPreviewService(shipping, totals, pricing,
+    private final CheckoutPreviewService service = new CheckoutPreviewService(shipping, totals, subvencionDeEnvio(), pricing,
             currency, products, dutyLines, affiliate, promociones, orderAmounts, declarationGroups);
 
     private final UUID productId = UUID.randomUUID();
@@ -87,7 +87,7 @@ class CheckoutPreviewShippingOptionTest {
     /** La tarifa que el desglose ha usado como base del envío (y, con ella, de la base del impuesto). */
     private int tarifaUsada() {
         ArgumentCaptor<Integer> envio = ArgumentCaptor.forClass(Integer.class);
-        verify(totals).compute(anyString(), any(), anyInt(), envio.capture(), any());
+        verify(totals).compute(anyString(), any(), anyInt(), envio.capture(), any(), anyInt());
         return envio.getValue();
     }
 
@@ -141,6 +141,25 @@ class CheckoutPreviewShippingOptionTest {
 
         previewCon("THPHR");
 
-        verify(totals).compute(anyString(), any(), anyInt(), eq(0), any());
+        verify(totals).compute(anyString(), any(), anyInt(), eq(0), any(), anyInt());
+    }
+
+    /**
+     * La bolsa de subvención del envío, real y con su suelo puesto.
+     *
+     * <p>Real y no simulada a propósito: estas pruebas miden importes, y un doble que devolviera cero
+     * escondería justo el descuento que hoy forma parte del desglose.
+     */
+    private static com.nexaplatform.dropshipping.application.service.ShippingSubsidyService subvencionDeEnvio() {
+        com.nexaplatform.dropshipping.application.service.CustomsValuationService aduana =
+                org.mockito.Mockito.mock(com.nexaplatform.dropshipping.application.service.CustomsValuationService.class);
+        com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService divisa =
+                org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService.class);
+        org.mockito.Mockito.lenient().when(divisa.toUsd(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString())).thenReturn(new java.math.BigDecimal("5.85"));
+        com.nexaplatform.dropshipping.application.service.ShippingSubsidyService s =
+                new com.nexaplatform.dropshipping.application.service.ShippingSubsidyService(aduana, divisa);
+        org.springframework.test.util.ReflectionTestUtils.setField(s, "sueloDeGananciaEur", new java.math.BigDecimal("5"));
+        return s;
     }
 }

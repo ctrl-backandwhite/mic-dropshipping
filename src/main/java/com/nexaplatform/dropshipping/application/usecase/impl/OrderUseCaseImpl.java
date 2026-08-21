@@ -15,6 +15,7 @@ import com.nexaplatform.dropshipping.application.notifications.NotificationsPubl
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.application.service.CartService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
+import com.nexaplatform.dropshipping.application.service.ShippingSubsidyService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
 import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
 import com.nexaplatform.dropshipping.application.service.StockService;
@@ -136,6 +137,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
      */
     private final FulfillmentRouter router;
     private final CheckoutTotalsService checkoutTotalsService;
+    private final ShippingSubsidyService shippingSubsidyService;
     private final CustomsDutyLinesService customsDutyLinesService;
     private final UnserviceableZoneService unserviceableZoneService;
     private final OperatorCommissionService operatorCommissionService;
@@ -472,8 +474,11 @@ public class OrderUseCaseImpl implements OrderUseCase {
         //  · Recargo de despacho formal si el valor de los bienes supera el umbral de minimis del destino.
         // Derecho fijo de la UE: se cobra por línea de declaración (partida arancelaria) dentro de cada
         // bulto, no por producto ni por unidad. Ver CustomsDutyLinesService.
+        // La bolsa de subvención va por el MISMO servicio que la vista previa: si el checkout enseñara un
+        // descuento y el cobro otro, el cliente pagaría distinto de lo que aceptó.
         CheckoutTotalsService.CheckoutTotals totals = checkoutTotalsService.compute(order.getShippingCountry(),
-                order.getShippingState(), discountedSubtotal, shippingCents, customsParcelsOf(order));
+                order.getShippingState(), discountedSubtotal, shippingCents, customsParcelsOf(order),
+                shippingSubsidyService.subsidyUsdCents(lineasDeSubvencion(order), order.getShippingCountry()));
         // Destino cuya política prohíbe vender por encima del umbral: se rechaza ANTES de cobrar, en vez de
         // aceptar un pedido que costaría aranceles y despacho formal no repercutidos.
         if (totals.blocked()) {
@@ -1481,4 +1486,34 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 order.getShippingCountry());
     }
 
+
+    /**
+     * Las líneas del pedido tal y como las necesita la bolsa de subvención.
+     *
+     * <p>La ganancia por unidad es <b>lo cobrado menos el coste</b> descontando el IVA y el porte del
+     * proveedor, que son dinero suyo y no ganancia nuestra. El pedido ya guarda el coste por línea
+     * (`costCents`), así que no hay que volver a tarificar.
+     */
+    private List<ShippingSubsidyService.Linea> lineasDeSubvencion(Order order) {
+        List<ShippingSubsidyService.Linea> out = new ArrayList<>();
+        for (OrderItem item : order.getItems()) {
+            if (item.getProductId() == null) {
+                continue;
+            }
+            ProductEntity p = productRepository.findById(item.getProductId()).orElse(null);
+            if (p == null) {
+                continue;
+            }
+            PricingService.PricedAmount priced = pricingService.priceFor(p, null);
+            int base = priced.baseRetailUsd() == null ? 0
+                    : priced.baseRetailUsd().setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
+            int coste = priced.costUsd() == null ? 0
+                    : priced.costUsd().setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
+            int porte = priced.shippingUsd() == null ? 0
+                    : priced.shippingUsd().setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
+            out.add(new ShippingSubsidyService.Linea(p.getId(), Math.max(1, item.getQuantity()), base - coste,
+                    porte));
+        }
+        return out;
+    }
 }

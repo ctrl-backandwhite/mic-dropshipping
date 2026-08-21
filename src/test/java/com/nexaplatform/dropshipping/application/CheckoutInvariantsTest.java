@@ -8,6 +8,7 @@ import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
+import com.nexaplatform.dropshipping.application.service.ShippingSubsidyService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
@@ -112,6 +113,8 @@ class CheckoutInvariantsTest {
     @Mock
     CheckoutTotalsService checkoutTotalsService;
     @Mock
+    ShippingSubsidyService shippingSubsidyService;
+    @Mock
     OperatorCommissionService operatorCommissionService;
     @Mock
     OrderIndexer orderIndexer;
@@ -181,7 +184,7 @@ class CheckoutInvariantsTest {
         when(totals.shippingCents()).thenReturn(0);
         when(totals.taxCents()).thenReturn(0);
         when(totals.totalCents(anyInt())).thenReturn(totalCents);
-        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList())).thenReturn(totals);
+        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList(), anyInt())).thenReturn(totals);
         when(orderRepository.save(any())).thenAnswer(i -> {
             Order o = i.getArgument(0);
             if (o.getId() == null) {
