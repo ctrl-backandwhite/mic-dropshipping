@@ -308,7 +308,7 @@ public class CatalogStorefrontReadService {
         // «Ver los que no suman arancel»: el grupo se resuelve a los productos de su TERNA y se entra por el
         // mismo camino que los resultados del buscador. Nulo = sin filtro; vacío = el grupo no existe o no
         // tiene productos, y entonces la respuesta es una página vacía, nunca el catálogo entero.
-        List<UUID> delGrupo = idsDeLasTernasDe(filters.dutyGroupIds());
+        List<UUID> delGrupo = idsDeLasLineasDe(filters.dutyLines());
         if (delGrupo != null && delGrupo.isEmpty()) {
             return PageResponse.from(new PageImpl<>(List.of(), pageable, 0));
         }
@@ -363,22 +363,26 @@ public class CatalogStorefrontReadService {
      * una sola línea. Guardar el grupo en cada producto obligaría a reescribir miles de filas cada vez que
      * se aprueba o se retira una descripción.
      *
-     * <p>Son varios grupos porque un carrito tiene tantas líneas de declaración como ternas distintas
-     * lleve: la unión de todas es «lo que no me suma arancel». Se conserva el orden y se quitan los
-     * repetidos —un producto puede aparecer una sola vez aunque encaje por dos vías.
+     * <p>Son varias líneas porque un carrito tiene tantas como ternas distintas lleve: la unión de todas
+     * es «lo que no me suma arancel». Se conserva el orden y se quitan los repetidos —un producto puede
+     * aparecer una sola vez aunque encaje por dos vías.
+     *
+     * <p>Cada línea lleva su ORIGEN, porque la terna que separa una línea de declaración de otra es
+     * clasificación + descripción + origen. Sin él, el filtro devolvía productos del mismo grupo pero de
+     * otro país, que abren línea nueva y suman los 3 EUR igualmente.
      */
-    private List<UUID> idsDeLasTernasDe(List<UUID> dutyGroupIds) {
+    private List<UUID> idsDeLasLineasDe(List<ProductListFilters.DutyLine> dutyLines) {
         // Nulo = sin filtro. Lista VACÍA = filtro que no casa con nada, que es lo que corresponde cuando
         // se pide «los de mi carrito» y en el carrito no hay ni un grupo aprobado: entonces cualquier
         // producto abre línea nueva. Devolver el catálogo entero sería justo la promesa contraria.
-        if (dutyGroupIds == null) {
+        if (dutyLines == null) {
             return null;
         }
         Set<UUID> vistos = new LinkedHashSet<>();
-        for (UUID grupoId : dutyGroupIds) {
-            declarationGroupRepository.findById(grupoId).ifPresent(g -> vistos.addAll(
+        for (ProductListFilters.DutyLine linea : dutyLines) {
+            declarationGroupRepository.findById(linea.groupId()).ifPresent(g -> vistos.addAll(
                     productRepository.idsForCustomsTerna(ProductStatus.ACTIVE, g.getHs6(), g.getMaterial(),
-                            g.getUsageCode())));
+                            g.getUsageCode(), linea.originCountry())));
         }
         return List.copyOf(vistos);
     }

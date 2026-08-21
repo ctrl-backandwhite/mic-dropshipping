@@ -916,16 +916,23 @@ class Cov03StorefrontCatalogControllerTest {
         // lo que encaje en cualquiera de los tres. Filtrar por uno solo —que es lo que hacía— le escondía
         // al comprador dos tercios del catálogo que tampoco le habría costado nada.
         UUID enCarrito = UUID.randomUUID();
-        List<UUID> tresGrupos = List.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+        List<CatalogDutyBadgeService.LineaDeclarada> tresLineas = List.of(
+                new CatalogDutyBadgeService.LineaDeclarada(UUID.randomUUID(), "CN"),
+                new CatalogDutyBadgeService.LineaDeclarada(UUID.randomUUID(), "CN"),
+                new CatalogDutyBadgeService.LineaDeclarada(UUID.randomUUID(), ""));
         when(customsValuation.perArticleFeeUsdCents(any())).thenReturn(300);
-        when(dutyBadges.gruposDe(List.of(enCarrito))).thenReturn(tresGrupos);
+        when(dutyBadges.lineasDe(List.of(enCarrito))).thenReturn(tresLineas);
 
         controller.list(0, 20, "es", null, null, null, null, null, null, null, null, null, null, null, null, null,
                 null, null, null, Boolean.TRUE, List.of(enCarrito));
 
         ArgumentCaptor<ProductListFilters> captor = ArgumentCaptor.forClass(ProductListFilters.class);
         verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull());
-        assertThat(captor.getValue().dutyGroupIds()).isEqualTo(tresGrupos);
+        assertThat(captor.getValue().dutyLines()).extracting(ProductListFilters.DutyLine::groupId)
+                .isEqualTo(tresLineas.stream().map(CatalogDutyBadgeService.LineaDeclarada::grupoId).toList());
+        assertThat(captor.getValue().dutyLines()).extracting(ProductListFilters.DutyLine::originCountry)
+                .as("cada línea lleva SU origen: sin él, productos de otro país sumarían arancel igual")
+                .containsExactly("CN", "CN", "");
     }
 
     @Test
@@ -940,6 +947,6 @@ class Cov03StorefrontCatalogControllerTest {
 
         ArgumentCaptor<ProductListFilters> captor = ArgumentCaptor.forClass(ProductListFilters.class);
         verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull());
-        assertThat(captor.getValue().dutyGroupIds()).isNull();
+        assertThat(captor.getValue().dutyLines()).isNull();
     }
 }

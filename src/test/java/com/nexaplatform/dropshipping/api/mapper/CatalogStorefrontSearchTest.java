@@ -207,7 +207,7 @@ class CatalogStorefrontSearchTest {
         UUID grupo = UUID.randomUUID();
         when(declarationGroupRepository.findById(grupo)).thenReturn(Optional.of(CustomsDeclarationGroupEntity
                 .builder().id(grupo).hs6("620443").material("POLYESTER").usageCode("DRESS").build()));
-        when(productRepository.idsForCustomsTerna(ProductStatus.ACTIVE, "620443", "POLYESTER", "DRESS"))
+        when(productRepository.idsForCustomsTerna(ProductStatus.ACTIVE, "620443", "POLYESTER", "DRESS", null))
                 .thenReturn(List.of(vestido.getId()));
         when(productRepository.searchStorefrontByIds(eq(ProductStatus.ACTIVE), eq(List.of(vestido.getId())), any(),
                 any(), any(), any(), any(), any(), any(), any())).thenReturn(List.of(vestido));
@@ -241,14 +241,14 @@ class CatalogStorefrontSearchTest {
                 .thenReturn(Optional.of(List.of(fueraDelGrupo.getId(), delGrupo.getId())));
         when(declarationGroupRepository.findById(grupo)).thenReturn(Optional.of(CustomsDeclarationGroupEntity
                 .builder().id(grupo).hs6("620443").material("POLYESTER").usageCode("DRESS").build()));
-        when(productRepository.idsForCustomsTerna(ProductStatus.ACTIVE, "620443", "POLYESTER", "DRESS"))
+        when(productRepository.idsForCustomsTerna(ProductStatus.ACTIVE, "620443", "POLYESTER", "DRESS", null))
                 .thenReturn(List.of(delGrupo.getId()));
         when(productRepository.searchStorefrontByIds(eq(ProductStatus.ACTIVE), eq(List.of(delGrupo.getId())), any(),
                 any(), any(), any(), any(), any(), any(), any())).thenReturn(List.of(delGrupo));
 
         PageResponse<ProductSummaryView> pagina = service.productListFull(0, 20, "es",
                 new ProductListFilters("azul", null, null, null, null, null, null, null, null, null, null, null,
-                        null, null, List.of(grupo)),
+                        null, null, List.of(new ProductListFilters.DutyLine(grupo, null))),
                 null);
 
         assertThat(pagina.totalElements()).isEqualTo(1);
@@ -256,7 +256,7 @@ class CatalogStorefrontSearchTest {
 
     private ProductListFilters porGrupo(UUID grupo) {
         return new ProductListFilters(null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, List.of(grupo));
+                null, List.of(new ProductListFilters.DutyLine(grupo, null)));
     }
 
     private ProductListFilters filtros(String q) {

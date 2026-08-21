@@ -26,7 +26,22 @@ public record ProductListFilters(String q, UUID categoryId, UUID supplierId, Big
         // Es una LISTA y no un grupo suelto porque el carrito tiene tantas líneas de declaración como
         // ternas distintas lleve: con tres productos de tres grupos, enseñar solo uno deja fuera dos
         // tercios de lo que tampoco sumaría arancel.
-        List<UUID> dutyGroupIds) {
+        List<DutyLine> dutyLines) {
+
+    /**
+     * Una LÍNEA de declaración: el grupo (partida, material y uso) más el ORIGEN.
+     *
+     * <p>El origen no es un adorno: la terna del art. 1(61) del Reglamento Delegado (UE) 2015/2446 es
+     * clasificación + descripción + <b>origen</b>, así que dos productos del mismo grupo con orígenes
+     * distintos son dos líneas y pagan dos derechos. Filtrar solo por el grupo devolvía productos que,
+     * al declararse con otro origen, sumaban arancel igualmente — que es exactamente lo que se veía en
+     * pantalla el 21-ago-2026, con 81 camisas sin país de origen y 28 con «CN».
+     *
+     * @param originCountry ya normalizado; {@code null} = cualquier origen (el caso de «ver los del grupo
+     *                      de este producto», donde no hay carrito con el que comparar)
+     */
+    public record DutyLine(UUID groupId, String originCountry) {
+    }
 
     /** Sin ningún filtro: el listado completo. */
     public static ProductListFilters none() {

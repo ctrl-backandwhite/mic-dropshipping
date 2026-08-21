@@ -214,10 +214,15 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
      * <p>Manda el producto cuando se ha elegido uno —es una petición explícita del comprador sobre ESE
      * artículo, y funciona con el carrito vacío—; el carrito es el respaldo.
      *
+     * <p>Cada línea lleva su ORIGEN cuando viene del carrito: lo que separa una línea de declaración de
+     * otra es clasificación + descripción + <b>origen</b>, así que sin él el filtro devolvía productos del
+     * mismo grupo pero de otro país, que suman los 3 EUR igualmente.
+     *
      * @return {@code null} si no hay filtro; lista vacía si se pidió el del carrito y en él no hay ni un
      *         grupo aprobado, porque entonces cualquier producto abre línea nueva y no encaja ninguno
      */
-    private List<UUID> gruposDelFiltro(UUID dutyGroupId, Boolean dutyGroupsFromCart, List<UUID> cartProductIds) {
+    private List<ProductListFilters.DutyLine> gruposDelFiltro(UUID dutyGroupId, Boolean dutyGroupsFromCart,
+            List<UUID> cartProductIds) {
         // Donde no se cobra derecho por artículo no hay nada que agrupar, así que el filtro se ignora: el
         // régimen de 3 EUR es de los 27 de la Unión y en el resto del mundo esta pantalla no habla de
         // aranceles. Sin esto, cambiar de país con el filtro puesto —o abrir un enlace compartido desde
@@ -226,12 +231,15 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
             return null;
         }
         if (dutyGroupId != null) {
-            return List.of(dutyGroupId);
+            // Desde una tarjeta con el carrito vacío no hay con qué comparar el origen, así que se dejan
+            // todos los del grupo: es «los de la misma familia», no una promesa sobre un carrito.
+            return List.of(new ProductListFilters.DutyLine(dutyGroupId, null));
         }
         if (!Boolean.TRUE.equals(dutyGroupsFromCart)) {
             return null;
         }
-        return dutyBadges.gruposDe(cartProductIds);
+        return dutyBadges.lineasDe(cartProductIds).stream()
+                .map(l -> new ProductListFilters.DutyLine(l.grupoId(), l.originCountry())).toList();
     }
 
     /**

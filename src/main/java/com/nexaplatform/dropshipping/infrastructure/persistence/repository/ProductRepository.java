@@ -342,8 +342,11 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
               AND p.hsCode LIKE CONCAT(CAST(:hs6 AS string), '%')
               AND UPPER(TRIM(COALESCE(p.customsMaterial, ''))) = CAST(:material AS string)
               AND UPPER(TRIM(COALESCE(p.customsUsage, ''))) = CAST(:usageCode AS string)
+              AND (CAST(:origin AS string) IS NULL
+                   OR UPPER(TRIM(COALESCE(p.countryOfOrigin, ''))) = CAST(:origin AS string))
             ORDER BY p.trendScore DESC, p.monthlySales DESC, p.id ASC
             """)
     List<UUID> idsForCustomsTerna(@Param("status") ProductStatus status, @Param("hs6") String hs6,
-            @Param("material") String material, @Param("usageCode") String usageCode);
+            @Param("material") String material, @Param("usageCode") String usageCode,
+            @Param("origin") String origin);
 }

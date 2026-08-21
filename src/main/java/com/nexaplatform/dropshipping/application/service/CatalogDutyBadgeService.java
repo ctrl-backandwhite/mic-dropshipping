@@ -17,6 +17,7 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -59,6 +60,17 @@ public class CatalogDutyBadgeService {
      *                            arancel»; {@code null} si no tiene grupo o si nadie lo ha firmado
      */
     public record DutyBadge(Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId) {
+    }
+
+    /**
+     * Una línea de declaración del carrito: el grupo aprobado más el ORIGEN.
+     *
+     * <p>Van juntos porque lo que separa una línea de otra es clasificación + descripción + origen. Dos
+     * productos del mismo grupo con orígenes distintos son dos líneas y pagan dos derechos.
+     *
+     * @param originCountry normalizado; cadena vacía cuando el producto no declara país
+     */
+    public record LineaDeclarada(UUID grupoId, String originCountry) {
     }
 
     private final ProductRepository productRepository;
@@ -119,12 +131,26 @@ public class CatalogDutyBadgeService {
      * de las tres. Devolver solo una dejaría fuera dos tercios.
      */
     @Transactional(readOnly = true)
-    public List<UUID> gruposDe(List<UUID> productIds) {
+    public List<LineaDeclarada> lineasDe(List<UUID> productIds) {
         if (productIds == null || productIds.isEmpty()) {
             return List.of();
         }
-        return List.copyOf(new LinkedHashSet<>(
-                gruposAprobadosDe(productRepository.findAllById(productIds)).values()));
+        List<ProductEntity> productos = productRepository.findAllById(productIds);
+        Map<UUID, UUID> grupos = gruposAprobadosDe(productos);
+        Set<LineaDeclarada> lineas = new LinkedHashSet<>();
+        for (ProductEntity p : productos) {
+            UUID grupo = grupos.get(p.getId());
+            if (grupo != null) {
+                lineas.add(new LineaDeclarada(grupo, origenNormalizado(p)));
+            }
+        }
+        return List.copyOf(lineas);
+    }
+
+    /** El país de origen comparable: en mayúsculas, sin espacios y con el nulo como cadena vacía. */
+    private static String origenNormalizado(ProductEntity p) {
+        String origen = p.getCountryOfOrigin();
+        return origen == null ? "" : origen.trim().toUpperCase(java.util.Locale.ROOT);
     }
 
     /** El derecho por línea de esas mercancías, repartidas en bultos como las repartirá el transportista. */
