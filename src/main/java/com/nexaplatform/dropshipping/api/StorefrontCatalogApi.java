@@ -113,6 +113,9 @@ public interface StorefrontCatalogApi {
             // «Ver los que no suman arancel»: solo los productos que comparten terna con ese grupo y por
             // tanto se declaran con su misma descripción.
             @RequestParam(required = false) UUID dutyGroupId,
+            // «Los que no suman arancel con lo que ya llevo»: filtra por TODAS las líneas de declaración
+            // del carrito, no por una. Se ignora si viene también un dutyGroupId concreto.
+            @RequestParam(required = false) Boolean dutyGroupsFromCart,
             // Lo que el comprador ya lleva en el carrito. Es la REFERENCIA del distintivo de arancel: sin
             // ella no hay incremento que calcular y el distintivo no se pinta.
             @RequestParam(required = false) List<UUID> cartProductIds);

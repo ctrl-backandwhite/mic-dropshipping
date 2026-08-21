@@ -16,6 +16,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -108,6 +109,22 @@ public class CatalogDutyBadgeService {
             badges.put(p.getId(), new DutyBadge(extra, formateado(extra), grupos.get(p.getId())));
         }
         return badges;
+    }
+
+    /**
+     * Los grupos <b>aprobados</b> a los que pertenecen esos productos, sin repetir.
+     *
+     * <p>Es «lo que hay en mi carrito» traducido a líneas de declaración: un carrito de tres productos de
+     * tres ternas distintas son tres líneas, y lo que no suma arancel es lo que encaje en <b>cualquiera</b>
+     * de las tres. Devolver solo una dejaría fuera dos tercios.
+     */
+    @Transactional(readOnly = true)
+    public List<UUID> gruposDe(List<UUID> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return List.of();
+        }
+        return List.copyOf(new LinkedHashSet<>(
+                gruposAprobadosDe(productRepository.findAllById(productIds)).values()));
     }
 
     /** El derecho por línea de esas mercancías, repartidas en bultos como las repartirá el transportista. */

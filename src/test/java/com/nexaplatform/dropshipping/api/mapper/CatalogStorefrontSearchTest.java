@@ -248,7 +248,7 @@ class CatalogStorefrontSearchTest {
 
         PageResponse<ProductSummaryView> pagina = service.productListFull(0, 20, "es",
                 new ProductListFilters("azul", null, null, null, null, null, null, null, null, null, null, null,
-                        null, null, grupo),
+                        null, null, List.of(grupo)),
                 null);
 
         assertThat(pagina.totalElements()).isEqualTo(1);
@@ -256,7 +256,7 @@ class CatalogStorefrontSearchTest {
 
     private ProductListFilters porGrupo(UUID grupo) {
         return new ProductListFilters(null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, grupo);
+                null, List.of(grupo));
     }
 
     private ProductListFilters filtros(String q) {

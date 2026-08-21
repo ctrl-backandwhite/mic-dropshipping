@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -18,9 +19,14 @@ import java.util.UUID;
 public record ProductListFilters(String q, UUID categoryId, UUID supplierId, BigDecimal minPrice,
         BigDecimal maxPrice, String shipFrom, Boolean freeShipping, Boolean selfPickup, Boolean hasVideo,
         Integer minRating, Integer inventoryMin, String certification, Boolean verified, UUID promotionId,
-        // Grupo de declaración: «ver los que no suman arancel». Filtra por la TERNA del grupo (partida,
-        // material y uso), que es lo que de verdad hace que dos productos compartan línea de aduana.
-        UUID dutyGroupId) {
+        // Grupos de declaración: «ver los que no suman arancel». Filtra por la TERNA de cada grupo
+        // (partida, material y uso), que es lo que de verdad hace que dos productos compartan línea de
+        // aduana.
+        //
+        // Es una LISTA y no un grupo suelto porque el carrito tiene tantas líneas de declaración como
+        // ternas distintas lleve: con tres productos de tres grupos, enseñar solo uno deja fuera dos
+        // tercios de lo que tampoco sumaría arancel.
+        List<UUID> dutyGroupIds) {
 
     /** Sin ningún filtro: el listado completo. */
     public static ProductListFilters none() {

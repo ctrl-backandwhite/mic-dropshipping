@@ -24,6 +24,7 @@ import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
 import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService;
+import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService.DutyBadge;
 import com.nexaplatform.dropshipping.api.mapper.ProductListFilters;
 import com.nexaplatform.dropshipping.application.service.OrderAmounts;
@@ -136,6 +137,8 @@ class Cov03StorefrontCatalogControllerTest {
     ProductPriceTierRepository priceTierRepository;
     @Mock
     CatalogDutyBadgeService dutyBadges;
+    @Mock
+    CustomsValuationService customsValuation;
 
     @InjectMocks
     StorefrontCatalogController controller;
@@ -217,7 +220,7 @@ class Cov03StorefrontCatalogControllerTest {
         // `verified` es una marca interna de revisión: si un usuario cualquiera pudiera filtrar por ella,
         // se le estaría enseñando qué parte del catálogo está sin revisar.
         controller.list(0, 20, "es", null, null, null, null, null, null, null, null, null, null, null, null, null,
-                Boolean.TRUE, null, null, null);
+                Boolean.TRUE, null, null, null, null);
 
         ArgumentCaptor<ProductListFilters> captor = ArgumentCaptor.forClass(ProductListFilters.class);
         verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull());
@@ -229,7 +232,7 @@ class Cov03StorefrontCatalogControllerTest {
         autenticaComoAdmin();
 
         controller.list(0, 20, "es", null, null, null, null, null, null, null, null, null, null, null, null, null,
-                Boolean.FALSE, null, null, null);
+                Boolean.FALSE, null, null, null, null);
 
         ArgumentCaptor<ProductListFilters> captor = ArgumentCaptor.forClass(ProductListFilters.class);
         verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull());
@@ -905,5 +908,38 @@ class Cov03StorefrontCatalogControllerTest {
                 null, null, 1, null, null, null, 0, 0, null, null, "ACTIVE", null, null, null, List.of(),
                 List.of(), List.of(), List.of(), null, null, null, null, null, null, null, null, null, null,
                 null, null, false, null, false);
+    }
+
+    @Test
+    void elFiltroDeArancelDelCarritoUsaTODASSusLineasDeDeclaracion() {
+        // Un carrito de tres productos de tres ternas paga TRES derechos, y lo que no le suma arancel es
+        // lo que encaje en cualquiera de los tres. Filtrar por uno solo —que es lo que hacía— le escondía
+        // al comprador dos tercios del catálogo que tampoco le habría costado nada.
+        UUID enCarrito = UUID.randomUUID();
+        List<UUID> tresGrupos = List.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+        when(customsValuation.perArticleFeeUsdCents(any())).thenReturn(300);
+        when(dutyBadges.gruposDe(List.of(enCarrito))).thenReturn(tresGrupos);
+
+        controller.list(0, 20, "es", null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, Boolean.TRUE, List.of(enCarrito));
+
+        ArgumentCaptor<ProductListFilters> captor = ArgumentCaptor.forClass(ProductListFilters.class);
+        verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull());
+        assertThat(captor.getValue().dutyGroupIds()).isEqualTo(tresGrupos);
+    }
+
+    @Test
+    void fueraDeLaUnionElFiltroDeArancelSeIGNORA() {
+        // El régimen de 3 EUR es de los 27. En un destino que no cobra derecho por artículo, un enlace
+        // compartido —o quedarse el filtro puesto al cambiar de país— dejaría el catálogo recortado por
+        // una promesa que allí no significa nada.
+        when(customsValuation.perArticleFeeUsdCents(any())).thenReturn(0);
+
+        controller.list(0, 20, "es", null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, UUID.randomUUID(), null, null);
+
+        ArgumentCaptor<ProductListFilters> captor = ArgumentCaptor.forClass(ProductListFilters.class);
+        verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull());
+        assertThat(captor.getValue().dutyGroupIds()).isNull();
     }
 }

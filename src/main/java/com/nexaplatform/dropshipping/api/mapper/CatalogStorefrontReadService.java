@@ -44,10 +44,12 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -306,7 +308,7 @@ public class CatalogStorefrontReadService {
         // «Ver los que no suman arancel»: el grupo se resuelve a los productos de su TERNA y se entra por el
         // mismo camino que los resultados del buscador. Nulo = sin filtro; vacío = el grupo no existe o no
         // tiene productos, y entonces la respuesta es una página vacía, nunca el catálogo entero.
-        List<UUID> delGrupo = idsDeLaTernaDe(filters.dutyGroupId());
+        List<UUID> delGrupo = idsDeLasTernasDe(filters.dutyGroupIds());
         if (delGrupo != null && delGrupo.isEmpty()) {
             return PageResponse.from(new PageImpl<>(List.of(), pageable, 0));
         }
@@ -354,21 +356,31 @@ public class CatalogStorefrontReadService {
     }
 
     /**
-     * Los productos que comparten terna con ese grupo de declaración, o {@code null} si no hay filtro.
+     * Los productos que comparten terna con ALGUNO de esos grupos, o {@code null} si no hay filtro.
      *
      * <p>Se filtra por la <b>terna</b> (partida, material y uso) y no por una columna en el producto: es la
      * terna la que hace que dos productos se declaren con la misma descripción y la aduana los cuente como
      * una sola línea. Guardar el grupo en cada producto obligaría a reescribir miles de filas cada vez que
      * se aprueba o se retira una descripción.
+     *
+     * <p>Son varios grupos porque un carrito tiene tantas líneas de declaración como ternas distintas
+     * lleve: la unión de todas es «lo que no me suma arancel». Se conserva el orden y se quitan los
+     * repetidos —un producto puede aparecer una sola vez aunque encaje por dos vías.
      */
-    private List<UUID> idsDeLaTernaDe(UUID dutyGroupId) {
-        if (dutyGroupId == null) {
+    private List<UUID> idsDeLasTernasDe(List<UUID> dutyGroupIds) {
+        // Nulo = sin filtro. Lista VACÍA = filtro que no casa con nada, que es lo que corresponde cuando
+        // se pide «los de mi carrito» y en el carrito no hay ni un grupo aprobado: entonces cualquier
+        // producto abre línea nueva. Devolver el catálogo entero sería justo la promesa contraria.
+        if (dutyGroupIds == null) {
             return null;
         }
-        return declarationGroupRepository.findById(dutyGroupId)
-                .map(g -> productRepository.idsForCustomsTerna(ProductStatus.ACTIVE, g.getHs6(), g.getMaterial(),
-                        g.getUsageCode()))
-                .orElseGet(List::of);
+        Set<UUID> vistos = new LinkedHashSet<>();
+        for (UUID grupoId : dutyGroupIds) {
+            declarationGroupRepository.findById(grupoId).ifPresent(g -> vistos.addAll(
+                    productRepository.idsForCustomsTerna(ProductStatus.ACTIVE, g.getHs6(), g.getMaterial(),
+                            g.getUsageCode())));
+        }
+        return List.copyOf(vistos);
     }
 
     /**

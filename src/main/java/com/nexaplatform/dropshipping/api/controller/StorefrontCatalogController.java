@@ -33,6 +33,7 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
 import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService;
+import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
@@ -96,6 +97,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     private final CatalogUseCase catalogUseCase;
     private final CatalogDutyBadgeService dutyBadges;
+    private final CustomsValuationService customsValuation;
     private final CatalogStorefrontReadService storefrontRead;
     private final ProductDetailQueryService productDetailQuery;
     private final ProductRepository productRepository;
@@ -190,15 +192,46 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     public PageResponse<ProductSummaryView> list(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping,
             Boolean selfPickup, Boolean hasVideo, Integer minRating, Integer inventoryMin, String certification,
-            String sort, Boolean verified, UUID promotionId, UUID dutyGroupId, List<UUID> cartProductIds) {
+            String sort, Boolean verified, UUID promotionId, UUID dutyGroupId, Boolean dutyGroupsFromCart,
+            List<UUID> cartProductIds) {
         // El filtro de verificación es SOLO para admin: si el que consulta no es admin, se ignora.
         Boolean verifiedFilter = SecurityUtils.isAdmin() ? verified : null;
         PageResponse<ProductSummaryView> pagina = storefrontRead.productListFull(page, size, lang,
                 new ProductListFilters(q, categoryId, supplierId, minPrice, maxPrice, shipFrom, freeShipping,
                         selfPickup, hasVideo, minRating, inventoryMin, certification, verifiedFilter, promotionId,
-                        dutyGroupId),
+                        gruposDelFiltro(dutyGroupId, dutyGroupsFromCart, cartProductIds)),
                 sort);
         return conElArancel(pagina, cartProductIds);
+    }
+
+    /**
+     * Por qué grupos de declaración se filtra: por el de un producto concreto, o por los del carrito entero.
+     *
+     * <p>El carrito tiene tantas líneas de declaración como ternas distintas lleve. Con tres productos de
+     * tres grupos se pagan tres derechos, y «lo que no suma arancel» es lo que encaje en <b>cualquiera</b>
+     * de los tres: filtrar por uno solo deja fuera dos tercios del catálogo que tampoco costaría nada.
+     *
+     * <p>Manda el producto cuando se ha elegido uno —es una petición explícita del comprador sobre ESE
+     * artículo, y funciona con el carrito vacío—; el carrito es el respaldo.
+     *
+     * @return {@code null} si no hay filtro; lista vacía si se pidió el del carrito y en él no hay ni un
+     *         grupo aprobado, porque entonces cualquier producto abre línea nueva y no encaja ninguno
+     */
+    private List<UUID> gruposDelFiltro(UUID dutyGroupId, Boolean dutyGroupsFromCart, List<UUID> cartProductIds) {
+        // Donde no se cobra derecho por artículo no hay nada que agrupar, así que el filtro se ignora: el
+        // régimen de 3 EUR es de los 27 de la Unión y en el resto del mundo esta pantalla no habla de
+        // aranceles. Sin esto, cambiar de país con el filtro puesto —o abrir un enlace compartido desde
+        // fuera de la UE— dejaba el catálogo recortado por una promesa que allí no significa nada.
+        if (customsValuation.perArticleFeeUsdCents(PricingCountryHolder.get()) <= 0) {
+            return null;
+        }
+        if (dutyGroupId != null) {
+            return List.of(dutyGroupId);
+        }
+        if (!Boolean.TRUE.equals(dutyGroupsFromCart)) {
+            return null;
+        }
+        return dutyBadges.gruposDe(cartProductIds);
     }
 
     /**
