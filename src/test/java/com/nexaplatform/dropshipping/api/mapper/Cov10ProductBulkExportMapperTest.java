@@ -319,4 +319,39 @@ class Cov10ProductBulkExportMapperTest {
         return VariantValueEntity.builder().position(position).value(value).valueZh(valueZh)
                 .imageSourceUrl(imageSourceUrl).translations(new ArrayList<>()).build();
     }
+
+    @Test
+    void laTernaAduaneraLaBateriaYLaFichaDelProveedorSobrevivenAlExport() {
+        // Estos cuatro campos NO se exportaban, y el export dice de sí mismo que sirve para reimportar.
+        // Al volver a entrar, el material y el uso se repoblaban con los del PERFIL DE LA CATEGORÍA: la
+        // ficha afinada a mano volvía al valor genérico. Y desde que la aduana agrupa por terna, eso
+        // cambia CON QUIÉN comparte línea de declaración, es decir, cuántos derechos de 3 EUR se pagan.
+        // La batería decide el canal del transportista, y sourceUrl es por dónde se compra al proveedor.
+        ProductEntity p = ProductEntity.builder().externalId("1688-1")
+                .customsMaterial("100% cotton").customsUsage("Casual wear").batteryType("BUILT_IN")
+                .sourceUrl("https://detail.1688.com/offer/otra-cosa.html").build();
+
+        BulkProductDtoIn d = mapper.toBulk(p, List.of(), List.of(), List.of(), List.of());
+
+        assertThat(d.getCustomsMaterial()).isEqualTo("100% cotton");
+        assertThat(d.getCustomsUsage()).isEqualTo("Casual wear");
+        assertThat(d.getBatteryType()).isEqualTo("BUILT_IN");
+        assertThat(d.getSourceUrl()).isEqualTo("https://detail.1688.com/offer/otra-cosa.html");
+    }
+
+    @Test
+    void laCategoriaSaleConSuNombreChinoAdemasDelSlug() {
+        // El slug solo sirve si el destino YA tiene esa categoría. El par (id, nombre) de 1688 es el
+        // respaldo con el que el import puede resolverla en un entorno recién montado.
+        ProductEntity p = ProductEntity.builder().externalId("1688-1")
+                .category(CategoryEntity.builder().slug("moda-vestidos").externalId("126546700")
+                        .nameZh("连衣裙").build())
+                .build();
+
+        BulkProductDtoIn d = mapper.toBulk(p, List.of(), List.of(), List.of(), List.of());
+
+        assertThat(d.getCategorySlug()).isEqualTo("moda-vestidos");
+        assertThat(d.getCategory1688Id()).isEqualTo("126546700");
+        assertThat(d.getCategory1688Name()).isEqualTo("连衣裙");
+    }
 }
