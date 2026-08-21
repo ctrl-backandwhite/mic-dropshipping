@@ -299,4 +299,22 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             """)
     List<UUID> findCategoryIdsWithProductsIngestedSince(@Param("status") ProductStatus status,
             @Param("since") Instant since);
+
+    /**
+     * Las ternas aduaneras distintas del catálogo —partida, material y uso—, las más pobladas primero.
+     *
+     * <p>Es la entrada de la siembra de {@code customs_declaration_group}: una fila aquí es un grupo de
+     * declaración candidato. Se agrupa por los valores <b>en crudo</b> y se normaliza después en Java
+     * (ver {@link CustomsTernaRow}), así que la misma terna puede venir en varias filas con distinta
+     * grafía; el orden por cuenta descendente hace que la grafía mayoritaria sea la que dé el borrador.
+     */
+    @Query("""
+            SELECT new com.nexaplatform.dropshipping.infrastructure.persistence.repository.CustomsTernaRow(
+                       p.hsCode, p.customsMaterial, p.customsUsage, COUNT(p))
+            FROM ProductEntity p
+            WHERE p.hsCode IS NOT NULL AND p.hsCode <> ''
+            GROUP BY p.hsCode, p.customsMaterial, p.customsUsage
+            ORDER BY COUNT(p) DESC
+            """)
+    List<CustomsTernaRow> customsTernas();
 }

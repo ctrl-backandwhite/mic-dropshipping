@@ -21,6 +21,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -163,6 +165,21 @@ class CustomsDeclarationGroupServiceTest {
         ProductEntity p = productoCon("620443", "Cotton", "Casual wear", "Blue denim jeans");
 
         assertThat(service.describeFor(p, "ES")).isEqualTo("Men's woven cotton trousers");
+    }
+
+    @Test
+    void unMaterialMasLargoQueLaColumnaSeBuscaRecortado() {
+        // La columna de la clave admite 120 caracteres y el catálogo trae materiales de hasta 255. Si la
+        // búsqueda pidiera el texto entero contra una fila que guarda el trozo, el grupo no se encontraría
+        // NUNCA: la agrupación dejaría de aplicarse sin dar un solo error y se cobrarían 3 EUR de más por
+        // producto. Los dos lados —siembra y resolución— recortan aquí, que es el único sitio común.
+        String materialLargo = "COTTON ".repeat(30).trim();
+        ProductEntity p = productoCon("620443", materialLargo, "Casual wear", "Blue denim jeans");
+        when(groupRepository.findByHs6AndMaterialAndUsageCode(eq("620443"), argThat(m -> m.length() == 120),
+                eq("CASUAL WEAR"))).thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder()
+                        .ename("Women's or girls' dresses, of synthetic fibres").approvedAt(Instant.now()).build()));
+
+        assertThat(service.describeFor(p)).isEqualTo("Women's or girls' dresses, of synthetic fibres");
     }
 
     private static ProductEntity productoCon(String hs, String material, String uso, String tituloEn) {

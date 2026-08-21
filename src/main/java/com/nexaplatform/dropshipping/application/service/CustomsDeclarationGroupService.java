@@ -31,6 +31,9 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public class CustomsDeclarationGroupService {
 
+    /** Lo que aguantan {@code material} y {@code usage_code} en la tabla de grupos. */
+    private static final int MAX_PARTE_TERNA = 120;
+
     private final CustomsDeclarationGroupRepository groupRepository;
     private final CustomsValuationService customsValuation;
 
@@ -95,12 +98,19 @@ public class CustomsDeclarationGroupService {
      *
      * <p>«Cotton» y «  cotton » son el mismo material descrito por dos personas distintas. Tratarlos
      * como grupos separados partiría en dos un grupo que la aduana cuenta como uno.
+     *
+     * <p>Y se recorta a lo que cabe en la columna. El catálogo trae materiales de hasta 255 caracteres y
+     * la clave del grupo admite 120: sin recortar aquí, un material largo haría reventar la siembra al
+     * insertar, y —peor— recortar solo al guardar dejaría la búsqueda pidiendo el texto entero contra una
+     * fila que guarda el trozo, así que el grupo no se encontraría nunca y la agrupación fallaría en
+     * silencio. Se recorta en el único sitio por el que pasan las dos.
      */
     public static String normalizeKeyPart(String text) {
         if (text == null) {
             return "";
         }
-        return text.trim().replaceAll("\\s+", " ").toUpperCase(Locale.ROOT);
+        String limpio = text.trim().replaceAll("\\s+", " ").toUpperCase(Locale.ROOT);
+        return limpio.length() <= MAX_PARTE_TERNA ? limpio : limpio.substring(0, MAX_PARTE_TERNA);
     }
 
     /**
