@@ -137,7 +137,10 @@ public class ProductMapper {
                 // qué le falta a cada referencia.
                 euComplianceService.forProduct(p.getCategory() != null ? p.getCategory().getId() : null,
                         p.getManufacturerName(), p.getManufacturerAddress(), p.getManufacturerEmail(),
-                        language));
+                        language),
+                // El arancel adicional no se resuelve aquí: depende del CARRITO de quien mira, no del
+                // producto, y este mapeo va cacheado. Lo decora el controlador con la ficha ya construida.
+                null, null, null);
     }
 
     public ProductImageView toImageView(ProductImageEntity img) {

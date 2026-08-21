@@ -215,7 +215,24 @@ public final class CatalogDtos {
             // Cumplimiento del Reglamento (UE) 2023/988: fabricante (art. 19.a), advertencias de seguridad
             // (art. 19.d) y operador económico establecido en la Unión (art. 16.3). Va agrupado en un solo
             // campo para no sumar seis más a un record que ya arrastra cuarenta.
-            ProductComplianceView compliance) {
+            ProductComplianceView compliance,
+            // Arancel: lo mismo que en la tarjeta del catálogo. Cuánto sube el derecho de aduana del
+            // carrito por llevarse ESTE producto y a qué grupo de declaración pertenece. La ficha promete
+            // lo mismo que el listado porque lo calcula el mismo servicio.
+            Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId) {
+
+        /** La misma ficha con el arancel resuelto; se decora fuera del detalle, que va cacheado. */
+        public ProductDetailView withDuty(Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId) {
+            return new ProductDetailView(id, slug, source, externalId, supplier, categoryId, title,
+                    shortDescription, description, titleZh, shortDescriptionZh, descriptionZh, brand, moq,
+                    basePrice, currency, rating, reviewCount, monthlySales, repurchaseRate, trendScore, status,
+                    sourceUrl, ingestedAt, lastSyncedAt, images, variantOptions, variants, priceTiers, costUsd,
+                    retailUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted,
+                    appliedMarginPercent, baseFormatted, ivaFormatted, shippingFormatted, metaTitle,
+                    metaDescription, verified, videoUrl, hasVideo, originalFormatted, discountPercent,
+                    promotionName, customsFormatted, compliance, extraDutyCents, extraDutyFormatted,
+                    dutyGroupId);
+        }
 
         /** Sin promoción: atajo para los usos que no la calculan. */
         public ProductDetailView(UUID id, String slug, String source, String externalId, SupplierView supplier,
@@ -235,7 +252,7 @@ public final class CatalogDtos {
                     lastSyncedAt, images, variantOptions, variants, priceTiers, costUsd, retailUsd, displayPrice,
                     displayCurrency, displaySymbol, displayFormatted, appliedMarginPercent, baseFormatted,
                     ivaFormatted, shippingFormatted, metaTitle, metaDescription, verified, videoUrl, hasVideo,
-                    null, null, null, null, null);
+                    null, null, null, null, null, null, null, null);
         }
     }
 

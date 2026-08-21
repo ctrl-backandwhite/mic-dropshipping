@@ -229,13 +229,27 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     }
 
     @Override
-    public ProductDetailView detailBySlug(String slug, String lang) {
-        return catalogUseCase.getProductBySlug(slug, lang);
+    public ProductDetailView detailBySlug(String slug, String lang, List<UUID> cartProductIds) {
+        return conElArancel(catalogUseCase.getProductBySlug(slug, lang), cartProductIds);
     }
 
     @Override
-    public ProductDetailView detailById(UUID id, String lang) {
-        return catalogUseCase.getProductById(id, lang);
+    public ProductDetailView detailById(UUID id, String lang, List<UUID> cartProductIds) {
+        return conElArancel(catalogUseCase.getProductById(id, lang), cartProductIds);
+    }
+
+    /**
+     * La ficha promete lo mismo que el listado porque lo calcula el mismo servicio: si la tarjeta dijera
+     * «sin arancel adicional» y la ficha otra cosa, una de las dos estaría mintiendo.
+     */
+    private ProductDetailView conElArancel(ProductDetailView ficha, List<UUID> cartProductIds) {
+        if (ficha == null) {
+            return null;
+        }
+        CatalogDutyBadgeService.DutyBadge badge = dutyBadges
+                .badgesFor(cartProductIds, List.of(ficha.id()), PricingCountryHolder.get()).get(ficha.id());
+        return badge == null ? ficha
+                : ficha.withDuty(badge.extraDutyCents(), badge.extraDutyFormatted(), badge.dutyGroupId());
     }
 
     @Override

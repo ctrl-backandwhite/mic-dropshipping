@@ -119,11 +119,13 @@ public interface StorefrontCatalogApi {
 
     @Operation(summary = "Get a product detail by slug")
     @GetMapping("/products/{slug}")
-    ProductDetailView detailBySlug(@PathVariable String slug, @RequestParam(defaultValue = "es") String lang);
+    ProductDetailView detailBySlug(@PathVariable String slug, @RequestParam(defaultValue = "es") String lang,
+            @RequestParam(required = false) List<UUID> cartProductIds);
 
     @Operation(summary = "Get a product detail by id")
     @GetMapping("/products/by-id/{id}")
-    ProductDetailView detailById(@PathVariable UUID id, @RequestParam(defaultValue = "es") String lang);
+    ProductDetailView detailById(@PathVariable UUID id, @RequestParam(defaultValue = "es") String lang,
+            @RequestParam(required = false) List<UUID> cartProductIds);
 
     @Operation(summary = "Get a product detail by external source and id")
     @GetMapping("/products/by-external/{source}/{externalId}")

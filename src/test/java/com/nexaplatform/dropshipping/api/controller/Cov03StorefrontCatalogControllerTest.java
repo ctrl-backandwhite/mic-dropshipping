@@ -21,7 +21,10 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
+import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService;
+import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService.DutyBadge;
 import com.nexaplatform.dropshipping.api.mapper.ProductListFilters;
 import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.application.service.MarginService;
@@ -131,6 +134,8 @@ class Cov03StorefrontCatalogControllerTest {
     CurrencyRateService currencyService;
     @Mock
     ProductPriceTierRepository priceTierRepository;
+    @Mock
+    CatalogDutyBadgeService dutyBadges;
 
     @InjectMocks
     StorefrontCatalogController controller;
@@ -876,5 +881,29 @@ class Cov03StorefrontCatalogControllerTest {
 
         assertThat(controller.newest(0, 12, "es")).isNotNull();
         verify(storefrontRead).productList(0, 12, "es", null, null, null, null, null, "newest");
+    }
+
+    @Test
+    void laFichaPrometeElMismoArancelQueLaTarjeta() {
+        // Si la tarjeta del catálogo dijera «sin arancel adicional» y la ficha del mismo producto dijera
+        // otra cosa, una de las dos estaría mintiendo. Las dos preguntan al mismo servicio.
+        UUID id = UUID.randomUUID();
+        ProductDetailView ficha = fichaVacia(id);
+        UUID grupo = UUID.randomUUID();
+        when(catalogUseCase.getProductBySlug("vestido", "es")).thenReturn(ficha);
+        when(dutyBadges.badgesFor(any(), eq(List.of(id)), any()))
+                .thenReturn(Map.of(id, new DutyBadge(0, "0,00 €", grupo)));
+
+        ProductDetailView conArancel = controller.detailBySlug("vestido", "es", List.of(UUID.randomUUID()));
+
+        assertThat(conArancel.extraDutyCents()).isZero();
+        assertThat(conArancel.dutyGroupId()).isEqualTo(grupo);
+    }
+
+    private static ProductDetailView fichaVacia(UUID id) {
+        return new ProductDetailView(id, "vestido", null, null, null, null, "Vestido", null, null, null, null,
+                null, null, 1, null, null, null, 0, 0, null, null, "ACTIVE", null, null, null, List.of(),
+                List.of(), List.of(), List.of(), null, null, null, null, null, null, null, null, null, null,
+                null, null, false, null, false);
     }
 }
