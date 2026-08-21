@@ -143,7 +143,24 @@ public final class CatalogDtos {
             boolean verified,
             // Rebaja. Nulos cuando el producto no está en promoción: es lo que decide si el escaparate
             // pinta el precio anterior tachado o solo uno. Ya vienen formateados por el backend.
-            String originalFormatted, Integer discountPercent, String promotionName) {
+            String originalFormatted, Integer discountPercent, String promotionName,
+            // Arancel: cuánto sube el derecho de aduana del carrito al añadir ESTE producto, y a qué grupo
+            // de declaración pertenece. Nulos = no hay nada que prometer (carrito vacío) o el país ya no
+            // cobra derecho por artículo, y entonces el distintivo no se pinta. El importe viene formateado
+            // por el backend: el front no calcula importes.
+            Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId) {
+
+        /** Sin arancel resuelto: el listado lo decora después, fuera de la caché, porque depende del carrito. */
+        public ProductSummaryView(UUID id, String slug, String title, String mainImage, BigDecimal basePrice,
+                String currency, BigDecimal rating, int monthlySales, BigDecimal trendScore, String status,
+                BigDecimal priceUsd, BigDecimal displayPrice, String displayCurrency, String displaySymbol,
+                String displayFormatted, Integer inventoryCount, Integer availableUnits, boolean verified,
+                String originalFormatted, Integer discountPercent, String promotionName) {
+            this(id, slug, title, mainImage, basePrice, currency, rating, monthlySales, trendScore, status,
+                    priceUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted, inventoryCount,
+                    availableUnits, verified, originalFormatted, discountPercent, promotionName, null, null,
+                    null);
+        }
 
         /** Sin promoción: atajo para los usos que no la calculan. */
         public ProductSummaryView(UUID id, String slug, String title, String mainImage, BigDecimal basePrice,
@@ -152,7 +169,22 @@ public final class CatalogDtos {
                 String displayFormatted, Integer inventoryCount, Integer availableUnits, boolean verified) {
             this(id, slug, title, mainImage, basePrice, currency, rating, monthlySales, trendScore, status,
                     priceUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted, inventoryCount,
-                    availableUnits, verified, null, null, null);
+                    availableUnits, verified, null, null, null, null, null, null);
+        }
+
+        /**
+         * La misma ficha con el arancel resuelto.
+         *
+         * <p>Se decora <b>después</b> del listado y no dentro, a propósito: el listado está cacheado y su
+         * clave incluye los argumentos del método. Meter el carrito ahí crearía una entrada de caché por
+         * cada combinación de carrito —que no tiene fin— y echaría del hueco a las páginas que de verdad
+         * se repiten.
+         */
+        public ProductSummaryView withDuty(Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId) {
+            return new ProductSummaryView(id, slug, title, mainImage, basePrice, currency, rating, monthlySales,
+                    trendScore, status, priceUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted,
+                    inventoryCount, availableUnits, verified, originalFormatted, discountPercent, promotionName,
+                    extraDutyCents, extraDutyFormatted, dutyGroupId);
         }
     }
 

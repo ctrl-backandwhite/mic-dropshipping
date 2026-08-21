@@ -212,7 +212,7 @@ class Cov03StorefrontCatalogControllerTest {
         // `verified` es una marca interna de revisión: si un usuario cualquiera pudiera filtrar por ella,
         // se le estaría enseñando qué parte del catálogo está sin revisar.
         controller.list(0, 20, "es", null, null, null, null, null, null, null, null, null, null, null, null, null,
-                Boolean.TRUE, null);
+                Boolean.TRUE, null, null, null);
 
         ArgumentCaptor<ProductListFilters> captor = ArgumentCaptor.forClass(ProductListFilters.class);
         verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull());
@@ -224,7 +224,7 @@ class Cov03StorefrontCatalogControllerTest {
         autenticaComoAdmin();
 
         controller.list(0, 20, "es", null, null, null, null, null, null, null, null, null, null, null, null, null,
-                Boolean.FALSE, null);
+                Boolean.FALSE, null, null, null);
 
         ArgumentCaptor<ProductListFilters> captor = ArgumentCaptor.forClass(ProductListFilters.class);
         verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull());

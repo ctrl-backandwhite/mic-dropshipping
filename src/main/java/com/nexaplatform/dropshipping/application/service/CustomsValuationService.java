@@ -149,6 +149,50 @@ public class CustomsValuationService {
      *                            (ver {@link CustomsDutyLinesService})
      */
     @Transactional(readOnly = true)
+    /**
+     * Solo el derecho temporal por línea de declaración de esos bultos, sin impuestos ni recargos.
+     *
+     * <p>Lo usa el catálogo para responder «¿cuánto sube el arancel si añado este producto?»: el
+     * distintivo compara el derecho del carrito con y sin el producto, así que necesita ESTE importe
+     * aislado. Sumarle el recargo de gestión o la comisión de prepago del IVA —que sí dependen del valor—
+     * daría un incremento en un producto que NO abre línea nueva, y el «sin arancel adicional» sería
+     * mentira.
+     *
+     * <p>Comparte implementación con {@link #valuate}, que es el que cobra: si el catálogo prometiera con
+     * una regla y el checkout cobrara con otra, la diferencia la pondría el comercio.
+     */
+    public int perLineDutyUsdCents(String countryCode, List<CustomsDutyLinesService.DutyParcel> parcels) {
+        Optional<CountryCustomsRuleEntity> found = activeRule(countryCode);
+        if (found.isEmpty()) {
+            return 0;
+        }
+        CountryCustomsRuleEntity r = found.get();
+        // Solo en DDP: en DDU el derecho lo paga el destinatario en destino, no se le cobra aquí.
+        if (TaxMode.from(r.getTaxMode()) != TaxMode.DDP) {
+            return 0;
+        }
+        return perLineDuty(r, parcels == null ? List.of() : parcels);
+    }
+
+    /**
+     * Derecho temporal de la UE: tarifa × nº de LÍNEAS DE DECLARACIÓN (partidas arancelarias distintas),
+     * contadas dentro de cada bulto y solo en los bultos que no superan la franquicia —por encima de ella
+     * no se aplica el importe fijo, sino el arancel normal del TARIC—.
+     */
+    private int perLineDuty(CountryCustomsRuleEntity r, List<CustomsDutyLinesService.DutyParcel> bultos) {
+        int perLine = toUsdCents(r.getPerArticleFeeAmount(), r.getPerArticleFeeCurrency());
+        if (perLine <= 0) {
+            return 0;
+        }
+        int total = 0;
+        for (CustomsDutyLinesService.DutyParcel bulto : bultos) {
+            if (!exceedsDeMinimis(r, bulto.valueCents())) {
+                total = Math.addExact(total, Math.multiplyExact(bulto.tariffLines(), perLine));
+            }
+        }
+        return total;
+    }
+
     public CustomsValuation valuate(String countryCode, int intrinsicValueCents, int taxCents,
             List<CustomsDutyLinesService.DutyParcel> parcels) {
         int intrinsic = Math.max(0, intrinsicValueCents);
@@ -189,14 +233,7 @@ public class CustomsValuationService {
             // Derecho temporal de la UE: tarifa × nº de LÍNEAS DE DECLARACIÓN (partidas arancelarias
             // distintas), contadas dentro de cada bulto y solo en los bultos que no superan la franquicia
             // —por encima de ella no se aplica el importe fijo, sino el arancel normal del TARIC—.
-            int perLine = toUsdCents(r.getPerArticleFeeAmount(), r.getPerArticleFeeCurrency());
-            if (perLine > 0) {
-                for (CustomsDutyLinesService.DutyParcel bulto : bultos) {
-                    if (!exceedsDeMinimis(r, bulto.valueCents())) {
-                        handling += Math.multiplyExact(bulto.tariffLines(), perLine);
-                    }
-                }
-            }
+            handling += perLineDuty(r, bultos);
             // El arancel ad valorem del destino. Es la ÚNICA línea que lo cobra, y hoy no se ejecuta en
             // ningún país: los 52 con franquicia real están en BLOCK —el pedido se rechaza antes de
             // superarla— y los 34 de SURCHARGE la tienen a 0, con lo que `exceeded` nunca es true (ver

@@ -50,7 +50,7 @@ public class PartnerCatalogController implements PartnerCatalogApi {
                 // promotionId = null: el canal de integración no filtra por promoción (tampoco recibe sus
                 // descuentos). verified = null: la verificación manual es cosa del admin del escaparate.
                 new ProductListFilters(q, categoryId, supplierId, minPrice, maxPrice, shipFrom, freeShipping,
-                        selfPickup, hasVideo, minRating, inventoryMin, certification, null, null),
+                        selfPickup, hasVideo, minRating, inventoryMin, certification, null, null, null),
                 sort);
     }
 

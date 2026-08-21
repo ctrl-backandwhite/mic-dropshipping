@@ -109,7 +109,13 @@ public interface StorefrontCatalogApi {
             @RequestParam(required = false) Integer inventoryMin, @RequestParam(required = false) String certification,
             @RequestParam(required = false, defaultValue = "best_match") String sort,
             @RequestParam(required = false) Boolean verified,
-            @RequestParam(required = false) UUID promotionId);
+            @RequestParam(required = false) UUID promotionId,
+            // «Ver los que no suman arancel»: solo los productos que comparten terna con ese grupo y por
+            // tanto se declaran con su misma descripción.
+            @RequestParam(required = false) UUID dutyGroupId,
+            // Lo que el comprador ya lleva en el carrito. Es la REFERENCIA del distintivo de arancel: sin
+            // ella no hay incremento que calcular y el distintivo no se pinta.
+            @RequestParam(required = false) List<UUID> cartProductIds);
 
     @Operation(summary = "Get a product detail by slug")
     @GetMapping("/products/{slug}")

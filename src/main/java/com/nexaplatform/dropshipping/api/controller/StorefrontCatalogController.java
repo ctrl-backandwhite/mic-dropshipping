@@ -31,6 +31,8 @@ import com.nexaplatform.dropshipping.api.StorefrontCatalogApi;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
+import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
+import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
@@ -93,6 +95,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     private static final String NEWEST = "newest";
 
     private final CatalogUseCase catalogUseCase;
+    private final CatalogDutyBadgeService dutyBadges;
     private final CatalogStorefrontReadService storefrontRead;
     private final ProductDetailQueryService productDetailQuery;
     private final ProductRepository productRepository;
@@ -183,16 +186,46 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     /* =========================== PRODUCTS =========================== */
 
     @Override
+    @SuppressWarnings("java:S107")
     public PageResponse<ProductSummaryView> list(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping,
             Boolean selfPickup, Boolean hasVideo, Integer minRating, Integer inventoryMin, String certification,
-            String sort, Boolean verified, UUID promotionId) {
+            String sort, Boolean verified, UUID promotionId, UUID dutyGroupId, List<UUID> cartProductIds) {
         // El filtro de verificación es SOLO para admin: si el que consulta no es admin, se ignora.
         Boolean verifiedFilter = SecurityUtils.isAdmin() ? verified : null;
-        return storefrontRead.productListFull(page, size, lang,
+        PageResponse<ProductSummaryView> pagina = storefrontRead.productListFull(page, size, lang,
                 new ProductListFilters(q, categoryId, supplierId, minPrice, maxPrice, shipFrom, freeShipping,
-                        selfPickup, hasVideo, minRating, inventoryMin, certification, verifiedFilter, promotionId),
+                        selfPickup, hasVideo, minRating, inventoryMin, certification, verifiedFilter, promotionId,
+                        dutyGroupId),
                 sort);
+        return conElArancel(pagina, cartProductIds);
+    }
+
+    /**
+     * Añade a cada producto cuánto sube el arancel del carrito por llevárselo.
+     *
+     * <p>Va <b>fuera</b> del listado y no dentro, aunque dentro sería más cómodo: {@code productListFull}
+     * está cacheado y su clave incluye los argumentos del método, así que meter el carrito ahí crearía una
+     * entrada de caché por cada combinación de carrito —que no tiene fin— y echaría del hueco a las páginas
+     * que de verdad se repiten. El arancel se calcula aparte, con la página ya resuelta.
+     */
+    private PageResponse<ProductSummaryView> conElArancel(PageResponse<ProductSummaryView> pagina,
+            List<UUID> cartProductIds) {
+        if (pagina == null || pagina.items() == null || pagina.items().isEmpty()) {
+            return pagina;
+        }
+        Map<UUID, CatalogDutyBadgeService.DutyBadge> badges = dutyBadges.badgesFor(cartProductIds,
+                pagina.items().stream().map(ProductSummaryView::id).toList(), PricingCountryHolder.get());
+        if (badges.isEmpty()) {
+            return pagina;
+        }
+        List<ProductSummaryView> conArancel = pagina.items().stream().map(v -> {
+            CatalogDutyBadgeService.DutyBadge badge = badges.get(v.id());
+            return badge == null ? v
+                    : v.withDuty(badge.extraDutyCents(), badge.extraDutyFormatted(), badge.dutyGroupId());
+        }).toList();
+        return new PageResponse<>(conArancel, pagina.page(), pagina.size(), pagina.totalElements(),
+                pagina.totalPages());
     }
 
     @Override

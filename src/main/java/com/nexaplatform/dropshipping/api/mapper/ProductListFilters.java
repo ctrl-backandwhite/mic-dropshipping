@@ -17,18 +17,21 @@ import java.util.UUID;
  */
 public record ProductListFilters(String q, UUID categoryId, UUID supplierId, BigDecimal minPrice,
         BigDecimal maxPrice, String shipFrom, Boolean freeShipping, Boolean selfPickup, Boolean hasVideo,
-        Integer minRating, Integer inventoryMin, String certification, Boolean verified, UUID promotionId) {
+        Integer minRating, Integer inventoryMin, String certification, Boolean verified, UUID promotionId,
+        // Grupo de declaración: «ver los que no suman arancel». Filtra por la TERNA del grupo (partida,
+        // material y uso), que es lo que de verdad hace que dos productos compartan línea de aduana.
+        UUID dutyGroupId) {
 
     /** Sin ningún filtro: el listado completo. */
     public static ProductListFilters none() {
         return new ProductListFilters(null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null);
+                null, null);
     }
 
     /** Sólo búsqueda de texto, categoría, proveedor y rango de precio (lo que expone el listado simple). */
     public static ProductListFilters basic(String q, UUID categoryId, UUID supplierId, BigDecimal minPrice,
             BigDecimal maxPrice) {
         return new ProductListFilters(q, categoryId, supplierId, minPrice, maxPrice, null, null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null);
     }
 }
