@@ -72,6 +72,38 @@ public class CustomsDeclarationGroupService {
     }
 
     /**
+     * El texto en chino ({@code CName}) con el que se declarará este producto en un destino, o
+     * {@code null} si esta línea no viaja con la descripción de un grupo.
+     *
+     * <p>Va en pareja con {@link #describeFor(ProductEntity, String)} y bajo exactamente los mismos
+     * apagados, porque una línea de la declaración lleva UN inglés y UN chino y los dos describen la misma
+     * mercancía. Devolver aquí el chino del grupo cuando el inglés NO es el del grupo —o al revés— dejaría
+     * la línea diciendo dos cosas distintas en los dos idiomas.
+     *
+     * <p>Un chino sin ideogramas se descarta: YunExpress rechaza la guía si el {@code CName} no los lleva,
+     * así que un grupo aprobado con el texto a medio escribir tumbaría todos los envíos de esa partida. El
+     * respaldo —el título chino del producto— es el comportamiento de siempre y no rompe nada.
+     */
+    public String describeZhFor(ProductEntity product, String countryCode) {
+        if (!agrupacionActiva
+                || !customsValuation.groupsDeclarationLinesFor(countryCode)
+                || customsValuation.perArticleFeeUsdCents(countryCode) <= 0) {
+            return null;
+        }
+        String hs6 = hs6Of(product);
+        if (hs6 == null) {
+            return null;
+        }
+        return groupRepository
+                .findByHs6AndMaterialAndUsageCode(hs6, normalizeKeyPart(product.getCustomsMaterial()),
+                        normalizeKeyPart(product.getCustomsUsage()))
+                .filter(grupo -> grupo.getApprovedAt() != null)
+                .map(CustomsDeclarationGroupEntity::getCname)
+                .filter(CustomsDataCheck::tieneIdeogramas)
+                .orElse(null);
+    }
+
+    /**
      * La descripción con la que se declarará este producto, sin mirar el destino.
      *
      * <p>Para llamantes que de verdad no conocen el país todavía. Quien lo sepa debe usar

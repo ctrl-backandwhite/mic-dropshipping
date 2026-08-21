@@ -397,4 +397,18 @@ class OrderLineSnapshotTest {
         assertThat(firstLine(null, 1).getDeclaredDescription())
                 .isEqualTo("Men's woven cotton trousers");
     }
+
+    @Test
+    void seCongelaTambienElChinoConElQueSeVaADeclarar() {
+        // La línea de la declaración lleva UN inglés y UN chino, y describen la misma mercancía. Si solo se
+        // congelara el inglés, la guía saldría con el genérico aprobado en inglés y el título concreto del
+        // primer artículo en chino: dos mercancías distintas en la misma línea, y el CName lo valida
+        // YunExpress antes de emitir la guía.
+        product();
+        pricedAt("100.00");
+        when(declarationGroups.describeFor(any(), any())).thenReturn("Men's woven cotton trousers");
+        when(declarationGroups.describeZhFor(any(), any())).thenReturn("男式棉制机织长裤");
+
+        assertThat(firstLine(null, 1).getDeclaredDescriptionZh()).isEqualTo("男式棉制机织长裤");
+    }
 }

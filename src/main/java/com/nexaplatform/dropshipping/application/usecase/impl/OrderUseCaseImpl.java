@@ -354,7 +354,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 // arancel que usa checkoutTotalsService. Si el grupo se aprueba después de cobrar, este
                 // pedido seguirá contando por lo que se declaró: es lo que impide que la vista previa
                 // cuente una línea y el despacho cuente dos.
-                .declaredDescription(declarationGroups.describeFor(product, shippingCountry)).build();
+                .declaredDescription(declarationGroups.describeFor(product, shippingCountry))
+                .declaredDescriptionZh(declarationGroups.describeZhFor(product, shippingCountry)).build();
     }
 
     /**

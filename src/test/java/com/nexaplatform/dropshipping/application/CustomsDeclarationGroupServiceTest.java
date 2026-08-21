@@ -182,6 +182,61 @@ class CustomsDeclarationGroupServiceTest {
         assertThat(service.describeFor(p)).isEqualTo("Women's or girls' dresses, of synthetic fibres");
     }
 
+    @Test
+    void elChinoDelGrupoAcompanaAlInglesDelGrupo() {
+        // La línea fusionada lleva UN EName y UN CName. Si el inglés es el genérico del grupo y el chino
+        // el título concreto del primer producto que cayó en la línea, la misma línea de la declaración
+        // dice dos cosas distintas en los dos idiomas — y el CName es campo que el transportista valida.
+        ProductEntity p = productoCon("620443", "Polyester", "Casual wear", "Blue denim jeans");
+        when(customsValuation.groupsDeclarationLinesFor("ES")).thenReturn(true);
+        when(customsValuation.perArticleFeeUsdCents("ES")).thenReturn(300);
+        when(groupRepository.findByHs6AndMaterialAndUsageCode("620443", "POLYESTER", "CASUAL WEAR"))
+                .thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder()
+                        .ename("Women's or girls' dresses, of synthetic fibres").cname("女式合成纤维制连衣裙")
+                        .approvedAt(Instant.now()).build()));
+
+        assertThat(service.describeZhFor(p, "ES")).isEqualTo("女式合成纤维制连衣裙");
+    }
+
+    @Test
+    void sinAprobarNoHayChinoDeGrupo() {
+        // Si el grupo no agrupa, el inglés será el del producto: devolver aquí el chino del grupo volvería
+        // a descuadrar los dos idiomas de la línea, ahora al revés.
+        ProductEntity p = productoCon("620443", "Polyester", "Casual wear", "Blue denim jeans");
+        when(customsValuation.groupsDeclarationLinesFor("ES")).thenReturn(true);
+        when(customsValuation.perArticleFeeUsdCents("ES")).thenReturn(300);
+        when(groupRepository.findByHs6AndMaterialAndUsageCode("620443", "POLYESTER", "CASUAL WEAR"))
+                .thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder()
+                        .ename("Women's or girls' dresses, of synthetic fibres").cname("女式合成纤维制连衣裙")
+                        .approvedAt(null).build()));
+
+        assertThat(service.describeZhFor(p, "ES")).isNull();
+    }
+
+    @Test
+    void unChinoSinIdeogramasNoSeDeclara() {
+        // YunExpress rechaza la guía si el CName no lleva ideogramas. Un grupo aprobado con el chino a
+        // medio escribir tumbaría todos los envíos de esa partida; se prefiere el respaldo de siempre.
+        ProductEntity p = productoCon("620443", "Polyester", "Casual wear", "Blue denim jeans");
+        when(customsValuation.groupsDeclarationLinesFor("ES")).thenReturn(true);
+        when(customsValuation.perArticleFeeUsdCents("ES")).thenReturn(300);
+        when(groupRepository.findByHs6AndMaterialAndUsageCode("620443", "POLYESTER", "CASUAL WEAR"))
+                .thenReturn(Optional.of(CustomsDeclarationGroupEntity.builder()
+                        .ename("Women's or girls' dresses, of synthetic fibres").cname("Dresses")
+                        .approvedAt(Instant.now()).build()));
+
+        assertThat(service.describeZhFor(p, "ES")).isNull();
+    }
+
+    @Test
+    void conLaAgrupacionApagadaEnElPaisTampocoHayChinoDeGrupo() {
+        ProductEntity p = productoCon("620443", "Polyester", "Casual wear", "Blue denim jeans");
+        when(customsValuation.groupsDeclarationLinesFor("ES")).thenReturn(false);
+
+        assertThat(service.describeZhFor(p, "ES")).isNull();
+        verifyNoInteractions(groupRepository);
+    }
+
     private static ProductEntity productoCon(String hs, String material, String uso, String tituloEn) {
         ProductEntity p = new ProductEntity();
         p.setId(UUID.randomUUID());

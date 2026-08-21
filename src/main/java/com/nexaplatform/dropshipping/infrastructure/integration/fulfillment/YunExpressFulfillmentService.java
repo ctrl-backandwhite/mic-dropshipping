@@ -1057,6 +1057,12 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
      * título en español en el catálogo actual, y mandarla haría fallar todos los envíos.
      */
     private String chineseName(OrderItem item, ProductEntity product) {
+        // El snapshot manda, igual que en inglés: es el CName con el que se congeló la línea. Resolverlo
+        // aquí del producto dejaría la línea fusionada con el genérico aprobado en inglés y el título
+        // concreto del primer artículo en chino, es decir, dos mercancías distintas en la misma línea.
+        if (hasChinese(item.getDeclaredDescriptionZh())) {
+            return item.getDeclaredDescriptionZh();
+        }
         if (hasChinese(item.getProductTitleZh())) {
             return item.getProductTitleZh();
         }

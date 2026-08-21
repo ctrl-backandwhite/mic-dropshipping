@@ -176,6 +176,7 @@ public class OrderRepositoryImpl implements OrderRepository {
                 .quantity(itemModel.getQuantity()).lineTotalCents(itemModel.getLineTotalCents())
                 // Snapshot de la descripción declarada: si el grupo se aprueba DESPUÉS de cobrar, este
                 // pedido tiene que seguir contando por lo que se declaró, no por cómo se agrupe hoy.
-                .declaredDescription(itemModel.getDeclaredDescription()).build();
+                .declaredDescription(itemModel.getDeclaredDescription())
+                .declaredDescriptionZh(itemModel.getDeclaredDescriptionZh()).build();
     }
 }

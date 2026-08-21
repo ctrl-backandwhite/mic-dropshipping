@@ -62,4 +62,12 @@ public class OrderItem {
      * un pedido cuenta por lo que se declaró, no por cómo se agrupe hoy.
      */
     private String declaredDescription;
+
+    /**
+     * Con qué texto en chino se declaró esta línea ({@code CName}). Ver {@code OrderItemEntity}.
+     *
+     * <p>Nulo cuando la línea no se declaró con la descripción de un grupo: entonces el chino se resuelve
+     * del producto, como siempre.
+     */
+    private String declaredDescriptionZh;
 }

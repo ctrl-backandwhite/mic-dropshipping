@@ -79,6 +79,30 @@ class YunExpressDeclaracionAgrupadaTest {
         assertThat(lineas).singleElement().extracting(ParcelDeclaration::quantity).isEqualTo(5);
     }
 
+    @Test
+    void laLineaFusionadaDeclaraElChinoConElQueSeCongeloElPedido() {
+        // El snapshot manda también en chino: la línea lleva un solo CName, y tiene que describir lo mismo
+        // que su EName. Sin esto, la línea saldría con el genérico en inglés y el título concreto del
+        // primer artículo en chino — la aduana leería dos mercancías distintas en la misma línea.
+        Order pedido = pedidoCon(
+                lineaZh("Women's or girls' dresses, of synthetic fibres", "女式合成纤维制连衣裙", "620443", 1, 1240),
+                lineaZh("Women's or girls' dresses, of synthetic fibres", "女式合成纤维制连衣裙", "620443", 1, 980));
+
+        List<ParcelDeclaration> lineas = service.declaredParcels(pedido);
+
+        assertThat(lineas).singleElement()
+                .extracting(ParcelDeclaration::cName).isEqualTo("女式合成纤维制连衣裙");
+    }
+
+    @Test
+    void sinChinoCongeladoLaGuiaSigueTomandoElTituloDelProducto() {
+        // Los pedidos anteriores a la columna no tienen snapshot en chino y se declaran como siempre.
+        Order pedido = pedidoCon(lineaZh("Blue denim jeans", null, "620443", 1, 1240));
+
+        assertThat(service.declaredParcels(pedido)).singleElement()
+                .extracting(ParcelDeclaration::cName).isEqualTo("蓝色牛仔裤");
+    }
+
     private Order pedidoCon(OrderItem... items) {
         Order o = Order.builder().currency("EUR").items(new ArrayList<>(List.of(items))).build();
         o.setId(UUID.randomUUID());
@@ -97,5 +121,21 @@ class YunExpressDeclaracionAgrupadaTest {
         lenient().when(products.findById(productId)).thenReturn(Optional.of(p));
         return OrderItem.builder().productId(productId).declaredDescription(descripcionDeclarada)
                 .quantity(cantidad).unitPriceCents(unitarioCents).build();
+    }
+
+    private OrderItem lineaZh(String descripcionDeclarada, String chinoCongelado, String hs, int cantidad,
+            int unitarioCents) {
+        UUID productId = UUID.randomUUID();
+        ProductEntity p = new ProductEntity();
+        p.setId(productId);
+        p.setHsCode(hs);
+        p.setCountryOfOrigin("CN");
+        p.setCustomsMaterial("POLYESTER");
+        p.setCustomsUsage("CASUAL WEAR");
+        p.setPackageWeightGrams(200);
+        p.setTitleZh("蓝色牛仔裤");
+        lenient().when(products.findById(productId)).thenReturn(Optional.of(p));
+        return OrderItem.builder().productId(productId).declaredDescription(descripcionDeclarada)
+                .declaredDescriptionZh(chinoCongelado).quantity(cantidad).unitPriceCents(unitarioCents).build();
     }
 }
