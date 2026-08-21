@@ -72,12 +72,23 @@ public final class StorefrontViews {
     public record CartQuoteItemIn(UUID productId, UUID variantId, int quantity) {
     }
 
+    /**
+     * @param weightGrams peso NETO de la variante comprada, en gramos; el del producto si la variante no
+     *                    lo declara, y {@code null} si no hay ninguno. Nunca un respaldo inventado: el
+     *                    backend usa 500 g por defecto para poder cotizar un envío, pero enseñar eso como
+     *                    el peso de la compra sería darle al cliente un número que nadie ha medido
+     */
     public record CartQuoteLineOut(UUID productId, UUID variantId, BigDecimal unit, BigDecimal lineTotal,
-            String unitFormatted, String lineTotalFormatted) {
+            String unitFormatted, String lineTotalFormatted, Integer weightGrams) {
     }
 
+    /**
+     * @param totalWeightGrams suma del peso de las líneas que SÍ lo tienen, por cantidad
+     * @param weightIncomplete true si alguna línea no tiene peso real. Con él la pantalla dice «desde X g»
+     *                         en vez de un total que el comprador tomaría por el peso de su paquete
+     */
     public record CartQuoteOut(String currency, String symbol, List<CartQuoteLineOut> items, BigDecimal subtotal,
-            String subtotalFormatted) {
+            String subtotalFormatted, int totalWeightGrams, boolean weightIncomplete) {
     }
 
     public record HomeSection(String code, String title, List<ProductSummaryView> items) {

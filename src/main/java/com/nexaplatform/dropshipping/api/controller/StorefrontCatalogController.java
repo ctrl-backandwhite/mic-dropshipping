@@ -478,15 +478,39 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         String displayCode = pricingService.displayCurrencyCode();
         List<CartQuoteLineOut> lines = new ArrayList<>();
         BigDecimal subtotal = BigDecimal.ZERO;
+        int pesoTotal = 0;
+        boolean faltaAlgunPeso = false;
         for (CartQuoteItemIn it : items == null ? List.<CartQuoteItemIn>of() : items) {
             CartQuoteLineOut line = quoteLine(it, displayCode);
             if (line != null) {
                 lines.add(line);
                 subtotal = subtotal.add(line.lineTotal());
+                if (line.weightGrams() == null) {
+                    faltaAlgunPeso = true;
+                } else {
+                    pesoTotal = Math.addExact(pesoTotal,
+                            Math.multiplyExact(line.weightGrams(), Math.max(1, it.quantity())));
+                }
             }
         }
         return new CartQuoteOut(displayCode, pricingService.displayCurrencySymbol(), lines, subtotal,
-                currencyService.formatDisplay(subtotal, displayCode));
+                currencyService.formatDisplay(subtotal, displayCode), pesoTotal, faltaAlgunPeso);
+    }
+
+    /**
+     * Peso NETO de lo que se lleva el cliente, en gramos: el de la variante y, si no lo declara, el de la
+     * ficha. {@code null} cuando no hay ninguno de los dos.
+     *
+     * <p>Es el peso del artículo, no el que factura el transportista —ese incluye el embalaje y el
+     * volumétrico— porque lo que el comprador quiere saber es cuánto pesa lo que compra. Y jamás el
+     * respaldo de 500 g que usa el cálculo del flete: sirve para poder cotizar, no para enseñárselo a
+     * nadie como si fuera un dato medido. Un cero cuenta como ausente: un artículo no pesa cero gramos.
+     */
+    private static Integer pesoNetoDe(ProductEntity p, ProductVariantEntity v) {
+        if (v != null && v.getWeightGrams() != null && v.getWeightGrams() > 0) {
+            return v.getWeightGrams();
+        }
+        return p.getWeightGrams() != null && p.getWeightGrams() > 0 ? p.getWeightGrams() : null;
     }
 
     /**
@@ -517,7 +541,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         BigDecimal lineTotal = orderAmounts.lineSubtotal(priced.retailUsd(), it.quantity(), displayCode);
         return new CartQuoteLineOut(p.getId(), v != null ? v.getId() : null, unit, lineTotal,
                 currencyService.formatDisplay(unit, displayCode),
-                currencyService.formatDisplay(lineTotal, displayCode));
+                currencyService.formatDisplay(lineTotal, displayCode), pesoNetoDe(p, v));
     }
 
     /* =========================== HOME SECTIONS (DROP-20) =========================== */
