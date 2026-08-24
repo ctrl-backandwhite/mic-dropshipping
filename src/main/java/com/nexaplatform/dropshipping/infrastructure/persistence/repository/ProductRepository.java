@@ -299,4 +299,54 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             """)
     List<UUID> findCategoryIdsWithProductsIngestedSince(@Param("status") ProductStatus status,
             @Param("since") Instant since);
+
+    /**
+     * Las ternas aduaneras distintas del catálogo —partida, material y uso—, las más pobladas primero.
+     *
+     * <p>Es la entrada de la siembra de {@code customs_declaration_group}: una fila aquí es un grupo de
+     * declaración candidato. Se agrupa por los valores <b>en crudo</b> y se normaliza después en Java
+     * (ver {@link CustomsTernaRow}), así que la misma terna puede venir en varias filas con distinta
+     * grafía; el orden por cuenta descendente hace que la grafía mayoritaria sea la que dé el borrador.
+     */
+    @Query("""
+            SELECT new com.nexaplatform.dropshipping.infrastructure.persistence.repository.CustomsTernaRow(
+                       p.hsCode, p.customsMaterial, p.customsUsage, COUNT(p))
+            FROM ProductEntity p
+            WHERE p.hsCode IS NOT NULL AND p.hsCode <> ''
+            GROUP BY p.hsCode, p.customsMaterial, p.customsUsage
+            ORDER BY COUNT(p) DESC
+            """)
+    List<CustomsTernaRow> customsTernas();
+
+    /**
+     * Los productos que comparten terna aduanera con un grupo de declaración: los que se declaran con su
+     * misma descripción y por tanto <b>no abren línea nueva</b> en la aduana.
+     *
+     * <p>Es el filtro «ver los que no suman arancel». Devuelve solo identificadores porque la visibilidad
+     * real del escaparate —publicado y con imagen espejada— y el resto de filtros los aplica después
+     * {@link #searchStorefrontByIds}, que es el mismo camino por el que entran los resultados del buscador.
+     *
+     * <p>El orden es el que manda cuando el usuario no ha pedido otro, y termina en {@code id}: sin
+     * desempate, dos productos con la misma tendencia y las mismas ventas pueden salir repetidos en una
+     * página e inalcanzables en la siguiente.
+     *
+     * <p>La normalización tiene que coincidir con {@code CustomsDeclarationGroupService.normalizeKeyPart}.
+     * {@code TRIM} y {@code UPPER} cubren lo que hay hoy en el catálogo (ni un solo valor con espacios
+     * dobles ni con bordes sin recortar); el colapso de espacios interiores no se puede expresar en JPQL,
+     * así que un valor futuro con dos espacios seguidos quedaría fuera del filtro — se vería el producto en
+     * el catálogo general, nunca una promesa falsa.
+     */
+    @Query("""
+            SELECT p.id FROM ProductEntity p
+            WHERE p.status = :status
+              AND p.hsCode LIKE CONCAT(CAST(:hs6 AS string), '%')
+              AND UPPER(TRIM(COALESCE(p.customsMaterial, ''))) = CAST(:material AS string)
+              AND UPPER(TRIM(COALESCE(p.customsUsage, ''))) = CAST(:usageCode AS string)
+              AND (CAST(:origin AS string) IS NULL
+                   OR UPPER(TRIM(COALESCE(p.countryOfOrigin, ''))) = CAST(:origin AS string))
+            ORDER BY p.trendScore DESC, p.monthlySales DESC, p.id ASC
+            """)
+    List<UUID> idsForCustomsTerna(@Param("status") ProductStatus status, @Param("hs6") String hs6,
+            @Param("material") String material, @Param("usageCode") String usageCode,
+            @Param("origin") String origin);
 }

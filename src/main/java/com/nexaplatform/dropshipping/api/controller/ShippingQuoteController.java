@@ -125,6 +125,28 @@ public class ShippingQuoteController {
             /** Una entrada por línea del carrito, con su unitario y su importe, ya formateados. */
             List<QuoteLine> items,
             /**
+             * Descuento en el envío que estamos poniendo nosotros, ya formateado; "" si no hay.
+             *
+             * <p>Sale de dos sitios: el porte del proveedor que se cobra por cada unidad repetida del
+             * mismo producto y no se gasta —el proveedor manda un solo bulto—, y la ganancia del pedido
+             * por encima de 5 EUR en la Unión Europea.
+             */
+            String shippingSubsidyFormatted,
+            /**
+             * Qué PORCENTAJE del PORTE estamos cubriendo (0-100). 100 = al cliente le sale gratis.
+             *
+             * <p>Va por concepto y no como un número único porque el resumen enseña el subsidio debajo de
+             * cada línea: «Envío 30,00 € / Subsidio 100 %» y «Aranceles 24,00 € / Subsidio 40 %». Con un
+             * solo porcentaje no se puede decir cuál de los dos se está cubriendo.
+             */
+            int shippingSubsidyPercent,
+            /** Lo que ponemos del ARANCEL, ya formateado; "" si no hay. */
+            String customsSubsidyFormatted,
+            /** Qué porcentaje del arancel estamos cubriendo (0-100). */
+            int customsSubsidyPercent,
+            /** true cuando la subvención cubre el envío entero y hay que decir «envío gratis». */
+            boolean freeShipping,
+            /**
              * Total del pedido en céntimos de DÓLAR: producto + envío + impuesto.
              *
              * <p>Va además del total formateado porque el checkout necesita compararlo con el saldo del
@@ -212,16 +234,28 @@ public class ShippingQuoteController {
 
         ShippingQuote q = preview.quote();
         String code = pricingService.displayCurrencyCode();
-        // Separar el envío en "Envío base" y "Aranceles UE": el recargo de aduana se convierte a la divisa
-        // y el envío base = envío total − aduana, para que la suma cuadre exactamente con el envío mostrado.
+        // El desglose va en tres conceptos independientes —porte, arancel y subvención— y cada uno con su
+        // cifra REAL, para que sumar lo que se ve dé el total que se cobra.
+        //
+        // Antes el porte se deducía restando el arancel al envío mostrado. Dejó de valer en cuanto el
+        // envío mostrado pasó a llevar la subvención descontada: el 21-ago-2026 el resumen enseñó un
+        // «Envío −2,28 €» (9,87 + 6,00 − 12,15 − 6,00) y el descuento contado dos veces. El total era
+        // correcto, así que solo se vio en pantalla. El porte sale ahora de su propio dato.
         int customsCents = preview.totals().customsHandlingCents();
         BigDecimal customsDisplay = currencyService.usdToDisplay(BigDecimal.valueOf(customsCents).movePointLeft(2))
                 .setScale(2, RoundingMode.HALF_UP);
         String customsFmt = customsCents > 0 ? currencyService.formatDisplay(customsDisplay, code) : "";
         String shippingBaseFmt = currencyService.formatDisplay(
-                preview.shippingDisplay().subtract(customsDisplay), code);
+                currencyService.usdToDisplay(BigDecimal.valueOf(preview.totals().shippingBaseCents())
+                        .movePointLeft(2)).setScale(2, RoundingMode.HALF_UP), code);
         // amountUsdCents = envío TOTAL (tarifa + recargo de despacho), que es lo que se cobrará. Si se
         // devolviera la tarifa sin recargo, el front pintaría un envío distinto del facturado.
+        // Descuento en el envío: importe y porcentaje cubierto. El porcentaje se mide sobre lo que el
+        // cliente habría pagado de envío y aduana SIN la bolsa, que es lo que da sentido a «te cubrimos el
+        // 43 %»; medirlo sobre lo que queda por pagar daría un número que sube cuanto menos se cubre.
+        String subsidyFmt = importeSubvencionado(preview.totals().shippingSubsidyCents(), code);
+        String customsSubsidyFmt = importeSubvencionado(preview.totals().customsSubsidyCents(), code);
+
         QuoteResponse body = new QuoteResponse(q.supported(), q.countryCode(), preview.shippingUsdCents(),
                 q.carrier(), q.serviceName(), q.etaMinDays(), q.etaMaxDays(), q.zone(), preview.taxRateBps(),
                 currencyService.formatDisplay(preview.shippingDisplay(), code),
@@ -248,8 +282,18 @@ public class ShippingQuoteController {
                         .map(l -> new QuoteLine(l.productId(), l.variantId(), l.quantity(), l.unitFormatted(),
                                 l.lineSubtotalFormatted()))
                         .toList(),
+                subsidyFmt, preview.totals().shippingSubsidyPercent(),
+                customsSubsidyFmt, preview.totals().customsSubsidyPercent(),
+                preview.totals().freeShipping(),
                 preview.totals().totalCents(preview.subtotalUsdCents() - preview.discountUsdCents()));
         return ResponseEntity.ok(body);
+    }
+
+    /** Un importe de la bolsa, ya formateado en la divisa del comprador; cadena vacía si no hay nada. */
+    private String importeSubvencionado(int cents, String code) {
+        return cents <= 0 ? ""
+                : currencyService.formatDisplay(currencyService.usdToDisplay(
+                        BigDecimal.valueOf(cents).movePointLeft(2)), code);
     }
 
     @Operation(summary = "Países a los que se puede enviar (cobertura real del transportista)")

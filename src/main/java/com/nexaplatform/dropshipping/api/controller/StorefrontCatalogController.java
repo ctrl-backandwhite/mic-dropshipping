@@ -31,6 +31,9 @@ import com.nexaplatform.dropshipping.api.StorefrontCatalogApi;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
+import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
+import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService;
+import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
@@ -93,6 +96,8 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     private static final String NEWEST = "newest";
 
     private final CatalogUseCase catalogUseCase;
+    private final CatalogDutyBadgeService dutyBadges;
+    private final CustomsValuationService customsValuation;
     private final CatalogStorefrontReadService storefrontRead;
     private final ProductDetailQueryService productDetailQuery;
     private final ProductRepository productRepository;
@@ -183,26 +188,109 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     /* =========================== PRODUCTS =========================== */
 
     @Override
+    @SuppressWarnings("java:S107")
     public PageResponse<ProductSummaryView> list(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping,
             Boolean selfPickup, Boolean hasVideo, Integer minRating, Integer inventoryMin, String certification,
-            String sort, Boolean verified, UUID promotionId) {
+            String sort, Boolean verified, UUID promotionId, UUID dutyGroupId, Boolean dutyGroupsFromCart,
+            List<UUID> cartProductIds) {
         // El filtro de verificación es SOLO para admin: si el que consulta no es admin, se ignora.
         Boolean verifiedFilter = SecurityUtils.isAdmin() ? verified : null;
-        return storefrontRead.productListFull(page, size, lang,
+        PageResponse<ProductSummaryView> pagina = storefrontRead.productListFull(page, size, lang,
                 new ProductListFilters(q, categoryId, supplierId, minPrice, maxPrice, shipFrom, freeShipping,
-                        selfPickup, hasVideo, minRating, inventoryMin, certification, verifiedFilter, promotionId),
+                        selfPickup, hasVideo, minRating, inventoryMin, certification, verifiedFilter, promotionId,
+                        gruposDelFiltro(dutyGroupId, dutyGroupsFromCart, cartProductIds)),
                 sort);
+        return conElArancel(pagina, cartProductIds);
+    }
+
+    /**
+     * Por qué grupos de declaración se filtra: por el de un producto concreto, o por los del carrito entero.
+     *
+     * <p>El carrito tiene tantas líneas de declaración como ternas distintas lleve. Con tres productos de
+     * tres grupos se pagan tres derechos, y «lo que no suma arancel» es lo que encaje en <b>cualquiera</b>
+     * de los tres: filtrar por uno solo deja fuera dos tercios del catálogo que tampoco costaría nada.
+     *
+     * <p>Manda el producto cuando se ha elegido uno —es una petición explícita del comprador sobre ESE
+     * artículo, y funciona con el carrito vacío—; el carrito es el respaldo.
+     *
+     * <p>Cada línea lleva su ORIGEN cuando viene del carrito: lo que separa una línea de declaración de
+     * otra es clasificación + descripción + <b>origen</b>, así que sin él el filtro devolvía productos del
+     * mismo grupo pero de otro país, que suman los 3 EUR igualmente.
+     *
+     * @return {@code null} si no hay filtro; lista vacía si se pidió el del carrito y en él no hay ni un
+     *         grupo aprobado, porque entonces cualquier producto abre línea nueva y no encaja ninguno
+     */
+    private List<ProductListFilters.DutyLine> gruposDelFiltro(UUID dutyGroupId, Boolean dutyGroupsFromCart,
+            List<UUID> cartProductIds) {
+        // Donde no se cobra derecho por artículo no hay nada que agrupar, así que el filtro se ignora: el
+        // régimen de 3 EUR es de los 27 de la Unión y en el resto del mundo esta pantalla no habla de
+        // aranceles. Sin esto, cambiar de país con el filtro puesto —o abrir un enlace compartido desde
+        // fuera de la UE— dejaba el catálogo recortado por una promesa que allí no significa nada.
+        if (customsValuation.perArticleFeeUsdCents(PricingCountryHolder.get()) <= 0) {
+            return null;
+        }
+        if (dutyGroupId != null) {
+            // Desde una tarjeta con el carrito vacío no hay con qué comparar el origen, así que se dejan
+            // todos los del grupo: es «los de la misma familia», no una promesa sobre un carrito.
+            return List.of(new ProductListFilters.DutyLine(dutyGroupId, null));
+        }
+        if (!Boolean.TRUE.equals(dutyGroupsFromCart)) {
+            return null;
+        }
+        return dutyBadges.lineasDe(cartProductIds).stream()
+                .map(l -> new ProductListFilters.DutyLine(l.grupoId(), l.originCountry())).toList();
+    }
+
+    /**
+     * Añade a cada producto cuánto sube el arancel del carrito por llevárselo.
+     *
+     * <p>Va <b>fuera</b> del listado y no dentro, aunque dentro sería más cómodo: {@code productListFull}
+     * está cacheado y su clave incluye los argumentos del método, así que meter el carrito ahí crearía una
+     * entrada de caché por cada combinación de carrito —que no tiene fin— y echaría del hueco a las páginas
+     * que de verdad se repiten. El arancel se calcula aparte, con la página ya resuelta.
+     */
+    private PageResponse<ProductSummaryView> conElArancel(PageResponse<ProductSummaryView> pagina,
+            List<UUID> cartProductIds) {
+        if (pagina == null || pagina.items() == null || pagina.items().isEmpty()) {
+            return pagina;
+        }
+        Map<UUID, CatalogDutyBadgeService.DutyBadge> badges = dutyBadges.badgesFor(cartProductIds,
+                pagina.items().stream().map(ProductSummaryView::id).toList(), PricingCountryHolder.get());
+        if (badges.isEmpty()) {
+            return pagina;
+        }
+        List<ProductSummaryView> conArancel = pagina.items().stream().map(v -> {
+            CatalogDutyBadgeService.DutyBadge badge = badges.get(v.id());
+            return badge == null ? v
+                    : v.withDuty(badge.extraDutyCents(), badge.extraDutyFormatted(), badge.dutyGroupId());
+        }).toList();
+        return new PageResponse<>(conArancel, pagina.page(), pagina.size(), pagina.totalElements(),
+                pagina.totalPages());
     }
 
     @Override
-    public ProductDetailView detailBySlug(String slug, String lang) {
-        return catalogUseCase.getProductBySlug(slug, lang);
+    public ProductDetailView detailBySlug(String slug, String lang, List<UUID> cartProductIds) {
+        return conElArancel(catalogUseCase.getProductBySlug(slug, lang), cartProductIds);
     }
 
     @Override
-    public ProductDetailView detailById(UUID id, String lang) {
-        return catalogUseCase.getProductById(id, lang);
+    public ProductDetailView detailById(UUID id, String lang, List<UUID> cartProductIds) {
+        return conElArancel(catalogUseCase.getProductById(id, lang), cartProductIds);
+    }
+
+    /**
+     * La ficha promete lo mismo que el listado porque lo calcula el mismo servicio: si la tarjeta dijera
+     * «sin arancel adicional» y la ficha otra cosa, una de las dos estaría mintiendo.
+     */
+    private ProductDetailView conElArancel(ProductDetailView ficha, List<UUID> cartProductIds) {
+        if (ficha == null) {
+            return null;
+        }
+        CatalogDutyBadgeService.DutyBadge badge = dutyBadges
+                .badgesFor(cartProductIds, List.of(ficha.id()), PricingCountryHolder.get()).get(ficha.id());
+        return badge == null ? ficha
+                : ficha.withDuty(badge.extraDutyCents(), badge.extraDutyFormatted(), badge.dutyGroupId());
     }
 
     @Override
@@ -398,15 +486,39 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         String displayCode = pricingService.displayCurrencyCode();
         List<CartQuoteLineOut> lines = new ArrayList<>();
         BigDecimal subtotal = BigDecimal.ZERO;
+        int pesoTotal = 0;
+        boolean faltaAlgunPeso = false;
         for (CartQuoteItemIn it : items == null ? List.<CartQuoteItemIn>of() : items) {
             CartQuoteLineOut line = quoteLine(it, displayCode);
             if (line != null) {
                 lines.add(line);
                 subtotal = subtotal.add(line.lineTotal());
+                if (line.weightGrams() == null) {
+                    faltaAlgunPeso = true;
+                } else {
+                    pesoTotal = Math.addExact(pesoTotal,
+                            Math.multiplyExact(line.weightGrams(), Math.max(1, it.quantity())));
+                }
             }
         }
         return new CartQuoteOut(displayCode, pricingService.displayCurrencySymbol(), lines, subtotal,
-                currencyService.formatDisplay(subtotal, displayCode));
+                currencyService.formatDisplay(subtotal, displayCode), pesoTotal, faltaAlgunPeso);
+    }
+
+    /**
+     * Peso NETO de lo que se lleva el cliente, en gramos: el de la variante y, si no lo declara, el de la
+     * ficha. {@code null} cuando no hay ninguno de los dos.
+     *
+     * <p>Es el peso del artículo, no el que factura el transportista —ese incluye el embalaje y el
+     * volumétrico— porque lo que el comprador quiere saber es cuánto pesa lo que compra. Y jamás el
+     * respaldo de 500 g que usa el cálculo del flete: sirve para poder cotizar, no para enseñárselo a
+     * nadie como si fuera un dato medido. Un cero cuenta como ausente: un artículo no pesa cero gramos.
+     */
+    private static Integer pesoNetoDe(ProductEntity p, ProductVariantEntity v) {
+        if (v != null && v.getWeightGrams() != null && v.getWeightGrams() > 0) {
+            return v.getWeightGrams();
+        }
+        return p.getWeightGrams() != null && p.getWeightGrams() > 0 ? p.getWeightGrams() : null;
     }
 
     /**
@@ -437,7 +549,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         BigDecimal lineTotal = orderAmounts.lineSubtotal(priced.retailUsd(), it.quantity(), displayCode);
         return new CartQuoteLineOut(p.getId(), v != null ? v.getId() : null, unit, lineTotal,
                 currencyService.formatDisplay(unit, displayCode),
-                currencyService.formatDisplay(lineTotal, displayCode));
+                currencyService.formatDisplay(lineTotal, displayCode), pesoNetoDe(p, v));
     }
 
     /* =========================== HOME SECTIONS (DROP-20) =========================== */

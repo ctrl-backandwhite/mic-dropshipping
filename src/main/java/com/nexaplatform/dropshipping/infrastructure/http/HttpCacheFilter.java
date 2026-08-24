@@ -43,8 +43,11 @@ public class HttpCacheFilter extends OncePerRequestFilter {
             // TTL corto en endpoints volátiles (listings, PDP) — el CDN sigue
             // siendo el responsable real del cache, esto es la directiva para él.
             res.setHeader("Cache-Control", cacheControlFor(path));
-            // Estas combinaciones afectan al contenido devuelto.
-            res.setHeader("Vary", "Accept-Language, Accept-Encoding, X-Currency");
+            // Estas combinaciones afectan al contenido devuelto. X-Country no es opcional: el margen se
+            // aplica por país del comprador y el arancel adicional que enseña el catálogo sale del importe
+            // por artículo de SU país. Sin declararlo, un intermediario puede servir a un comprador la
+            // respuesta cacheada de otro país, con otro precio y otra promesa de aduana.
+            res.setHeader("Vary", "Accept-Language, Accept-Encoding, X-Currency, X-Country");
             etag.doFilter(req, res, chain);
         } else {
             // Endpoints autenticados o de escritura no deben cachearse.

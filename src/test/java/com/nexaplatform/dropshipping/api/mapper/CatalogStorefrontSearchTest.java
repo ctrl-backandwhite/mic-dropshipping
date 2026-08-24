@@ -7,9 +7,11 @@ import com.nexaplatform.dropshipping.application.service.PromotionService;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.ProductSearchService;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.SupplierSearchService;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomsDeclarationGroupEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CustomsDeclarationGroupRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierRepository;
@@ -69,6 +71,8 @@ class CatalogStorefrontSearchTest {
     PromotionService promotionService;
     @Mock
     ProductSearchService productSearchService;
+    @Mock
+    CustomsDeclarationGroupRepository declarationGroupRepository;
 
     @InjectMocks
     CatalogStorefrontReadService service;
@@ -190,6 +194,69 @@ class CatalogStorefrontSearchTest {
         service.productListFull(0, 20, "es", ProductListFilters.none(), null);
 
         verify(productSearchService, never()).searchRelevantIds(any(), any());
+    }
+
+    /**
+     * El filtro «ver los que no suman arancel» se resuelve a la TERNA del grupo, no a una columna del
+     * producto: es la terna la que hace que dos productos se declaren igual y la aduana los cuente como una
+     * sola línea.
+     */
+    @Test
+    void elFiltroPorGrupoDeDeclaracionListaSoloLosDeSuTerna() {
+        ProductEntity vestido = producto("vestido");
+        UUID grupo = UUID.randomUUID();
+        when(declarationGroupRepository.findById(grupo)).thenReturn(Optional.of(CustomsDeclarationGroupEntity
+                .builder().id(grupo).hs6("620443").material("POLYESTER").usageCode("DRESS").build()));
+        when(productRepository.idsForCustomsTerna(ProductStatus.ACTIVE, "620443", "POLYESTER", "DRESS", null))
+                .thenReturn(List.of(vestido.getId()));
+        when(productRepository.searchStorefrontByIds(eq(ProductStatus.ACTIVE), eq(List.of(vestido.getId())), any(),
+                any(), any(), any(), any(), any(), any(), any())).thenReturn(List.of(vestido));
+
+        PageResponse<ProductSummaryView> pagina = service.productListFull(0, 20, "es", porGrupo(grupo), null);
+
+        assertThat(pagina.totalElements()).isEqualTo(1);
+    }
+
+    @Test
+    void unGrupoQueNoExisteDevuelveLaPaginaVaciaYNoElCatalogoEntero() {
+        // Es la diferencia entre «no hay nada que cumpla esto» y «toma, todo»: lo segundo enseñaría bajo la
+        // etiqueta «no suman arancel» productos que sí lo suman.
+        UUID grupo = UUID.randomUUID();
+        when(declarationGroupRepository.findById(grupo)).thenReturn(Optional.empty());
+
+        PageResponse<ProductSummaryView> pagina = service.productListFull(0, 20, "es", porGrupo(grupo), null);
+
+        assertThat(pagina.items()).isEmpty();
+        assertThat(pagina.totalElements()).isZero();
+    }
+
+    @Test
+    void conTextoYGrupoSoloQuedaLoQueEstaEnLOSDOS() {
+        // El buscador manda en QUÉ casa; el grupo manda en qué se puede prometer. Un producto que casa con
+        // el texto pero no comparte terna abriría línea nueva en la aduana y no puede salir bajo la etiqueta.
+        ProductEntity delGrupo = producto("vestido-azul");
+        ProductEntity fueraDelGrupo = producto("camiseta-azul");
+        UUID grupo = UUID.randomUUID();
+        when(productSearchService.searchRelevantIds("azul", "es"))
+                .thenReturn(Optional.of(List.of(fueraDelGrupo.getId(), delGrupo.getId())));
+        when(declarationGroupRepository.findById(grupo)).thenReturn(Optional.of(CustomsDeclarationGroupEntity
+                .builder().id(grupo).hs6("620443").material("POLYESTER").usageCode("DRESS").build()));
+        when(productRepository.idsForCustomsTerna(ProductStatus.ACTIVE, "620443", "POLYESTER", "DRESS", null))
+                .thenReturn(List.of(delGrupo.getId()));
+        when(productRepository.searchStorefrontByIds(eq(ProductStatus.ACTIVE), eq(List.of(delGrupo.getId())), any(),
+                any(), any(), any(), any(), any(), any(), any())).thenReturn(List.of(delGrupo));
+
+        PageResponse<ProductSummaryView> pagina = service.productListFull(0, 20, "es",
+                new ProductListFilters("azul", null, null, null, null, null, null, null, null, null, null, null,
+                        null, null, List.of(new ProductListFilters.DutyLine(grupo, null))),
+                null);
+
+        assertThat(pagina.totalElements()).isEqualTo(1);
+    }
+
+    private ProductListFilters porGrupo(UUID grupo) {
+        return new ProductListFilters(null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, List.of(new ProductListFilters.DutyLine(grupo, null)));
     }
 
     private ProductListFilters filtros(String q) {

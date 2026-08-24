@@ -15,12 +15,14 @@ import com.nexaplatform.dropshipping.application.notifications.NotificationsPubl
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.application.service.CartService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
+import com.nexaplatform.dropshipping.application.service.ShippingSubsidyService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
 import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
 import com.nexaplatform.dropshipping.application.service.StockService;
 import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.CustomsDataCheck;
+import com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService;
 import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import com.nexaplatform.dropshipping.application.service.FulfillmentRouter;
 import com.nexaplatform.dropshipping.application.service.ParcelAggregator;
@@ -135,11 +137,14 @@ public class OrderUseCaseImpl implements OrderUseCase {
      */
     private final FulfillmentRouter router;
     private final CheckoutTotalsService checkoutTotalsService;
+    private final ShippingSubsidyService shippingSubsidyService;
     private final CustomsDutyLinesService customsDutyLinesService;
     private final UnserviceableZoneService unserviceableZoneService;
     private final OperatorCommissionService operatorCommissionService;
     private final PromotionService promotionService;
     private final SupplierPurchaseService supplierPurchaseService;
+    /** De dónde sale la descripción con la que se declara cada línea: el grupo aprobado, o el título. */
+    private final CustomsDeclarationGroupService declarationGroups;
     /** Timeline del pedido: los pasos que marca una persona también tienen que verse ahí. */
     private final OrderTrackingEventRepository trackingRepository;
     private final OrderIndexer orderIndexer;
@@ -218,7 +223,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
         //
         // Lo fija PedidoPaisDelMargenTest; ese test falla si alguien vuelve a pisar el país aquí.
         for (OrderItemInput itemReq : req.items()) {
-            OrderItem line = buildLine(itemReq, orderLang, parcel, gross, grossByProduct);
+            OrderItem line = buildLine(itemReq, orderLang, parcel, gross, grossByProduct,
+                    order.getShippingCountry());
             order.getItems().add(line);
             subtotal = Math.addExact(subtotal, line.getLineTotalCents());
         }
@@ -260,7 +266,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
     }
 
     private OrderItem buildLine(OrderItemInput itemReq, String orderLang,
-            ParcelAggregator parcel, GrossSubtotal gross, Map<UUID, Integer> grossByProduct) {
+            ParcelAggregator parcel, GrossSubtotal gross, Map<UUID, Integer> grossByProduct,
+            String shippingCountry) {
         // Cantidad dentro de un rango sano ANTES de calcular importes. Cierra el desbordamiento de
         // enteros del cobro (unitCents * quantity) y rechaza cantidades ≤ 0 aunque el DTO no valide.
         if (itemReq.quantity() <= 0 || itemReq.quantity() > MAX_LINE_QUANTITY) {
@@ -344,7 +351,13 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 .imageUrlSnapshot(snapshotImage(product, variant))
                 .skuSnapshot(variant != null ? variant.getSku() : null).unitPriceCents(unitCents)
                 .costCents(costCents).costCnyCents(costCnyCents).quantity(itemReq.quantity())
-                .lineTotalCents(lineTotal).build();
+                .lineTotalCents(lineTotal)
+                // Se congela AQUÍ la descripción con la que se va a declarar, con el mismo país del
+                // arancel que usa checkoutTotalsService. Si el grupo se aprueba después de cobrar, este
+                // pedido seguirá contando por lo que se declaró: es lo que impide que la vista previa
+                // cuente una línea y el despacho cuente dos.
+                .declaredDescription(declarationGroups.describeFor(product, shippingCountry))
+                .declaredDescriptionZh(declarationGroups.describeZhFor(product, shippingCountry)).build();
     }
 
     /**
@@ -461,8 +474,11 @@ public class OrderUseCaseImpl implements OrderUseCase {
         //  · Recargo de despacho formal si el valor de los bienes supera el umbral de minimis del destino.
         // Derecho fijo de la UE: se cobra por línea de declaración (partida arancelaria) dentro de cada
         // bulto, no por producto ni por unidad. Ver CustomsDutyLinesService.
+        // La bolsa de subvención va por el MISMO servicio que la vista previa: si el checkout enseñara un
+        // descuento y el cobro otro, el cliente pagaría distinto de lo que aceptó.
         CheckoutTotalsService.CheckoutTotals totals = checkoutTotalsService.compute(order.getShippingCountry(),
-                order.getShippingState(), discountedSubtotal, shippingCents, customsParcelsOf(order));
+                order.getShippingState(), discountedSubtotal, shippingCents, customsParcelsOf(order),
+                shippingSubsidyService.subsidyUsdCents(lineasDeSubvencion(order), order.getShippingCountry()));
         // Destino cuya política prohíbe vender por encima del umbral: se rechaza ANTES de cobrar, en vez de
         // aceptar un pedido que costaría aranceles y despacho formal no repercutidos.
         if (totals.blocked()) {
@@ -1446,11 +1462,17 @@ public class OrderUseCaseImpl implements OrderUseCase {
             // YunExpressFulfillmentService); aquí se replica ese orden, que además es el correcto: un
             // pedido antiguo debe seguir contando por lo que se declaró, no por cómo se llame el
             // producto hoy.
-            String descripcionDeclarada = item.getProductTitles() != null
-                    && item.getProductTitles().get("en") != null
-                    && !item.getProductTitles().get("en").isBlank()
-                    ? item.getProductTitles().get("en")
-                    : CustomsDutyLinesService.declaredDescriptionOf(p);
+            // El SNAPSHOT manda sobre todo lo demás: si el grupo se aprobó después de cobrar, este
+            // pedido sigue contando por lo que se declaró. Sin esta prioridad, la vista previa habría
+            // contado una línea y el despacho contaría dos, y esos 3 EUR los pondría el comercio.
+            String descripcionDeclarada = item.getDeclaredDescription() != null
+                    && !item.getDeclaredDescription().isBlank()
+                    ? item.getDeclaredDescription()
+                    : item.getProductTitles() != null
+                            && item.getProductTitles().get("en") != null
+                            && !item.getProductTitles().get("en").isBlank()
+                            ? item.getProductTitles().get("en")
+                            : CustomsDutyLinesService.declaredDescriptionOf(p);
             lines.add(new CustomsDutyLinesService.Line(p.getId(), p.getHsCode(),
                     descripcionDeclarada, p.getCountryOfOrigin(),
                     Math.max(1, item.getQuantity()),
@@ -1464,4 +1486,34 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 order.getShippingCountry());
     }
 
+
+    /**
+     * Las líneas del pedido tal y como las necesita la bolsa de subvención.
+     *
+     * <p>La ganancia por unidad es <b>lo cobrado menos el coste</b> descontando el IVA y el porte del
+     * proveedor, que son dinero suyo y no ganancia nuestra. El pedido ya guarda el coste por línea
+     * (`costCents`), así que no hay que volver a tarificar.
+     */
+    private List<ShippingSubsidyService.Linea> lineasDeSubvencion(Order order) {
+        List<ShippingSubsidyService.Linea> out = new ArrayList<>();
+        for (OrderItem item : order.getItems()) {
+            if (item.getProductId() == null) {
+                continue;
+            }
+            ProductEntity p = productRepository.findById(item.getProductId()).orElse(null);
+            if (p == null) {
+                continue;
+            }
+            PricingService.PricedAmount priced = pricingService.priceFor(p, null);
+            int base = priced.baseRetailUsd() == null ? 0
+                    : priced.baseRetailUsd().setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
+            int coste = priced.costUsd() == null ? 0
+                    : priced.costUsd().setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
+            int porte = priced.shippingUsd() == null ? 0
+                    : priced.shippingUsd().setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
+            out.add(new ShippingSubsidyService.Linea(p.getId(), Math.max(1, item.getQuantity()), base - coste,
+                    porte));
+        }
+        return out;
+    }
 }

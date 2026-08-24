@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.api.dto.in.MeCheckoutDtoIn;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
+import com.nexaplatform.dropshipping.application.service.ShippingSubsidyService;
 import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import com.nexaplatform.dropshipping.application.service.FulfillmentRouter;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
@@ -94,10 +95,14 @@ class PedidoGuardaElTransportistaTest {
     @Mock FulfillmentProvider fulfillment;
     @Mock FulfillmentRouter router;
     @Mock CheckoutTotalsService checkoutTotalsService;
+    @Mock ShippingSubsidyService shippingSubsidyService;
     @Mock OperatorCommissionService operatorCommissionService;
     @Mock OrderIndexer orderIndexer;
     @Mock OrderSearchService orderSearchService;
     @Mock SupplierPurchaseService supplierPurchaseService;
+
+    @org.mockito.Mock
+    com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService declarationGroups;
     @Mock UnserviceableZoneService unserviceableZoneService;
     @Spy CustomsDutyLinesService customsDutyLinesService = new CustomsDutyLinesService(null);
 
@@ -139,7 +144,7 @@ class PedidoGuardaElTransportistaTest {
         when(totals.shippingCents()).thenReturn(0);
         when(totals.taxCents()).thenReturn(0);
         when(totals.totalCents(anyInt())).thenAnswer(i -> i.getArgument(0));
-        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList())).thenReturn(totals);
+        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList(), anyInt())).thenReturn(totals);
 
         when(orderRepository.save(any())).thenAnswer(i -> {
             Order o = i.getArgument(0);

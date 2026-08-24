@@ -130,6 +130,17 @@ public class CountryCustomsRuleEntity extends BaseEntity {
     @Column(name = "vat_prepay_service_code", length = 16)
     private String vatPrepayServiceCode;
 
+    /**
+     * ¿Los productos de la misma terna se declaran en UNA sola línea en este destino?
+     *
+     * <p>Apagarlo devuelve el país a una línea por producto sin desplegar y sin tocar los grupos ya
+     * aprobados, que siguen ahí para cuando se vuelva a encender. Existe porque el derecho de 3 EUR
+     * <b>caduca por norma</b> el 1-jul-2028 (Reglamento (UE) 2026/382) y porque, si una aduana concreta
+     * contase distinto, hay que poder sacar ese destino sin parar los otros 26.
+     */
+    @Column(name = "group_declaration_lines", nullable = false)
+    private boolean groupDeclarationLines;
+
     @Column(nullable = false)
     private boolean active;
 }

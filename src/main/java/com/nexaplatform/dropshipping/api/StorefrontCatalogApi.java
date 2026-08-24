@@ -109,15 +109,26 @@ public interface StorefrontCatalogApi {
             @RequestParam(required = false) Integer inventoryMin, @RequestParam(required = false) String certification,
             @RequestParam(required = false, defaultValue = "best_match") String sort,
             @RequestParam(required = false) Boolean verified,
-            @RequestParam(required = false) UUID promotionId);
+            @RequestParam(required = false) UUID promotionId,
+            // «Ver los que no suman arancel»: solo los productos que comparten terna con ese grupo y por
+            // tanto se declaran con su misma descripción.
+            @RequestParam(required = false) UUID dutyGroupId,
+            // «Los que no suman arancel con lo que ya llevo»: filtra por TODAS las líneas de declaración
+            // del carrito, no por una. Se ignora si viene también un dutyGroupId concreto.
+            @RequestParam(required = false) Boolean dutyGroupsFromCart,
+            // Lo que el comprador ya lleva en el carrito. Es la REFERENCIA del distintivo de arancel: sin
+            // ella no hay incremento que calcular y el distintivo no se pinta.
+            @RequestParam(required = false) List<UUID> cartProductIds);
 
     @Operation(summary = "Get a product detail by slug")
     @GetMapping("/products/{slug}")
-    ProductDetailView detailBySlug(@PathVariable String slug, @RequestParam(defaultValue = "es") String lang);
+    ProductDetailView detailBySlug(@PathVariable String slug, @RequestParam(defaultValue = "es") String lang,
+            @RequestParam(required = false) List<UUID> cartProductIds);
 
     @Operation(summary = "Get a product detail by id")
     @GetMapping("/products/by-id/{id}")
-    ProductDetailView detailById(@PathVariable UUID id, @RequestParam(defaultValue = "es") String lang);
+    ProductDetailView detailById(@PathVariable UUID id, @RequestParam(defaultValue = "es") String lang,
+            @RequestParam(required = false) List<UUID> cartProductIds);
 
     @Operation(summary = "Get a product detail by external source and id")
     @GetMapping("/products/by-external/{source}/{externalId}")

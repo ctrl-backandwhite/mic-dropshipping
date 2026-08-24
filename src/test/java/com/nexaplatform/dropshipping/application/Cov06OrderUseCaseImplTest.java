@@ -10,6 +10,7 @@ import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
+import com.nexaplatform.dropshipping.application.service.ShippingSubsidyService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
@@ -122,6 +123,8 @@ class Cov06OrderUseCaseImplTest {
     @Mock
     CheckoutTotalsService checkoutTotalsService;
     @Mock
+    ShippingSubsidyService shippingSubsidyService;
+    @Mock
     OperatorCommissionService operatorCommissionService;
     @Mock
     OrderIndexer orderIndexer;
@@ -130,6 +133,9 @@ class Cov06OrderUseCaseImplTest {
 
     @Mock
     com.nexaplatform.dropshipping.application.service.SupplierPurchaseService supplierPurchaseService;
+
+    @org.mockito.Mock
+    com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService declarationGroups;
 
     @org.mockito.Spy
     com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService customsDutyLinesService =
@@ -149,7 +155,7 @@ class Cov06OrderUseCaseImplTest {
         when(fulfillment.isSupported(anyString())).thenReturn(true);
         when(router.cotizar(any(), any(FulfillmentProvider.ParcelSpec.class), anyList()))
                 .thenReturn(ShippingQuote.unsupported("XX"));
-        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList()))
+        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList(), anyInt()))
                 .thenAnswer(inv -> totalesNeutros(inv.getArgument(3)));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
             Order o = inv.getArgument(0);

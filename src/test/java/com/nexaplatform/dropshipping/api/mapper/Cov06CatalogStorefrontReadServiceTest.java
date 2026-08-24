@@ -392,7 +392,7 @@ class Cov06CatalogStorefrontReadServiceTest {
         when(productMapper.toSummary(conCe, "es")).thenReturn(resumen("con-ce", new BigDecimal("10")));
 
         ProductListFilters filtros = new ProductListFilters(null, null, null, null, null, null, null, null, null,
-                null, null, "ce", null, null);
+                null, null, "ce", null, null, null);
         PageResponse<ProductSummaryView> pagina = service.productListFull(0, 20, "es", filtros, null);
 
         assertThat(pagina.items()).extracting(ProductSummaryView::slug).containsExactly("con-ce");
@@ -417,7 +417,7 @@ class Cov06CatalogStorefrontReadServiceTest {
         when(productMapper.toSummary(pendiente, "es")).thenReturn(resumen("pendiente", new BigDecimal("10")));
 
         ProductListFilters soloPendientes = new ProductListFilters(null, null, null, null, null, null, null, null,
-                null, null, null, null, Boolean.FALSE, null);
+                null, null, null, null, Boolean.FALSE, null, null);
         PageResponse<ProductSummaryView> pagina = service.productListFull(0, 20, "es", soloPendientes, null);
 
         assertThat(pagina.items()).extracting(ProductSummaryView::slug).containsExactly("pendiente");

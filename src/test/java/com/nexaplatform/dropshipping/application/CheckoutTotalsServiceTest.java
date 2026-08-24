@@ -116,4 +116,80 @@ class CheckoutTotalsServiceTest {
         verify(taxService).taxCentsFor("US", "CA", 100_00);
         assertThat(t.taxRateBps()).isEqualTo(875);
     }
+
+    @Test
+    void laSubvencionBajaLoQueSECOBRASinTocarLoQueCUESTA() {
+        givenTax(2100, 25_20);
+        givenCustoms(3_00, false, false);
+        // La bolsa se descuenta del envío y el arancel que paga el cliente. Lo que NO se mueve es el porte
+        // base —es lo que nos cuesta el transportista— ni el derecho declarado, que se liquida íntegro.
+        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00,
+                List.of(new DutyParcel(100_00, 1)), 10_00);
+
+        assertThat(t.shippingBaseCents()).as("el porte base NO se toca: es lo que cuesta de verdad")
+                .isEqualTo(20_00);
+        assertThat(t.customsHandlingCents()).as("el derecho declarado tampoco").isEqualTo(3_00);
+        assertThat(t.shippingSubsidyCents()).isEqualTo(10_00);
+        assertThat(t.shippingCents()).isEqualTo(20_00 + 3_00 - 10_00);
+        assertThat(t.freeShipping()).isFalse();
+    }
+
+    @Test
+    void elARANCELQueSEDECLARANoBajaConLaSubvencion() {
+        givenTax(2100, 25_20);
+        givenCustoms(3_00, false, false);
+        // La invariante que no se puede romper: la bolsa abarata lo que PAGA el cliente, nunca lo que se
+        // declara ni lo que se liquida. Declarar menos sería infradeclarar ante 27 aduanas, y de eso
+        // responde el declarante.
+        CheckoutTotals conBolsa = service.compute("ES", null, 100_00, 20_00,
+                List.of(new DutyParcel(100_00, 1)), 50_00);
+        CheckoutTotals sinBolsa = service.compute("ES", null, 100_00, 20_00,
+                List.of(new DutyParcel(100_00, 1)), 0);
+
+        assertThat(conBolsa.customsHandlingCents()).isEqualTo(sinBolsa.customsHandlingCents());
+    }
+
+    @Test
+    void laSubvencionNoDejaImportesNEGATIVOS() {
+        givenTax(2100, 25_20);
+        givenCustoms(3_00, false, false);
+        // Si la bolsa da para más que el envío y el arancel, el sobrante se queda como ganancia: no se
+        // devuelve en metálico ni se resta de la mercancía.
+        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00,
+                List.of(new DutyParcel(100_00, 1)), 999_00);
+
+        assertThat(t.shippingCents()).isZero();
+        assertThat(t.subsidyCents())
+                .as("solo se apunta lo que de verdad se ha gastado de la bolsa, repartido en sus dos conceptos")
+                .isEqualTo(20_00 + t.customsHandlingCents());
+        assertThat(t.shippingSubsidyCents()).isEqualTo(20_00);
+        assertThat(t.customsSubsidyCents()).isEqualTo(t.customsHandlingCents());
+    }
+
+    @Test
+    void elIMPUESTONoBajaConLaSubvencion() {
+        givenTax(2100, 25_20);
+        givenCustoms(3_00, false, false);
+        // El IVA lo fija la base imponible real —mercancía más porte—, no lo que acabemos regalando.
+        // Calcularlo sobre el importe subvencionado sería liquidar de menos.
+        CheckoutTotals conBolsa = service.compute("ES", null, 100_00, 20_00,
+                List.of(new DutyParcel(100_00, 1)), 20_00);
+        CheckoutTotals sinBolsa = service.compute("ES", null, 100_00, 20_00,
+                List.of(new DutyParcel(100_00, 1)), 0);
+
+        assertThat(conBolsa.taxCents()).isEqualTo(sinBolsa.taxCents());
+    }
+
+    @Test
+    void sinSubvencionElResultadoEsElDeSIEMPRE() {
+        givenTax(2100, 25_20);
+        givenCustoms(3_00, false, false);
+        CheckoutTotals conCero = service.compute("ES", null, 100_00, 20_00,
+                List.of(new DutyParcel(100_00, 1)), 0);
+        CheckoutTotals sinParametro = service.compute("ES", null, 100_00, 20_00,
+                List.of(new DutyParcel(100_00, 1)));
+
+        assertThat(conCero.shippingCents()).isEqualTo(sinParametro.shippingCents());
+        assertThat(conCero.shippingSubsidyCents()).isZero();
+    }
 }

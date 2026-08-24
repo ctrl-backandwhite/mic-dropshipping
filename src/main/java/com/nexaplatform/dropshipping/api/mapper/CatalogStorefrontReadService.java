@@ -21,6 +21,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierE
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.ProductSearchService;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CustomsDeclarationGroupRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierRepository;
@@ -43,10 +44,12 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -64,6 +67,7 @@ import java.util.stream.Collectors;
 public class CatalogStorefrontReadService {
 
     private final ProductRepository productRepository;
+    private final CustomsDeclarationGroupRepository declarationGroupRepository;
     private final CategoryRepository categoryRepository;
     private final SupplierRepository supplierRepository;
     private final SupplierSearchService supplierSearchService;
@@ -301,15 +305,37 @@ public class CatalogStorefrontReadService {
         // TEXTO LIBRE → OpenSearch, que es el motor principal de la búsqueda: entiende la morfología de los
         // 8 idiomas (plurales, acentos, chino) y devuelve los productos ORDENADOS POR RELEVANCIA. Aquí solo
         // llegan identificadores; la visibilidad, los filtros y el precio los sigue resolviendo la BD.
+        // «Ver los que no suman arancel»: el grupo se resuelve a los productos de su TERNA y se entra por el
+        // mismo camino que los resultados del buscador. Nulo = sin filtro; vacío = el grupo no existe o no
+        // tiene productos, y entonces la respuesta es una página vacía, nunca el catálogo entero.
+        List<UUID> delGrupo = idsDeLasLineasDe(filters.dutyLines());
+        if (delGrupo != null && delGrupo.isEmpty()) {
+            return PageResponse.from(new PageImpl<>(List.of(), pageable, 0));
+        }
+
         if (needle != null) {
             Optional<List<UUID>> relevant = productSearchService.searchRelevantIds(needle, langCode);
             if (relevant.isPresent()) {
-                return fromRelevantIds(relevant.get(), categoryId, supplierId, shipCc, freeShipping, selfPickup,
+                List<UUID> ids = delGrupo == null ? relevant.get()
+                        : relevant.get().stream().filter(delGrupo::contains).toList();
+                return fromRelevantIds(ids, categoryId, supplierId, shipCc, freeShipping, selfPickup,
                         hasVideo, minRatingBd, inventoryMin, sort, lang, postFilters, safePage, safeSize, pageable);
             }
             // Si el buscador no ha podido responder (caído, índice aún sin construir) se sigue por SQL: la
             // búsqueda se degrada, pero el catálogo NUNCA deja de funcionar.
             log.debug("Búsqueda '{}' resuelta por SQL — OpenSearch no disponible", needle);
+        }
+
+        // Con filtro de grupo manda el grupo. Si además había texto y el buscador estaba caído, el texto se
+        // pierde: enseñar productos de FUERA del grupo sería prometer «no suma arancel» de mercancía que sí
+        // lo suma, y esa diferencia la pondría el comercio al despachar. Devolver de más dentro del grupo es
+        // ruido; devolver de fuera es una promesa falsa.
+        if (delGrupo != null) {
+            if (needle != null) {
+                log.debug("Filtro por grupo con texto '{}' sin buscador: se ignora el texto", needle);
+            }
+            return fromRelevantIds(delGrupo, categoryId, supplierId, shipCc, freeShipping, selfPickup, hasVideo,
+                    minRatingBd, inventoryMin, sort, lang, postFilters, safePage, safeSize, pageable);
         }
 
         if (priceFilter || certFilter || promoFilter != null) {
@@ -327,6 +353,38 @@ public class CatalogStorefrontReadService {
         }
         List<ProductSummaryView> slice = raw.getContent().stream().map(p -> productMapper.toSummary(p, lang)).toList();
         return PageResponse.from(new PageImpl<>(slice, pageable, raw.getTotalElements()));
+    }
+
+    /**
+     * Los productos que comparten terna con ALGUNO de esos grupos, o {@code null} si no hay filtro.
+     *
+     * <p>Se filtra por la <b>terna</b> (partida, material y uso) y no por una columna en el producto: es la
+     * terna la que hace que dos productos se declaren con la misma descripción y la aduana los cuente como
+     * una sola línea. Guardar el grupo en cada producto obligaría a reescribir miles de filas cada vez que
+     * se aprueba o se retira una descripción.
+     *
+     * <p>Son varias líneas porque un carrito tiene tantas como ternas distintas lleve: la unión de todas
+     * es «lo que no me suma arancel». Se conserva el orden y se quitan los repetidos —un producto puede
+     * aparecer una sola vez aunque encaje por dos vías.
+     *
+     * <p>Cada línea lleva su ORIGEN, porque la terna que separa una línea de declaración de otra es
+     * clasificación + descripción + origen. Sin él, el filtro devolvía productos del mismo grupo pero de
+     * otro país, que abren línea nueva y suman los 3 EUR igualmente.
+     */
+    private List<UUID> idsDeLasLineasDe(List<ProductListFilters.DutyLine> dutyLines) {
+        // Nulo = sin filtro. Lista VACÍA = filtro que no casa con nada, que es lo que corresponde cuando
+        // se pide «los de mi carrito» y en el carrito no hay ni un grupo aprobado: entonces cualquier
+        // producto abre línea nueva. Devolver el catálogo entero sería justo la promesa contraria.
+        if (dutyLines == null) {
+            return null;
+        }
+        Set<UUID> vistos = new LinkedHashSet<>();
+        for (ProductListFilters.DutyLine linea : dutyLines) {
+            declarationGroupRepository.findById(linea.groupId()).ifPresent(g -> vistos.addAll(
+                    productRepository.idsForCustomsTerna(ProductStatus.ACTIVE, g.getHs6(), g.getMaterial(),
+                            g.getUsageCode(), linea.originCountry())));
+        }
+        return List.copyOf(vistos);
     }
 
     /**

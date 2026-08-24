@@ -45,6 +45,9 @@ public class ProductBulkExportMapper {
         if (p.getCategory() != null) {
             d.setCategorySlug(p.getCategory().getSlug());
             d.setCategory1688Id(p.getCategory().getExternalId());
+            // Respaldo para el destino que aún no tenga esa categoría creada: con el slug basta si existe,
+            // pero si no existe el import resuelve por el par (id, nombre) de 1688.
+            d.setCategory1688Name(p.getCategory().getNameZh());
         }
         if (p.getSupplier() != null) {
             d.setSupplierExternalId(p.getSupplier().getExternalId());
@@ -94,6 +97,19 @@ public class ProductBulkExportMapper {
         d.setHeightMm(p.getHeightMm());
         d.setCountryOfOrigin(p.getCountryOfOrigin());
         d.setHsCode(p.getHsCode());
+        // La TERNA aduanera completa, no solo la partida. Estos dos campos no se exportaban, y al
+        // reimportar se repoblaban con los del perfil de la CATEGORÍA: un producto con material o uso
+        // propios —afinados a mano— volvía silenciosamente al valor genérico. Y desde la agrupación de
+        // líneas de declaración eso además cambia CON QUIÉN agrupa en la aduana, es decir, cuántos
+        // derechos de 3 EUR se pagan.
+        d.setCustomsMaterial(p.getCustomsMaterial());
+        d.setCustomsUsage(p.getCustomsUsage());
+        // Decide el PackageType del transportista y, con él, el canal y la tarifa. Sin exportarlo, un
+        // producto con batería se reimportaba como si no la llevara.
+        d.setBatteryType(p.getBatteryType());
+        // La ficha real del proveedor. Sin ella se regenera a partir del externalId, y para lo que no
+        // venga de 1688 esa URL inventada no lleva a ninguna parte: es por donde se va a comprar.
+        d.setSourceUrl(p.getSourceUrl());
         d.setCertifications(p.getCertifications());
         d.setShipFrom(p.getShipFrom());
         d.setLeadTimeDays(p.getLeadTimeDays());

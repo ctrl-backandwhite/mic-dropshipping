@@ -309,3 +309,7 @@ databaseChangeLog:
       file: db/changelog/schema-v149-prepago-iva-por-pais.sql
   - include:
       file: db/changelog/schema-v150-compras-huerfanas-de-pedidos-cancelados.sql
+  - include:
+      file: db/changelog/schema-v151-grupos-de-declaracion.sql
+  - include:
+      file: db/changelog/schema-v152-descripcion-declarada-en-chino.sql

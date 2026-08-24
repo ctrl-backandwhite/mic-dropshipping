@@ -89,6 +89,7 @@ public class CheckoutPreviewService {
 
     private final ShippingQuoteService shippingQuoteService;
     private final CheckoutTotalsService checkoutTotalsService;
+    private final ShippingSubsidyService shippingSubsidyService;
     private final PricingService pricingService;
     private final CurrencyRateService currencyService;
     private final ProductRepository productRepository;
@@ -97,6 +98,8 @@ public class CheckoutPreviewService {
     private final PromotionService promotionService;
     /** La cuenta del pedido: el importe de línea lo decide ELLA, no esta clase (ver {@link OrderAmounts}). */
     private final OrderAmounts orderAmounts;
+    /** De dónde sale la descripción con la que se declarará cada línea: el grupo aprobado, o el título. */
+    private final CustomsDeclarationGroupService declarationGroups;
 
     /**
      * Calcula el desglose del checkout para un carrito, destino y comprador dados.
@@ -232,11 +235,13 @@ public class CheckoutPreviewService {
         // que la vista previa tiene que repartir igual que después el despacho o el derecho por partida
         // mostrado y el liquidado contarían bultos distintos.
         List<CustomsDutyLinesService.DutyParcel> parcels = customsDutyLinesService.parcelsOf(
-                customsLines(items), shippingOption != null ? shippingOption.code() : null, country);
+                customsLines(items, country), shippingOption != null ? shippingOption.code() : null,
+                country);
         // Impuesto + despacho aduanero por el MISMO servicio que usa el cobro (CheckoutTotalsService), para
         // que el desglose mostrado coincida al céntimo con el pedido.
         CheckoutTotalsService.CheckoutTotals totals = checkoutTotalsService.compute(country, region,
-                discountedSubtotalUsdCents, shippingBaseUsdCents, parcels);
+                discountedSubtotalUsdCents, shippingBaseUsdCents, parcels,
+                shippingSubsidyService.subsidyUsdCents(lineasDeSubvencion(items), country));
 
         // Importes en la moneda activa: cada componente convertido y REDONDEADO a 2 decimales; el total
         // es la SUMA de esos componentes redondeados (igual que el detalle del pedido), para que el
@@ -297,6 +302,40 @@ public class CheckoutPreviewService {
                 : original.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
     }
 
+    /**
+     * Las líneas tal y como las necesita la bolsa de subvención: qué producto, cuántas unidades, cuánto se
+     * gana por unidad y cuánto porte del proveedor lleva dentro.
+     *
+     * <p>La ganancia es <b>base con margen menos coste</b>, no el precio de venta menos coste: el IVA y el
+     * porte que van dentro del unitario son dinero que se le debe al proveedor, no ganancia nuestra.
+     * Contarlos como tal regalaría un margen que no existe.
+     */
+    private List<ShippingSubsidyService.Linea> lineasDeSubvencion(List<Line> items) {
+        List<ShippingSubsidyService.Linea> out = new ArrayList<>();
+        for (Line it : items) {
+            if (it == null || it.productId() == null) {
+                continue;
+            }
+            ProductEntity p = productRepository.findById(it.productId()).orElse(null);
+            if (p == null) {
+                continue;
+            }
+            ProductVariantEntity v = it.variantId() == null ? null
+                    : p.getVariants().stream().filter(x -> it.variantId().equals(x.getId())).findFirst()
+                            .orElse(null);
+            PricingService.PricedAmount priced = pricingService.priceFor(p, v);
+            out.add(new ShippingSubsidyService.Linea(p.getId(), Math.max(1, it.quantity()),
+                    centimos(priced.baseRetailUsd()) - centimos(priced.costUsd()),
+                    centimos(priced.shippingUsd())));
+        }
+        return out;
+    }
+
+    /** Un importe en dólares a céntimos, con el redondeo de siempre. Nulo cuenta como cero. */
+    private static int centimos(BigDecimal usd) {
+        return usd == null ? 0 : usd.setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
+    }
+
     private Integer unitPriceUsdCents(Line it) {
         if (it == null || it.productId() == null) {
             return null;
@@ -342,7 +381,7 @@ public class CheckoutPreviewService {
      * Traduce las líneas del carrito a lo que necesita el cálculo aduanero: clasificación arancelaria para
      * agrupar, y peso/medidas para repartir la mercancía en bultos igual que hará el transportista.
      */
-    private List<CustomsDutyLinesService.Line> customsLines(List<Line> items) {
+    List<CustomsDutyLinesService.Line> customsLines(List<Line> items, String country) {
         List<CustomsDutyLinesService.Line> out = new ArrayList<>();
         for (Line it : items) {
             if (it == null || it.productId() == null) {
@@ -357,7 +396,7 @@ public class CheckoutPreviewService {
                             .orElse(null);
             Integer unit = unitPriceUsdCents(it);
             out.add(new CustomsDutyLinesService.Line(p.getId(), p.getHsCode(),
-                    CustomsDutyLinesService.declaredDescriptionOf(p), p.getCountryOfOrigin(),
+                    declarationGroups.describeFor(p, country), p.getCountryOfOrigin(),
                     Math.max(1, it.quantity()),
                     unit == null ? 0 : unit, ParcelAggregator.unitWeightGrams(p, v), dimension(p, v, 0),
                     dimension(p, v, 1), dimension(p, v, 2), ParcelAggregator.hasBattery(p)));

@@ -70,4 +70,33 @@ public class OrderItemEntity {
 
     @Column(name = "line_total_cents", nullable = false)
     private int lineTotalCents;
+
+    /**
+     * Con qué descripción se declaró esta línea en la aduana.
+     *
+     * <p>Es un snapshot de verdad, no un dato derivado: si el grupo se aprueba DESPUÉS de cobrar, este
+     * pedido tiene que seguir contando por lo que se declaró. Sin él la vista previa contaría una línea
+     * (con la descripción del grupo) y el despacho contaría dos (con el título del producto), y esos
+     * 3 EUR de diferencia los pondría el comercio.
+     *
+     * <p>Nulo en los pedidos anteriores a la agrupación: esos se resuelven por el título, que es como se
+     * declararon.
+     */
+    @Column(name = "declared_description", length = 512)
+    private String declaredDescription;
+
+    /**
+     * Con qué texto en chino se declaró esta línea: el {@code CName} que se le transmite al transportista.
+     *
+     * <p>Hermano de {@link #declaredDescription} y por el mismo motivo. Una línea de la declaración lleva
+     * UN inglés y UN chino, y los dos describen la misma mercancía. Al fusionar por grupo el inglés pasa a
+     * ser el genérico aprobado; si el chino se siguiera resolviendo del primer artículo de la línea, la
+     * aduana leería dos mercancías distintas en la misma línea — y el {@code CName} lo valida YunExpress
+     * antes de emitir la guía.
+     *
+     * <p>Nulo cuando la línea no viajó con la descripción de un grupo, y en los pedidos anteriores a la
+     * agrupación: esos se resuelven por el título del producto, que es como se declararon.
+     */
+    @Column(name = "declared_description_zh", length = 512)
+    private String declaredDescriptionZh;
 }
