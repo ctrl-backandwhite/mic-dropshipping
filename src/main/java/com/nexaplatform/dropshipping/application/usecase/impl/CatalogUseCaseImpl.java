@@ -1762,6 +1762,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         mergeTranslationField("en", m, r::getTitleEn, r::setTitleEn, r::getDescriptionEn, r::setDescriptionEn);
         mergeTranslationField("pt", m, r::getTitlePt, r::setTitlePt, r::getDescriptionPt, r::setDescriptionPt);
         mergeTranslationField("zh", m, r::getTitleZh, r::setTitleZh, r::getDescriptionZh, r::setDescriptionZh);
+        mergeTranslationField("fr", m, r::getTitleFr, r::setTitleFr, r::getDescriptionFr, r::setDescriptionFr);
+        mergeTranslationField("it", m, r::getTitleIt, r::setTitleIt, r::getDescriptionIt, r::setDescriptionIt);
+        mergeTranslationField("de", m, r::getTitleDe, r::setTitleDe, r::getDescriptionDe, r::setDescriptionDe);
+        mergeTranslationField("nl", m, r::getTitleNl, r::setTitleNl, r::getDescriptionNl, r::setDescriptionNl);
         if (Texts.has(r.getTitleEs())) {
             return;
         }

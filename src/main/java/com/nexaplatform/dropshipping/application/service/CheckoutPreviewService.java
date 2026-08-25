@@ -325,8 +325,7 @@ public class CheckoutPreviewService {
                             .orElse(null);
             PricingService.PricedAmount priced = pricingService.priceFor(p, v);
             out.add(new ShippingSubsidyService.Linea(p.getId(), Math.max(1, it.quantity()),
-                    centimos(priced.baseRetailUsd()) - centimos(priced.costUsd()),
-                    centimos(priced.shippingUsd())));
+                    centimos(priced.profitUsd()), centimos(priced.supplierShippingUsd())));
         }
         return out;
     }

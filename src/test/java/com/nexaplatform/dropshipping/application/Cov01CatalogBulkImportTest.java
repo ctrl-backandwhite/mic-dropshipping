@@ -753,6 +753,24 @@ class Cov01CatalogBulkImportTest {
     }
 
     @Test
+    void unaFilaQueSoloVieneEnChinoSeAceptaYEsElChinoElQueHaceDeCanonico() {
+        // Un volcado de 1688 con translations {"zh": {...}} y nada más tiene que ENTRAR: rechazarlo por
+        // «falta el título» dejaría fuera un producto perfectamente vendible. El chino sigue siendo el
+        // título de trabajo del importador —de él salen el identificador externo, el nombre de las
+        // variantes y el slug degradado— y el canónico del producto; lo que ya no hace es acabar guardado
+        // como traducción española, inglesa y portuguesa (eso lo cubre CatalogFillWriterTest).
+        BulkProductDtoIn r = validRow();
+        r.setTitleEs(null);
+        r.setTranslations(Map.of("zh",
+                new BulkProductDtoIn.BulkTranslation("破洞牛仔裤男春季2025浅色修身弹力九分裤", null, "弹力牛仔裤")));
+
+        useCase.createProductManual(r);
+
+        assertThat(capturedSpanishTitle()).isEqualTo("破洞牛仔裤男春季2025浅色修身弹力九分裤");
+        assertThat(capturedIngest().titleZh()).isEqualTo("破洞牛仔裤男春季2025浅色修身弹力九分裤");
+    }
+
+    @Test
     void elTituloExplicitoDeLaFilaGanaAlDelMapaDeTraducciones() {
         BulkProductDtoIn r = validRow();
         r.setTranslations(Map.of("es", new BulkProductDtoIn.BulkTranslation("Otro título", null, null)));

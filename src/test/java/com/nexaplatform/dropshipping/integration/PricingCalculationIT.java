@@ -100,7 +100,7 @@ class PricingCalculationIT extends BaseIntegration {
      * ================================================================================== */
 
     @Test
-    @DisplayName("Precio de escaparate: 10,00 $ de coste × 150 % + 1,00 de IVA + 2,00 de envío = 28,00 $")
+    @DisplayName("Precio de escaparate: (10,00 $ + 1,00 de IVA + 2,00 de envío) × 150 % = 32,50 $")
     void elPrecioDeEscaparateSaleExacto() {
         UUID producto = sembrarProducto("camiseta-basica", BASE_CNY, IVA_CNY, ENVIO_CNY, 1);
 
@@ -109,29 +109,35 @@ class PricingCalculationIT extends BaseIntegration {
         assertThat(p.costUsd()).isEqualByComparingTo("10.0000");
         assertThat(p.appliedMarginPercent()).isEqualByComparingTo("150.00");
         assertThat(p.baseRetailUsd()).isEqualByComparingTo("25.0000");
-        assertThat(p.ivaUsd()).isEqualByComparingTo("1.0000");
-        assertThat(p.shippingUsd()).isEqualByComparingTo("2.0000");
-        assertThat(p.retailUsd()).isEqualByComparingTo("28.00");
-        assertThat(p.displayAmount()).isEqualByComparingTo("28.00");
+        // El IVA y el porte del proveedor llevan el MISMO factor de 2,5 que la base.
+        assertThat(p.ivaUsd()).isEqualByComparingTo("2.5000");
+        assertThat(p.shippingUsd()).isEqualByComparingTo("5.0000");
+        // Y lo que se le paga al proveedor por el porte sigue siendo 2,00: eso no lleva margen.
+        assertThat(p.supplierShippingUsd()).isEqualByComparingTo("2.0000");
+        assertThat(p.retailUsd()).isEqualByComparingTo("32.50");
+        assertThat(p.displayAmount()).isEqualByComparingTo("32.50");
         assertThat(p.displayCurrency()).isEqualTo("USD");
         // El string lo compone el backend: el frontend solo lo pinta, así que aquí se fija su forma exacta.
-        assertThat(p.displayFormatted()).isEqualTo("$28.00");
+        assertThat(p.displayFormatted()).isEqualTo("$32.50");
     }
 
     @Test
-    @DisplayName("El margen NO se aplica al IVA ni al envío: solo a la base del proveedor")
-    void elMargenSoloSeAplicaALaBase() {
-        UUID producto = sembrarProducto("solo-base", BASE_CNY, IVA_CNY, ENVIO_CNY, 1);
+    @DisplayName("El margen se aplica al desembolso COMPLETO del proveedor: base, IVA y envío")
+    void elMargenSeAplicaAlDesembolsoCompletoDelProveedor() {
+        UUID producto = sembrarProducto("desembolso-completo", BASE_CNY, IVA_CNY, ENVIO_CNY, 1);
 
         PricedAmount p = precioDe(producto);
 
-        // Si el margen se aplicara al total del proveedor (10 + 1 + 2 = 13), el precio sería 32,50 $.
-        assertThat(p.retailUsd()).isEqualByComparingTo("28.00");
-        assertThat(p.retailUsd()).isNotEqualByComparingTo("32.50");
+        // (10 + 1 + 2) × 2,5 = 32,50 $. Hasta el 25-ago-2026 el margen gravaba solo la base y el resultado
+        // era 28,00 $: el IVA y el porte viajaban sin margen, y el porte pesa más que muchos artículos.
+        assertThat(p.retailUsd()).isEqualByComparingTo("32.50");
+        assertThat(p.retailUsd()).isNotEqualByComparingTo("28.00");
+        // La ganancia es lo cobrado menos TODO lo que se le debe al proveedor: 32,50 − (10 + 1 + 2).
+        assertThat(p.profitUsd()).isEqualByComparingTo("19.50");
     }
 
     @Test
-    @DisplayName("El canal de integración aplica su propio margen (75 %): 20,50 $, no 28,00 $")
+    @DisplayName("El canal de integración aplica su propio margen (75 %): 22,75 $, no 32,50 $")
     void elCanalDeIntegracionUsaSuPropioMargen() {
         UUID producto = sembrarProducto("mismo-producto-dos-canales", BASE_CNY, IVA_CNY, ENVIO_CNY, 1);
 
@@ -140,14 +146,14 @@ class PricingCalculationIT extends BaseIntegration {
         PricingChannelHolder.set(PriceRuleChannel.INTEGRATION);
         PricedAmount integracion = precioDe(producto);
 
-        assertThat(escaparate.retailUsd()).isEqualByComparingTo("28.00");
+        assertThat(escaparate.retailUsd()).isEqualByComparingTo("32.50");
         // 10,00 × 1,75 = 17,50 de base + 1,00 + 2,00 = 20,50.
-        assertThat(integracion.retailUsd()).isEqualByComparingTo("20.50");
+        assertThat(integracion.retailUsd()).isEqualByComparingTo("22.75");
         assertThat(integracion.appliedMarginPercent()).isEqualByComparingTo("75.00");
     }
 
     @Test
-    @DisplayName("Un producto con MOQ > 1 aplica la MITAD del margen: 20,50 $")
+    @DisplayName("Un producto con MOQ > 1 aplica la MITAD del margen: 22,75 $")
     void unProductoConMoqAplicaLaMitadDelMargen() {
         UUID producto = sembrarProducto("pack-de-cinco", BASE_CNY, IVA_CNY, ENVIO_CNY, 5);
 
@@ -155,18 +161,19 @@ class PricingCalculationIT extends BaseIntegration {
 
         // 150 % × 50 % = 75 % efectivo → 10,00 × 1,75 = 17,50 + 1,00 + 2,00 = 20,50.
         assertThat(p.appliedMarginPercent()).isEqualByComparingTo("75.000000");
-        assertThat(p.retailUsd()).isEqualByComparingTo("20.50");
+        assertThat(p.retailUsd()).isEqualByComparingTo("22.75");
     }
 
     @Test
-    @DisplayName("El porcentaje del ajuste MOQ es configurable: al 25 % el precio baja a 16,75 $")
+    @DisplayName("El porcentaje del ajuste MOQ es configurable: al 25 % el precio baja a 17,88 $")
     void elPorcentajeDelAjusteMoqEsConfigurable() {
         UUID producto = sembrarProducto("pack-al-veinticinco", BASE_CNY, IVA_CNY, ENVIO_CNY, 5);
 
         margenes.updateMoqMargin(true, new BigDecimal("25"));
 
         // 150 % × 25 % = 37,5 % efectivo → 10,00 × 1,375 = 13,75 + 1,00 + 2,00 = 16,75.
-        assertThat(precioDe(producto).retailUsd()).isEqualByComparingTo("16.75");
+        // 150 % × 25 % = 37,5 % → factor 1,375 sobre los tres componentes: 13,75 + 1,38 + 2,75.
+        assertThat(precioDe(producto).retailUsd()).isEqualByComparingTo("17.88");
     }
 
     @Test
@@ -176,20 +183,20 @@ class PricingCalculationIT extends BaseIntegration {
 
         margenes.updateMoqMargin(false, new BigDecimal("50"));
 
-        assertThat(precioDe(producto).retailUsd()).isEqualByComparingTo("28.00");
+        assertThat(precioDe(producto).retailUsd()).isEqualByComparingTo("32.50");
     }
 
     @Test
     @DisplayName("MOQ exactamente 1 no reduce nada: el ajuste solo aplica a partir de 2 unidades")
     void elMoqDeUnaUnidadNoReduceElMargen() {
         assertThat(precioDe(sembrarProducto("moq-uno", BASE_CNY, IVA_CNY, ENVIO_CNY, 1)).retailUsd())
-                .isEqualByComparingTo("28.00");
+                .isEqualByComparingTo("32.50");
         assertThat(precioDe(sembrarProducto("moq-dos", BASE_CNY, IVA_CNY, ENVIO_CNY, 2)).retailUsd())
-                .isEqualByComparingTo("20.50");
+                .isEqualByComparingTo("22.75");
     }
 
     @Test
-    @DisplayName("Una regla de PRODUCTO gana a la GLOBAL: 300 % de margen → 43,00 $")
+    @DisplayName("Una regla de PRODUCTO gana a la GLOBAL: 300 % de margen → 52,00 $")
     void laReglaMasEspecificaGanaALaGlobal() {
         UUID producto = sembrarProducto("con-regla-propia", BASE_CNY, IVA_CNY, ENVIO_CNY, 1);
         jdbcTemplate.update("INSERT INTO price_rule (id, scope, scope_id, margin_type, margin_value, active, "
@@ -198,7 +205,8 @@ class PricingCalculationIT extends BaseIntegration {
         margenes.invalidateCache();
 
         // 10,00 × 4 = 40,00 de base + 1,00 + 2,00 = 43,00.
-        assertThat(precioDe(producto).retailUsd()).isEqualByComparingTo("43.00");
+        // (10 + 1 + 2) × 4 = 52,00 $.
+        assertThat(precioDe(producto).retailUsd()).isEqualByComparingTo("52.00");
     }
 
     /* ==================================================================================
@@ -206,21 +214,21 @@ class PricingCalculationIT extends BaseIntegration {
      * ================================================================================== */
 
     @Test
-    @DisplayName("Al cambiar a euros el importe se recalcula con la tasa vigente: 25,76 €")
+    @DisplayName("Al cambiar a euros el importe se recalcula con la tasa vigente: 29,90 €")
     void alCambiarDeDivisaSeRecalculaConLaTasaVigente() {
         UUID producto = sembrarProducto("en-euros", BASE_CNY, IVA_CNY, ENVIO_CNY, 1);
 
         CurrencyHolder.set("EUR");
         PricedAmount p = precioDe(producto);
 
-        // 28,00 $ × 0,92 = 25,76 €.
-        assertThat(p.displayAmount()).isEqualByComparingTo("25.76");
+        // 32,50 $ × 0,92 = 29,90 €.
+        assertThat(p.displayAmount()).isEqualByComparingTo("29.90");
         assertThat(p.displayCurrency()).isEqualTo("EUR");
         assertThat(p.displaySymbol()).isEqualTo("€");
         // Separadores del locale de la divisa (es-ES): coma decimal y símbolo detrás.
-        assertThat(normalizado(p.displayFormatted())).isEqualTo("25,76 €");
+        assertThat(normalizado(p.displayFormatted())).isEqualTo("29,90 €");
         // El cobro canónico NO cambia con la divisa que mire el cliente: se cobra en dólares.
-        assertThat(p.retailUsd()).isEqualByComparingTo("28.00");
+        assertThat(p.retailUsd()).isEqualByComparingTo("32.50");
     }
 
     @Test
@@ -237,7 +245,7 @@ class PricingCalculationIT extends BaseIntegration {
 
         assertThat(enEuros).isEqualByComparingTo(enDolares);
         assertThat(enYuanes).isEqualByComparingTo(enDolares);
-        assertThat(enDolares).isEqualByComparingTo("28.00");
+        assertThat(enDolares).isEqualByComparingTo("32.50");
     }
 
     @Test
@@ -250,22 +258,22 @@ class PricingCalculationIT extends BaseIntegration {
         PricedAmount p = precioDe(producto);
 
         assertThat(p.baseRetailUsd()).isEqualByComparingTo("25.0000");
-        assertThat(p.ivaUsd()).isEqualByComparingTo("0.0050");
-        assertThat(p.shippingUsd()).isEqualByComparingTo("2.0000");
-        // Canónico: 25,00 + 0,01 (medio céntimo hacia arriba) + 2,00 = 27,01 $.
-        assertThat(p.retailUsd()).isEqualByComparingTo("27.01");
-        // Y el precio que se enseña sale de ESE importe: 27,01 × 0,92 = 24,8492 → 24,85 €.
-        assertThat(p.displayAmount()).isEqualByComparingTo("24.85");
+        // 0,0050 × 2,5 = 0,0125: el medio céntimo sigue siéndolo tras aplicarle el margen.
+        assertThat(p.ivaUsd()).isEqualByComparingTo("0.0125");
+        assertThat(p.shippingUsd()).isEqualByComparingTo("5.0000");
+        // Canónico: 25,00 + 0,01 (medio céntimo hacia arriba) + 5,00 = 30,01 $.
+        assertThat(p.retailUsd()).isEqualByComparingTo("30.01");
+        // Y el precio que se enseña sale de ESE importe: 30,01 × 0,92 = 27,6092 → 27,61 €.
+        assertThat(p.displayAmount()).isEqualByComparingTo("27.61");
 
-        // OBSERVACIÓN (no es un fallo de cobro, pero conviene tenerlo por escrito): el desglose que ve el
-        // admin se convierte componente a componente —23,00 + 0,00 + 1,84 = 24,84 €— y por tanto NO suma
-        // el total que se enseña, 24,85 €. Un céntimo de diferencia, siempre en el desglose informativo,
-        // nunca en lo que se cobra. El comentario de PricingService dice que el desglose «SIEMPRE cuadra»,
-        // y en este caso no cuadra.
+        // El desglose que ve el admin se convierte componente a componente: 23,00 + 0,01 + 4,60 = 27,61 €,
+        // que es exactamente el total que se enseña. Antes de aplicar el margen al IVA, ese medio céntimo
+        // se quedaba en 0,00 € y el desglose sumaba un céntimo menos que el total; al multiplicarlo por
+        // 2,5 cruza el umbral de redondeo y las dos cifras vuelven a coincidir.
         assertThat(normalizado(p.baseFormatted())).isEqualTo("23,00 €");
-        assertThat(normalizado(p.ivaFormatted())).isEqualTo("0,00 €");
-        assertThat(normalizado(p.shippingFormatted())).isEqualTo("1,84 €");
-        assertThat(normalizado(p.displayFormatted())).isEqualTo("24,85 €");
+        assertThat(normalizado(p.ivaFormatted())).isEqualTo("0,01 €");
+        assertThat(normalizado(p.shippingFormatted())).isEqualTo("4,60 €");
+        assertThat(normalizado(p.displayFormatted())).isEqualTo("27,61 €");
     }
 
     @Test
@@ -294,12 +302,12 @@ class PricingCalculationIT extends BaseIntegration {
         // Una variante inactiva más barata todavía no puede tirar del precio hacia abajo: no se puede comprar.
         sembrarVariante(producto, "SKU-INACTIVA", new BigDecimal("14.48"), false);
 
-        // 50,68 CNY ÷ 7,24 = 7,00 $ → 7,00 × 2,5 = 17,50 + 1,00 + 2,00 = 20,50 $.
-        assertThat(precioDe(producto).retailUsd()).isEqualByComparingTo("20.50");
+        // 50,68 CNY ÷ 7,24 = 7,00 $ → (7,00 + 1,00 + 2,00) × 2,5 = 25,00 $.
+        assertThat(precioDe(producto).retailUsd()).isEqualByComparingTo("25.00");
     }
 
     @Test
-    @DisplayName("Un tramo por cantidad se tarifica igual que la ficha: IVA y envío incluidos (15,50 $)")
+    @DisplayName("Un tramo por cantidad se tarifica igual que la ficha: IVA y envío incluidos (20,00 $)")
     void elTramoPorCantidadLlevaIvaYEnvioComoLaFicha() {
         UUID producto = sembrarProducto("con-tramos", BASE_CNY, IVA_CNY, ENVIO_CNY, 1);
         sembrarTramo(producto, 10, new BigDecimal("36.20"));
@@ -309,12 +317,12 @@ class PricingCalculationIT extends BaseIntegration {
             return productMapper.toPriceTierView(lista.get(0));
         });
 
-        // 36,20 CNY ÷ 7,24 = 5,00 $ de coste → 5,00 × 2,5 = 12,50 + 1,00 de IVA + 2,00 de envío = 15,50 $.
-        // Sin IVA ni envío la ficha anunciaría 12,50 $ y al pagar se cobrarían 15,50: un 24 % más.
+        // 36,20 CNY ÷ 7,24 = 5,00 $ de coste → (5,00 + 1,00 de IVA + 2,00 de envío) × 2,5 = 20,00 $.
+        // Sin IVA ni envío la ficha anunciaría 12,50 $ y al pagar se cobrarían 20,00: un 60 % más.
         assertThat(tramo.minQty()).isEqualTo(10);
-        assertThat(tramo.unitPrice()).isEqualByComparingTo("15.50");
+        assertThat(tramo.unitPrice()).isEqualByComparingTo("20.00");
         assertThat(tramo.currency()).isEqualTo("USD");
-        assertThat(tramo.unitPriceFormatted()).isEqualTo("$15.50");
+        assertThat(tramo.unitPriceFormatted()).isEqualTo("$20.00");
     }
 
     @Test
@@ -327,8 +335,8 @@ class PricingCalculationIT extends BaseIntegration {
         PriceTierView tramo = transacciones.execute(estado ->
                 productMapper.toPriceTierView(tramos.findByProductIdOrderByMinQtyAsc(producto).get(0)));
 
-        assertThat(unaUnidad).isEqualByComparingTo("28.00");
-        assertThat(tramo.unitPrice()).isEqualByComparingTo("15.50");
+        assertThat(unaUnidad).isEqualByComparingTo("32.50");
+        assertThat(tramo.unitPrice()).isEqualByComparingTo("20.00");
         assertThat(tramo.unitPrice()).isLessThan(unaUnidad);
     }
 
@@ -352,8 +360,8 @@ class PricingCalculationIT extends BaseIntegration {
                 .jsonPath("$.ivaFormatted").doesNotExist()
                 .jsonPath("$.shippingFormatted").doesNotExist()
                 // Lo que sí ve: el precio de venta ya compuesto y formateado.
-                .jsonPath("$.displayFormatted").isEqualTo("$28.00")
-                .jsonPath("$.displayPrice").value(v -> importeJson(v, "28.00"));
+                .jsonPath("$.displayFormatted").isEqualTo("$32.50")
+                .jsonPath("$.displayPrice").value(v -> importeJson(v, "32.50"));
     }
 
     /**
@@ -364,7 +372,7 @@ class PricingCalculationIT extends BaseIntegration {
      * yuanes del proveedor.
      */
     @Test
-    @DisplayName("La lista de variantes devuelve el PRECIO DE VENTA (28,00 $), nunca el coste en yuanes")
+    @DisplayName("La lista de variantes devuelve el PRECIO DE VENTA (32,50 $), nunca el coste en yuanes")
     void laListaDeVariantesNoDevuelveElCosteEnYuanes() {
         UUID producto = sembrarProducto("variantes-usuario", BASE_CNY, IVA_CNY, ENVIO_CNY, 1);
         sembrarVariante(producto, "SKU-1", BASE_CNY, true);
@@ -375,7 +383,7 @@ class PricingCalculationIT extends BaseIntegration {
                 .expectBody()
                 .jsonPath("$[0].sku").isEqualTo("SKU-1")
                 // 72,40 es el coste del proveedor en CNY: si apareciera aquí, el margen sería público.
-                .jsonPath("$[0].price").value(v -> importeJson(v, "28.00"))
+                .jsonPath("$[0].price").value(v -> importeJson(v, "32.50"))
                 .jsonPath("$[0].price").value(v -> importeDistintoJson(v, "72.40"));
     }
 

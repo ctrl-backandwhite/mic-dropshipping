@@ -106,6 +106,12 @@ public final class BulkProductFields {
         if (r.getDropshipPickupRate48h() != null) {
             p.setDropshipPickupRate48h(r.getDropshipPickupRate48h());
         }
+        if (r.getRepurchaseRate() != null) {
+            p.setRepurchaseRate(r.getRepurchaseRate());
+        }
+        if (r.getReviewsSummary() != null && !r.getReviewsSummary().isBlank()) {
+            p.setReviewsSummary(r.getReviewsSummary());
+        }
     }
 
     /**

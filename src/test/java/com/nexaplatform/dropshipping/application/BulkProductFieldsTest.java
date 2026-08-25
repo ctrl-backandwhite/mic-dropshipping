@@ -489,4 +489,42 @@ class BulkProductFieldsTest {
         ax.setValueTranslations(new LinkedHashMap<>(Map.of(valueZh, translations)));
         return ax;
     }
+
+    @Test
+    void lasSenalesDeCalidadDelOrigenSeGuardanCuandoLleganEnLaFila() {
+        ProductEntity p = new ProductEntity();
+        BulkProductDtoIn r = new BulkProductDtoIn();
+        r.setRepurchaseRate(new BigDecimal("55.0"));
+        r.setReviewsSummary("Los compradores destacan el tacto del tejido.");
+
+        BulkProductFields.applyCommercialFields(p, r);
+
+        assertThat(p.getRepurchaseRate()).isEqualByComparingTo("55.0");
+        assertThat(p.getReviewsSummary()).isEqualTo("Los compradores destacan el tacto del tejido.");
+    }
+
+    @Test
+    void unaFilaSinSenalesDeCalidadNoBorraLasQueYaTeniaElProducto() {
+        ProductEntity p = new ProductEntity();
+        p.setRepurchaseRate(new BigDecimal("42.0"));
+        p.setReviewsSummary("resumen anterior");
+
+        BulkProductFields.applyCommercialFields(p, new BulkProductDtoIn());
+
+        assertThat(p.getRepurchaseRate()).isEqualByComparingTo("42.0");
+        assertThat(p.getReviewsSummary()).isEqualTo("resumen anterior");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   "})
+    void unResumenDeOpinionesEnBlancoNoPisaElQueYaHabia(String blank) {
+        ProductEntity p = new ProductEntity();
+        p.setReviewsSummary("resumen bueno");
+        BulkProductDtoIn r = new BulkProductDtoIn();
+        r.setReviewsSummary(blank);
+
+        BulkProductFields.applyCommercialFields(p, r);
+
+        assertThat(p.getReviewsSummary()).isEqualTo("resumen bueno");
+    }
 }

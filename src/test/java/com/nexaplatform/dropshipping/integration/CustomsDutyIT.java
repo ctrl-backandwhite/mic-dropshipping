@@ -452,16 +452,31 @@ class CustomsDutyIT extends BaseIntegration {
     }
 
     @Test
-    @DisplayName("Un país con umbral 0 no se evalúa y NO encarece el pedido")
+    @DisplayName("Un país con umbral 0 por falta de dato no se evalúa y NO encarece el pedido")
     void unPaisSinUmbralConfiguradoNoEncarece() {
-        // Estados Unidos está sembrado con de_minimis 0 (la franquicia de 800 USD dejó de aplicar al
-        // origen chino). 0 significa «sin dato», no «umbral cero»: ni se marca excedido ni se recarga.
-        CustomsValuation v = valoracion.valuate("US", 100_000, 0, List.of(new DutyParcel(100_000, 1)));
+        // Costa Rica está sembrada con de_minimis 0 y de_minimis_applies = TRUE: el 0 significa «no lo
+        // hemos configurado», no «no hay franquicia». Ni se marca excedido ni se recarga.
+        //
+        // Este caso usaba Estados Unidos hasta la v153. Ya no vale: allí el 0 pasó a significar «no hay
+        // franquicia» de verdad (de_minimis_applies = FALSE) y el destino se bloquea, que es justo lo
+        // contrario de lo que mide esta prueba. Si algún día se configura el umbral de Costa Rica, hay que
+        // mover este caso a otro de los 32 destinos que siguen sin dato, no borrarlo: es el que impide que
+        // «sin configurar» vuelva a leerse como «sin franquicia» y cierre países por sorpresa.
+        CustomsValuation v = valoracion.valuate("CR", 100_000, 0, List.of(new DutyParcel(100_000, 1)));
 
         assertThat(v.deMinimisExceeded()).isFalse();
         assertThat(v.blocked()).isFalse();
-        assertThat(v.handlingFeeCents()).isZero();
         assertThat(v.deMinimisLabel()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Estados Unidos, sin franquicia desde la v153, se bloquea con cualquier importe")
+    void estadosUnidosSeBloqueaPorNoTenerFranquicia() {
+        // Contrapunto del caso anterior: mismo de_minimis 0, lectura opuesta. US y PR llevan
+        // de_minimis_applies = FALSE, así que no hay tramo exento y la política BLOCK cierra la venta
+        // tanto en un pedido de 1 USD como en uno de 1.000.
+        assertThat(valoracion.valuate("US", 100, 0, List.of(new DutyParcel(100, 1))).blocked()).isTrue();
+        assertThat(valoracion.valuate("US", 100_000, 0, List.of(new DutyParcel(100_000, 1))).blocked()).isTrue();
     }
 
     @Test

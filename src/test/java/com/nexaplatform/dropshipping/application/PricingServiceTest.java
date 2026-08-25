@@ -258,6 +258,84 @@ class PricingServiceTest {
     }
 
     /**
+     * El margen se aplica sobre el precio COMPLETO del proveedor: base + IVA chino + porte, no solo
+     * sobre la base.
+     *
+     * <p>Qué se rompería en producción si esta prueba fallara: el catálogo entero se vendería un 20-25 %
+     * por debajo de lo acordado. Con el margen solo sobre la base, un artículo de 100 CNY con 13 de IVA
+     * y 16 de porte salía a 25 + 1,30 + 1,60 = 27,90 USD; sobre el total sale a 32,25. Esos 4,35 USD por
+     * unidad son la diferencia entre ganar dinero con el porte y regalarlo.
+     */
+    @Test
+    void elMargenSeAplicaSobreLaBaseElIvaYElPorte() {
+        when(currencyService.toUsd(any(BigDecimal.class), eq("CNY")))
+                .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("10")));
+        when(marginService.apply(any(), any(), any())).thenReturn(new PriceWithMargin(new BigDecimal("10.00"),
+                new BigDecimal("25.00"), null, new BigDecimal("150")));
+        when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(currencyService.symbolOf(anyString())).thenReturn("$");
+
+        ProductEntity p = ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY")
+                .ivaCny(new BigDecimal("13.00")).shippingCny(new BigDecimal("16.00")).build();
+
+        PricedAmount priced = service.priceFor(p);
+
+        // 10 USD de base × 2,5 = 25; el IVA (1,30) y el porte (1,60) llevan el MISMO factor.
+        assertThat(priced.baseRetailUsd()).isEqualByComparingTo("25.00");
+        assertThat(priced.ivaUsd()).isEqualByComparingTo("3.25");
+        assertThat(priced.shippingUsd()).isEqualByComparingTo("4.00");
+        assertThat(priced.retailUsd()).isEqualByComparingTo("32.25");
+    }
+
+    /**
+     * El porte del PROVEEDOR se conserva aparte del que se cobra al cliente.
+     *
+     * <p>Qué se rompería en producción si esta prueba fallara: la subvención por porte repetido devolvería
+     * el porte con margen en vez de los 16 CNY que de verdad se pagan al proveedor, regalando el margen
+     * dos veces —una en la bolsa y otra en la regla de la ganancia sobrante—.
+     */
+    @Test
+    void elPorteDelProveedorSeGuardaSinMargenJuntoAlCobrado() {
+        when(currencyService.toUsd(any(BigDecimal.class), eq("CNY")))
+                .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("10")));
+        when(marginService.apply(any(), any(), any())).thenReturn(new PriceWithMargin(new BigDecimal("10.00"),
+                new BigDecimal("25.00"), null, new BigDecimal("150")));
+        when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(currencyService.symbolOf(anyString())).thenReturn("$");
+
+        ProductEntity p = ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY")
+                .ivaCny(new BigDecimal("13.00")).shippingCny(new BigDecimal("16.00")).build();
+
+        PricedAmount priced = service.priceFor(p);
+
+        assertThat(priced.supplierShippingUsd()).isEqualByComparingTo("1.60");
+        // Ganancia = 32,25 cobrados − (10 de coste + 1,30 de IVA + 1,60 de porte) que se le deben al proveedor.
+        assertThat(priced.profitUsd()).isEqualByComparingTo("19.35");
+    }
+
+    /**
+     * Sin coste no hay factor que aplicar: el IVA y el porte se quedan como vienen en vez de reventar con
+     * una división por cero.
+     */
+    @Test
+    void sinCosteElIvaYElPorteNoLlevanMargen() {
+        when(currencyService.toUsd(any(BigDecimal.class), eq("CNY")))
+                .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("10")));
+        when(marginService.apply(any(), any(), any())).thenReturn(
+                new PriceWithMargin(BigDecimal.ZERO, BigDecimal.ZERO, null, BigDecimal.ZERO));
+        when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(currencyService.symbolOf(anyString())).thenReturn("$");
+
+        ProductEntity p = ProductEntity.builder().basePrice(BigDecimal.ZERO).currency("CNY")
+                .ivaCny(new BigDecimal("13.00")).shippingCny(new BigDecimal("16.00")).build();
+
+        PricedAmount priced = service.priceFor(p);
+
+        assertThat(priced.ivaUsd()).isEqualByComparingTo("1.30");
+        assertThat(priced.shippingUsd()).isEqualByComparingTo("1.60");
+    }
+
+    /**
      * Motor de promociones que no rebaja nada: estas pruebas miden el pipeline de precio (coste →
      * margen → divisa), no las rebajas, y una promoción activa cambiaría todos los importes esperados.
      */
