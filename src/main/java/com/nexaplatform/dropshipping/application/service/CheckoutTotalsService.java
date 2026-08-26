@@ -66,6 +66,23 @@ public class CheckoutTotalsService {
             return Math.addExact(shippingSubsidyCents, customsSubsidyCents);
         }
 
+        /**
+         * Lo que el cliente paga DE PORTE, ya descontada la bolsa.
+         *
+         * <p>El resumen enseñaba la tarifa y el descuento por separado y dejaba la resta al comprador:
+         * «Envío 13,30 €» y «Subsidio −12,37 €», sin decir en ninguna parte que pagaba 0,93 €. Ese es
+         * justo el número que se busca en un resumen, así que se calcula aquí —donde están los dos
+         * sumandos— y no en el navegador, que no hace cuentas con dinero.
+         */
+        public int shippingNetCents() {
+            return Math.max(0, shippingBaseCents - shippingSubsidyCents);
+        }
+
+        /** Lo que el cliente paga DE ARANCEL. Mismo motivo que {@link #shippingNetCents()}. */
+        public int customsNetCents() {
+            return Math.max(0, customsHandlingCents - customsSubsidyCents);
+        }
+
         /** Qué parte del PORTE estamos cubriendo (0-100). */
         public int shippingSubsidyPercent() {
             return shippingBaseCents <= 0 ? 0

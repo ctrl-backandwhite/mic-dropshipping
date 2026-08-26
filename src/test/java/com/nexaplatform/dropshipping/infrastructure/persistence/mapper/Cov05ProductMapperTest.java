@@ -34,7 +34,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -339,10 +341,62 @@ class Cov05ProductMapperTest {
         ProductEntity p = product();
         ProductVariantEntity v = variant(true, 5);
 
-        VariantView view = mapper.toVariantView(p, v);
+        VariantView view = mapper.toVariantView(p, v, "es");
 
         assertThat(view.price()).isEqualByComparingTo("23.10");
         assertThat(view.priceFormatted()).isEqualTo("23,10 €");
+    }
+
+    @Test
+    @DisplayName("el mapa de opciones de la variante traduce el valor, igual que ya hace el selector")
+    void elMapaDeOpcionesDeLaVarianteTraduceElValor() {
+        // BUG real: el carrito mostraba "黑色 / L" en vez de "Negro / L" porque options_json de la
+        // variante se servía tal cual (chino crudo) mientras variantOptions[].values[].label ya
+        // resolvía la traducción. Evidencia en BD (producto 2026ebay-683840704548): options_json
+        // trae {"Color":"黑色","Talla":"L"} y variant_value_translation tiene 黑色→es→Negro.
+        ProductEntity p = product();
+        VariantValueEntity color = VariantValueEntity.builder().valueZh("黑色").value("黑色")
+                .translations(new ArrayList<>()).build();
+        color.getTranslations().add(VariantValueTranslationEntity.builder().language("es").value("Negro").build());
+        VariantValueEntity talla = VariantValueEntity.builder().valueZh("L").value("L")
+                .translations(new ArrayList<>()).build();
+        talla.getTranslations().add(VariantValueTranslationEntity.builder().language("es").value("L").build());
+        p.getVariantOptions().add(VariantOptionEntity.builder().nameZh("Color").position(0)
+                .values(new ArrayList<>(List.of(color))).build());
+        p.getVariantOptions().add(VariantOptionEntity.builder().nameZh("Talla").position(1)
+                .values(new ArrayList<>(List.of(talla))).build());
+        ProductVariantEntity v = variant(true, 5);
+        v.setOptions(new LinkedHashMap<>(Map.of("Color", "黑色", "Talla", "L")));
+
+        VariantView view = mapper.toVariantView(p, v, "es");
+
+        assertThat(view.options()).containsEntry("Color", "Negro").containsEntry("Talla", "L");
+    }
+
+    @Test
+    @DisplayName("sin traducción para el idioma pedido, la opción de la variante cae al valor crudo, nunca vacío")
+    void sinTraduccionLaOpcionDeLaVarianteCaeAlValorCrudo() {
+        ProductEntity p = product();
+        VariantValueEntity color = VariantValueEntity.builder().valueZh("黑色").translations(new ArrayList<>()).build();
+        p.getVariantOptions().add(VariantOptionEntity.builder().nameZh("Color").position(0)
+                .values(new ArrayList<>(List.of(color))).build());
+        ProductVariantEntity v = variant(true, 5);
+        v.setOptions(new LinkedHashMap<>(Map.of("Color", "黑色")));
+
+        VariantView view = mapper.toVariantView(p, v, "fr");
+
+        assertThat(view.options()).containsEntry("Color", "黑色");
+    }
+
+    @Test
+    @DisplayName("una variante sin opciones no revienta al traducir (mapa nulo o vacío)")
+    void unaVarianteSinOpcionesNoRevientaAlTraducir() {
+        ProductEntity p = product();
+        ProductVariantEntity v = variant(true, 5);
+
+        VariantView view = mapper.toVariantView(p, v, "es");
+
+        assertThat(view.options()).isNullOrEmpty();
     }
 
     @Test

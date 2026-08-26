@@ -273,4 +273,79 @@ class CustomsValuationServiceTest {
         assertThat(TaxMode.from("LO_QUE_SEA")).isEqualTo(TaxMode.DDP);
         assertThat(TaxMode.from(null)).isEqualTo(TaxMode.DDP);
     }
+
+    // ================== Destinos SIN franquicia (v153: US y PR) ==================
+
+    /**
+     * El caso que motivó la v153: «sin franquicia» se escribía igual que «franquicia sin averiguar»
+     * ({@code de_minimis_amount = 0}) y el motor solo entendía la segunda, así que Estados Unidos no
+     * cobraba arancel ni bloqueaba nada. Aquí el importe es de un céntimo y aun así cuenta como superado.
+     */
+    @Test
+    void sin_franquicia_cualquier_importe_cuenta_como_superado() {
+        CountryCustomsRuleEntity r = rule("US");
+        r.setDeMinimisAmount(BigDecimal.ZERO);
+        r.setDeMinimisCurrency("USD");
+        r.setDeMinimisApplies(false);
+        givenRule(r);
+
+        assertThat(service.valuate("US", 1, 0, List.of(new DutyParcel(1, 1))).deMinimisExceeded()).isTrue();
+        assertThat(service.valuate("US", 5_000_00, 0, List.of(new DutyParcel(5_000_00, 1))).deMinimisExceeded())
+                .isTrue();
+    }
+
+    /** Con BLOCK, un destino sin franquicia no acepta ningún pedido: se rechaza antes de cobrar. */
+    @Test
+    void sin_franquicia_con_block_rechaza_cualquier_pedido() {
+        CountryCustomsRuleEntity r = rule("US");
+        r.setDeMinimisAmount(BigDecimal.ZERO);
+        r.setDeMinimisCurrency("USD");
+        r.setDeMinimisApplies(false);
+        r.setOverThresholdPolicy("BLOCK");
+        givenRule(r);
+
+        assertThat(service.valuate("US", 1, 0, List.of(new DutyParcel(1, 1))).blocked()).isTrue();
+        assertThat(service.valuate("US", 20_00, 0, List.of(new DutyParcel(20_00, 1))).blocked()).isTrue();
+    }
+
+    /**
+     * El derecho fijo por línea es el de la UE por DEBAJO de su franquicia. Un destino que no tiene
+     * franquicia está siempre por encima, así que no le corresponde: si se cobrara, se estaría aplicando
+     * a Estados Unidos una tarifa que solo existe en el reglamento europeo.
+     */
+    @Test
+    void sin_franquicia_no_se_cobra_el_derecho_por_linea_de_la_ue() {
+        CountryCustomsRuleEntity r = rule("US");
+        r.setDeMinimisAmount(BigDecimal.ZERO);
+        r.setDeMinimisCurrency("USD");
+        r.setDeMinimisApplies(false);
+        r.setPerArticleFeeAmount(new BigDecimal("3"));
+        r.setPerArticleFeeCurrency("USD");
+        givenRule(r);
+
+        assertThat(service.perLineDutyUsdCents("US", List.of(new DutyParcel(20_00, 4)))).isZero();
+    }
+
+    /** Un país con franquicia real no cambia de comportamiento: la marca nueva no toca a los otros 84. */
+    @Test
+    void los_paises_con_franquicia_siguen_evaluando_su_umbral() {
+        CountryCustomsRuleEntity r = rule("ES");
+        givenRule(r);
+        givenEurRate();
+
+        assertThat(service.valuate("ES", 100_00, 0, List.of(new DutyParcel(100_00, 1))).deMinimisExceeded())
+                .isFalse();
+        assertThat(service.valuate("ES", 200_00, 0, List.of(new DutyParcel(200_00, 1))).deMinimisExceeded())
+                .isTrue();
+    }
+
+    /**
+     * La columna trae {@code DEFAULT TRUE} en la base, pero el ORM nombra todas las columnas en el INSERT
+     * y ese defecto no llega a aplicarse. Sin el {@code @Builder.Default} de la entidad, dar de alta un
+     * país desde el panel lo dejaría sin franquicia y bloqueado sin que nadie lo hubiera pedido.
+     */
+    @Test
+    void una_regla_nueva_nace_con_franquicia_para_no_bloquear_el_pais_sin_querer() {
+        assertThat(CountryCustomsRuleEntity.builder().countryCode("ZZ").build().isDeMinimisApplies()).isTrue();
+    }
 }

@@ -144,6 +144,12 @@ public class BffSecurityConfig {
                         // puñado de productos por sección, no el catálogo.
                         .requestMatchers(HttpMethod.GET, "/api/catalog/products").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/search", "/api/search/**").authenticated()
+                        // El simulador de la guía de bienvenida. Es un POST porque manda las cantidades que
+                        // el visitante va poniendo, pero lo ve justo quien AÚN NO TIENE CUENTA: cerrarlo
+                        // dejaría la guía sin números para su único público. No es una calculadora abierta:
+                        // el controlador solo acepta los tres productos que la propia guía propone y como
+                        // mucho seis unidades de cada uno, así que no sirve para tarifar un catálogo.
+                        .requestMatchers(HttpMethod.POST, "/api/catalog/welcome/simulate").permitAll()
                         // GET públicos de navegación (antes GET /api/storefront/**), enumerados por base.
                         .requestMatchers(HttpMethod.GET, "/api/catalog/**", "/api/billing/**", API_CONTACT,
                                 "/api/contact/**", "/api/newsletter/**", "/api/affiliate/**", "/api/search",

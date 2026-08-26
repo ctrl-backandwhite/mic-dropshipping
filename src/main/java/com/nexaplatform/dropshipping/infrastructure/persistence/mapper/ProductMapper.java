@@ -123,7 +123,7 @@ public class ProductMapper {
                 p.getStatus() != null ? p.getStatus().name() : null, p.getSourceUrl(), p.getIngestedAt(),
                 p.getLastSyncedAt(), p.getImages().stream().map(this::toImageView).toList(),
                 p.getVariantOptions().stream().map(o -> toOptionView(o, language)).toList(),
-                p.getVariants().stream().map(v -> toVariantView(p, v)).toList(),
+                p.getVariants().stream().map(v -> toVariantView(p, v, language)).toList(),
                 tiers == null ? Collections.emptyList() : tiers.stream().map(this::toPriceTierView).toList(),
                 costUsd, retailUsd, priced.displayAmount(), priced.displayCurrency(),
                 priced.displaySymbol(), priced.displayFormatted(), appliedMarginPercent,
@@ -147,14 +147,15 @@ public class ProductMapper {
         return new ProductImageView(img.getId(), img.getPosition(), img.getRole(), img.getSourceUrl(), img.getCdnUrl());
     }
 
-    public VariantView toVariantView(ProductEntity product, ProductVariantEntity v) {
+    public VariantView toVariantView(ProductEntity product, ProductVariantEntity v, String language) {
         // Display variant price converted via PricingService too
         PricedAmount priced = pricingService.priceFor(product, v);
         // Peso por variante: usa el del paquete (bruto) si existe, si no el neto. Dimensiones tal cual (mm).
         Integer weight = (v.getPackageWeightGrams() != null && v.getPackageWeightGrams() > 0)
                 ? v.getPackageWeightGrams() : v.getWeightGrams();
         return new VariantView(v.getId(), v.getSku(), v.getTitle(), priced.displayAmount(), // shown in user currency
-                priced.displayFormatted(), v.getStock(), pickVariantImage(v), v.getOptions(), v.isActive(),
+                priced.displayFormatted(), v.getStock(), pickVariantImage(v),
+                translateVariantOptions(v.getOptions(), product, language), v.isActive(),
                 weight, v.getLengthMm(), v.getWidthMm(), v.getHeightMm(),
                 priced.originalFormatted(), priced.discountPercent());
     }
@@ -193,6 +194,62 @@ public class ProductMapper {
         }
         return new VariantValueView(v.getId(), v.getValueZh(), v.getValue(), localized, pickValueImage(v),
                 v.getImageSourceUrl(), v.getPosition(), tr);
+    }
+
+    /**
+     * Traduce el mapa {@code options} de UNA variante (SKU) al idioma pedido — el mismo dato que
+     * {@code toOptionView}/{@code toValueView} ya traducen para el selector visual, pero que hasta ahora
+     * viajaba crudo en chino para cada variante del carrito. Las claves (nombre del eje, p.ej. "Color")
+     * NO se tocan: el pipeline de carga ya las traduce antes de guardarlas. Solo el VALOR ("黑色") se
+     * resuelve contra {@code variant_value_translation}, emparejando por el chino igual que hace
+     * {@code BulkProductFields.applyVariantValueTranslations} al importar.
+     *
+     * <p>Si el valor no tiene traducción para el idioma pedido —o no aparece entre los ejes del
+     * producto—, se conserva el valor crudo tal cual llegó: nunca se deja el campo vacío.
+     */
+    private Map<String, String> translateVariantOptions(Map<String, String> rawOptions, ProductEntity product,
+            String language) {
+        if (rawOptions == null || rawOptions.isEmpty()) {
+            return rawOptions;
+        }
+        Map<String, String> localizedByChineseValue = valueTranslationIndex(product, language);
+        Map<String, String> translated = new LinkedHashMap<>();
+        for (Map.Entry<String, String> e : rawOptions.entrySet()) {
+            String localized = localizedByChineseValue.get(e.getValue());
+            translated.put(e.getKey(), localized != null && !localized.isBlank() ? localized : e.getValue());
+        }
+        return translated;
+    }
+
+    /** Índice valor-en-chino → valor localizado, aplanando TODOS los ejes del producto. */
+    private Map<String, String> valueTranslationIndex(ProductEntity product, String language) {
+        Map<String, String> index = new LinkedHashMap<>();
+        if (product == null || product.getVariantOptions() == null) {
+            return index;
+        }
+        for (VariantOptionEntity opt : product.getVariantOptions()) {
+            if (opt.getValues() == null) {
+                continue;
+            }
+            for (VariantValueEntity vv : opt.getValues()) {
+                if (vv.getValueZh() != null) {
+                    index.put(vv.getValueZh(), resolveLocalizedValue(vv, language));
+                }
+            }
+        }
+        return index;
+    }
+
+    /** Idioma pedido → override neutral (value). Mismo criterio que {@link #toValueView}. */
+    private String resolveLocalizedValue(VariantValueEntity v, String language) {
+        if (language != null && v.getTranslations() != null) {
+            for (VariantValueTranslationEntity t : v.getTranslations()) {
+                if (language.equalsIgnoreCase(t.getLanguage()) && t.getValue() != null) {
+                    return t.getValue();
+                }
+            }
+        }
+        return v.getValue();
     }
 
     public PriceTierView toPriceTierView(ProductPriceTierEntity t) {

@@ -555,4 +555,49 @@ class CustomsRegulationIT extends BaseIntegration {
         assertThat(dutyLines.parcelsOf(null)).isEmpty();
         assertThat(valuation.valuate(DESTINO_UE, 0, 0, new ArrayList<>()).handlingFeeCents()).isZero();
     }
+
+    /* ==================== Destinos SIN franquicia (v153) ==================== */
+
+    /** Marca el país como destino sin franquicia y con la política de rechazo, igual que hace la v153. */
+    private void marcarSinFranquicia(String pais) {
+        jdbcTemplate.update("UPDATE country_customs_rule SET de_minimis_applies = false, "
+                + "over_threshold_policy = 'BLOCK' WHERE country_code = ?", pais);
+    }
+
+    /**
+     * <b>Regla:</b> un destino sin franquicia no tiene ningún importe por debajo del cual se pueda vender.
+     *
+     * <p>Estados Unidos suspendió la suya de 800 USD —de forma indefinida y para todos los orígenes desde el
+     * 24-jun-2026, y de ley desde el 1-jul-2027—, así que cualquier envío exige entrada formal con
+     * aranceles. Antes de la v153 esto no se cumplía: «sin franquicia» y «franquicia sin averiguar» se
+     * escribían las dos como {@code de_minimis_amount = 0} y el cálculo solo entendía la segunda, de modo
+     * que ni se cobraba arancel ni se bloqueaba el pedido. En DDP esa diferencia la pagaba el comercio.
+     *
+     * <p>El caso de un dólar es el que importa: con la lectura antigua pasaba, y con esta no.
+     */
+    @Test
+    @DisplayName("un destino sin franquicia rechaza cualquier pedido, por pequeño que sea")
+    void destinoSinFranquiciaRechazaCualquierPedido() {
+        marcarSinFranquicia(DESTINO_NO_UE);
+
+        assertThat(valorar(DESTINO_NO_UE, List.of(productoConPartida(HS_VAQUEROS, 1, 1_00))).blocked()).isTrue();
+        assertThat(valorar(DESTINO_NO_UE, List.of(productoConPartida(HS_VAQUEROS, 1, 500_00))).blocked()).isTrue();
+    }
+
+    /**
+     * <b>Regla:</b> la marca de «sin franquicia» no toca a los países que sí la tienen.
+     *
+     * <p>Es la prueba de que el cambio es acotado: la Unión Europea sigue cobrando su derecho por línea por
+     * debajo de 150 EUR y sigue vendiendo. Si esto se rompiera, la corrección de un destino habría cerrado
+     * los otros veintisiete.
+     */
+    @Test
+    @DisplayName("marcar un destino sin franquicia no altera a los que sí la tienen")
+    void marcarUnDestinoSinFranquiciaNoAlteraALosDemas() {
+        marcarSinFranquicia(DESTINO_NO_UE);
+
+        CustomsValuation ue = valorar(DESTINO_UE, List.of(productoConPartida(HS_VAQUEROS, 2, 1_000)));
+        assertThat(ue.blocked()).isFalse();
+        assertThat(ue.handlingFeeCents()).isEqualTo(DERECHO_POR_LINEA);
+    }
 }

@@ -144,6 +144,16 @@ public class ShippingQuoteController {
             String customsSubsidyFormatted,
             /** Qué porcentaje del arancel estamos cubriendo (0-100). */
             int customsSubsidyPercent,
+            /**
+             * Lo que el cliente PAGA de porte, con la bolsa ya descontada.
+             *
+             * <p>Va aparte del bruto y del subsidio porque el resumen enseñaba los dos y dejaba la resta al
+             * comprador: «Envío 13,30 €» y «Subsidio −12,37 €» sin decir en ninguna línea que pagaba 0,93 €.
+             * Se manda calculado desde aquí; el front pinta, no resta.
+             */
+            String shippingNetFormatted,
+            /** Lo que el cliente PAGA de arancel, con la bolsa ya descontada. Mismo motivo que el anterior. */
+            String customsNetFormatted,
             /** true cuando la subvención cubre el envío entero y hay que decir «envío gratis». */
             boolean freeShipping,
             /**
@@ -255,6 +265,10 @@ public class ShippingQuoteController {
         // 43 %»; medirlo sobre lo que queda por pagar daría un número que sube cuanto menos se cubre.
         String subsidyFmt = importeSubvencionado(preview.totals().shippingSubsidyCents(), code);
         String customsSubsidyFmt = importeSubvencionado(preview.totals().customsSubsidyCents(), code);
+        // Los netos SÍ se mandan siempre, aunque valgan cero: la línea «a pagar» se pinta en todos los
+        // casos, y un cero se lee mucho mejor que un hueco donde debería ir un importe.
+        String shippingNetFmt = importeExacto(preview.totals().shippingNetCents(), code);
+        String customsNetFmt = importeExacto(preview.totals().customsNetCents(), code);
 
         QuoteResponse body = new QuoteResponse(q.supported(), q.countryCode(), preview.shippingUsdCents(),
                 q.carrier(), q.serviceName(), q.etaMinDays(), q.etaMaxDays(), q.zone(), preview.taxRateBps(),
@@ -284,9 +298,16 @@ public class ShippingQuoteController {
                         .toList(),
                 subsidyFmt, preview.totals().shippingSubsidyPercent(),
                 customsSubsidyFmt, preview.totals().customsSubsidyPercent(),
+                shippingNetFmt, customsNetFmt,
                 preview.totals().freeShipping(),
                 preview.totals().totalCents(preview.subtotalUsdCents() - preview.discountUsdCents()));
         return ResponseEntity.ok(body);
+    }
+
+    /** Un importe formateado en la divisa del comprador, incluido el cero: aquí un 0,00 € es información. */
+    private String importeExacto(int cents, String code) {
+        return currencyService.formatDisplay(currencyService.usdToDisplay(
+                BigDecimal.valueOf(Math.max(0, cents)).movePointLeft(2)), code);
     }
 
     /** Un importe de la bolsa, ya formateado en la divisa del comprador; cadena vacía si no hay nada. */

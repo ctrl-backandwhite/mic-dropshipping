@@ -23,6 +23,7 @@ import com.nexaplatform.dropshipping.api.dto.StorefrontViews.VariantView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import io.swagger.v3.oas.annotations.Operation;
@@ -237,6 +238,15 @@ public interface StorefrontCatalogApi {
     List<ShippingQuoteItem> shippingQuote(@RequestBody ShippingQuoteRequest req);
 
     /* =========================== HOME SECTIONS (DROP-20) =========================== */
+
+    @Operation(summary = "Products that illustrate the welcome guide (EU duty and shipping rules)")
+    @GetMapping("/welcome/examples")
+    StorefrontViews.WelcomeExamplesResponse welcomeExamples(@RequestParam(defaultValue = "es") String lang);
+
+    @Operation(summary = "Simulate the welcome guide basket with the real checkout maths")
+    @PostMapping("/welcome/simulate")
+    StorefrontViews.WelcomeSimulationResponse welcomeSimulate(
+            @RequestBody List<StorefrontViews.WelcomeSimulationLine> lines);
 
     @Operation(summary = "Get the homepage sections and hot categories")
     @GetMapping("/home/sections")

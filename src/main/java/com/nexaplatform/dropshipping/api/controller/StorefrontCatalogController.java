@@ -31,6 +31,13 @@ import com.nexaplatform.dropshipping.api.StorefrontCatalogApi;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews;
+import com.nexaplatform.dropshipping.application.service.CountryTaxService;
+import com.nexaplatform.dropshipping.application.service.WelcomeExamplesService;
+import com.nexaplatform.dropshipping.application.service.CheckoutPreviewService;
+import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
+import com.nexaplatform.dropshipping.application.service.ParcelAggregator;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
 import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
@@ -114,6 +121,9 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     private final MarginService marginService;
     private final CurrencyRateService currencyService;
     private final ProductPriceTierRepository priceTierRepository;
+    private final WelcomeExamplesService welcomeExamples;
+    private final CountryTaxService countryTaxService;
+    private final CheckoutPreviewService checkoutPreview;
     /** La cuenta del pedido: el carrito cotiza con la MISMA aritmética con la que se cobra. */
     private final OrderAmounts orderAmounts;
     /** Comisión de plataforma (%). DROP-680: por defecto 0 — no se inventa una comisión. */
@@ -583,8 +593,124 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         flattenCategories(storefrontRead.categoriesTree(lang), allCats);
         List<CategoryView> hot = allCats.stream().filter(v -> v.directProductCount() > 0)
                 .sorted((a, b) -> Integer.compare(b.directProductCount(), a.directProductCount())).limit(8).toList();
-        long totalProducts = productRepository.countByStatus(ProductStatus.ACTIVE);
+        // Los VISIBLES, no todos los activos: el catálogo solo lista los que tienen imagen espejada, y
+        // anunciar en la portada un número mayor del que luego se puede recorrer es prometer de más.
+        long totalProducts = productRepository.countVisibleByStatus(ProductStatus.ACTIVE);
         return new HomeSectionsResponse(sections, hot, totalProducts);
+    }
+
+    /**
+     * Productos reales con los que la guía de bienvenida enseña las dos reglas que ahorran dinero en la
+     * Unión Europea: el arancel se paga por partida declarada y el envío por bulto.
+     *
+     * <p>Se sirven con el precio ya calculado —el navegador no hace cuentas de dinero— y con el peso y la
+     * clave de partida, que es lo que el simulador combina al sumar y restar unidades.
+     *
+     * <p>Cuando el país que mira no tiene derecho por artículo, {@code perArticleDutyFormatted} viene
+     * vacío y la guía se salta ese paso: contarle el arancel de 3 EUR a quien compra desde fuera de la
+     * Unión sería explicarle una regla que no le aplica.
+     *
+     * <p>Transaccional porque el mapeo lee las imágenes del producto, que son perezosas: sin una
+     * transacción viva aquí, la colección revienta con LazyInitializationException al salir del servicio
+     * que las cargó.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public StorefrontViews.WelcomeExamplesResponse welcomeExamples(String lang) {
+        String pais = PricingCountryHolder.get();
+        String divisa = CurrencyHolder.get();
+        List<StorefrontViews.WelcomeExample> ejemplos = new ArrayList<>();
+        for (ProductEntity p : welcomeExamples.examples()) {
+            PricedAmount priced = pricingService.priceFor(p, null);
+            if (priced.displayAmount() == null) {
+                continue;
+            }
+            ProductSummaryView resumen = productMapper.toSummary(p, lang);
+            ejemplos.add(new StorefrontViews.WelcomeExample(p.getId(), p.getSlug(),
+                    resumen.title(), resumen.mainImage(), priced.displayFormatted(), priced.displayAmount(),
+                    p.getWeightGrams() == null ? 0 : p.getWeightGrams(), welcomeExamples.dutyGroupOf(p),
+                    priced.supplierShippingUsd() == null ? BigDecimal.ZERO
+                            : currencyService.usdToDisplay(priced.supplierShippingUsd())));
+        }
+        int derechoUsdCents = customsValuation.perArticleFeeUsdCents(pais);
+        String derecho = derechoUsdCents <= 0 ? ""
+                : currencyService.formatDisplay(currencyService.usdToDisplay(
+                        BigDecimal.valueOf(derechoUsdCents).movePointLeft(2)), divisa);
+        int topeUsdCents = customsValuation.deMinimisUsdCentsFor(pais);
+        return new StorefrontViews.WelcomeExamplesResponse(ejemplos, derecho,
+                countryTaxService.rateBpsFor(pais),
+                customsValuation.valuate(pais, 0, 0, List.of()).deMinimisLabel(),
+                topeUsdCents <= 0 ? BigDecimal.ZERO
+                        : currencyService.usdToDisplay(BigDecimal.valueOf(topeUsdCents).movePointLeft(2)));
+    }
+
+    /**
+     * El desglose del simulador de la guía, con la aritmética REAL del checkout.
+     *
+     * <p>No replica el cálculo: llama al mismo {@code CheckoutPreviewService} que la vista previa del
+     * pago. Así la guía no puede prometer una cosa y el checkout cobrar otra, y entran las dos fuentes de
+     * la subvención —el porte que no se repite y la ganancia del pedido sobre el suelo—, la segunda de
+     * las cuales depende del margen y por eso nunca podría calcularse en el navegador.
+     *
+     * <p>Solo acepta los productos que la propia guía propone y como mucho seis unidades de cada uno: es
+     * un ejemplo con tres artículos, no una calculadora de precios abierta a cualquier catálogo.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public StorefrontViews.WelcomeSimulationResponse welcomeSimulate(
+            List<StorefrontViews.WelcomeSimulationLine> lines) {
+        String pais = PricingCountryHolder.get();
+        String divisa = CurrencyHolder.get();
+        Set<UUID> permitidos = welcomeExamples.examples().stream().map(ProductEntity::getId)
+                .collect(Collectors.toSet());
+        List<CheckoutPreviewService.Line> items = (lines == null ? List.<StorefrontViews.WelcomeSimulationLine>of()
+                : lines).stream()
+                .filter(l -> l != null && l.productId() != null && permitidos.contains(l.productId()))
+                .filter(l -> l.quantity() > 0)
+                .map(l -> new CheckoutPreviewService.Line(l.productId(), null, Math.min(6, l.quantity())))
+                .toList();
+        if (items.isEmpty()) {
+            String cero = currencyService.formatDisplay(BigDecimal.ZERO, divisa);
+            return new StorefrontViews.WelcomeSimulationResponse(cero, cero, 0, cero, "", cero, "", cero,
+                    cero, 0, cero, 0, false, "");
+        }
+        CheckoutPreviewService.Preview p = checkoutPreview.compute(pais, null, items, null);
+        CheckoutTotalsService.CheckoutTotals t = p.totals();
+        int pesoGramos = items.stream().mapToInt(i -> productRepository.findById(i.productId())
+                .map(pr -> ParcelAggregator.unitWeightGrams(pr, null) * i.quantity()).orElse(0)).sum();
+        return new StorefrontViews.WelcomeSimulationResponse(
+                currencyService.formatDisplay(p.subtotalDisplay(), divisa),
+                enDivisa(t.customsHandlingCents(), divisa), partidasDe(t, pais),
+                enDivisa(t.shippingBaseCents(), divisa),
+                t.shippingSubsidyCents() > 0 ? enDivisa(t.shippingSubsidyCents(), divisa) : "",
+                enDivisa(t.shippingNetCents(), divisa),
+                t.customsSubsidyCents() > 0 ? enDivisa(t.customsSubsidyCents(), divisa) : "",
+                enDivisa(t.customsNetCents(), divisa),
+                currencyService.formatDisplay(p.taxDisplay(), divisa), p.taxRateBps(),
+                currencyService.formatDisplay(p.totalDisplay(), divisa), pesoGramos,
+                t.customs().blocked() || t.customs().deMinimisExceeded(),
+                customsValuation.valuate(pais, 0, 0, List.of()).deMinimisLabel());
+    }
+
+    /**
+     * Cuántas líneas de declaración lleva el pedido, deducidas del derecho ya calculado.
+     *
+     * <p>{@code CustomsValuation} no guarda el número —lo consume al multiplicar— así que se divide el
+     * derecho total entre el de una línea. En la Unión el resto de recargos están a cero, de modo que la
+     * división es exacta; donde no lo fueran, se devuelve 0 antes que un número inventado.
+     */
+    private int partidasDe(CheckoutTotalsService.CheckoutTotals t, String pais) {
+        int porLinea = customsValuation.perArticleFeeUsdCents(pais);
+        if (porLinea <= 0 || t.customsHandlingCents() <= 0) {
+            return 0;
+        }
+        return t.customsHandlingCents() / porLinea;
+    }
+
+    /** Un importe en céntimos de dólar, ya convertido y formateado en la divisa del visitante. */
+    private String enDivisa(int usdCents, String divisa) {
+        return currencyService.formatDisplay(currencyService.usdToDisplay(
+                BigDecimal.valueOf(Math.max(0, usdCents)).movePointLeft(2)), divisa);
     }
 
     /** Aplana el árbol de categorías (raíces + todas sus descendientes) en una lista plana. */

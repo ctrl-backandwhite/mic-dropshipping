@@ -1505,14 +1505,16 @@ public class OrderUseCaseImpl implements OrderUseCase {
                 continue;
             }
             PricingService.PricedAmount priced = pricingService.priceFor(p, null);
-            int base = priced.baseRetailUsd() == null ? 0
-                    : priced.baseRetailUsd().setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
-            int coste = priced.costUsd() == null ? 0
-                    : priced.costUsd().setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
-            int porte = priced.shippingUsd() == null ? 0
-                    : priced.shippingUsd().setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
-            out.add(new ShippingSubsidyService.Linea(p.getId(), Math.max(1, item.getQuantity()), base - coste,
-                    porte));
+            // La ganancia sale ya calculada del tarificador —cobrado menos coste, IVA y porte del
+            // proveedor— y el porte que se devuelve es el del PROVEEDOR, sin margen: es el gasto que no se
+            // repite al pedir la segunda unidad. Cobrarle al cliente el porte con margen y devolvérselo
+            // también con margen regalaría ese margen dos veces, porque ya vuelve por la vía de la
+            // ganancia sobrante.
+            int ganancia = priced.profitUsd() == null ? 0
+                    : priced.profitUsd().setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
+            int porte = priced.supplierShippingUsd() == null ? 0
+                    : priced.supplierShippingUsd().setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
+            out.add(new ShippingSubsidyService.Linea(p.getId(), Math.max(1, item.getQuantity()), ganancia, porte));
         }
         return out;
     }

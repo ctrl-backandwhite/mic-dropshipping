@@ -81,6 +81,43 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
     Page<ProductEntity> findVisibleByStatus(@Param("status") ProductStatus status, Pageable pageable);
 
     /**
+     * Cuántos productos ve de verdad el cliente: los mismos que lista {@link #findVisibleByStatus}.
+     *
+     * <p>La portada anunciaba el conteo de {@code countByStatus}, que incluye los productos sin imagen
+     * espejada —invisibles en el catálogo—. El 26-ago-2026 eso eran 415 de 4.830: la portada prometía 4.830
+     * y al entrar había 4.415. Un conteo que no se puede recorrer no es un conteo, es una promesa
+     * incumplida, así que la portada usa este y {@code countByStatus} se queda para el panel de admin.
+     */
+    @Query("""
+            SELECT count(p) FROM ProductEntity p
+            WHERE p.status = :status
+              AND EXISTS (SELECT 1 FROM ProductImageEntity i WHERE i.product = p AND i.cdnUrl IS NOT NULL)
+            """)
+    long countVisibleByStatus(@Param("status") ProductStatus status);
+
+    /**
+     * Candidatos para los ejemplos de la guía de bienvenida: productos que el cliente puede comprar de
+     * verdad y que se pueden declarar y pesar.
+     *
+     * <p>Se exige HS, material y peso porque de esos tres sale lo que la guía enseña: la partida
+     * arancelaria —HS6 más descripción más origen— y el porte, que va por peso. Un producto sin peso
+     * mentiría en el envío, y uno sin HS no tiene partida que compartir con nadie.
+     *
+     * <p>Ordenados por ventas para que los ejemplos sean artículos reconocibles del catálogo y no el
+     * primer registro que devuelva la tabla.
+     */
+    @Query("""
+            SELECT p FROM ProductEntity p
+            WHERE p.status = :status
+              AND p.hsCode IS NOT NULL AND p.customsMaterial IS NOT NULL
+              AND p.weightGrams IS NOT NULL AND p.weightGrams > 0
+              AND p.basePrice IS NOT NULL AND p.basePrice > 0
+              AND EXISTS (SELECT 1 FROM ProductImageEntity i WHERE i.product = p AND i.cdnUrl IS NOT NULL)
+            ORDER BY p.monthlySales DESC NULLS LAST, p.id ASC
+            """)
+    List<ProductEntity> findWelcomeExampleCandidates(@Param("status") ProductStatus status, Pageable pageable);
+
+    /**
      * Escaparate — productos VISIBLES que tienen vídeo de explicación ({@code hasVideo = true}). Filtra en
      * BD (no trae un lote y filtra en memoria), así la sección "Productos con vídeo" del home los encuentra
      * aunque estén lejos en el catálogo. Misma visibilidad que {@link #findVisibleByStatus} (activo + imagen

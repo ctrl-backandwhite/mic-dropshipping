@@ -18,7 +18,9 @@ import java.math.BigDecimal;
  *
  * <p>El umbral se guarda en su <b>divisa legal</b> ({@code deMinimisCurrency}) porque cada país lo fija en
  * la suya (150 EUR en la UE, 135 GBP en UK, 3.000 NOK en Noruega); el servicio lo convierte con la tasa del
- * día. {@code deMinimisAmount = 0} significa "sin franquicia": todo envío declara y paga.
+ * día. {@code deMinimisAmount = 0} significa <b>umbral no configurado</b>: no se evalúa y el pedido pasa
+ * sin recargo. Para decir «este destino NO tiene franquicia» está {@link #deMinimisApplies}, porque las dos
+ * cosas se escribían igual y el motor solo entendía la primera.
  *
  * @see com.nexaplatform.dropshipping.application.service.CustomsValuationService
  */
@@ -38,12 +40,32 @@ public class CountryCustomsRuleEntity extends BaseEntity {
     @Column(name = "tax_mode", nullable = false, length = 3)
     private String taxMode;
 
-    /** Umbral del régimen simplificado, en {@link #deMinimisCurrency}. 0 = sin franquicia. */
+    /** Umbral del régimen simplificado, en {@link #deMinimisCurrency}. 0 = umbral NO configurado. */
     @Column(name = "de_minimis_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal deMinimisAmount;
 
     @Column(name = "de_minimis_currency", nullable = false, length = 3)
     private String deMinimisCurrency;
+
+    /**
+     * ¿Este destino tiene franquicia de importación?
+     *
+     * <p>{@code false} significa que NO la tiene y que, por tanto, <b>cualquier</b> pedido está por encima
+     * del umbral y le aplica {@link #overThresholdPolicy}. Existe porque «sin franquicia» y «franquicia sin
+     * averiguar» se escribían las dos como {@code deMinimisAmount = 0} y el cálculo solo sabía leer la
+     * segunda, de modo que un destino sin franquicia no recibía ni arancel ni recargo ni bloqueo.
+     *
+     * <p>Hoy solo está a {@code false} en Estados Unidos y Puerto Rico, que suspendieron la suya de 800 USD.
+     * Ponerlo a {@code true} desde el panel reabre el destino sin desplegar.
+     *
+     * <p><b>El valor por defecto {@code true} no es cosmético.</b> La columna tiene {@code DEFAULT TRUE} en
+     * la base, pero el ORM nombra todas las columnas en el INSERT y ese defecto no llega a aplicarse nunca
+     * —el mismo motivo por el que los topes del transportista viajaban nulos—. Sin inicializar aquí, un país
+     * dado de alta desde el panel nacería sin franquicia y quedaría bloqueado sin que nadie lo pidiera.
+     */
+    @Column(name = "de_minimis_applies", nullable = false)
+    @Builder.Default
+    private boolean deMinimisApplies = true;
 
     /** Qué hacer al superar el umbral: {@code SURCHARGE}, {@code ALLOW} o {@code BLOCK}. */
     @Column(name = "over_threshold_policy", nullable = false, length = 10)
@@ -66,7 +88,7 @@ public class CountryCustomsRuleEntity extends BaseEntity {
      *
      * <p><b>Solo surte efecto si se cumplen dos condiciones a la vez</b>, y hoy no se cumplen en ningún
      * país: que el pedido supere la franquicia del destino y que la política sea {@code SURCHARGE}. Los 52
-     * países con franquicia real están en {@code BLOCK} (por encima no se vende) y los 34 de
+     * países con franquicia real están en {@code BLOCK} (por encima no se vende) y los 32 de
      * {@code SURCHARGE} tienen la franquicia a 0, que el cálculo lee como «no configurada». Así que
      * teclear aquí un porcentaje desde el panel de administración <b>no cambia lo que se cobra</b> hasta
      * que se arregle eso. Está a 0 en los 86 países (19-ago-2026). El por qué completo, en el javadoc de

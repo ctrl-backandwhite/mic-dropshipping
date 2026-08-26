@@ -327,25 +327,25 @@ class CurrencyConversionIT extends BaseIntegration {
     @Test
     @DisplayName("El IVA y el envío del producto entran en el precio y el desglose es solo para el admin")
     void ivaYEnvio_entranEnElPrecioYElDesgloseEsDeAdmin() {
-        // 80 CNY base + 4 CNY de IVA + 12 CNY de envío. Margen SOLO sobre la base:
+        // 80 CNY base + 4 CNY de IVA + 12 CNY de envío. El margen grava el desembolso COMPLETO:
         //   base   80/8 = 10,00 USD × 2 = 20,0000
-        //   IVA     4/8 =  0,50 USD (sin margen)
-        //   envío  12/8 =  1,50 USD (sin margen)
-        //   canónico = 20,00 + 0,50 + 1,50 = 22,00 USD  →  22 × 0,92 = 20,24 €
+        //   IVA     4/8 =  0,50 USD × 2 =  1,0000
+        //   envío  12/8 =  1,50 USD × 2 =  3,0000
+        //   canónico = 20,00 + 1,00 + 3,00 = 24,00 USD  →  24 × 0,92 = 22,08 €
         Producto conExtras = sembrarProducto("producto-con-extras", "EXTRA-1", "80.0000", "4.0000", "12.0000");
 
         JsonNode paraCliente = fichaEnDivisa(conExtras.id(), "EUR");
-        assertThat(paraCliente.get("displayPrice").decimalValue()).isEqualByComparingTo("20.24");
-        assertThat(paraCliente.get("displayFormatted").asText()).isEqualTo("20,24" + NBSP + "€");
+        assertThat(paraCliente.get("displayPrice").decimalValue()).isEqualByComparingTo("22.08");
+        assertThat(paraCliente.get("displayFormatted").asText()).isEqualTo("22,08" + NBSP + "€");
         assertThat(paraCliente.get("baseFormatted").isNull()).as("el desglose no es para el cliente").isTrue();
         assertThat(paraCliente.get("retailUsd").isNull()).as("el canónico tampoco").isTrue();
 
-        // El admin sí ve el desglose, y base + IVA + envío tiene que sumar el total: 18,40 + 0,46 + 1,38.
+        // El admin sí ve el desglose, y base + IVA + envío tiene que sumar el total: 18,40 + 0,92 + 2,76.
         JsonNode paraAdmin = fichaAdmin(conExtras.id(), "EUR");
-        assertThat(paraAdmin.get("retailUsd").decimalValue()).isEqualByComparingTo("22.00");
+        assertThat(paraAdmin.get("retailUsd").decimalValue()).isEqualByComparingTo("24.00");
         assertThat(paraAdmin.get("baseFormatted").asText()).isEqualTo("18,40" + NBSP + "€");
-        assertThat(paraAdmin.get("ivaFormatted").asText()).isEqualTo("0,46" + NBSP + "€");
-        assertThat(paraAdmin.get("shippingFormatted").asText()).isEqualTo("1,38" + NBSP + "€");
+        assertThat(paraAdmin.get("ivaFormatted").asText()).isEqualTo("0,92" + NBSP + "€");
+        assertThat(paraAdmin.get("shippingFormatted").asText()).isEqualTo("2,76" + NBSP + "€");
     }
 
     /* ==================================================================================== */

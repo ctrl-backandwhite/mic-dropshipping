@@ -120,6 +120,8 @@ public class ProductBulkExportMapper {
         d.setCrossBorderSupport(p.getCrossBorderSupport());
         d.setDropshipShipped30d(p.getDropshipShipped30d());
         d.setDropshipPickupRate48h(p.getDropshipPickupRate48h());
+        d.setRepurchaseRate(p.getRepurchaseRate());
+        d.setReviewsSummary(p.getReviewsSummary());
 
         d.setTieredPricing(safe(tiers).stream()
                 .map(t -> new BulkTier(t.getMinQty(), t.getMaxQty(), t.getUnitPrice(), t.getCurrency())).toList());

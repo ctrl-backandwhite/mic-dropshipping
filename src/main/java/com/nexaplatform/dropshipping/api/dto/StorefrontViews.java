@@ -126,4 +126,69 @@ public final class StorefrontViews {
             BigDecimal commission, BigDecimal netProfit, BigDecimal marginPct,
             String currency, BigDecimal appliedMarginPct, Integer appliedTierMinQty) {
     }
+
+    /**
+     * Un producto de ejemplo de la guía de bienvenida, con lo justo para que el simulador funcione.
+     *
+     * <p>La guía enseña dos reglas de la Unión Europea: el arancel se paga por partida declarada y el
+     * envío por bulto. Para verlas moverse hacen falta el <b>precio</b> (subtotal), el <b>peso</b>
+     * (porte) y la <b>partida</b> ({@code dutyGroup}), que es lo que el simulador cuenta para saber
+     * cuántos derechos de 3 EUR se pagan.
+     *
+     * @param dutyGroup clave opaca de agrupación arancelaria. Dos ejemplos con la MISMA clave pagan un
+     *                  solo derecho por mucho que se sumen unidades; con claves distintas, uno cada uno.
+     */
+    public record WelcomeExample(java.util.UUID id, String slug, String title, String imageUrl,
+            String priceFormatted, java.math.BigDecimal priceAmount, int weightGrams, String dutyGroup,
+            /**
+             * El porte del proveedor que va dentro del precio unitario, en la divisa que se mira.
+             *
+             * <p>Es lo que se devuelve de la segunda unidad en adelante: el proveedor manda un solo bulto
+             * tenga el cliente una unidad o cinco, así que ese porte entra y no se gasta. Con esto el
+             * simulador puede enseñar el descuento sin saber nada de márgenes, que no son asunto del
+             * comprador.
+             */
+            java.math.BigDecimal repeatShippingAmount) {
+    }
+
+    /**
+     * Los ejemplos de la guía y los datos con los que se calculan.
+     *
+     * @param perArticleDutyFormatted derecho por partida del país que mira ("3,00 EUR"); vacío donde no
+     *                                exista, y entonces la guía no enseña el paso del arancel
+     * @param taxRateBps              impuesto del país de entrega, para que el ejemplo cuadre con lo que
+     *                                luego verá en el checkout
+     * @param orderLimitFormatted     valor de mercancía por encima del cual el transportista no acepta
+     *                                el pedido; vacío si ese destino no tiene tope
+     */
+    public record WelcomeExamplesResponse(java.util.List<WelcomeExample> examples,
+            String perArticleDutyFormatted, int taxRateBps, String orderLimitFormatted,
+            /**
+             * El mismo tope, en la divisa que se está mirando y como número.
+             *
+             * <p>La etiqueta ("150 EUR") va en su divisa LEGAL porque así lo fija la norma, pero el
+             * simulador necesita comparar la mercancía de ejemplo con él, y para eso hace falta la cifra
+             * en la divisa del visitante. Cero donde ese destino no tenga tope.
+             */
+            java.math.BigDecimal orderLimitAmount) {
+    }
+
+    /** Cuántas unidades de un producto de ejemplo pone el visitante en el simulador de la guía. */
+    public record WelcomeSimulationLine(java.util.UUID productId, int quantity) {
+    }
+
+    /**
+     * El desglose del simulador de la guía, calculado por el MISMO servicio que el checkout.
+     *
+     * <p>Se calcula en el servidor y no en el navegador por dos motivos. El primero es que así no puede
+     * divergir: la guía enseña exactamente lo que se cobrará, incluidas las dos fuentes de la subvención
+     * —el porte repetido y la ganancia del pedido por encima del suelo—. El segundo es que la segunda
+     * fuente depende del margen, y el margen no sale de este servidor.
+     */
+    public record WelcomeSimulationResponse(String subtotalFormatted, String dutyFormatted, int dutyLines,
+            String shippingFormatted, String shippingSubsidyFormatted, String shippingNetFormatted,
+            String customsSubsidyFormatted, String customsNetFormatted, String taxFormatted,
+            int taxRateBps, String totalFormatted, int weightGrams, boolean overLimit,
+            String orderLimitFormatted) {
+    }
 }

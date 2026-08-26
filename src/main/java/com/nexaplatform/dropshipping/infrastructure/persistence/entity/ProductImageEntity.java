@@ -55,4 +55,16 @@ public class ProductImageEntity extends BaseEntity {
 
     @Column(name = "mirrored_at")
     private Instant mirroredAt;
+
+    /**
+     * Intentos de espejado fallidos seguidos. Decide cuánto espera esta imagen antes del siguiente intento
+     * —base × 2^intentos— y, al llegar al tope, que se deje de reintentar.
+     *
+     * <p>Existe porque reintentarlas todas a la vez es lo que las tumbó: el 25-ago-2026 las 4.835 imágenes
+     * de 415 productos se reencolaron de golpe al reiniciar y volvieron a fallar por tiempo de espera
+     * agotado, dejando esos productos fuera del escaparate. Vuelve a cero en cuanto la imagen se espeja.
+     */
+    @Column(name = "mirror_attempts", nullable = false)
+    @Builder.Default
+    private int mirrorAttempts = 0;
 }
