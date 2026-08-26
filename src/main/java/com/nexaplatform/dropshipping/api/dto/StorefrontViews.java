@@ -126,4 +126,33 @@ public final class StorefrontViews {
             BigDecimal commission, BigDecimal netProfit, BigDecimal marginPct,
             String currency, BigDecimal appliedMarginPct, Integer appliedTierMinQty) {
     }
+
+    /**
+     * Un producto de ejemplo de la guía de bienvenida, con lo justo para que el simulador funcione.
+     *
+     * <p>La guía enseña dos reglas de la Unión Europea: el arancel se paga por partida declarada y el
+     * envío por bulto. Para verlas moverse hacen falta el <b>precio</b> (subtotal), el <b>peso</b>
+     * (porte) y la <b>partida</b> ({@code dutyGroup}), que es lo que el simulador cuenta para saber
+     * cuántos derechos de 3 EUR se pagan.
+     *
+     * @param dutyGroup clave opaca de agrupación arancelaria. Dos ejemplos con la MISMA clave pagan un
+     *                  solo derecho por mucho que se sumen unidades; con claves distintas, uno cada uno.
+     */
+    public record WelcomeExample(java.util.UUID id, String slug, String title, String imageUrl,
+            String priceFormatted, java.math.BigDecimal priceAmount, int weightGrams, String dutyGroup) {
+    }
+
+    /**
+     * Los ejemplos de la guía y los datos con los que se calculan.
+     *
+     * @param perArticleDutyFormatted derecho por partida del país que mira ("3,00 EUR"); vacío donde no
+     *                                exista, y entonces la guía no enseña el paso del arancel
+     * @param taxRateBps              impuesto del país de entrega, para que el ejemplo cuadre con lo que
+     *                                luego verá en el checkout
+     * @param orderLimitFormatted     valor de mercancía por encima del cual el transportista no acepta
+     *                                el pedido; vacío si ese destino no tiene tope
+     */
+    public record WelcomeExamplesResponse(java.util.List<WelcomeExample> examples,
+            String perArticleDutyFormatted, int taxRateBps, String orderLimitFormatted) {
+    }
 }

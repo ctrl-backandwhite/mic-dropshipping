@@ -87,7 +87,7 @@ class ImageMirrorServiceTest {
 
         assertThat(mirrored).isZero();
         verify(imageRepository, never()).markMirrored(any(), any(), any(), any(), any(), any());
-        verify(imageRepository, never()).markStatus(any(), any());
+        verify(imageRepository, never()).markFailedAndCountAttempt(any());
     }
 
     @Test
@@ -101,7 +101,9 @@ class ImageMirrorServiceTest {
 
         // Sin URL de origen no se descarga nada: directo a FAILED, 0 espejadas.
         assertThat(mirrored).isZero();
-        verify(imageRepository).markStatus(id, MirrorStatus.FAILED);
+        // Desde el 26-ago-2026 el fallo no solo marca estado: suma un intento, que es lo que espacia
+        // el siguiente y evita repetir la avalancha que dejó 415 productos fuera del escaparate.
+        verify(imageRepository).markFailedAndCountAttempt(id);
         verify(imageRepository, never()).markMirrored(any(), any(), any(), any(), any(), any());
     }
 
@@ -114,7 +116,9 @@ class ImageMirrorServiceTest {
 
         service.mirrorPendingBatch(50);
 
-        verify(imageRepository).markStatus(id, MirrorStatus.FAILED);
+        // Desde el 26-ago-2026 el fallo no solo marca estado: suma un intento, que es lo que espacia
+        // el siguiente y evita repetir la avalancha que dejó 415 productos fuera del escaparate.
+        verify(imageRepository).markFailedAndCountAttempt(id);
         verify(imageRepository, never()).markMirrored(any(), any(), any(), any(), any(), any());
     }
 
@@ -130,9 +134,9 @@ class ImageMirrorServiceTest {
         service.mirrorPendingBatch(2);
 
         // Solo las dos primeras (limit=2) se procesan → solo dos FAILED; la tercera ni se toca.
-        verify(imageRepository).markStatus(id1, MirrorStatus.FAILED);
-        verify(imageRepository).markStatus(id2, MirrorStatus.FAILED);
-        verify(imageRepository, never()).markStatus(eq(id3), any());
+        verify(imageRepository).markFailedAndCountAttempt(id1);
+        verify(imageRepository).markFailedAndCountAttempt(id2);
+        verify(imageRepository, never()).markFailedAndCountAttempt(eq(id3));
     }
 
     // ---- Auto-heal (una vez por arranque) dentro del job programado ----

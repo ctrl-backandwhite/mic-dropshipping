@@ -31,6 +31,10 @@ import com.nexaplatform.dropshipping.api.StorefrontCatalogApi;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews;
+import com.nexaplatform.dropshipping.application.service.CountryTaxService;
+import com.nexaplatform.dropshipping.application.service.WelcomeExamplesService;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
 import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
@@ -114,6 +118,8 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     private final MarginService marginService;
     private final CurrencyRateService currencyService;
     private final ProductPriceTierRepository priceTierRepository;
+    private final WelcomeExamplesService welcomeExamples;
+    private final CountryTaxService countryTaxService;
     /** La cuenta del pedido: el carrito cotiza con la MISMA aritmética con la que se cobra. */
     private final OrderAmounts orderAmounts;
     /** Comisión de plataforma (%). DROP-680: por defecto 0 — no se inventa una comisión. */
@@ -583,8 +589,50 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         flattenCategories(storefrontRead.categoriesTree(lang), allCats);
         List<CategoryView> hot = allCats.stream().filter(v -> v.directProductCount() > 0)
                 .sorted((a, b) -> Integer.compare(b.directProductCount(), a.directProductCount())).limit(8).toList();
-        long totalProducts = productRepository.countByStatus(ProductStatus.ACTIVE);
+        // Los VISIBLES, no todos los activos: el catálogo solo lista los que tienen imagen espejada, y
+        // anunciar en la portada un número mayor del que luego se puede recorrer es prometer de más.
+        long totalProducts = productRepository.countVisibleByStatus(ProductStatus.ACTIVE);
         return new HomeSectionsResponse(sections, hot, totalProducts);
+    }
+
+    /**
+     * Productos reales con los que la guía de bienvenida enseña las dos reglas que ahorran dinero en la
+     * Unión Europea: el arancel se paga por partida declarada y el envío por bulto.
+     *
+     * <p>Se sirven con el precio ya calculado —el navegador no hace cuentas de dinero— y con el peso y la
+     * clave de partida, que es lo que el simulador combina al sumar y restar unidades.
+     *
+     * <p>Cuando el país que mira no tiene derecho por artículo, {@code perArticleDutyFormatted} viene
+     * vacío y la guía se salta ese paso: contarle el arancel de 3 EUR a quien compra desde fuera de la
+     * Unión sería explicarle una regla que no le aplica.
+     *
+     * <p>Transaccional porque el mapeo lee las imágenes del producto, que son perezosas: sin una
+     * transacción viva aquí, la colección revienta con LazyInitializationException al salir del servicio
+     * que las cargó.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public StorefrontViews.WelcomeExamplesResponse welcomeExamples(String lang) {
+        String pais = PricingCountryHolder.get();
+        String divisa = CurrencyHolder.get();
+        List<StorefrontViews.WelcomeExample> ejemplos = new ArrayList<>();
+        for (ProductEntity p : welcomeExamples.examples()) {
+            PricedAmount priced = pricingService.priceFor(p, null);
+            if (priced.displayAmount() == null) {
+                continue;
+            }
+            ProductSummaryView resumen = productMapper.toSummary(p, lang);
+            ejemplos.add(new StorefrontViews.WelcomeExample(p.getId(), p.getSlug(),
+                    resumen.title(), resumen.mainImage(), priced.displayFormatted(), priced.displayAmount(),
+                    p.getWeightGrams() == null ? 0 : p.getWeightGrams(), welcomeExamples.dutyGroupOf(p)));
+        }
+        int derechoUsdCents = customsValuation.perArticleFeeUsdCents(pais);
+        String derecho = derechoUsdCents <= 0 ? ""
+                : currencyService.formatDisplay(currencyService.usdToDisplay(
+                        BigDecimal.valueOf(derechoUsdCents).movePointLeft(2)), divisa);
+        return new StorefrontViews.WelcomeExamplesResponse(ejemplos, derecho,
+                countryTaxService.rateBpsFor(pais),
+                customsValuation.valuate(pais, 0, 0, List.of()).deMinimisLabel());
     }
 
     /** Aplana el árbol de categorías (raíces + todas sus descendientes) en una lista plana. */

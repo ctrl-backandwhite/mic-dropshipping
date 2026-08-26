@@ -192,4 +192,59 @@ class CheckoutTotalsServiceTest {
         assertThat(conCero.shippingCents()).isEqualTo(sinParametro.shippingCents());
         assertThat(conCero.shippingSubsidyCents()).isZero();
     }
+
+    /**
+     * Lo que el cliente PAGA de porte, ya descontada la bolsa.
+     *
+     * <p>Qué se rompería sin esto: el resumen del checkout enseñaba el porte bruto (13,30 €) y el
+     * subsidio (−12,37 €) y dejaba que el comprador restara para saber que pagaba 0,93 €. El número que
+     * busca es justo el que no aparecía.
+     */
+    @Test
+    void elNetoDelPorteEsLaTarifaMenosLoQueCubrimos() {
+        givenTax(2100, 25_20);
+        givenCustoms(3_00, false, false);
+
+        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(100_00, 1)), 15_00);
+
+        assertThat(t.shippingSubsidyCents()).isEqualTo(15_00);
+        assertThat(t.shippingNetCents()).isEqualTo(5_00);
+    }
+
+    /** Cubierto del todo, el neto es cero y nunca negativo por mucho que la bolsa sobrepase la tarifa. */
+    @Test
+    void conElPorteCubiertoEnteroElNetoEsCeroNoNegativo() {
+        givenTax(2100, 25_20);
+        givenCustoms(3_00, false, false);
+
+        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(100_00, 1)), 100_00);
+
+        assertThat(t.shippingNetCents()).isZero();
+        assertThat(t.freeShipping()).isTrue();
+    }
+
+    /** El arancel tiene su propio neto: la bolsa cubre primero el porte y solo lo que sobra llega aquí. */
+    @Test
+    void elNetoDelArancelEsElDerechoMenosLoQueCubrimos() {
+        givenTax(2100, 25_20);
+        givenCustoms(10_00, false, false);
+
+        // Bolsa de 25: 20 se van al porte y los 5 restantes al arancel de 10.
+        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(100_00, 1)), 25_00);
+
+        assertThat(t.customsSubsidyCents()).isEqualTo(5_00);
+        assertThat(t.customsNetCents()).isEqualTo(5_00);
+    }
+
+    /** Sin bolsa, cada neto es su importe íntegro: es el caso corriente y el que más se pinta. */
+    @Test
+    void sinBolsaCadaNetoEsSuImporteIntegro() {
+        givenTax(2100, 25_20);
+        givenCustoms(3_00, false, false);
+
+        CheckoutTotals t = service.compute("ES", null, 100_00, 20_00, List.of(new DutyParcel(100_00, 1)), 0);
+
+        assertThat(t.shippingNetCents()).isEqualTo(20_00);
+        assertThat(t.customsNetCents()).isEqualTo(3_00);
+    }
 }

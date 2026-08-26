@@ -118,7 +118,9 @@ class Cov09ImageMirrorBatchTest {
 
         service.mirrorProductsAsync(productos);
 
-        verify(imageRepository).markStatus(imagenId, MirrorStatus.FAILED);
+        // Desde el 26-ago-2026 el fallo no solo marca estado: suma un intento, que es lo que espacia
+        // el siguiente y evita repetir la avalancha que dejó 415 productos fuera del escaparate.
+        verify(imageRepository).markFailedAndCountAttempt(imagenId);
         verify(imageRepository, never()).markMirrored(any(), any(), any(), any(), any(), any());
         verifyNoInteractions(productIndexer);
     }

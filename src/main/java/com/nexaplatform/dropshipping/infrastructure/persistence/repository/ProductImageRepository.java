@@ -44,6 +44,39 @@ public interface ProductImageRepository extends JpaRepository<ProductImageEntity
     @Query("UPDATE ProductImageEntity i SET i.mirrorStatus = :status WHERE i.id = :id")
     void markStatus(@Param("id") UUID id, @Param("status") MirrorStatus status);
 
+    /** Marca el fallo y suma un intento, que es lo que espacia el siguiente. */
+    @Modifying
+    @Transactional
+    @Query("UPDATE ProductImageEntity i SET i.mirrorStatus = com.nexaplatform.dropshipping.domain.enums.MirrorStatus.FAILED, "
+            + "i.mirrorAttempts = i.mirrorAttempts + 1 WHERE i.id = :id")
+    void markFailedAndCountAttempt(@Param("id") UUID id);
+
+    /**
+     * Candidatas a reintento: las fallidas que aún no han agotado sus intentos, de la más antigua a la más
+     * nueva.
+     *
+     * <p>Devuelve candidatas, no elegidas: cuál toca de verdad depende de la espera de cada una —base ×
+     * 2^intentos— y eso se decide en el servicio, donde el reloj es inyectable y se puede probar sin base
+     * de datos. Aquí solo se acota el conjunto para no traerse 4.800 filas a memoria.
+     */
+    @Query("SELECT i FROM ProductImageEntity i "
+            + "WHERE i.mirrorStatus = com.nexaplatform.dropshipping.domain.enums.MirrorStatus.FAILED "
+            + "AND i.mirrorAttempts < :maxAttempts ORDER BY i.updatedAt ASC LIMIT :limit")
+    List<ProductImageEntity> findFailedForRetry(@Param("maxAttempts") int maxAttempts, @Param("limit") int limit);
+
+    /** Una imagen espejada empieza de cero: si mañana hay que re-espejarla, no arrastra los fallos de ayer. */
+    @Modifying
+    @Transactional
+    @Query("UPDATE ProductImageEntity i SET i.mirrorAttempts = 0 WHERE i.id = :id")
+    void resetAttempts(@Param("id") UUID id);
+
+    /** Devuelve a la cola las imágenes indicadas. El contador de intentos NO se toca: es lo que las espacia. */
+    @Modifying
+    @Transactional
+    @Query("UPDATE ProductImageEntity i SET i.mirrorStatus = com.nexaplatform.dropshipping.domain.enums.MirrorStatus.PENDING "
+            + "WHERE i.id IN :ids")
+    int requeueToPending(@Param("ids") List<UUID> ids);
+
     /** Reencola para re-espejar: pone PENDING todo lo que no apunte aún a nuestro storage (backfill/retry). */
     @Modifying
     @Transactional

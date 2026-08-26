@@ -317,3 +317,7 @@ databaseChangeLog:
       file: db/changelog/schema-v153-eeuu-sin-franquicia.sql
   - include:
       file: db/changelog/schema-v154-margen-ue-150.sql
+  - include:
+      file: db/changelog/schema-v155-mirror-reintentos.sql
+  - include:
+      file: db/changelog/schema-v156-welcome-ejemplos.sql
