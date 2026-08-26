@@ -243,6 +243,11 @@ public interface StorefrontCatalogApi {
     @GetMapping("/welcome/examples")
     StorefrontViews.WelcomeExamplesResponse welcomeExamples(@RequestParam(defaultValue = "es") String lang);
 
+    @Operation(summary = "Simulate the welcome guide basket with the real checkout maths")
+    @PostMapping("/welcome/simulate")
+    StorefrontViews.WelcomeSimulationResponse welcomeSimulate(
+            @RequestBody List<StorefrontViews.WelcomeSimulationLine> lines);
+
     @Operation(summary = "Get the homepage sections and hot categories")
     @GetMapping("/home/sections")
     HomeSectionsResponse homeSections(@RequestParam(defaultValue = "es") String lang,

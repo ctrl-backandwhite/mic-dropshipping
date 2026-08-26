@@ -34,6 +34,9 @@ import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews;
 import com.nexaplatform.dropshipping.application.service.CountryTaxService;
 import com.nexaplatform.dropshipping.application.service.WelcomeExamplesService;
+import com.nexaplatform.dropshipping.application.service.CheckoutPreviewService;
+import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
+import com.nexaplatform.dropshipping.application.service.ParcelAggregator;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
 import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService;
@@ -120,6 +123,7 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     private final ProductPriceTierRepository priceTierRepository;
     private final WelcomeExamplesService welcomeExamples;
     private final CountryTaxService countryTaxService;
+    private final CheckoutPreviewService checkoutPreview;
     /** La cuenta del pedido: el carrito cotiza con la MISMA aritmética con la que se cobra. */
     private final OrderAmounts orderAmounts;
     /** Comisión de plataforma (%). DROP-680: por defecto 0 — no se inventa una comisión. */
@@ -638,6 +642,75 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
                 customsValuation.valuate(pais, 0, 0, List.of()).deMinimisLabel(),
                 topeUsdCents <= 0 ? BigDecimal.ZERO
                         : currencyService.usdToDisplay(BigDecimal.valueOf(topeUsdCents).movePointLeft(2)));
+    }
+
+    /**
+     * El desglose del simulador de la guía, con la aritmética REAL del checkout.
+     *
+     * <p>No replica el cálculo: llama al mismo {@code CheckoutPreviewService} que la vista previa del
+     * pago. Así la guía no puede prometer una cosa y el checkout cobrar otra, y entran las dos fuentes de
+     * la subvención —el porte que no se repite y la ganancia del pedido sobre el suelo—, la segunda de
+     * las cuales depende del margen y por eso nunca podría calcularse en el navegador.
+     *
+     * <p>Solo acepta los productos que la propia guía propone y como mucho seis unidades de cada uno: es
+     * un ejemplo con tres artículos, no una calculadora de precios abierta a cualquier catálogo.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public StorefrontViews.WelcomeSimulationResponse welcomeSimulate(
+            List<StorefrontViews.WelcomeSimulationLine> lines) {
+        String pais = PricingCountryHolder.get();
+        String divisa = CurrencyHolder.get();
+        Set<UUID> permitidos = welcomeExamples.examples().stream().map(ProductEntity::getId)
+                .collect(Collectors.toSet());
+        List<CheckoutPreviewService.Line> items = (lines == null ? List.<StorefrontViews.WelcomeSimulationLine>of()
+                : lines).stream()
+                .filter(l -> l != null && l.productId() != null && permitidos.contains(l.productId()))
+                .filter(l -> l.quantity() > 0)
+                .map(l -> new CheckoutPreviewService.Line(l.productId(), null, Math.min(6, l.quantity())))
+                .toList();
+        if (items.isEmpty()) {
+            String cero = currencyService.formatDisplay(BigDecimal.ZERO, divisa);
+            return new StorefrontViews.WelcomeSimulationResponse(cero, cero, 0, cero, "", cero, "", cero,
+                    cero, 0, cero, 0, false, "");
+        }
+        CheckoutPreviewService.Preview p = checkoutPreview.compute(pais, null, items, null);
+        CheckoutTotalsService.CheckoutTotals t = p.totals();
+        int pesoGramos = items.stream().mapToInt(i -> productRepository.findById(i.productId())
+                .map(pr -> ParcelAggregator.unitWeightGrams(pr, null) * i.quantity()).orElse(0)).sum();
+        return new StorefrontViews.WelcomeSimulationResponse(
+                currencyService.formatDisplay(p.subtotalDisplay(), divisa),
+                enDivisa(t.customsHandlingCents(), divisa), partidasDe(t, pais),
+                enDivisa(t.shippingBaseCents(), divisa),
+                t.shippingSubsidyCents() > 0 ? enDivisa(t.shippingSubsidyCents(), divisa) : "",
+                enDivisa(t.shippingNetCents(), divisa),
+                t.customsSubsidyCents() > 0 ? enDivisa(t.customsSubsidyCents(), divisa) : "",
+                enDivisa(t.customsNetCents(), divisa),
+                currencyService.formatDisplay(p.taxDisplay(), divisa), p.taxRateBps(),
+                currencyService.formatDisplay(p.totalDisplay(), divisa), pesoGramos,
+                t.customs().blocked() || t.customs().deMinimisExceeded(),
+                customsValuation.valuate(pais, 0, 0, List.of()).deMinimisLabel());
+    }
+
+    /**
+     * Cuántas líneas de declaración lleva el pedido, deducidas del derecho ya calculado.
+     *
+     * <p>{@code CustomsValuation} no guarda el número —lo consume al multiplicar— así que se divide el
+     * derecho total entre el de una línea. En la Unión el resto de recargos están a cero, de modo que la
+     * división es exacta; donde no lo fueran, se devuelve 0 antes que un número inventado.
+     */
+    private int partidasDe(CheckoutTotalsService.CheckoutTotals t, String pais) {
+        int porLinea = customsValuation.perArticleFeeUsdCents(pais);
+        if (porLinea <= 0 || t.customsHandlingCents() <= 0) {
+            return 0;
+        }
+        return t.customsHandlingCents() / porLinea;
+    }
+
+    /** Un importe en céntimos de dólar, ya convertido y formateado en la divisa del visitante. */
+    private String enDivisa(int usdCents, String divisa) {
+        return currencyService.formatDisplay(currencyService.usdToDisplay(
+                BigDecimal.valueOf(Math.max(0, usdCents)).movePointLeft(2)), divisa);
     }
 
     /** Aplana el árbol de categorías (raíces + todas sus descendientes) en una lista plana. */

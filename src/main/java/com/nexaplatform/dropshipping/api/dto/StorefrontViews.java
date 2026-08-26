@@ -172,4 +172,23 @@ public final class StorefrontViews {
              */
             java.math.BigDecimal orderLimitAmount) {
     }
+
+    /** Cuántas unidades de un producto de ejemplo pone el visitante en el simulador de la guía. */
+    public record WelcomeSimulationLine(java.util.UUID productId, int quantity) {
+    }
+
+    /**
+     * El desglose del simulador de la guía, calculado por el MISMO servicio que el checkout.
+     *
+     * <p>Se calcula en el servidor y no en el navegador por dos motivos. El primero es que así no puede
+     * divergir: la guía enseña exactamente lo que se cobrará, incluidas las dos fuentes de la subvención
+     * —el porte repetido y la ganancia del pedido por encima del suelo—. El segundo es que la segunda
+     * fuente depende del margen, y el margen no sale de este servidor.
+     */
+    public record WelcomeSimulationResponse(String subtotalFormatted, String dutyFormatted, int dutyLines,
+            String shippingFormatted, String shippingSubsidyFormatted, String shippingNetFormatted,
+            String customsSubsidyFormatted, String customsNetFormatted, String taxFormatted,
+            int taxRateBps, String totalFormatted, int weightGrams, boolean overLimit,
+            String orderLimitFormatted) {
+    }
 }
