@@ -624,15 +624,20 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
             ProductSummaryView resumen = productMapper.toSummary(p, lang);
             ejemplos.add(new StorefrontViews.WelcomeExample(p.getId(), p.getSlug(),
                     resumen.title(), resumen.mainImage(), priced.displayFormatted(), priced.displayAmount(),
-                    p.getWeightGrams() == null ? 0 : p.getWeightGrams(), welcomeExamples.dutyGroupOf(p)));
+                    p.getWeightGrams() == null ? 0 : p.getWeightGrams(), welcomeExamples.dutyGroupOf(p),
+                    priced.supplierShippingUsd() == null ? BigDecimal.ZERO
+                            : currencyService.usdToDisplay(priced.supplierShippingUsd())));
         }
         int derechoUsdCents = customsValuation.perArticleFeeUsdCents(pais);
         String derecho = derechoUsdCents <= 0 ? ""
                 : currencyService.formatDisplay(currencyService.usdToDisplay(
                         BigDecimal.valueOf(derechoUsdCents).movePointLeft(2)), divisa);
+        int topeUsdCents = customsValuation.deMinimisUsdCentsFor(pais);
         return new StorefrontViews.WelcomeExamplesResponse(ejemplos, derecho,
                 countryTaxService.rateBpsFor(pais),
-                customsValuation.valuate(pais, 0, 0, List.of()).deMinimisLabel());
+                customsValuation.valuate(pais, 0, 0, List.of()).deMinimisLabel(),
+                topeUsdCents <= 0 ? BigDecimal.ZERO
+                        : currencyService.usdToDisplay(BigDecimal.valueOf(topeUsdCents).movePointLeft(2)));
     }
 
     /** Aplana el árbol de categorías (raíces + todas sus descendientes) en una lista plana. */

@@ -254,6 +254,21 @@ public class CustomsValuationService {
     }
 
     /**
+     * El umbral del país en DÓLARES, para quien necesite compararlo con un importe y no solo enseñarlo.
+     *
+     * <p>Lo usa la guía de bienvenida: su simulador tiene que avisar cuando la mercancía de ejemplo pasa
+     * de lo que el destino admite, y para eso necesita el número, no la etiqueta. Devuelve 0 donde no hay
+     * franquicia configurada, que es lo mismo que decir «aquí no hay tope que enseñar».
+     */
+    @Transactional(readOnly = true)
+    public int deMinimisUsdCentsFor(String countryCode) {
+        return activeRule(countryCode)
+                .filter(CountryCustomsRuleEntity::isDeMinimisApplies)
+                .map(r -> toUsdCents(r.getDeMinimisAmount(), r.getDeMinimisCurrency()))
+                .filter(c -> c > 0).orElse(0);
+    }
+
+    /**
      * El umbral del país en su divisa legal, formateado para el mensaje al cliente ("150 EUR"). Vacío si
      * el país no tiene franquicia configurada. Se muestra en su divisa LEGAL (la ley lo fija así: 150 € en
      * la UE), no en la divisa activa del comprador.

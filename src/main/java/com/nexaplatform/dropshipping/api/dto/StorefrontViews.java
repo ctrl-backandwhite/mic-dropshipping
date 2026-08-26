@@ -139,7 +139,16 @@ public final class StorefrontViews {
      *                  solo derecho por mucho que se sumen unidades; con claves distintas, uno cada uno.
      */
     public record WelcomeExample(java.util.UUID id, String slug, String title, String imageUrl,
-            String priceFormatted, java.math.BigDecimal priceAmount, int weightGrams, String dutyGroup) {
+            String priceFormatted, java.math.BigDecimal priceAmount, int weightGrams, String dutyGroup,
+            /**
+             * El porte del proveedor que va dentro del precio unitario, en la divisa que se mira.
+             *
+             * <p>Es lo que se devuelve de la segunda unidad en adelante: el proveedor manda un solo bulto
+             * tenga el cliente una unidad o cinco, así que ese porte entra y no se gasta. Con esto el
+             * simulador puede enseñar el descuento sin saber nada de márgenes, que no son asunto del
+             * comprador.
+             */
+            java.math.BigDecimal repeatShippingAmount) {
     }
 
     /**
@@ -153,6 +162,14 @@ public final class StorefrontViews {
      *                                el pedido; vacío si ese destino no tiene tope
      */
     public record WelcomeExamplesResponse(java.util.List<WelcomeExample> examples,
-            String perArticleDutyFormatted, int taxRateBps, String orderLimitFormatted) {
+            String perArticleDutyFormatted, int taxRateBps, String orderLimitFormatted,
+            /**
+             * El mismo tope, en la divisa que se está mirando y como número.
+             *
+             * <p>La etiqueta ("150 EUR") va en su divisa LEGAL porque así lo fija la norma, pero el
+             * simulador necesita comparar la mercancía de ejemplo con él, y para eso hace falta la cifra
+             * en la divisa del visitante. Cero donde ese destino no tenga tope.
+             */
+            java.math.BigDecimal orderLimitAmount) {
     }
 }
