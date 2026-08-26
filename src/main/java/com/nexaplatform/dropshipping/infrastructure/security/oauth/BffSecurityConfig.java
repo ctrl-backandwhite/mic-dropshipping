@@ -101,6 +101,11 @@ public class BffSecurityConfig {
                 "/api/affiliate/**", "/api/search", "/api/search/**", "/api/shipping/**", "/api/currency/**",
                 "/api/languages", "/api/languages/**", "/api/warehouses", "/api/warehouses/**", "/api/academy/**",
                 "/api/mentors", "/api/mentors/**", "/api/pod/**", "/api/campaigns/**", "/api/geo",
+                // El asistente conversacional. Tiene que estar AQUÍ además de en las reglas de abajo:
+                // esto decide qué cadena atiende la petición, y aquello qué se le exige. Sin esta línea
+                // la regla de abajo no llega a evaluarse nunca y la petición cae en la cadena por
+                // defecto, que no lee el token Bearer — un 403 con credenciales perfectamente válidas.
+                "/api/chat",
                 // Cumplimiento del Reglamento (UE) 2023/988. Tiene que estar AQUÍ además de en las reglas
                 // de autorización de abajo: lo que no entra en este securityMatcher lo atiende la cadena
                 // del servidor de autorización, que responde 302 hacia /login — o sea, la ruta parece
@@ -144,6 +149,12 @@ public class BffSecurityConfig {
                         // puñado de productos por sección, no el catálogo.
                         .requestMatchers(HttpMethod.GET, "/api/catalog/products").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/search", "/api/search/**").authenticated()
+                        // El asistente conversacional busca en el catálogo por dentro, así que dejarlo
+                        // abierto abriría por la puerta de atrás justo lo que las dos líneas de arriba
+                        // cierran: volcar el catálogo sin cuenta, preguntando. Además cada mensaje cuesta
+                        // dinero en el proveedor del modelo, y un endpoint anónimo de pago es una factura
+                        // ajena esperando a que alguien la encuentre.
+                        .requestMatchers(HttpMethod.POST, "/api/chat").authenticated()
                         // El simulador de la guía de bienvenida. Es un POST porque manda las cantidades que
                         // el visitante va poniendo, pero lo ve justo quien AÚN NO TIENE CUENTA: cerrarlo
                         // dejaría la guía sin números para su único público. No es una calculadora abierta:
@@ -165,6 +176,10 @@ public class BffSecurityConfig {
                                 "/api/legal", "/api/legal/**")
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/catalog/shipping/quote").permitAll()
+                        // Las sugerencias de ahorro devuelven productos del catálogo y cotizan envíos:
+                        // se cierran igual que el listado, y por el mismo motivo —no regalar el catálogo
+                        // ni el trabajo del transportista a quien no tiene cuenta.
+                        .requestMatchers(HttpMethod.POST, "/api/catalog/cart-suggestions").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/catalog/cart-quote").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/catalog/products/*/variants/match")
                         .permitAll().requestMatchers(HttpMethod.POST, "/api/catalog/products/import-url")

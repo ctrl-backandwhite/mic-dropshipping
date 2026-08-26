@@ -206,6 +206,24 @@ springdoc:
 
 # ============ NexaDrop-specific config ============
 nexadrop:
+  chat:
+    # Asistente conversacional del escaparate (DeepSeek). Apagado por defecto: sin clave el proveedor
+    # real ni siquiera se crea y el caso de uso responde «no disponible», que es lo honesto.
+    enabled: ${CHAT_ENABLED:false}
+    api-key: ${NEXADROP_CHAT_API_KEY:}
+    base-url: ${CHAT_BASE_URL:https://api.deepseek.com}
+    # deepseek-v4-flash es el barato; deepseek-v4-pro está disponible en la misma cuenta y se cambia
+    # aquí, sin tocar código.
+    model: ${CHAT_MODEL:deepseek-v4-flash}
+    max-tokens: ${CHAT_MAX_TOKENS:800}
+    timeout-seconds: ${CHAT_TIMEOUT_SECONDS:30}
+    # Vueltas de herramientas antes de exigir una respuesta: acota el gasto y evita bucles.
+    max-tool-rounds: ${CHAT_MAX_TOOL_ROUNDS:3}
+    history-ttl-minutes: ${CHAT_HISTORY_TTL_MINUTES:60}
+    # Cupos diarios: el freno por minuto del filtro de peticiones acota el pico, estos acotan la
+    # factura. El global es el interruptor de emergencia si el abuso se reparte entre muchas cuentas.
+    daily-limit-per-user: ${CHAT_DAILY_LIMIT_USER:100}
+    daily-limit-global: ${CHAT_DAILY_LIMIT_GLOBAL:5000}
   search:
     # Reindexar el catálogo al arrancar SI el índice acaba de crearse (versión de esquema nueva). Sin esto
     # la búsqueda quedaría degradada al fallback SQL hasta que alguien pulsara "Sincronizar" en el admin.

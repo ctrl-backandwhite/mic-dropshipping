@@ -207,6 +207,18 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (path.startsWith("/api/v1/integrations/shops/"))
             return new RateRule("inbound.shop", Scope.PATH_SEG_3, 240, Duration.ofMinutes(1));
 
+        // Asistente conversacional: cada mensaje se paga por tokens al proveedor del modelo, así que el
+        // freno no es anti-abuso, es control de gasto. Por sujeto del JWT cuando hay sesión (y por IP si
+        // no): 15 por minuto es más de lo que teclea una persona y muchísimo menos de lo que cuesta un
+        // bucle automatizado.
+        // Cada sugerencia cotiza hasta cuatro envíos con el transportista. Es barato para quien
+        // compra —una vez por añadir al carrito— y caro si alguien lo llama en bucle.
+        if (path.equals("/api/catalog/cart-suggestions"))
+            return new RateRule("cart.suggestions", Scope.PARTNER, 20, Duration.ofMinutes(1));
+
+        if (path.equals("/api/chat"))
+            return new RateRule("chat.ask", Scope.PARTNER, 15, Duration.ofMinutes(1));
+
         // Emisión de challenges CAPTCHA: sin freno, un bot puede pedir retos sin límite (el PoW es barato).
         if (path.equals("/api/captcha/challenge"))
             return new RateRule("captcha.challenge", Scope.IP, 60, Duration.ofMinutes(1));
@@ -299,6 +311,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 policy("inbound.shop", "/api/v1/integrations/shops/{id}/**", "per shopConnection id", 240, "1m"),
                 policy("storefront", "/api/v1/rate-limits, /api/v1/invoices", PER_IP, 60, "1m"),
                 policy("storefront.web", "/api/catalog/**, /api/search, ... (navegación pública)", PER_IP, 100, "1m"),
+                policy("chat.ask", "/api/chat", PER_CLIENT_ID_JWT_SUB, 15, "1m"),
+                policy("cart.suggestions", "/api/catalog/cart-suggestions", PER_CLIENT_ID_JWT_SUB, 20, "1m"),
                 policy("oauth.token", "/oauth2/token", PER_IP, 30, "1m"),
                 policy("auth.login", "/login", PER_IP, 20, "1m"),
                 policy("auth.login.api", "/api/auth/login", PER_IP, 10, "1m"),
