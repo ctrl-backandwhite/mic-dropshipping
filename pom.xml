@@ -142,6 +142,20 @@
             <groupId>org.springframework.session</groupId>
             <artifactId>spring-session-data-redis</artifactId>
         </dependency>
+        <!-- La AUTOCONFIGURACIÓN de Spring Session. Hace falta explícitamente.
+
+             Spring Boot 4 partió las autoconfiguraciones en módulos sueltos, y el
+             de sesión no lo arrastra ningún starter. Sin él, spring-session-data-redis
+             está en el classpath pero NADIE lo configura: Tomcat sigue llevando la
+             sesión en su memoria y la cookie sale como JSESSIONID en vez de SESSION.
+
+             Y falla en silencio, que es lo peor: la aplicación arranca, el acceso
+             funciona con una réplica y se rompe en cuanto hay dos, sin un solo error
+             en el registro. Costó media tarde el 27-ago-2026. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-session</artifactId>
+        </dependency>
 
         <!-- ============ Security + Auth Server ============ -->
         <dependency>
