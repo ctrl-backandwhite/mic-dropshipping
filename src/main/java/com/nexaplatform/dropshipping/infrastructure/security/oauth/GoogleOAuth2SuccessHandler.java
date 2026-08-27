@@ -116,6 +116,10 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         // Registrar la sesión/dispositivo también en el login social: sin esto, las cuentas que entran por
         // Google/GitHub no aparecían en "Sesiones activas" del perfil (solo lo hacía el login por contraseña).
         deviceSessionService.recordLogin(user.getId(), request, response);
+        // El aviso de acceso se emite AQUÍ y no en LoginAuditListener: allí el
+        // evento llega antes de que este manejador cree al usuario, así que en un
+        // primer acceso con Google no había a quién avisar y el correo se perdía.
+        userUseCase.notifyLoginDetected(user.getEmail());
         // Tokens en el fragmento (#) — no llega al servidor ni a los logs del proxy.
         response.sendRedirect(redirects.success(target, tokens.accessToken(), tokens.refreshToken()));
     }
