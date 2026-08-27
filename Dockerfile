@@ -2,19 +2,19 @@
 FROM maven:3.9-eclipse-temurin-25 AS build
 WORKDIR /app
 COPY pom.xml .
+# Las dependencias, en su propia capa: así se reutiliza entre construcciones
+# mientras el pom.xml no cambie, que es lo que hace que esto tarde 10 minutos en
+# vez de 20. Al cambiar el pom, la capa se invalida y se vuelven a resolver.
+#
+# Este patrón fue el que ocultó el fallo del 27-ago-2026 —una dependencia nueva no
+# llegaba al jar— pero el problema no era el patrón: era que NADIE COMPROBABA el
+# resultado. La verificación de más abajo cierra ese hueco, así que se puede
+# conservar la velocidad sin volver a publicar imágenes incompletas.
+RUN --mount=type=cache,target=/root/.m2/repository \
+    mvn -B dependency:go-offline
 COPY src ./src
-# Un solo paso, con el repositorio de Maven en una caché de montaje.
+# El empaquetado, con el mismo repositorio montado.
 #
-# Antes iban en dos: "dependency:go-offline" en su propia capa y el empaquetado
-# en otra. Esa capa intermedia se reutilizaba de la caché de la cadena de
-# entrega aunque el pom.xml hubiera cambiado, así que una dependencia nueva NO
-# entraba en el jar y la aplicación arrancaba sin ella. Pasó el 27-ago-2026 con
-# spring-session-data-redis: estaba en el pom, no en la imagen, y las sesiones
-# no se compartían entre réplicas sin que nada avisara.
-#
-# Con la caché de montaje, el repositorio se reaprovecha entre construcciones
-# —que es lo que se quería— pero la resolución se hace SIEMPRE contra el pom.xml
-# real de esta construcción.
 RUN --mount=type=cache,target=/root/.m2/repository \
     mvn -B -DskipTests package
 
