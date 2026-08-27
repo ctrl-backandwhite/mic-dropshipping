@@ -35,7 +35,9 @@ spring:
             # El front es estático (Railpack) y NO puede proxiar /login/oauth2/**, por eso el callback
             # NO puede ir a nx036.com. Override-able por GOOGLE_REDIRECT_URI (p. ej. api.nx036.com si se
             # da al backend un subdominio propio).
-            redirect-uri: "${GOOGLE_REDIRECT_URI:https://api.nx036.com/login/oauth2/code/google}"
+            # El valor por defecto apuntaba a PRODUCCIÓN: quien iniciara sesión aquí
+              # acababa devuelto a la tienda real. Cada entorno vuelve al suyo.
+              redirect-uri: "${NX_API_URL:https://api-dev.nx036.com}/login/oauth2/code/google"
           github:
             redirect-uri: "${NX_API_URL:https://api-dev.nx036.com}/login/oauth2/code/github"
 
