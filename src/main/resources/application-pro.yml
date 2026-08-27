@@ -31,7 +31,16 @@ spring:
           google:
             # Auth por token (sin proxy nginx): Google redirige al BACKEND; su success handler
             # emite el token y redirige al front (<front>/auth/callback#token=…).
-            redirect-uri: "${NX_API_URL:https://api.nx036.com}/login/oauth2/code/google"
+            # El retorno va al MISMO dominio por el que se entró, no al de la API.
+              #
+              # La sesión que guarda la petición de autorización se crea al
+              # arrancar el flujo en el dominio del frontal, y su cookie es de
+              # ESE dominio: el navegador no la manda a otro. Volviendo a la API
+              # no había sesión y el acceso moría con
+              # "authorization_request_not_found", incluso con una sola réplica.
+              #
+              # nginx ya hace proxy de /login/oauth2/ hacia el backend.
+              redirect-uri: "${NX_WEB_URL:https://nx036.com}/login/oauth2/code/google"
 
 server:
   servlet:
