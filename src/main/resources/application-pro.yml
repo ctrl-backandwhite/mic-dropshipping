@@ -1,7 +1,7 @@
 # =====================================================================================
-# Perfil PRO (despliegue remoto Railway, producción)
-#   Frontend: https://front-dropshipping-pro.up.railway.app
-#   Backend : https://back-dropshipping-pro.up.railway.app  (servidor de autorización)
+# Perfil PRO (VPS propio (k3s + Argo CD), producción)
+#   Frontend: ${NX_WEB_URL:https://nx036.com}
+#   Backend : ${NX_API_URL:https://api.nx036.com}  (servidor de autorización)
 #
 # Local sigue usando application-local.yml (localhost). Aquí solo se sobrescriben las URLs
 # públicas: issuer del authorization server (backend) y los dominios de confianza (frontend)
@@ -21,7 +21,7 @@ spring:
   kafka:
     # Kafka KRaft seguro (SASL/SCRAM). El JAAS (usuario+password) llega por env.
     properties:
-      security.protocol: ${KAFKA_SECURITY_PROTOCOL:SASL_PLAINTEXT}
+      security.protocol: ${KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
       sasl.mechanism: ${KAFKA_SASL_MECHANISM:SCRAM-SHA-256}
       sasl.jaas.config: ${KAFKA_SASL_JAAS:}
   security:
@@ -31,7 +31,7 @@ spring:
           google:
             # Auth por token (sin proxy nginx): Google redirige al BACKEND; su success handler
             # emite el token y redirige al front (<front>/auth/callback#token=…).
-            redirect-uri: "https://back-dropshipping-pro.up.railway.app/login/oauth2/code/google"
+            redirect-uri: "${NX_API_URL:https://api.nx036.com}/login/oauth2/code/google"
 
 server:
   servlet:
@@ -42,14 +42,14 @@ server:
 
 nexadrop:
   storefront:
-    base-url: https://front-dropshipping-pro.up.railway.app
+    base-url: ${NX_WEB_URL:https://nx036.com}
   mobile:
     # Enlace profundo de la app; debe coincidir con el `scheme` de app.config.ts.
     oauth-callback-url: ${MOBILE_OAUTH_CALLBACK_URL:nx036://auth/callback}
   oauth:
-    issuer: https://back-dropshipping-pro.up.railway.app
+    issuer: ${NX_API_URL:https://api.nx036.com}
   cors:
-    allowed-origins: https://front-dropshipping-pro.up.railway.app,https://back-dropshipping-pro.up.railway.app
+    allowed-origins: ${NX_WEB_URL:https://nx036.com},${NX_API_URL:https://api.nx036.com}
   cainiao:
     # En PRODUCCIÓN: integración real activa por defecto, contra el gateway de PRODUCCIÓN de Cainiao.
     # appKey/appSecret de la cuenta de PROD se inyectan por env (CAINIAO_APP_KEY / CAINIAO_APP_SECRET).

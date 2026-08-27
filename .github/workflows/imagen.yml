@@ -1,0 +1,108 @@
+name: Imagen
+
+# Cada rama entrega a su entorno:
+#   features -> desarrollo
+#   develop  -> preproducción
+#   main     -> producción
+# El control de lo que llega a producción es la revisión del pull request hacia
+# main, no una puerta aquí.
+on:
+  push:
+    branches: [features, develop, main]
+  workflow_dispatch:
+
+concurrency:
+  # Si llegan dos empujones seguidos, el primero se cancela: publicar una imagen
+  # vieja encima de una nueva deja preproducción con lo que no toca.
+  group: imagen-backend-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Preparar JDK 21
+        uses: actions/setup-java@v5
+        with:
+          # 21 aunque las imágenes usen JRE 25: el pom compila con release 21.
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - name: Pruebas
+        # La puerta: si algo está en rojo, no se publica imagen. Los tests de
+        # integración van aparte porque necesitan Docker y tardan mucho más.
+        run: mvn -B -Dsurefire.failIfNoSpecifiedTests=false test
+
+      - name: Entrar en el registro
+        uses: docker/login-action@v3
+        with:
+          registry: registry.nx036.com
+          username: ${{ secrets.HARBOR_USUARIO }}
+          password: ${{ secrets.HARBOR_SECRETO }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Construir y publicar
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # El tag es el SHA y nunca "latest". Es lo que hace que revertir sea
+          # cambiar una línea, y que se sepa siempre qué código hay corriendo.
+          tags: registry.nx036.com/nexadrop/backend:sha-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Apuntar la entrega en el repositorio de despliegue
+        env:
+          LLAVE: ${{ secrets.DESPLIEGUE_SSH }}
+        run: |
+          mkdir -p ~/.ssh
+          # printf con salto explícito: una llave privada SIN el salto de línea
+          # final hace que OpenSSH falle con "error in libcrypto", un mensaje que
+          # no menciona el salto por ningún lado y manda a buscar donde no es.
+          printf '%s\n' "$LLAVE" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Se valida antes de usarla, para que el fallo diga qué pasa de verdad.
+          if ! ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null 2>&1; then
+            echo "::error::El secreto DESPLIEGUE_SSH no es una llave privada válida. Cópiala entera, desde -----BEGIN hasta -----END incluido."
+            exit 1
+          fi
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git clone git@github.com:ctrl-backandwhite/nexadrop-deploy.git /tmp/despliegue
+          cd /tmp/despliegue
+          # El entorno lo decide la rama, no está escrito a fuego:
+          #   features -> desarrollo · develop -> preproducción · main -> producción
+          case "$GITHUB_REF_NAME" in
+            features) ENTORNO=des ;;
+            develop)  ENTORNO=pre ;;
+            main)     ENTORNO=pro ;;
+            *) echo "::error::La rama $GITHUB_REF_NAME no tiene entorno asignado"; exit 1 ;;
+          esac
+          export ENTORNO
+          echo "Rama $GITHUB_REF_NAME -> entorno $ENTORNO"
+          python3 - <<'PY'
+          import re, os
+          p = f"overlays/{os.environ['ENTORNO']}/kustomization.yaml"
+          s = open(p).read()
+          sha = os.environ['GITHUB_SHA']
+          s = re.sub(r'(name: registry\.nx036\.com/nexadrop/backend\n    newTag: )\S+',
+                     r'\g<1>sha-' + sha, s)
+          open(p, 'w').write(s)
+          PY
+          git config user.name "entrega automática"
+          git config user.email "ci@nx036.com"
+          git commit -am "entrega($ENTORNO): backend sha-${GITHUB_SHA}" || exit 0
+          # Reintento con rebase: si otra entrega escribió en el repositorio
+          # mientras esta construía, el empujón se rechaza con "cannot lock ref".
+          # Es una carrera normal entre cadenas, no un error que deba tumbar la
+          # entrega.
+          for i in 1 2 3 4 5; do
+            git push && break
+            echo "empujón rechazado, reintentando ($i)"
+            git pull --rebase
+            sleep 3
+          done
