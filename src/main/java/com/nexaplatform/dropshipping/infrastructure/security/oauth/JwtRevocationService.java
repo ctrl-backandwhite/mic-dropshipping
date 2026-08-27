@@ -101,14 +101,37 @@ public class JwtRevocationService {
     public boolean isStillValid(String clientId, long issuedAtEpochSeconds) {
         if (clientId == null)
             return true;
-        Long revokedAt;
-        if (redis != null) {
-            String v = redis.opsForValue().get(PREFIX + clientId);
-            revokedAt = v != null ? Long.parseLong(v) : null;
-        } else {
-            revokedAt = fallback.get(clientId);
-        }
+        Long revokedAt = leerRevocacion(clientId);
         return revokedAt == null || issuedAtEpochSeconds > revokedAt;
+    }
+
+    /**
+     * Momento de la revocación masiva de ese cliente, o {@code null} si no la hay.
+     *
+     * <p>Si Redis está configurado pero no responde, se cae al registro en memoria
+     * en vez de propagar el fallo. El motivo: esto se ejecuta al validar CADA
+     * token, así que un Redis caído dejaría a todo el mundo fuera de la
+     * aplicación —incluida la parte que no usa Redis para nada—. Es preferible
+     * perder temporalmente la revocación masiva, que es una medida excepcional,
+     * antes que tumbar la autenticación entera.
+     *
+     * <p>El registro en memoria no se comparte entre réplicas, así que mientras
+     * Redis esté caído una revocación podría no llegar a todos los pods. Se avisa
+     * en el registro para que no pase inadvertido.
+     */
+    private Long leerRevocacion(String clientId) {
+        if (redis == null) {
+            return fallback.get(clientId);
+        }
+        try {
+            String v = redis.opsForValue().get(PREFIX + clientId);
+            return v != null ? Long.parseLong(v) : null;
+        } catch (RuntimeException e) {
+            log.warn("::> [REVOCACION] Redis no responde ({}), se usa el registro en memoria. "
+                    + "Las revocaciones masivas pueden no llegar a todas las réplicas mientras dure.",
+                    e.getClass().getSimpleName());
+            return fallback.get(clientId);
+        }
     }
 
     /**
