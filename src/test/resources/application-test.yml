@@ -1,4 +1,9 @@
+# Las pruebas NO usan Redis para las sesiones: montar un Redis por contexto de
+# prueba las haría lentas y frágiles, y lo que se prueba aquí no es dónde se
+# guarda la sesión. En los entornos reales manda el valor por defecto: redis.
 spring:
+  session:
+    store-type: none
   # El perfil 'test' lo activa @ActiveProfiles; un recurso -test.yml no puede fijar spring.profiles.active.
   # El datasource lo inyecta Testcontainers vía @ServiceConnection (PostgreSQLContainer) en
   # los tests de integración (*IT). Los unit (*Test, Mockito) no cargan contexto de Spring.
