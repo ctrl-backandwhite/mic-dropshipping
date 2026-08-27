@@ -26,7 +26,8 @@ RUN --mount=type=cache,target=/root/.m2/repository \
 # incompleto es peor que una que falle.
 # Nombres de BIBLIOTECA, no de "starter": los starter son descriptores y no
 # dejan ningún jar dentro, así que buscarlos aquí siempre falla.
-RUN for LIB in spring-session-core spring-session-data-redis spring-data-redis \
+RUN for LIB in spring-session-core spring-session-data-redis spring-boot-session \
+               spring-data-redis \
                lettuce-core spring-security-oauth2-client postgresql; do \
       jar tf target/*.jar | grep -q "$LIB" \
         || { echo "FALTA EN EL JAR: $LIB"; exit 1; }; \
