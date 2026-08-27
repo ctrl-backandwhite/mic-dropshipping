@@ -47,10 +47,24 @@ public class LoginAuditListener {
         } else {
             email = auth.getName();
         }
-        if (email != null && email.contains("@")) {
-            userUseCase.recordSuccessfulLogin(email);
-            userUseCase.notifyLoginDetected(email);
+        if (email == null || !email.contains("@")) {
+            return;
         }
+        userUseCase.recordSuccessfulLogin(email);
+        if (auth instanceof OAuth2AuthenticationToken) {
+            // En el acceso social NO se avisa desde aquí.
+            //
+            // Spring dispara este evento en cuanto el proveedor valida la identidad,
+            // y eso ocurre ANTES de que el manejador de éxito cree al usuario en la
+            // base. En un primer acceso con Google, buscarlo aquí no lo encuentra y
+            // el aviso se pierde sin dejar rastro: el registro de auditoría sí se
+            // escribe, así que parecía enviado.
+            //
+            // Lo emite el manejador de éxito, que es quien tiene el usuario ya
+            // creado. Ver GoogleOAuth2SuccessHandler.
+            return;
+        }
+        userUseCase.notifyLoginDetected(email);
     }
 
     @EventListener
