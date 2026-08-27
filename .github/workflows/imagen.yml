@@ -1,16 +1,20 @@
 name: Imagen
 
-# Solo desde features: cada empujón aquí es una entrega a preproducción. Producción
-# no se toca desde el CI, se promociona por pull request.
+# Cada rama entrega a su entorno:
+#   features -> desarrollo
+#   develop  -> preproducción
+#   main     -> producción
+# El control de lo que llega a producción es la revisión del pull request hacia
+# main, no una puerta aquí.
 on:
   push:
-    branches: [features]
+    branches: [features, develop, main]
   workflow_dispatch:
 
 concurrency:
   # Si llegan dos empujones seguidos, el primero se cancela: publicar una imagen
   # vieja encima de una nueva deja preproducción con lo que no toca.
-  group: imagen-backend
+  group: imagen-backend-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -70,11 +74,19 @@ jobs:
           ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
           git clone git@github.com:ctrl-backandwhite/nexadrop-deploy.git /tmp/despliegue
           cd /tmp/despliegue
-          # Se edita SOLO el overlay de preproducción. El de producción lo cambia
-          # una persona por pull request, que es donde está la revisión.
+          # El entorno lo decide la rama, no está escrito a fuego:
+          #   features -> desarrollo · develop -> preproducción · main -> producción
+          case "$GITHUB_REF_NAME" in
+            features) ENTORNO=des ;;
+            develop)  ENTORNO=pre ;;
+            main)     ENTORNO=pro ;;
+            *) echo "::error::La rama $GITHUB_REF_NAME no tiene entorno asignado"; exit 1 ;;
+          esac
+          export ENTORNO
+          echo "Rama $GITHUB_REF_NAME -> entorno $ENTORNO"
           python3 - <<'PY'
           import re, os
-          p = 'overlays/pre/kustomization.yaml'
+          p = f"overlays/{os.environ['ENTORNO']}/kustomization.yaml"
           s = open(p).read()
           sha = os.environ['GITHUB_SHA']
           s = re.sub(r'(name: registry\.nx036\.com/nexadrop/backend\n    newTag: )\S+',
@@ -83,7 +95,7 @@ jobs:
           PY
           git config user.name "entrega automática"
           git config user.email "ci@nx036.com"
-          git commit -am "entrega(pre): backend sha-${GITHUB_SHA}" || exit 0
+          git commit -am "entrega($ENTORNO): backend sha-${GITHUB_SHA}" || exit 0
           # Reintento con rebase: si otra entrega escribió en el repositorio
           # mientras esta construía, el empujón se rechaza con "cannot lock ref".
           # Es una carrera normal entre cadenas, no un error que deba tumbar la
