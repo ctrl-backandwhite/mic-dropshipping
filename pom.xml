@@ -130,6 +130,19 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
+        <!-- Sesiones compartidas entre réplicas.
+             Sin esto cada pod guarda las suyas en memoria: el acceso con Google
+             empieza en un pod, Google devuelve a otro, y ese no tiene la petición
+             de autorización guardada. Con cuatro réplicas fallaba tres de cada
+             cuatro veces (authorization_request_not_found).
+             Redis y no la base de datos: cada petición actualiza la marca de
+             tiempo de su sesión, y ese caudal de escrituras competiría con los
+             pedidos y el catálogo, además de hinchar la tabla. -->
+        <dependency>
+            <groupId>org.springframework.session</groupId>
+            <artifactId>spring-session-data-redis</artifactId>
+        </dependency>
+
         <!-- ============ Security + Auth Server ============ -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

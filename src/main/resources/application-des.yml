@@ -35,9 +35,20 @@ spring:
             # El front es estático (Railpack) y NO puede proxiar /login/oauth2/**, por eso el callback
             # NO puede ir a nx036.com. Override-able por GOOGLE_REDIRECT_URI (p. ej. api.nx036.com si se
             # da al backend un subdominio propio).
-            redirect-uri: "${GOOGLE_REDIRECT_URI:https://api.nx036.com/login/oauth2/code/google}"
+            # El valor por defecto apuntaba a PRODUCCIÓN: quien iniciara sesión aquí
+              # acababa devuelto a la tienda real. Cada entorno vuelve al suyo.
+              # El retorno va al MISMO dominio por el que se entró, no al de la API.
+              #
+              # La sesión que guarda la petición de autorización se crea al
+              # arrancar el flujo en el dominio del frontal, y su cookie es de
+              # ESE dominio: el navegador no la manda a otro. Volviendo a la API
+              # no había sesión y el acceso moría con
+              # "authorization_request_not_found", incluso con una sola réplica.
+              #
+              # nginx ya hace proxy de /login/oauth2/ hacia el backend.
+              redirect-uri: "${NX_WEB_URL:https://dev.nx036.com}/login/oauth2/code/google"
           github:
-            redirect-uri: "${NX_API_URL:https://api-dev.nx036.com}/login/oauth2/code/github"
+            redirect-uri: "${NX_WEB_URL:https://dev.nx036.com}/login/oauth2/code/github"
 
 server:
   servlet:
