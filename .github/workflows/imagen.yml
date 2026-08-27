@@ -84,4 +84,13 @@ jobs:
           git config user.name "entrega automática"
           git config user.email "ci@nx036.com"
           git commit -am "entrega(pre): backend sha-${GITHUB_SHA}" || exit 0
-          git push
+          # Reintento con rebase: si otra entrega escribió en el repositorio
+          # mientras esta construía, el empujón se rechaza con "cannot lock ref".
+          # Es una carrera normal entre cadenas, no un error que deba tumbar la
+          # entrega.
+          for i in 1 2 3 4 5; do
+            git push && break
+            echo "empujón rechazado, reintentando ($i)"
+            git pull --rebase
+            sleep 3
+          done

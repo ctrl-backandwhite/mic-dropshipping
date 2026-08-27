@@ -1,11 +1,11 @@
 # =====================================================================================
-# Perfil PRE (preproducción, VPS propio (k3s + Argo CD), entorno pre-produccion)
+# Perfil DES (desarrollo, VPS propio (k3s + Argo CD), entorno de desarrollo)
 #   Frontend: https://nx036.com
-#   Backend : ${NX_API_URL:https://api-pre.nx036.com}  (servidor de autorización)
+#   Backend : ${NX_API_URL:https://api-dev.nx036.com}  (servidor de autorización)
 #
 # Réplica de application-dev.yml pero con las URLs públicas de PRE: issuer del authorization
 # server (backend), callback de Google, CORS y enlaces de email apuntan al entorno pre. Solo se
-# carga cuando SPRING_PROFILES_ACTIVE=pre → no afecta a dev (perfil dev) ni a pro (perfil pro).
+# carga cuando SPRING_PROFILES_ACTIVE=des → no afecta a dev (perfil dev) ni a pro (perfil pro).
 #
 # Los SECRETOS (Google client id/secret, BD, KEKs, etc.) NUNCA van aquí: se inyectan por
 # variables de entorno en Railway (ya soportadas en application.yml).
@@ -37,7 +37,7 @@ spring:
             # da al backend un subdominio propio).
             redirect-uri: "${GOOGLE_REDIRECT_URI:https://api.nx036.com/login/oauth2/code/google}"
           github:
-            redirect-uri: "${NX_API_URL:https://api-pre.nx036.com}/login/oauth2/code/github"
+            redirect-uri: "${NX_API_URL:https://api-dev.nx036.com}/login/oauth2/code/github"
 
 server:
   servlet:
@@ -48,16 +48,16 @@ server:
 
 nexadrop:
   storefront:
-    base-url: ${NX_WEB_URL:https://pre.nx036.com}   # CTA y baja de los correos, y regreso tras el acceso con Google
+    base-url: ${NX_WEB_URL:https://dev.nx036.com}   # CTA y baja de los correos, y regreso tras el acceso con Google
   mobile:
     # Enlace profundo de la app; debe coincidir con el `scheme` de app.config.ts.
     oauth-callback-url: ${MOBILE_OAUTH_CALLBACK_URL:nx036://auth/callback}
   oauth:
     # Identidad del authorization server y emisor de los JWT de usuario (este backend).
-    issuer: ${NX_API_URL:https://api-pre.nx036.com}
+    issuer: ${NX_API_URL:https://api-dev.nx036.com}
   cors:
     # Dominios de confianza desde los que se accede a la API (frontend + el propio backend).
-    allowed-origins: ${NX_WEB_URL:https://pre.nx036.com},${NX_API_URL:https://api-pre.nx036.com}
+    allowed-origins: ${NX_WEB_URL:https://dev.nx036.com},${NX_API_URL:https://api-dev.nx036.com}
   cainiao:
     # En PRE la integración real (sandbox de Cainiao Link) está disponible; se controla por env
     # CAINIAO_ENABLED en Railway (déjala en false hasta que la app esté aprobada y mapeada).
