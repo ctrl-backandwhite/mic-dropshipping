@@ -52,5 +52,5 @@ public interface IntelligenceApi {
 
     @Operation(summary = "Delete (deactivate) an intelligence alert by id")
     @DeleteMapping("/alerts/{id}")
-    void deleteAlert(@PathVariable UUID id);
+    void deleteAlert(Authentication auth, @PathVariable UUID id);
 }

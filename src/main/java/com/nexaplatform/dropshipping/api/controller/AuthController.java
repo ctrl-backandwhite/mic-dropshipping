@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.AuthApi;
 import com.nexaplatform.dropshipping.api.dto.in.ActivateDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.ResendActivationDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.LoginDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetRequestDtoIn;
@@ -56,6 +57,12 @@ public class AuthController implements AuthApi {
     @Override
     public ResponseEntity<Void> activate(ActivateDtoIn req) {
         authUseCase.activate(req);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    @Override
+    public ResponseEntity<Void> resendActivation(ResendActivationDtoIn req) {
+        authUseCase.resendActivation(req);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 

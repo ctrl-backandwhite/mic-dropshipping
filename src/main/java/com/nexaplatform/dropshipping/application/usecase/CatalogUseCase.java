@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase;
 
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.CustomsAuditView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
@@ -71,6 +72,19 @@ public interface CatalogUseCase {
 
     /** Reindexes every product into OpenSearch; returns the number indexed. */
     int reindexAllProducts();
+
+    /** Estado de un reindexado: si hay uno en curso, si esta llamada acaba de lanzarlo y el último recuento. */
+    record ReindexStatus(boolean running, boolean started, int lastIndexed) {}
+
+    /**
+     * Lanza el reindexado completo en SEGUNDO PLANO y responde al instante (no bloquea la petición HTTP,
+     * que con miles de productos moriría por timeout del proxy/edge). Si ya había uno en curso no arranca
+     * otro ({@code started=false}).
+     */
+    ReindexStatus startReindex();
+
+    /** Estado actual del reindexado en background (para que el panel muestre "en curso"/"terminado"). */
+    ReindexStatus reindexStatus();
 
     /** DROP-679: rellena el SEO (meta_title/meta_description) faltante de productos ya activos. */
     int backfillMissingSeo();
@@ -144,7 +158,7 @@ public interface CatalogUseCase {
      * {@link BulkProductDtoIn} JSON shape used to create them, so the result can be re-imported. Lets the
      * admin export the catalog in fixed segments (1-1000, 1001-2000, …).
      */
-    List<BulkProductDtoIn> exportProducts(int from, int to);
+    List<BulkProductDtoIn> exportProducts(int from, int to, java.time.Instant createdFrom, java.time.Instant createdTo);
 
     /** One page of a keyset-paginated export: the mapped rows and the id of the last row (for the next page). */
     record ProductExportBatch(List<BulkProductDtoIn> items, UUID lastId) {}
@@ -153,14 +167,16 @@ public interface CatalogUseCase {
      * Keyset-paginated export batch: returns up to {@code limit} products with id greater than {@code afterId}
      * (or the first ones when {@code afterId} is null), ordered by id. Child collections are batch-fetched by
      * the page's ids (no N+1). Used to stream millions of products with bounded memory (one page at a time).
+     * {@code createdFrom}/{@code createdTo} (nullable) acotan por fecha de carga ({@code ingestedAt}).
      */
-    ProductExportBatch exportBatchAfter(UUID afterId, int limit);
+    ProductExportBatch exportBatchAfter(UUID afterId, int limit, java.time.Instant createdFrom,
+            java.time.Instant createdTo);
 
     /** Exporta UN producto al formato de carga masiva (para editarlo como JSON y reimportar con upsert). */
     BulkProductDtoIn exportProduct(UUID id);
 
-    /** Total number of products (used to compute the export segments). */
-    long countProducts();
+    /** Total de productos (para calcular los segmentos de export); acota por fecha de carga si se indica. */
+    long countProducts(java.time.Instant createdFrom, java.time.Instant createdTo);
 
     /** Creates a single product manually from a friendly row; returns the new product id. */
     UUID createProductManual(BulkProductDtoIn req);
@@ -209,6 +225,14 @@ public interface CatalogUseCase {
 
     List<CatalogPriceTierDtoOut> listProductPriceTiers(UUID productId);
 
+    /**
+     * Productos del catálogo que no se podrían declarar en aduana, con el detalle de qué les falta.
+     *
+     * @param status estado a repasar ({@code ACTIVE}, {@code DRAFT}…); vacío o desconocido repasa todo
+     * @param max    tope de filas devueltas; el resultado avisa si se quedaron más fuera
+     */
+    CustomsAuditView auditCustomsData(String status, int max);
+
     /* ============ Products: mutate (admin) ============ */
 
     void updateStatus(UUID id, String status);
@@ -216,6 +240,9 @@ public interface CatalogUseCase {
     void updateStatus(UUID id, ProductStatus status);
 
     ProductDetailView quickEdit(UUID id, AdminProductQuickEditDtoIn req, String lang);
+
+    /** Corrige el enlace a la ficha del proveedor (1688/Alibaba); rechaza cualquier otro dominio o esquema. */
+    ProductDetailView updateSourceUrl(UUID id, String sourceUrl, String lang);
 
     /** Elimina un tramo de precio (price break) de un producto, identificado por su cantidad mínima. */
     void deletePriceTier(UUID productId, int minQty);

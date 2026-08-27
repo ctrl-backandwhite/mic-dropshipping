@@ -36,8 +36,39 @@ public class Order {
     private UUID billingAddressId;
     private OrderStatus status;
     private int subtotalCents;
+    /**
+     * Canal del transportista con el que se cotizó el envío que eligió el cliente. La guía se emite por
+     * este y no por el que resulte más barato al despachar: entre el pedido y el despacho la tarifa
+     * cambia, y entonces se cobraría una cosa y se enviaría otra.
+     */
+    private String shippingChannelCode;
+    /**
+     * Quién lleva el envío: {@code YUNEXPRESS}, {@code CJ}.
+     *
+     * <p>Con un solo transportista bastaba el código del canal. Con dos no se pueden distinguir
+     * mirándolos —{@code FZZXR} contra {@code 1868922929754472449}— y despachar por el que no era
+     * significa cobrar un porte y pagar otro. Lo rellena el cobro con el transportista de la opción que
+     * el cliente eligió, y lo lee el despacho para saber a quién pedirle la guía.
+     */
+    private String shippingCarrier;
+    /**
+     * Cómo llama el transportista a la línea contratada.
+     *
+     * <p>Se guarda además del código porque CJ pide el NOMBRE para emitir la guía y el pedido solo
+     * tenía el código: sin esto, el despacho tendría que volver a cotizar horas después solo para
+     * cruzarlos, gastando una llamada de una API limitada a una por segundo y quedándose sin despachar
+     * si para entonces CJ ya no ofrece esa línea.
+     */
+    private String shippingChannelName;
+
     private int shippingCents;
     private int taxCents;
+    /**
+     * Derecho de aduana de la Unión cobrado en el pedido, INCLUIDO ya en {@code shippingCents}. Viaja
+     * aparte para que la factura pueda desglosarlo: un tributo que se recauda y se entrega a la aduana no
+     * puede figurar escondido dentro del precio del transporte.
+     */
+    private int customsDutyCents;
     private int totalCents;
     // Descuento de referido aplicado al comprador (céntimos USD). totalCents ya lo resta.
     private int discountCents;

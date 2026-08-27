@@ -8,6 +8,9 @@ import com.nexaplatform.dropshipping.infrastructure.integration.currency.Currenc
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CountryCustomsRuleEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CurrencyRateEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CountryCustomsRuleRepository;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService.DutyParcel;
+
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -60,7 +63,7 @@ class CustomsValuationServiceTest {
     void sin_regla_configurada_la_valoracion_es_neutra() {
         when(repository.findByCountryCodeIgnoreCase(anyString())).thenReturn(Optional.empty());
 
-        CustomsValuation v = service.valuate("ZZ", 50_00, 10_00);
+        CustomsValuation v = service.valuate("ZZ", 50_00, 10_00, List.of(new DutyParcel(Math.max(0, 50_00), 1)));
 
         assertThat(v.taxMode()).isEqualTo(TaxMode.DDP);
         assertThat(v.handlingFeeCents()).isZero();
@@ -75,7 +78,7 @@ class CustomsValuationServiceTest {
         givenRule(rule("ES"));
         givenEurRate();
 
-        CustomsValuation v = service.valuate("ES", 120_00, 25_20);
+        CustomsValuation v = service.valuate("ES", 120_00, 25_20, List.of(new DutyParcel(Math.max(0, 120_00), 1)));
 
         // Lo que se declara es lo que el cliente paga por los bienes, no el coste de compra al proveedor.
         assertThat(v.declaredValueCents()).isEqualTo(120_00);
@@ -87,7 +90,7 @@ class CustomsValuationServiceTest {
         givenRule(rule("ES"));
         givenEurRate();
 
-        assertThat(service.valuate("ES", -5_00, 0).declaredValueCents()).isZero();
+        assertThat(service.valuate("ES", -5_00, 0, List.of(new DutyParcel(Math.max(0, -5_00), 1))).declaredValueCents()).isZero();
     }
 
     // ===== 2) Umbral de minimis por país =====
@@ -98,7 +101,7 @@ class CustomsValuationServiceTest {
         givenEurRate();
 
         // 164 USD < 165 USD (equivalente de 150 EUR)
-        assertThat(service.valuate("ES", 164_00, 0).deMinimisExceeded()).isFalse();
+        assertThat(service.valuate("ES", 164_00, 0, List.of(new DutyParcel(Math.max(0, 164_00), 1))).deMinimisExceeded()).isFalse();
     }
 
     @Test
@@ -106,7 +109,7 @@ class CustomsValuationServiceTest {
         givenRule(rule("ES"));
         givenEurRate();
 
-        assertThat(service.valuate("ES", 200_00, 0).deMinimisExceeded()).isTrue();
+        assertThat(service.valuate("ES", 200_00, 0, List.of(new DutyParcel(Math.max(0, 200_00), 1))).deMinimisExceeded()).isTrue();
     }
 
     @Test
@@ -116,8 +119,8 @@ class CustomsValuationServiceTest {
         r.setDeMinimisCurrency("USD");
         givenRule(r);
 
-        assertThat(service.valuate("MX", 49_00, 0).deMinimisExceeded()).isFalse();
-        assertThat(service.valuate("MX", 51_00, 0).deMinimisExceeded()).isTrue();
+        assertThat(service.valuate("MX", 49_00, 0, List.of(new DutyParcel(Math.max(0, 49_00), 1))).deMinimisExceeded()).isFalse();
+        assertThat(service.valuate("MX", 51_00, 0, List.of(new DutyParcel(Math.max(0, 51_00), 1))).deMinimisExceeded()).isTrue();
     }
 
     @Test
@@ -127,7 +130,7 @@ class CustomsValuationServiceTest {
         r.setOverThresholdSurchargeCents(9_99);
         givenRule(r);
 
-        CustomsValuation v = service.valuate("FJ", 5_000_00, 0);
+        CustomsValuation v = service.valuate("FJ", 5_000_00, 0, List.of(new DutyParcel(Math.max(0, 5_000_00), 1)));
 
         assertThat(v.deMinimisExceeded()).isFalse();
         assertThat(v.handlingFeeCents()).isZero();
@@ -141,8 +144,8 @@ class CustomsValuationServiceTest {
         givenRule(r);
         when(currencyService.find("NOK")).thenReturn(Optional.empty());
 
-        assertThat(service.valuate("NO", 2_999_00, 0).deMinimisExceeded()).isFalse();
-        assertThat(service.valuate("NO", 3_001_00, 0).deMinimisExceeded()).isTrue();
+        assertThat(service.valuate("NO", 2_999_00, 0, List.of(new DutyParcel(Math.max(0, 2_999_00), 1))).deMinimisExceeded()).isFalse();
+        assertThat(service.valuate("NO", 3_001_00, 0, List.of(new DutyParcel(Math.max(0, 3_001_00), 1))).deMinimisExceeded()).isTrue();
     }
 
     @Test
@@ -152,8 +155,8 @@ class CustomsValuationServiceTest {
         givenRule(r);
         givenEurRate();
 
-        assertThat(service.valuate("BR", 200_00, 0).blocked()).isTrue();
-        assertThat(service.valuate("BR", 100_00, 0).blocked()).isFalse();
+        assertThat(service.valuate("BR", 200_00, 0, List.of(new DutyParcel(Math.max(0, 200_00), 1))).blocked()).isTrue();
+        assertThat(service.valuate("BR", 100_00, 0, List.of(new DutyParcel(Math.max(0, 100_00), 1))).blocked()).isFalse();
     }
 
     @Test
@@ -165,7 +168,7 @@ class CustomsValuationServiceTest {
         givenRule(r);
         givenEurRate();
 
-        CustomsValuation v = service.valuate("DE", 200_00, 42_00);
+        CustomsValuation v = service.valuate("DE", 200_00, 42_00, List.of(new DutyParcel(Math.max(0, 200_00), 1)));
 
         assertThat(v.deMinimisExceeded()).isTrue();
         assertThat(v.handlingFeeCents()).isZero();
@@ -183,7 +186,33 @@ class CustomsValuationServiceTest {
         givenEurRate();
 
         // impuesto 40,00 USD → 1,50 + 1,00 = 2,50
-        assertThat(service.valuate("FR", 100_00, 40_00).handlingFeeCents()).isEqualTo(2_50);
+        assertThat(service.valuate("FR", 100_00, 40_00, List.of(new DutyParcel(Math.max(0, 100_00), 1))).handlingFeeCents()).isEqualTo(2_50);
+    }
+
+    @Test
+    void la_comision_de_prepago_de_iva_suma_2pct_del_valor_declarado() {
+        // Sin IOSS: el carrier adelanta el IVA y cobra un 2% sobre el valor declarado, además del IVA.
+        CountryCustomsRuleEntity r = rule("ES");
+        r.setVatPrepayPercentBps(200); // 2%
+        givenRule(r);
+        givenEurRate();
+
+        // 2% de 100,00 USD declarados = 2,00 (el nº de artículos no influye aquí)
+        assertThat(service.valuate("ES", 100_00, 0, List.of(new DutyParcel(Math.max(0, 100_00), 1))).handlingFeeCents()).isEqualTo(2_00);
+    }
+
+    @Test
+    void el_arancel_por_articulo_multiplica_la_tarifa_por_producto_distinto() {
+        // Arancel temporal de la UE: 3 EUR por artículo (producto distinto). 3 productos = 9 EUR.
+        CountryCustomsRuleEntity r = rule("ES");
+        r.setPerArticleFeeAmount(new BigDecimal("3.00"));
+        r.setPerArticleFeeCurrency("EUR");
+        givenRule(r);
+        givenEurRate();
+        when(currencyService.toUsd(new BigDecimal("3.00"), "EUR")).thenReturn(new BigDecimal("3.3000"));
+
+        // 3 EUR → 3,30 USD por artículo × 3 productos distintos = 9,90
+        assertThat(service.valuate("ES", 100_00, 0, List.of(new DutyParcel(Math.max(0, 100_00), 3))).handlingFeeCents()).isEqualTo(9_90);
     }
 
     @Test
@@ -196,7 +225,7 @@ class CustomsValuationServiceTest {
         givenEurRate();
 
         // 1,00 fijo + 15,00 despacho formal + 12% de 200,00 = 24,00 → 40,00
-        assertThat(service.valuate("IT", 200_00, 0).handlingFeeCents()).isEqualTo(40_00);
+        assertThat(service.valuate("IT", 200_00, 0, List.of(new DutyParcel(Math.max(0, 200_00), 1))).handlingFeeCents()).isEqualTo(40_00);
     }
 
     @Test
@@ -208,7 +237,7 @@ class CustomsValuationServiceTest {
         givenRule(r);
         givenEurRate();
 
-        CustomsValuation v = service.valuate("UA", 100_00, 20_00);
+        CustomsValuation v = service.valuate("UA", 100_00, 20_00, List.of(new DutyParcel(Math.max(0, 100_00), 1)));
 
         assertThat(v.taxMode()).isEqualTo(TaxMode.DDU);
         assertThat(v.handlingFeeCents()).isZero();
@@ -221,7 +250,7 @@ class CustomsValuationServiceTest {
         r.setHandlingFeeCents(9_99);
         when(repository.findByCountryCodeIgnoreCase(anyString())).thenReturn(Optional.of(r));
 
-        assertThat(service.valuate("PL", 100_00, 10_00).handlingFeeCents()).isZero();
+        assertThat(service.valuate("PL", 100_00, 10_00, List.of(new DutyParcel(Math.max(0, 100_00), 1))).handlingFeeCents()).isZero();
     }
 
     @Test
@@ -243,5 +272,80 @@ class CustomsValuationServiceTest {
         assertThat(OverThresholdPolicy.from(null)).isEqualTo(OverThresholdPolicy.SURCHARGE);
         assertThat(TaxMode.from("LO_QUE_SEA")).isEqualTo(TaxMode.DDP);
         assertThat(TaxMode.from(null)).isEqualTo(TaxMode.DDP);
+    }
+
+    // ================== Destinos SIN franquicia (v153: US y PR) ==================
+
+    /**
+     * El caso que motivó la v153: «sin franquicia» se escribía igual que «franquicia sin averiguar»
+     * ({@code de_minimis_amount = 0}) y el motor solo entendía la segunda, así que Estados Unidos no
+     * cobraba arancel ni bloqueaba nada. Aquí el importe es de un céntimo y aun así cuenta como superado.
+     */
+    @Test
+    void sin_franquicia_cualquier_importe_cuenta_como_superado() {
+        CountryCustomsRuleEntity r = rule("US");
+        r.setDeMinimisAmount(BigDecimal.ZERO);
+        r.setDeMinimisCurrency("USD");
+        r.setDeMinimisApplies(false);
+        givenRule(r);
+
+        assertThat(service.valuate("US", 1, 0, List.of(new DutyParcel(1, 1))).deMinimisExceeded()).isTrue();
+        assertThat(service.valuate("US", 5_000_00, 0, List.of(new DutyParcel(5_000_00, 1))).deMinimisExceeded())
+                .isTrue();
+    }
+
+    /** Con BLOCK, un destino sin franquicia no acepta ningún pedido: se rechaza antes de cobrar. */
+    @Test
+    void sin_franquicia_con_block_rechaza_cualquier_pedido() {
+        CountryCustomsRuleEntity r = rule("US");
+        r.setDeMinimisAmount(BigDecimal.ZERO);
+        r.setDeMinimisCurrency("USD");
+        r.setDeMinimisApplies(false);
+        r.setOverThresholdPolicy("BLOCK");
+        givenRule(r);
+
+        assertThat(service.valuate("US", 1, 0, List.of(new DutyParcel(1, 1))).blocked()).isTrue();
+        assertThat(service.valuate("US", 20_00, 0, List.of(new DutyParcel(20_00, 1))).blocked()).isTrue();
+    }
+
+    /**
+     * El derecho fijo por línea es el de la UE por DEBAJO de su franquicia. Un destino que no tiene
+     * franquicia está siempre por encima, así que no le corresponde: si se cobrara, se estaría aplicando
+     * a Estados Unidos una tarifa que solo existe en el reglamento europeo.
+     */
+    @Test
+    void sin_franquicia_no_se_cobra_el_derecho_por_linea_de_la_ue() {
+        CountryCustomsRuleEntity r = rule("US");
+        r.setDeMinimisAmount(BigDecimal.ZERO);
+        r.setDeMinimisCurrency("USD");
+        r.setDeMinimisApplies(false);
+        r.setPerArticleFeeAmount(new BigDecimal("3"));
+        r.setPerArticleFeeCurrency("USD");
+        givenRule(r);
+
+        assertThat(service.perLineDutyUsdCents("US", List.of(new DutyParcel(20_00, 4)))).isZero();
+    }
+
+    /** Un país con franquicia real no cambia de comportamiento: la marca nueva no toca a los otros 84. */
+    @Test
+    void los_paises_con_franquicia_siguen_evaluando_su_umbral() {
+        CountryCustomsRuleEntity r = rule("ES");
+        givenRule(r);
+        givenEurRate();
+
+        assertThat(service.valuate("ES", 100_00, 0, List.of(new DutyParcel(100_00, 1))).deMinimisExceeded())
+                .isFalse();
+        assertThat(service.valuate("ES", 200_00, 0, List.of(new DutyParcel(200_00, 1))).deMinimisExceeded())
+                .isTrue();
+    }
+
+    /**
+     * La columna trae {@code DEFAULT TRUE} en la base, pero el ORM nombra todas las columnas en el INSERT
+     * y ese defecto no llega a aplicarse. Sin el {@code @Builder.Default} de la entidad, dar de alta un
+     * país desde el panel lo dejaría sin franquicia y bloqueado sin que nadie lo hubiera pedido.
+     */
+    @Test
+    void una_regla_nueva_nace_con_franquicia_para_no_bloquear_el_pais_sin_querer() {
+        assertThat(CountryCustomsRuleEntity.builder().countryCode("ZZ").build().isDeMinimisApplies()).isTrue();
     }
 }

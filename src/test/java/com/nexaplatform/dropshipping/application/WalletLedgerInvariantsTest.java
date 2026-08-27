@@ -94,6 +94,31 @@ class WalletLedgerInvariantsTest {
     @BeforeEach
     void buildSubject() {
         subject = useCase();
+        // Los movimientos de saldo ahora cargan la wallet con bloqueo de fila (findByUserIdForUpdate). En los
+        // tests se delega al mismo stub que findByUserId para no duplicar cada `when(...)`.
+        org.mockito.Mockito.lenient().when(walletRepository.findByUserIdForUpdate(any()))
+                .thenAnswer(inv -> walletRepository.findByUserId(inv.getArgument(0)));
+        // El saldo se mueve con un UPDATE atómico en la base (applyBalanceDelta), no leyendo y guardando la
+        // entidad: es lo que impide el doble gasto entre checkouts simultáneos. Aquí se reproduce esa misma
+        // semántica sobre la wallet simulada — aplica el delta solo si no deja el saldo en negativo — para
+        // que las pruebas sigan comprobando la regla y no el mecanismo.
+        org.mockito.Mockito.lenient().when(walletRepository.applyBalanceDelta(any(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenAnswer(inv -> {
+                    var actual = walletRepository.findByUserId(inv.getArgument(0));
+                    if (actual.isEmpty()) {
+                        return false;
+                    }
+                    long nuevo = actual.get().getBalanceUsdCents() + (long) inv.getArgument(1);
+                    if (nuevo < 0) {
+                        return false;
+                    }
+                    actual.get().setBalanceUsdCents(nuevo);
+                    return true;
+                });
+        org.mockito.Mockito.lenient().when(walletRepository.currentBalanceCents(any()))
+                .thenAnswer(inv -> walletRepository.findByUserId(inv.getArgument(0))
+                        .map(w -> w.getBalanceUsdCents()).orElse(0L));
+
     }
 
     // ---------------------------------------------------------------- no gastar lo que no hay

@@ -51,6 +51,14 @@ public class ReviewItemDtoOut {
     @Schema(description = "Whether the purchase was verified")
     private boolean verifiedPurchase;
 
+    /**
+     * SUPPLIER o CUSTOMER. La ficha lo necesita para declarar al comprador que una reseña viene del
+     * catálogo del proveedor y no de una compra en esta tienda: ocultarlo es lo que convierte una
+     * reseña importada en una afirmación engañosa.
+     */
+    @Schema(description = "Review origin: SUPPLIER (imported from the supplier catalogue) or CUSTOMER")
+    private String source;
+
     @Schema(description = "Creation timestamp")
     private Instant createdAt;
 }

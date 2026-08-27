@@ -10,6 +10,7 @@ import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
+import com.nexaplatform.dropshipping.application.service.ShippingSubsidyService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
@@ -19,6 +20,7 @@ import com.nexaplatform.dropshipping.application.service.WebhookDispatcherServic
 import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
+import com.nexaplatform.dropshipping.application.service.FulfillmentRouter;
 import com.nexaplatform.dropshipping.application.usecase.impl.OrderUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.enums.OverThresholdPolicy;
@@ -44,6 +46,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopC
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserAddressRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService.DutyParcel;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -67,6 +70,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -115,13 +119,30 @@ class Cov06OrderUseCaseImplTest {
     @Mock
     FulfillmentProvider fulfillment;
     @Mock
+    FulfillmentRouter router;
+    @Mock
     CheckoutTotalsService checkoutTotalsService;
+    @Mock
+    ShippingSubsidyService shippingSubsidyService;
     @Mock
     OperatorCommissionService operatorCommissionService;
     @Mock
     OrderIndexer orderIndexer;
     @Mock
     OrderSearchService orderSearchService;
+
+    @Mock
+    com.nexaplatform.dropshipping.application.service.SupplierPurchaseService supplierPurchaseService;
+
+    @org.mockito.Mock
+    com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService declarationGroups;
+
+    @org.mockito.Spy
+    com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService customsDutyLinesService =
+            new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService(null);
+    @org.mockito.Mock
+    com.nexaplatform.dropshipping.application.service.UnserviceableZoneService unserviceableZoneService;
+
 
     @InjectMocks
     OrderUseCaseImpl useCase;
@@ -132,9 +153,9 @@ class Cov06OrderUseCaseImplTest {
     @BeforeEach
     void preparar() {
         when(fulfillment.isSupported(anyString())).thenReturn(true);
-        when(fulfillment.quote(any(), any(FulfillmentProvider.ParcelSpec.class)))
+        when(router.cotizar(any(), any(FulfillmentProvider.ParcelSpec.class), anyList()))
                 .thenReturn(ShippingQuote.unsupported("XX"));
-        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt()))
+        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList(), anyInt()))
                 .thenAnswer(inv -> totalesNeutros(inv.getArgument(3)));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
             Order o = inv.getArgument(0);
@@ -163,7 +184,13 @@ class Cov06OrderUseCaseImplTest {
         Order pedido = useCase.checkout(userId, checkout(producto.getId(), 2, "WALLET"), "idem-1");
 
         assertThat(pedido.getStatus()).isEqualTo(OrderStatus.PAID);
-        verify(walletUseCase).charge(eq(userId), eq(2500L), any(), eq("idem-1"), anyString());
+        // La clave de idempotencia del cargo va ACOTADA AL PEDIDO ("checkout-<orderId>"), no la del cliente,
+        // para que no se pueda reutilizar la misma clave entre pedidos distintos y colar cargos a cero.
+        verify(walletUseCase).charge(eq(userId), eq(2500L), any(),
+                org.mockito.ArgumentMatchers.startsWith("checkout-"), anyString());
+        // El dinero está cobrado → la mercancía entra en la cola de compras de 1688. Sin esta llamada el
+        // freno veía cero compras, trataba el pedido como antiguo y dejaba emitir la guía sin comprar.
+        verify(supplierPurchaseService).planPurchases(any(Order.class));
         verify(orderEmailService).paymentConfirmed(any(Order.class), eq("comprador@x.com"), eq("es"), eq("WALLET"));
     }
 
@@ -180,6 +207,11 @@ class Cov06OrderUseCaseImplTest {
         assertThat(pedido.getStatus()).isEqualTo(OrderStatus.PENDING);
         verify(walletUseCase, never()).charge(any(), anyLong(), any(), anyString(), anyString());
         verify(orderEmailService, never()).paymentConfirmed(any(), anyString(), anyString(), anyString());
+        // El pago externo puede tardar o abandonarse: se avisa «hemos recibido tu pedido» para que el
+        // cliente tenga constancia escrita antes de la factura.
+        verify(orderEmailService).placedAwaitingPayment(any(Order.class), eq("comprador@x.com"), eq("es"));
+        // Y NO se planifican compras todavía: aún no hay dinero cobrado.
+        verify(supplierPurchaseService, never()).planPurchases(any());
     }
 
     /**
@@ -235,7 +267,7 @@ class Cov06OrderUseCaseImplTest {
         ProductEntity producto = producto("100.00");
         prepararCatalogo(producto, "100.00");
         when(affiliateProgramService.referralDiscountCents(userId, 10000L)).thenReturn(1000L);
-        when(fulfillment.quote(any(), any(FulfillmentProvider.ParcelSpec.class)))
+        when(router.cotizar(any(), any(FulfillmentProvider.ParcelSpec.class), anyList()))
                 .thenReturn(new ShippingQuote(true, "ES", 500, "YUN", "STD", 5, 10, "EU"));
 
         useCase.checkout(userId, checkout(producto.getId(), 1, "CARD"), null);
@@ -685,7 +717,7 @@ class Cov06OrderUseCaseImplTest {
     /** Desglose neutro: sin impuesto ni recargo de despacho, para que el total sea subtotal + envío. */
     private static CheckoutTotalsService.CheckoutTotals totalesNeutros(int envioCents) {
         CustomsValuationService.CustomsValuation customs = new CustomsValuationService.CustomsValuation("XX",
-                TaxMode.DDP, 0, false, OverThresholdPolicy.SURCHARGE, 0, false);
+                TaxMode.DDP, 0, false, OverThresholdPolicy.SURCHARGE, 0, false, "", false);
         return new CheckoutTotalsService.CheckoutTotals(envioCents, 0, envioCents, 0, 0, customs);
     }
 

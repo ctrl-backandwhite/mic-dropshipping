@@ -6,8 +6,10 @@ import com.nexaplatform.dropshipping.api.dto.PartnerDtos.CreateOrderRequest;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.OrderItemInput;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
+import com.nexaplatform.dropshipping.application.service.CartService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
+import com.nexaplatform.dropshipping.application.service.PromotionService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.StockService;
@@ -16,6 +18,7 @@ import com.nexaplatform.dropshipping.application.notifications.NotificationsPubl
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.application.usecase.impl.OrderUseCaseImpl;
+import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
@@ -25,16 +28,23 @@ import com.nexaplatform.dropshipping.infrastructure.integration.search.OrderSear
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderTrackingEventEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderTrackingEventRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopConnectionRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserAddressRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService.DutyParcel;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
+import com.nexaplatform.dropshipping.application.service.FulfillmentRouter;
+import com.nexaplatform.dropshipping.application.service.UnserviceableZoneService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -50,8 +60,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -102,13 +114,25 @@ class OrderLineSnapshotTest {
     @Mock
     FulfillmentProvider fulfillment;
     @Mock
+    FulfillmentRouter router;
+    @Mock
     CheckoutTotalsService checkoutTotalsService;
     @Mock
     OperatorCommissionService operatorCommissionService;
     @Mock
+    PromotionService promotionService;
+    @Mock
+    com.nexaplatform.dropshipping.application.service.SupplierPurchaseService supplierPurchaseService;
+    @Mock
     OrderIndexer orderIndexer;
     @Mock
     OrderSearchService orderSearchService;
+    @Mock
+    OrderTrackingEventRepository trackingRepository;
+
+    private final com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService
+            declarationGroups =
+            mock(com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService.class);
 
     private final UUID productId = UUID.randomUUID();
 
@@ -116,8 +140,9 @@ class OrderLineSnapshotTest {
         return new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository,
                 userRepository, shopConnectionRepository, userAddressRepository, webhooks, walletUseCase,
                 notificationsPublisher, pricingService, affiliateProgramService, stockService, paymentUseCase,
-                orderEmailService, fulfillment, checkoutTotalsService, operatorCommissionService, orderIndexer,
-                orderSearchService);
+                orderEmailService, fulfillment, router, checkoutTotalsService, subvencionDeEnvio(), new CustomsDutyLinesService(null), mock(UnserviceableZoneService.class), operatorCommissionService, promotionService, supplierPurchaseService, declarationGroups,
+                trackingRepository, orderIndexer,
+                orderSearchService, mock(CartService.class));
     }
 
     private ProductEntity product() {
@@ -145,14 +170,14 @@ class OrderLineSnapshotTest {
     }
 
     private void happyTotals() {
-        when(fulfillment.quote(anyString(), any())).thenReturn(new ShippingQuote(true, "ES", 0, "YunExpress", "Standard", 7, 15, "EU"));
+        when(router.cotizar(anyString(), any(), anyList())).thenReturn(new ShippingQuote(true, "ES", 0, "YunExpress", "Standard", 7, 15, "EU"));
         when(affiliateProgramService.referralDiscountCents(any(), anyLong())).thenReturn(0L);
         CheckoutTotalsService.CheckoutTotals totals = mock(CheckoutTotalsService.CheckoutTotals.class);
         when(totals.blocked()).thenReturn(false);
         when(totals.shippingCents()).thenReturn(0);
         when(totals.taxCents()).thenReturn(0);
         when(totals.totalCents(anyInt())).thenAnswer(i -> i.getArgument(0));
-        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt())).thenReturn(totals);
+        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList(), anyInt())).thenReturn(totals);
         when(orderRepository.save(any())).thenAnswer(i -> {
             Order o = i.getArgument(0);
             o.setId(UUID.randomUUID());
@@ -326,5 +351,78 @@ class OrderLineSnapshotTest {
         assertThatThrownBy(() -> subject.createOrder(null, null, sinLineas))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("at least one item");
+    }
+
+    @Test
+    void elSeguimientoRecogeLosPasosQueMarcaElAdmin() {
+        // El cliente ve DOS cosas: la barra de estado y el detalle del seguimiento. Marcar solo el
+        // estado dejaba la barra en «Entregado» y el detalle parado en «Envío registrado».
+        UUID id = UUID.randomUUID();
+        Order o = Order.builder().id(id).orderNumber("NX-1").status(OrderStatus.FORWARDED)
+                .shippingCountry("ES").build();
+        when(orderRepository.findById(id)).thenReturn(Optional.of(o));
+        when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        useCase().shipOrder(id);
+
+        ArgumentCaptor<OrderTrackingEventEntity> ev = ArgumentCaptor.forClass(OrderTrackingEventEntity.class);
+        verify(trackingRepository).save(ev.capture());
+        assertThat(ev.getValue().getStatus()).isEqualTo(OrderStatus.SHIPPED.name());
+        // ADMIN y no el carrier: el timeline debe distinguir lo anotado a mano de lo que informó YunExpress.
+        assertThat(ev.getValue().getSource()).isEqualTo("ADMIN");
+    }
+
+    @Test
+    void siFallaElApunteDelSeguimientoElPedidoAvanzaIgual() {
+        // Perder una línea del seguimiento es un incordio; tumbar la transición sería peor.
+        UUID id = UUID.randomUUID();
+        Order o = Order.builder().id(id).orderNumber("NX-2").status(OrderStatus.FORWARDED)
+                .shippingCountry("ES").build();
+        when(orderRepository.findById(id)).thenReturn(Optional.of(o));
+        when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(trackingRepository.save(any())).thenThrow(new IllegalStateException("timeline caído"));
+
+        assertThat(useCase().shipOrder(id).getStatus()).isEqualTo(OrderStatus.SHIPPED);
+    }
+
+    @Test
+    void seCongelaLaDescripcionConLaQueSeVaADeclarar() {
+        // Si el grupo se aprueba DESPUÉS de cobrar, este pedido tiene que seguir contando por lo que se
+        // declaró. Sin congelarlo, la vista previa contaría UNA línea (con la descripción del grupo) y el
+        // despacho contaría DOS (con el título del producto): esos 3 EUR los pondría el comercio.
+        product();
+        pricedAt("100.00");
+        when(declarationGroups.describeFor(any(), any())).thenReturn("Men's woven cotton trousers");
+
+        assertThat(firstLine(null, 1).getDeclaredDescription())
+                .isEqualTo("Men's woven cotton trousers");
+    }
+
+    @Test
+    void seCongelaTambienElChinoConElQueSeVaADeclarar() {
+        // La línea de la declaración lleva UN inglés y UN chino, y describen la misma mercancía. Si solo se
+        // congelara el inglés, la guía saldría con el genérico aprobado en inglés y el título concreto del
+        // primer artículo en chino: dos mercancías distintas en la misma línea, y el CName lo valida
+        // YunExpress antes de emitir la guía.
+        product();
+        pricedAt("100.00");
+        when(declarationGroups.describeFor(any(), any())).thenReturn("Men's woven cotton trousers");
+        when(declarationGroups.describeZhFor(any(), any())).thenReturn("男式棉制机织长裤");
+
+        assertThat(firstLine(null, 1).getDeclaredDescriptionZh()).isEqualTo("男式棉制机织长裤");
+    }
+
+    /** La bolsa de subvención del envío, real y con su suelo puesto (mide importes, no puede ser un cero). */
+    private static com.nexaplatform.dropshipping.application.service.ShippingSubsidyService subvencionDeEnvio() {
+        com.nexaplatform.dropshipping.application.service.CustomsValuationService aduana =
+                org.mockito.Mockito.mock(com.nexaplatform.dropshipping.application.service.CustomsValuationService.class);
+        com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService divisa =
+                org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService.class);
+        org.mockito.Mockito.lenient().when(divisa.toUsd(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString())).thenReturn(new java.math.BigDecimal("5.85"));
+        com.nexaplatform.dropshipping.application.service.ShippingSubsidyService s =
+                new com.nexaplatform.dropshipping.application.service.ShippingSubsidyService(aduana, divisa);
+        org.springframework.test.util.ReflectionTestUtils.setField(s, "sueloDeGananciaEur", new java.math.BigDecimal("5"));
+        return s;
     }
 }

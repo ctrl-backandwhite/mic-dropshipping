@@ -11,6 +11,10 @@ target/
 *.log
 
 # Docker es solo para trabajo local (no versionado)
-Dockerfile
-**/Dockerfile
 .env*.example
+
+# Copias de trabajo temporales de agentes: nunca se versionan.
+.claude/worktrees/
+
+# El Dockerfile SÍ se versiona: sin él en el repositorio, la cadena de entrega
+# no puede construir la imagen. Estuvo excluido hasta el 27-ago-2026.

@@ -16,6 +16,8 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Caini
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.BeforeEach;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService.DutyParcel;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -29,6 +31,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -37,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -75,8 +79,8 @@ class Cov04YunExpressShipmentTest {
 
     @BeforeEach
     void setUp() {
-        service = new YunExpressFulfillmentService(zoneRepository, client, customsValuation, productRepository,
-                currencyRateService, new MockEnvironment());
+        service = new YunExpressFulfillmentService(zoneRepository, client, customsValuation, new CustomsDutyLinesService(null), productRepository,
+                currencyRateService, new MockEnvironment(), null);
         ReflectionTestUtils.setField(service, "enabled", true);
         ReflectionTestUtils.setField(service, "productCode", "BPA");
         ReflectionTestUtils.setField(service, "productGroupCode", "");
@@ -98,14 +102,22 @@ class Cov04YunExpressShipmentTest {
                 .thenReturn(Optional.of(CainiaoZoneEntity.builder().countryCode("ES").countryName("España")
                         .zone("EU").baseCents(500).perKgCents(1000).etaMinDays(5).etaMaxDays(12).enabled(true)
                         .build()));
-        when(customsValuation.valuate(anyString(), anyInt(), anyInt()))
+        when(customsValuation.valuate(anyString(), anyInt(), anyInt(), anyList()))
                 .thenReturn(valoracion(false));
         when(client.post(eq(PATH_SUBSCRIBE), any(Object.class))).thenReturn(ok("{\"success\":true}"));
     }
 
+    /**
+     * Valoración de un destino de la UE, donde el prepago se pide con el servicio {@code V1}.
+     *
+     * <p>El código del servicio viaja en la valoración porque desde v149 sale de la fila del PAÍS y no de
+     * una constante: hay destinos —Emiratos, Arabia Saudí, Canadá, México— donde el transportista prepaga
+     * y NO hay que pedirle nada, porque el canal ya va DDP por contrato. Dejarlo nulo aquí sería describir
+     * uno de esos, y entonces no debe pedirse ningún extra.
+     */
     private static CustomsValuation valoracion(boolean deMinimisExceeded) {
         return new CustomsValuation("ES", TaxMode.DDP, 4500, deMinimisExceeded, OverThresholdPolicy.ALLOW, 0,
-                false);
+                false, "", true, "V1");
     }
 
     private JsonNode ok(String raw) {
@@ -118,6 +130,7 @@ class Cov04YunExpressShipmentTest {
 
     private static OrderItem linea(int qty, int unitPriceCents) {
         OrderItem item = new OrderItem();
+        item.setProductId(UUID.randomUUID()); // cada línea es un producto distinto (para contar artículos)
         item.setQuantity(qty);
         item.setUnitPriceCents(unitPriceCents);
         item.setTitleSnapshot("Cotton T-shirt");
@@ -126,7 +139,31 @@ class Cov04YunExpressShipmentTest {
         return item;
     }
 
-    private static Order pedido(OrderItem... items) {
+    /**
+     * Da por declarable el producto de una línea, salvo que el test haya puesto ya el suyo.
+     *
+     * <p>Sin ficha en el catálogo la línea sale sin partida arancelaria ni peso, y desde que un envío con
+     * la declaración incompleta se corta antes de llamar al transportista, estos pedidos de prueba ni
+     * siquiera llegarían a la parte que quieren comprobar. El producto por defecto es el mínimo declarable;
+     * los tests que miran QUÉ se declara siguen poniendo el suyo y este no lo pisa.
+     */
+    private void declarable(OrderItem item) {
+        Optional<ProductEntity> yaPuesto = productRepository.findById(item.getProductId());
+        if (yaPuesto != null && yaPuesto.isPresent()) {
+            return;
+        }
+        // 500 g a propósito: es el peso que ParcelAggregator da por supuesto cuando el producto no lo
+        // trae, así que el reparto en bultos sale igual que cuando estos pedidos no tenían ficha y las
+        // cuentas de peso que comprueban los tests siguen valiendo.
+        ProductEntity producto = ProductEntity.builder().hsCode("610910").weightGrams(500).build();
+        producto.setId(item.getProductId());
+        when(productRepository.findById(item.getProductId())).thenReturn(Optional.of(producto));
+    }
+
+    private Order pedido(OrderItem... items) {
+        for (OrderItem item : items) {
+            declarable(item);
+        }
         Order order = new Order();
         order.setId(UUID.fromString("11112222-3333-4444-5555-666677778888"));
         order.setOrderNumber("NX-1");
@@ -316,9 +353,15 @@ class Cov04YunExpressShipmentTest {
     void seDeclaraElValorIntrinsecoDeLosBienesYNoElTotalDelPedido() {
         // Declarar de menos es infradeclaración; declarar el total (con envío/impuesto) hace que el
         // transportista liquide impuesto de más a cargo del comercio.
-        service.declarationFor(pedido(linea(1, 4500)));
+        OrderItem item = linea(1, 4500);
+        ProductEntity producto = ProductEntity.builder().hsCode("610910").weightGrams(300).build();
+        producto.setId(item.getProductId());
+        when(productRepository.findById(item.getProductId())).thenReturn(Optional.of(producto));
 
-        verify(customsValuation).valuate("ES", 4500, 0);
+        service.declarationFor(pedido(item));
+
+        // El valor declarado es el de la mercancía, y el bulto que lo ampara lleva UNA partida arancelaria.
+        verify(customsValuation).valuate("ES", 4500, 0, List.of(new DutyParcel(4500, 1)));
     }
 
     @Test
@@ -343,6 +386,143 @@ class Cov04YunExpressShipmentTest {
                 ParcelSpec.ofWeight(500), "BPA", valoracion(false));
 
         assertThat(payload.customsNumber()).isNull();
+    }
+
+    // ── El canal que eligió el cliente ───────────────────────────────────────────────────────────
+
+    @Test
+    void laGuiaSeEmitePorElCanalQueEligioElCliente() {
+        // Entre el pedido y el despacho la tarifa cambia: recalcular «el más barato» ahora sería cobrar
+        // una forma de envío y usar otra, con otro plazo del prometido.
+        Order order = pedido(linea(1, 4500));
+        order.setShippingChannelCode("FZZXR");
+
+        YunExpressRequests.CreateShipment payload = service.createPayload(order, ParcelSpec.ofWeight(500),
+                service.channelFor(order, ParcelSpec.ofWeight(500)), valoracion(false));
+
+        assertThat(payload.productCode()).isEqualTo("FZZXR");
+    }
+
+    @Test
+    void sinEleccionDelClienteSeUsaElCanalDeConfiguracion() {
+        Order order = pedido(linea(1, 4500));   // sin canal elegido
+
+        assertThat(service.channelFor(order, ParcelSpec.ofWeight(500))).isEqualTo("BPA");
+    }
+
+    // ── Prepago del IVA por el transportista ─────────────────────────────────────────────────────
+    //
+    // La tienda vende DDP: cobra el IVA al cliente y nadie le reclama nada al recibir. Para que eso se
+    // cumpla, YunExpress tiene que liquidarlo con SU IOSS, y ese servicio se pide envío a envío con el
+    // extra `V1` (云途预缴). Sin él, el envío se despacha como si nadie hubiera pagado el impuesto y
+    // quien acaba pagándolo en destino es el cliente —que ya pagó en la tienda—.
+
+    @Test
+    void pideElPrepagoDelIvaEnLosEnviosDdpQueNoSuperanElUmbral() {
+        YunExpressRequests.CreateShipment payload = service.createPayload(pedido(linea(1, 4500)),
+                ParcelSpec.ofWeight(500), "BPA", valoracion(false));
+
+        assertThat(payload.extraServices()).hasSize(1);
+        assertThat(payload.extraServices().getFirst().extraCode()).isEqualTo("V1");
+        assertThat(payload.extraServices().getFirst().extraValue()).isEqualTo("云途预缴");
+    }
+
+    @Test
+    void noPideElPrepagoPorEncimaDelUmbralDeMinimis() {
+        // Por encima de 150 EUR el régimen simplificado deja de aplicar: el despacho es formal y el
+        // prepago del transportista no tiene dónde liquidarse.
+        YunExpressRequests.CreateShipment payload = service.createPayload(pedido(linea(1, 4500)),
+                ParcelSpec.ofWeight(500), "BPA", valoracion(true));
+
+        assertThat(payload.extraServices()).isNullOrEmpty();
+    }
+
+    @Test
+    void noPideElPrepagoEnDestinosSinRegimenDePrepago() {
+        // El servicio V1 liquida el IVA de la UE con el IOSS del transportista: fuera de ahí no hay nada
+        // que prepagar. Y TODOS los destinos activos están en DDP, así que sin este filtro se pediría
+        // también para Estados Unidos o Brasil y el alta del envío fallaría.
+        CustomsValuation fueraDeLaUe = new CustomsValuation("US", TaxMode.DDP, 4500, false,
+                OverThresholdPolicy.ALLOW, 0, false, "", false);
+
+        YunExpressRequests.CreateShipment payload = service.createPayload(pedido(linea(1, 4500)),
+                ParcelSpec.ofWeight(500), "BPA", fueraDeLaUe);
+
+        assertThat(payload.extraServices()).isNullOrEmpty();
+    }
+
+    @Test
+    void noPideElPrepagoCuandoElDestinoPagaElImpuesto() {
+        // DDU: el impuesto lo paga el destinatario. Pedir prepago aquí lo cobraría dos veces.
+        CustomsValuation ddu = new CustomsValuation("MX", TaxMode.DDU, 4500, false,
+                OverThresholdPolicy.ALLOW, 0, false, "", true);
+
+        YunExpressRequests.CreateShipment payload = service.createPayload(pedido(linea(1, 4500)),
+                ParcelSpec.ofWeight(500), "BPA", ddu);
+
+        assertThat(payload.extraServices()).isNullOrEmpty();
+    }
+
+    @Test
+    void elPrepagoSePuedeApagarSinTocarCodigo() {
+        // Si la cuenta del transportista no tiene el servicio dado de alta, mandarlo hace fallar la
+        // creación del envío. Vaciar el código lo desactiva sin desplegar.
+        ReflectionTestUtils.setField(service, "prepaidVatServiceCode", "");
+
+        YunExpressRequests.CreateShipment payload = service.createPayload(pedido(linea(1, 4500)),
+                ParcelSpec.ofWeight(500), "BPA", valoracion(false));
+
+        assertThat(payload.extraServices()).isNullOrEmpty();
+    }
+
+    // ── Constancia de lo declarado ───────────────────────────────────────────────────────────────
+
+    @Test
+    void laGuiaArchivaLaMismaDeclaracionQueSeLeTransmitioAlTransportista() {
+        // Antes solo quedaba el RESULTADO (guía, canal, peso y valor): ante un rechazo de aduana no había
+        // forma de comprobar qué se declaró sin entrar al panel del transportista.
+        OrderItem item = linea(2, 1500);
+        ProductEntity producto = ProductEntity.builder().hsCode("610910").weightGrams(400)
+                .customsMaterial("cotton").customsUsage("daily use").build();
+        producto.setId(item.getProductId());
+        when(productRepository.findById(item.getProductId())).thenReturn(Optional.of(producto));
+        when(client.post(eq(PATH_CREATE), any(Object.class)))
+                .thenReturn(ok("{\"success\":true,\"result\":{\"waybill_number\":\"YT-A\"}}"));
+
+        List<FulfillmentResult> results = service.createShipments(pedido(item));
+
+        ArgumentCaptor<Object> captor = payloadCaptor();
+        verify(client).post(eq(PATH_CREATE), captor.capture());
+        YunExpressRequests.CreateShipment enviado = (YunExpressRequests.CreateShipment) captor.getValue();
+        FulfillmentProvider.ShipmentDeclaration archivada = results.get(0).declaration();
+        assertThat(archivada.receiver().firstName()).isEqualTo(enviado.receiver().firstName());
+        assertThat(archivada.receiver().lastName()).isEqualTo(enviado.receiver().lastName());
+        assertThat(archivada.receiver().countryCode()).isEqualTo("ES");
+        assertThat(archivada.receiver().city()).isEqualTo("Zaragoza");
+        assertThat(archivada.receiver().addressLines()).isEqualTo(enviado.receiver().addressLines());
+        assertThat(archivada.lines()).hasSameSizeAs(enviado.declarationInfo());
+        assertThat(archivada.lines().get(0).nameEn()).isEqualTo("Cotton T-shirt");
+        assertThat(archivada.lines().get(0).nameLocal()).isEqualTo("棉T恤");
+        assertThat(archivada.lines().get(0).hsCode()).isEqualTo("610910");
+        assertThat(archivada.lines().get(0).quantity()).isEqualTo(2);
+        assertThat(archivada.lines().get(0).material()).isEqualTo("cotton");
+    }
+
+    @Test
+    void cadaBultoArchivaSoloLasUnidadesQueViajanEnEl() {
+        // La declaración de una guía tiene que cuadrar con lo que hay dentro de ESE paquete: archivar el
+        // pedido entero en los dos bultos haría creer que se declaró el doble de mercancía.
+        ReflectionTestUtils.setField(service, "maxParcelWeightGrams", 1200);
+        when(client.post(eq(PATH_CREATE), any(Object.class))).thenReturn(
+                ok("{\"success\":true,\"result\":{\"waybill_number\":\"YT-A\"}}"),
+                ok("{\"success\":true,\"result\":{\"waybill_number\":\"YT-B\"}}"));
+
+        List<FulfillmentResult> results = service.createShipments(pedido(linea(3, 1000)));
+
+        assertThat(results.get(0).declaration().lines()).singleElement()
+                .extracting(FulfillmentProvider.DeclaredLine::quantity).isEqualTo(2);
+        assertThat(results.get(1).declaration().lines()).singleElement()
+                .extracting(FulfillmentProvider.DeclaredLine::quantity).isEqualTo(1);
     }
 
     @Test

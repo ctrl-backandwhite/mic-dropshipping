@@ -462,23 +462,112 @@ class ProductRepositoryIT extends PersistenceITBase {
         Pageable firstPage = PageRequest.of(0, 20);
 
         // Spanish full-ish title finds the PAUSED, image-less product across the whole catalogue.
-        assertThat(adminRepo.searchAdmin(null, null, "sandalias de tacón", null, firstPage).getContent())
+        assertThat(adminRepo.searchAdmin(null, null, "sandalias de tacón", null, "es", false, firstPage).getContent())
                 .extracting(ProductEntity::getSlug)
                 .containsExactly("sandalias-tacon-alto");
 
         // Chinese needle finds the ARCHIVED product → multilingual.
-        assertThat(adminRepo.searchAdmin(null, null, "透明", null, firstPage).getContent())
+        assertThat(adminRepo.searchAdmin(null, null, "透明", null, "es", false, firstPage).getContent())
                 .extracting(ProductEntity::getSlug)
                 .containsExactly("producto-chino");
 
         // Optional status filter still narrows results.
-        assertThat(adminRepo.searchAdmin(ProductStatus.PAUSED, null, "sandalias", null, firstPage).getContent())
+        assertThat(adminRepo.searchAdmin(ProductStatus.PAUSED, null, "sandalias", null, "es", false, firstPage).getContent())
                 .extracting(ProductEntity::getSlug)
                 .containsExactly("sandalias-tacon-alto");
-        assertThat(adminRepo.searchAdmin(ProductStatus.ACTIVE, null, "sandalias", null, firstPage).getContent())
+        assertThat(adminRepo.searchAdmin(ProductStatus.ACTIVE, null, "sandalias", null, "es", false, firstPage).getContent())
                 .isEmpty();
 
         // A needle that matches nothing returns an empty page.
-        assertThat(adminRepo.searchAdmin(null, null, "zzz-no-match", null, firstPage).getContent()).isEmpty();
+        assertThat(adminRepo.searchAdmin(null, null, "zzz-no-match", null, "es", false, firstPage).getContent()).isEmpty();
+    }
+
+    // ── precisión del texto libre (fallback SQL) ────────────────────────────────────────
+
+    /**
+     * Los tres falsos positivos que devolvía buscar "botas", cada uno por un motivo distinto, y que aquí
+     * NO deben volver:
+     * <ul>
+     *   <li>una falda cuya <b>descripción</b> dice "combina con botas" (la descripción no es el título);</li>
+     *   <li>un blazer cuyo título <b>portugués</b> ("botao") se parecía al término español — el fuzzy solo
+     *       debe aplicarse al idioma que está mirando el usuario;</li>
+     *   <li>y, en cambio, sí debe seguir apareciendo lo que lleva el término en el título.</li>
+     * </ul>
+     */
+    @Test
+    void busquedaDeTextoLibre_niDescripcionesNiOtrosIdiomasCuelanFalsosPositivos() {
+        ProductEntity botas = conTraduccion(baseProduct("botas-martin", "BOT-1").build(), "es",
+                "Botas Martin de caña alta para mujer", "Botas de cuero con cordones");
+        ProductEntity falda = conTraduccion(baseProduct("falda-plisada", "FAL-1").build(), "es",
+                "Falda plisada corta para mujer", "Combina con botas altas y medias");
+        ProductEntity blazer = conTraduccion(baseProduct("blazer-boton", "BLZ-1").build(), "pt",
+                "Blazer curto de um botao para mulher", "Blazer curto");
+        imagenEspejada(botas);
+        imagenEspejada(falda);
+        imagenEspejada(blazer);
+        em.flush();
+        em.clear();
+
+        Pageable page = PageRequest.of(0, 20);
+        List<String> encontrados = adminRepo
+                .searchStorefront(ProductStatus.ACTIVE, "botas", null, null, null, null, null, null, null, null, null,
+                        null, null, "es", false, true, page)
+                .getContent().stream().map(ProductEntity::getSlug).toList();
+
+        assertThat(encontrados).containsExactly("botas-martin");
+    }
+
+    /**
+     * La descripción es la RED DE SEGURIDAD: cuando nada casa por título, buscar dentro del texto largo es
+     * mejor que devolver una página vacía. Por eso el mismo término, con {@code wide}, sí trae la falda.
+     */
+    @Test
+    void busquedaAmplia_siRastreaLasDescripciones() {
+        ProductEntity falda = conTraduccion(baseProduct("falda-plisada", "FAL-2").build(), "es",
+                "Falda plisada corta para mujer", "Combina con botas altas y medias");
+        imagenEspejada(falda);
+        em.flush();
+        em.clear();
+
+        Pageable page = PageRequest.of(0, 20);
+        assertThat(adminRepo.searchStorefront(ProductStatus.ACTIVE, "botas", null, null, null, null, null, null, null,
+                null, null, null, null, "es", true, true, page).getContent()).hasSize(1);
+    }
+
+    /** Los identificadores que manda el buscador se filtran igual: publicado y con imagen utilizable. */
+    @Test
+    void busquedaPorIdentificadores_respetaLaVisibilidadDelEscaparate() {
+        ProductEntity visible = baseProduct("visible", "VIS-1").build();
+        ProductEntity sinImagen = baseProduct("sin-imagen", "SIN-1").build();
+        ProductEntity pausado = baseProduct("pausado", "PAU-1").status(ProductStatus.PAUSED).build();
+        repo.save(visible);
+        repo.save(sinImagen);
+        repo.save(pausado);
+        imagenEspejada(visible);
+        imagenEspejada(pausado);
+        em.flush();
+        em.clear();
+
+        List<String> encontrados = adminRepo
+                .searchStorefrontByIds(ProductStatus.ACTIVE,
+                        List.of(visible.getId(), sinImagen.getId(), pausado.getId()), null, null, null, null, null,
+                        null, null, null)
+                .stream().map(ProductEntity::getSlug).toList();
+
+        assertThat(encontrados).containsExactly("visible");
+    }
+
+    /** Guarda un producto con su traducción (título + descripción) en el idioma dado. */
+    private ProductEntity conTraduccion(ProductEntity p, String lang, String titulo, String descripcion) {
+        ProductTranslationEntity t = ProductTranslationEntity.builder().product(p).language(lang).title(titulo)
+                .description(descripcion).build();
+        p.getTranslations().add(t);
+        return repo.save(p);
+    }
+
+    /** Una imagen ya espejada a nuestro storage: sin ella el escaparate oculta el producto. */
+    private void imagenEspejada(ProductEntity p) {
+        em.persist(ProductImageEntity.builder().product(p).sourceUrl("https://origen/" + p.getSlug() + ".jpg")
+                .cdnUrl("https://cdn/" + p.getSlug() + ".jpg").position(0).build());
     }
 }

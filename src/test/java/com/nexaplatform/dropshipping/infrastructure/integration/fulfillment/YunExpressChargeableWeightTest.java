@@ -20,7 +20,7 @@ class YunExpressChargeableWeightTest {
 
     @BeforeEach
     void setUp() {
-        service = new YunExpressFulfillmentService(null, null, null, null, null, null);
+        service = new YunExpressFulfillmentService(null, null, null, null, null, null, null, null);
         ReflectionTestUtils.setField(service, "volumetricDivisor", 6000.0);
         ReflectionTestUtils.setField(service, "volumetricMinCm3", 6000.0);
     }

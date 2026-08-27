@@ -67,6 +67,16 @@ public class UserEntity extends BaseEntity {
     @Column(name = "deletion_code_expires_at")
     private Instant deletionCodeExpiresAt;
 
+    // Confirmación por código para eliminar un método de pago (código enviado por correo).
+    @Column(name = "pm_delete_code", length = 12)
+    private String pmDeleteCode;
+
+    @Column(name = "pm_delete_ref", length = 200)
+    private String pmDeleteRef;
+
+    @Column(name = "pm_delete_code_at")
+    private Instant pmDeleteCodeAt;
+
     @Column(name = "failed_login_count")
     private int failedLoginCount;
 
@@ -109,4 +119,15 @@ public class UserEntity extends BaseEntity {
 
     @Column(name = "google_linked", nullable = false)
     private boolean googleLinked;
+
+    /** Cuándo y qué versión de los textos legales aceptó. Sin esto no se puede acreditar la aceptación. */
+    @Column(name = "terms_accepted_at")
+    private Instant termsAcceptedAt;
+
+    @Column(name = "terms_accepted_version", length = 20)
+    private String termsAcceptedVersion;
+
+    /** Cuándo consintió el marketing. NULL significa que nunca lo hizo, no que no se sepa. */
+    @Column(name = "marketing_opt_in_at")
+    private Instant marketingOptInAt;
 }

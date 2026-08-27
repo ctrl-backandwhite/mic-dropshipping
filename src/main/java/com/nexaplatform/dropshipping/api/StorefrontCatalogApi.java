@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api;
 
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.LivePromotionView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.HomeSectionsResponse;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.AttributeKeyView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.AttributeView;
@@ -22,6 +23,7 @@ import com.nexaplatform.dropshipping.api.dto.StorefrontViews.VariantView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import io.swagger.v3.oas.annotations.Operation;
@@ -90,6 +92,10 @@ public interface StorefrontCatalogApi {
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "24") int size,
             @RequestParam(defaultValue = "es") String lang, @RequestParam(defaultValue = "trending") String sort);
 
+    @Operation(summary = "Rebajas vigentes para anunciar en la portada")
+    @GetMapping("/promotions/live")
+    List<LivePromotionView> livePromotions(@RequestParam(defaultValue = "es") String lang);
+
     /* =========================== PRODUCTS =========================== */
 
     @Operation(summary = "List/search products with filters")
@@ -103,15 +109,27 @@ public interface StorefrontCatalogApi {
             @RequestParam(required = false) Boolean hasVideo, @RequestParam(required = false) Integer minRating,
             @RequestParam(required = false) Integer inventoryMin, @RequestParam(required = false) String certification,
             @RequestParam(required = false, defaultValue = "best_match") String sort,
-            @RequestParam(required = false) Boolean verified);
+            @RequestParam(required = false) Boolean verified,
+            @RequestParam(required = false) UUID promotionId,
+            // «Ver los que no suman arancel»: solo los productos que comparten terna con ese grupo y por
+            // tanto se declaran con su misma descripción.
+            @RequestParam(required = false) UUID dutyGroupId,
+            // «Los que no suman arancel con lo que ya llevo»: filtra por TODAS las líneas de declaración
+            // del carrito, no por una. Se ignora si viene también un dutyGroupId concreto.
+            @RequestParam(required = false) Boolean dutyGroupsFromCart,
+            // Lo que el comprador ya lleva en el carrito. Es la REFERENCIA del distintivo de arancel: sin
+            // ella no hay incremento que calcular y el distintivo no se pinta.
+            @RequestParam(required = false) List<UUID> cartProductIds);
 
     @Operation(summary = "Get a product detail by slug")
     @GetMapping("/products/{slug}")
-    ProductDetailView detailBySlug(@PathVariable String slug, @RequestParam(defaultValue = "es") String lang);
+    ProductDetailView detailBySlug(@PathVariable String slug, @RequestParam(defaultValue = "es") String lang,
+            @RequestParam(required = false) List<UUID> cartProductIds);
 
     @Operation(summary = "Get a product detail by id")
     @GetMapping("/products/by-id/{id}")
-    ProductDetailView detailById(@PathVariable UUID id, @RequestParam(defaultValue = "es") String lang);
+    ProductDetailView detailById(@PathVariable UUID id, @RequestParam(defaultValue = "es") String lang,
+            @RequestParam(required = false) List<UUID> cartProductIds);
 
     @Operation(summary = "Get a product detail by external source and id")
     @GetMapping("/products/by-external/{source}/{externalId}")
@@ -220,6 +238,15 @@ public interface StorefrontCatalogApi {
     List<ShippingQuoteItem> shippingQuote(@RequestBody ShippingQuoteRequest req);
 
     /* =========================== HOME SECTIONS (DROP-20) =========================== */
+
+    @Operation(summary = "Products that illustrate the welcome guide (EU duty and shipping rules)")
+    @GetMapping("/welcome/examples")
+    StorefrontViews.WelcomeExamplesResponse welcomeExamples(@RequestParam(defaultValue = "es") String lang);
+
+    @Operation(summary = "Simulate the welcome guide basket with the real checkout maths")
+    @PostMapping("/welcome/simulate")
+    StorefrontViews.WelcomeSimulationResponse welcomeSimulate(
+            @RequestBody List<StorefrontViews.WelcomeSimulationLine> lines);
 
     @Operation(summary = "Get the homepage sections and hot categories")
     @GetMapping("/home/sections")

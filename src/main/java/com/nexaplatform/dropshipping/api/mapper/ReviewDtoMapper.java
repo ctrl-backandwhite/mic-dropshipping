@@ -31,6 +31,7 @@ public interface ReviewDtoMapper {
     @Mapping(target = "tags", source = "tags")
     @Mapping(target = "helpfulCount", source = "helpfulCount")
     @Mapping(target = "verifiedPurchase", source = "verifiedPurchase")
+    @Mapping(target = "source", source = "source")
     @Mapping(target = "createdAt", source = "createdAt")
     ReviewItemDtoOut toItem(ProductReview model);
 

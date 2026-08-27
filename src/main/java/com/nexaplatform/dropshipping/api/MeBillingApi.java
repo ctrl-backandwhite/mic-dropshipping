@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.api;
 
 import com.stripe.exception.StripeException;
+import com.nexaplatform.dropshipping.api.dto.in.SavePayPalDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.SubscribeDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BillingConfigDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.BillingInvoiceDtoOut;
@@ -33,7 +34,7 @@ public interface MeBillingApi {
     @Operation(summary = "Config pública de Stripe (publishable key) para el UI de facturación del perfil")
     @ApiResponse(responseCode = "200", description = "Config devuelta")
     @GetMapping("/billing/config")
-    ResponseEntity<BillingConfigDtoOut> billingConfig();
+    ResponseEntity<BillingConfigDtoOut> billingConfig(Authentication auth);
 
     @Operation(summary = "Crea un SetupIntent para guardar una tarjeta con Stripe Elements")
     @ApiResponse(responseCode = "200", description = "client_secret devuelto")
@@ -41,19 +42,31 @@ public interface MeBillingApi {
     ResponseEntity<SetupIntentDtoOut> createSetupIntent(Authentication auth) throws StripeException;
 
     @Operation(summary = "Lista las tarjetas guardadas del usuario autenticado")
-    @ApiResponse(responseCode = "200", description = "Tarjetas listadas")
+    @ApiResponse(responseCode = "200", description = "Métodos listados (tarjetas + PayPal)")
     @GetMapping("/payment-methods")
     ResponseEntity<List<PaymentMethodDtoOut>> listPaymentMethods(Authentication auth) throws StripeException;
 
-    @Operation(summary = "Marca una tarjeta guardada como la predeterminada (la que cobra las suscripciones)")
+    @Operation(summary = "Guarda una cuenta PayPal como método de pago (correo cifrado)")
+    @ApiResponse(responseCode = "204", description = "PayPal guardado")
+    @PostMapping("/payment-methods/paypal")
+    ResponseEntity<Void> savePayPal(Authentication auth, @Valid @RequestBody SavePayPalDtoIn req);
+
+    @Operation(summary = "Marca un método guardado (tarjeta o PayPal) como el predeterminado")
     @ApiResponse(responseCode = "204", description = "Tarjeta por defecto fijada")
     @PostMapping("/payment-methods/{id}/default")
     ResponseEntity<Void> setDefault(Authentication auth, @PathVariable String id) throws StripeException;
 
-    @Operation(summary = "Borra (desvincula) una tarjeta guardada")
-    @ApiResponse(responseCode = "204", description = "Tarjeta borrada")
+    @Operation(summary = "Envía por correo un código para confirmar la eliminación de un método de pago")
+    @ApiResponse(responseCode = "204", description = "Código enviado")
+    @PostMapping("/payment-methods/{id}/delete-code")
+    ResponseEntity<Void> requestDeleteCode(Authentication auth, @PathVariable String id) throws StripeException;
+
+    @Operation(summary = "Borra (desvincula) un método de pago confirmando con el código enviado por correo")
+    @ApiResponse(responseCode = "204", description = "Método borrado")
     @DeleteMapping("/payment-methods/{id}")
-    ResponseEntity<Void> delete(Authentication auth, @PathVariable String id) throws StripeException;
+    ResponseEntity<Void> delete(Authentication auth, @PathVariable String id,
+            @org.springframework.web.bind.annotation.RequestParam(value = "code", required = false) String code)
+            throws StripeException;
 
     @Operation(summary = "Contrata un plan cobrando con la tarjeta guardada por defecto")
     @ApiResponse(responseCode = "200", description = "Suscripción creada")

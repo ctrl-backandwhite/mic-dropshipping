@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.mapper.CustomerSubscriptionUpdateMapper;
 import com.nexaplatform.dropshipping.application.service.CountryTaxService;
 import com.nexaplatform.dropshipping.application.service.InvoiceService;
+import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.usecase.SubscriptionPlanUseCase;
 import com.nexaplatform.dropshipping.application.usecase.impl.CustomerSubscriptionUseCaseImpl;
@@ -36,7 +37,6 @@ import org.mockito.quality.Strictness;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
@@ -82,6 +82,8 @@ class Cov07CustomerSubscriptionBillingTest {
     CountryTaxService countryTaxService;
     @Mock
     InvoiceService invoiceService;
+    @Mock
+    SubscriptionNotificationService subscriptionNotificationService;
 
     @InjectMocks
     CustomerSubscriptionUseCaseImpl useCase;
@@ -153,7 +155,7 @@ class Cov07CustomerSubscriptionBillingTest {
     /* ==================== Prueba gratis ==================== */
 
     @Test
-    void elPlanGratisArrancaUnaPruebaDeUnMesYMarcaLaCuenta() {
+    void elPlanGratisArrancaUnaPruebaDeQuinceDiasYMarcaLaCuenta() {
         SubscriptionPlanEntity plan = plan("FREE", 0, 0);
         UserEntity user = user(false);
         when(planRepository.findByCode("FREE")).thenReturn(Optional.of(plan));
@@ -167,7 +169,8 @@ class Cov07CustomerSubscriptionBillingTest {
         assertThat(saved.getStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
         assertThat(saved.getBillingPeriod()).isEqualTo("MONTHLY");
         assertThat(saved.getCurrentPeriodEnd())
-                .isAfterOrEqualTo(before.atZone(ZoneOffset.UTC).plusMonths(1).toInstant().minusSeconds(5));
+                .isAfterOrEqualTo(before.plus(15, ChronoUnit.DAYS).minusSeconds(5))
+                .isBefore(before.plus(16, ChronoUnit.DAYS));
         assertThat(user.isFreeTrialUsed()).isTrue();
         verify(userRepository).save(user);
     }
@@ -179,7 +182,7 @@ class Cov07CustomerSubscriptionBillingTest {
 
         assertThatThrownBy(() -> useCase.createSubscription(userId, "FREE", "MONTHLY"))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("mes de prueba gratis");
+                .hasMessageContaining("15 días");
         verify(customerSubscriptionRepository, never()).save(any());
     }
 

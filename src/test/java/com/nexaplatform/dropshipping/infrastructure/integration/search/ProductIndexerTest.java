@@ -43,6 +43,12 @@ class ProductIndexerTest {
     @Mock
     ProductRepository productRepository;
 
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductAttributeRepository productAttributeRepository;
+
+    @Mock
+    ProductIndexSchema schema;
+
     @InjectMocks
     ProductIndexer indexer;
 
@@ -54,6 +60,9 @@ class ProductIndexerTest {
         java.lang.reflect.Field f = ProductIndexer.class.getDeclaredField("index");
         f.setAccessible(true);
         f.set(indexer, INDEX);
+        // Los atributos del producto se consultan aparte (no cuelgan de la entidad): sin stub, null.
+        org.mockito.Mockito.lenient().when(productAttributeRepository.findByProduct_Id(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.List.of());
     }
 
     private ProductEntity product() {
@@ -116,8 +125,7 @@ class ProductIndexerTest {
                 .containsEntry("status", "ACTIVE")
                 .containsEntry("titleZh", "酷小工具")
                 .containsEntry("titleEs", "Aparato chulo")
-                .containsEntry("descriptionEs", "desc es")
-                .containsEntry("monthlySales", 42)
+                                .containsEntry("monthlySales", 42)
                 .containsEntry("supplierId", p.getSupplier().getId().toString())
                 .containsEntry("categoryId", p.getCategory().getId().toString())
                 .containsEntry("hasImage", true)

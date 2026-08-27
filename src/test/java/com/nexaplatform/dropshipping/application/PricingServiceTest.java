@@ -3,6 +3,9 @@ package com.nexaplatform.dropshipping.application;
 import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.MarginService.PriceWithMargin;
 import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.service.PromotionService;
+import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
+import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
 import com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
@@ -14,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 
 import java.math.BigDecimal;
 
+import static org.mockito.Mockito.lenient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -31,19 +35,61 @@ class PricingServiceTest {
 
     private CurrencyRateService currencyService;
     private MarginService marginService;
+    private PromotionService promotionService;
     private PricingService service;
 
     @BeforeEach
     void setup() {
         currencyService = mock(CurrencyRateService.class);
         marginService = mock(MarginService.class);
-        service = new PricingService(currencyService, marginService);
+        promotionService = sinPromociones();
+        service = new PricingService(currencyService, promotionService, marginService);
         CurrencyHolder.clear();
+        PricingChannelHolder.set(PriceRuleChannel.STOREFRONT);
     }
 
     @AfterEach
     void cleanup() {
         CurrencyHolder.clear();
+        PricingChannelHolder.set(PriceRuleChannel.STOREFRONT);
+    }
+
+    /**
+     * REGLA ESTRICTA: el canal de integración (Shopify/WooCommerce/API) NO recibe rebajas. Se comprueba
+     * por el contrato —no se consulta ni una sola vez a la promoción— para que la regla no dependa de
+     * que el mock «casualmente» no descuente.
+     */
+    @Test
+    void priceFor_integrationChannel_neverAppliesPromotions() {
+        when(currencyService.toUsd(any(BigDecimal.class), eq("CNY"))).thenReturn(new BigDecimal("14.00"));
+        when(marginService.apply(any(), any(), any())).thenReturn(
+                new PriceWithMargin(new BigDecimal("14.00"), new BigDecimal("21.00"), null, new BigDecimal("50.0")));
+        when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(currencyService.symbolOf(anyString())).thenReturn("$");
+        PricingChannelHolder.set(PriceRuleChannel.INTEGRATION);
+
+        PricedAmount priced = service.priceFor(
+                ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY").build());
+
+        assertThat(priced.discountPercent()).isNull();
+        assertThat(priced.originalFormatted()).isNull();
+        org.mockito.Mockito.verify(promotionService, org.mockito.Mockito.never())
+                .applyAutomatic(any(), any(), any());
+    }
+
+    /** En el escaparate sí se pregunta a la promoción (aunque este mock no descuente). */
+    @Test
+    void priceFor_storefrontChannel_consultsPromotions() {
+        when(currencyService.toUsd(any(BigDecimal.class), eq("CNY"))).thenReturn(new BigDecimal("14.00"));
+        when(marginService.apply(any(), any(), any())).thenReturn(
+                new PriceWithMargin(new BigDecimal("14.00"), new BigDecimal("21.00"), null, new BigDecimal("50.0")));
+        when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(currencyService.symbolOf(anyString())).thenReturn("$");
+        PricingChannelHolder.set(PriceRuleChannel.STOREFRONT);
+
+        service.priceFor(ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY").build());
+
+        org.mockito.Mockito.verify(promotionService).applyAutomatic(any(), any(), any());
     }
 
     @Test
@@ -209,5 +255,96 @@ class PricingServiceTest {
 
         // Should still convert as if it were CNY (default).
         assertThat(priced.costUsd()).isEqualByComparingTo("5.00");
+    }
+
+    /**
+     * El margen se aplica sobre el precio COMPLETO del proveedor: base + IVA chino + porte, no solo
+     * sobre la base.
+     *
+     * <p>Qué se rompería en producción si esta prueba fallara: el catálogo entero se vendería un 20-25 %
+     * por debajo de lo acordado. Con el margen solo sobre la base, un artículo de 100 CNY con 13 de IVA
+     * y 16 de porte salía a 25 + 1,30 + 1,60 = 27,90 USD; sobre el total sale a 32,25. Esos 4,35 USD por
+     * unidad son la diferencia entre ganar dinero con el porte y regalarlo.
+     */
+    @Test
+    void elMargenSeAplicaSobreLaBaseElIvaYElPorte() {
+        when(currencyService.toUsd(any(BigDecimal.class), eq("CNY")))
+                .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("10")));
+        when(marginService.apply(any(), any(), any())).thenReturn(new PriceWithMargin(new BigDecimal("10.00"),
+                new BigDecimal("25.00"), null, new BigDecimal("150")));
+        when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(currencyService.symbolOf(anyString())).thenReturn("$");
+
+        ProductEntity p = ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY")
+                .ivaCny(new BigDecimal("13.00")).shippingCny(new BigDecimal("16.00")).build();
+
+        PricedAmount priced = service.priceFor(p);
+
+        // 10 USD de base × 2,5 = 25; el IVA (1,30) y el porte (1,60) llevan el MISMO factor.
+        assertThat(priced.baseRetailUsd()).isEqualByComparingTo("25.00");
+        assertThat(priced.ivaUsd()).isEqualByComparingTo("3.25");
+        assertThat(priced.shippingUsd()).isEqualByComparingTo("4.00");
+        assertThat(priced.retailUsd()).isEqualByComparingTo("32.25");
+    }
+
+    /**
+     * El porte del PROVEEDOR se conserva aparte del que se cobra al cliente.
+     *
+     * <p>Qué se rompería en producción si esta prueba fallara: la subvención por porte repetido devolvería
+     * el porte con margen en vez de los 16 CNY que de verdad se pagan al proveedor, regalando el margen
+     * dos veces —una en la bolsa y otra en la regla de la ganancia sobrante—.
+     */
+    @Test
+    void elPorteDelProveedorSeGuardaSinMargenJuntoAlCobrado() {
+        when(currencyService.toUsd(any(BigDecimal.class), eq("CNY")))
+                .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("10")));
+        when(marginService.apply(any(), any(), any())).thenReturn(new PriceWithMargin(new BigDecimal("10.00"),
+                new BigDecimal("25.00"), null, new BigDecimal("150")));
+        when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(currencyService.symbolOf(anyString())).thenReturn("$");
+
+        ProductEntity p = ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY")
+                .ivaCny(new BigDecimal("13.00")).shippingCny(new BigDecimal("16.00")).build();
+
+        PricedAmount priced = service.priceFor(p);
+
+        assertThat(priced.supplierShippingUsd()).isEqualByComparingTo("1.60");
+        // Ganancia = 32,25 cobrados − (10 de coste + 1,30 de IVA + 1,60 de porte) que se le deben al proveedor.
+        assertThat(priced.profitUsd()).isEqualByComparingTo("19.35");
+    }
+
+    /**
+     * Sin coste no hay factor que aplicar: el IVA y el porte se quedan como vienen en vez de reventar con
+     * una división por cero.
+     */
+    @Test
+    void sinCosteElIvaYElPorteNoLlevanMargen() {
+        when(currencyService.toUsd(any(BigDecimal.class), eq("CNY")))
+                .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("10")));
+        when(marginService.apply(any(), any(), any())).thenReturn(
+                new PriceWithMargin(BigDecimal.ZERO, BigDecimal.ZERO, null, BigDecimal.ZERO));
+        when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(currencyService.symbolOf(anyString())).thenReturn("$");
+
+        ProductEntity p = ProductEntity.builder().basePrice(BigDecimal.ZERO).currency("CNY")
+                .ivaCny(new BigDecimal("13.00")).shippingCny(new BigDecimal("16.00")).build();
+
+        PricedAmount priced = service.priceFor(p);
+
+        assertThat(priced.ivaUsd()).isEqualByComparingTo("1.30");
+        assertThat(priced.shippingUsd()).isEqualByComparingTo("1.60");
+    }
+
+    /**
+     * Motor de promociones que no rebaja nada: estas pruebas miden el pipeline de precio (coste →
+     * margen → divisa), no las rebajas, y una promoción activa cambiaría todos los importes esperados.
+     */
+    private static PromotionService sinPromociones() {
+        PromotionService p = mock(PromotionService.class);
+        lenient().when(p.applyAutomatic(any(), any(), any())).thenAnswer(inv -> {
+            java.math.BigDecimal precio = inv.getArgument(1);
+            return new PromotionService.Discounted(precio, precio, java.math.BigDecimal.ZERO, null, null);
+        });
+        return p;
     }
 }

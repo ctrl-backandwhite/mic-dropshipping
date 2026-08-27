@@ -130,9 +130,15 @@ class CurrencyRateServiceTest {
     }
 
     @Test
-    void toUsd_unknown_source_throws_not_found() {
+    void toUsd_sinTasaDeOrigen_esErrorDeConfiguracionNoUnNoEncontrado() {
+        // Que falte la tasa de la divisa en la que está guardado el producto es un fallo de configuración
+        // del servidor, no un «recurso no encontrado». Devolvía NotFoundException y el manejador lo
+        // traducía a 404, así que TODA lectura de catálogo respondía «no existe» sin que nadie supiera por
+        // qué. Como error de estado sale con 500 y queda en el log de errores.
         BigDecimal uno = new BigDecimal("1");
-        assertThatThrownBy(() -> service.toUsd(uno, "XXX")).isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> service.toUsd(uno, "XXX"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("XXX");
     }
 
     @Test

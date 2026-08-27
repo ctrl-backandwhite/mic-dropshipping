@@ -42,7 +42,20 @@ public final class PartnerDtos {
     }
 
     public record CreateOrderRequest(String externalOrderId, @Valid @NotNull AddressInput shippingAddress,
-            @Valid AddressInput billingAddress, @NotEmpty List<@Valid OrderItemInput> items, String notes) {
+            @Valid AddressInput billingAddress, @NotEmpty List<@Valid OrderItemInput> items, String notes,
+            String couponCode, String shippingOptionCode) {
+
+        /** Sin cupón. Los pedidos de socio y los manuales no teclean códigos. */
+        public CreateOrderRequest(String externalOrderId, AddressInput shippingAddress, AddressInput billingAddress,
+                List<OrderItemInput> items, String notes) {
+            this(externalOrderId, shippingAddress, billingAddress, items, notes, null, null);
+        }
+
+        /** Sin forma de envío elegida: solo el checkout del storefront ofrece elegir. */
+        public CreateOrderRequest(String externalOrderId, AddressInput shippingAddress, AddressInput billingAddress,
+                List<OrderItemInput> items, String notes, String couponCode) {
+            this(externalOrderId, shippingAddress, billingAddress, items, notes, couponCode, null);
+        }
     }
 
     public record OrderItemView(UUID productId, UUID variantId, int quantity, BigDecimal unitPrice,

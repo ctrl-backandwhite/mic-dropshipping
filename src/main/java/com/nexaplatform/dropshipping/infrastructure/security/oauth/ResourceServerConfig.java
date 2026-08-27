@@ -25,6 +25,13 @@ public class ResourceServerConfig {
      * Incluye un filtro de revocación que rechaza tokens emitidos antes de un cambio
      * de plan o de la eliminación de la credencial.
      *
+     * <p>SPRING_CSRF_PROTECTION_DISABLED es falso positivo aquí por el mismo motivo que en
+     * {@code BffSecurityConfig}: {@link SessionCreationPolicy#STATELESS} hace que Spring Security cambie el
+     * {@code SecurityContextRepository} de la cadena por uno que no toca la {@code HttpSession}, así que un
+     * {@code JSESSIONID} no autentica nada. Además el consumidor es servidor-a-servidor (integraciones de
+     * partner con {@code client_credentials}), no un navegador con cookies: no existe el escenario de
+     * «víctima con sesión abierta» que CSRF necesita.
+     *
      * <p>SEGURIDAD: el decoder VALIDA el {@code iss} (issuer) contra el issuer de ESTE entorno
      * ({@code nexadrop.oauth.issuer}). Así un token emitido en DES no se acepta en PRE (ni al revés):
      * los tokens quedan ligados a su entorno y no se pueden cruzar. Antes usaba el decoder por defecto,

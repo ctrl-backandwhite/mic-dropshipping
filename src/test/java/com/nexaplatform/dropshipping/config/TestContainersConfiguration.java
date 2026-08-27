@@ -15,9 +15,19 @@ import org.testcontainers.utility.DockerImageName;
 @TestConfiguration(proxyBeanMethods = false)
 public class TestContainersConfiguration {
 
+    /**
+     * <b>La versión mayor tiene que ser la del despliegue.</b> Estos tests corrían contra Postgres 16
+     * mientras el despliegue iba con el 18, y esa diferencia dejó pasar un fallo que tumbaba el arranque
+     * en los dos entornos: desde PostgreSQL 17 las operaciones de MANTENIMIENTO (CREATE INDEX entre ellas)
+     * se ejecutan con un search_path seguro y restringido, así que un índice de expresión que llamaba a
+     * unaccent sin cualificar el esquema reventaba Liquibase. La suite entera pasaba en verde igualmente,
+     * porque en la 16 ese comportamiento no existe. Si el despliegue sube de mayor, este número sube con él.
+     */
+    private static final String POSTGRES_IMAGE = "postgres:18-alpine";
+
     @Bean
     @ServiceConnection
     PostgreSQLContainer<?> postgresContainer() {
-        return new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"));
+        return new PostgreSQLContainer<>(DockerImageName.parse(POSTGRES_IMAGE));
     }
 }

@@ -4,6 +4,7 @@ import com.nexaplatform.dropshipping.application.usecase.GoogleLoginOutcome;
 import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
 import com.nexaplatform.dropshipping.domain.enums.UserRole;
 import com.nexaplatform.dropshipping.domain.model.User;
+import com.nexaplatform.dropshipping.application.service.DeviceSessionService;
 import com.nexaplatform.dropshipping.infrastructure.security.jwt.UserTokenService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -35,11 +37,19 @@ class GoogleOAuth2SuccessHandlerTest {
 
     private static final String FRONT = "https://app.example.com";
 
+    private static final String MOBILE = "nx036://auth/callback";
+
     @Mock
     private UserUseCase userUseCase;
 
     @Mock
     private UserTokenService userTokenService;
+
+    @Mock
+    private DeviceSessionService deviceSessionService;
+
+    @Mock
+    private com.nexaplatform.dropshipping.application.service.TotpService totpService;
 
     private GoogleOAuth2SuccessHandler handler;
 
@@ -49,7 +59,9 @@ class GoogleOAuth2SuccessHandlerTest {
     @BeforeEach
     void setUp() {
         // Trailing slash must be trimmed by the handler.
-        handler = new GoogleOAuth2SuccessHandler(userUseCase, userTokenService, FRONT + "/");
+        // La barra final debe recortarla el resolutor.
+        handler = new GoogleOAuth2SuccessHandler(userUseCase, userTokenService, deviceSessionService, totpService,
+                new OAuthRedirectResolver(FRONT + "/", MOBILE));
         request = new MockHttpServletRequest();
         response = new MockHttpServletResponse();
     }
@@ -79,7 +91,7 @@ class GoogleOAuth2SuccessHandlerTest {
     void new_or_linked_account_issues_tokens_and_redirects_to_callback_fragment() throws Exception {
         UUID userId = UUID.randomUUID();
         User user = user(userId, "jane@gmail.com");
-        when(userUseCase.resolveGoogleLogin("jane@gmail.com", "Jane", "Doe"))
+        when(userUseCase.resolveGoogleLogin(eq("jane@gmail.com"), eq("Jane"), eq("Doe"), isNull()))
                 .thenReturn(new GoogleLoginOutcome(user, false, "jane@gmail.com"));
         when(userTokenService.issue(eq(userId), eq("jane@gmail.com"), eq("USER"), any()))
                 .thenReturn(new UserTokenService.Tokens("ACCESS-T", "REFRESH-T", 3600L));
@@ -92,7 +104,7 @@ class GoogleOAuth2SuccessHandlerTest {
 
     @Test
     void existing_local_account_stashes_email_in_session_and_redirects_to_link_required() throws Exception {
-        when(userUseCase.resolveGoogleLogin(eq("owner@gmail.com"), anyString(), anyString()))
+        when(userUseCase.resolveGoogleLogin(eq("owner@gmail.com"), anyString(), anyString(), isNull()))
                 .thenReturn(new GoogleLoginOutcome(null, true, "owner@gmail.com"));
 
         handler.onAuthenticationSuccess(request, response, authToken(verifiedAttributes("owner@gmail.com")));
@@ -140,5 +152,53 @@ class GoogleOAuth2SuccessHandlerTest {
         OAuth2User principal = new DefaultOAuth2User(
                 AuthorityUtils.createAuthorityList("ROLE_USER"), attributes, "sub");
         return new OAuth2AuthenticationToken(principal, principal.getAuthorities(), "google");
+    }
+
+    @Test
+    void aplicacion_movil_recibe_los_tokens_en_su_enlace_profundo() throws Exception {
+        // El destino se anotó en la sesión al arrancar el flujo; el manejador debe honrarlo en lugar de
+        // devolver siempre a la web, que es lo que hacía antes de existir la aplicación.
+        UUID userId = UUID.randomUUID();
+        User user = user(userId, "jane@gmail.com");
+        when(userUseCase.resolveGoogleLogin(eq("jane@gmail.com"), eq("Jane"), eq("Doe"), isNull()))
+                .thenReturn(new GoogleLoginOutcome(user, false, "jane@gmail.com"));
+        when(userTokenService.issue(eq(userId), eq("jane@gmail.com"), eq("USER"), any()))
+                .thenReturn(new UserTokenService.Tokens("ACCESS-T", "REFRESH-T", 3600L));
+        request.getSession(true).setAttribute(OAuthClientTargetFilter.CLIENT_TARGET_ATTRIBUTE,
+                OAuthClientTarget.MOBILE);
+
+        handler.onAuthenticationSuccess(request, response, authToken(verifiedAttributes("jane@gmail.com")));
+
+        assertThat(response.getRedirectedUrl()).isEqualTo(MOBILE + "#token=ACCESS-T&refresh=REFRESH-T");
+    }
+
+    @Test
+    void aplicacion_movil_tambien_recibe_los_fallos() throws Exception {
+        // Sin esto la aplicación se quedaría esperando en el navegador del sistema, sin recuperar el foco
+        // ni poder explicar qué ha pasado.
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put("email", "jane@gmail.com");
+        attrs.put("email_verified", Boolean.FALSE);
+        request.getSession(true).setAttribute(OAuthClientTargetFilter.CLIENT_TARGET_ATTRIBUTE,
+                OAuthClientTarget.MOBILE);
+
+        handler.onAuthenticationSuccess(request, response, authToken(attrs));
+
+        assertThat(response.getRedirectedUrl()).isEqualTo(MOBILE + "?error=google_email_unverified");
+        verifyNoInteractions(userTokenService);
+    }
+
+    @Test
+    void un_flujo_sin_cliente_anotado_sigue_yendo_a_la_web() throws Exception {
+        UUID userId = UUID.randomUUID();
+        User user = user(userId, "jane@gmail.com");
+        when(userUseCase.resolveGoogleLogin(eq("jane@gmail.com"), eq("Jane"), eq("Doe"), isNull()))
+                .thenReturn(new GoogleLoginOutcome(user, false, "jane@gmail.com"));
+        when(userTokenService.issue(eq(userId), eq("jane@gmail.com"), eq("USER"), any()))
+                .thenReturn(new UserTokenService.Tokens("ACCESS-T", "REFRESH-T", 3600L));
+
+        handler.onAuthenticationSuccess(request, response, authToken(verifiedAttributes("jane@gmail.com")));
+
+        assertThat(response.getRedirectedUrl()).isEqualTo(FRONT + "/auth/callback#token=ACCESS-T&refresh=REFRESH-T");
     }
 }

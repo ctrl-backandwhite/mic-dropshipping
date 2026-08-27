@@ -1,6 +1,8 @@
 package com.nexaplatform.dropshipping.application;
 
 import com.nexaplatform.dropshipping.application.service.InvoiceService;
+import com.nexaplatform.dropshipping.application.service.EuComplianceService;
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
@@ -55,10 +57,15 @@ class Cov08InvoiceImagesAndStatusTest {
         CurrencyRateService currency = mock(CurrencyRateService.class);
         when(currency.formatDisplay(any(BigDecimal.class), anyString()))
                 .thenAnswer(i -> i.getArgument(0, BigDecimal.class).toPlainString());
+        // Conversión 1:1 — esta clase mide las fotos de la factura, no los importes, pero la cuenta de
+        // línea pasa igualmente por CurrencyRateService y sin stub devolvería null.
+        when(currency.usdTo(any(BigDecimal.class), anyString())).thenAnswer(i -> i.getArgument(0));
+        when(currency.decimalsOf(anyString())).thenReturn(2);
         PaymentJpaRepositoryAdapter payments = mock(PaymentJpaRepositoryAdapter.class);
         when(payments.findByOrderIdOrderByCreatedAtDesc(any())).thenReturn(List.of());
-        service = new InvoiceService(templateEngine, currency, payments, mock(ProductRepository.class),
-                variantRepository, storage);
+        service = new InvoiceService(templateEngine, currency, mock(EuComplianceService.class),
+                new OrderAmounts(currency), payments,
+                mock(ProductRepository.class), variantRepository, storage);
     }
 
     private static Order order(OrderStatus status, OrderItem... items) {

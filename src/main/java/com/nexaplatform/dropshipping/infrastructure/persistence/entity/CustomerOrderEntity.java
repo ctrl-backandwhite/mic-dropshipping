@@ -68,11 +68,35 @@ public class CustomerOrderEntity extends BaseEntity {
     @Column(name = "subtotal_cents", nullable = false)
     private int subtotalCents;
 
+    /** Canal del transportista que eligió el cliente al pagar; vacío si no eligió. */
+    @Column(name = "shipping_channel_code", length = 32)
+    private String shippingChannelCode;
+
+    /**
+     * Qué transportista lo lleva. Los pedidos anteriores al 18-ago-2026 son todos de YunExpress, que es
+     * lo que la migración deja escrito: dejarlo vacío obligaría a adivinarlo al despachar un pedido
+     * antiguo.
+     */
+    @Column(name = "shipping_carrier", length = 32)
+    private String shippingCarrier;
+
+    /** Nombre de la línea contratada. CJ lo exige para emitir la guía; el código no le vale. */
+    @Column(name = "shipping_channel_name", length = 96)
+    private String shippingChannelName;
+
     @Column(name = "shipping_cents", nullable = false)
     private int shippingCents;
 
     @Column(name = "tax_cents", nullable = false)
     private int taxCents;
+
+    /**
+     * Derecho de aduana de la Unión cobrado en el pedido. Va INCLUIDO en {@link #shippingCents}: no se
+     * suma dos veces al total. Se guarda aparte para poder desglosarlo en la factura, donde un tributo que
+     * el vendedor recauda y entrega a la aduana no puede ir escondido dentro del precio del transporte.
+     */
+    @Column(name = "customs_duty_cents", nullable = false)
+    private int customsDutyCents;
 
     @Column(name = "total_cents", nullable = false)
     private int totalCents;

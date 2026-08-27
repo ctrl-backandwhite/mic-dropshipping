@@ -20,6 +20,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -31,6 +32,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 
 /**
  * Unit tests for {@link CustomerSubscriptionUseCaseImpl}. Mockito drives the ports:
@@ -59,6 +61,8 @@ class CustomerSubscriptionUseCaseImplTest {
     com.nexaplatform.dropshipping.application.service.CountryTaxService countryTaxService;
     @Mock
     com.nexaplatform.dropshipping.application.service.InvoiceService invoiceService;
+    @Mock
+    com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService subscriptionNotificationService;
 
     @InjectMocks
     CustomerSubscriptionUseCaseImpl useCase;
@@ -208,5 +212,43 @@ class CustomerSubscriptionUseCaseImplTest {
         when(customerSubscriptionRepository.getById(id)).thenReturn(null);
 
         assertThatThrownBy(() -> useCase.getById(id)).isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void sendPlanCancelReminders_dentroDeVentanaYSinEnviarHoy_envia() {
+        UUID userId = UUID.randomUUID();
+        // Cancelación dentro de 2 días (dentro de la ventana de 3 días previos), sin recordatorio hoy.
+        CustomerSubscription sub = CustomerSubscription.builder().id(UUID.randomUUID()).userId(userId)
+                .status(SubscriptionStatus.ACTIVE).planCode("PRO")
+                .cancelAt(Instant.now().plusSeconds(2 * 86400)).cancelReminderLastAt(null).build();
+        when(customerSubscriptionRepository.findAll()).thenReturn(List.of(sub));
+
+        useCase.sendPlanCancelReminders();
+
+        verify(subscriptionNotificationService).planCancelReminder(eq(userId), eq("PRO"), any());
+        verify(customerSubscriptionRepository).save(any(CustomerSubscription.class));
+    }
+
+    @Test
+    void sendPlanCancelReminders_sinCancelacion_noEnvia() {
+        CustomerSubscription sub = CustomerSubscription.builder().id(UUID.randomUUID()).userId(UUID.randomUUID())
+                .status(SubscriptionStatus.ACTIVE).planCode("PRO").cancelAt(null).build();
+        when(customerSubscriptionRepository.findAll()).thenReturn(List.of(sub));
+
+        useCase.sendPlanCancelReminders();
+
+        verify(subscriptionNotificationService, never()).planCancelReminder(any(), any(), any());
+    }
+
+    @Test
+    void sendPlanCancelReminders_yaEnviadoHoy_noRepite() {
+        CustomerSubscription sub = CustomerSubscription.builder().id(UUID.randomUUID()).userId(UUID.randomUUID())
+                .status(SubscriptionStatus.ACTIVE).planCode("PRO")
+                .cancelAt(Instant.now().plusSeconds(2 * 86400)).cancelReminderLastAt(Instant.now()).build();
+        when(customerSubscriptionRepository.findAll()).thenReturn(List.of(sub));
+
+        useCase.sendPlanCancelReminders();
+
+        verify(subscriptionNotificationService, never()).planCancelReminder(any(), any(), any());
     }
 }

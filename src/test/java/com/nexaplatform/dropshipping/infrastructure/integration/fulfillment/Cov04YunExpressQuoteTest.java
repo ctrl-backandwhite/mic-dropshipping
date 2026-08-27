@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.domain.enums.TaxMode;
+import com.nexaplatform.dropshipping.domain.model.ShippingOption;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.ParcelSpec;
@@ -12,6 +13,7 @@ import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunE
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CainiaoZoneEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CainiaoZoneRepository;
 import org.junit.jupiter.api.BeforeEach;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -66,8 +68,8 @@ class Cov04YunExpressQuoteTest {
 
     @BeforeEach
     void setUp() {
-        service = new YunExpressFulfillmentService(zoneRepository, client, customsValuation, null,
-                currencyRateService, new MockEnvironment());
+        service = new YunExpressFulfillmentService(zoneRepository, client, customsValuation, new CustomsDutyLinesService(null), null,
+                currencyRateService, new MockEnvironment(), null);
         ReflectionTestUtils.setField(service, "enabled", false);
         ReflectionTestUtils.setField(service, "quoteTimeoutSeconds", 5L);
         ReflectionTestUtils.setField(service, "volumetricDivisor", 6000.0);
@@ -188,6 +190,52 @@ class Cov04YunExpressQuoteTest {
 
         // 4,132 USD → 413 céntimos (redondeo al alza en el medio punto)
         assertThat(quote.amountUsdCents()).isEqualTo(413);
+    }
+
+    @Test
+    void devuelveTodasLasFormasDeEnvioParaQueElClienteElija() throws IOException {
+        zonaEspana();
+        conYunExpressOperativo();
+        // Lo que cotiza España de verdad: la línea de ropa es la más barata y llega antes, el postal es
+        // barato pero no admite IOSS, y el -AMZ exige el número de Amazon.
+        when(client.get(eq(PATH_PRICE_TRIAL), anyMap(), any(Duration.class))).thenReturn(json("""
+                {"success":true,"result":[
+                  {"product_code":"THPHR","product_name":"Global line","calculate_amount":57.5,
+                   "currency":"RMB","interval_day":"6-10"},
+                  {"product_code":"CNDWA","product_name":"China Post","calculate_amount":57,
+                   "currency":"RMB","interval_day":"9-30"},
+                  {"product_code":"FZZXR","product_name":"Apparel line","calculate_amount":55,
+                   "currency":"RMB","interval_day":"5-8"},
+                  {"product_code":"FZZXR-AMZ","product_name":"Apparel AMZ","calculate_amount":55,
+                   "currency":"RMB","interval_day":"5-8"}]}"""));
+        when(customsValuation.carrierPrepaysVatFor("ES")).thenReturn(true);
+        when(currencyRateService.toUsd(any(BigDecimal.class), eq("CNY")))
+                .thenAnswer(inv -> inv.getArgument(0, BigDecimal.class).divide(new BigDecimal("7"), 4,
+                        java.math.RoundingMode.HALF_UP));
+
+        ShippingQuote quote = service.quote("ES", ParcelSpec.ofWeight(250));
+
+        // Solo las utilizables, de más barata a más cara: fuera el postal y el de Amazon.
+        assertThat(quote.options()).extracting(ShippingOption::code).containsExactly("FZZXR", "THPHR");
+        // Y el plazo es el DEL CANAL, no el de la tabla de zonas: es el envío que se está cobrando.
+        assertThat(quote.options().getFirst().etaMinDays()).isEqualTo(5);
+        assertThat(quote.options().getFirst().etaMaxDays()).isEqualTo(8);
+        // Sin elección, se cobra la primera.
+        assertThat(quote.amountUsdCents()).isEqualTo(quote.options().getFirst().amountUsdCents());
+    }
+
+    @Test
+    void sinTarifaDelTransportistaNoHayNadaQueElegir() throws IOException {
+        zonaEspana();
+        conYunExpressOperativo();
+        when(client.get(eq(PATH_PRICE_TRIAL), anyMap(), any(Duration.class)))
+                .thenReturn(json("{\"success\":true,\"result\":[]}"));
+
+        // Se sigue vendiendo con la tarifa de la tabla de zonas, pero sin opciones que ofrecer.
+        ShippingQuote quote = service.quote("ES", ParcelSpec.ofWeight(250));
+
+        assertThat(quote.supported()).isTrue();
+        assertThat(quote.options()).isEmpty();
     }
 
     @Test

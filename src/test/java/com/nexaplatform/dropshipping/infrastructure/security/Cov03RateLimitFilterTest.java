@@ -80,6 +80,8 @@ class Cov03RateLimitFilterTest {
             "/api/auth/password-reset/confirm,   auth.reset.conf, 5",
             "/login,                             auth.login,      20",
             "/oauth2/token,                      oauth.token,     30",
+            "/api/chat,                          chat.ask,        15",
+            "/api/catalog/cart-suggestions,      cart.suggestions, 20",
             "/api/catalog/products,              storefront.web,  100",
             "/api/search,                        storefront.web,  100",
             "/api/v1/rate-limits,                storefront,      60",
@@ -229,7 +231,7 @@ class Cov03RateLimitFilterTest {
         assertThat(politicas).extracting(p -> p.get("name")).containsExactlyInAnyOrder("partner.catalog.read",
                 "partner.orders.write", "partner.shop.sync", "inbound.shop", "storefront", "storefront.web",
                 "oauth.token", "auth.login", "auth.login.api", "auth.refresh", "auth.register", "auth.reset.req",
-                "auth.reset.conf");
+                "auth.reset.conf", "chat.ask", "cart.suggestions");
     }
 
     @Test

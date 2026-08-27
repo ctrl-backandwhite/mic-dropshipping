@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="referrer" content="no-referrer"/>
+  <title>NX036</title>
+</head>
+<body style="margin:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6f9;">
+  <tr><td align="center" style="padding:24px 12px;">
+    <table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e3e8ef;box-shadow:0 10px 32px rgba(12,74,151,0.22);-fs-box-shadow:0 10px 32px 0 rgba(12,74,151,0.22);">
+
+      <tr><td style="padding:26px 32px 8px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+          <td><div style="width:34px;height:34px;border-radius:9px;background:#0c4a97;color:#ffffff;font-weight:700;font-size:17px;text-align:center;line-height:34px;">N</div></td>
+          <td style="padding-left:10px;font-size:16px;font-weight:700;color:#14212e;">NX036</td>
+        </tr></table>
+      </td></tr>
+
+      <tr><td style="padding:12px 32px 0;">
+        <h1 style="margin:0 0 6px;font-size:21px;font-weight:700;color:#14212e;" th:text="${title}">Sigue donde lo dejaste</h1>
+        <div style="font-size:14px;line-height:1.6;color:#5c6e7c;" th:text="${intro}">Fichas que has visitado.</div>
+      </td></tr>
+
+      <!--
+        Cuadrícula montada con tablas: los clientes de correo no tienen ni grid ni flex, y los flotados se
+        rompen en Outlook. Las filas llegan del servidor ya repartidas, así que aquí solo se recorren dos
+        listas y no hay que abrir ni cerrar etiquetas desde dentro de un bucle.
+        La foto se pinta desde el modelo, que ya trae la referencia al adjunto del propio mensaje. Por URL
+        no se vería: en local apunta a localhost y Outlook y Apple Mail bloquean las imágenes remotas.
+      -->
+      <tr><td style="padding:18px 18px 0;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" align="center">
+          <tr th:each="row : ${rows}">
+            <td th:each="p : ${row}" width="180" valign="top" style="width:180px;padding:6px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border:1px solid #e3e8ef;border-radius:12px;overflow:hidden;">
+                <tr><td style="background-color:#f4f6f9;padding:0;line-height:0;font-size:0;">
+                  <a th:href="${p.url}" style="text-decoration:none;"><img th:if="${p.image}" th:src="${p.image}" width="180" height="168" alt="" border="0"
+                       style="display:block;width:100%;height:168px;object-fit:cover;border:0;outline:none;text-decoration:none;" /></a></td></tr>
+                <tr><td style="padding:8px 10px;">
+                  <a th:href="${p.url}" style="text-decoration:none;color:#14212e;"><div style="font-size:12px;line-height:1.35;color:#14212e;height:34px;overflow:hidden;" th:text="${p.title}">Producto</div></a>
+                  <div style="margin-top:6px;font-size:15px;font-weight:700;color:#0c4a97;" th:text="${p.price}">$0.00</div>
+                </td></tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+
+      <tr><td align="center" style="padding:26px 32px 8px;">
+        <a th:href="${ctaUrl}" th:text="${ctaLabel}" style="display:inline-block;padding:13px 34px;background:#0c4a97;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;border-radius:10px;font-family:Arial,Helvetica,sans-serif;">Ver mi historial completo</a>
+      </td></tr>
+
+      <tr><td style="padding:16px 32px 26px;text-align:center;">
+        <p style="margin:0;color:#9aa4b2;font-size:11px;line-height:1.5;" th:text="${footerNote}"></p>
+        <p style="margin:8px 0 0;font-size:11px;line-height:1.5;">
+          <a th:href="${unsubscribeUrl}" th:text="${unsubscribeLabel}" style="color:#9aa4b2;text-decoration:underline;">Dejar de recibir este recordatorio</a>
+        </p>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>

@@ -62,6 +62,9 @@ public class User {
     private String phone;
     private String avatarUrl;
     private String language;
+    private Instant termsAcceptedAt;
+    private String termsAcceptedVersion;
+    private Instant marketingOptInAt;
 
     /** Whether this account has a confirmed link to a Google identity (social login). */
     private boolean googleLinked;

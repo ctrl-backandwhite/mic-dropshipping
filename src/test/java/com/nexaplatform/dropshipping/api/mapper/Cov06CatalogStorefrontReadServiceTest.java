@@ -1,5 +1,7 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
+import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.service.PromotionService;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
@@ -23,6 +25,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Suppl
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -42,6 +45,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -69,9 +73,28 @@ class Cov06CatalogStorefrontReadServiceTest {
     ProductVariantRepository variantRepository;
     @Mock
     ProductMapper productMapper;
+    @Mock
+    PricingService pricingService;
+    @Mock
+    PromotionService promotionService;
 
     @InjectMocks
     CatalogStorefrontReadService service;
+
+    /**
+     * Precio de venta por defecto para cualquier variante: los tests de imagen/opciones/sku no miran
+     * el precio, pero variantView SIEMPRE precia (nunca sirve el coste CNY del proveedor).
+     */
+    @org.junit.jupiter.api.BeforeEach
+    void precioDeVentaPorDefecto() {
+        // El listado consulta reachFilter en cada llamada; sin promoción activa devuelve vacío (sin filtro).
+        org.mockito.Mockito.lenient().when(promotionService.reachFilter(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.Optional.empty());
+        PricingService.PricedAmount venta = org.mockito.Mockito.mock(PricingService.PricedAmount.class);
+        org.mockito.Mockito.lenient().when(venta.displayAmount()).thenReturn(java.math.BigDecimal.ONE);
+        org.mockito.Mockito.lenient().when(pricingService.priceFor(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(ProductVariantEntity.class))).thenReturn(venta);
+    }
 
     /* ============================ nombre traducido ============================ */
 
@@ -273,22 +296,33 @@ class Cov06CatalogStorefrontReadServiceTest {
 
     /* ============================ orden del listado ============================ */
 
+    /**
+     * Cada criterio ordena por su columna Y TERMINA EN {@code id}.
+     *
+     * <p>El desempate no es cosmético: los campos por los que se ordena empatan en masa —5.181 de 5.485
+     * productos comparten {@code trendScore = 0}—, y sin un criterio final estable PostgreSQL devuelve las
+     * filas empatadas en el orden que le convenga, que cambia entre consultas. El efecto medido era que la
+     * misma página del catálogo devolvía productos distintos, así que al comprador le salían repetidos unos
+     * y otros no le salían nunca. Si alguien quita el desempate, estos casos fallan.
+     */
     @Test
-    void cadaCriterioDeOrdenSeTraduceASuColumna() {
-        assertThat(service.sortFor("price_asc")).isEqualTo(Sort.by(Sort.Direction.ASC, "basePrice"));
-        assertThat(service.sortFor("price_desc")).isEqualTo(Sort.by(Sort.Direction.DESC, "basePrice"));
-        assertThat(service.sortFor("newest")).isEqualTo(Sort.by(Sort.Direction.DESC, "createdAt"));
-        assertThat(service.sortFor("sales")).isEqualTo(Sort.by(Sort.Direction.DESC, "monthlySales"));
-        assertThat(service.sortFor("lists")).isEqualTo(Sort.by(Sort.Direction.DESC, "monthlySales"));
-        assertThat(service.sortFor("rating")).isEqualTo(Sort.by(Sort.Direction.DESC, "rating"));
-        assertThat(service.sortFor("inventory")).isEqualTo(Sort.by(Sort.Direction.DESC, "inventoryCount"));
+    void cadaCriterioDeOrdenSeTraduceASuColumnaYDesempataPorId() {
+        Sort id = Sort.by(Sort.Direction.ASC, "id");
+        assertThat(service.sortFor("price_asc")).isEqualTo(Sort.by(Sort.Direction.ASC, "basePrice").and(id));
+        assertThat(service.sortFor("price_desc")).isEqualTo(Sort.by(Sort.Direction.DESC, "basePrice").and(id));
+        assertThat(service.sortFor("newest")).isEqualTo(Sort.by(Sort.Direction.DESC, "createdAt").and(id));
+        assertThat(service.sortFor("sales")).isEqualTo(Sort.by(Sort.Direction.DESC, "monthlySales").and(id));
+        assertThat(service.sortFor("lists")).isEqualTo(Sort.by(Sort.Direction.DESC, "monthlySales").and(id));
+        assertThat(service.sortFor("rating")).isEqualTo(Sort.by(Sort.Direction.DESC, "rating").and(id));
+        assertThat(service.sortFor("inventory")).isEqualTo(Sort.by(Sort.Direction.DESC, "inventoryCount").and(id));
     }
 
     /** Sin criterio (o con uno desconocido) manda la relevancia: nunca un orden arbitrario. */
     @Test
     void sinCriterioDeOrdenMandaLaRelevancia() {
-        assertThat(service.sortFor(null)).isEqualTo(Sort.by(Sort.Direction.DESC, "trendScore"));
-        assertThat(service.sortFor("inventado")).isEqualTo(Sort.by(Sort.Direction.DESC, "trendScore"));
+        Sort esperado = Sort.by(Sort.Direction.DESC, "trendScore").and(Sort.by(Sort.Direction.ASC, "id"));
+        assertThat(service.sortFor(null)).isEqualTo(esperado);
+        assertThat(service.sortFor("inventado")).isEqualTo(esperado);
     }
 
     /* ============================ listado de productos ============================ */
@@ -297,7 +331,7 @@ class Cov06CatalogStorefrontReadServiceTest {
     @Test
     void elTamanoDePaginaDelListadoSeAcotaACien() {
         when(productRepository.searchStorefront(eq(ProductStatus.ACTIVE), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(Pageable.class)))
+                any(), any(), any(), any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
                         .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 100), 0));
 
         PageResponse<ProductSummaryView> pagina = service.productListFull(0, 5000, "es", ProductListFilters.none(),
@@ -317,7 +351,7 @@ class Cov06CatalogStorefrontReadServiceTest {
         ProductEntity caro = producto("caro");
         ProductEntity sinPrecio = producto("sin-precio");
         when(productRepository.searchStorefront(eq(ProductStatus.ACTIVE), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(Pageable.class)))
+                any(), any(), any(), any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
                         .thenReturn(new PageImpl<>(List.of(barato, caro, sinPrecio)));
         when(productMapper.toSummary(barato, "es")).thenReturn(resumen("barato", new BigDecimal("10.00")));
         when(productMapper.toSummary(caro, "es")).thenReturn(resumen("caro", new BigDecimal("90.00")));
@@ -336,7 +370,7 @@ class Cov06CatalogStorefrontReadServiceTest {
     void elRangoDePrecioIncluyeSusExtremos() {
         ProductEntity justo = producto("justo");
         when(productRepository.searchStorefront(eq(ProductStatus.ACTIVE), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(Pageable.class)))
+                any(), any(), any(), any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
                         .thenReturn(new PageImpl<>(List.of(justo)));
         when(productMapper.toSummary(justo, "es")).thenReturn(resumen("justo", new BigDecimal("90.00")));
 
@@ -353,34 +387,46 @@ class Cov06CatalogStorefrontReadServiceTest {
         conCe.setCertifications(List.of("CE-EMC"));
         ProductEntity sinCert = producto("sin-cert");
         when(productRepository.searchStorefront(eq(ProductStatus.ACTIVE), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(Pageable.class)))
+                any(), any(), any(), any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
                         .thenReturn(new PageImpl<>(List.of(conCe, sinCert)));
         when(productMapper.toSummary(conCe, "es")).thenReturn(resumen("con-ce", new BigDecimal("10")));
 
         ProductListFilters filtros = new ProductListFilters(null, null, null, null, null, null, null, null, null,
-                null, null, "ce", null);
+                null, null, "ce", null, null, null);
         PageResponse<ProductSummaryView> pagina = service.productListFull(0, 20, "es", filtros, null);
 
         assertThat(pagina.items()).extracting(ProductSummaryView::slug).containsExactly("con-ce");
     }
 
-    /** El filtro de verificados del admin distingue los revisados de los pendientes (nulo = pendiente). */
+    /**
+     * El filtro de verificados viaja a la CONSULTA, no se aplica en memoria.
+     *
+     * <p>Antes se filtraba sobre el resultado, y para eso el servicio tomaba un atajo: cargaba las primeras
+     * 5.000 filas y filtraba sobre ellas. Con un catálogo mayor —hoy son 5.491 productos— los de fuera del
+     * corte no se filtraban NUNCA, así que «Verificado: No» devolvía cero sin que nada fallara. Y como el
+     * orden no era estable, qué 5.000 entraban cambiaba en cada consulta: el filtro funcionaba en un
+     * entorno y no en otro. Lo que se fija aquí es que el valor llega al repositorio.
+     */
     @Test
-    void elFiltroDeVerificadosSepararLosRevisadosDeLosPendientes() {
-        ProductEntity revisado = producto("revisado");
-        revisado.setVerified(true);
+    void elFiltroDeVerificadosViajaALaConsulta() {
         ProductEntity pendiente = producto("pendiente");
         pendiente.setVerified(null);
         when(productRepository.searchStorefront(eq(ProductStatus.ACTIVE), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(Pageable.class)))
-                        .thenReturn(new PageImpl<>(List.of(revisado, pendiente)));
+                any(), any(), any(), any(), any(), any(), anyString(), anyBoolean(), anyBoolean(), any(Pageable.class)))
+                        .thenReturn(new PageImpl<>(List.of(pendiente)));
         when(productMapper.toSummary(pendiente, "es")).thenReturn(resumen("pendiente", new BigDecimal("10")));
 
         ProductListFilters soloPendientes = new ProductListFilters(null, null, null, null, null, null, null, null,
-                null, null, null, null, Boolean.FALSE);
+                null, null, null, null, Boolean.FALSE, null, null);
         PageResponse<ProductSummaryView> pagina = service.productListFull(0, 20, "es", soloPendientes, null);
 
         assertThat(pagina.items()).extracting(ProductSummaryView::slug).containsExactly("pendiente");
+        // El 13.º argumento es `verified`: tiene que llegar FALSE, no null.
+        ArgumentCaptor<Boolean> captor = ArgumentCaptor.forClass(Boolean.class);
+        verify(productRepository).searchStorefront(eq(ProductStatus.ACTIVE), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), captor.capture(), anyString(), anyBoolean(),
+                anyBoolean(), any(Pageable.class));
+        assertThat(captor.getValue()).isFalse();
     }
 
     /* ============================ favoritos ============================ */
@@ -502,5 +548,22 @@ class Cov06CatalogStorefrontReadServiceTest {
     private static ProductSummaryView resumen(String slug, BigDecimal displayPrice) {
         return new ProductSummaryView(UUID.randomUUID(), slug, slug, null, null, "CNY", null, 0, null, "ACTIVE", null,
                 displayPrice, "EUR", "€", null, null, null, false);
+    }
+
+    /**
+     * La variante se sirve a PRECIO DE VENTA. v.getPrice() es el coste CNY del proveedor, y servirlo
+     * por el API público regalaba el margen a cualquier usuario logueado (y a los partners).
+     */
+    @Test
+    void laVarianteNuncaEnsenaElCosteDelProveedor() {
+        ProductVariantEntity v = variante("SKU-A", true);
+        v.setPrice(new java.math.BigDecimal("5.38")); // coste CNY 1688
+        PricingService.PricedAmount venta = org.mockito.Mockito.mock(PricingService.PricedAmount.class,
+                org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        when(venta.displayAmount()).thenReturn(new java.math.BigDecimal("2.70"));
+        when(pricingService.priceFor(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(v)))
+                .thenReturn(venta);
+
+        assertThat(service.variantView(v).price()).isEqualByComparingTo("2.70");
     }
 }

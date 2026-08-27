@@ -14,6 +14,8 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariantValue;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
 import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.CustomsAuditView;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductCustomsGapView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
@@ -21,15 +23,19 @@ import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.application.service.BulkProductFields;
+import com.nexaplatform.dropshipping.application.service.CatalogReindexRunner;
 import com.nexaplatform.dropshipping.application.service.BulkProductRules;
 import com.nexaplatform.dropshipping.application.service.BulkProductStructure;
 import com.nexaplatform.dropshipping.application.service.ProductSeoMetadata;
+import com.nexaplatform.dropshipping.application.service.SupplierSourceUrl;
 import com.nexaplatform.dropshipping.application.service.Texts;
 import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.domain.enums.ReviewSource;
 import com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontMapper;
+import com.nexaplatform.dropshipping.application.service.CustomsDataCheck;
 import com.nexaplatform.dropshipping.application.service.CustomsProfileService;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
@@ -54,6 +60,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierE
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantOptionEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
+import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductAttributeRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductImageRepository;
@@ -151,6 +158,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     private static final Slugify SLUG = Slugify.builder().lowerCase(true).build();
 
+    /** Cuántos productos se traen por tanda al auditar la aduana. Ni una consulta por producto, ni todos. */
+    private static final int AUDIT_BATCH_SIZE = 300;
+
     private final ProductRepository productRepository;
     private final SupplierRepository supplierRepository;
     private final CategoryRepository categoryRepository;
@@ -172,6 +182,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private final JdbcTemplate jdbcTemplate;
     private final ProductBulkExportMapper bulkExportMapper;
     private final ImageMirrorService imageMirrorService;
+    /** Ejecutor del reindexado completo en segundo plano (evita el timeout del proxy/edge). */
+    private final CatalogReindexRunner reindexRunner;
     /** DROP-677: mapeo de categorías de 1688 → categoría interna, usado al resolver la fila de carga. */
     private final Category1688MappingRepository category1688MappingRepository;
     /** DROP-670: esquema de atributos obligatorios por categoría, validado en cada alta masiva. */
@@ -425,10 +437,20 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // substring over the current page.
         // needle "" (no nulo) evita el error de tipo de Postgres al bindear null en el LIKE; la query usa
         // (:needle = '' OR ...). searchAdmin también sirve como ruta del filtro `verified` (con o sin texto/categoría).
-        String needle = (query == null || query.isBlank()) ? "" : query.trim().toLowerCase();
+        String needle = (query == null || query.isBlank()) ? ""
+                : Texts.escapeLikeWildcards(query.trim().toLowerCase());
         if (!needle.isEmpty() || verified != null) {
-            return productJpaRepository.searchAdmin(st, categoryId, needle, verified, pageable)
-                    .map(p -> productMapper.toSummary(p, language));
+            // El fuzzy se acota al idioma que está viendo el admin (contra los 8 a la vez, "botas" casaba
+            // con el "botao" portugués). Las descripciones largas solo se rastrean si el match por
+            // título/atributo/variante no ha encontrado NADA — así el ruido no tapa lo relevante, pero el
+            // admin sigue pudiendo localizar un producto por una frase que solo está en su descripción.
+            String lang = (language == null || language.isBlank()) ? "es" : language.toLowerCase();
+            Page<ProductEntity> found = productJpaRepository.searchAdmin(st, categoryId, needle, verified, lang,
+                    false, pageable);
+            if (!needle.isEmpty() && found.getTotalElements() == 0) {
+                found = productJpaRepository.searchAdmin(st, categoryId, needle, verified, lang, true, pageable);
+            }
+            return found.map(p -> productMapper.toSummary(p, language));
         }
         if (categoryId == null) {
             return pageProducts(st, pageable, language);
@@ -444,16 +466,20 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
      * ({@code basePrice}) — el margen es multiplicativo, así que el orden coincide con el de venta.
      */
     private static Sort adminSort(String sort) {
-        if (sort == null || sort.isBlank()) {
-            return Sort.unsorted();
-        }
-        return switch (sort) {
+        // NUNCA se devuelve Sort.unsorted(): paginar sin ORDER BY deja el orden a criterio de PostgreSQL,
+        // que con LIMIT/OFFSET no garantiza ser el mismo entre dos consultas. El resultado es que la misma
+        // fila puede salir en dos páginas y otra no salir en ninguna — el listado del admin se saltaría
+        // productos sin avisar. Ordenar por id es barato (clave primaria) y estable.
+        Sort criterio = switch (sort == null ? "" : sort) {
             case "price_asc" -> Sort.by(Sort.Direction.ASC, "basePrice");
             case "price_desc" -> Sort.by(Sort.Direction.DESC, "basePrice");
             case "newest" -> Sort.by(Sort.Direction.DESC, "ingestedAt");
             case "oldest" -> Sort.by(Sort.Direction.ASC, "ingestedAt");
             default -> Sort.unsorted();
         };
+        // Y el desempate va SIEMPRE, también sobre los criterios explícitos: `ingestedAt` y `basePrice`
+        // empatan de sobra en un catálogo cargado por lotes.
+        return criterio.and(Sort.by(Sort.Direction.ASC, "id"));
     }
 
     @Override
@@ -522,17 +548,25 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = CACHE_PRODUCT_DETAIL, key = "#slug + ':' + #language + ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get() + ':' + T(com.nexaplatform.dropshipping.application.service.PricingChannelHolder).get() + ':' + T(com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils).isAdmin()")
+    @Cacheable(value = CACHE_PRODUCT_DETAIL, key = "#slug + ':' + #language + ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get() + ':' + T(com.nexaplatform.dropshipping.application.service.PricingChannelHolder).get() + ':' + T(com.nexaplatform.dropshipping.application.service.PricingCountryHolder).get() + ':' + T(com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils).isAdmin()")
     public ProductDetailView getProductBySlug(String slug, String language) {
         ProductEntity p = productJpaRepository.findWithDetailsBySlug(slug)
                 .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND + slug));
+        // Un producto retirado no existe para el escaparate. El listado ya lo esconde (exige ACTIVE) y el
+        // cobro ya lo rechaza con PRODUCT_UNAVAILABLE, pero la ficha por slug —a la que se llega por enlace
+        // directo, por un resultado indexado o desde un correo antiguo— seguía sirviéndose entera, con su
+        // precio: enseñaba un escaparate de algo que no se puede comprar. Para el admin sí tiene que abrirse,
+        // porque desde el panel se revisa y se reactiva justo lo que está pausado o archivado.
+        if (!SecurityUtils.isAdmin() && p.getStatus() != ProductStatus.ACTIVE) {
+            throw new NotFoundException(PRODUCT_NOT_FOUND + slug);
+        }
         forceLoadCollections(p);
         return productMapper.toDetail(p, language, priceTierRepository.findByProductIdOrderByMinQtyAsc(p.getId()));
     }
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = CACHE_PRODUCT_DETAIL, key = "'id:' + #id + ':' + #language + ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get() + ':' + T(com.nexaplatform.dropshipping.application.service.PricingChannelHolder).get() + ':' + T(com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils).isAdmin()")
+    @Cacheable(value = CACHE_PRODUCT_DETAIL, key = "'id:' + #id + ':' + #language + ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get() + ':' + T(com.nexaplatform.dropshipping.application.service.PricingChannelHolder).get() + ':' + T(com.nexaplatform.dropshipping.application.service.PricingCountryHolder).get() + ':' + T(com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils).isAdmin()")
     public ProductDetailView getProductById(UUID id, String language) {
         return detailById(id, language);
     }
@@ -602,6 +636,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private void applyStatus(UUID id, ProductStatus status) {
         ProductEntity p = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND + id));
+        requireCustomsDataToPublish(p, status);
         p.setStatus(status);
         // DROP-679: al publicar se generan los metadatos SEO por idioma a partir del contenido real
         // (título/descripción ya traducidos), sin sobrescribir los que el operador haya definido.
@@ -610,6 +645,96 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         }
         productJpaRepository.save(p);
         productIndexer.indexProduct(id);
+    }
+
+    /**
+     * Un producto no entra a la venta sin los datos que la aduana exige para poder declararlo.
+     *
+     * <p>Este es el sitio barato de descubrirlo. Si el producto llega al escaparate incompleto, el fallo
+     * no aparece hasta que alguien lo compra y hay que despachar su pedido, y entonces ya hay dinero
+     * cobrado: o el transportista rechaza la guía, o la aduana retiene el paquete. Publicar es una acción
+     * deliberada del administrador, así que es el momento natural para exigírselos.
+     *
+     * <p>Solo se comprueba al ACTIVAR: retirar del escaparate un producto defectuoso —pausarlo o
+     * archivarlo— es precisamente lo que hay que poder hacer siempre, faltándole lo que le falte.
+     */
+    private void requireCustomsDataToPublish(ProductEntity p, ProductStatus status) {
+        if (status != ProductStatus.ACTIVE) {
+            return;
+        }
+        List<CustomsDataCheck.CustomsField> faltantes = CustomsDataCheck.faltantesDe(p);
+        if (faltantes.isEmpty()) {
+            return;
+        }
+        String nombre = p.getSlug() != null && !p.getSlug().isBlank() ? p.getSlug() : p.getExternalId();
+        throw new BusinessException("INCOMPLETE_CUSTOMS_DATA",
+                "No se puede poner a la venta sin los datos obligatorios de aduana. "
+                        + CustomsDataCheck.describe(String.valueOf(nombre), faltantes)
+                        + ". Complétalos y vuelve a publicarlo.");
+    }
+
+    /**
+     * Repasa el catálogo y devuelve qué productos no se podrían declarar en aduana y qué les falta.
+     *
+     * <p>Existe porque con miles de referencias abrirlas una a una para ver cuál está coja no es viable:
+     * el administrador necesita la lista de golpe para arreglarlas en bloque. Se lee en tandas —ids
+     * primero, luego los productos con sus traducciones y variantes— para no traerse el catálogo entero
+     * a memoria, y se corta en {@code max} filas avisando de que quedan más.
+     *
+     * <p>El veredicto lo da {@link CustomsDataCheck}, el mismo que bloquea la publicación y el despacho:
+     * lo que aquí sale como incompleto es exactamente lo que allí no va a pasar.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public CustomsAuditView auditCustomsData(String status, int max) {
+        ProductStatus filtro = parseStatusTolerant(status);
+        int tope = Math.max(1, max);
+        List<ProductCustomsGapView> incompletos = new ArrayList<>();
+        long revisados = 0;
+        long totalIncompletos = 0;
+        boolean quedanMas = false;
+        int pagina = 0;
+        boolean hayMasPaginas = true;
+        while (hayMasPaginas) {
+            Page<UUID> ids = productJpaRepository.findIdsForCustomsAudit(filtro,
+                    // Ordenado por id: la paginación tiene que ser estable mientras se recorre el
+                    // catálogo, o un producto se repetiría en dos tandas y otro no saldría en ninguna.
+                    PageRequest.of(pagina, AUDIT_BATCH_SIZE, Sort.by(Sort.Direction.ASC, "id")));
+            List<UUID> lote = ids.getContent();
+            if (!lote.isEmpty()) {
+                // Las traducciones y las variantes van en dos consultas porque no se pueden traer las dos
+                // colecciones en el mismo JOIN FETCH; la segunda rellena las mismas instancias.
+                List<ProductEntity> productos = productJpaRepository.findWithTranslationsByIds(lote);
+                productJpaRepository.findWithVariantsByIds(lote);
+                for (ProductEntity p : productos) {
+                    revisados++;
+                    List<CustomsDataCheck.CustomsField> faltantes = CustomsDataCheck.faltantesDe(p);
+                    if (faltantes.isEmpty()) {
+                        continue;
+                    }
+                    totalIncompletos++;
+                    if (incompletos.size() < tope) {
+                        incompletos.add(toCustomsGapView(p, faltantes));
+                    } else {
+                        quedanMas = true;
+                    }
+                }
+            }
+            hayMasPaginas = ids.hasNext();
+            pagina++;
+        }
+        return new CustomsAuditView(revisados, totalIncompletos, quedanMas, incompletos);
+    }
+
+    /** Una fila de la auditoría: lo justo para reconocer el producto y saber qué corregirle. */
+    private static ProductCustomsGapView toCustomsGapView(ProductEntity p,
+            List<CustomsDataCheck.CustomsField> faltantes) {
+        List<String> etiquetas = new ArrayList<>();
+        for (CustomsDataCheck.CustomsField campo : faltantes) {
+            etiquetas.add(campo.etiqueta());
+        }
+        return new ProductCustomsGapView(p.getId(), p.getSlug(), p.getTitleZh(), p.getExternalId(),
+                p.getStatus() != null ? p.getStatus().name() : null, etiquetas);
     }
 
     /** DROP-679: rellena meta_title/meta_description (solo si están vacíos) desde el contenido real. */
@@ -644,10 +769,35 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         return productMapper.toDetail(p, lang, priceTierRepository.findByProductIdOrderByMinQtyAsc(p.getId()));
     }
 
+    @Override
+    @Transactional
+    @Caching(evict = {@CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true)})
+    public ProductDetailView updateSourceUrl(UUID id, String sourceUrl, String lang) {
+        ProductEntity p = productJpaRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND + id));
+        p.setSourceUrl(SupplierSourceUrl.requireValid(sourceUrl));
+        productJpaRepository.save(p);
+        productIndexer.indexProduct(id);
+        return productMapper.toDetail(p, lang, priceTierRepository.findByProductIdOrderByMinQtyAsc(p.getId()));
+    }
+
     /** Campos sueltos de la ficha: sólo se toca lo que el admin manda, un null es "no lo edito". */
     private void applyQuickEditScalars(ProductEntity p, AdminProductQuickEditDtoIn req) {
         if (req.getBrand() != null) {
             p.setBrand(req.getBrand());
+        }
+        // Fabricante (art. 19.a del Reglamento (UE) 2023/988). Cadena vacía sirve para BORRAR el dato, igual
+        // que en el resto de campos de texto de la ficha; null es "no lo edito".
+        if (req.getManufacturerName() != null) {
+            p.setManufacturerName(Texts.trimToNull(req.getManufacturerName()));
+        }
+        if (req.getManufacturerAddress() != null) {
+            p.setManufacturerAddress(Texts.trimToNull(req.getManufacturerAddress()));
+        }
+        if (req.getManufacturerEmail() != null) {
+            p.setManufacturerEmail(Texts.trimToNull(req.getManufacturerEmail()));
         }
         if (req.getBasePrice() != null) {
             p.setBasePrice(req.getBasePrice());
@@ -657,6 +807,14 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         }
         if (req.getMoq() != null) {
             p.setMoq(req.getMoq());
+        }
+        // Envío e IVA se cargan al importar, pero hasta ahora no había forma de corregirlos sin
+        // reimportar el producto entero: el PUT aceptaba el campo y lo descartaba en silencio.
+        if (req.getShippingCny() != null) {
+            p.setShippingCny(req.getShippingCny());
+        }
+        if (req.getIvaCny() != null) {
+            p.setIvaCny(req.getIvaCny());
         }
         // Verificación manual del admin (checkbox del listado): true = revisado OK, false = pendiente/reimportar.
         if (req.getVerified() != null) {
@@ -810,6 +968,22 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // "reindexar" deje todo el catálogo visible en el escaparate, no solo actualice el índice.
         imageMirrorService.mirrorAllPendingAsync();
         return n;
+    }
+
+    @Override
+    public ReindexStatus startReindex() {
+        // tryAcquire() marca "en curso" de forma atómica; si ya había uno, no se lanza otro.
+        if (!reindexRunner.tryAcquire()) {
+            return new ReindexStatus(true, false, reindexRunner.lastIndexed());
+        }
+        // Cruce de bean (runner distinto): así surte efecto el @Async y la petición vuelve al instante.
+        reindexRunner.runAsync();
+        return new ReindexStatus(true, true, reindexRunner.lastIndexed());
+    }
+
+    @Override
+    public ReindexStatus reindexStatus() {
+        return new ReindexStatus(reindexRunner.isRunning(), false, reindexRunner.lastIndexed());
     }
 
     @Override
@@ -1010,7 +1184,20 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                     "DELETE FROM product_variant WHERE product_id = ? AND (options_json->>? = ? OR options_json->>? = ?)",
                     productId, optName, v.getValueZh(), optName, v.getValue());
         }
+        // Se saca de la colección del PADRE antes de borrarlo. No es redundante con el delete: la
+        // asociación es @OneToMany(cascade = ALL, orphanRemoval = true), así que mientras el valor siga
+        // dentro de `opt.values` Hibernate lo considera vivo. Y la colección se carga sí o sí unas líneas
+        // más abajo, cuando el indexador lee el producto ENTERO dentro de esta misma transacción: al
+        // materializarla, el valor marcado para borrar reaparecía y la cascada lo volvía a persistir.
+        // Resultado: el endpoint respondía 204 y la fila seguía en la base de datos.
+        if (opt != null && opt.getValues() != null) {
+            opt.getValues().remove(v);
+        }
         variantValueRepository.delete(v);
+        // Flush explícito: obliga a que el DELETE llegue a la base ANTES de que el indexador vuelva a leer
+        // el producto. Sin esto, el orden de las operaciones lo decide Hibernate y el indexado podía
+        // adelantarse al borrado.
+        variantValueRepository.flush();
         if (productId != null) {
             productIndexer.indexProduct(productId);
         }
@@ -1261,14 +1448,30 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<BulkProductDtoIn> exportProducts(int from, int to) {
+    public List<BulkProductDtoIn> exportProducts(int from, int to, Instant createdFrom, Instant createdTo) {
         int safeFrom = Math.max(1, from);
         int safeTo = Math.max(safeFrom, to);
         int offset = safeFrom - 1;
         int limit = safeTo - safeFrom + 1;
-        List<ProductEntity> products = em
-                .createQuery("SELECT p FROM ProductEntity p ORDER BY p.id ASC", ProductEntity.class)
-                .setFirstResult(offset).setMaxResults(limit).getResultList();
+        // El filtro por fecha de carga se añade SOLO si viene informado: pasar un parámetro null a un
+        // "(:cf IS NULL OR ...)" hace que Postgres no pueda inferir el tipo del bind ("could not determine
+        // data type of parameter"). Construyendo el WHERE condicional se evita el bind nulo por completo.
+        StringBuilder jpql = new StringBuilder("SELECT p FROM ProductEntity p WHERE 1 = 1");
+        if (createdFrom != null) {
+            jpql.append(" AND p.ingestedAt >= :cf");
+        }
+        if (createdTo != null) {
+            jpql.append(" AND p.ingestedAt < :ct");
+        }
+        jpql.append(" ORDER BY p.id ASC");
+        TypedQuery<ProductEntity> query = em.createQuery(jpql.toString(), ProductEntity.class);
+        if (createdFrom != null) {
+            query.setParameter("cf", createdFrom);
+        }
+        if (createdTo != null) {
+            query.setParameter("ct", createdTo);
+        }
+        List<ProductEntity> products = query.setFirstResult(offset).setMaxResults(limit).getResultList();
         List<BulkProductDtoIn> out = new ArrayList<>();
         for (ProductEntity p : products) {
             List<ProductAttributeEntity> attributes = em.createQuery(
@@ -1290,16 +1493,21 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public ProductExportBatch exportBatchAfter(UUID afterId, int limit) {
+    public ProductExportBatch exportBatchAfter(UUID afterId, int limit, Instant createdFrom, Instant createdTo) {
         int safeLimit = Math.clamp(limit, 1, 1000);
         // Keyset pagination by id. A native query with an explicit uuid cast is used because Hibernate does
         // not reliably translate the JPQL "p.id > :afterId" comparison on a UUID column (it silently returns
         // no rows past a point), which truncated the stream. Native SQL uses Postgres' native uuid ordering.
+        // El rango opcional por fecha de carga (ingested_at) se pasa como texto ISO y se castea a timestamptz.
         @SuppressWarnings("unchecked")
         List<ProductEntity> products = em.createNativeQuery(
                 "SELECT * FROM product WHERE (CAST(:afterId AS uuid) IS NULL OR id > CAST(:afterId AS uuid)) "
+                        + "AND (CAST(:cf AS timestamptz) IS NULL OR ingested_at >= CAST(:cf AS timestamptz)) "
+                        + "AND (CAST(:ct AS timestamptz) IS NULL OR ingested_at < CAST(:ct AS timestamptz)) "
                         + "ORDER BY id ASC LIMIT :lim", ProductEntity.class)
                 .setParameter("afterId", afterId != null ? afterId.toString() : null)
+                .setParameter("cf", createdFrom != null ? createdFrom.toString() : null)
+                .setParameter("ct", createdTo != null ? createdTo.toString() : null)
                 .setParameter("lim", safeLimit)
                 .getResultList();
         if (products.isEmpty()) {
@@ -1355,8 +1563,23 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public long countProducts() {
-        return em.createQuery("SELECT COUNT(p) FROM ProductEntity p", Long.class).getSingleResult();
+    public long countProducts(Instant createdFrom, Instant createdTo) {
+        // Filtro condicional (ver exportProducts): evita el bind nulo sin tipo que Postgres rechaza.
+        StringBuilder jpql = new StringBuilder("SELECT COUNT(p) FROM ProductEntity p WHERE 1 = 1");
+        if (createdFrom != null) {
+            jpql.append(" AND p.ingestedAt >= :cf");
+        }
+        if (createdTo != null) {
+            jpql.append(" AND p.ingestedAt < :ct");
+        }
+        TypedQuery<Long> query = em.createQuery(jpql.toString(), Long.class);
+        if (createdFrom != null) {
+            query.setParameter("cf", createdFrom);
+        }
+        if (createdTo != null) {
+            query.setParameter("ct", createdTo);
+        }
+        return query.getSingleResult();
     }
 
     @Override
@@ -1539,6 +1762,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         mergeTranslationField("en", m, r::getTitleEn, r::setTitleEn, r::getDescriptionEn, r::setDescriptionEn);
         mergeTranslationField("pt", m, r::getTitlePt, r::setTitlePt, r::getDescriptionPt, r::setDescriptionPt);
         mergeTranslationField("zh", m, r::getTitleZh, r::setTitleZh, r::getDescriptionZh, r::setDescriptionZh);
+        mergeTranslationField("fr", m, r::getTitleFr, r::setTitleFr, r::getDescriptionFr, r::setDescriptionFr);
+        mergeTranslationField("it", m, r::getTitleIt, r::setTitleIt, r::getDescriptionIt, r::setDescriptionIt);
+        mergeTranslationField("de", m, r::getTitleDe, r::setTitleDe, r::getDescriptionDe, r::setDescriptionDe);
+        mergeTranslationField("nl", m, r::getTitleNl, r::setTitleNl, r::getDescriptionNl, r::setDescriptionNl);
         if (Texts.has(r.getTitleEs())) {
             return;
         }
@@ -1634,7 +1861,13 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 .title(rv.getTitle())
                 .body(rv.getBody())
                 .tags(rv.getTags() != null ? String.join(",", rv.getTags()) : null)
-                .verifiedPurchase(Boolean.TRUE.equals(rv.getVerifiedPurchase()))
+                // Una reseña que llega en la carga del catálogo NO puede marcarse como compra verificada,
+                // diga lo que diga el fichero de origen: no hay ninguna compra en esta tienda detrás de
+                // ella. Afirmar lo contrario está en la lista negra de prácticas desleales de la
+                // Directiva Omnibus, que se sanciona sin necesidad de probar que alguien fue engañado.
+                // El distintivo se gana en ProductReviewUseCase, cuando escribe quien sí compró.
+                .verifiedPurchase(false)
+                .source(ReviewSource.SUPPLIER)
                 .approved(true)
                 .language(Texts.has(rv.getLanguage()) ? rv.getLanguage().trim().toLowerCase() : "es")
                 .build();

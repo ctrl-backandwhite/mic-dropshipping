@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.UUID;
+import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 
 /**
  * Canonical pricing pipeline:
@@ -32,6 +33,8 @@ import java.util.UUID;
 public class PricingService {
 
     private final CurrencyRateService currencyService;
+    /** Rebajas vigentes: el precio de escaparate sale ya descontado. */
+    private final PromotionService promotionService;
     private final MarginService marginService;
 
     public PricedAmount priceFor(ProductEntity product, ProductVariantEntity variant) {
@@ -56,13 +59,21 @@ public class PricingService {
     }
 
     /**
-     * Tarifica un importe de proveedor concreto con las reglas del producto: margen sobre la base, y
-     * después IVA y envío SIN margen.
+     * Tarifica un importe de proveedor concreto con las reglas del producto: el margen se aplica sobre el
+     * COSTE COMPLETO del proveedor —base + IVA chino + porte—, no solo sobre la base.
      *
      * <p>Existe para que los tramos por cantidad pasen por AQUÍ y no por su propia cuenta. Los tramos
      * calculaban coste → USD → margen y se quedaban ahí, sin IVA ni envío: la ficha anunciaba «2+ →
      * 1,99 $» y al pagar se cobraban 3,57 $ por unidad. Con una sola fórmula, lo que se enseña y lo que
      * se cobra no pueden separarse otra vez.
+     *
+     * <p><b>Sobre qué se aplica el margen (25-ago-2026).</b> Hasta esta fecha el margen gravaba solo la
+     * base y el IVA y el porte se sumaban en crudo, de modo que dos tercios del desembolso real —el porte
+     * de 16 CNY pesa más que muchos artículos— viajaban sin un céntimo de margen. Ahora el porcentaje se
+     * aplica al desembolso entero: {@code (base + IVA + porte) × (1 + margen)}. Se implementa como un
+     * FACTOR derivado de {@code retail / coste} en vez de releer el porcentaje, para que un margen de tipo
+     * FIXED —que suma dólares en vez de multiplicar— reparta su parte proporcional igual que uno
+     * porcentual, sin una segunda rama que mantener.
      */
     public PricedAmount priceForSupplierAmount(ProductEntity product, ProductVariantEntity effective,
             BigDecimal supplierAmount) {
@@ -72,13 +83,17 @@ public class PricingService {
         String sourceCurrency = product.getCurrency() != null ? product.getCurrency() : "CNY";
         BigDecimal costUsd = supplierAmount != null ? currencyService.toUsd(supplierAmount, sourceCurrency) : null;
         PriceWithMargin withMargin = marginService.apply(costUsd, product, effective);
-        // Base CON margen (el margen SOLO se aplica al precio base). El IVA y el envío se suman DESPUÉS,
-        // sin margen (decisión del usuario). Ambos vienen en CNY (misma moneda que base) y se convierten a USD.
         BigDecimal retailBaseUsd = withMargin.retailUsd();
-        BigDecimal ivaUsd = product.getIvaCny() != null
+        // Lo que se le debe al PROVEEDOR, sin margen. Se conserva porque son dos cosas distintas de las que
+        // dependen cálculos distintos: la subvención por porte repetido devuelve el porte que de verdad no
+        // se gasta (estos 16 CNY), mientras que el cliente paga ese porte ya con margen.
+        BigDecimal supplierIvaUsd = product.getIvaCny() != null
                 ? currencyService.toUsd(product.getIvaCny(), sourceCurrency) : BigDecimal.ZERO;
-        BigDecimal shippingUsd = product.getShippingCny() != null
+        BigDecimal supplierShippingUsd = product.getShippingCny() != null
                 ? currencyService.toUsd(product.getShippingCny(), sourceCurrency) : BigDecimal.ZERO;
+        BigDecimal marginFactor = marginFactor(costUsd, retailBaseUsd);
+        BigDecimal ivaUsd = supplierIvaUsd.multiply(marginFactor);
+        BigDecimal shippingUsd = supplierShippingUsd.multiply(marginFactor);
         String displayCode = CurrencyHolder.get();
         // Sin precio base (producto sin precio) → todo null (no se puede tarificar); no forzar 0.
         BigDecimal baseUsd = retailBaseUsd;
@@ -100,22 +115,80 @@ public class PricingService {
         // mientras el pedido se cobraba a 14,78 €. Derivándolo del canónico, lo que se enseña ES lo que
         // se cobra, en cualquier moneda y sin más cuentas de por medio.
         BigDecimal displayTotal = currencyService.usdToDisplay(retailUsd);
+        // Rebaja. Se aplica sobre el precio YA compuesto y en la moneda que se enseña, para que el
+        // porcentaje anunciado sea el que el cliente ve descontado y no difiera por redondeos.
+        // Suelo: el PRECIO BASE del producto (coste × margen), decisión del usuario del 8-ago-2026.
+        // Ninguna promoción baja de ahí por mucho que diga su porcentaje.
+        //
+        // Se eligió la base y no «coste + envío» por dos motivos. Uno, aquel suelo se olvidaba del IVA
+        // —cubría producto y porte pero no el impuesto, así que dejaba vender con pérdida—. Y dos, la
+        // base ya lleva dentro el coste y deja un margen aunque el descuento llegue al tope, mientras
+        // que rozar el coste desnudo convierte cada venta rebajada en trabajo gratis.
+        BigDecimal floorDisplay = displayBase;
+        // REGLA ESTRICTA: las rebajas y promociones son SOLO del escaparate propio (web/app NX036). El
+        // canal de integración (Shopify/WooCommerce/API de partners) vende con su propio margen y NUNCA
+        // se le aplica un descuento: si un partner revende, la promoción es decisión suya, no nuestra, y
+        // regalársela le comería el margen que paga por integrarse. Ver [[price-rule-channel]].
+        PromotionService.Discounted deal = PricingChannelHolder.get() == PriceRuleChannel.STOREFRONT
+                ? promotionService.applyAutomatic(product, displayTotal, floorDisplay)
+                : PromotionService.Discounted.none(displayTotal);
+        String originalFormatted = null;
+        Integer discountPercent = null;
+        String promotionName = null;
+        BigDecimal originalRetailUsd = retailUsd;
+        if (deal.applies()) {
+            originalFormatted = currencyService.formatDisplay(displayTotal, displayCode);
+            discountPercent = deal.percentOff().intValue();
+            promotionName = deal.promotionName();
+            displayTotal = deal.finalAmount();
+            // El cobro real también baja: si solo cambiara el escaparate, se anunciaría una rebaja que
+            // el cliente no llega a pagar. Se aplica el MISMO porcentaje al importe en dólares en vez
+            // de reconvertir desde la moneda mostrada: ida y vuelta por el tipo de cambio introduce un
+            // céntimo de deriva, y ahí es donde el precio anunciado deja de coincidir con el cobrado.
+            BigDecimal factor = deal.finalAmount().divide(deal.original(), 8, RoundingMode.HALF_UP);
+            retailUsd = retailUsd == null ? null : retailUsd.multiply(factor).setScale(2, RoundingMode.HALF_UP);
+        }
         // El string formateado lo produce el BACKEND (locale de la moneda en BD); el frontend solo pinta.
         String displayFormatted = currencyService.formatDisplay(displayTotal, displayCode);
         String baseFormatted = currencyService.formatDisplay(displayBase, displayCode);
         String ivaFormatted = currencyService.formatDisplay(displayIva, displayCode);
         String shippingFormatted = currencyService.formatDisplay(displayShip, displayCode);
+        // Ganancia real de la línea: lo que se cobra menos TODO lo que se le debe al proveedor (coste, su
+        // IVA y su porte). Se calcula aquí, donde están los tres importes sin margen, y no en quien la
+        // consume: la vista previa y el pedido la necesitaban por separado y cada uno la derivaba a su
+        // manera, que es como se acaba con dos cifras de ganancia que no coinciden.
+        BigDecimal profitUsd = retailUsd == null ? null
+                : retailUsd.subtract(nvl(costUsd)).subtract(supplierIvaUsd).subtract(supplierShippingUsd);
         return new PricedAmount(costUsd, retailUsd, displayTotal, displayCode, currencyService.symbolOf(displayCode),
                 displayFormatted, withMargin.appliedRule() != null ? withMargin.appliedRule().getId() : null,
                 withMargin.appliedPercentage(), baseUsd, ivaUsd, shippingUsd, baseFormatted, ivaFormatted,
-                shippingFormatted);
+                shippingFormatted, originalFormatted, discountPercent, promotionName, originalRetailUsd,
+                supplierShippingUsd, profitUsd);
+    }
+
+    /**
+     * Cuánto multiplica el margen al coste, para repartirlo también sobre el IVA y el porte del proveedor.
+     *
+     * <p>Sin coste no hay proporción que calcular —dividir daría ArithmeticException— así que se devuelve
+     * 1: el IVA y el porte se cobran tal cual. Es el caso del producto sin precio, que no se tarifica.
+     */
+    private static BigDecimal marginFactor(BigDecimal costUsd, BigDecimal retailBaseUsd) {
+        if (costUsd == null || costUsd.signum() <= 0 || retailBaseUsd == null) {
+            return BigDecimal.ONE;
+        }
+        return retailBaseUsd.divide(costUsd, 8, RoundingMode.HALF_UP);
+    }
+
+    /** Cero cuando falta el importe: sumar null en una cadena de BigDecimal revienta con NullPointerException. */
+    private static BigDecimal nvl(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     /** Resultado "no se puede tarificar": todos los importes a null, nunca 0. */
     private PricedAmount unpriced() {
         String displayCode = CurrencyHolder.get();
         return new PricedAmount(null, null, null, displayCode, currencyService.symbolOf(displayCode),
-                null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     /** null → 0 (para sumar componentes de desglose cuando IVA/envío son 0 y la conversión devuelve null). */
@@ -168,6 +241,44 @@ public class PricingService {
             BigDecimal appliedMarginPercent,
             // Desglose (solo informativo, para el admin): base con margen + IVA + envío = total.
             BigDecimal baseRetailUsd, BigDecimal ivaUsd, BigDecimal shippingUsd,
-            String baseFormatted, String ivaFormatted, String shippingFormatted) {
+            String baseFormatted, String ivaFormatted, String shippingFormatted,
+            // Rebaja. Nulos cuando el producto no está en promoción, que es lo que el escaparate usa
+            // para decidir si pinta el precio tachado o solo uno.
+            String originalFormatted, Integer discountPercent, String promotionName,
+            /**
+             * Importe en USD ANTES de la rebaja. Hace falta para comparar descuentos a nivel de pedido:
+             * el cupón se mide contra el precio sin rebajar, o compararlo con el ya rebajado acumularía
+             * los dos y daría un descuento que nadie ha decidido.
+             */
+            BigDecimal originalRetailUsd,
+            /**
+             * El porte del proveedor SIN margen: los 16 CNY de suelo que se le pagan por mandar el bulto
+             * al almacén. El cliente paga ese mismo porte con margen encima ({@code shippingUsd}); esta
+             * cifra es la que devuelve la subvención cuando se compra más de una unidad, porque es el
+             * gasto que de verdad no se repite.
+             */
+            BigDecimal supplierShippingUsd,
+            /** Lo que gana la plataforma con esta línea: cobrado − (coste + IVA + porte del proveedor). */
+            BigDecimal profitUsd) {
+
+        /**
+         * Precio sin promoción.
+         *
+         * <p>La mayoría de los usos —y de las pruebas— no se ocupan de rebajas, y obligarles a pasar
+         * tres nulos solo añade ruido a cada llamada.
+         */
+        public PricedAmount(BigDecimal costUsd, BigDecimal retailUsd, BigDecimal displayAmount,
+                String displayCurrency, String displaySymbol, String displayFormatted, UUID appliedRuleId,
+                BigDecimal appliedMarginPercent, BigDecimal baseRetailUsd, BigDecimal ivaUsd,
+                BigDecimal shippingUsd, String baseFormatted, String ivaFormatted, String shippingFormatted) {
+            this(costUsd, retailUsd, displayAmount, displayCurrency, displaySymbol, displayFormatted,
+                    appliedRuleId, appliedMarginPercent, baseRetailUsd, ivaUsd, shippingUsd, baseFormatted,
+                    ivaFormatted, shippingFormatted, null, null, null, null, shippingUsd, null);
+        }
+
+        /** ¿Este precio lleva rebaja? Lo pregunta el frontend para tachar el precio anterior. */
+        public boolean discounted() {
+            return discountPercent != null && discountPercent > 0;
+        }
     }
 }

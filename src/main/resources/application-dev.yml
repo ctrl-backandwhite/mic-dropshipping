@@ -45,6 +45,9 @@ server:
 nexadrop:
   storefront:
     base-url: https://front-dropshipping-des.up.railway.app   # CTA / unsubscribe de los emails
+  mobile:
+    # Enlace profundo de la app; debe coincidir con el `scheme` de app.config.ts.
+    oauth-callback-url: ${MOBILE_OAUTH_CALLBACK_URL:nx036://auth/callback}
   oauth:
     # Identidad del authorization server y emisor de los JWT de usuario (este backend).
     issuer: https://back-dropshipping-des.up.railway.app

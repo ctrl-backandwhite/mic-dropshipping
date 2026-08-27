@@ -1,5 +1,8 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
+import com.nexaplatform.dropshipping.application.service.Texts;
+import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.service.PromotionService;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
@@ -17,10 +20,13 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVa
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.ProductSearchService;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CustomsDeclarationGroupRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -38,11 +44,14 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 /**
@@ -52,16 +61,21 @@ import java.util.stream.Collectors;
  * identical shapes without one controller injecting the other (the partner→storefront
  * controller dependency is replaced by this shared collaborator + the CatalogUseCase).
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CatalogStorefrontReadService {
 
     private final ProductRepository productRepository;
+    private final CustomsDeclarationGroupRepository declarationGroupRepository;
     private final CategoryRepository categoryRepository;
     private final SupplierRepository supplierRepository;
     private final SupplierSearchService supplierSearchService;
     private final ProductVariantRepository variantRepository;
     private final ProductMapper productMapper;
+    private final PricingService pricingService;
+    private final PromotionService promotionService;
+    private final ProductSearchService productSearchService;
 
     /* ============================ Categories ============================ */
 
@@ -147,7 +161,8 @@ public class CatalogStorefrontReadService {
 
     @Cacheable(value = CACHE_PRODUCT_LIST,
             key = "'cat:' + #idOrSlug + ':' + #page + ':' + #size + ':' + #lang + ':' + #sort + ':' "
-                    + "+ T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get()")
+                    + "+ T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get() + ':' "
+                    + "+ T(com.nexaplatform.dropshipping.application.service.PricingCountryHolder).get()")
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productsByCategory(String idOrSlug, int page, int size, String lang,
             String sort) {
@@ -179,7 +194,8 @@ public class CatalogStorefrontReadService {
     }
 
     @Cacheable(value = CACHE_PRODUCT_LIST, key = "'sup:' + #id + ':' + #page + ':' + #size + ':' + #lang + ':' + #sort "
-            + "+ ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get()")
+            + "+ ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get() "
+            + "+ ':' + T(com.nexaplatform.dropshipping.application.service.PricingCountryHolder).get()")
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productsBySupplier(UUID id, int page, int size, String lang, String sort) {
         return listing(page, size, lang, ProductListFilters.basic(null, null, id, null, null), sort);
@@ -243,47 +259,228 @@ public class CatalogStorefrontReadService {
         Boolean verified = filters.verified();
 
         int safeSize = Math.min(size, 100);
+        // Acotar `page`: un offset gigante (page*size) desbordaba y caía en un 500 genérico. Con un techo
+        // razonable devolvemos una página vacía en vez de reventar (el catálogo real nunca llega ahí).
+        int safePage = Math.max(0, Math.min(page, 100_000));
         Sort sortSpec = sortFor(sort);
-        Pageable pageable = PageRequest.of(page, safeSize, sortSpec);
+        Pageable pageable = PageRequest.of(safePage, safeSize, sortSpec);
 
-        String needle = (q == null || q.isBlank()) ? null : q.trim().toLowerCase();
+        String needle = (q == null || q.isBlank()) ? null : Texts.escapeLikeWildcards(q.trim().toLowerCase());
         String shipCc = shipFrom == null ? null : shipFrom.toUpperCase();
         BigDecimal minRatingBd = minRating == null ? null : BigDecimal.valueOf(minRating);
         boolean certFilter = certification != null && !certification.isBlank();
         boolean priceFilter = minPrice != null || maxPrice != null;
         // Filtro de verificación manual (solo lo envía el admin desde /admin/browse). Se aplica en memoria.
         boolean verifiedFilter = verified != null;
+        // «Ver los productos» de una promoción: lista solo los alcanzados por ella (por categoría o por
+        // producto; una promoción global no filtra). Se resuelve una vez y se aplica en el mismo barrido
+        // en memoria que el resto de filtros de la capa de aplicación.
+        java.util.function.Predicate<ProductEntity> promoFilter =
+                promotionService.reachFilter(filters.promotionId()).orElse(null);
 
-        // El filtro de precio y el de certificación se aplican en la capa de aplicación, NO en el SQL.
-        // Motivo del precio: el número que ve el usuario (displayPrice) se obtiene de la variante
-        // representativa → coste en USD → margen (reglas) → conversión a la moneda activa (X-Currency).
-        // El SQL solo conoce base_price en CNY, así que filtrar ahí daría rangos sin sentido para EUR/USD/etc.
-        // Por eso aquí filtramos sobre displayPrice, que está en la MISMA moneda que el usuario seleccionó
-        // → el filtro de precio funciona para cualquier moneda. Se pagina en memoria para que el total y
-        // las páginas sean correctos (el catálogo está acotado por el resto de filtros).
-        if (priceFilter || certFilter || verifiedFilter) {
-            String certUp = certFilter ? certification.toUpperCase() : null;
-            Pageable scan = PageRequest.of(0, 5000, sortSpec);
-            Page<ProductEntity> raw = productRepository.searchStorefront(ProductStatus.ACTIVE, needle, categoryId,
-                    supplierId, null, null, shipCc, freeShipping, selfPickup, hasVideo, minRatingBd, inventoryMin, scan);
-            List<ProductSummaryView> all = raw.getContent().stream()
-                    .filter(p -> certUp == null || (p.getCertifications() != null && p.getCertifications().stream()
-                            .anyMatch(c -> c != null && c.toUpperCase().contains(certUp))))
-                    .filter(p -> !verifiedFilter || verified.equals(Boolean.TRUE.equals(p.getVerified())))
-                    .map(p -> productMapper.toSummary(p, lang))
-                    .filter(v -> withinPrice(v.displayPrice(), minPrice, maxPrice)).toList();
-            int total = all.size();
-            // (long) para que un ?page enorme no desborde el int: el índice salía negativo y el subList
-            // respondía 500 en vez de una página vacía.
-            int from = (int) Math.min((long) page * safeSize, total);
-            int to = Math.min(from + safeSize, total);
-            return PageResponse.from(new PageImpl<>(all.subList(from, to), pageable, total));
+        // Texto libre: el idioma activo acota el fuzzy a UN idioma (buscando "botas" en español, el fuzzy
+        // contra los 8 idiomas casaba "botao" en portugués) y `ranked` ordena por relevancia — el término
+        // en el título primero — solo cuando el usuario no ha pedido otro orden explícito.
+        final String langCode = (lang == null || lang.isBlank()) ? "es" : lang.toLowerCase();
+        final boolean ranked = needle != null && (sort == null || sort.isBlank() || "best_match".equals(sort));
+        // `wide` = mirar también dentro de las descripciones largas. Se deja para el segundo intento: una
+        // falda cuya descripción dice "combina con botas" no es un resultado de "botas", pero sí es mejor
+        // que devolver la página vacía cuando NADA casa por título/atributo/variante.
+        BiFunction<Boolean, Pageable, Page<ProductEntity>> search = (wide, pg) -> productRepository
+                .searchStorefront(ProductStatus.ACTIVE, needle, categoryId, supplierId, null, null, shipCc,
+                        freeShipping, selfPickup, hasVideo, minRatingBd, inventoryMin,
+                        verifiedFilter ? verified : null, langCode, wide, ranked, pg);
+
+        // Los filtros que NO se pueden delegar: promoción, certificación, verificado y precio. Este último
+        // porque el número que ve el usuario (displayPrice) sale de la variante representativa → coste en
+        // USD → margen (reglas) → conversión a la moneda activa (X-Currency), mientras que el SQL solo
+        // conoce base_price en CNY: filtrar ahí daría rangos sin sentido para EUR/USD/etc.
+        String certUp = certFilter ? certification.toUpperCase() : null;
+        // `verified` YA NO va aquí: lo resuelve el SQL. Filtrarlo en memoria obligaba a pasar por el
+        // camino del `scan` de 5.000 filas, que con un catálogo mayor deja fuera al resto — el filtro
+        // devolvía 0 resultados sin que nada fallara.
+        InMemoryFilters postFilters = new InMemoryFilters(promoFilter, certUp, false, null, minPrice,
+                maxPrice);
+
+        // TEXTO LIBRE → OpenSearch, que es el motor principal de la búsqueda: entiende la morfología de los
+        // 8 idiomas (plurales, acentos, chino) y devuelve los productos ORDENADOS POR RELEVANCIA. Aquí solo
+        // llegan identificadores; la visibilidad, los filtros y el precio los sigue resolviendo la BD.
+        // «Ver los que no suman arancel»: el grupo se resuelve a los productos de su TERNA y se entra por el
+        // mismo camino que los resultados del buscador. Nulo = sin filtro; vacío = el grupo no existe o no
+        // tiene productos, y entonces la respuesta es una página vacía, nunca el catálogo entero.
+        List<UUID> delGrupo = idsDeLasLineasDe(filters.dutyLines());
+        if (delGrupo != null && delGrupo.isEmpty()) {
+            return PageResponse.from(new PageImpl<>(List.of(), pageable, 0));
         }
 
-        Page<ProductEntity> raw = productRepository.searchStorefront(ProductStatus.ACTIVE, needle, categoryId,
-                supplierId, null, null, shipCc, freeShipping, selfPickup, hasVideo, minRatingBd, inventoryMin, pageable);
+        if (needle != null) {
+            Optional<List<UUID>> relevant = productSearchService.searchRelevantIds(needle, langCode);
+            if (relevant.isPresent()) {
+                List<UUID> ids = delGrupo == null ? relevant.get()
+                        : relevant.get().stream().filter(delGrupo::contains).toList();
+                return fromRelevantIds(ids, categoryId, supplierId, shipCc, freeShipping, selfPickup,
+                        hasVideo, minRatingBd, inventoryMin, sort, lang, postFilters, safePage, safeSize, pageable);
+            }
+            // Si el buscador no ha podido responder (caído, índice aún sin construir) se sigue por SQL: la
+            // búsqueda se degrada, pero el catálogo NUNCA deja de funcionar.
+            log.debug("Búsqueda '{}' resuelta por SQL — OpenSearch no disponible", needle);
+        }
+
+        // Con filtro de grupo manda el grupo. Si además había texto y el buscador estaba caído, el texto se
+        // pierde: enseñar productos de FUERA del grupo sería prometer «no suma arancel» de mercancía que sí
+        // lo suma, y esa diferencia la pondría el comercio al despachar. Devolver de más dentro del grupo es
+        // ruido; devolver de fuera es una promesa falsa.
+        if (delGrupo != null) {
+            if (needle != null) {
+                log.debug("Filtro por grupo con texto '{}' sin buscador: se ignora el texto", needle);
+            }
+            return fromRelevantIds(delGrupo, categoryId, supplierId, shipCc, freeShipping, selfPickup, hasVideo,
+                    minRatingBd, inventoryMin, sort, lang, postFilters, safePage, safeSize, pageable);
+        }
+
+        if (priceFilter || certFilter || promoFilter != null) {
+            Pageable scan = PageRequest.of(0, 5000, sortSpec);
+            Page<ProductEntity> raw = search.apply(false, scan);
+            if (needle != null && raw.isEmpty()) {
+                raw = search.apply(true, scan);
+            }
+            return paginate(applyPostFilters(raw.getContent(), postFilters, lang), safePage, safeSize, pageable);
+        }
+
+        Page<ProductEntity> raw = search.apply(false, pageable);
+        if (needle != null && raw.getTotalElements() == 0) {
+            raw = search.apply(true, pageable);
+        }
         List<ProductSummaryView> slice = raw.getContent().stream().map(p -> productMapper.toSummary(p, lang)).toList();
         return PageResponse.from(new PageImpl<>(slice, pageable, raw.getTotalElements()));
+    }
+
+    /**
+     * Los productos que comparten terna con ALGUNO de esos grupos, o {@code null} si no hay filtro.
+     *
+     * <p>Se filtra por la <b>terna</b> (partida, material y uso) y no por una columna en el producto: es la
+     * terna la que hace que dos productos se declaren con la misma descripción y la aduana los cuente como
+     * una sola línea. Guardar el grupo en cada producto obligaría a reescribir miles de filas cada vez que
+     * se aprueba o se retira una descripción.
+     *
+     * <p>Son varias líneas porque un carrito tiene tantas como ternas distintas lleve: la unión de todas
+     * es «lo que no me suma arancel». Se conserva el orden y se quitan los repetidos —un producto puede
+     * aparecer una sola vez aunque encaje por dos vías.
+     *
+     * <p>Cada línea lleva su ORIGEN, porque la terna que separa una línea de declaración de otra es
+     * clasificación + descripción + origen. Sin él, el filtro devolvía productos del mismo grupo pero de
+     * otro país, que abren línea nueva y suman los 3 EUR igualmente.
+     */
+    private List<UUID> idsDeLasLineasDe(List<ProductListFilters.DutyLine> dutyLines) {
+        // Nulo = sin filtro. Lista VACÍA = filtro que no casa con nada, que es lo que corresponde cuando
+        // se pide «los de mi carrito» y en el carrito no hay ni un grupo aprobado: entonces cualquier
+        // producto abre línea nueva. Devolver el catálogo entero sería justo la promesa contraria.
+        if (dutyLines == null) {
+            return null;
+        }
+        Set<UUID> vistos = new LinkedHashSet<>();
+        for (ProductListFilters.DutyLine linea : dutyLines) {
+            declarationGroupRepository.findById(linea.groupId()).ifPresent(g -> vistos.addAll(
+                    productRepository.idsForCustomsTerna(ProductStatus.ACTIVE, g.getHs6(), g.getMaterial(),
+                            g.getUsageCode(), linea.originCountry())));
+        }
+        return List.copyOf(vistos);
+    }
+
+    /**
+     * Materializa en productos del escaparate los identificadores que ha devuelto el buscador, conservando
+     * su orden de relevancia salvo que el usuario haya pedido otro criterio (precio, novedad, ventas…).
+     *
+     * <p>Todo el pipeline va en memoria a partir de aquí, y puede: la lista viene acotada por el buscador
+     * ({@link ProductSearchService#MAX_IDS}), mientras que el barrido SQL equivalente traía hasta 5.000.
+     */
+    @SuppressWarnings("java:S107")
+    private PageResponse<ProductSummaryView> fromRelevantIds(List<UUID> ids, UUID categoryId, UUID supplierId,
+            String shipCc, Boolean freeShipping, Boolean selfPickup, Boolean hasVideo, BigDecimal minRatingBd,
+            Integer inventoryMin, String sort, String lang, InMemoryFilters postFilters, int safePage, int safeSize,
+            Pageable pageable) {
+        if (ids.isEmpty()) {
+            return PageResponse.from(new PageImpl<>(List.of(), pageable, 0));
+        }
+        List<ProductEntity> found = productRepository.searchStorefrontByIds(ProductStatus.ACTIVE, ids, categoryId,
+                supplierId, shipCc, freeShipping, selfPickup, hasVideo, minRatingBd, inventoryMin);
+        List<ProductEntity> ordered = orderBy(found, ids, sort);
+        return paginate(byDisplayPrice(applyPostFilters(ordered, postFilters, lang), sort), safePage, safeSize,
+                pageable);
+    }
+
+    /**
+     * Ordena por el precio que el usuario VE, no por el coste en CNY.
+     *
+     * <p>Pedir "precio más bajo" y recibir 5,53 → 7,87 → 6,50 es lo que pasa al ordenar por {@code
+     * basePrice}: entre el coste y el precio mostrado median el margen (que varía por producto — reglas de
+     * canal, ajuste por MOQ) y la conversión a la divisa activa, así que el orden del coste no es el orden
+     * del precio. Aquí ya están los precios calculados, de modo que se ordena por el número real de la
+     * ficha. Solo aplica a la búsqueda: el listado por SQL sigue ordenando en base de datos.
+     */
+    private static List<ProductSummaryView> byDisplayPrice(List<ProductSummaryView> views, String sort) {
+        if (!"price_asc".equals(sort) && !"price_desc".equals(sort)) {
+            return views;
+        }
+        Comparator<ProductSummaryView> byPrice = Comparator.comparing(ProductSummaryView::displayPrice,
+                Comparator.nullsLast(Comparator.naturalOrder()));
+        return views.stream().sorted("price_desc".equals(sort) ? byPrice.reversed() : byPrice).toList();
+    }
+
+    /**
+     * Orden final de una búsqueda. Por defecto manda la RELEVANCIA (la posición que le dio el buscador);
+     * si el usuario ha elegido otro criterio en el desplegable, ese gana — buscar y pedir "precio más
+     * bajo" tiene que ordenar por precio, no por relevancia.
+     */
+    private static List<ProductEntity> orderBy(List<ProductEntity> found, List<UUID> relevanceOrder, String sort) {
+        Comparator<ProductEntity> explicit = switch (sort == null ? "" : sort) {
+            case "price_asc" -> Comparator.comparing(ProductEntity::getBasePrice, nullsLast());
+            case "price_desc" -> Comparator.comparing(ProductEntity::getBasePrice, nullsLast()).reversed();
+            case "newest" -> Comparator.comparing(ProductEntity::getCreatedAt, nullsLast()).reversed();
+            case "sales", "lists" -> Comparator.comparing(ProductEntity::getMonthlySales, nullsLast()).reversed();
+            case "rating" -> Comparator.comparing(ProductEntity::getRating, nullsLast()).reversed();
+            case "inventory" -> Comparator.comparing(ProductEntity::getInventoryCount, nullsLast()).reversed();
+            default -> null;
+        };
+        if (explicit != null) {
+            return found.stream().sorted(explicit).toList();
+        }
+        Map<UUID, Integer> rank = new HashMap<>();
+        for (int i = 0; i < relevanceOrder.size(); i++) {
+            rank.put(relevanceOrder.get(i), i);
+        }
+        return found.stream().sorted(Comparator.comparingInt(p -> rank.getOrDefault(p.getId(), Integer.MAX_VALUE)))
+                .toList();
+    }
+
+    /** Comparador natural que deja los nulos al final — hay productos sin precio, sin nota o sin ventas. */
+    private static <T extends Comparable<T>> Comparator<T> nullsLast() {
+        return Comparator.nullsLast(Comparator.naturalOrder());
+    }
+
+    /** Filtros que solo se pueden resolver con el producto ya mapeado (precio en divisa) o en memoria. */
+    private record InMemoryFilters(java.util.function.Predicate<ProductEntity> promo, String certification,
+            boolean verifiedFilter, Boolean verified, BigDecimal minPrice, BigDecimal maxPrice) {
+    }
+
+    private List<ProductSummaryView> applyPostFilters(List<ProductEntity> entities, InMemoryFilters f, String lang) {
+        return entities.stream()
+                .filter(p -> f.promo() == null || f.promo().test(p))
+                .filter(p -> f.certification() == null || (p.getCertifications() != null && p.getCertifications()
+                        .stream().anyMatch(c -> c != null && c.toUpperCase().contains(f.certification()))))
+                .filter(p -> !f.verifiedFilter() || f.verified().equals(Boolean.TRUE.equals(p.getVerified())))
+                .map(p -> productMapper.toSummary(p, lang))
+                .filter(v -> withinPrice(v.displayPrice(), f.minPrice(), f.maxPrice())).toList();
+    }
+
+    private static PageResponse<ProductSummaryView> paginate(List<ProductSummaryView> all, int safePage, int safeSize,
+            Pageable pageable) {
+        int total = all.size();
+        // (long) para que un ?page enorme no desborde el int: el índice salía negativo y el subList
+        // respondía 500 en vez de una página vacía.
+        int from = (int) Math.min((long) safePage * safeSize, total);
+        int to = Math.min(from + safeSize, total);
+        return PageResponse.from(new PageImpl<>(all.subList(from, to), pageable, total));
     }
 
     /**
@@ -368,7 +565,10 @@ public class CatalogStorefrontReadService {
 
     public VariantView variantView(ProductVariantEntity v) {
         String img = v.getImageCdnUrl() != null ? v.getImageCdnUrl() : v.getImageSourceUrl();
-        return new VariantView(v.getId(), v.getSku(), v.getExternalId(), v.getTitle(), v.getPrice(), v.getStock(), img,
+        // Precio de VENTA, nunca v.getPrice(): esa columna es el coste CNY del proveedor, y servirla
+        // aquí regalaba el margen a cualquier usuario logueado (y a los partners).
+        BigDecimal retail = pricingService.priceFor(v.getProduct(), v).displayAmount();
+        return new VariantView(v.getId(), v.getSku(), v.getExternalId(), v.getTitle(), retail, v.getStock(), img,
                 v.getOptions() != null ? v.getOptions() : Map.of(), v.isActive());
     }
 
@@ -377,7 +577,7 @@ public class CatalogStorefrontReadService {
     }
 
     public Sort sortFor(String sort) {
-        return switch (sort == null ? "best_match" : sort) {
+        Sort criterio = switch (sort == null ? "best_match" : sort) {
             case "price_asc" -> Sort.by(Sort.Direction.ASC, "basePrice");
             case "price_desc" -> Sort.by(Sort.Direction.DESC, "basePrice");
             case "newest" -> Sort.by(Sort.Direction.DESC, "createdAt");
@@ -386,7 +586,24 @@ public class CatalogStorefrontReadService {
             case "inventory" -> Sort.by(Sort.Direction.DESC, "inventoryCount");
             default -> Sort.by(Sort.Direction.DESC, "trendScore");
         };
+        return criterio.and(DESEMPATE);
     }
+
+    /**
+     * Desempate final de TODA ordenación paginada. No es un adorno: sin él, la paginación del catálogo
+     * está rota.
+     *
+     * <p>Los siete criterios de arriba ordenan por campos donde el catálogo empata en masa —5.181 de 5.485
+     * productos tienen {@code trendScore = 0}, y otro tanto pasa con las ventas mensuales o el inventario—.
+     * Cuando miles de filas empatan y no hay más criterio, PostgreSQL las devuelve en el orden que le
+     * resulte más barato, y ese orden NO es estable entre consultas: basta un UPDATE en cualquier producto
+     * para que cambie. Medido sobre el catálogo real: la misma página (LIMIT 12 OFFSET 2400) pedida dos
+     * veces con un solo UPDATE en medio devolvió 12 productos DISTINTOS, cero coincidencias.
+     *
+     * <p>El efecto que ve el comprador es que, al bajar por el catálogo, unos productos le salen repetidos
+     * y otros no le salen NUNCA — quedan inalcanzables por más que siga bajando.
+     */
+    private static final Sort DESEMPATE = Sort.by(Sort.Direction.ASC, "id");
 
     /**
      * Nombre de la categoría en el idioma pedido, con el chino como respaldo.

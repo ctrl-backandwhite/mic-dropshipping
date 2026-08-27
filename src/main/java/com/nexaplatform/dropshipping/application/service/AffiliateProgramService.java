@@ -246,8 +246,10 @@ public class AffiliateProgramService {
                     "Las cuentas de administración no pueden ser afiliados");
         }
         AffiliateEntity affiliate = affiliateRepo.findByUser_Id(userId).orElseGet(() -> {
-            AffiliateEntity a = AffiliateEntity.builder().user(user).code(generateUniqueCode(user)).active(true)
-                    .status(ACTIVE).build();
+            // Nace PENDING/inactivo: hasta que un admin lo apruebe no gana comisiones ni cuenta clics (la
+            // atribución exige status ACTIVE). La aprobación la hace el admin tras la solicitud (joinProgram).
+            AffiliateEntity a = AffiliateEntity.builder().user(user).code(generateUniqueCode(user)).active(false)
+                    .status(PENDING).build();
             return affiliateRepo.save(a);
         });
         // Ensure at least one referral code row exists.
@@ -260,17 +262,22 @@ public class AffiliateProgramService {
         return affiliate;
     }
 
-    /** DROP-650: explicit opt-in to the program (records terms acceptance, activates, notifies). */
+    /**
+     * SOLICITUD de acceso al programa de afiliados: registra la aceptación de términos y deja la cuenta en
+     * PENDING (inactiva). NO gana comisiones ni cuenta clics hasta que un ADMIN la apruebe (la atribución y
+     * las comisiones exigen status ACTIVE). Avisa al usuario de que está pendiente y al staff para revisar.
+     */
     @Transactional
     public AffiliateEntity joinProgram(UUID userId) {
         AffiliateEntity a = getOrCreateAffiliate(userId);
         if (a.getAcceptedTermsAt() == null) {
             a.setAcceptedTermsAt(Instant.now());
-            a.setStatus(ACTIVE);
-            a.setActive(true);
+            a.setStatus(PENDING);
+            a.setActive(false);
             affiliateRepo.save(a);
-            notify(userId, "AFFILIATE_JOINED", "Te has unido al programa de afiliados",
-                    "Tu cuenta de afiliado está activa. Comparte tu enlace para empezar a ganar comisiones.");
+            notify(userId, "AFFILIATE_APPLIED", "Solicitud de afiliado recibida",
+                    "Hemos recibido tu solicitud para el programa de afiliados. Un administrador la revisará y te "
+                            + "avisaremos cuando esté aprobada.");
             notifyStaffAffiliateJoined(a.getUser());
         }
         return a;
@@ -884,10 +891,17 @@ public class AffiliateProgramService {
         }
         AffiliateEntity a = affiliateRepo.findById(affiliateId).orElseThrow(
                 () -> new NotFoundException(AFFILIATE_NOT_FOUND));
+        boolean wasPending = PENDING.equals(a.getStatus());
         a.setStatus(s);
         a.setActive(ACTIVE.equals(s));
         AffiliateEntity saved = affiliateRepo.save(a);
         affiliateIndexer.indexAffiliate(saved); // auto-sync del índice al cambiar el estado
+        // Avisa al usuario cuando el admin APRUEBA su solicitud (PENDING → ACTIVE).
+        if (wasPending && ACTIVE.equals(s) && a.getUser() != null) {
+            notify(a.getUser().getId(), "AFFILIATE_APPROVED", "Tu solicitud de afiliado ha sido aprobada",
+                    "¡Enhorabuena! Ya puedes usar el programa de afiliados: comparte tu enlace para empezar a "
+                            + "ganar comisiones.");
+        }
         return saved;
     }
 }

@@ -4,14 +4,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import org.springframework.test.util.ReflectionTestUtils;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
 import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
 import com.nexaplatform.dropshipping.application.service.StockService;
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
+import com.nexaplatform.dropshipping.application.service.CartService;
 import com.nexaplatform.dropshipping.application.usecase.impl.PaymentUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
@@ -120,9 +123,9 @@ class Cov09PaymentGatewayFlowsTest {
 
     private PaymentUseCaseImpl useCase(List<PaymentGateway> gateways) {
         return new PaymentUseCaseImpl(gateways, paymentRepository, paymentJpaRepositoryAdapter, userRepository,
-                orderRepository, walletUseCase, auditLogger, partnerPlanSyncService, customerSubscriptionUseCase,
+                orderRepository, walletUseCase, org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class), auditLogger, partnerPlanSyncService, customerSubscriptionUseCase,
                 subscriptionNotificationService, new ObjectMapper(), orderEmailService, currencyRateService, new OrderAmounts(currencyRateService),
-                stockService, opsAlertService);
+                stockService, mock(SupplierPurchaseService.class), opsAlertService, mock(CartService.class));
     }
 
     private Payment payment(PaymentMethod method, PaymentStatus status, String providerRef, boolean forOrder) {
@@ -159,7 +162,7 @@ class Cov09PaymentGatewayFlowsTest {
     void soloSeCapturaEnPaypalUnPagoQueSeAbrioEnPaypal() {
         payment(PaymentMethod.CARD, PaymentStatus.REQUIRES_ACTION, "cs_test_1", false);
 
-        assertThatThrownBy(() -> subject.capturePayPal(paymentId))
+        assertThatThrownBy(() -> subject.capturePayPal(userId, paymentId))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Not a PayPal payment");
     }
@@ -172,7 +175,7 @@ class Cov09PaymentGatewayFlowsTest {
         when(impostor.supports(PaymentMethod.PAYPAL)).thenReturn(true);
         PaymentUseCaseImpl sinPaypal = useCase(List.of(impostor));
 
-        assertThatThrownBy(() -> sinPaypal.capturePayPal(paymentId))
+        assertThatThrownBy(() -> sinPaypal.capturePayPal(userId, paymentId))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("PayPal gateway not configured");
     }
@@ -182,7 +185,7 @@ class Cov09PaymentGatewayFlowsTest {
         Payment p = payment(PaymentMethod.PAYPAL, PaymentStatus.REQUIRES_ACTION, "PAYID-1", false);
         when(paypal.capture("PAYID-1")).thenReturn(Map.of("status", "COMPLETED"));
 
-        Payment out = subject.capturePayPal(paymentId);
+        Payment out = subject.capturePayPal(userId, paymentId);
 
         assertThat(out.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
         verify(walletUseCase).deposit(eq(userId), eq(2500L), eq(p.getId()), anyString(), anyString());
@@ -193,7 +196,7 @@ class Cov09PaymentGatewayFlowsTest {
         payment(PaymentMethod.PAYPAL, PaymentStatus.REQUIRES_ACTION, "PAYID-1", false);
         when(paypal.capture("PAYID-1")).thenReturn(Map.of("status", "DECLINED"));
 
-        Payment out = subject.capturePayPal(paymentId);
+        Payment out = subject.capturePayPal(userId, paymentId);
 
         assertThat(out.getStatus()).isEqualTo(PaymentStatus.FAILED);
         assertThat(out.getErrorMessage()).contains("DECLINED");
@@ -208,7 +211,7 @@ class Cov09PaymentGatewayFlowsTest {
         Order o = order(OrderStatus.AWAITING_PAYMENT);
         when(stripe.retrieveCheckoutSession("cs_test_real")).thenReturn(Map.of("status", "paid"));
 
-        Payment out = subject.confirmOrderPayment(orderId, paymentId);
+        Payment out = subject.confirmOrderPayment(userId, orderId, paymentId);
 
         assertThat(out.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
         assertThat(o.getStatus()).isEqualTo(OrderStatus.PAID);
@@ -221,7 +224,7 @@ class Cov09PaymentGatewayFlowsTest {
         Order o = order(OrderStatus.AWAITING_PAYMENT);
         when(stripe.retrieveCheckoutSession("cs_test_real")).thenReturn(Map.of("status", "open"));
 
-        Payment out = subject.confirmOrderPayment(orderId, paymentId);
+        Payment out = subject.confirmOrderPayment(userId, orderId, paymentId);
 
         assertThat(out.getStatus()).isEqualTo(PaymentStatus.FAILED);
         assertThat(o.getStatus()).isEqualTo(OrderStatus.AWAITING_PAYMENT);
@@ -234,7 +237,7 @@ class Cov09PaymentGatewayFlowsTest {
         order(OrderStatus.AWAITING_PAYMENT);
         when(paypal.capture("PAYID-1")).thenReturn(Map.of("status", "COMPLETED"));
 
-        assertThat(subject.confirmOrderPayment(orderId, paymentId).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+        assertThat(subject.confirmOrderPayment(userId, orderId, paymentId).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
 
         verify(paypal).capture("PAYID-1");
     }
@@ -243,7 +246,7 @@ class Cov09PaymentGatewayFlowsTest {
     void confirmarUnPedidoYaCobradoNoVuelveATocarLaPasarela() {
         payment(PaymentMethod.CARD, PaymentStatus.SUCCEEDED, "cs_test_real", true);
 
-        assertThat(subject.confirmOrderPayment(orderId, paymentId).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+        assertThat(subject.confirmOrderPayment(userId, orderId, paymentId).getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
 
         verify(stripe, never()).retrieveCheckoutSession(anyString());
     }
@@ -252,7 +255,7 @@ class Cov09PaymentGatewayFlowsTest {
     void unMetodoSinConfirmacionSoportadaNoDaPorCobradoElPedido() {
         payment(PaymentMethod.USDT, PaymentStatus.REQUIRES_ACTION, "usdt-tx", true);
 
-        assertThatThrownBy(() -> subject.confirmOrderPayment(orderId, paymentId))
+        assertThatThrownBy(() -> subject.confirmOrderPayment(userId, orderId, paymentId))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Confirm not supported");
     }
@@ -408,7 +411,7 @@ class Cov09PaymentGatewayFlowsTest {
         assertThat(p.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
         assertThat(p.getProvider()).isEqualTo("wallet");
         assertThat(o.getStatus()).isEqualTo(OrderStatus.PAID);
-        verify(walletUseCase).charge(eq(userId), eq(2500L), eq(orderId), eq("k1"), anyString());
+        verify(walletUseCase).charge(eq(userId), eq(2500L), eq(orderId), eq("order-charge-" + orderId), anyString());
         verify(stripe, never()).initiate(any());
     }
 
@@ -419,6 +422,7 @@ class Cov09PaymentGatewayFlowsTest {
         UUID esperado = UUID.nameUUIDFromBytes("partner:acme-client".getBytes());
         Order o = order(OrderStatus.AWAITING_PAYMENT);
         o.setUserId(null);
+        o.setPartnerAppId(esperado); // el pedido pertenece a ESTE partner (assertOrderOwnedByPartner)
         when(userRepository.findById(esperado)).thenReturn(Optional.of(mock(UserEntity.class)));
         Wallet w = new Wallet();
         w.setId(UUID.randomUUID());
@@ -428,5 +432,34 @@ class Cov09PaymentGatewayFlowsTest {
         Payment p = subject.initiatePartnerOrderPayment(jwt, orderId, true, PaymentMethod.CARD, "k1");
 
         assertThat(p.getUserId()).isEqualTo(esperado);
+    }
+
+    // ---------------------------------------------------------------- seguridad: IDOR y mock en prod
+
+    @Test
+    void confirmarElPagoDeUnPedidoDeOtroUsuarioDevuelve404() {
+        // IDOR: el pago pertenece a `userId`; otro usuario autenticado no puede confirmarlo.
+        payment(PaymentMethod.CARD, PaymentStatus.REQUIRES_ACTION, "cs_test_real", true);
+
+        assertThatThrownBy(() -> subject.confirmOrderPayment(UUID.randomUUID(), orderId, paymentId))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void capturarElPagoDeOtroUsuarioDevuelve404() {
+        payment(PaymentMethod.PAYPAL, PaymentStatus.REQUIRES_ACTION, "PAYID-1", false);
+
+        assertThatThrownBy(() -> subject.capturePayPal(UUID.randomUUID(), paymentId))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void enPerfilProLaConfirmacionMockEstaProhibida() {
+        // Fail-closed: en pro/pre no se acepta una confirmación simulada (dinero/pedido gratis).
+        ReflectionTestUtils.setField(subject, "activeProfiles", "pro,kibana");
+        payment(PaymentMethod.CARD, PaymentStatus.REQUIRES_ACTION, "cs_mock_x", false);
+
+        assertThatThrownBy(() -> subject.confirmMockRecharge(userId, paymentId))
+                .isInstanceOf(BusinessException.class);
     }
 }

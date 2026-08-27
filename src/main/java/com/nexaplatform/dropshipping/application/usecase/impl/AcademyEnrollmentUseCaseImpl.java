@@ -42,7 +42,8 @@ public class AcademyEnrollmentUseCaseImpl implements AcademyEnrollmentUseCase {
         }
         return academyEnrollmentRepository.findByUserIdAndCourseId(userId, courseId)
                 .orElseGet(() -> academyEnrollmentRepository
-                        .save(AcademyEnrollment.builder().userId(userId).courseId(courseId).build()));
+                        .save(AcademyEnrollment.builder().userId(userId).courseId(courseId)
+                                .progressPct(BigDecimal.ZERO).build()));
     }
 
     @Override
@@ -53,9 +54,11 @@ public class AcademyEnrollmentUseCaseImpl implements AcademyEnrollmentUseCase {
 
     @Override
     @Transactional
-    public AcademyEnrollment updateProgress(UUID id, Map<String, Number> body) {
+    public AcademyEnrollment updateProgress(UUID userId, UUID id, Map<String, Number> body) {
         AcademyEnrollment existing = academyEnrollmentRepository.getById(id);
-        if (Objects.isNull(existing)) {
+        // IDOR: la matrícula debe ser del usuario autenticado. Si no existe o es de otro, 404 (no filtramos
+        // la existencia de matrículas ajenas ni permitimos modificar su progreso).
+        if (Objects.isNull(existing) || !userId.equals(existing.getUserId())) {
             throw new NotFoundException("Enrollment");
         }
         Number pct = body.get("progressPct");

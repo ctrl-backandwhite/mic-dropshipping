@@ -6,6 +6,7 @@ import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
+import com.nexaplatform.dropshipping.application.service.EuComplianceService.ResponsiblePersonView;
 import com.nexaplatform.dropshipping.domain.enums.InvoiceLabel;
 import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
@@ -40,6 +41,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -66,6 +68,9 @@ public class InvoiceService {
 
     private final TemplateEngine templateEngine;
     private final CurrencyRateService currencyRateService;
+    private final EuComplianceService euComplianceService;
+    /** La cuenta del pedido: la factura tiene que decir exactamente lo que se cobró, no recalcularlo. */
+    private final OrderAmounts orderAmounts;
     private final PaymentJpaRepositoryAdapter paymentRepository;
     private final ProductRepository productRepository;
     private final ProductVariantRepository variantRepository;
@@ -206,6 +211,7 @@ public class InvoiceService {
         m.put("labelShipping", InvoiceLabel.SHIPPING.of(lang));
         m.put("labelDiscount", InvoiceLabel.DISCOUNT.of(lang));
         m.put("labelTax", InvoiceLabel.VAT.of(lang) + " (" + vatRate + "%)");
+        m.put("labelCustomsDuty", InvoiceLabel.CUSTOMS_DUTY.of(lang));
         m.put("labelTotal", InvoiceLabel.TOTAL.of(lang));
         m.put("subtotal", fmt(subtotalDisp, cur));
         m.put("shipping", fmt(shippingDisp, cur));
@@ -213,6 +219,9 @@ public class InvoiceService {
         m.put("hasDiscount", discountDisp.signum() > 0);
         m.put("discount", fmt(discountDisp, cur));
         m.put("tax", fmt(taxDisp, cur));
+        // Solo se pinta si el pedido llevaba arancel. Los anteriores a la v132 lo tienen a cero porque no
+        // se guardaba: su factura sigue mostrando el envío completo, que es lo que se les cobró.
+        m.put("customsDuty", amounts.customsDuty().signum() > 0 ? fmt(amounts.customsDuty(), cur) : null);
         m.put("total", fmt(totalDisp, cur));
 
         putIssuerBlock(m, locale, lang);
@@ -229,13 +238,13 @@ public class InvoiceService {
         m.put(BODYBG, "#F4F1FB");
         m.put("ctaUrl", downloadUrl);
         m.put("ctaLabel", InvoiceLabel.CTA_DOWNLOAD.of(lang));
-        m.put("footer", "NX036 Dropshipping · " + InvoiceLabel.RECEIPT_NOTE.of(lang));
+        m.put("footer", "NX036 · " + InvoiceLabel.RECEIPT_NOTE.of(lang));
         return m;
     }
 
     /** Importes de la factura ya en la moneda en que se emite, más el tipo de IVA efectivo. */
     public record InvoiceAmounts(BigDecimal subtotal, BigDecimal shipping, BigDecimal tax, BigDecimal discount,
-            BigDecimal total, int vatRate) {
+            BigDecimal total, int vatRate, BigDecimal customsDuty) {
     }
 
     /**
@@ -243,7 +252,10 @@ public class InvoiceService {
      * adjuntará.
      *
      * <p>El subtotal se SUMA línea a línea en vez de convertir el total de una vez, para que la factura
-     * cuadre consigo misma y con lo que el comprador vio en el carrito.
+     * cuadre consigo misma y con lo que el comprador vio en el carrito. Dentro de cada línea el importe
+     * se multiplica en dólares y se convierte al final ({@link OrderAmounts#lineSubtotal}), así que el
+     * unitario impreso por la cantidad puede diferir un céntimo del importe de la línea: manda el importe
+     * de la línea, que es lo que se cobró.
      *
      * <p>Si el pedido ya se cobró, manda el importe LIQUIDADO: la factura tiene que decir exactamente lo
      * que se cobró, no lo que costaría hoy —el tipo de cambio se mueve y una factura emitida semanas
@@ -258,7 +270,11 @@ public class InvoiceService {
             int idx = 0;
             for (OrderItem it : o.getItems()) {
                 BigDecimal unit = conv(it.getUnitPriceCents(), cur);
-                BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(it.getQuantity()));
+                // El importe de la línea lo calcula OrderAmounts —multiplica en dólares y convierte al
+                // final—, que es la misma cuenta con la que se cobró. Multiplicar aquí el unitario ya
+                // convertido daba una factura por encima del cargo real (hasta un 1,45 %), y una factura
+                // que no dice lo que se cobró no vale como documento.
+                BigDecimal lineTotal = orderAmounts.lineSubtotal(it.getUnitPriceCents(), it.getQuantity(), cur);
                 subtotal = subtotal.add(lineTotal);
                 items.add(Map.of(TITLE, it.getTitleSnapshot() != null ? it.getTitleSnapshot() : "—", "sku",
                         it.getSkuSnapshot() != null ? it.getSkuSnapshot() : "", "variant",
@@ -269,6 +285,9 @@ public class InvoiceService {
             }
         }
         BigDecimal shipping = conv(o.getShippingCents(), cur);
+        // El arancel va DENTRO de `shipping`: se convierte aquí para poder enseñarlo desglosado, no para
+        // sumarlo otra vez.
+        BigDecimal customsDuty = conv(o.getCustomsDutyCents(), cur);
         BigDecimal tax = conv(o.getTaxCents(), cur);
         BigDecimal discount = conv(o.getDiscountCents(), cur);
         // Total = subtotal − DESCUENTO de referido + envío + IVA. total_cents del pedido ya resta el
@@ -281,6 +300,9 @@ public class InvoiceService {
             subtotal = subtotal.multiply(factor).setScale(2, RoundingMode.HALF_UP);
             shipping = shipping.multiply(factor).setScale(2, RoundingMode.HALF_UP);
             discount = discount.multiply(factor).setScale(2, RoundingMode.HALF_UP);
+            // El arancel lleva el MISMO factor que el envío del que forma parte: sin esto, una factura
+            // ajustada por la liquidación enseñaría un desglose que no suma.
+            customsDuty = customsDuty.multiply(factor).setScale(2, RoundingMode.HALF_UP);
             total = settled.setScale(2, RoundingMode.HALF_UP);
             tax = total.subtract(subtotal).add(discount).subtract(shipping);
         }
@@ -290,7 +312,7 @@ public class InvoiceService {
         int vatRate = taxableBase.signum() > 0
                 ? tax.multiply(BigDecimal.valueOf(100)).divide(taxableBase, 0, RoundingMode.HALF_UP).intValue()
                 : 0;
-        return new InvoiceAmounts(subtotal, shipping, tax, discount, total, vatRate);
+        return new InvoiceAmounts(subtotal, shipping, tax, discount, total, vatRate, customsDuty);
     }
 
     /** Renderiza la factura como HTML (cuerpo del email) en la moneda del pedido. */
@@ -482,6 +504,7 @@ public class InvoiceService {
         m.put("labelSubtotal", InvoiceLabel.SUBTOTAL.of(lang));
         m.put("labelShipping", InvoiceLabel.SHIPPING.of(lang));
         m.put("labelTax", InvoiceLabel.VAT.of(lang) + " (" + vatRate + "%)");
+        m.put("labelCustomsDuty", InvoiceLabel.CUSTOMS_DUTY.of(lang));
         m.put("labelTotal", InvoiceLabel.TOTAL.of(lang));
         m.put("subtotal", fmt(subtotal, cur));
         m.put("shipping", fmt(BigDecimal.ZERO, cur));
@@ -498,7 +521,7 @@ public class InvoiceService {
         m.put("verifyNote", InvoiceLabel.VERIFY_NOTE.of(lang));
         m.put("ctaUrl", null);
         m.put("ctaLabel", InvoiceLabel.CTA_DOWNLOAD.of(lang));
-        m.put("footer", "NX036 Dropshipping · " + InvoiceLabel.RECEIPT_NOTE.of(lang));
+        m.put("footer", "NX036 · " + InvoiceLabel.RECEIPT_NOTE.of(lang));
         return m;
     }
 
@@ -538,6 +561,29 @@ public class InvoiceService {
         m.put("issuerEmail", nz(issuerEmail));
         m.put("issuerRegistry", nz(issuerRegistry));
         m.put("legalNote", nz(legalNote));
+        putEuResponsibleBlock(m, lang);
+    }
+
+    /**
+     * Operador económico establecido en la Unión, art. 16.3 del Reglamento (UE) 2023/988: sus datos deben
+     * figurar "en el producto o en su envase, en el paquete o en un documento de acompañamiento". El
+     * embalaje lo prepara el proveedor en origen y no se controla, de modo que la factura es el documento
+     * que hace de vehículo — y por eso el bloque va en las DOS facturas (pedido y suscripción), no solo en
+     * la ficha del escaparate.
+     *
+     * <p>Si no hay operador publicable el bloque no se pinta: una dirección a medias no cumple el requisito
+     * de datos de contacto, así que es preferible su ausencia visible en el panel a un dato inservible en la
+     * factura del cliente.
+     */
+    private void putEuResponsibleBlock(Map<String, Object> m, String lang) {
+        Optional<ResponsiblePersonView> responsable = euComplianceService.publishedResponsible(lang);
+        m.put("hasEuResponsible", responsable.isPresent());
+        m.put("labelEuResponsible", InvoiceLabel.EU_RESPONSIBLE.of(lang));
+        m.put("euResponsibleNote", InvoiceLabel.EU_RESPONSIBLE_NOTE.of(lang));
+        m.put("euResponsibleName", responsable.map(ResponsiblePersonView::name).orElse(""));
+        m.put("euResponsibleAddress", responsable.map(ResponsiblePersonView::formattedAddress).orElse(""));
+        m.put("euResponsibleEmail", responsable.map(ResponsiblePersonView::email).orElse(""));
+        m.put("euResponsibleRole", responsable.map(ResponsiblePersonView::roleLabel).orElse(""));
     }
 
     /**

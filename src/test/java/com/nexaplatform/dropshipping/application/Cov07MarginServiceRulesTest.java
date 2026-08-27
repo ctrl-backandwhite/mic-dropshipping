@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.application;
 
 import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
+import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
 import com.nexaplatform.dropshipping.domain.enums.MarginType;
 import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.domain.enums.PriceRuleScope;
@@ -48,14 +49,35 @@ class Cov07MarginServiceRulesTest {
     ProductGroupMemberRepository groupMemberRepository;
     @Mock
     CategoryGroupMemberRepository categoryGroupMemberRepository;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.persistence.repository.MoqMarginSettingRepository moqRepository;
 
     @InjectMocks
     MarginService service;
 
     @AfterEach
     void tearDown() {
-        // El canal vive en un ThreadLocal: si no se limpia, contamina el resto de tests del hilo.
+        // El canal y el país viven en ThreadLocal: si no se limpian, contaminan el resto de tests del hilo.
         PricingChannelHolder.clear();
+        PricingCountryHolder.clear();
+    }
+
+    @Test
+    void unaReglaDeUnPaisGanaSobreLaGlobalCuandoElPaisCoincide() {
+        PriceRuleEntity global = rule(PriceRuleScope.GLOBAL, null, "100");   // cualquier país: 100%
+        PriceRuleEntity alemania = rule(PriceRuleScope.GLOBAL, null, "120"); // DE: 120%
+        alemania.setCountryCode("DE");
+        rules(global, alemania);
+
+        // Comprador en Alemania: gana la regla del país (120%) → 10 × 2,20 = 22,00
+        PricingCountryHolder.set("DE");
+        assertThat(service.apply(new BigDecimal("10"), null, null).retailUsd()).isEqualByComparingTo("22.0000");
+
+        // Comprador en Francia (sin regla propia) o sin país: cae a la global (100%) → 10 × 2 = 20,00
+        PricingCountryHolder.set("FR");
+        assertThat(service.apply(new BigDecimal("10"), null, null).retailUsd()).isEqualByComparingTo("20.0000");
+        PricingCountryHolder.clear();
+        assertThat(service.apply(new BigDecimal("10"), null, null).retailUsd()).isEqualByComparingTo("20.0000");
     }
 
     /* ==================== precedencia entre ámbitos ==================== */

@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.application.usecase.impl;
 
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.mapper.UserAddressUpdateMapper;
+import com.nexaplatform.dropshipping.application.service.PostalCodeCheck;
 import com.nexaplatform.dropshipping.application.usecase.UserAddressUseCase;
 import com.nexaplatform.dropshipping.domain.model.UserAddress;
 import com.nexaplatform.dropshipping.domain.repository.UserAddressRepository;
@@ -40,6 +41,7 @@ public class UserAddressUseCaseImpl implements UserAddressUseCase {
     @Override
     @Transactional
     public UserAddress save(UUID userId, UserAddress model) {
+        PostalCodeCheck.require(model.getCountry(), model.getPostalCode());
         if (model.isDefault()) {
             clearExistingDefault(userId);
         }
@@ -55,6 +57,9 @@ public class UserAddressUseCaseImpl implements UserAddressUseCase {
     public UserAddress update(UUID userId, UUID id, UserAddress model) {
         UserAddress existing = require(userId, id);
         userAddressUpdateMapper.updateFromModel(model, existing);
+        // Se comprueba sobre el resultado de la mezcla, no sobre lo que llega: una edición parcial puede
+        // cambiar solo el país y dejar el código postal viejo, que entonces ya no vale para ese país.
+        PostalCodeCheck.require(existing.getCountry(), existing.getPostalCode());
         if (model.isDefault() && !existing.isDefault()) {
             clearExistingDefault(existing.getUserId());
             existing.setDefault(true);

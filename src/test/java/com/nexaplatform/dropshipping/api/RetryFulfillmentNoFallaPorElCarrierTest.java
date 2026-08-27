@@ -48,7 +48,8 @@ class RetryFulfillmentNoFallaPorElCarrierTest {
         orderId = UUID.randomUUID();
 
         when(fulfillmentService.adminTrackingView(orderId)).thenReturn(
-                new TrackingView("FORWARDED", "YUNEXPRESS", "YT-NUEVA", null, null, List.of(), List.of()));
+                new TrackingView("FORWARDED", "YUNEXPRESS", "YT-NUEVA", null, null, List.of(), List.of(),
+                        List.of()));
     }
 
     @Test

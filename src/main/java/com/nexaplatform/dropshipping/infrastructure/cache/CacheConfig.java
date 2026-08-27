@@ -1,7 +1,9 @@
 package com.nexaplatform.dropshipping.infrastructure.cache;
 
+import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
+import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cache.CacheManager;
@@ -41,6 +43,8 @@ public class CacheConfig {
     public static final String CACHE_PRODUCT_SPECS = "product-specs";
     public static final String CACHE_PRODUCT_ATTRS = "product-attrs";
     public static final String CACHE_SEARCH = "search"; // resultados de /api/search por keyword+lang+page+size (TTL corto)
+    // Operador económico de la UE y advertencias por categoría: se leen en CADA ficha y cambian casi nunca.
+    public static final String CACHE_EU_COMPLIANCE = "eu-compliance";
 
     /**
      * Clave de caché que INCLUYE la moneda de display activa (X-Currency) además del método + args.
@@ -51,10 +55,18 @@ public class CacheConfig {
      */
     @Bean("currencyAwareKeyGenerator")
     public KeyGenerator currencyAwareKeyGenerator() {
-        // Incluye moneda Y canal (STOREFRONT 150% vs INTEGRATION 75%): el precio depende de ambos, así
-        // que el storefront y las apps conectadas (Shopify/WooCommerce) NO deben compartir entrada de caché.
+        // Incluye moneda, canal Y PAÍS: el precio depende de los tres (el margen puede variar por país), así
+        // que distintos países/canales/monedas NO deben compartir entrada de caché.
+        //
+        // Y el ROL, que es lo que faltaba: desde que el listado oculta el coste del proveedor y el precio
+        // canónico a quien no es admin, la respuesta ya NO es la misma para todos. Sin el rol en la clave,
+        // un admin navegando el escaparate dejaba cacheada la página CON esos campos y cualquier usuario
+        // —o un anónimo— con los mismos filtros la recibía tal cual durante los cinco minutos de TTL, lo
+        // que reabría la fuga por la puerta de atrás. Y al revés: el admin se quedaba sin las columnas de
+        // coste si otro había cacheado antes.
         return (target, method, params) -> method.getName() + ':' + CurrencyHolder.get() + ':'
-                + PricingChannelHolder.get() + ':'
+                + PricingChannelHolder.get() + ':' + PricingCountryHolder.get()
+                + (SecurityUtils.isAdmin() ? ":admin" : ":user") + ':'
                 + Arrays.deepToString(params);
     }
 
@@ -76,7 +88,8 @@ public class CacheConfig {
     public CacheManager caffeineCacheManager() {
         CaffeineCacheManager mgr = new CaffeineCacheManager(CACHE_PRODUCT_DETAIL, CACHE_PRODUCT_SUMMARY,
                 CACHE_PRODUCT_LIST, CACHE_CATEGORY_TREE, CACHE_CATEGORIES_FLAT, CACHE_SUPPLIERS_FLAT,
-                CACHE_PRICING_AMOUNT, CACHE_CURRENCY_RATES, CACHE_PRODUCT_SPECS, CACHE_PRODUCT_ATTRS, CACHE_SEARCH);
+                CACHE_PRICING_AMOUNT, CACHE_CURRENCY_RATES, CACHE_PRODUCT_SPECS, CACHE_PRODUCT_ATTRS,
+                CACHE_SEARCH, CACHE_EU_COMPLIANCE);
         mgr.setCaffeine(Caffeine.newBuilder().maximumSize(50_000).expireAfterWrite(5, TimeUnit.MINUTES).recordStats()); // expone métricas a Micrometer
         mgr.setAllowNullValues(false);
         return mgr;

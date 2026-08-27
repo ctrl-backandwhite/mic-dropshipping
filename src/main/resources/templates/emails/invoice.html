@@ -45,6 +45,10 @@
                 <div th:if="${issuerEmail != ''}" th:text="${issuerEmail}">info@nx036.com</div>
                 <div th:if="${issuerAddress != '' or issuerCityLine != '' or issuerCountry != ''}"><span th:if="${issuerAddress != ''}" th:text="${issuerAddress}">Calle</span><span th:if="${issuerAddress != '' and (issuerCityLine != '' or issuerCountry != '')}"> · </span><span th:if="${issuerCityLine != ''}" th:text="${issuerCityLine}">Ciudad</span><span th:if="${issuerCityLine != '' and issuerCountry != ''}"> · </span><span th:if="${issuerCountry != ''}" th:text="${issuerCountry}">País</span></div>
                 <div th:if="${issuerTaxId != ''}"><span th:text="${labelTaxId}">NIF/CIF</span>: <span th:text="${issuerTaxId}">B00000000</span></div>
+                <!-- El número de registro mercantil. En una sociedad irlandesa es el CRO, y la Companies
+                     Act 2014 obliga a que figure en la papelería comercial, facturas incluidas. El campo
+                     ya se calculaba en InvoiceService pero no se pintaba en ninguna parte. -->
+                <div th:if="${issuerRegistry != ''}" th:text="${issuerRegistry}">CRO 000000</div>
               </div>
             </td>
             <td align="right" style="vertical-align:top;text-align:right;">
@@ -137,6 +141,13 @@
             <td align="left"  style="padding:5px 0;color:#5c6e7c;" th:text="${labelShipping}">Envío</td>
             <td align="right" style="padding:5px 0;color:#14212e;font-variant-numeric:tabular-nums;white-space:nowrap;" th:text="${shipping}">$0.00</td>
           </tr>
+          <!-- El arancel, en su propia línea y solo si lo hay. Va INCLUIDO en el importe de envío de
+               arriba, así que no se suma otra vez al total: se muestra para que la factura cuadre con el
+               desglose que el comprador vio al pagar. -->
+          <tr th:if="${customsDuty} != null">
+            <td align="left"  style="padding:5px 0;color:#5c6e7c;" th:text="${labelCustomsDuty}">Arancel UE</td>
+            <td align="right" style="padding:5px 0;color:#14212e;font-variant-numeric:tabular-nums;white-space:nowrap;" th:text="${customsDuty}">$0.00</td>
+          </tr>
           <tr>
             <td align="left"  style="padding:5px 0;color:#5c6e7c;" th:text="${labelTax}">IVA</td>
             <td align="right" style="padding:5px 0;color:#14212e;font-variant-numeric:tabular-nums;white-space:nowrap;" th:text="${tax}">$0.00</td>
@@ -165,12 +176,35 @@
         <!--<![endif]-->
       </td></tr>
 
+      <!--/* Operador económico responsable en la UE (art. 16.3 del Reglamento (UE) 2023/988). La norma
+             admite que estos datos figuren "en un documento de acompañamiento": como el embalaje lo prepara
+             el proveedor en origen, la factura es ese documento. Solo se pinta si hay operador publicable.
+
+             Va como comentario de parser y no como comentario HTML: Thymeleaf emite los normales tal
+             cual, así que un comentario explicativo acabaría dentro de la factura que recibe el cliente.
+             Y por eso mismo aquí no se escribe la marca de cierre como ejemplo: el parser la tomaría por
+             buena, cerraría el comentario antes de tiempo y el resto de este texto saldría impreso —que
+             es exactamente lo que pasaba. */-->
+      <tr th:if="${hasEuResponsible}"><td style="padding:18px 32px;border-top:1px solid #e3e8ef;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr><td style="font-size:11px;color:#5c6e7c;line-height:1.7;font-family:Arial,Helvetica,sans-serif;">
+            <div style="font-size:11px;font-weight:700;color:#28323c;text-transform:uppercase;letter-spacing:.4px;" th:text="${labelEuResponsible}">Operador económico responsable en la UE</div>
+            <div style="margin-top:5px;">
+              <strong th:text="${euResponsibleName}">Nombre</strong><span th:if="${euResponsibleRole != ''}" th:text="' · ' + ${euResponsibleRole}"> · Importador</span>
+            </div>
+            <div th:text="${euResponsibleAddress}">Dirección</div>
+            <div th:text="${euResponsibleEmail}">correo@ejemplo.com</div>
+            <div style="margin-top:5px;color:#9aa4b2;font-size:10px;" th:text="${euResponsibleNote}">Datos publicados conforme al artículo 16 del Reglamento (UE) 2023/988.</div>
+          </td></tr>
+        </table>
+      </td></tr>
+
       <!-- footer: línea legal (izq) + QR de verificación (der, solo en el PDF) -->
       <tr><td style="padding:24px 32px;border-top:1px solid #e3e8ef;background:#f4f6f9;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
           <tr>
             <td style="vertical-align:bottom;font-size:11px;color:#5c6e7c;line-height:1.6;">
-              <div th:text="${footerLegal}">NX036 S.L. · CIF · email · NX-000</div>
+              <div th:text="${footerLegal}">NX036 · VAT · email · NX-000</div>
               <div th:if="${pdf and qr != ''}" style="margin-top:8px;color:#9aa4b2;max-width:340px;" th:text="${verifyNote}">Documento generado electrónicamente. Escanea el QR para verificar la autenticidad de esta factura.</div>
               <div th:if="${legalNote != ''}" style="margin-top:8px;color:#9aa4b2;" th:text="${legalNote}">Nota legal</div>
             </td>

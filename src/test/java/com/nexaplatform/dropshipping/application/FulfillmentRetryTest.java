@@ -1,7 +1,11 @@
 package com.nexaplatform.dropshipping.application;
 
+import static com.nexaplatform.dropshipping.config.FulfillmentTestUtil.unSoloTransportista;
+
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
+import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService;
 import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
@@ -14,6 +18,7 @@ import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.Fulf
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.FulfillmentResult;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressEventCipher;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentItemRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderTrackingEventRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +38,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 
 /**
@@ -62,9 +68,9 @@ class FulfillmentRetryTest {
         notificationUseCase = mock(NotificationUseCase.class);
         shipmentRepository = mock(OrderShipmentRepository.class);
         service = new FulfillmentService(orderRepository, mock(OrderTrackingEventRepository.class),
-                provider, mock(UserRepository.class), mock(OrderEmailService.class),
+                unSoloTransportista(provider), mock(UserRepository.class), mock(NotificationsPublisher.class), mock(OrderEmailService.class),
                 new ObjectMapper(), new YunExpressEventCipher(), opsAlertService, notificationUseCase, shipmentRepository,
-                mock(TrackingViewMapper.class));
+                mock(OrderShipmentItemRepository.class), mock(TrackingViewMapper.class), readyPurchases());
 
         order = new Order();
         order.setId(UUID.randomUUID());
@@ -185,5 +191,15 @@ class FulfillmentRetryTest {
         // Lo desconocido se trata como transitorio: rendirse de más deja envíos sin crear para siempre.
         assertThat(FulfillmentFailure.from("algo que no hemos visto nunca").isPermanent()).isFalse();
         assertThat(FulfillmentFailure.of(new IllegalStateException("fallo de red")).isPermanent()).isFalse();
+    }
+
+    /**
+     * Las compras al proveedor ya están en camino: estos tests van del transportista internacional, no
+     * del tramo chino, y sin este permiso {@code createShipment} se frena antes de llamar al carrier.
+     */
+    private static SupplierPurchaseService readyPurchases() {
+        SupplierPurchaseService s = mock(SupplierPurchaseService.class);
+        lenient().when(s.readyForInternationalShipment(any())).thenReturn(true);
+        return s;
     }
 }

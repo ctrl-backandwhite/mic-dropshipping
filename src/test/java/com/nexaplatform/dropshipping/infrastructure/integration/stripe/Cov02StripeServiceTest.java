@@ -239,13 +239,14 @@ class Cov02StripeServiceTest {
         try (MockedStatic<Subscription> s = mockStatic(Subscription.class)) {
             s.when(() -> Subscription.retrieve("sub_1")).thenReturn(actual);
 
-            StripeService.SubResult resultado = service.changeSubscriptionPrice("sub_1", "price_2", "PRO");
+            StripeService.SubResult resultado = service.changeSubscriptionPrice("sub_1", "price_2", "PRO",
+                    SubscriptionUpdateParams.ProrationBehavior.ALWAYS_INVOICE);
 
             assertThat(resultado.id()).isEqualTo("sub_1");
             assertThat(resultado.status()).isEqualTo("active");
             verify(actual).update(captor.capture());
             Map<String, Object> raw = captor.getValue().toMap();
-            assertThat(raw).containsEntry("proration_behavior", "create_prorations");
+            assertThat(raw).containsEntry("proration_behavior", "always_invoice");
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> items = (List<Map<String, Object>>) raw.get("items");
             assertThat(items).hasSize(1);

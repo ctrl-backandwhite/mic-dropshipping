@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.AdminCatalogApi;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.CustomsAuditView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
@@ -13,13 +14,13 @@ import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AddProductImageDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.ReorderProductImagesDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.AdminProductSourceUrlDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.Category1688MappingDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CategoryAttributeSchemaDtoOut;
-import com.nexaplatform.dropshipping.api.dto.out.ReindexResultDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
@@ -61,6 +62,10 @@ import java.util.UUID;
 public class AdminCatalogController implements AdminCatalogApi {
 
     private static final int MAX_BATCH = 1000;
+    /** Topes anti-DoS de la importación NDJSON (cuerpo crudo por streaming). */
+    private static final long MAX_IMPORT_BYTES = 100L * 1024 * 1024; // 100 MB
+    private static final int MAX_IMPORT_LINE_CHARS = 2_000_000;       // ~2 MB por línea
+    private static final long MAX_IMPORT_RECORDS = 1_000_000L;
 
     private final CatalogUseCase catalogUseCase;
     private final ObjectMapper objectMapper;
@@ -88,6 +93,11 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
+    public CustomsAuditView customsGaps(String status, int max) {
+        return catalogUseCase.auditCustomsData(status, max);
+    }
+
+    @Override
     public ProductDetailView detail(UUID id, String lang) {
         return catalogUseCase.getProductById(id, lang);
     }
@@ -104,13 +114,28 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
+    public ProductDetailView updateSourceUrl(UUID id, AdminProductSourceUrlDtoIn req, String lang) {
+        return catalogUseCase.updateSourceUrl(id, req.getSourceUrl(), lang);
+    }
+
+    @Override
     public ProductDetailView duplicate(UUID id, String lang) {
         return catalogUseCase.duplicateProduct(id, lang);
     }
 
     @Override
-    public ResponseEntity<ReindexResultDtoOut> reindex() {
-        return ResponseEntity.ok(new ReindexResultDtoOut(catalogUseCase.reindexAllProducts()));
+    public ResponseEntity<Map<String, Object>> reindex() {
+        // Reindexado en SEGUNDO PLANO: responde al instante (con miles de productos, hacerlo síncrono
+        // superaba el timeout del proxy/edge y el admin veía "No se pudo reindexar").
+        CatalogUseCase.ReindexStatus s = catalogUseCase.startReindex();
+        return ResponseEntity.accepted().body(Map.of(
+                "started", s.started(), "running", s.running(), "indexed", s.lastIndexed()));
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> reindexStatus() {
+        CatalogUseCase.ReindexStatus s = catalogUseCase.reindexStatus();
+        return ResponseEntity.ok(Map.of("running", s.running(), "indexed", s.lastIndexed()));
     }
 
     @Override
@@ -236,13 +261,40 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
-    public ResponseEntity<List<BulkProductDtoIn>> exportProducts(int from, int to) {
-        return ResponseEntity.ok(catalogUseCase.exportProducts(from, to));
+    public ResponseEntity<List<BulkProductDtoIn>> exportProducts(int from, int to, String createdFrom,
+            String createdTo) {
+        return ResponseEntity.ok(catalogUseCase.exportProducts(from, to, startOfDay(createdFrom),
+                endOfDayExclusive(createdTo)));
     }
 
     @Override
-    public ResponseEntity<Map<String, Long>> exportCount() {
-        return ResponseEntity.ok(Map.of("count", catalogUseCase.countProducts()));
+    public ResponseEntity<Map<String, Long>> exportCount(String createdFrom, String createdTo) {
+        return ResponseEntity.ok(Map.of("count",
+                catalogUseCase.countProducts(startOfDay(createdFrom), endOfDayExclusive(createdTo))));
+    }
+
+    /** Fecha ISO (yyyy-MM-dd) al inicio del día UTC; null si vacía. Para el límite inferior del rango. */
+    private static java.time.Instant startOfDay(String isoDate) {
+        java.time.LocalDate d = parseIsoDate(isoDate);
+        return d == null ? null : d.atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
+    }
+
+    /** Fecha ISO al inicio del DÍA SIGUIENTE (límite superior EXCLUSIVO, para incluir todo el día indicado). */
+    private static java.time.Instant endOfDayExclusive(String isoDate) {
+        java.time.LocalDate d = parseIsoDate(isoDate);
+        return d == null ? null : d.plusDays(1).atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
+    }
+
+    /** Parsea una fecha ISO; vacía → null; inválida → 400 (IllegalArgumentException) en vez de 500. */
+    private static java.time.LocalDate parseIsoDate(String isoDate) {
+        if (isoDate == null || isoDate.isBlank()) {
+            return null;
+        }
+        try {
+            return java.time.LocalDate.parse(isoDate.trim());
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new IllegalArgumentException("Fecha inválida (usa yyyy-MM-dd): " + isoDate);
+        }
     }
 
     @Override
@@ -251,15 +303,17 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
-    public ResponseEntity<StreamingResponseBody> exportProductsNdjson(int batch) {
+    public ResponseEntity<StreamingResponseBody> exportProductsNdjson(int batch, String createdFrom, String createdTo) {
         int safeBatch = Math.clamp(batch, 1, MAX_BATCH);
+        java.time.Instant cf = startOfDay(createdFrom);
+        java.time.Instant ct = endOfDayExclusive(createdTo);
         // Stream one product per line; keyset-paginate and flush each batch so memory stays bounded to a
         // single page regardless of the total number of products (scales to millions).
         StreamingResponseBody body = out -> {
             UUID after = null;
             boolean hasMore = true;
             while (hasMore) {
-                CatalogUseCase.ProductExportBatch page = catalogUseCase.exportBatchAfter(after, safeBatch);
+                CatalogUseCase.ProductExportBatch page = catalogUseCase.exportBatchAfter(after, safeBatch, cf, ct);
                 for (BulkProductDtoIn dto : page.items()) {
                     out.write(objectMapper.writeValueAsBytes(dto));
                     out.write('\n');
@@ -280,12 +334,26 @@ public class AdminCatalogController implements AdminCatalogApi {
     @Override
     public ResponseEntity<BulkResultDtoOut> importProductsNdjson(HttpServletRequest request, int batch) {
         int safeBatch = Math.clamp(batch, 1, MAX_BATCH);
+        // Límites anti-DoS/OOM (el cuerpo se lee como stream crudo, sin los caps de multipart):
+        //  · Content-Length declarado por encima del tope → se rechaza sin leer.
+        //  · nº de registros y longitud de una línea acotados para no agotar memoria.
+        if (request.getContentLengthLong() > MAX_IMPORT_BYTES) {
+            throw new BusinessException("El fichero NDJSON supera el tamaño máximo permitido");
+        }
         NdjsonImportAccumulator acc = new NdjsonImportAccumulator();
         List<BulkProductDtoIn> buffer = new ArrayList<>(safeBatch);
+        long records = 0;
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(request.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
+                if (line.length() > MAX_IMPORT_LINE_CHARS) {
+                    throw new BusinessException("Una línea del NDJSON supera el tamaño máximo permitido");
+                }
+                if (++records > MAX_IMPORT_RECORDS) {
+                    throw new BusinessException("El NDJSON supera el número máximo de registros ("
+                            + MAX_IMPORT_RECORDS + ")");
+                }
                 BulkProductDtoIn row = parseNdjsonRow(line, acc);
                 if (row == null) {
                     continue;

@@ -11,6 +11,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.util.Base64;
 import java.util.HexFormat;
 
@@ -29,10 +33,42 @@ import java.util.HexFormat;
  *
  * <p>Sin {@code encrypt-key} configurado el componente queda inactivo y el webhook rechaza los pushes:
  * es preferible perder eventos (el sondeo periódico los recupera) a procesar uno no verificado.
+ *
+ * <h2>Por qué CIPHER_INTEGRITY (Find Security Bugs) NO aplica aquí</h2>
+ *
+ * <p>El analizador marca {@code AES/CBC} sin MAC como «cifrado sin comprobación de integridad» y sugiere
+ * GCM. Aquí no procede, y no por comodidad sino por estas cuatro razones comprobables:
+ *
+ * <ol>
+ *   <li><b>El modo lo impone el proveedor.</b> El sobre lo cifra YunExpress con AES-256-CBC según su
+ *       contrato de 事件管理; no somos el emisor, así que no podemos migrar a GCM unilateralmente. Cambiarlo
+ *       sería, sencillamente, dejar de poder leer sus eventos.</li>
+ *   <li><b>La integridad ya está cubierta, y ANTES de descifrar.</b> {@link #verify} valida
+ *       {@code SHA-256(timestamp + encryptKey + cuerpoCrudo)} sobre el cuerpo <i>crudo</i>, que es el que
+ *       transporta el campo {@code encrypt} con el criptograma. Es decir: la firma <b>cubre el texto
+ *       cifrado completo</b>, con una clave secreta compartida, así que cualquier bit volteado en el
+ *       criptograma rompe la firma. {@code YunExpressWebhookController} corta con 401 antes de invocar
+ *       {@code FulfillmentService.applyYunExpressPush}, que es el ÚNICO camino que llega a
+ *       {@link #decrypt}. El orden verificar→descifrar es justo lo que exige la construcción
+ *       encrypt-then-MAC, y está fijado por test (ver {@code YunExpressWebhookIntegrityOrderTest}).</li>
+ *   <li><b>No hay oráculo de padding.</b> El descifrado usa {@code AES/CBC/NoPadding}: el JCE no valida
+ *       relleno, luego no puede lanzar {@code BadPaddingException} ni ninguna otra excepción que distinga
+ *       «relleno correcto» de «relleno incorrecto». El relleno se recorta a mano en {@link #stripPadding}.
+ *       Sin señal diferenciada no hay oráculo que interrogar, ni siquiera hipotéticamente.</li>
+ *   <li><b>No hay canal de respuesta que explotar.</b> Todo fallo de firma devuelve el mismo 401 con el
+ *       mismo cuerpo, y la comparación es en tiempo constante ({@link MessageDigest#isEqual}), así que no
+ *       se filtra información ni por el contenido ni por el tiempo.</li>
+ * </ol>
+ *
+ * <p>Conclusión: FALSO POSITIVO justificado. Si alguien reordena el controller para descifrar antes de
+ * verificar, deja de serlo — por eso ese orden está protegido por test y no solo por este comentario.
  */
 @Slf4j
 @Component
 public class YunExpressEventCipher {
+
+    /** Solo se usa para mirar dentro del sobre; el contenido real lo interpreta el servicio. */
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private static final int IV_LENGTH = 16;
 
@@ -64,9 +100,43 @@ public class YunExpressEventCipher {
         }
     }
 
-    /** Descifra el contenido del evento (Base64 de IV + criptograma AES-256-CBC). */
+    /**
+     * Descifra el contenido del evento (Base64 de IV + criptograma AES-256-CBC).
+     *
+     * <p><b>PRECONDICIÓN</b>: solo se debe llamar sobre un cuerpo cuya firma ya haya pasado por
+     * {@link #verify}. Esa firma es la que aporta la integridad que CBC no trae (ver el javadoc de la
+     * clase); descifrar antes de verificar convertiría el aviso CIPHER_INTEGRITY en un fallo real.
+     */
     public String decrypt(String base64Content) {
         return decrypt(base64Content, encryptKey);
+    }
+
+    /**
+     * El {@code ack} del saludo con el que YunExpress comprueba la dirección del webhook, o
+     * {@code null} si el sobre no es un saludo sino un aviso de trazabilidad.
+     *
+     * <p>Al guardar la URL en el console mandan un POST <b>firmado y cifrado igual que los avisos
+     * reales</b> —capturado el 17-ago-2026— cuyo contenido descifrado es {@code {"ack":"<valor>"}}. Hay
+     * que devolver ese valor; con cualquier otra respuesta el console contesta {@code URL校验失败} y la
+     * dirección no se puede registrar. (Su documentación dice que esa comprobación va sin firma; no es
+     * cierto, y menos mal: así no hace falta abrir ninguna puerta.)
+     *
+     * <p>Vive aquí, junto al descifrado, por la misma <b>PRECONDICIÓN</b> que {@link #decrypt}: se llama
+     * solo sobre un cuerpo cuya firma ya pasó por {@link #verify}. Reconocer el saludo obliga a abrir el
+     * sobre, y abrir sobres es de esta clase, no del controlador.
+     */
+    public String ackOf(String rawBody) {
+        try {
+            JsonNode sobre = JSON.readTree(rawBody);
+            String contenido = sobre.hasNonNull("encrypt")
+                    ? decrypt(sobre.get("encrypt").asText())
+                    : rawBody;
+            String ack = JSON.readTree(contenido).path("ack").asText("");
+            return ack.isBlank() ? null : ack;
+        } catch (JsonProcessingException | RuntimeException e) {
+            // Lo que no se puede leer como sobre no es un saludo: que siga su camino.
+            return null;
+        }
     }
 
     static String decrypt(String base64Content, String key) {

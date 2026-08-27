@@ -7,23 +7,29 @@ import com.nexaplatform.dropshipping.api.dto.out.MySubscriptionDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.PaymentMethodDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SetupIntentDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SubscribeStatusDtoOut;
+import com.nexaplatform.dropshipping.api.mapper.BillingInvoiceDtoMapper;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.domain.enums.SubscriptionStatus;
 import com.nexaplatform.dropshipping.domain.model.CustomerSubscription;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -39,10 +45,26 @@ class Cov01MeBillingControllerTest {
     @Mock
     CustomerSubscriptionUseCase useCase;
     @Mock
+    com.nexaplatform.dropshipping.application.service.SavedPaymentMethodsService savedMethods;
+    @Mock
     Authentication auth;
+    @Mock
+    CurrencyRateService currencyRateService;
 
-    @InjectMocks
     MeBillingController controller;
+
+    /**
+     * El controlador se arma a mano en lugar de con {@code @InjectMocks} porque el importe de las facturas
+     * lo formatea el mapper con el servicio central de divisas: con el mapper simulado la proyección no se
+     * comprobaría, y ese formateo es justamente lo que el navegador ya no puede hacer por su cuenta.
+     */
+    @BeforeEach
+    void montarControlador() {
+        lenient().when(currencyRateService.decimalsOf(anyString())).thenReturn(2);
+        lenient().when(currencyRateService.formatDisplay(any(BigDecimal.class), anyString()))
+                .thenAnswer(i -> i.getArgument(0) + " " + i.getArgument(1));
+        controller = new MeBillingController(useCase, savedMethods, new BillingInvoiceDtoMapper(currencyRateService));
+    }
 
     private void authenticatedAs(UUID id) {
         when(auth.getName()).thenReturn(id.toString());
@@ -50,10 +72,11 @@ class Cov01MeBillingControllerTest {
 
     @Test
     void laConfigDeStripeViajaConLaClavePublicaYSuInterruptor() {
-        when(useCase.billingConfig())
-                .thenReturn(new CustomerSubscriptionUseCase.BillingConfigInfo("pk_test_123", true));
+        authenticatedAs(USER_ID);
+        when(useCase.billingConfig(USER_ID))
+                .thenReturn(new CustomerSubscriptionUseCase.BillingConfigInfo("pk_test_123", true, false));
 
-        ResponseEntity<BillingConfigDtoOut> resp = controller.billingConfig();
+        ResponseEntity<BillingConfigDtoOut> resp = controller.billingConfig(auth);
 
         assertThat(resp.getStatusCode().value()).isEqualTo(200);
         assertThat(resp.getBody()).isNotNull();
@@ -75,10 +98,13 @@ class Cov01MeBillingControllerTest {
 
     @Test
     void lasTarjetasSeProyectanConLaMarcaLosCuatroDigitosYCualEsLaPredeterminada() throws Exception {
+        // Tras la Fase 1, el listado unificado lo sirve SavedPaymentMethodsService (tarjetas Stripe + PayPal).
         authenticatedAs(USER_ID);
-        when(useCase.listCards(USER_ID)).thenReturn(List.of(
-                new CustomerSubscriptionUseCase.CardInfo("pm_1", "visa", "4242", 12L, 2030L, true),
-                new CustomerSubscriptionUseCase.CardInfo("pm_2", "mastercard", "5555", 1L, 2031L, false)));
+        when(savedMethods.list(USER_ID)).thenReturn(List.of(
+                PaymentMethodDtoOut.builder().id("pm_1").type("CARD").brand("visa").last4("4242")
+                        .expMonth(12L).expYear(2030L).isDefault(true).build(),
+                PaymentMethodDtoOut.builder().id("pm_2").type("CARD").brand("mastercard").last4("5555")
+                        .expMonth(1L).expYear(2031L).isDefault(false).build()));
 
         ResponseEntity<List<PaymentMethodDtoOut>> resp = controller.listPaymentMethods(auth);
 
@@ -98,12 +124,12 @@ class Cov01MeBillingControllerTest {
         authenticatedAs(USER_ID);
 
         ResponseEntity<Void> setDefault = controller.setDefault(auth, "pm_1");
-        ResponseEntity<Void> deleted = controller.delete(auth, "pm_2");
+        ResponseEntity<Void> deleted = controller.delete(auth, "pm_2", "123456");
 
         assertThat(setDefault.getStatusCode().value()).isEqualTo(204);
         assertThat(deleted.getStatusCode().value()).isEqualTo(204);
-        verify(useCase).setDefaultCard(USER_ID, "pm_1");
-        verify(useCase).deleteCard(USER_ID, "pm_2");
+        verify(savedMethods).setDefault(USER_ID, "pm_1");
+        verify(savedMethods).delete(USER_ID, "pm_2", "123456");
     }
 
     @Test
@@ -195,6 +221,20 @@ class Cov01MeBillingControllerTest {
         assertThat(inv.getStatus()).isEqualTo("paid");
         assertThat(inv.getPdfUrl()).isEqualTo("https://stripe.test/f.pdf");
         assertThat(inv.getHostedUrl()).isEqualTo("https://stripe.test/f");
+    }
+
+    @Test
+    void elImporteDeLaFacturaViajaYaFormateadoDesdeElBackend() throws Exception {
+        // El navegador lo componía con (total / 100) + código de divisa. Eso rompe la norma de que todo
+        // importe se formatea aquí y, en las divisas sin céntimos, enseñaba la factura cien veces más
+        // barata. La respuesta tiene que traer la cadena hecha para que el perfil se limite a pintarla.
+        authenticatedAs(USER_ID);
+        when(useCase.listInvoices(USER_ID)).thenReturn(List.of(new CustomerSubscriptionUseCase.InvoiceView("F-001",
+                2900L, "eur", "paid", 1750000000L, null, null)));
+
+        ResponseEntity<List<BillingInvoiceDtoOut>> resp = controller.invoices(auth);
+
+        assertThat(resp.getBody().get(0).getTotalFormatted()).isEqualTo("29.00 eur");
     }
 
     @Test

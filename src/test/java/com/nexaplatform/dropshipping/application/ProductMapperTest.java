@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.application;
 
 import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.service.PromotionService;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
@@ -13,8 +14,14 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.math.BigDecimal;
+import java.util.List;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import java.util.ArrayList;
 
+import static org.mockito.Mockito.lenient;
+import static org.mockito.ArgumentMatchers.any;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -44,9 +51,11 @@ class ProductMapperTest {
                 .thenAnswer(inv -> new MarginService.PriceWithMargin(inv.getArgument(0), inv.getArgument(0), null,
                         BigDecimal.ZERO));
 
-        pricingService = new PricingService(currencyService, marginService);
+        pricingService = new PricingService(currencyService, sinPromociones(), marginService);
 
-        productMapper = new ProductMapper(supplierMapper, pricingService, currencyService, marginService);
+        productMapper = new ProductMapper(supplierMapper, pricingService, currencyService, marginService,
+                mock(com.nexaplatform.dropshipping.application.service.CustomsValuationService.class),
+                mock(com.nexaplatform.dropshipping.application.service.EuComplianceService.class));
     }
 
     @Test
@@ -61,7 +70,29 @@ class ProductMapperTest {
 
         var view = productMapper.toSummary(p, "es");
         assertThat(view.title()).isEqualTo("Título");
-        assertThat(view.basePrice()).isEqualByComparingTo("9.99");
+        // Sin sesión de admin NO se devuelve el coste del proveedor: `basePrice` es lo que se paga en CNY,
+        // la base sobre la que se aplica el margen, y publicarlo junto al precio final deja calcular la
+        // ganancia exacta. El listado lo enviaba a todo el mundo mientras la ficha ya lo filtraba.
+        assertThat(view.basePrice()).as("el coste del proveedor no puede viajar a un no-admin").isNull();
+        assertThat(view.currency()).as("la etiqueta CNY delata el coste igual que el importe").isNull();
+    }
+
+    @Test
+    void summary_expone_el_coste_solo_cuando_quien_pregunta_es_admin() {
+        ProductEntity p = ProductEntity.builder().source("1688").externalId("X").titleZh("中文标题")
+                .basePrice(new BigDecimal("9.99")).currency("CNY").monthlySales(10).build();
+        p.setTranslations(new ArrayList<>());
+        p.setImages(new ArrayList<>());
+
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "admin", "n/a", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+        try {
+            var view = productMapper.toSummary(p, "es");
+            assertThat(view.basePrice()).isEqualByComparingTo("9.99");
+            assertThat(view.currency()).isEqualTo("CNY");
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
     }
 
     @Test
@@ -93,5 +124,18 @@ class ProductMapperTest {
         p.setTranslations(new ArrayList<>());
         var view = productMapper.toSummary(p, "es");
         assertThat(view.mainImage()).isEqualTo("https://cbu01.alicdn.com/x.jpg");
+    }
+
+    /**
+     * Motor de promociones que no rebaja nada: estas pruebas miden el pipeline de precio (coste →
+     * margen → divisa), no las rebajas, y una promoción activa cambiaría todos los importes esperados.
+     */
+    private static PromotionService sinPromociones() {
+        PromotionService p = mock(PromotionService.class);
+        lenient().when(p.applyAutomatic(any(), any(), any())).thenAnswer(inv -> {
+            java.math.BigDecimal precio = inv.getArgument(1);
+            return new PromotionService.Discounted(precio, precio, java.math.BigDecimal.ZERO, null, null);
+        });
+        return p;
     }
 }

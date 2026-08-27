@@ -37,6 +37,9 @@ public class UpdateProfileDtoIn {
     @Schema(description = "Company name")
     private String companyName;
 
+    @Schema(description = "Teléfono en formato internacional (E.164, p. ej. +34600123456)")
+    private String phone;
+
     @Size(max = 60)
     @Schema(description = "Country")
     private String country;

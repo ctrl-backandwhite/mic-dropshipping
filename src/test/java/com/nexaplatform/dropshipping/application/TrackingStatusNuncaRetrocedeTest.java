@@ -1,8 +1,12 @@
 package com.nexaplatform.dropshipping.application;
 
+import static com.nexaplatform.dropshipping.config.FulfillmentTestUtil.unSoloTransportista;
+
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
+import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService;
 import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
@@ -15,6 +19,7 @@ import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.Fulf
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.TrackingStep;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressEventCipher;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressFulfillmentService;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentItemRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderTrackingEventRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,6 +34,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -56,10 +62,11 @@ class TrackingStatusNuncaRetrocedeTest {
     void setUp() {
         orderRepository = mock(OrderRepository.class);
         provider = mock(YunExpressFulfillmentService.class);
-        service = new FulfillmentService(orderRepository, mock(OrderTrackingEventRepository.class), provider,
-                mock(UserRepository.class), mock(OrderEmailService.class), new ObjectMapper(),
+        service = new FulfillmentService(orderRepository, mock(OrderTrackingEventRepository.class), unSoloTransportista(provider),
+                mock(UserRepository.class), mock(NotificationsPublisher.class), mock(OrderEmailService.class), new ObjectMapper(),
                 mock(YunExpressEventCipher.class), mock(OpsAlertService.class), mock(NotificationUseCase.class),
-                mock(OrderShipmentRepository.class), mock(TrackingViewMapper.class));
+                mock(OrderShipmentRepository.class), mock(OrderShipmentItemRepository.class),
+                mock(TrackingViewMapper.class), readyPurchases());
 
         order = new Order();
         order.setId(UUID.randomUUID());
@@ -135,5 +142,15 @@ class TrackingStatusNuncaRetrocedeTest {
         pushLlega(OrderStatus.SHIPPED, step(OrderStatus.SHIPPED, "En tránsito"));
 
         assertThat(order.getTrackingStatus()).isEqualTo(OrderStatus.SHIPPED.name());
+    }
+
+    /**
+     * Las compras al proveedor ya están en camino: estos tests van del transportista internacional, no
+     * del tramo chino, y sin este permiso {@code createShipment} se frena antes de llamar al carrier.
+     */
+    private static SupplierPurchaseService readyPurchases() {
+        SupplierPurchaseService s = mock(SupplierPurchaseService.class);
+        lenient().when(s.readyForInternationalShipment(any())).thenReturn(true);
+        return s;
     }
 }

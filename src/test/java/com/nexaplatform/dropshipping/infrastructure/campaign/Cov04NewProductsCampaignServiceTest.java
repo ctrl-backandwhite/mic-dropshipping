@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
+import com.nexaplatform.dropshipping.application.service.CountryCurrencyService;
 import com.nexaplatform.dropshipping.infrastructure.email.EmailQueueService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OutboundEmailRepository;
@@ -71,6 +72,8 @@ class Cov04NewProductsCampaignServiceTest {
     EmailQueueService emailQueue;
     @Mock
     MarketingUnsubscribeService unsubscribeService;
+    @Mock
+    CountryCurrencyService countryCurrencyService;
 
     private NewProductsCampaignService service;
     private UUID categoriaId;
@@ -78,7 +81,7 @@ class Cov04NewProductsCampaignServiceTest {
     @BeforeEach
     void setUp() {
         service = new NewProductsCampaignService(productRepository, userRepository, outboundEmailRepository,
-                storefrontRead, emailQueue, unsubscribeService, TIENDA, BACKEND);
+                storefrontRead, emailQueue, countryCurrencyService, unsubscribeService, TIENDA, BACKEND);
         categoriaId = UUID.randomUUID();
         when(unsubscribeService.tokenFor(any(UUID.class))).thenReturn("tok en+/=");
     }
@@ -207,6 +210,27 @@ class Cov04NewProductsCampaignServiceTest {
         // El token va URL-encoded: sin codificar, un '+' del HMAC llegaría como espacio y la baja fallaría.
         assertThat((String) vars.get("unsubscribeUrl")).startsWith(BACKEND + "/api/campaigns/unsubscribe")
                 .contains("lang=es").contains("token=tok+en%2B%2F%3D");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void cadaCategoriaYCadaProductoLlevanSuEnlaceAlEscaparate() {
+        // El correo agrupaba las novedades por categoría pero no dejaba entrar en ninguna: el único enlace
+        // era el botón final, que lleva al catálogo entero y obliga a buscar otra vez lo que ya se enseñaba.
+        catalogoConNovedades();
+        when(userRepository.findByActiveTrueAndMarketingOptOutFalse())
+                .thenReturn(List.of(usuario("es@test", "ES", "es")));
+
+        service.sendForCountries(Set.of("ES"));
+
+        ArgumentCaptor<Map<String, Object>> captor = varsCaptor();
+        verify(emailQueue).enqueue(eq("es@test"), anyString(), eq(TEMPLATE), captor.capture());
+        List<Map<String, Object>> categorias = (List<Map<String, Object>>) captor.getValue().get("categories");
+        assertThat(categorias).hasSize(1);
+        assertThat(categorias.get(0)).containsEntry("url", TIENDA + "/catalog?categoryId=" + categoriaId);
+        List<Map<String, Object>> productos = (List<Map<String, Object>>) categorias.get(0).get("products");
+        assertThat(productos).hasSize(1);
+        assertThat(productos.get(0)).containsEntry("url", TIENDA + "/catalog/slug");
     }
 
     @Test

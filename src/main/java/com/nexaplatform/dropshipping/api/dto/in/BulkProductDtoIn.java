@@ -49,6 +49,25 @@ public class BulkProductDtoIn {
 
     private String descriptionZh;
 
+    // Los otros cuatro idiomas de la plataforma. Antes solo existían es/en/pt/zh y fr/it/de/nl había
+    // que mandarlos por el mapa `translations`, lo que dejaba la ficha asimétrica: cuatro idiomas
+    // arriba y cuatro escondidos. Son los OCHO que publica la tienda, así que los ocho tienen clave.
+    private String titleFr;
+
+    private String titleIt;
+
+    private String titleDe;
+
+    private String titleNl;
+
+    private String descriptionFr;
+
+    private String descriptionIt;
+
+    private String descriptionDe;
+
+    private String descriptionNl;
+
     private BigDecimal price;
 
     /**
@@ -150,6 +169,12 @@ public class BulkProductDtoIn {
     private Integer dropshipShipped30d;
     /** Tasa de recolección en 48 h (0-100). */
     private BigDecimal dropshipPickupRate48h;
+
+    /** Porcentaje de compradores que repiten. Es la señal de calidad más directa del origen. */
+    private BigDecimal repurchaseRate;
+
+    /** Resumen de las opiniones tal y como lo publica el proveedor. */
+    private String reviewsSummary;
 
     /** Precios escalonados por cantidad (tiered pricing). */
     private List<BulkTier> tieredPricing;

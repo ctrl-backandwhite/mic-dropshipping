@@ -4,6 +4,8 @@ import com.nexaplatform.dropshipping.application.service.CustomsValuationService
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -40,8 +42,75 @@ public class CheckoutTotalsService {
      * @param taxRateBps         tasa efectiva en puntos básicos (solo para la etiqueta "X%")
      * @param customs            valoración aduanera aplicada (modo fiscal, umbral, política)
      */
+    /**
+     * @param shippingBaseCents     el porte del transportista, SIN subvención: lo que cuesta de verdad
+     * @param customsHandlingCents  el derecho de aduana ÍNTEGRO — lo que se declara y se liquida. NO baja
+     *                              con la subvención: esa abarata lo que paga el cliente, nunca lo que se
+     *                              declara, porque declarar de menos es infradeclarar ante 27 aduanas
+     * @param shippingCents         lo que se le cobra al cliente por envío y aduana, ya subvencionado
+     * @param shippingSubsidyCents  cuánto se ha gastado de la bolsa. Es lo que pinta el desglose como
+     *                              «descuento en el envío»; lo que sobre de la bolsa se queda como ganancia
+     */
     public record CheckoutTotals(int shippingBaseCents, int customsHandlingCents, int shippingCents,
-            int taxCents, int taxRateBps, CustomsValuation customs) {
+            int taxCents, int taxRateBps, CustomsValuation customs, int shippingSubsidyCents,
+            int customsSubsidyCents) {
+
+        /** Sin subvención: el atajo de los llamantes y las pruebas que no la usan. */
+        public CheckoutTotals(int shippingBaseCents, int customsHandlingCents, int shippingCents,
+                int taxCents, int taxRateBps, CustomsValuation customs) {
+            this(shippingBaseCents, customsHandlingCents, shippingCents, taxCents, taxRateBps, customs, 0, 0);
+        }
+
+        /** Lo que se gasta de la bolsa en total: porte más arancel. */
+        public int subsidyCents() {
+            return Math.addExact(shippingSubsidyCents, customsSubsidyCents);
+        }
+
+        /**
+         * Lo que el cliente paga DE PORTE, ya descontada la bolsa.
+         *
+         * <p>El resumen enseñaba la tarifa y el descuento por separado y dejaba la resta al comprador:
+         * «Envío 13,30 €» y «Subsidio −12,37 €», sin decir en ninguna parte que pagaba 0,93 €. Ese es
+         * justo el número que se busca en un resumen, así que se calcula aquí —donde están los dos
+         * sumandos— y no en el navegador, que no hace cuentas con dinero.
+         */
+        public int shippingNetCents() {
+            return Math.max(0, shippingBaseCents - shippingSubsidyCents);
+        }
+
+        /** Lo que el cliente paga DE ARANCEL. Mismo motivo que {@link #shippingNetCents()}. */
+        public int customsNetCents() {
+            return Math.max(0, customsHandlingCents - customsSubsidyCents);
+        }
+
+        /** Qué parte del PORTE estamos cubriendo (0-100). */
+        public int shippingSubsidyPercent() {
+            return shippingBaseCents <= 0 ? 0
+                    : (int) Math.round(shippingSubsidyCents * 100.0 / shippingBaseCents);
+        }
+
+        /** Qué parte del ARANCEL estamos cubriendo (0-100). */
+        public int customsSubsidyPercent() {
+            return customsHandlingCents <= 0 ? 0
+                    : (int) Math.round(customsSubsidyCents * 100.0 / customsHandlingCents);
+        }
+
+        /** ¿La bolsa cubrió el PORTE entero? Es lo que decide si al cliente se le dice «envío gratis». */
+        public boolean freeShipping() {
+            return shippingBaseCents > 0 && shippingSubsidyCents >= shippingBaseCents;
+        }
+
+        /**
+         * Qué porcentaje del envío y la aduana estamos cubriendo (0-100).
+         *
+         * <p>Se mide sobre lo que el cliente habría pagado <b>sin</b> la bolsa, que es lo que da sentido a
+         * «te cubrimos el 43 %». Medirlo sobre lo que queda por pagar daría un número que sube cuanto
+         * menos se cubre, y con el envío gratis sería una división por cero.
+         */
+        public int subsidyPercent() {
+            int sinBolsa = Math.addExact(shippingBaseCents, customsHandlingCents);
+            return sinBolsa <= 0 ? 0 : (int) Math.round(subsidyCents() * 100.0 / sinBolsa);
+        }
 
         /** Total a cobrar = (subtotal − descuento) + envío (con recargo) + impuesto. */
         public int totalCents(int discountedSubtotalCents) {
@@ -62,10 +131,35 @@ public class CheckoutTotalsService {
      * @param discountedSubtotalCents  subtotal de producto menos descuento — es también el valor intrínseco
      *                                 que se declarará en aduana
      * @param shippingBaseCents        tarifa de envío cotizada por el transportista
+     * @param parcels                  bultos a declarar con sus partidas arancelarias: sobre ellos se calcula
+     *                                 el derecho fijo de la UE y se mide la franquicia (uno por declaración)
+     */
+    /** Sin subvención. */
+    @Transactional(readOnly = true)
+    public CheckoutTotals compute(String country, String region, int discountedSubtotalCents,
+            int shippingBaseCents, List<CustomsDutyLinesService.DutyParcel> parcels) {
+        return compute(country, region, discountedSubtotalCents, shippingBaseCents, parcels, 0);
+    }
+
+    /**
+     * El desglose con la bolsa de subvención aplicada.
+     *
+     * <p>La bolsa se come <b>primero el porte y después el arancel</b>. El orden no es indiferente para el
+     * cliente: al revés vería el envío intacto y el arancel a cero, que se lee como que no hay aduana que
+     * pagar — justo lo contrario de lo que ocurre.
+     *
+     * <p>Dos cosas NO cambian con la subvención, y son las dos que se liquidan con terceros: el
+     * <b>derecho de aduana</b>, que se declara y se remite íntegro, y el <b>impuesto</b>, que lo fija la
+     * base imponible real —mercancía más porte— y no lo que acabemos regalando. Bajar cualquiera de los
+     * dos sería liquidar de menos.
+     *
+     * @param shippingSubsidyCents lo que hay en la bolsa (ver {@link ShippingSubsidyService}); lo que
+     *                             sobre tras cubrir envío y arancel se queda como ganancia, no se devuelve
      */
     @Transactional(readOnly = true)
     public CheckoutTotals compute(String country, String region, int discountedSubtotalCents,
-            int shippingBaseCents) {
+            int shippingBaseCents, List<CustomsDutyLinesService.DutyParcel> parcels,
+            int shippingSubsidyCents) {
         int base = Math.max(0, shippingBaseCents);
         int intrinsic = Math.max(0, discountedSubtotalCents);
         int taxableBase = Math.addExact(intrinsic, base);
@@ -73,13 +167,28 @@ public class CheckoutTotalsService {
         int taxRateBps = taxService.rateBpsFor(country, region);
         int taxCents = taxService.taxCentsFor(country, region, taxableBase);
 
-        CustomsValuation customs = customsValuationService.valuate(country, intrinsic, taxCents);
+        CustomsValuation customs = customsValuationService.valuate(country, intrinsic, taxCents, parcels);
         int handling = customs.handlingFeeCents();
         if (log.isDebugEnabled() && (handling > 0 || customs.deMinimisExceeded())) {
             log.debug("Despacho {}: modo={} declarado={} umbralSuperado={} recargo={}", country,
                     customs.taxMode(), customs.declaredValueCents(), customs.deMinimisExceeded(), handling);
         }
-        return new CheckoutTotals(base, handling, Math.addExact(base, handling), taxCents, taxRateBps,
-                customs);
+        // La bolsa se reparte por conceptos y en este orden: PRIMERO el porte y, si sobra, el arancel.
+        // Se lleva la cuenta separada porque el resumen enseña el porcentaje cubierto DE CADA UNO —«envío
+        // gratis, subsidio 100 %» y «arancel, subsidio 40 %»—, y con un solo número no se puede.
+        int bolsa = Math.max(0, shippingSubsidyCents);
+        int subvencionPorte = Math.min(bolsa, base);
+        int subvencionArancel = Math.min(bolsa - subvencionPorte, handling);
+        int porteCobrado = base - subvencionPorte;
+
+        // El IVA se recalcula sobre lo que de VERDAD se cobra de porte. Un descuento concedido en el
+        // momento de la operación no forma parte de la base imponible: si el envío sale gratis no hay
+        // envío que gravar, y seguir cobrando su IVA sería repercutirle al cliente el impuesto de un
+        // importe que no ha pagado. El arancel nunca estuvo en esta base y sigue sin estarlo.
+        int taxCentsFinal = porteCobrado == base ? taxCents
+                : taxService.taxCentsFor(country, region, Math.addExact(intrinsic, porteCobrado));
+
+        return new CheckoutTotals(base, handling, porteCobrado + (handling - subvencionArancel),
+                taxCentsFinal, taxRateBps, customs, subvencionPorte, subvencionArancel);
     }
 }

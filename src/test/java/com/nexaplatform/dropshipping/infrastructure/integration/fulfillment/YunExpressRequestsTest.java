@@ -31,7 +31,8 @@ class YunExpressRequestsTest {
                 List.of(new YunExpressRequests.DeclarationLine("Cotton T-shirt", "棉T恤", 1,
                         new BigDecimal("12.5"), new BigDecimal("0.3"), "USD", "6109100000",
                         "Cotton", "Daily wear", "https://example.com/p/1", "SKU-1")),
-                null);
+                null,
+                List.of(new YunExpressRequests.ExtraService("V1", "云途预缴")));
 
         String json = mapper.writeValueAsString(req);
 
@@ -54,9 +55,31 @@ class YunExpressRequestsTest {
         // Por encima del umbral de minimis el régimen IOSS no aplica: mandarlo vacío hace que la aduana
         // rechace la liquidación, así que el campo no debe aparecer en el JSON.
         YunExpressRequests.CreateShipment req = new YunExpressRequests.CreateShipment(
-                "BPA", "NX-1", "KG", "CM", "W", "PDF", List.of(), null, List.of(), null);
+                "BPA", "NX-1", "KG", "CM", "W", "PDF", List.of(), null, List.of(), null, null);
 
         assertThat(mapper.writeValueAsString(req)).doesNotContain("customs_number");
+    }
+
+    @Test
+    void elPrepagoDeIvaViajaConLosNombresQueEsperaLaApi() throws IOException {
+        YunExpressRequests.CreateShipment req = new YunExpressRequests.CreateShipment(
+                "BPA", "NX-1", "KG", "CM", "W", "PDF", List.of(), null, List.of(), null,
+                List.of(new YunExpressRequests.ExtraService("V1", "云途预缴")));
+
+        String json = mapper.writeValueAsString(req);
+
+        assertThat(json).contains("\"extra_services\"").contains("\"extra_code\":\"V1\"")
+                .contains("\"extra_value\":\"云途预缴\"");
+    }
+
+    @Test
+    void sinServicioDePrepagoElCampoNoAparece() throws IOException {
+        // Mandar `extra_services: []` no es lo mismo que no mandarlo: hay validaciones del transportista
+        // que rechazan el array vacío.
+        YunExpressRequests.CreateShipment req = new YunExpressRequests.CreateShipment(
+                "BPA", "NX-1", "KG", "CM", "W", "PDF", List.of(), null, List.of(), null, null);
+
+        assertThat(mapper.writeValueAsString(req)).doesNotContain("extra_services");
     }
 
     @Test

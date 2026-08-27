@@ -58,6 +58,10 @@ class Cov07ProductIndexerSetupTest {
     OpenSearchIndicesClient indices;
     @Mock
     ProductRepository productRepository;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductAttributeRepository productAttributeRepository;
+    @Mock
+    ProductIndexSchema schema;
 
     @InjectMocks
     ProductIndexer indexer;
@@ -65,39 +69,40 @@ class Cov07ProductIndexerSetupTest {
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(indexer, "index", INDEX);
+        ReflectionTestUtils.setField(indexer, "logicalIndex", "products");
         when(client.indices()).thenReturn(indices);
+        when(schema.indexName("products")).thenReturn(INDEX);
+        when(productAttributeRepository.findByProduct_Id(any())).thenReturn(List.of());
     }
 
+    /** Índice ya existente: no se recrea (recrearlo lo dejaría vacío) y no hay que reindexar. */
     @Test
-    void siElIndiceYaExisteNoSeRecrea() throws IOException {
-        when(indices.exists(existsFn())).thenReturn(new BooleanResponse(true));
+    void siElIndiceYaExisteNoSeRecreaNiSeMarcaParaReindexar() throws IOException {
+        when(schema.createIfMissing("products")).thenReturn(false);
 
         indexer.ensureIndex();
 
-        // Recrearlo borraría el catálogo indexado y dejaría la búsqueda vacía hasta el siguiente reindex.
-        verify(indices, never()).create(any(CreateIndexRequest.class));
+        assertThat(indexer.isFreshlyCreated()).isFalse();
+        assertThat(indexer.indexName()).isEqualTo(INDEX);
     }
 
+    /** Índice recién creado ⇒ nace vacío: queda marcado para que el arranque lo rellene. */
     @Test
-    void siNoExisteSeCreaConElMapeoDeBusqueda() throws IOException {
-        when(indices.exists(existsFn())).thenReturn(new BooleanResponse(false));
-        when(indices.create(any(CreateIndexRequest.class))).thenReturn(mock(CreateIndexResponse.class));
+    void unIndiceReciencreadoQuedaMarcadoParaReindexar() throws IOException {
+        when(schema.createIfMissing("products")).thenReturn(true);
 
         indexer.ensureIndex();
 
-        ArgumentCaptor<CreateIndexRequest> captor = ArgumentCaptor.forClass(CreateIndexRequest.class);
-        verify(indices).create(captor.capture());
-        assertThat(captor.getValue().index()).isEqualTo(INDEX);
-        assertThat(captor.getValue().mappings().properties()).containsKeys("slug", "source", "categoryId", "status",
-                "titleZh", "titleEs", "titleEn", "titlePt", "basePrice", "trendScore", "monthlySales", "rating",
-                "supplierId");
+        assertThat(indexer.isFreshlyCreated()).isTrue();
     }
 
+    /** Un buscador caído degrada la búsqueda; jamás debe impedir que la aplicación arranque. */
     @Test
     void unFalloDeOpenSearchAlAsegurarElIndiceNoTumbaElArranque() throws IOException {
-        when(indices.exists(existsFn())).thenThrow(new IOException("opensearch caído"));
+        when(schema.createIfMissing("products")).thenThrow(new IOException("opensearch caído"));
 
         assertThatCode(() -> indexer.ensureIndex()).doesNotThrowAnyException();
+        assertThat(indexer.isFreshlyCreated()).isFalse();
     }
 
     @Test
@@ -150,8 +155,10 @@ class Cov07ProductIndexerSetupTest {
         ArgumentCaptor<IndexRequest<Map<String, Object>>> captor = captor();
         verify(client).index(captor.capture());
         // El mapeo declara titlePt/titleEs/…: si no se capitalizara el idioma, el campo no existiría.
-        assertThat(captor.getValue().document()).containsEntry("titlePt", "Camisa de linho")
-                .containsEntry("descriptionPt", "resumo");
+        // Las descripciones, en cambio, van TODAS a un único campo que solo se consulta como red de
+        // seguridad: no compiten con el título en la búsqueda normal.
+        assertThat(captor.getValue().document()).containsEntry("titlePt", "Camisa de linho");
+        assertThat(captor.getValue().document().get("descAll").toString()).contains("resumo");
     }
 
     @Test

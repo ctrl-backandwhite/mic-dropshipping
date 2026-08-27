@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.controller;
 
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.LivePromotionView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
@@ -30,6 +31,16 @@ import com.nexaplatform.dropshipping.api.StorefrontCatalogApi;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews;
+import com.nexaplatform.dropshipping.application.service.CountryTaxService;
+import com.nexaplatform.dropshipping.application.service.WelcomeExamplesService;
+import com.nexaplatform.dropshipping.application.service.CheckoutPreviewService;
+import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
+import com.nexaplatform.dropshipping.application.service.ParcelAggregator;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
+import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
+import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService;
+import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
@@ -38,7 +49,10 @@ import com.nexaplatform.dropshipping.api.mapper.ProductListFilters;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
 import com.nexaplatform.dropshipping.application.service.ProductDetailQueryService;
 import com.nexaplatform.dropshipping.application.service.MarginService;
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount;
+import com.nexaplatform.dropshipping.application.service.PromotionShowcaseService;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
@@ -89,6 +103,8 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     private static final String NEWEST = "newest";
 
     private final CatalogUseCase catalogUseCase;
+    private final CatalogDutyBadgeService dutyBadges;
+    private final CustomsValuationService customsValuation;
     private final CatalogStorefrontReadService storefrontRead;
     private final ProductDetailQueryService productDetailQuery;
     private final ProductRepository productRepository;
@@ -101,9 +117,15 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     private final ProductMapper productMapper;
     // DROP-669/678: estimación de rentabilidad con datos reales (tramo aplicable + margen configurado).
     private final PricingService pricingService;
+    private final PromotionShowcaseService promotionShowcase;
     private final MarginService marginService;
     private final CurrencyRateService currencyService;
     private final ProductPriceTierRepository priceTierRepository;
+    private final WelcomeExamplesService welcomeExamples;
+    private final CountryTaxService countryTaxService;
+    private final CheckoutPreviewService checkoutPreview;
+    /** La cuenta del pedido: el carrito cotiza con la MISMA aritmética con la que se cobra. */
+    private final OrderAmounts orderAmounts;
     /** Comisión de plataforma (%). DROP-680: por defecto 0 — no se inventa una comisión. */
     @Value("${nexadrop.platform.commission-pct:0}")
     private BigDecimal platformCommissionPct;
@@ -176,26 +198,109 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     /* =========================== PRODUCTS =========================== */
 
     @Override
+    @SuppressWarnings("java:S107")
     public PageResponse<ProductSummaryView> list(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping,
             Boolean selfPickup, Boolean hasVideo, Integer minRating, Integer inventoryMin, String certification,
-            String sort, Boolean verified) {
+            String sort, Boolean verified, UUID promotionId, UUID dutyGroupId, Boolean dutyGroupsFromCart,
+            List<UUID> cartProductIds) {
         // El filtro de verificación es SOLO para admin: si el que consulta no es admin, se ignora.
         Boolean verifiedFilter = SecurityUtils.isAdmin() ? verified : null;
-        return storefrontRead.productListFull(page, size, lang,
+        PageResponse<ProductSummaryView> pagina = storefrontRead.productListFull(page, size, lang,
                 new ProductListFilters(q, categoryId, supplierId, minPrice, maxPrice, shipFrom, freeShipping,
-                        selfPickup, hasVideo, minRating, inventoryMin, certification, verifiedFilter),
+                        selfPickup, hasVideo, minRating, inventoryMin, certification, verifiedFilter, promotionId,
+                        gruposDelFiltro(dutyGroupId, dutyGroupsFromCart, cartProductIds)),
                 sort);
+        return conElArancel(pagina, cartProductIds);
+    }
+
+    /**
+     * Por qué grupos de declaración se filtra: por el de un producto concreto, o por los del carrito entero.
+     *
+     * <p>El carrito tiene tantas líneas de declaración como ternas distintas lleve. Con tres productos de
+     * tres grupos se pagan tres derechos, y «lo que no suma arancel» es lo que encaje en <b>cualquiera</b>
+     * de los tres: filtrar por uno solo deja fuera dos tercios del catálogo que tampoco costaría nada.
+     *
+     * <p>Manda el producto cuando se ha elegido uno —es una petición explícita del comprador sobre ESE
+     * artículo, y funciona con el carrito vacío—; el carrito es el respaldo.
+     *
+     * <p>Cada línea lleva su ORIGEN cuando viene del carrito: lo que separa una línea de declaración de
+     * otra es clasificación + descripción + <b>origen</b>, así que sin él el filtro devolvía productos del
+     * mismo grupo pero de otro país, que suman los 3 EUR igualmente.
+     *
+     * @return {@code null} si no hay filtro; lista vacía si se pidió el del carrito y en él no hay ni un
+     *         grupo aprobado, porque entonces cualquier producto abre línea nueva y no encaja ninguno
+     */
+    private List<ProductListFilters.DutyLine> gruposDelFiltro(UUID dutyGroupId, Boolean dutyGroupsFromCart,
+            List<UUID> cartProductIds) {
+        // Donde no se cobra derecho por artículo no hay nada que agrupar, así que el filtro se ignora: el
+        // régimen de 3 EUR es de los 27 de la Unión y en el resto del mundo esta pantalla no habla de
+        // aranceles. Sin esto, cambiar de país con el filtro puesto —o abrir un enlace compartido desde
+        // fuera de la UE— dejaba el catálogo recortado por una promesa que allí no significa nada.
+        if (customsValuation.perArticleFeeUsdCents(PricingCountryHolder.get()) <= 0) {
+            return null;
+        }
+        if (dutyGroupId != null) {
+            // Desde una tarjeta con el carrito vacío no hay con qué comparar el origen, así que se dejan
+            // todos los del grupo: es «los de la misma familia», no una promesa sobre un carrito.
+            return List.of(new ProductListFilters.DutyLine(dutyGroupId, null));
+        }
+        if (!Boolean.TRUE.equals(dutyGroupsFromCart)) {
+            return null;
+        }
+        return dutyBadges.lineasDe(cartProductIds).stream()
+                .map(l -> new ProductListFilters.DutyLine(l.grupoId(), l.originCountry())).toList();
+    }
+
+    /**
+     * Añade a cada producto cuánto sube el arancel del carrito por llevárselo.
+     *
+     * <p>Va <b>fuera</b> del listado y no dentro, aunque dentro sería más cómodo: {@code productListFull}
+     * está cacheado y su clave incluye los argumentos del método, así que meter el carrito ahí crearía una
+     * entrada de caché por cada combinación de carrito —que no tiene fin— y echaría del hueco a las páginas
+     * que de verdad se repiten. El arancel se calcula aparte, con la página ya resuelta.
+     */
+    private PageResponse<ProductSummaryView> conElArancel(PageResponse<ProductSummaryView> pagina,
+            List<UUID> cartProductIds) {
+        if (pagina == null || pagina.items() == null || pagina.items().isEmpty()) {
+            return pagina;
+        }
+        Map<UUID, CatalogDutyBadgeService.DutyBadge> badges = dutyBadges.badgesFor(cartProductIds,
+                pagina.items().stream().map(ProductSummaryView::id).toList(), PricingCountryHolder.get());
+        if (badges.isEmpty()) {
+            return pagina;
+        }
+        List<ProductSummaryView> conArancel = pagina.items().stream().map(v -> {
+            CatalogDutyBadgeService.DutyBadge badge = badges.get(v.id());
+            return badge == null ? v
+                    : v.withDuty(badge.extraDutyCents(), badge.extraDutyFormatted(), badge.dutyGroupId());
+        }).toList();
+        return new PageResponse<>(conArancel, pagina.page(), pagina.size(), pagina.totalElements(),
+                pagina.totalPages());
     }
 
     @Override
-    public ProductDetailView detailBySlug(String slug, String lang) {
-        return catalogUseCase.getProductBySlug(slug, lang);
+    public ProductDetailView detailBySlug(String slug, String lang, List<UUID> cartProductIds) {
+        return conElArancel(catalogUseCase.getProductBySlug(slug, lang), cartProductIds);
     }
 
     @Override
-    public ProductDetailView detailById(UUID id, String lang) {
-        return catalogUseCase.getProductById(id, lang);
+    public ProductDetailView detailById(UUID id, String lang, List<UUID> cartProductIds) {
+        return conElArancel(catalogUseCase.getProductById(id, lang), cartProductIds);
+    }
+
+    /**
+     * La ficha promete lo mismo que el listado porque lo calcula el mismo servicio: si la tarjeta dijera
+     * «sin arancel adicional» y la ficha otra cosa, una de las dos estaría mintiendo.
+     */
+    private ProductDetailView conElArancel(ProductDetailView ficha, List<UUID> cartProductIds) {
+        if (ficha == null) {
+            return null;
+        }
+        CatalogDutyBadgeService.DutyBadge badge = dutyBadges
+                .badgesFor(cartProductIds, List.of(ficha.id()), PricingCountryHolder.get()).get(ficha.id());
+        return badge == null ? ficha
+                : ficha.withDuty(badge.extraDutyCents(), badge.extraDutyFormatted(), badge.dutyGroupId());
     }
 
     @Override
@@ -376,10 +481,14 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
 
     /**
-     * Cotiza el carrito con el precio ACTUAL de cada producto (margen + tasa del día, 2 decimales hacia
-     * arriba por línea) en la moneda activa — EXACTAMENTE lo que se factura y se cobra. El carrito del
-     * cliente "congela" el precio al añadir, así que el checkout debe re-cotizar aquí para que lo mostrado
-     * coincida con lo cobrado (evita "veo X y me cobran Y" cuando el precio cambió tras añadir al carrito).
+     * Cotiza el carrito con el precio ACTUAL de cada producto (margen + tasa del día) en la moneda activa
+     * — EXACTAMENTE lo que se factura y se cobra. El carrito del cliente "congela" el precio al añadir,
+     * así que el checkout debe re-cotizar aquí para que lo mostrado coincida con lo cobrado (evita "veo X
+     * y me cobran Y" cuando el precio cambió tras añadir al carrito).
+     *
+     * <p>El subtotal es la suma de los importes de LÍNEA, cada uno redondeado una sola vez. Sumar
+     * unitarios redondeados es lo que hacía que el carrito anunciara —y la pasarela liquidara— hasta un
+     * 1,45 % de más.
      */
     @PostMapping("/cart-quote")
     @Transactional(readOnly = true)
@@ -387,15 +496,39 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         String displayCode = pricingService.displayCurrencyCode();
         List<CartQuoteLineOut> lines = new ArrayList<>();
         BigDecimal subtotal = BigDecimal.ZERO;
+        int pesoTotal = 0;
+        boolean faltaAlgunPeso = false;
         for (CartQuoteItemIn it : items == null ? List.<CartQuoteItemIn>of() : items) {
             CartQuoteLineOut line = quoteLine(it, displayCode);
             if (line != null) {
                 lines.add(line);
                 subtotal = subtotal.add(line.lineTotal());
+                if (line.weightGrams() == null) {
+                    faltaAlgunPeso = true;
+                } else {
+                    pesoTotal = Math.addExact(pesoTotal,
+                            Math.multiplyExact(line.weightGrams(), Math.max(1, it.quantity())));
+                }
             }
         }
         return new CartQuoteOut(displayCode, pricingService.displayCurrencySymbol(), lines, subtotal,
-                currencyService.formatDisplay(subtotal, displayCode));
+                currencyService.formatDisplay(subtotal, displayCode), pesoTotal, faltaAlgunPeso);
+    }
+
+    /**
+     * Peso NETO de lo que se lleva el cliente, en gramos: el de la variante y, si no lo declara, el de la
+     * ficha. {@code null} cuando no hay ninguno de los dos.
+     *
+     * <p>Es el peso del artículo, no el que factura el transportista —ese incluye el embalaje y el
+     * volumétrico— porque lo que el comprador quiere saber es cuánto pesa lo que compra. Y jamás el
+     * respaldo de 500 g que usa el cálculo del flete: sirve para poder cotizar, no para enseñárselo a
+     * nadie como si fuera un dato medido. Un cero cuenta como ausente: un artículo no pesa cero gramos.
+     */
+    private static Integer pesoNetoDe(ProductEntity p, ProductVariantEntity v) {
+        if (v != null && v.getWeightGrams() != null && v.getWeightGrams() > 0) {
+            return v.getWeightGrams();
+        }
+        return p.getWeightGrams() != null && p.getWeightGrams() > 0 ? p.getWeightGrams() : null;
     }
 
     /**
@@ -413,14 +546,20 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         }
         ProductVariantEntity v = it.variantId() == null ? null
                 : p.getVariants().stream().filter(x -> it.variantId().equals(x.getId())).findFirst().orElse(null);
-        BigDecimal unit = pricingService.priceFor(p, v).displayAmount();
+        PricedAmount priced = pricingService.priceFor(p, v);
+        BigDecimal unit = priced.displayAmount();
         if (unit == null) {
             return null;
         }
-        BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(Math.max(1, it.quantity())));
+        // El importe de la línea lo decide OrderAmounts: multiplica en DÓLARES sobre el precio canónico y
+        // convierte al final, un solo redondeo. Multiplicar el unitario ya redondeado cobraba de más
+        // —0,14 € × 100 = 14,00 € donde 100 unidades de 0,15 $ valen 13,80 €— y esa cifra es la que
+        // acababa en la pasarela. El unitario se sigue enseñando redondeado porque es el precio que el
+        // cliente eligió, pero ya no es la base de la cuenta.
+        BigDecimal lineTotal = orderAmounts.lineSubtotal(priced.retailUsd(), it.quantity(), displayCode);
         return new CartQuoteLineOut(p.getId(), v != null ? v.getId() : null, unit, lineTotal,
                 currencyService.formatDisplay(unit, displayCode),
-                currencyService.formatDisplay(lineTotal, displayCode));
+                currencyService.formatDisplay(lineTotal, displayCode), pesoNetoDe(p, v));
     }
 
     /* =========================== HOME SECTIONS (DROP-20) =========================== */
@@ -454,7 +593,124 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         flattenCategories(storefrontRead.categoriesTree(lang), allCats);
         List<CategoryView> hot = allCats.stream().filter(v -> v.directProductCount() > 0)
                 .sorted((a, b) -> Integer.compare(b.directProductCount(), a.directProductCount())).limit(8).toList();
-        return new HomeSectionsResponse(sections, hot);
+        // Los VISIBLES, no todos los activos: el catálogo solo lista los que tienen imagen espejada, y
+        // anunciar en la portada un número mayor del que luego se puede recorrer es prometer de más.
+        long totalProducts = productRepository.countVisibleByStatus(ProductStatus.ACTIVE);
+        return new HomeSectionsResponse(sections, hot, totalProducts);
+    }
+
+    /**
+     * Productos reales con los que la guía de bienvenida enseña las dos reglas que ahorran dinero en la
+     * Unión Europea: el arancel se paga por partida declarada y el envío por bulto.
+     *
+     * <p>Se sirven con el precio ya calculado —el navegador no hace cuentas de dinero— y con el peso y la
+     * clave de partida, que es lo que el simulador combina al sumar y restar unidades.
+     *
+     * <p>Cuando el país que mira no tiene derecho por artículo, {@code perArticleDutyFormatted} viene
+     * vacío y la guía se salta ese paso: contarle el arancel de 3 EUR a quien compra desde fuera de la
+     * Unión sería explicarle una regla que no le aplica.
+     *
+     * <p>Transaccional porque el mapeo lee las imágenes del producto, que son perezosas: sin una
+     * transacción viva aquí, la colección revienta con LazyInitializationException al salir del servicio
+     * que las cargó.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public StorefrontViews.WelcomeExamplesResponse welcomeExamples(String lang) {
+        String pais = PricingCountryHolder.get();
+        String divisa = CurrencyHolder.get();
+        List<StorefrontViews.WelcomeExample> ejemplos = new ArrayList<>();
+        for (ProductEntity p : welcomeExamples.examples()) {
+            PricedAmount priced = pricingService.priceFor(p, null);
+            if (priced.displayAmount() == null) {
+                continue;
+            }
+            ProductSummaryView resumen = productMapper.toSummary(p, lang);
+            ejemplos.add(new StorefrontViews.WelcomeExample(p.getId(), p.getSlug(),
+                    resumen.title(), resumen.mainImage(), priced.displayFormatted(), priced.displayAmount(),
+                    p.getWeightGrams() == null ? 0 : p.getWeightGrams(), welcomeExamples.dutyGroupOf(p),
+                    priced.supplierShippingUsd() == null ? BigDecimal.ZERO
+                            : currencyService.usdToDisplay(priced.supplierShippingUsd())));
+        }
+        int derechoUsdCents = customsValuation.perArticleFeeUsdCents(pais);
+        String derecho = derechoUsdCents <= 0 ? ""
+                : currencyService.formatDisplay(currencyService.usdToDisplay(
+                        BigDecimal.valueOf(derechoUsdCents).movePointLeft(2)), divisa);
+        int topeUsdCents = customsValuation.deMinimisUsdCentsFor(pais);
+        return new StorefrontViews.WelcomeExamplesResponse(ejemplos, derecho,
+                countryTaxService.rateBpsFor(pais),
+                customsValuation.valuate(pais, 0, 0, List.of()).deMinimisLabel(),
+                topeUsdCents <= 0 ? BigDecimal.ZERO
+                        : currencyService.usdToDisplay(BigDecimal.valueOf(topeUsdCents).movePointLeft(2)));
+    }
+
+    /**
+     * El desglose del simulador de la guía, con la aritmética REAL del checkout.
+     *
+     * <p>No replica el cálculo: llama al mismo {@code CheckoutPreviewService} que la vista previa del
+     * pago. Así la guía no puede prometer una cosa y el checkout cobrar otra, y entran las dos fuentes de
+     * la subvención —el porte que no se repite y la ganancia del pedido sobre el suelo—, la segunda de
+     * las cuales depende del margen y por eso nunca podría calcularse en el navegador.
+     *
+     * <p>Solo acepta los productos que la propia guía propone y como mucho seis unidades de cada uno: es
+     * un ejemplo con tres artículos, no una calculadora de precios abierta a cualquier catálogo.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public StorefrontViews.WelcomeSimulationResponse welcomeSimulate(
+            List<StorefrontViews.WelcomeSimulationLine> lines) {
+        String pais = PricingCountryHolder.get();
+        String divisa = CurrencyHolder.get();
+        Set<UUID> permitidos = welcomeExamples.examples().stream().map(ProductEntity::getId)
+                .collect(Collectors.toSet());
+        List<CheckoutPreviewService.Line> items = (lines == null ? List.<StorefrontViews.WelcomeSimulationLine>of()
+                : lines).stream()
+                .filter(l -> l != null && l.productId() != null && permitidos.contains(l.productId()))
+                .filter(l -> l.quantity() > 0)
+                .map(l -> new CheckoutPreviewService.Line(l.productId(), null, Math.min(6, l.quantity())))
+                .toList();
+        if (items.isEmpty()) {
+            String cero = currencyService.formatDisplay(BigDecimal.ZERO, divisa);
+            return new StorefrontViews.WelcomeSimulationResponse(cero, cero, 0, cero, "", cero, "", cero,
+                    cero, 0, cero, 0, false, "");
+        }
+        CheckoutPreviewService.Preview p = checkoutPreview.compute(pais, null, items, null);
+        CheckoutTotalsService.CheckoutTotals t = p.totals();
+        int pesoGramos = items.stream().mapToInt(i -> productRepository.findById(i.productId())
+                .map(pr -> ParcelAggregator.unitWeightGrams(pr, null) * i.quantity()).orElse(0)).sum();
+        return new StorefrontViews.WelcomeSimulationResponse(
+                currencyService.formatDisplay(p.subtotalDisplay(), divisa),
+                enDivisa(t.customsHandlingCents(), divisa), partidasDe(t, pais),
+                enDivisa(t.shippingBaseCents(), divisa),
+                t.shippingSubsidyCents() > 0 ? enDivisa(t.shippingSubsidyCents(), divisa) : "",
+                enDivisa(t.shippingNetCents(), divisa),
+                t.customsSubsidyCents() > 0 ? enDivisa(t.customsSubsidyCents(), divisa) : "",
+                enDivisa(t.customsNetCents(), divisa),
+                currencyService.formatDisplay(p.taxDisplay(), divisa), p.taxRateBps(),
+                currencyService.formatDisplay(p.totalDisplay(), divisa), pesoGramos,
+                t.customs().blocked() || t.customs().deMinimisExceeded(),
+                customsValuation.valuate(pais, 0, 0, List.of()).deMinimisLabel());
+    }
+
+    /**
+     * Cuántas líneas de declaración lleva el pedido, deducidas del derecho ya calculado.
+     *
+     * <p>{@code CustomsValuation} no guarda el número —lo consume al multiplicar— así que se divide el
+     * derecho total entre el de una línea. En la Unión el resto de recargos están a cero, de modo que la
+     * división es exacta; donde no lo fueran, se devuelve 0 antes que un número inventado.
+     */
+    private int partidasDe(CheckoutTotalsService.CheckoutTotals t, String pais) {
+        int porLinea = customsValuation.perArticleFeeUsdCents(pais);
+        if (porLinea <= 0 || t.customsHandlingCents() <= 0) {
+            return 0;
+        }
+        return t.customsHandlingCents() / porLinea;
+    }
+
+    /** Un importe en céntimos de dólar, ya convertido y formateado en la divisa del visitante. */
+    private String enDivisa(int usdCents, String divisa) {
+        return currencyService.formatDisplay(currencyService.usdToDisplay(
+                BigDecimal.valueOf(Math.max(0, usdCents)).movePointLeft(2)), divisa);
     }
 
     /** Aplana el árbol de categorías (raíces + todas sus descendientes) en una lista plana. */
@@ -715,5 +971,10 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     private static String firstNonNull(String a, String b) {
         return a != null && !a.isBlank() ? a : b;
+    }
+
+    @Override
+    public List<LivePromotionView> livePromotions(String lang) {
+        return promotionShowcase.live(lang);
     }
 }

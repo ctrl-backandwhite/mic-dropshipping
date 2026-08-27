@@ -2,14 +2,18 @@ package com.nexaplatform.dropshipping.application.usecase.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
+import org.springframework.beans.factory.annotation.Value;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.api.exception.WebhookProcessingException;
+import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
+import com.nexaplatform.dropshipping.application.service.CartService;
 import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
 import com.nexaplatform.dropshipping.application.service.StockService;
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
@@ -31,7 +35,10 @@ import com.nexaplatform.dropshipping.domain.repository.PaymentRepository;
 import com.nexaplatform.dropshipping.infrastructure.integration.payment.PaymentGateway;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PaymentEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PaymentJpaRepositoryAdapter;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
+import com.stripe.exception.StripeException;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
+import com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -81,13 +88,25 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     private static final String ORDERID = "orderId";
     private static final String METHOD = "method";
     private static final String STATUS = "status";
+    private static final String ERROR = "error";
+    private static final String PAYMENT_INTENT = "paymentIntent";
+    /**
+     * El dinero no se ha podido devolver al método original. El texto que lee el cliente lo resuelve
+     * {@code ErrorCode} en su idioma; el motivo literal de la pasarela viaja en el detalle y en el log.
+     */
+    private static final String REFUND_NOT_POSSIBLE = "REFUND_NOT_POSSIBLE";
 
     private final List<PaymentGateway> gateways;
     private final PaymentRepository paymentRepository;
     private final PaymentJpaRepositoryAdapter paymentJpaRepositoryAdapter;
     private final UserRepository userRepository;
     private final OrderRepository orderRepository;
+
+    /** Perfiles Spring activos: se usa para prohibir los pagos simulados en pro/pre (fail-closed). */
+    @Value("${spring.profiles.active:}")
+    private String activeProfiles;
     private final WalletUseCase walletUseCase;
+    private final StripeService stripeService;
     private final AuditLogger auditLogger;
     private final PartnerPlanSyncService partnerPlanSyncService;
     private final CustomerSubscriptionUseCase customerSubscriptionUseCase;
@@ -98,8 +117,12 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     /** La cuenta del pedido, compartida con el checkout, la ficha del cliente y el panel. */
     private final OrderAmounts orderAmounts;
     private final StockService stockService;
+    /** Al cobrar hay que dejar anotado qué comprar en 1688 y a qué proveedor. */
+    private final SupplierPurchaseService supplierPurchaseService;
     /** Avisos al responsable cuando una pasarela deja de cobrar. */
     private final OpsAlertService opsAlertService;
+    /** La cesta sincronizada: lo comprado sale de ella en cuanto el pedido queda PAGADO. */
+    private final CartService cartService;
 
     @Override
     @Transactional
@@ -321,20 +344,53 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
      *
      * <p>El paso a PAID solo se da desde PENDING/AWAITING_PAYMENT. Así una segunda confirmación (webhook
      * duplicado o reproceso) encuentra la orden ya avanzada, no la hace retroceder y NO vuelve a descontar
-     * stock; el audit y el email, en cambio, se emiten aunque la orden ya estuviera pagada.
+     * stock ni a tocar la cesta; el audit y el email, en cambio, se emiten aunque la orden ya estuviera
+     * pagada.
      */
     private void settleOrderPayment(Payment p) {
         Order order = orderRepository.findById(p.getOrderId()).orElse(null);
-        if (order != null && (order.getStatus() == OrderStatus.PENDING
-                || order.getStatus() == OrderStatus.AWAITING_PAYMENT)) {
+        // ¿Es ESTA confirmación la que paga el pedido? Distinguirlo de "el pedido ya estaba pagado" es lo
+        // que hace que un webhook repetido no vuelva a tocar la cesta.
+        boolean acabaDePagarse = order != null && (order.getStatus() == OrderStatus.PENDING
+                || order.getStatus() == OrderStatus.AWAITING_PAYMENT);
+        if (acabaDePagarse) {
             order.setStatus(OrderStatus.PAID);
             order = orderRepository.save(order);
             stockService.deductForOrder(order);
+        }
+        // El dinero ya está cobrado: hay que comprar la mercancía en 1688. Se planifica aunque el pedido
+        // ya estuviera pagado (webhook duplicado o reproceso) porque planPurchases es idempotente y así
+        // un fallo transitorio en el primer intento se recupera solo en el siguiente.
+        if (order != null && order.getStatus() == OrderStatus.PAID) {
+            supplierPurchaseService.planPurchases(order);
         }
         auditLogger.log("order_payment.succeeded", p.getUserEmail(), Map.of(PAYMENTID, p.getId(), ORDERID,
                 p.getOrderId(), METHOD, p.getMethod(), AMOUNT_USD_CENTS, p.getAmountUsdCents()));
         if (order != null) {
             sendPaymentConfirmedEmail(p, order);
+        }
+        // La cesta, al final y solo si el pedido acaba de quedar PAGADO. Al final porque el borrado se
+        // confirma en su propia transacción: si se hiciera antes y algo posterior tumbara la del cobro,
+        // la persona se quedaría sin pedido Y sin cesta. Y solo en la transición real, para que una
+        // segunda confirmación no borre lo que haya vuelto a añadir después de comprar.
+        if (acabaDePagarse) {
+            clearPurchasedFromCart(order);
+        }
+    }
+
+    /**
+     * Saca de la cesta las líneas del pedido recién pagado.
+     *
+     * <p>Un fallo limpiando NUNCA puede tumbar el cobro: el pedido ya está pagado y eso es lo que cuenta.
+     * Perder un pago por no poder borrar una fila sería mucho peor que dejar restos en la cesta, así que
+     * el problema se registra —con el motivo en claro, sin SQL— y el cobro sigue su curso.
+     */
+    private void clearPurchasedFromCart(Order order) {
+        try {
+            cartService.removePurchased(order);
+        } catch (RuntimeException e) {
+            log.warn("Pedido {} PAGADO pero no se pudo vaciar la cesta: {}", order.getId(),
+                    ErrorMessages.humanize(e), e);
         }
     }
 
@@ -375,7 +431,9 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
     @Override
     @Transactional
-    public Payment capturePayPal(UUID paymentId) {
+    public Payment capturePayPal(UUID userId, UUID paymentId) {
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
+        assertPaymentOwnedBy(p, userId); // IDOR: solo el dueño del pago puede capturarlo
         return doCapturePayPal(paymentId);
     }
 
@@ -397,8 +455,9 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
     @Override
     @Transactional
-    public Payment confirmOrderPayment(UUID orderId, UUID paymentId) {
+    public Payment confirmOrderPayment(UUID userId, UUID orderId, UUID paymentId) {
         Payment p = requireOrderPayment(orderId, paymentId);
+        assertPaymentOwnedBy(p, userId);
         if (p.getStatus() == PaymentStatus.SUCCEEDED) {
             return p; // idempotente
         }
@@ -406,6 +465,9 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         String ref = p.getProviderRef() != null ? p.getProviderRef() : "";
         boolean mock = ref.startsWith(CS_MOCK) || ref.startsWith(PAYPAL_MOCK) || ref.startsWith(PI_MOCK);
         if (mock) {
+            // FAIL-CLOSED: marcar un pedido como pagado por vía sintética (sin pasarela real) SOLO fuera de
+            // pro/pre. Evita que, si prod arranca con pagos deshabilitados, se confirmen pedidos gratis.
+            assertMockAllowed();
             return doConfirmSucceeded(p.getId(), Map.of(MOCK_CONFIRM, true, ORDERID, orderId.toString()));
         }
         if (p.getMethod() == PaymentMethod.PAYPAL) {
@@ -446,7 +508,10 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         }
 
         p.setStatus(PaymentStatus.REFUNDED);
-        Map<String, Object> merged = new HashMap<>(pr);
+        // Se RELEE la respuesta del proveedor en vez de reusar `pr`: al resolver el PaymentIntent contra
+        // Stripe puede haberse completado con el identificador que faltaba, y ese dato debe persistirse.
+        Map<String, Object> merged = new HashMap<>(
+                p.getProviderResponse() != null ? p.getProviderResponse() : Map.of());
         merged.put("refund", result);
         merged.put("refunded_at", Instant.now().toString());
         p.setProviderResponse(merged);
@@ -481,29 +546,104 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     }
 
     /**
-     * Devolución por Stripe: se reembolsa el PaymentIntent guardado en la respuesta del proveedor (con el
-     * providerRef como respaldo). Igual que en PayPal, un estado distinto de succeeded/pending aborta para
-     * no dar por devuelto un dinero que Stripe no ha devuelto.
+     * Devolución por Stripe: se reembolsa el PaymentIntent que resuelve
+     * {@link #resolveStripePaymentIntent(Payment, Map, StripeGateway)}. Igual que en PayPal, un estado
+     * distinto de succeeded/pending aborta para no dar por devuelto un dinero que Stripe no ha devuelto.
      */
     private Map<String, Object> refundWithStripe(Payment p, Map<String, Object> providerResponse, long amountCents) {
         PaymentGateway gw = resolveGateway(PaymentMethod.CARD);
         if (!(gw instanceof StripeGateway sg)) {
             throw new BusinessException("Stripe gateway not configured");
         }
-        String paymentIntentId = String.valueOf(providerResponse.getOrDefault("paymentIntent", p.getProviderRef()));
+        String paymentIntentId = resolveStripePaymentIntent(p, providerResponse, sg);
         Map<String, Object> result = sg.refund(paymentIntentId, amountCents);
         String status = String.valueOf(result.getOrDefault(STATUS, ""));
         boolean ok = "succeeded".equalsIgnoreCase(status) || "pending".equalsIgnoreCase(status)
                 || Boolean.TRUE.equals(result.get("mock"));
         if (!ok) {
-            throw new BusinessException("Stripe refund failed: " + status);
+            // El motivo que da Stripe («No such payment_intent», «charge_already_refunded»…) viaja en la
+            // excepción: antes solo se escribía en el log del servidor y quien cancelaba veía un 422 mudo,
+            // imposible de diagnosticar sin acceso a la infraestructura.
+            Object reason = result.get(ERROR);
+            throw new BusinessException(REFUND_NOT_POSSIBLE,
+                    "Stripe refund failed: " + status + (reason != null ? " — " + reason : ""),
+                    reason != null ? List.of(String.valueOf(reason)) : null);
         }
         return result;
+    }
+
+    /**
+     * Identificador con el que Stripe puede devolver el dinero. SIEMPRE tiene que ser un PaymentIntent:
+     * el {@code cs_…} de una sesión de Checkout no es reembolsable.
+     *
+     * <p>El cobro con tarjeta va por Checkout hospedado y Stripe <b>no</b> crea el PaymentIntent al crear
+     * la sesión, así que al iniciar el pago no hay nada que guardar. El {@code pi_…} solo se conocía al
+     * confirmar desde la vuelta del navegador; si ganaba la carrera el webhook {@code payment_intent
+     * .succeeded} —que llega en el mismo segundo del cobro— la confirmación posterior se saltaba por
+     * idempotencia y el identificador no llegaba a guardarse nunca. Al reembolsar se le mandaba a Stripe
+     * la cadena {@code "null"} (o el {@code cs_…} de respaldo) y respondía {@code resource_missing}.
+     *
+     * <p>Por eso se busca en todas las claves donde puede haber quedado, y como último recurso se le
+     * pregunta a Stripe por la sesión. Lo recuperado se guarda en el pago, de forma que los cobros
+     * antiguos se curan solos la primera vez que se reembolsan.
+     */
+    private String resolveStripePaymentIntent(Payment p, Map<String, Object> providerResponse, StripeGateway sg) {
+        String ref = p.getProviderRef() != null ? p.getProviderRef() : "";
+        if (ref.startsWith(CS_MOCK) || ref.startsWith(PI_MOCK)) {
+            return ref; // mock-mode: la pasarela responde con un éxito sintético, no llega a llamar a Stripe
+        }
+        String stored = firstPaymentIntent(providerResponse.get(PAYMENT_INTENT),
+                providerResponse.get("stripe_payment_intent"), providerResponse.get("id"), ref);
+        if (stored != null) {
+            return stored;
+        }
+        String sessionId = firstCheckoutSession(ref, providerResponse.get("id"));
+        if (sessionId == null) {
+            throw new BusinessException(REFUND_NOT_POSSIBLE,
+                    "No hay ningún PaymentIntent asociado a este cobro: no se puede reembolsar en Stripe.");
+        }
+        Map<String, Object> session = sg.retrieveCheckoutSession(sessionId);
+        String recovered = asPaymentIntent(session.get(PAYMENT_INTENT));
+        if (recovered == null) {
+            throw new BusinessException(REFUND_NOT_POSSIBLE,
+                    "Stripe no devuelve el PaymentIntent de la sesión " + sessionId + ": "
+                            + session.getOrDefault(ERROR, session.getOrDefault(STATUS, "sin detalle")));
+        }
+        Map<String, Object> healed = new HashMap<>(providerResponse);
+        healed.put(PAYMENT_INTENT, recovered);
+        p.setProviderResponse(healed);
+        return recovered;
+    }
+
+    /** Primer valor de los candidatos que sea un PaymentIntent de Stripe, o {@code null} si no hay ninguno. */
+    private static String firstPaymentIntent(Object... candidates) {
+        for (Object candidate : candidates) {
+            String intent = asPaymentIntent(candidate);
+            if (intent != null) {
+                return intent;
+            }
+        }
+        return null;
+    }
+
+    /** Primer valor de los candidatos que sea una sesión de Checkout, o {@code null} si no hay ninguna. */
+    private static String firstCheckoutSession(Object... candidates) {
+        for (Object candidate : candidates) {
+            if (candidate instanceof String value && value.startsWith("cs_")) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private static String asPaymentIntent(Object value) {
+        return value instanceof String text && text.startsWith("pi_") ? text : null;
     }
 
     @Override
     @Transactional
     public Payment confirmMockRecharge(UUID userId, UUID paymentId) {
+        assertMockAllowed();
         Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
         // Propietario: no permitir confirmar el pago de otro usuario (no filtramos pagos ajenos → 404).
         if (p.getUserId() == null || !p.getUserId().equals(userId)) {
@@ -537,6 +677,10 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         String ref = p.getProviderRef() != null ? p.getProviderRef() : "";
         boolean mock = ref.startsWith(CS_MOCK) || ref.startsWith(PAYPAL_MOCK) || ref.startsWith(PI_MOCK);
         if (mock) {
+            // FAIL-CLOSED: acreditar un pago sintético (sin pasarela real) SOLO se permite fuera de pro/pre.
+            // Si prod arranca con las pasarelas deshabilitadas, initiate() genera refs mock; sin este guard
+            // cualquiera "confirmaría" una recarga y tendría saldo gratis. En pro/pre esto lanza excepción.
+            assertMockAllowed();
             return doConfirmSucceeded(p.getId(), Map.of(MOCK_CONFIRM, true));
         }
         if (p.getMethod() == PaymentMethod.PAYPAL) {
@@ -615,8 +759,13 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             return existing.get();
 
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException("Order"));
+        assertOrderOwnedBy(order, userId);
         if (order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.REFUNDED) {
             throw new BusinessException("Order is " + order.getStatus() + " and cannot be paid");
+        }
+        // Un pedido ya PAGADO no se vuelve a cobrar (evita doble cargo al reintentar con otra clave idem).
+        if (order.getStatus() == OrderStatus.PAID) {
+            throw new BusinessException("Order is already PAID");
         }
 
         long amountUsdCents = order.getTotalCents();
@@ -690,6 +839,88 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     }
 
     @Override
+    @Transactional(noRollbackFor = StripeException.class)
+    public SavedCardPayResult payOrderWithSavedCard(UUID userId, UUID orderId, String paymentMethodId,
+            String idempotencyKey) throws StripeException {
+        if (!stripeService.isEnabled()) {
+            throw new BusinessException("Los pagos con tarjeta no están activos en este entorno.");
+        }
+        Optional<Payment> existing = existingByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent()) {
+            Payment p0 = existing.get();
+            return new SavedCardPayResult(p0.getStatus() == PaymentStatus.SUCCEEDED ? "succeeded" : "pending", null,
+                    p0.getId());
+        }
+        Order order = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException("Order"));
+        assertOrderOwnedBy(order, userId);
+        if (order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.REFUNDED) {
+            throw new BusinessException("Order is " + order.getStatus() + " and cannot be paid");
+        }
+        if (order.getStatus() == OrderStatus.PAID) {
+            return new SavedCardPayResult("succeeded", null, null);
+        }
+        long amountUsdCents = order.getTotalCents();
+        if (amountUsdCents < 100) {
+            throw new BusinessException("Order total below $1.00 USD — refusing to charge");
+        }
+        UUID payerUserId = order.getUserId() != null ? order.getUserId() : userId;
+        UserEntity user = userRepository.findById(payerUserId).orElseThrow(() -> new NotFoundException("User"));
+        String customerId = user.getStripeCustomerId();
+        if (customerId == null || customerId.isBlank()) {
+            throw new BusinessException("No hay ninguna tarjeta guardada para cobrar.");
+        }
+        // IDOR: la tarjeta debe pertenecer al Customer de Stripe del usuario.
+        boolean owned = stripeService.listCards(customerId).stream().anyMatch(pm -> pm.getId().equals(paymentMethodId));
+        if (!owned) {
+            throw new NotFoundException("Tarjeta no encontrada para el usuario");
+        }
+        Wallet wallet = walletUseCase.getOrCreate(payerUserId);
+        String displayCcy = CurrencyHolder.get();
+        boolean stripeEur = "EUR".equalsIgnoreCase(displayCcy);
+        String settlementCcy = settlementCurrencyFor(PaymentMethod.CARD, stripeEur);
+        BigDecimal settlementAmount = perLineSettlementAmount(order, settlementCcy);
+        long minor = settlementAmount.setScale(2, RoundingMode.HALF_UP).movePointRight(2).longValueExact();
+
+        Payment p = Payment.builder().userId(payerUserId).walletId(wallet.getId()).method(PaymentMethod.CARD)
+                .status(PaymentStatus.PENDING).amountUsdCents(amountUsdCents)
+                .amountDisplay(perLineSettlementAmount(order, displayCcy)).currencyDisplay(displayCcy)
+                .settlementCurrency(settlementCcy).settlementAmount(settlementAmount).idempotencyKey(idempotencyKey)
+                .orderId(orderId).purpose(ORDER_PAYMENT).provider("stripe").build();
+        p = paymentRepository.save(p);
+
+        StripeService.OffSessionResult r = stripeService.chargeSavedCardOffSession(customerId, paymentMethodId, minor,
+                settlementCcy, orderId.toString());
+        p.setProviderRef(r.id());
+        paymentRepository.save(p);
+
+        if ("succeeded".equals(r.status())) {
+            // Éxito inmediato (sin 3DS): reutiliza la liquidación estándar → marca el pedido PAGADO.
+            doConfirmSucceeded(p.getId(), Map.of("stripe_payment_intent", r.id(), "off_session", true));
+            return new SavedCardPayResult("succeeded", null, p.getId());
+        }
+        // La tarjeta exige autenticación (3DS): el navegador la completa con el client_secret y luego confirma.
+        return new SavedCardPayResult("requires_action", r.clientSecret(), p.getId());
+    }
+
+    @Override
+    @Transactional(noRollbackFor = StripeException.class)
+    public Payment confirmSavedCardPayment(UUID userId, UUID orderId, UUID paymentId) throws StripeException {
+        Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
+        if (p.getUserId() == null || !p.getUserId().equals(userId) || !orderId.equals(p.getOrderId())) {
+            throw new NotFoundException(PAYMENT); // no filtramos pagos ajenos
+        }
+        if (p.getStatus() == PaymentStatus.SUCCEEDED) {
+            return p;
+        }
+        String status = stripeService.paymentIntentStatus(p.getProviderRef());
+        if ("succeeded".equals(status)) {
+            return doConfirmSucceeded(p.getId(), Map.of("stripe_payment_intent", p.getProviderRef(), "confirmed_3ds",
+                    true));
+        }
+        throw new BusinessException("El pago con tarjeta no se completó (estado " + status + ")");
+    }
+
+    @Override
     @Transactional
     public Payment chargeWalletForOrder(UUID orderId, UUID userId, String idempotencyKey) {
         return doChargeWalletForOrder(orderId, userId, idempotencyKey);
@@ -697,6 +928,14 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
     private Payment doChargeWalletForOrder(UUID orderId, UUID userId, String idempotencyKey) {
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException("Order"));
+        assertOrderOwnedBy(order, userId);
+        if (order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.REFUNDED) {
+            throw new BusinessException("Order is " + order.getStatus() + " and cannot be paid");
+        }
+        // Un pedido ya PAGADO no se vuelve a cobrar (evita doble débito del wallet con otra clave idem).
+        if (order.getStatus() == OrderStatus.PAID) {
+            throw new BusinessException("Order is already PAID");
+        }
         UUID payerUserId = order.getUserId() != null ? order.getUserId() : userId;
         if (payerUserId == null)
             throw new BusinessException("Cannot resolve payer user for this order");
@@ -706,8 +945,12 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             throw new NotFoundException("User");
         Wallet wallet = walletUseCase.getOrCreate(payerUserId);
 
-        // El WalletUseCase.charge ya valida saldo y maneja idempotencia.
-        walletUseCase.charge(payerUserId, amountUsdCents, orderId, idempotencyKey, "Order " + order.getOrderNumber());
+        // El WalletUseCase.charge ya valida saldo y maneja idempotencia. La clave del cargo va ACOTADA AL
+        // PEDIDO ("order-charge-<orderId>"), no la del cliente: así dos peticiones concurrentes al MISMO
+        // pedido con claves idem distintas deduplican en el wallet y solo se debita UNA vez (el guard PAID
+        // solo cubre el caso secuencial).
+        String walletKey = "order-charge-" + orderId;
+        walletUseCase.charge(payerUserId, amountUsdCents, orderId, walletKey, "Order " + order.getOrderNumber());
 
         // Registramos el payment en SUCCEEDED para auditoría uniforme.
         Payment p = Payment.builder().userId(payerUserId).walletId(wallet.getId()).method(PaymentMethod.CARD) // sentinel: wallet no es un PaymentMethod del enum
@@ -721,6 +964,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         // La orden pasa a PAID — el FulfillmentService la recogerá.
         order.setStatus(OrderStatus.PAID);
         order = orderRepository.save(order);
+        supplierPurchaseService.planPurchases(order);
 
         auditLogger.log("order_payment.wallet", p.getUserEmail(),
                 Map.of(ORDERID, orderId, PAYMENTID, p.getId(), AMOUNTCENTS, amountUsdCents));
@@ -728,6 +972,10 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         String email = userRepository.findById(payerUserId).map(u -> u.getEmail()).orElse(null);
         String locale = userRepository.findById(payerUserId).map(u -> u.getLanguage()).orElse(null);
         orderEmailService.paymentConfirmed(order, email, locale, "WALLET");
+        // Con saldo el cobro es inmediato: el pedido ya está PAGADO y lo comprado sale de la cesta. Va al
+        // final por lo mismo que en el cobro externo, y el guard de arriba (un pedido PAID no se vuelve a
+        // cobrar) hace que este punto solo se alcance una vez por pedido.
+        clearPurchasedFromCart(order);
         return p;
     }
 
@@ -749,6 +997,10 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
     @Transactional
     public Payment initiatePartnerOrderPayment(Jwt jwt, UUID orderId, boolean wallet, PaymentMethod method,
             String idempotencyKey) {
+        // Cross-tenant: el pedido DEBE pertenecer a este partner. assertOrderOwnedBy tolera userId==null (los
+        // pedidos de partner no tienen userId), así que sin esta comprobación un partner podía pagar/forzar a
+        // PAID el pedido de OTRO partner conociendo su UUID.
+        assertOrderOwnedByPartner(jwt, orderId);
         UUID userId = resolvePartnerUserId(jwt);
         return doInitiateOrderPaymentView(orderId, userId, method, wallet, idempotencyKey);
     }
@@ -777,8 +1029,79 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
     @Override
     @Transactional(readOnly = true)
+    public List<Payment> listOrderPaymentsForPartner(Jwt jwt, UUID orderId) {
+        assertOrderOwnedByPartner(jwt, orderId);
+        return listOrderPayments(orderId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Payment getOrderPayment(UUID orderId, UUID paymentId) {
         return requireOrderPayment(orderId, paymentId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Payment getOrderPaymentForPartner(Jwt jwt, UUID orderId, UUID paymentId) {
+        assertOrderOwnedByPartner(jwt, orderId);
+        return requireOrderPayment(orderId, paymentId);
+    }
+
+    /**
+     * IDOR entre partners: un partner solo puede leer los pagos de SUS pedidos. El pedido debe pertenecer al
+     * partner del JWT (partnerAppId == id derivado del subject); si es de otro partner o del escaparate
+     * (partnerAppId null), 404 — sin filtrar su existencia.
+     */
+    private void assertOrderOwnedByPartner(Jwt jwt, UUID orderId) {
+        UUID partnerId = resolvePartnerUserId(jwt);
+        Order order = orderRepository.findById(orderId).orElseThrow(() -> new NotFoundException("Order"));
+        if (order.getPartnerAppId() == null || !order.getPartnerAppId().equals(partnerId)) {
+            throw new NotFoundException("Order");
+        }
+    }
+
+    /**
+     * IDOR: la orden debe pertenecer al usuario que paga/confirma. Si es de otro, 404 (no filtramos la
+     * existencia de pedidos ajenos ni permitimos cargar el wallet del dueño desde otra cuenta). Se tolera
+     * {@code order.userId == null} (pedido sin dueño explícito) por compatibilidad.
+     */
+    private void assertOrderOwnedBy(Order order, UUID userId) {
+        if (order.getUserId() != null && userId != null && !order.getUserId().equals(userId)) {
+            throw new NotFoundException("Order");
+        }
+    }
+
+    /** IDOR: el pago debe ser del usuario autenticado (mismo criterio que {@code confirmMockRecharge}). */
+    private void assertPaymentOwnedBy(Payment p, UUID userId) {
+        if (p.getUserId() == null || userId == null || !p.getUserId().equals(userId)) {
+            throw new NotFoundException(PAYMENT);
+        }
+    }
+
+    /** ¿Estamos en un entorno productivo (pro/pre)? Ahí los pagos simulados están PROHIBIDOS. */
+    private boolean isProdLikeProfile() {
+        if (activeProfiles == null) {
+            return false;
+        }
+        for (String prof : activeProfiles.split(",")) {
+            String t = prof.trim().toLowerCase();
+            if (t.equals("pro") || t.equals("pre") || t.equals("prod") || t.equals("production")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Fail-closed: si la app corre en pro/pre, NUNCA se acepta una confirmación "mock" (que acredita el
+     * wallet o marca el pedido pagado sin pasar por la pasarela real). Cierra el agujero de arrancar en
+     * producción con la pasarela deshabilitada y obtener dinero/pedidos gratis.
+     */
+    private void assertMockAllowed() {
+        if (isProdLikeProfile()) {
+            throw new BusinessException("MOCK_PAYMENT_DISABLED",
+                    "Los pagos simulados no están permitidos en este entorno");
+        }
     }
 
     /** Pago de esa orden o 404. Sin anotar: lo usan confirmar y devolver, que ya abren su transacción. */
@@ -792,12 +1115,15 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
 
     @Override
     @Transactional
-    public Payment confirmMockOrderPayment(UUID orderId, UUID paymentId) {
+    public Payment confirmMockOrderPayment(UUID userId, UUID orderId, UUID paymentId) {
+        assertMockAllowed();
         Payment p = paymentRepository.findById(paymentId).orElseThrow(() -> new NotFoundException(PAYMENT));
-        // El pago debe corresponder a la orden indicada (evita confirmar un pago de otra orden).
+        // El pago debe corresponder a la orden indicada (evita confirmar un pago de otra orden)...
         if (p.getOrderId() == null || !p.getOrderId().equals(orderId)) {
             throw new NotFoundException(PAYMENT);
         }
+        // ...y debe ser del usuario autenticado (IDOR: no confirmar/pagar el pedido de otro).
+        assertPaymentOwnedBy(p, userId);
         // SEGURIDAD (idéntico a confirmMockRecharge): esta vía marca la orden como PAGADA SIN pasar por la
         // pasarela real. Solo se admite para pagos sintéticos de mock-mode (providerRef *_mock_). Un checkout
         // REAL de Stripe/PayPal (cs_test_/cs_live_/pi_...) no cobrado NUNCA se confirma aquí; de lo contrario
@@ -859,7 +1185,13 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             }
             UUID paymentId = UUID.fromString(paymentIdStr);
             if ("payment_intent.succeeded".equals(eventType)) {
-                doConfirmSucceeded(paymentId, data);
+                // El evento trae el PaymentIntent en `id`, no bajo la clave que luego busca el reembolso.
+                // Se anota explícitamente: si este webhook gana la carrera a la vuelta del navegador —lo
+                // habitual, llega en el mismo segundo del cobro—, es la ÚNICA ocasión de guardarlo, porque
+                // la confirmación posterior se salta por idempotencia y ya no consulta la sesión.
+                Map<String, Object> confirmed = new HashMap<>(data);
+                confirmed.put(PAYMENT_INTENT, intentId);
+                doConfirmSucceeded(paymentId, confirmed);
             } else if ("payment_intent.payment_failed".equals(eventType)) {
                 doMarkFailed(paymentId, "Stripe: payment_failed", data);
             }

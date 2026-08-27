@@ -145,6 +145,8 @@ public interface OrderEntityMapper {
     @Mapping(target = "variantImageUrl", source = "variant", qualifiedByName = "resolveVariantImage")
     @Mapping(target = "productSourceUrl", expression = "java(item.getProduct() != null ? item.getProduct().getSourceUrl() : null)")
     @Mapping(target = "productTitles", source = "product", qualifiedByName = "resolveTitles")
+    @Mapping(target = "declaredDescription", source = "declaredDescription")
+    @Mapping(target = "declaredDescriptionZh", source = "declaredDescriptionZh")
     OrderItem toItemDomain(OrderItemEntity item);
 
     List<OrderItem> toItemDomainList(List<OrderItemEntity> items);

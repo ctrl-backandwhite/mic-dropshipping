@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Supresiones de OWASP Dependency-Check.
+
+  REGLA: aquí solo entra lo que se ha mirado una por una y se ha decidido que NO aplica, con el motivo
+  escrito y la fecha. Una supresión sin motivo es una vulnerabilidad escondida, no resuelta. Si la razón
+  es "aún no hay versión corregida", eso no es una supresión: es una tarea pendiente, y debe llevar
+  <until> para que vuelva a saltar y se revise.
+
+  Formato:
+    <suppress until="2026-12-31Z">
+        <notes>Por qué no aplica, quién lo revisó y cuándo.</notes>
+        <packageUrl regex="true">^pkg:maven/grupo/artefacto@.*$</packageUrl>
+        <cve>CVE-0000-00000</cve>
+    </suppress>
+
+  Empieza vacío a propósito: la primera ejecución dirá qué hay de verdad, y cada entrada se añadirá
+  con su justificación en lugar de silenciar en bloque.
+-->
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+</suppressions>

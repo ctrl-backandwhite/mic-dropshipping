@@ -157,16 +157,17 @@ class Cov05AffiliateLifecycleTest {
     }
 
     @Test
-    @DisplayName("el alta crea el afiliado ACTIVO y su primer código de referido")
-    void elAltaCreaAfiliadoActivoConSuPrimerCodigo() {
+    @DisplayName("el alta crea el afiliado PENDIENTE de aprobación y su primer código de referido")
+    void elAltaCreaAfiliadoPendienteConSuPrimerCodigo() {
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(customer()));
         when(affiliateRepo.findByUser_Id(USER_ID)).thenReturn(Optional.empty());
         when(codeRepo.findByAffiliateIdOrderByCreatedAtAsc(any())).thenReturn(List.of());
 
         AffiliateEntity created = service.getOrCreateForUser(USER_ID);
 
-        assertThat(created.getStatus()).isEqualTo("ACTIVE");
-        assertThat(created.isActive()).isTrue();
+        // El programa de afiliados exige aprobación del admin: se crea PENDIENTE e inactivo.
+        assertThat(created.getStatus()).isEqualTo("PENDING");
+        assertThat(created.isActive()).isFalse();
         ArgumentCaptor<AffiliateReferralCodeEntity> code = ArgumentCaptor.forClass(AffiliateReferralCodeEntity.class);
         verify(codeRepo).save(code.capture());
         assertThat(code.getValue().getCode()).isEqualTo(created.getCode());
@@ -331,7 +332,8 @@ class Cov05AffiliateLifecycleTest {
         // Solo la bienvenida al propio afiliado: ningún cliente recibe la alerta interna.
         ArgumentCaptor<NotificationEntity> saved = ArgumentCaptor.forClass(NotificationEntity.class);
         verify(notificationRepo, times(1)).save(saved.capture());
-        assertThat(saved.getValue().getEventType()).isEqualTo("AFFILIATE_JOINED");
+        // Unirse ahora es SOLICITAR (queda pendiente de aprobación del admin): el evento es AFFILIATE_APPLIED.
+        assertThat(saved.getValue().getEventType()).isEqualTo("AFFILIATE_APPLIED");
     }
 
     @Test
@@ -365,7 +367,7 @@ class Cov05AffiliateLifecycleTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> extra = ArgumentCaptor.forClass(Map.class);
-        verify(notificationsPublisher).dispatch(eq("AFFILIATE_JOINED"), eq(USER_ID), eq("ana@example.com"),
+        verify(notificationsPublisher).dispatch(eq("AFFILIATE_APPLIED"), eq(USER_ID), eq("ana@example.com"),
                 extra.capture(), eq("pt"));
         assertThat(extra.getValue()).containsEntry("marketing", true).containsEntry("ctaUrl", "/affiliate");
     }

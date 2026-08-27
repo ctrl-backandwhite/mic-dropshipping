@@ -49,6 +49,22 @@ public class WalletRepositoryImpl implements WalletRepository {
     }
 
     @Override
+    public Optional<Wallet> findByUserIdForUpdate(UUID userId) {
+        return walletJpaRepositoryAdapter.findByUser_IdForUpdate(userId).map(walletEntityMapper::toDomain);
+    }
+
+    @Override
+    public boolean applyBalanceDelta(UUID userId, long delta) {
+        return walletJpaRepositoryAdapter.applyBalanceDelta(userId, delta) == 1;
+    }
+
+    @Override
+    public long currentBalanceCents(UUID userId) {
+        return walletJpaRepositoryAdapter.currentBalance(userId)
+                .orElseThrow(() -> new NotFoundException("Wallet not found"));
+    }
+
+    @Override
     public Wallet update(Wallet model) {
         return this.save(model);
     }

@@ -55,7 +55,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.atLeastOnce;
@@ -143,15 +145,15 @@ class Cov02CatalogAdminReadTest {
     void conTextoDeBusquedaSeConsultaTodoElCatalogoNoSoloLaPaginaActual() {
         // La caja de búsqueda del admin debe encontrar el producto esté en la página que esté y en
         // cualquier idioma; filtrar en cliente solo miraría las 20 filas visibles.
-        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), any(Pageable.class)))
+        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(Pageable.class)))
                 .thenReturn(pagina(producto));
 
         Page<ProductSummaryView> page = useCase.listProductsForAdmin("ACTIVE", null, "  Bailarinas  ", 0, 20,
                 "es", null, null);
 
         assertThat(page.getTotalElements()).isEqualTo(1);
-        verify(productJpaRepository).searchAdmin(eq(ProductStatus.ACTIVE), isNull(), eq("bailarinas"), isNull(),
-                any(Pageable.class));
+        verify(productJpaRepository).searchAdmin(eq(ProductStatus.ACTIVE), isNull(), eq("bailarinas"), isNull(), eq("es"),
+                eq(false), any(Pageable.class));
         // El listado se traduce al idioma pedido: el admin en español no puede ver títulos en chino.
         verify(productMapper).toSummary(producto, "es");
     }
@@ -159,12 +161,12 @@ class Cov02CatalogAdminReadTest {
     @Test
     void elFiltroDeVerificadosUsaLaBusquedaAunqueNoHayaTexto() {
         // needle "" (no nulo) evita el error de tipo de Postgres al bindear null en el LIKE.
-        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), any(Pageable.class)))
+        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(Pageable.class)))
                 .thenReturn(pagina(producto));
 
         useCase.listProductsForAdmin(null, null, null, 0, 20, "es", null, Boolean.FALSE);
 
-        verify(productJpaRepository).searchAdmin(isNull(), isNull(), eq(""), eq(Boolean.FALSE),
+        verify(productJpaRepository).searchAdmin(isNull(), isNull(), eq(""), eq(Boolean.FALSE), eq("es"), eq(false),
                 any(Pageable.class));
     }
 
@@ -175,7 +177,7 @@ class Cov02CatalogAdminReadTest {
         useCase.listProductsForAdmin("ALL", null, "", 0, 20, "es", null, null);
 
         verify(productJpaRepository).findAll(any(Pageable.class));
-        verify(productJpaRepository, never()).searchAdmin(any(), any(), any(), any(), any(Pageable.class));
+        verify(productJpaRepository, never()).searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(Pageable.class));
     }
 
     @Test
@@ -240,14 +242,17 @@ class Cov02CatalogAdminReadTest {
     }
 
     @Test
-    void unOrdenDesconocidoDejaElListadoSinOrdenar() {
+    void unOrdenDesconocidoIgualmenteSeOrdenaPorId() {
         when(productJpaRepository.findAll(any(Pageable.class))).thenReturn(pagina(producto));
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
 
         useCase.listProductsForAdmin(null, null, null, 0, 20, "es", "por_lo_que_sea", null);
 
         verify(productJpaRepository).findAll(captor.capture());
-        assertThat(captor.getValue().getSort().isSorted()).isFalse();
+        // Un criterio desconocido NO puede dejar el listado sin ordenar: paginar con LIMIT/OFFSET sin
+        // ORDER BY deja el orden a criterio de PostgreSQL, que no garantiza ser el mismo entre dos
+        // consultas — el admin se saltaría productos al pasar de página, sin que nada fallara.
+        assertThat(captor.getValue().getSort()).isEqualTo(Sort.by(Sort.Direction.ASC, "id"));
     }
 
     @Test
@@ -318,9 +323,28 @@ class Cov02CatalogAdminReadTest {
         assertThatThrownBy(() -> useCase.getProductById(id, "es")).isInstanceOf(NotFoundException.class);
     }
 
+    /**
+     * Un producto que no está publicado no existe para el escaparate por NINGUNA puerta. El listado ya lo
+     * escondía y el cobro ya lo rechazaba, pero la ficha por slug —enlace directo, resultado indexado o
+     * correo antiguo— se servía entera y con su precio. Además se comprueba que ni siquiera se llega a
+     * mapear: la respuesta no puede llevar nada del producto retirado.
+     */
+    @Test
+    void laFichaPorSlugDeUnProductoRetiradoNoSeSirveAQuienNoEsAdmin() {
+        // El fixture está en DRAFT, y el mismo criterio vale para PAUSED y ARCHIVED.
+        when(productJpaRepository.findWithDetailsBySlug("zapatos-offer-1")).thenReturn(Optional.of(producto));
+
+        assertThatThrownBy(() -> useCase.getProductBySlug("zapatos-offer-1", "es"))
+                .isInstanceOf(NotFoundException.class);
+        verify(productMapper, never()).toDetail(any(), any(), any());
+    }
+
     @Test
     void laFichaPorSlugCargaLasColeccionesDentroDeLaTransaccion() {
         // open-in-view está desactivado: si no se fuerzan aquí, el mapeo revienta con LazyInitialization.
+        // El producto se publica porque la ficha por slug solo se sirve si está ACTIVE (o si pregunta un
+        // admin): con el DRAFT del fixture este caso mediría el 404, no la carga de las colecciones.
+        producto.setStatus(ProductStatus.ACTIVE);
         when(productJpaRepository.findWithDetailsBySlug("zapatos-offer-1")).thenReturn(Optional.of(producto));
 
         useCase.getProductBySlug("zapatos-offer-1", "es");
@@ -370,6 +394,12 @@ class Cov02CatalogAdminReadTest {
     void publicarUnProductoGeneraSuSeoYReindexa() {
         producto.getTranslations().add(ProductTranslationEntity.builder().product(producto).language("es")
                 .title("Bailarinas planas de mujer").description("Cómodas y ligeras.").build());
+        // Poner a la venta exige los datos con los que se declara en aduana; sin ellos el producto ya no
+        // se publica, así que el que se usa aquí tiene que ser vendible de verdad.
+        producto.getTranslations().add(ProductTranslationEntity.builder().product(producto).language("en")
+                .title("Women's flat ballerinas").build());
+        producto.setHsCode("6402990000");
+        producto.setWeightGrams(400);
         when(productJpaRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
 
         useCase.updateStatus(producto.getId(), "active");
@@ -449,6 +479,35 @@ class Cov02CatalogAdminReadTest {
         assertThat(producto.getBasePrice()).isEqualByComparingTo("25.50");
         assertThat(producto.getCurrency()).isEqualTo("CNY");
         assertThat(producto.getTranslations()).isEmpty();
+    }
+
+    @Test
+    void laEdicionRapidaCorrigeElEnvioYElIva() {
+        // El envío y el IVA se cargan al importar y antes no había forma de corregirlos: el endpoint
+        // aceptaba el campo y lo descartaba en silencio, así que 262 productos se quedaron con el
+        // valor por defecto del importador y la respuesta 200 hacía creer que se había guardado.
+        producto.setShippingCny(new BigDecimal("12.00"));
+        producto.setIvaCny(new BigDecimal("3.00"));
+        when(productJpaRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
+
+        useCase.quickEdit(producto.getId(), AdminProductQuickEditDtoIn.builder()
+                .shippingCny(new BigDecimal("10.00")).ivaCny(new BigDecimal("3.38")).build(), "es");
+
+        assertThat(producto.getShippingCny()).isEqualByComparingTo("10.00");
+        assertThat(producto.getIvaCny()).isEqualByComparingTo("3.38");
+    }
+
+    @Test
+    void unEnvioNuloNoBorraElQueYaTeniaElProducto() {
+        // Mismo contrato que el resto de campos: null es "no lo edito", no "ponlo a cero".
+        producto.setShippingCny(new BigDecimal("10.00"));
+        producto.setIvaCny(new BigDecimal("3.38"));
+        when(productJpaRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
+
+        useCase.quickEdit(producto.getId(), AdminProductQuickEditDtoIn.builder().moq(2).build(), "es");
+
+        assertThat(producto.getShippingCny()).isEqualByComparingTo("10.00");
+        assertThat(producto.getIvaCny()).isEqualByComparingTo("3.38");
     }
 
     @Test

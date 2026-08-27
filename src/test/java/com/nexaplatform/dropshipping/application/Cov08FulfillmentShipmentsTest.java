@@ -1,7 +1,14 @@
 package com.nexaplatform.dropshipping.application;
 
+import static com.nexaplatform.dropshipping.config.FulfillmentTestUtil.unSoloTransportista;
+
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
+import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderShipmentItemEntity;
+import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService.ShipmentTrackingView;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService.TrackingProgress;
@@ -20,22 +27,27 @@ import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.Fulf
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressEventCipher;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderShipmentEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderTrackingEventEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentItemRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderTrackingEventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -56,6 +68,7 @@ class Cov08FulfillmentShipmentsTest {
     private OrderTrackingEventRepository trackingRepository;
     private FulfillmentProvider provider;
     private OrderShipmentRepository shipmentRepository;
+    private OrderShipmentItemRepository shipmentItemRepository;
     private TrackingViewMapper trackingViewMapper;
     private FulfillmentService service;
 
@@ -67,10 +80,11 @@ class Cov08FulfillmentShipmentsTest {
         trackingRepository = mock(OrderTrackingEventRepository.class);
         provider = mock(FulfillmentProvider.class);
         shipmentRepository = mock(OrderShipmentRepository.class);
+        shipmentItemRepository = mock(OrderShipmentItemRepository.class);
         trackingViewMapper = mock(TrackingViewMapper.class);
-        service = new FulfillmentService(orderRepository, trackingRepository, provider, mock(UserRepository.class),
+        service = new FulfillmentService(orderRepository, trackingRepository, unSoloTransportista(provider), mock(UserRepository.class), mock(NotificationsPublisher.class),
                 mock(OrderEmailService.class), new ObjectMapper(), mock(YunExpressEventCipher.class),
-                mock(OpsAlertService.class), mock(NotificationUseCase.class), shipmentRepository, trackingViewMapper);
+                mock(OpsAlertService.class), mock(NotificationUseCase.class), shipmentRepository, shipmentItemRepository, trackingViewMapper, readyPurchases());
 
         order = new Order();
         order.setId(UUID.randomUUID());
@@ -79,6 +93,24 @@ class Cov08FulfillmentShipmentsTest {
         order.setShippingCountry("ES");
         order.setForwardedAt(Instant.parse("2026-07-01T08:00:00Z"));
         when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+    }
+
+    /**
+     * Una declaración como la que arma el transportista al crear la guía: a quién va el paquete y qué
+     * lleva, con su partida arancelaria.
+     */
+    private static FulfillmentProvider.ShipmentDeclaration declaracion() {
+        return new FulfillmentProvider.ShipmentDeclaration(
+                new FulfillmentProvider.DeclaredReceiver("Ana", "López", "ES", "Zaragoza", "Zaragoza",
+                        List.of("Calle Mayor 1"), "50001", "+34600000000", "ana@example.com"),
+                List.of(new FulfillmentProvider.DeclaredLine("Cotton T-shirt", "棉T恤", "610910", 2,
+                        new BigDecimal("15.00"), "USD", new BigDecimal("0.400"), "cotton", "daily use",
+                        "SKU-1", "https://detail.1688.com/offer/1.html")));
+    }
+
+    /** La misma declaración tal como queda archivada en la columna jsonb del bulto. */
+    private static Map<String, Object> declaracionArchivada() {
+        return new ObjectMapper().convertValue(declaracion(), new TypeReference<Map<String, Object>>() { });
     }
 
     private static OrderShipmentEntity shipment(int sequenceNo, String waybill, String tracking) {
@@ -270,7 +302,7 @@ class Cov08FulfillmentShipmentsTest {
         TrackingView view = service.adminTrackingView(order.getId());
 
         assertThat(view.shipments()).isEmpty();
-        verify(trackingViewMapper, never()).toShipmentView(any(), anyList());
+        verify(trackingViewMapper, never()).toShipmentView(any(), anyList(), anyList());
     }
 
     @Test
@@ -283,13 +315,13 @@ class Cov08FulfillmentShipmentsTest {
         when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(order.getId())).thenReturn(List.of(deUno));
         when(trackingViewMapper.toEventViews(anyList())).thenReturn(List.of());
         when(shipmentRepository.findByOrderIdOrderBySequenceNoAsc(order.getId())).thenReturn(List.of(uno, dos));
-        when(trackingViewMapper.toShipmentView(any(), anyList()))
-                .thenReturn(new ShipmentTrackingView(1, "YunExpress", "YT-1", "SHIPPED", 500, null, List.of()));
+        when(trackingViewMapper.toShipmentView(any(), anyList(), anyList()))
+                .thenReturn(new ShipmentTrackingView(1, "YunExpress", "YT-1", "SHIPPED", 500, null, List.of(), List.of()));
 
         TrackingView view = service.adminTrackingView(order.getId());
 
         assertThat(view.shipments()).hasSize(2);
-        verify(trackingViewMapper, times(2)).toShipmentView(any(), anyList());
+        verify(trackingViewMapper, times(2)).toShipmentView(any(), anyList(), anyList());
     }
 
     // ─────────────────────── consultas del panel ───────────────────────
@@ -348,5 +380,194 @@ class Cov08FulfillmentShipmentsTest {
 
         assertThat(service.timeline(orderId)).containsExactly(evento);
         assertThat(service.shipmentsOf(orderId)).containsExactly(bulto);
+    }
+
+    /**
+     * Las compras al proveedor ya están en camino: estos tests van del transportista internacional, no
+     * del tramo chino, y sin este permiso {@code createShipment} se frena antes de llamar al carrier.
+     */
+    private static SupplierPurchaseService readyPurchases() {
+        SupplierPurchaseService s = mock(SupplierPurchaseService.class);
+        lenient().when(s.readyForInternationalShipment(any())).thenReturn(true);
+        return s;
+    }
+
+    /* ─────────────────── contenido del bulto y aviso por paquete ─────────────────── */
+
+    /**
+     * El seguimiento enseña qué va dentro de cada paquete.
+     *
+     * <p>Sin esto, «Paquete 1/2» no decía nada: quien recibía uno no sabía a qué le estaba siguiendo la
+     * pista. El reparto ya se calculaba al crear los envíos, pero se tiraba.
+     */
+    @Test
+    void cadaBultoEnsenaLoQueLleva() {
+        order.setStatus(OrderStatus.SHIPPED);
+        UUID lineaId = UUID.randomUUID();
+        OrderItem linea = OrderItem.builder().productId(UUID.randomUUID()).quantity(3)
+                .titleSnapshot("Chaqueta").imageUrlSnapshot("http://img/1.jpg").variantName("Caño 872 / M")
+                .build();
+        linea.setId(lineaId);
+        order.setItems(List.of(linea));
+        OrderShipmentEntity uno = shipment(1, "WB-1", "YT-1");
+        OrderShipmentEntity dos = shipment(2, "WB-2", "YT-2");
+        when(shipmentRepository.findByOrderIdOrderBySequenceNoAsc(order.getId())).thenReturn(List.of(uno, dos));
+        when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(order.getId())).thenReturn(List.of());
+        when(trackingViewMapper.toEventViews(anyList())).thenReturn(List.of());
+        when(shipmentItemRepository.findByShipmentIdIn(anyCollection())).thenReturn(List.of(
+                OrderShipmentItemEntity.builder().shipmentId(uno.getId()).orderItemId(lineaId).quantity(2).build()));
+
+        ArgumentCaptor<List<FulfillmentService.ParcelItemView>> captor = ArgumentCaptor.forClass(List.class);
+        when(trackingViewMapper.toShipmentView(any(), anyList(), captor.capture()))
+                .thenReturn(new ShipmentTrackingView(1, "YunExpress", "YT-1", "SHIPPED", 500, null,
+                        List.of(), List.of()));
+
+        service.adminTrackingView(order.getId());
+
+        List<FulfillmentService.ParcelItemView> delPrimero = captor.getAllValues().get(0);
+        assertThat(delPrimero).hasSize(1);
+        assertThat(delPrimero.get(0).title()).isEqualTo("Chaqueta");
+        assertThat(delPrimero.get(0).imageUrl()).isEqualTo("http://img/1.jpg");
+        // Dos de las tres unidades de la línea: el resto viaja en el otro bulto.
+        assertThat(delPrimero.get(0).quantity()).isEqualTo(2);
+        assertThat(captor.getAllValues().get(1)).as("el segundo bulto no tiene contenido registrado").isEmpty();
+    }
+
+    /**
+     * Un envío anterior a que se guardara el reparto no rompe el seguimiento.
+     *
+     * <p>Se pinta sin fotos, como siempre, en vez de fallar: es un seguimiento menos rico, no un error.
+     */
+    @Test
+    void unBultoSinContenidoRegistradoSePintaIgual() {
+        order.setStatus(OrderStatus.SHIPPED);
+        order.setItems(List.of());
+        when(shipmentRepository.findByOrderIdOrderBySequenceNoAsc(order.getId()))
+                .thenReturn(List.of(shipment(1, "WB-1", "YT-1"), shipment(2, "WB-2", "YT-2")));
+        when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(order.getId())).thenReturn(List.of());
+        when(trackingViewMapper.toEventViews(anyList())).thenReturn(List.of());
+        when(shipmentItemRepository.findByShipmentIdIn(anyCollection())).thenReturn(List.of());
+        when(trackingViewMapper.toShipmentView(any(), anyList(), anyList()))
+                .thenReturn(new ShipmentTrackingView(1, "YunExpress", "YT-1", "SHIPPED", 500, null,
+                        List.of(), List.of()));
+
+        TrackingView view = service.adminTrackingView(order.getId());
+
+        assertThat(view.shipments()).hasSize(2);
+    }
+
+    /* ─────────────────── declaración enviada al transportista ─────────────────── */
+
+    /**
+     * La declaración transmitida se archiva junto al bulto.
+     *
+     * <p>Del alta de la guía solo se guardaba el resultado —guía, canal, peso y valor—, así que cuando
+     * aduana o el transportista rechazaban un envío no había manera de comprobar qué se había declarado
+     * sin entrar al panel del transportista, donde no queda histórico propio.
+     */
+    @Test
+    void laDeclaracionEnviadaAlTransportistaSeArchivaConElBulto() {
+        when(provider.createShipments(order)).thenReturn(List.of(
+                new FulfillmentResult("YunExpress", "YT-1", "WB-1", 15, 1, 500, 1200, "CH01",
+                        List.of(), declaracion())));
+
+        service.createShipment(order.getId());
+
+        ArgumentCaptor<OrderShipmentEntity> saved = ArgumentCaptor.forClass(OrderShipmentEntity.class);
+        verify(shipmentRepository).save(saved.capture());
+        Map<String, Object> archivada = saved.getValue().getDeclaration();
+        assertThat(archivada).isNotNull();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> destinatario = (Map<String, Object>) archivada.get("receiver");
+        assertThat(destinatario).containsEntry("city", "Zaragoza").containsEntry("countryCode", "ES")
+                .containsEntry("postalCode", "50001");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> lineas = (List<Map<String, Object>>) archivada.get("lines");
+        assertThat(lineas).singleElement().satisfies(l -> {
+            assertThat(l).containsEntry("hsCode", "610910").containsEntry("quantity", 2);
+            assertThat(l).containsEntry("nameLocal", "棉T恤");
+        });
+    }
+
+    /**
+     * Un transportista que no aporte declaración no puede impedir el despacho.
+     *
+     * <p>La guía ya está emitida y pagada: perder el envío por no poder archivar una copia sería mucho
+     * peor que quedarse sin la copia.
+     */
+    @Test
+    void unEnvioSinDeclaracionSeDaDeAltaIgual() {
+        when(provider.createShipments(order))
+                .thenReturn(List.of(new FulfillmentResult("YunExpress", "YT-1", "WB-1", 15)));
+
+        service.createShipment(order.getId());
+
+        ArgumentCaptor<OrderShipmentEntity> saved = ArgumentCaptor.forClass(OrderShipmentEntity.class);
+        verify(shipmentRepository).save(saved.capture());
+        assertThat(saved.getValue().getDeclaration()).isNull();
+        assertThat(order.getTrackingNumber()).isEqualTo("YT-1");
+    }
+
+    /** La ficha del pedido enseña, por cada bulto, lo que se le declaró al transportista. */
+    @Test
+    void laFichaDelAdminEnsenaLoQueSeLeDeclaroAlTransportista() {
+        order.setStatus(OrderStatus.SHIPPED);
+        OrderShipmentEntity bulto = shipment(1, "WB-1", "YT-1");
+        bulto.setDeclaration(declaracionArchivada());
+        when(shipmentRepository.findByOrderIdOrderBySequenceNoAsc(order.getId())).thenReturn(List.of(bulto));
+        when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(order.getId())).thenReturn(List.of());
+        when(trackingViewMapper.toEventViews(anyList())).thenReturn(List.of());
+
+        TrackingView view = service.adminTrackingView(order.getId());
+
+        assertThat(view.declarations()).singleElement().satisfies(d -> {
+            assertThat(d.sequenceNo()).isEqualTo(1);
+            assertThat(d.waybillNumber()).isEqualTo("WB-1");
+            assertThat(d.declaration().receiver().city()).isEqualTo("Zaragoza");
+            assertThat(d.declaration().receiver().addressLines()).containsExactly("Calle Mayor 1");
+            assertThat(d.declaration().lines()).singleElement()
+                    .extracting(FulfillmentProvider.DeclaredLine::hsCode).isEqualTo("610910");
+        });
+    }
+
+    /**
+     * Un envío anterior a este cambio no tiene declaración archivada y la ficha se abre igual.
+     *
+     * <p>Es justo cuando algo va mal cuando el admin necesita poder abrir el pedido: fallar aquí sería
+     * dejarle sin la pantalla en el peor momento.
+     */
+    @Test
+    void unEnvioSinDeclaracionArchivadaNoRompeLaFichaDelPedido() {
+        order.setStatus(OrderStatus.SHIPPED);
+        when(shipmentRepository.findByOrderIdOrderBySequenceNoAsc(order.getId()))
+                .thenReturn(List.of(shipment(1, "WB-1", "YT-1")));
+        when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(order.getId())).thenReturn(List.of());
+        when(trackingViewMapper.toEventViews(anyList())).thenReturn(List.of());
+
+        TrackingView view = service.adminTrackingView(order.getId());
+
+        assertThat(view.declarations()).isEmpty();
+    }
+
+    /**
+     * La declaración NO viaja en el seguimiento del comprador.
+     *
+     * <p>Lleva partidas arancelarias, valores declarados, la referencia del proveedor y la URL de origen
+     * del artículo: es información del negocio, no del pedido de quien compra.
+     */
+    @Test
+    void laDeclaracionNoSaleEnElSeguimientoDelComprador() {
+        UUID comprador = UUID.randomUUID();
+        order.setUserId(comprador);
+        order.setStatus(OrderStatus.SHIPPED);
+        OrderShipmentEntity bulto = shipment(1, "WB-1", "YT-1");
+        bulto.setDeclaration(declaracionArchivada());
+        when(shipmentRepository.findByOrderIdOrderBySequenceNoAsc(order.getId())).thenReturn(List.of(bulto));
+        when(trackingRepository.findByOrderIdOrderByOccurredAtAsc(order.getId())).thenReturn(List.of());
+        when(trackingViewMapper.toEventViews(anyList())).thenReturn(List.of());
+
+        TrackingView view = service.myTrackingView(comprador, order.getId());
+
+        assertThat(view.declarations()).isEmpty();
     }
 }

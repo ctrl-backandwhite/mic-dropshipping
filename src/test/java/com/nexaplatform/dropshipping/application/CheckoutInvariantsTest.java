@@ -8,6 +8,7 @@ import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
+import com.nexaplatform.dropshipping.application.service.ShippingSubsidyService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
@@ -15,6 +16,7 @@ import com.nexaplatform.dropshipping.application.service.StockService;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
+import com.nexaplatform.dropshipping.application.service.FulfillmentRouter;
 import com.nexaplatform.dropshipping.application.usecase.impl.OrderUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
@@ -34,6 +36,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserR
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.api.BeforeEach;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService.DutyParcel;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -52,6 +55,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -105,13 +109,30 @@ class CheckoutInvariantsTest {
     @Mock
     FulfillmentProvider fulfillment;
     @Mock
+    FulfillmentRouter router;
+    @Mock
     CheckoutTotalsService checkoutTotalsService;
+    @Mock
+    ShippingSubsidyService shippingSubsidyService;
     @Mock
     OperatorCommissionService operatorCommissionService;
     @Mock
     OrderIndexer orderIndexer;
     @Mock
     OrderSearchService orderSearchService;
+
+    @Mock
+    com.nexaplatform.dropshipping.application.service.SupplierPurchaseService supplierPurchaseService;
+
+    @org.mockito.Mock
+    com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService declarationGroups;
+
+    @org.mockito.Spy
+    com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService customsDutyLinesService =
+            new com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService(null);
+    @org.mockito.Mock
+    com.nexaplatform.dropshipping.application.service.UnserviceableZoneService unserviceableZoneService;
+
 
     @InjectMocks
     private OrderUseCaseImpl subject;
@@ -155,7 +176,7 @@ class CheckoutInvariantsTest {
         when(pricingService.priceFor(any(), any())).thenReturn(new PricingService.PricedAmount(
                 new BigDecimal("10.00"), new BigDecimal("40.00"), null, "USD", "$", null, null, null,
                 null, null, null, null, null, null));
-        when(fulfillment.quote(anyString(), any()))
+        when(router.cotizar(anyString(), any(), anyList()))
                 .thenReturn(new ShippingQuote(true, "ES", 0, "YunExpress", "Standard", 7, 15, "EU"));
         when(affiliateProgramService.referralDiscountCents(any(), anyLong())).thenReturn(0L);
         CheckoutTotalsService.CheckoutTotals totals = mock(CheckoutTotalsService.CheckoutTotals.class);
@@ -163,7 +184,7 @@ class CheckoutInvariantsTest {
         when(totals.shippingCents()).thenReturn(0);
         when(totals.taxCents()).thenReturn(0);
         when(totals.totalCents(anyInt())).thenReturn(totalCents);
-        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt())).thenReturn(totals);
+        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList(), anyInt())).thenReturn(totals);
         when(orderRepository.save(any())).thenAnswer(i -> {
             Order o = i.getArgument(0);
             if (o.getId() == null) {

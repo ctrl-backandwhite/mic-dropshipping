@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api;
 
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.CustomsAuditView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
@@ -11,12 +12,12 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AddProductImageDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.AdminProductSourceUrlDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.ReorderProductImagesDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut;
-import com.nexaplatform.dropshipping.api.dto.out.ReindexResultDtoOut;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -63,6 +64,17 @@ public interface AdminCatalogApi {
             @RequestParam(defaultValue = "30") int size, @RequestParam(defaultValue = "es") String lang,
             @RequestParam(required = false) String sort, @RequestParam(required = false) Boolean verified);
 
+    /**
+     * Repaso del catálogo en busca de productos que la aduana no aceptaría.
+     *
+     * <p>Va ANTES de {@code /products/{id}} porque comparten prefijo: declarado después, Spring intentaría
+     * interpretar «customs-gaps» como un identificador.
+     */
+    @Operation(summary = "Products missing mandatory customs data (EName, CName, HSCode, weight, value)")
+    @GetMapping("/products/customs-gaps")
+    CustomsAuditView customsGaps(@RequestParam(defaultValue = "ACTIVE") String status,
+            @RequestParam(defaultValue = "500") int max);
+
     @Operation(summary = "Get product detail by id")
     @GetMapping("/products/{id}")
     ProductDetailView detail(@PathVariable UUID id, @RequestParam(defaultValue = "es") String lang);
@@ -77,15 +89,27 @@ public interface AdminCatalogApi {
             @Valid @RequestBody AdminProductQuickEditDtoIn req,
             @RequestParam(defaultValue = "es") String lang);
 
+    @Operation(summary = "Update the supplier listing URL (1688/Alibaba) of a product. "
+            + "Rejects any other domain or scheme with 422 PRODUCT_SOURCE_URL_INVALID.")
+    @PutMapping("/products/{id}/source-url")
+    ProductDetailView updateSourceUrl(@PathVariable UUID id,
+            @Valid @RequestBody AdminProductSourceUrlDtoIn req,
+            @RequestParam(defaultValue = "es") String lang);
+
     @Operation(summary = "Duplicate a product")
     @PostMapping("/products/{id}/duplicate")
     ProductDetailView duplicate(@PathVariable UUID id, @RequestParam(defaultValue = "es") String lang);
 
     /* ============================ Reindex ============================ */
 
-    @Operation(summary = "Reindex the whole catalog into OpenSearch")
+    @Operation(summary = "Kick off a full catalog reindex in the BACKGROUND (returns 202 immediately). "
+            + "Long reindexes of large catalogs would otherwise die on the proxy/edge timeout.")
     @PostMapping("/reindex")
-    ResponseEntity<ReindexResultDtoOut> reindex();
+    ResponseEntity<Map<String, Object>> reindex();
+
+    @Operation(summary = "Status of the background reindex ({running, indexed}) so the panel can poll it")
+    @GetMapping("/reindex/status")
+    ResponseEntity<Map<String, Object>> reindexStatus();
 
     /* ============================ Variants ============================ */
 
@@ -150,14 +174,18 @@ public interface AdminCatalogApi {
     @PostMapping("/products/bulk")
     ResponseEntity<BulkResultDtoOut> bulkProducts(@Valid @RequestBody List<BulkProductDtoIn> rows);
 
-    @Operation(summary = "Export products in a 1-based range as the same bulk JSON shape (re-importable)")
+    @Operation(summary = "Export products in a 1-based range as the same bulk JSON shape (re-importable). "
+            + "Optional createdFrom/createdTo (yyyy-MM-dd) filter by upload date (ingestedAt).")
     @GetMapping("/products/export")
     ResponseEntity<List<BulkProductDtoIn>> exportProducts(@RequestParam(defaultValue = "1") int from,
-            @RequestParam(defaultValue = "1000") int to);
+            @RequestParam(defaultValue = "1000") int to,
+            @RequestParam(required = false) String createdFrom,
+            @RequestParam(required = false) String createdTo);
 
-    @Operation(summary = "Total product count (to compute export segments)")
+    @Operation(summary = "Total product count (to compute export segments); optional createdFrom/createdTo filter")
     @GetMapping("/products/export/count")
-    ResponseEntity<Map<String, Long>> exportCount();
+    ResponseEntity<Map<String, Long>> exportCount(@RequestParam(required = false) String createdFrom,
+            @RequestParam(required = false) String createdTo);
 
     @Operation(summary = "Export ONE product as the bulk JSON shape (to edit as JSON and re-import with upsert)")
     @GetMapping("/products/{id}/export")
@@ -166,7 +194,9 @@ public interface AdminCatalogApi {
     @Operation(summary = "Stream ALL products as NDJSON (one product per line), batched with bounded memory. "
             + "Scales to millions: the server keyset-paginates and flushes each batch instead of buffering everything.")
     @GetMapping(value = "/products/export/ndjson", produces = "application/x-ndjson")
-    ResponseEntity<StreamingResponseBody> exportProductsNdjson(@RequestParam(defaultValue = "200") int batch);
+    ResponseEntity<StreamingResponseBody> exportProductsNdjson(@RequestParam(defaultValue = "200") int batch,
+            @RequestParam(required = false) String createdFrom,
+            @RequestParam(required = false) String createdTo);
 
     @Operation(summary = "Import products from an NDJSON body (one product per line), processed in batches with "
             + "bounded memory. The request body is read as a stream and never fully loaded into memory.")

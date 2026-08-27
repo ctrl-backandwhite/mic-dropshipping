@@ -23,7 +23,7 @@ public class CorsConfig {
         // no la aprueba y el navegador bloquea TODAS las llamadas cross-origin con "CORS error"
         // (catálogo/imágenes no cargan y /api/me falla → login no queda autenticado).
         cfg.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Accept-Language", "X-Currency",
-                "X-Lang", "X-XSRF-TOKEN", "Idempotency-Key"));
+                "X-Country", "X-Lang", "X-XSRF-TOKEN", "Idempotency-Key", "X-Altcha"));
         cfg.setExposedHeaders(List.of("Location", "X-Total-Count", "X-RateLimit-Remaining"));
         cfg.setAllowCredentials(true);
         cfg.setMaxAge(3600L);

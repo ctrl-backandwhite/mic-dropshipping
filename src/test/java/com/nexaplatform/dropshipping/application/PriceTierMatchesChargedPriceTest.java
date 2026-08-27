@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.application;
 import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.MarginService.PriceWithMargin;
 import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.service.PromotionService;
 import com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
@@ -41,6 +42,13 @@ class PriceTierMatchesChargedPriceTest {
     @Mock
     private MarginService marginService;
 
+    /**
+     * Sin rebajas: esta prueba comprueba que el precio del tramo por cantidad sale con la misma
+     * fórmula que el que se cobra. Una promoción activa movería ambos y taparía justamente eso.
+     */
+    @Mock
+    PromotionService promotionService;
+
     @InjectMocks
     private PricingService pricingService;
 
@@ -57,6 +65,11 @@ class PriceTierMatchesChargedPriceTest {
 
     @BeforeEach
     void setUp() {
+        // El motor de promociones devuelve el precio intacto: aquí no se miden rebajas.
+        when(promotionService.applyAutomatic(any(), any(), any())).thenAnswer(inv -> {
+            java.math.BigDecimal precio = inv.getArgument(1);
+            return new PromotionService.Discounted(precio, precio, java.math.BigDecimal.ZERO, null, null);
+        });
         product = new ProductEntity();
         product.setBasePrice(COSTE_CNY);
         product.setCurrency("CNY");
@@ -91,9 +104,31 @@ class PriceTierMatchesChargedPriceTest {
     void elTramoIncluyeElIvaYElEnvio() {
         PricedAmount delTramo = pricingService.priceForSupplierAmount(product, null, COSTE_CNY);
 
-        // 1,99 (base con margen) + 0,28 (IVA) + 1,30 (envío) = 3,57. Quedarse en 1,99 era el defecto.
-        assertThat(delTramo.displayAmount()).isEqualByComparingTo(new BigDecimal("3.57"));
+        // 1,99 (base con margen) + 0,74 (IVA con margen) + 3,44 (envío con margen) = 6,17.
+        //
+        // Quedarse en 1,99 —solo la base— era el defecto original. Y quedarse en 3,57 —sumando el IVA y el
+        // envío en crudo— era el modelo hasta el 25-ago-2026: desde esa fecha el margen se aplica sobre el
+        // desembolso completo del proveedor, así que el mismo factor de 2,64 que multiplica la base
+        // multiplica también sus 0,28 de IVA y sus 1,30 de porte.
+        assertThat(delTramo.displayAmount()).isEqualByComparingTo(new BigDecimal("6.17"));
         assertThat(delTramo.displayAmount()).isNotEqualByComparingTo(new BigDecimal("1.99"));
+        assertThat(delTramo.displayAmount()).isNotEqualByComparingTo(new BigDecimal("3.57"));
+    }
+
+    /**
+     * El porte que se le paga al proveedor no se contamina con el margen, aunque el cliente lo pague con
+     * él encima.
+     *
+     * <p>Qué se rompería en producción si esta prueba fallara: la subvención por porte repetido devolvería
+     * 3,44 en vez de 1,30 por cada unidad extra, es decir, el margen del porte regalado por partida doble
+     * —una aquí y otra por la vía de la ganancia sobrante—.
+     */
+    @Test
+    void elPorteQueSeDevuelveEsElDelProveedorNoElCobrado() {
+        PricedAmount cobrado = pricingService.priceFor(product, null);
+
+        assertThat(cobrado.supplierShippingUsd()).isEqualByComparingTo(ENVIO_USD);
+        assertThat(cobrado.shippingUsd()).isGreaterThan(cobrado.supplierShippingUsd());
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
+import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
 import com.nexaplatform.dropshipping.api.exception.ConflictException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.service.AuditLogger;
@@ -82,6 +83,7 @@ public class UserUseCaseImpl implements UserUseCase {
     private final EmailQueueService emailQueueService;
     private final AuditLogger auditLogger;
     private final UserUpdateMapper userUpdateMapper;
+    private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserAddressRepository userAddressJpaRepository;
     /** Para invalidar en caliente los tokens de un usuario cuando cambia su rol (o su acceso). */
     private final com.nexaplatform.dropshipping.infrastructure.security.oauth.JwtRevocationService jwtRevocationService;
 
@@ -93,17 +95,32 @@ public class UserUseCaseImpl implements UserUseCase {
     @Value("${nexadrop.storefront.base-url:http://localhost:3003}")
     private String storefrontBaseUrl;
 
+    /**
+     * Versión vigente de los textos legales, en formato fecha. Es lo que se guarda como constancia de QUÉ
+     * aceptó cada usuario, y no solo de que aceptó algo: sin versión, el día que el texto cambie no hay
+     * forma de saber a qué redacción dio su consentimiento.
+     *
+     * <p>Vive aquí porque el alta social no recibe nada del cliente —quien redirige es el proveedor de
+     * identidad, que no conoce nuestros textos—, así que el servidor tiene que saber cuál está publicada.
+     * Al actualizar los textos hay que subir también este valor y el del escaparate a la vez.
+     */
+    @Value("${nexadrop.legal.version:2026-07-31}")
+    private String legalVersion;
+
     /* ============ Registration / activation ============ */
 
     @Override
     @Transactional
     public User register(User user, String rawPassword) {
         String email = normalizeEmail(user.getEmail());
-        if (userRepository.existsByEmail(email)) {
-            // Same response shape as success path to mitigate user enumeration.
-            throw new ConflictException("Account creation failed");
-        }
         passwordPolicy.validate(rawPassword);
+        if (userRepository.existsByEmail(email)) {
+            // Anti-enumeración REAL: mismo status (200) y mismo cuerpo que el alta correcta. Antes se
+            // lanzaba ConflictException → 409, que permitía distinguir "email registrado" de "libre". No
+            // creamos ni reenviamos nada; devolvemos un id efímero para que la respuesta sea idéntica.
+            auditLogger.log("auth.register.duplicate", email, Map.of());
+            return User.builder().id(UUID.randomUUID()).email(email).role(UserRole.USER).active(false).build();
+        }
 
         String activationCode = randomToken(32);
         user.setEmail(email);
@@ -150,6 +167,32 @@ public class UserUseCaseImpl implements UserUseCase {
             }
         }
         return sb.isEmpty() ? null : sb.toString();
+    }
+
+    @Override
+    @Transactional
+    public void resendActivation(String email) {
+        String normalized = normalizeEmail(email);
+        // Respuesta NEUTRA (anti-enumeración): el controlador siempre devuelve 204. Aquí solo reenviamos si
+        // la cuenta existe, aún no está activada y no está borrada; en cualquier otro caso, no hacemos nada.
+        userRepository.findByEmail(normalized).ifPresent(user -> {
+            if (user.isActive() || user.getDeletedAt() != null) {
+                return;
+            }
+            String activationCode = randomToken(32);
+            user.setActivationCode(activationCode);
+            user.setActivationCodeExpiresAt(Instant.now().plus(ACTIVATION_TTL_HOURS, ChronoUnit.HOURS));
+            userRepository.update(user);
+            String confirmLang = InvoiceLabel.lang(user.getLanguage());
+            emailQueueService.enqueue(user.getEmail(), AuthEmailLabel.CONFIRM_SUBJECT.of(confirmLang), EMAILS_WELCOME,
+                    Map.of(TITLE, AuthEmailLabel.CONFIRM_TITLE.of(confirmLang),
+                            BODYHTML, AuthEmailLabel.CONFIRM_BODY.of(confirmLang, user.getDisplayName()),
+                            CTALABEL, AuthEmailLabel.CONFIRM_CTA.of(confirmLang),
+                            CTAURL, storefrontBaseUrl + "/activate?code=" + activationCode,
+                            "icon", CIRCLE_CHECK,
+                            FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(confirmLang)));
+            auditLogger.log("auth.activation.resend", user.getEmail(), Map.of(USERID, user.getId()));
+        });
     }
 
     @Override
@@ -241,6 +284,9 @@ public class UserUseCaseImpl implements UserUseCase {
             String hash = sha256(raw);
             UserEntity managed = userJpaRepository.findById(user.getId())
                     .orElseThrow(() -> new NotFoundException("User not found"));
+            // Al emitir un token nuevo, invalidamos los anteriores del usuario: no deben quedar varios
+            // enlaces de reset válidos a la vez (reduce la ventana de un enlace filtrado).
+            resetTokenRepository.consumeAllActiveForUser(managed.getId(), Instant.now());
             resetTokenRepository.save(PasswordResetTokenEntity.builder().user(managed).tokenHash(hash)
                     .expiresAt(Instant.now().plus(RESET_TTL_MINUTES, ChronoUnit.MINUTES)).build());
             String resetLang = InvoiceLabel.lang(user.getLanguage());
@@ -275,6 +321,9 @@ public class UserUseCaseImpl implements UserUseCase {
         prt.setConsumedAt(Instant.now());
         userRepository.update(user);
         resetTokenRepository.save(prt);
+        // Cambiar la contraseña cierra TODAS las sesiones activas: si la cuenta estaba comprometida, el
+        // token del atacante (access hasta 60 min, refresh hasta 14 días) dejaría de servir de inmediato.
+        jwtRevocationService.revokeAllForClient(user.getId().toString());
         auditLogger.log("auth.password_reset.confirm", user.getEmail(), Map.of(USERID, user.getId()));
     }
 
@@ -284,6 +333,8 @@ public class UserUseCaseImpl implements UserUseCase {
         passwordPolicy.validate(newPassword);
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.update(user);
+        // Igual que el reset: cambiar la contraseña revoca las sesiones/tokens previos.
+        jwtRevocationService.revokeAllForClient(user.getId().toString());
         auditLogger.log("auth.password_change", user.getEmail(), Map.of(USERID, user.getId()));
     }
 
@@ -299,7 +350,7 @@ public class UserUseCaseImpl implements UserUseCase {
         user.setDeletionCodeExpiresAt(Instant.now().plus(DELETION_CODE_TTL_MINUTES, ChronoUnit.MINUTES));
         userRepository.update(user);
         emailQueueService.enqueue(user.getEmail(),
-                "Confirma la eliminación de tu cuenta — NX036 Dropshipping", "emails/account-deletion-code",
+                "Confirma la eliminación de tu cuenta — NX036", "emails/account-deletion-code",
                 Map.of(TITLE, "Confirma la eliminación de tu cuenta",
                         "displayName", user.getDisplayName() != null ? user.getDisplayName() : "",
                         "code", code,
@@ -312,20 +363,74 @@ public class UserUseCaseImpl implements UserUseCase {
     public void confirmAccountDeletion(UUID userId, String code) {
         User user = loadUser(userId);
         String provided = code == null ? null : code.trim();
-        if (user.getDeletionCode() == null || provided == null || !user.getDeletionCode().equals(provided)
-                || user.getDeletionCodeExpiresAt() == null
-                || user.getDeletionCodeExpiresAt().isBefore(Instant.now())) {
+        boolean fresh = user.getDeletionCodeExpiresAt() != null
+                && !user.getDeletionCodeExpiresAt().isBefore(Instant.now());
+        // Comparación en tiempo CONSTANTE del código.
+        boolean codeOk = user.getDeletionCode() != null && provided != null
+                && java.security.MessageDigest.isEqual(
+                        provided.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                        user.getDeletionCode().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        if (!(fresh && codeOk)) {
+            // Un intento con código ERRÓNEO (dentro de la ventana) QUEMA el código, para que no se pueda
+            // forzar por fuerza bruta el código de 6 dígitos durante su validez. Hay que solicitarlo de nuevo.
+            if (fresh && !codeOk && user.getDeletionCode() != null) {
+                user.setDeletionCode(null);
+                user.setDeletionCodeExpiresAt(null);
+                userRepository.update(user);
+            }
             throw new BusinessException("DELETION_CODE_INVALID",
                     "El código de eliminación no es válido o ha expirado.");
         }
-        // BORRADO LÓGICO: la fila NO se borra físicamente. Se marca deletedAt, se desactiva (el login ya
-        // bloquea active=false) y se limpia el código de confirmación.
-        user.setDeletedAt(Instant.now());
+        String emailOriginal = user.getEmail();
+        // A efectos del usuario es una ELIMINACIÓN (no puede acceder ni verla), pero por dentro solo se
+        // DESACTIVA para poder recuperarla si decide volver: se conservan sus datos (perfil, direcciones,
+        // pedidos). active=false hace que el login responda "cuenta desactivada" (UserDetails.disabled);
+        // deleted_at la oculta de los listados. La reactivación la hace un ADMIN (active=true, deleted_at=null).
         user.setActive(false);
+        user.setDeletedAt(Instant.now());
         user.setDeletionCode(null);
         user.setDeletionCodeExpiresAt(null);
         userRepository.update(user);
-        auditLogger.log("auth.account.delete", user.getEmail(), Map.of(USERID, userId));
+        // Ninguna sesión abierta puede sobrevivir a la desactivación.
+        jwtRevocationService.revokeAllForClient(userId.toString());
+        auditLogger.log("auth.account.deactivate", emailOriginal, Map.of(USERID, userId));
+    }
+
+    /**
+     * Deja la cuenta sin datos que identifiquen a nadie.
+     *
+     * <p>Antes esto era una desactivación con otro nombre: se marcaba {@code deletedAt}, se ponía
+     * {@code active = false} y nombre, email, teléfono y direcciones seguían en la base de datos
+     * indefinidamente. Quien ejerce el derecho de supresión (art. 17 RGPD) tiene derecho a que se
+     * supriman, no a que se oculten.
+     *
+     * <p>La fila se conserva porque los pedidos la referencian y borrarla rompería la contabilidad. Lo
+     * que se va es el contenido personal. El email se sustituye por uno irrepetible del dominio
+     * reservado {@code deleted.invalid} —que por RFC 2606 no puede existir— para no chocar con la
+     * restricción de unicidad y para que el correo no pueda entregarse a nadie por accidente; de paso
+     * queda libre para registrarse de nuevo.
+     *
+     * <p>Lo que NO se toca: los datos de facturación ya emitidos. Conservarlos no es una excepción que
+     * nos inventemos, es una obligación legal (art. 17.3.b) y su plazo es el fiscal y mercantil.
+     */
+    static void anonymise(User user, String unusableHash) {
+        user.setDeletedAt(Instant.now());
+        user.setActive(false);
+        user.setEmail("deleted-" + UUID.randomUUID() + "@deleted.invalid");
+        user.setPasswordHash(unusableHash);
+        user.setDisplayName(null);
+        user.setFirstName(null);
+        user.setLastName1(null);
+        user.setLastName2(null);
+        user.setCompanyName(null);
+        user.setPhone(null);
+        user.setAvatarUrl(null);
+        user.setGoogleLinked(false);
+        user.setDeletionCode(null);
+        user.setDeletionCodeExpiresAt(null);
+        user.setActivationCode(null);
+        user.setActivationCodeExpiresAt(null);
+        user.setLastLogin(null);
     }
 
     /* ============ Lookups ============ */
@@ -404,6 +509,19 @@ public class UserUseCaseImpl implements UserUseCase {
         if (role == null) {
             throw new BusinessException("role required");
         }
+        // NADIE SE CAMBIA EL ROL A SÍ MISMO. Tres líneas más abajo se revocan TODOS los tokens del
+        // usuario —hace falta, o el rol viejo seguiría vivo en su token hasta una hora—, así que un
+        // administrador que se degrade queda expulsado en el acto y sin forma de volver a entrar a
+        // deshacerlo: la única salida sería tocar la base de datos a mano. Y si era el último
+        // administrador, la plataforma se queda sin nadie que pueda administrarla.
+        //
+        // `deleteUser` ya se niega a borrar cuentas de administrador por lo mismo; esto cierra la otra
+        // puerta, que lleva al mismo sitio y encima no tiene vuelta atrás desde la aplicación.
+        String enSesion = SecurityUtils.currentSubject();
+        if (enSesion != null && enSesion.equals(id.toString())) {
+            throw new BusinessException("No puedes cambiar tu propio rol: perderías el acceso al panel "
+                    + "en el acto y no podrías deshacerlo. Pídeselo a otro administrador.");
+        }
         User u = loadUser(id);
         u.setRole(UserRole.valueOf(role.toUpperCase()));
         User updated = userRepository.update(u);
@@ -464,6 +582,8 @@ public class UserUseCaseImpl implements UserUseCase {
     private List<User> filtered(String role, String q, String country) {
         String needle = q == null ? "" : q.trim().toLowerCase();
         return userRepository.findAll().stream()
+                // Los borrados (auto-baja o borrado del admin) están anonimizados: no deben salir en la lista.
+                .filter(u -> u.getDeletedAt() == null)
                 .filter(u -> role == null || role.isBlank() || u.getRole().name().equalsIgnoreCase(role))
                 .filter(u -> country == null || country.isBlank()
                         || (u.getCountry() != null && u.getCountry().equalsIgnoreCase(country)))
@@ -497,7 +617,7 @@ public class UserUseCaseImpl implements UserUseCase {
 
     @Override
     @Transactional
-    public GoogleLoginOutcome resolveGoogleLogin(String email, String firstName, String lastName) {
+    public GoogleLoginOutcome resolveGoogleLogin(String email, String firstName, String lastName, String country) {
         String normalized = normalizeEmail(email);
         if (normalized == null || normalized.isBlank()) {
             // GoogleOAuth2SuccessHandler ya rechaza el login cuando el proveedor no devuelve correo, pero
@@ -526,11 +646,36 @@ public class UserUseCaseImpl implements UserUseCase {
                 .googleLinked(true)
                 .displayName(display.isBlank() ? normalized.split("@")[0] : display)
                 .language("es")
+                .country(normalizeCountry(country))
+                // El alta social dejaba la cuenta SIN constancia de haber aceptado nada: la casilla se marca
+                // en la pantalla de registro antes de ir al proveedor, pero eso solo vivía en el navegador y
+                // aquí no llegaba nada. El resultado era un usuario en la base sin fecha ni versión, es decir
+                // sin nada que enseñar el día que haya que acreditar el consentimiento (RGPD art. 7.1).
+                // Se sella con el reloj del SERVIDOR y con la versión vigente que conoce el servidor, no la
+                // que diga el cliente: en este flujo el cliente es el proveedor de identidad, que no sabe
+                // nada de nuestros textos legales.
+                .termsAcceptedAt(Instant.now())
+                .termsAcceptedVersion(legalVersion)
                 .build();
         User saved = userRepository.save(user);
         auditLogger.log("auth.google.register", normalized, Map.of(USERID, saved.getId()));
         log.info("::> [GOOGLE-OAUTH2] New user registered userId={}", saved.getId());
         return new GoogleLoginOutcome(saved, false, normalized);
+    }
+
+    /**
+     * País ISO-2 saneado para el alta social, o {@code null} si no es utilizable. Los CDN mandan "XX"/"T1"
+     * (Tor) cuando no saben el país: se descartan para no persistir un país basura en el perfil.
+     */
+    private static String normalizeCountry(String country) {
+        if (country == null) {
+            return null;
+        }
+        String c = country.trim().toUpperCase();
+        if (c.length() != 2 || "XX".equals(c) || "T1".equals(c)) {
+            return null;
+        }
+        return c;
     }
 
     @Override
@@ -561,8 +706,18 @@ public class UserUseCaseImpl implements UserUseCase {
         if (user.getRole() == UserRole.ADMIN) {
             throw new BusinessException("No se puede eliminar una cuenta de administrador");
         }
-        userRepository.delete(id);
-        auditLogger.log("auth.admin.delete", user.getEmail(), Map.of(USERID, id));
+        // Borrado SUAVE, igual que la auto-baja (confirmAccountDeletion). Un DELETE físico fallaba con una
+        // violación de FK —"se hace referencia a un registro que no existe"— porque pedidos, facturas, el
+        // libro de la wallet, favoritos y sesiones referencian al usuario; y esos datos deben CONSERVARSE
+        // (obligación fiscal/contable, art. 17.3.b RGPD). Se anonimiza el PII, se desactiva, se borran las
+        // direcciones (PII sin obligación de conservación) y se cierran todas sus sesiones.
+        String emailOriginal = user.getEmail();
+        anonymise(user, passwordEncoder.encode(randomToken(48)));
+        userRepository.update(user);
+        userAddressJpaRepository.deleteAll(
+                userAddressJpaRepository.findByUser_IdOrderByIsDefaultDescCreatedAtDesc(id));
+        jwtRevocationService.revokeAllForClient(id.toString());
+        auditLogger.log("auth.admin.delete", emailOriginal, Map.of(USERID, id));
     }
 
     @Override

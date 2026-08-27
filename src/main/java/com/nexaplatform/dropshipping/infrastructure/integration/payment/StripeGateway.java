@@ -98,8 +98,8 @@ public class StripeGateway implements PaymentGateway {
             String cancelUrl = isOrder ? storefrontBaseUrl + "/checkout?cancelled=1"
                     : storefrontBaseUrl + "/wallet/recharge?cancelled=1";
             String productName = isOrder
-                    ? "NX036 Dropshipping · order " + shortId(p.getOrderId().toString())
-                    : "NX036 Dropshipping · wallet recharge";
+                    ? "NX036 · order " + shortId(p.getOrderId().toString())
+                    : "NX036 · wallet recharge";
             String description = isOrder ? platformId + " · order " + p.getOrderId()
                     : platformId + " · wallet recharge";
 
@@ -137,7 +137,12 @@ public class StripeGateway implements PaymentGateway {
             Map<String, Object> raw = new HashMap<>();
             raw.put("id", session.getId());
             raw.put("approveUrl", session.getUrl());
-            raw.put("paymentIntent", session.getPaymentIntent());
+            // Al CREAR la sesión, Stripe todavía no ha creado el PaymentIntent: devuelve null. Guardar la
+            // clave con ese null era peor que no guardarla — al reembolsar, getOrDefault ve la clave puesta,
+            // NO aplica el respaldo y le manda a Stripe la cadena "null". Solo se escribe si hay valor.
+            if (session.getPaymentIntent() != null) {
+                raw.put("paymentIntent", session.getPaymentIntent());
+            }
             return new InitiateResult(session.getId(), null, session.getUrl(), null, null, null, raw);
         } catch (StripeException e) {
             log.error("Stripe checkout session creation failed", e);

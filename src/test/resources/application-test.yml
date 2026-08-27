@@ -11,6 +11,15 @@ spring:
         jdbc:
           time_zone: UTC
     open-in-view: false
+  trend:
+    # En tests el recálculo se dispara a mano desde su propio test, no por cron.
+    recompute-enabled: false
+    recompute-cron: "-"
+    reindex-after-recompute: false
+  legal:
+    # Apagado en tests: el aviso recorre TODAS las cuentas activas y encolaría correos en cada caso que
+    # levante el contexto. Quien lo prueba es Cov05LegalUpdateNoticeServiceTest, encendiéndolo a mano.
+    notify-on-change: false
   liquibase:
     enabled: true
     # Igual que dev/pre/pro: solo migraciones de esquema, sin los seeds demo (context:demo),
@@ -39,6 +48,14 @@ server:
   port: 0
 
 nexadrop:
+  search:
+    # Sin reindexado automático al arrancar: en los tests el índice se puebla explícitamente cuando hace
+    # falta, y un barrido de fondo sobre el catálogo entero solo añadiría ruido y lentitud.
+    auto-reindex: false
+  captcha:
+    # Los tests no resuelven proof-of-work: se desactiva la verificación para no bloquear los POST
+    # a los formularios públicos (registro, contacto, reset, newsletter).
+    enabled: false
   oauth:
     issuer: http://localhost:18082
     admin-spa:
@@ -62,7 +79,13 @@ nexadrop:
     public-base-url: http://localhost:9000/test
     path-style-access: true
   opensearch:
-    uris: http://localhost:9200
+    # Puerto MUERTO a propósito. Apuntaba a localhost:9200 y, en cualquier máquina con un OpenSearch
+    # levantado —la de desarrollo lo tiene—, los tests de integración leían el índice REAL: aparecían
+    # pedidos y productos de otro conjunto de datos en respuestas que el test creía haber sembrado él.
+    # Un test que depende de qué haya arrancado en la máquina no certifica nada.
+    # Sin OpenSearch alcanzable, la búsqueda cae al fallback SQL, que es determinista y es justo lo que
+    # queremos ejercitar aquí; la ruta de OpenSearch se prueba aparte, con su propio contenedor.
+    uris: http://127.0.0.1:1
     products-index: products-test
   crawler:
     base-url: http://localhost:8001

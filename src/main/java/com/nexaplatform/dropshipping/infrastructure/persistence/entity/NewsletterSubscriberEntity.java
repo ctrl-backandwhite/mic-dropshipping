@@ -31,4 +31,8 @@ public class NewsletterSubscriberEntity extends BaseEntity {
 
     @Column(length = 40)
     private String source;
+
+    /** Cuándo se confirmó el alta desde el propio buzón. NULL = pendiente o anterior al doble opt-in. */
+    @Column(name = "confirmed_at")
+    private java.time.Instant confirmedAt;
 }

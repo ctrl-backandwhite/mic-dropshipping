@@ -9,9 +9,11 @@ import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
 import com.nexaplatform.dropshipping.application.service.StockService;
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
+import com.nexaplatform.dropshipping.application.service.CartService;
 import com.nexaplatform.dropshipping.application.usecase.impl.PaymentUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
@@ -107,9 +109,9 @@ class PaymentSettlementInvariantsTest {
 
     private PaymentUseCaseImpl useCase(List<PaymentGateway> gateways) {
         return new PaymentUseCaseImpl(gateways, paymentRepository, paymentJpaRepositoryAdapter, userRepository,
-                orderRepository, walletUseCase, auditLogger, partnerPlanSyncService, customerSubscriptionUseCase,
+                orderRepository, walletUseCase, org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class), auditLogger, partnerPlanSyncService, customerSubscriptionUseCase,
                 subscriptionNotificationService, new ObjectMapper(), orderEmailService, currencyRateService, new OrderAmounts(currencyRateService),
-                stockService, mock(OpsAlertService.class));
+                stockService, mock(SupplierPurchaseService.class), mock(OpsAlertService.class), mock(CartService.class));
     }
 
     private Payment recharge(PaymentStatus status, String providerRef) {
@@ -307,7 +309,7 @@ class PaymentSettlementInvariantsTest {
 
         assertThatThrownBy(() -> subject.refundOrderPayment(foreignOrder, paymentId, 100L))
                 .isInstanceOf(NotFoundException.class);
-        assertThatThrownBy(() -> subject.confirmOrderPayment(foreignOrder, paymentId))
+        assertThatThrownBy(() -> subject.confirmOrderPayment(userId, foreignOrder, paymentId))
                 .isInstanceOf(NotFoundException.class);
     }
 
@@ -333,7 +335,8 @@ class PaymentSettlementInvariantsTest {
 
         // El importe cargado es el TOTAL del pedido, no el subtotal: si se cobrara el subtotal, el envío
         // y el impuesto se regalarían en cada compra pagada con saldo.
-        verify(walletUseCase).charge(eq(userId), eq(9540L), eq(orderId), eq("idem-1"), anyString());
+        // La clave del cargo va acotada al pedido ("order-charge-<orderId>"), no la del cliente.
+        verify(walletUseCase).charge(eq(userId), eq(9540L), eq(orderId), eq("order-charge-" + orderId), anyString());
         assertThat(p.getAmountUsdCents()).isEqualTo(9540L);
         assertThat(p.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
         assertThat(o.getStatus()).isEqualTo(OrderStatus.PAID);

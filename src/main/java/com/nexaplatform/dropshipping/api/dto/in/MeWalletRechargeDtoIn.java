@@ -1,6 +1,8 @@
 package com.nexaplatform.dropshipping.api.dto.in;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
@@ -29,6 +31,7 @@ public class MeWalletRechargeDtoIn {
     @Schema(description = "Amount to recharge in USD cents (optional fallback; the backend derives it "
             + "from amountDisplay + currencyDisplay)")
     @Positive
+    @Max(value = 10_000_000L, message = "Importe de recarga fuera de rango") // tope defensivo: 100.000 USD
     private Long amountUsdCents;
 
     @Schema(description = "USDT chain: TRC20, ERC20 or BEP20 (USDT only)")
@@ -39,5 +42,6 @@ public class MeWalletRechargeDtoIn {
 
     @Schema(description = "Amount the user entered in the display currency (source of truth)")
     @Positive
+    @DecimalMax(value = "1000000", message = "Importe de recarga fuera de rango") // tope defensivo
     private BigDecimal amountDisplay;
 }

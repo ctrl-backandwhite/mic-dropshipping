@@ -97,7 +97,7 @@ public class ContactService {
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", cleanSubject);
         vars.put("bodyHtml", toHtml(cleanMessage));
-        vars.put("footer", "NX036 Dropshipping");
+        vars.put("footer", "NX036");
         vars.put("footerNote", "Respuesta de nuestro equipo de soporte a tu consulta.");
         emailQueue.enqueue(cleanEmail, cleanSubject, "emails/notification", vars);
 
@@ -121,7 +121,7 @@ public class ContactService {
             details.add(List.of("Email", escape(senderEmail)));
             details.add(List.of("Asunto", subject.isBlank() ? "—" : escape(subject)));
             vars.put("details", details);
-            vars.put("footer", "NX036 Dropshipping · Panel de administración");
+            vars.put("footer", "NX036 · Panel de administración");
             vars.put("footerNote", "Responde a este correo para contestar directamente a " + senderEmail + ".");
             // Reply-To = email del remitente: el admin responde desde su bandeja y le llega al usuario.
             emailQueue.enqueue(adminEmail, senderEmail, title, "emails/notification", vars);
@@ -132,7 +132,7 @@ public class ContactService {
         Map<String, Object> vars = new HashMap<>();
         vars.put("name", name);
         vars.put("subject", subject);
-        emailQueue.enqueue(senderEmail, "Hemos recibido tu mensaje — NX036 Dropshipping", "emails/contact-ack", vars);
+        emailQueue.enqueue(senderEmail, "Hemos recibido tu mensaje — NX036", "emails/contact-ack", vars);
     }
 
     /** Escapa el texto plano del usuario y conserva los saltos de línea para su render en el email. */

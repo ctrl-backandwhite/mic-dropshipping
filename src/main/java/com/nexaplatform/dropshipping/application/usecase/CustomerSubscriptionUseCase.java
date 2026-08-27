@@ -50,12 +50,12 @@ public interface CustomerSubscriptionUseCase extends BaseUseCase<CustomerSubscri
     record CardInfo(String id, String brand, String last4, Long expMonth, Long expYear, boolean isDefault) {
     }
 
-    /** Config pública de billing para el frontend. */
-    record BillingConfigInfo(String publishableKey, boolean enabled) {
+    /** Config pública de billing para el frontend. {@code freeTrialUsed}: el usuario ya gastó su prueba gratis. */
+    record BillingConfigInfo(String publishableKey, boolean enabled, boolean freeTrialUsed) {
     }
 
-    /** Publishable key + estado de Stripe (para inicializar Elements en el front). */
-    BillingConfigInfo billingConfig();
+    /** Publishable key + estado de Stripe + si el usuario ya usó la prueba gratis (para inicializar Elements). */
+    BillingConfigInfo billingConfig(UUID userId);
 
     /** Crea un SetupIntent para que el usuario guarde una tarjeta; devuelve su client_secret. */
     String createSetupIntentSecret(UUID userId) throws StripeException;

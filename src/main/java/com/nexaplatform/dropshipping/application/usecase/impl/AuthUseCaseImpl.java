@@ -1,10 +1,16 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
+import java.time.Instant;
+
 import com.nexaplatform.dropshipping.api.dto.in.ActivateDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.ResendActivationDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.ChangePasswordDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.DeleteAccountConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.LoginDtoIn;
 import com.nexaplatform.dropshipping.application.service.DeviceSessionService;
+import com.nexaplatform.dropshipping.application.service.TotpService;
+import com.nexaplatform.dropshipping.api.exception.TwoFactorInvalidException;
+import com.nexaplatform.dropshipping.api.exception.TwoFactorRequiredException;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetRequestDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.RefreshTokenDtoIn;
@@ -26,6 +32,7 @@ import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -49,16 +56,33 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AuthUseCaseImpl implements AuthUseCase {
 
+    /** UE-27: sus usuarios no pueden cambiar de país (candado anti-trampa del margen por país). */
+    private static final Set<String> EU_COUNTRIES = Set.of(
+            "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT",
+            "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE");
+
     private final UserUseCase userUseCase;
     private final AuthenticationManager authenticationManager;
     private final PasswordEncoder passwordEncoder;
     private final UserDtoMapper mapper;
     private final DeviceSessionService deviceSessionService;
     private final UserTokenService userTokenService;
+    private final TotpService totpService;
 
     @Override
     public RegisterDtoOut register(RegisterDtoIn req) {
-        User user = userUseCase.register(mapper.toDomain(req), req.getPassword());
+        User model = mapper.toDomain(req);
+        // La constancia se sella en el SERVIDOR, con su reloj. Si la fecha viniera del cliente, la
+        // prueba de la aceptación valdría exactamente lo que valga el reloj de quien la envía.
+        Instant now = Instant.now();
+        if (Boolean.TRUE.equals(req.getAcceptedTerms())) {
+            model.setTermsAcceptedAt(now);
+            model.setTermsAcceptedVersion(req.getAcceptedTermsVersion());
+        }
+        if (Boolean.TRUE.equals(req.getMarketingOptIn())) {
+            model.setMarketingOptInAt(now);
+        }
+        User user = userUseCase.register(model, req.getPassword());
         return RegisterDtoOut.builder().userId(user.getId()).message("Account created. Check your email to activate.")
                 .build();
     }
@@ -69,11 +93,35 @@ public class AuthUseCaseImpl implements AuthUseCase {
         // no activada o bloqueada) se deja propagar como AuthenticationException → 401 genérico
         // idéntico. Así NO se puede enumerar qué emails existen ni su estado de cuenta.
         // (DisabledException/LockedException extienden AuthenticationException.)
-        Authentication auth = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(req.getEmail().toLowerCase().trim(), req.getPassword()));
+        String normalizedEmail = req.getEmail().toLowerCase().trim();
+        Authentication auth;
+        try {
+            auth = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(normalizedEmail, req.getPassword()));
+        } catch (BadCredentialsException ex) {
+            // Contraseña incorrecta: contabiliza el intento fallido para el bloqueo por fuerza bruta.
+            // OJO: el authenticate() PROGRAMÁTICO no dispara los AbstractAuthenticationFailureEvent que
+            // escuchaba LoginAuditListener, así que el contador nunca se incrementaba y el bloqueo (5→15min)
+            // estaba MUERTO en esta ruta. Lo contamos aquí y re-lanzamos la MISMA excepción → 401 genérico
+            // idéntico (no rompe la anti-enumeración; recordFailedLogin es no-op si el email no existe).
+            userUseCase.recordFailedLogin(normalizedEmail);
+            throw ex;
+        }
 
         UUID id = UUID.fromString(auth.getName());
         User user = userUseCase.findById(id);
+        // SEGUNDO FACTOR: si la cuenta tiene 2FA activo, la contraseña sola NO basta. Debe ir ANTES de
+        // registrar el login como correcto, emitir tokens o enviar el aviso "inicio de sesión detectado":
+        // un OTP ausente/erróneo no puede dejar rastro de sesión válida ni acreditar el acceso. Sin este
+        // control, activar 2FA no protegía nada (el token completo se emitía solo con la contraseña).
+        try {
+            enforceTwoFactor(id, req.getOtp());
+        } catch (TwoFactorInvalidException ex) {
+            // Un OTP incorrecto cuenta para el bloqueo por fuerza bruta (5→15 min), igual que una contraseña
+            // errónea: si no, con la contraseña ya conocida se podían probar los 10^6 códigos sin freno de cuenta.
+            userUseCase.recordFailedLogin(normalizedEmail);
+            throw ex;
+        }
         completePendingGoogleLink(httpRequest, user);
         // Vínculo social por TOKEN (cross-origin): la sesión PENDING_* no viaja, así que si el usuario
         // llegó desde el flujo OAuth (?link=required) y ahora prueba su contraseña, vinculamos aquí. El
@@ -113,6 +161,26 @@ public class AuthUseCaseImpl implements AuthUseCase {
         userTokenService.revokeAll(authentication.getName());
     }
 
+    /**
+     * Exige el segundo factor cuando la cuenta lo tiene activo. Acepta tanto el código TOTP como un
+     * código de recuperación de un solo uso. Lanza {@link TwoFactorRequiredException} (401
+     * {@code MFA_REQUIRED}) si falta el código y {@link TwoFactorInvalidException} (401
+     * {@code MFA_INVALID}) si es incorrecto. No hace nada si la cuenta no tiene 2FA.
+     */
+    private void enforceTwoFactor(UUID userId, String otp) {
+        if (!totpService.isEnabled(userId)) {
+            return;
+        }
+        if (otp == null || otp.isBlank()) {
+            throw new TwoFactorRequiredException();
+        }
+        String code = otp.trim();
+        boolean ok = totpService.verifyOtp(userId, code) || totpService.consumeBackupCode(userId, code);
+        if (!ok) {
+            throw new TwoFactorInvalidException();
+        }
+    }
+
     /** Emite el par de tokens para {@code user} y arma la respuesta de login. */
     private LoginDtoOut buildLogin(User user, Set<String> authorities) {
         UserTokenService.Tokens tokens = userTokenService.issue(user.getId(), user.getEmail(),
@@ -143,6 +211,11 @@ public class AuthUseCaseImpl implements AuthUseCase {
     @Override
     public void activate(ActivateDtoIn req) {
         userUseCase.activate(req.getCode());
+    }
+
+    @Override
+    public void resendActivation(ResendActivationDtoIn req) {
+        userUseCase.resendActivation(req.getEmail());
     }
 
     @Override
@@ -203,8 +276,23 @@ public class AuthUseCaseImpl implements AuthUseCase {
             user.setDisplayName(req.getDisplayName().trim());
         if (req.getCompanyName() != null)
             user.setCompanyName(req.getCompanyName().trim());
-        if (req.getCountry() != null)
-            user.setCountry(req.getCountry().trim().toUpperCase());
+        if (req.getPhone() != null) {
+            // Teléfono ÚNICO en toda la app (índice parcial en BD); vacío lo limpia. La violación del índice
+            // se traduce a un mensaje humano en el handler global (constraint uk_users_phone).
+            String phone = req.getPhone().trim();
+            user.setPhone(phone.isBlank() ? null : phone);
+        }
+        if (req.getCountry() != null) {
+            String newCountry = req.getCountry().trim().toUpperCase();
+            String current = user.getCountry() != null ? user.getCountry().trim().toUpperCase() : null;
+            // Candado anti-trampa: un usuario con país UE NO puede cambiar su país (evitar saltar a un país
+            // con margen más favorable). Puede fijarlo si aún no tiene, o cambiarlo si su país actual no es UE.
+            if (current != null && EU_COUNTRIES.contains(current) && !newCountry.equals(current)) {
+                throw new BusinessException("EU_COUNTRY_LOCKED",
+                        "Los usuarios registrados en la UE no pueden cambiar su país");
+            }
+            user.setCountry(newCountry);
+        }
         if (req.getLanguage() != null)
             user.setLanguage(req.getLanguage());
         User saved = userUseCase.updateUser(user);

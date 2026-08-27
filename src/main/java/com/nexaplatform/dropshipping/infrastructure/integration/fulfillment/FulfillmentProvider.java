@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.domain.enums.TaxMode;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
@@ -27,12 +28,58 @@ public interface FulfillmentProvider {
      * máx en días. {@code sequenceNo} indica qué bulto del pedido es (1..N) y {@code weightGrams} /
      * {@code declaredValueCents} lo que finalmente viajó en él, que es lo que se enseña al cliente.
      */
+    /**
+     * Unidades de una línea del pedido que van dentro de un bulto.
+     *
+     * <p>Una misma línea puede repartirse entre bultos cuando el peso no cabe en una sola guía, así que
+     * no basta con saber qué líneas van: hace falta cuántas de cada una.
+     */
+    record ParcelContent(int lineIndex, int quantity) {
+    }
+
+    /**
+     * Destinatario tal como se transmitió al transportista, con el nombre ya partido en dos campos —que
+     * es como lo pide la API— y las líneas de dirección en el mismo orden en que se mandaron.
+     *
+     * <p>Se archiva por separado del pedido a propósito: la dirección del pedido puede corregirse
+     * después, y entonces ya no diría a dónde se mandó realmente el paquete.
+     */
+    record DeclaredReceiver(String firstName, String lastName, String countryCode, String province,
+            String city, List<String> addressLines, String postalCode, String phone, String email) {
+    }
+
+    /**
+     * Una línea de la declaración aduanera tal como se transmitió: qué es (en inglés y en chino), bajo
+     * qué partida arancelaria, cuánto y por cuánto.
+     */
+    record DeclaredLine(String nameEn, String nameLocal, String hsCode, int quantity, BigDecimal unitPrice,
+            String currency, BigDecimal unitWeightKg, String material, String purpose, String sku,
+            String salesUrl) {
+    }
+
+    /**
+     * Lo que se le declaró al transportista para UN bulto: a quién iba y qué llevaba.
+     *
+     * <p>Es una copia de lo transmitido, no una consulta al pedido: si aduana rechaza el envío, lo que
+     * hay que poder comprobar es lo que salió de aquí ese día.
+     */
+    record ShipmentDeclaration(DeclaredReceiver receiver, List<DeclaredLine> lines) {
+    }
+
     record FulfillmentResult(String carrier, String trackingNumber, String fulfillmentRef, int etaMaxDays,
-            int sequenceNo, int weightGrams, int declaredValueCents, String productCode) {
+            int sequenceNo, int weightGrams, int declaredValueCents, String productCode,
+            List<ParcelContent> contents, ShipmentDeclaration declaration) {
 
         /** Bulto único de un pedido que no hizo falta repartir. */
         public FulfillmentResult(String carrier, String trackingNumber, String fulfillmentRef, int etaMaxDays) {
-            this(carrier, trackingNumber, fulfillmentRef, etaMaxDays, 1, 0, 0, null);
+            this(carrier, trackingNumber, fulfillmentRef, etaMaxDays, 1, 0, 0, null, List.of(), null);
+        }
+
+        /** Bulto del que no se conoce el reparto: el seguimiento no podrá enseñar su contenido. */
+        public FulfillmentResult(String carrier, String trackingNumber, String fulfillmentRef, int etaMaxDays,
+                int sequenceNo, int weightGrams, int declaredValueCents, String productCode) {
+            this(carrier, trackingNumber, fulfillmentRef, etaMaxDays, sequenceNo, weightGrams,
+                    declaredValueCents, productCode, List.of(), null);
         }
     }
 
@@ -70,6 +117,20 @@ public interface FulfillmentProvider {
         }
     }
 
+    /**
+     * Cómo se llama este transportista dentro de la plataforma: {@code YUNEXPRESS}, {@code CJ}.
+     *
+     * <p>Hace falta desde que hay más de uno (18-ago-2026). Es lo que se guarda en el pedido al cobrar y
+     * lo que decide, al despachar, a quién se le pide la guía: los códigos de línea de dos
+     * transportistas no se parecen en nada y no se pueden distinguir mirándolos.
+     *
+     * <p>Tiene valor por defecto para no obligar a tocar las implementaciones antiguas, pero quien tenga
+     * que aparecer en un pedido debe devolver el suyo.
+     */
+    default String nombre() {
+        return "DESCONOCIDO";
+    }
+
     /** ¿El proveedor envía a este país? */
     boolean isSupported(String countryCode);
 
@@ -101,6 +162,23 @@ public interface FulfillmentProvider {
      * repartir devuelve una lista de un elemento —con sus datos completos.
      */
     List<FulfillmentResult> createShipments(Order order);
+
+    /**
+     * ¿Puede este transportista emitir ya la guía de este pedido?
+     *
+     * <p>No sustituye a las comprobaciones que hace la plataforma —que el pedido esté liberado y que la
+     * mercancía vaya camino del almacén—, sino que añade lo que <b>solo el transportista sabe</b>. Para
+     * quien recibe y reexpide basta con que la mercancía esté en camino, y por eso el valor por defecto es
+     * que sí; para quien exige tener la mercancía dada de alta en su propio inventario antes de emitir
+     * nada, no.
+     *
+     * <p>Un «no» aquí significa <b>todavía no</b>, no un error: el pedido espera y se reintenta. Lo que
+     * evita es emitir una guía —que se paga y arranca el reloj del seguimiento del cliente— sobre
+     * mercancía que el transportista no tiene.
+     */
+    default boolean readyToShip(Order order) {
+        return true;
+    }
 
     /** Consulta el tracking del envío (estado actual + pasos). */
     TrackingSnapshot track(String trackingNumber, Instant forwardedAt, String countryCode);

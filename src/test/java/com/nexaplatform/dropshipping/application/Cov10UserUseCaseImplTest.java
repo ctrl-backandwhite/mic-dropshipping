@@ -77,7 +77,9 @@ class Cov10UserUseCaseImplTest {
     void setUp() throws Exception {
         jwtRevocationService = mock(JwtRevocationService.class);
         useCase = new UserUseCaseImpl(userRepository, resetTokenRepository, userJpaRepository, encoder, policy,
-                emailQueueService, auditLogger, userUpdateMapper, jwtRevocationService);
+                emailQueueService, auditLogger, userUpdateMapper,
+                mock(com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserAddressRepository.class),
+                jwtRevocationService);
         Field baseUrl = UserUseCaseImpl.class.getDeclaredField("storefrontBaseUrl");
         baseUrl.setAccessible(true);
         baseUrl.set(useCase, "https://tienda.example");
@@ -345,14 +347,23 @@ class Cov10UserUseCaseImplTest {
     }
 
     @Test
-    void unaCuentaNormalSiSePuedeBorrar() {
+    void unaCuentaNormalSeBorraDeFormaSuave() {
         UUID id = UUID.randomUUID();
         when(userRepository.getById(id))
                 .thenReturn(User.builder().id(id).email("ana@x.com").role(UserRole.USER).build());
 
         useCase.deleteUser(id);
 
-        verify(userRepository).delete(id);
+        // Borrado SUAVE: NO se hace DELETE físico (rompería las FK de pedidos/facturas). Se anonimiza y
+        // desactiva vía update, y se cierran sus sesiones.
+        verify(userRepository, never()).delete(any());
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).update(captor.capture());
+        User saved = captor.getValue();
+        assertThat(saved.getDeletedAt()).isNotNull();
+        assertThat(saved.isActive()).isFalse();
+        assertThat(saved.getEmail()).endsWith("@deleted.invalid");
+        verify(jwtRevocationService).revokeAllForClient(id.toString());
     }
 
     @Test
@@ -456,9 +467,9 @@ class Cov10UserUseCaseImplTest {
     void googleSinCorreoNoPuedeCrearNiIdentificarUnaCuenta() {
         // Sin correo, más abajo se hace normalized.split("@") para el nombre visible: era una cuenta
         // sin identidad o un NullPointerException.
-        assertThatThrownBy(() -> useCase.resolveGoogleLogin(null, "Ada", "Lovelace"))
+        assertThatThrownBy(() -> useCase.resolveGoogleLogin(null, "Ada", "Lovelace", null))
                 .isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> useCase.resolveGoogleLogin("   ", "Ada", "Lovelace"))
+        assertThatThrownBy(() -> useCase.resolveGoogleLogin("   ", "Ada", "Lovelace", null))
                 .isInstanceOf(BusinessException.class);
         verify(userRepository, never()).save(any());
     }
@@ -467,7 +478,7 @@ class Cov10UserUseCaseImplTest {
     void googleSinNombreUsaLaParteLocalDelCorreoComoNombreVisible() {
         when(userRepository.findByEmail("ada.lovelace@gmail.com")).thenReturn(Optional.empty());
 
-        GoogleLoginOutcome outcome = useCase.resolveGoogleLogin("Ada.Lovelace@Gmail.com", null, null);
+        GoogleLoginOutcome outcome = useCase.resolveGoogleLogin("Ada.Lovelace@Gmail.com", null, null, null);
 
         assertThat(outcome.getUser().getDisplayName()).isEqualTo("ada.lovelace");
     }

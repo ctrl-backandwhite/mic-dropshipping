@@ -17,6 +17,8 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Passw
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -31,6 +33,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
@@ -74,7 +77,9 @@ class UserUseCaseImplTest {
     void setup() {
         jwtRevocationService = mock(JwtRevocationService.class);
         useCase = new UserUseCaseImpl(userRepository, resetTokenRepository, userJpaRepository, encoder, policy,
-                emailQueueService, auditLogger, userUpdateMapper, jwtRevocationService);
+                emailQueueService, auditLogger, userUpdateMapper,
+                mock(com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserAddressRepository.class),
+                jwtRevocationService);
     }
 
     @Test
@@ -102,13 +107,16 @@ class UserUseCaseImplTest {
     }
 
     @Test
-    @DisplayName("register: rechaza email duplicado")
+    @DisplayName("register: email duplicado NO revela nada (anti-enumeración) — no crea ni lanza")
     void register_duplicate_email() {
         when(userRepository.existsByEmail("a@b.com")).thenReturn(true);
         User candidate = User.builder().email("a@b.com").language("es").build();
 
-        assertThatThrownBy(() -> useCase.register(candidate, "Str0ngP@ssword!"))
-                .isInstanceOf(ConflictException.class);
+        // Antes lanzaba ConflictException (→409, permitía enumerar). Ahora responde como el alta correcta:
+        // devuelve un User (id efímero) SIN persistir ni enviar email de activación.
+        User result = useCase.register(candidate, "Str0ngP@ssword!");
+        assertThat(result).isNotNull();
+        assertThat(result.getId()).isNotNull();
         verify(userRepository, never()).save(any());
     }
 
@@ -250,6 +258,56 @@ class UserUseCaseImplTest {
     }
 
     @Test
+    @DisplayName("un administrador NO puede cambiarse el rol a sí mismo y quedarse fuera")
+    void changeRole_noSePuedeUnoDegradarASiMismo() {
+        // Cambiar de rol revoca TODOS los tokens del usuario para que el rol viejo no siga vivo en el
+        // token. Si el administrador se degrada a sí mismo, esa revocación lo expulsa en el acto y ya no
+        // puede volver a entrar a deshacerlo: la única salida es tocar la base de datos a mano. Y si era
+        // el último administrador, la plataforma se queda sin nadie que pueda administrarla.
+        //
+        // `deleteUser` ya protege las cuentas de administrador; esto cierra la misma puerta por el otro
+        // lado, que tiene el mismo efecto y encima es irreversible desde la aplicación.
+        // No hace falta preparar el repositorio: el rechazo llega ANTES de cargar a nadie, que es
+        // justo lo que se quiere —ni se toca la base ni se revoca ningún token—.
+        UUID id = UUID.randomUUID();
+        autenticadoComo(id);
+
+        assertThatThrownBy(() -> useCase.changeRole(id, "user"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("propio rol");
+
+        verify(userRepository, never()).update(any());
+        verify(jwtRevocationService, never()).revokeAllForClient(anyString());
+    }
+
+    @Test
+    @DisplayName("cambiarle el rol a OTRA persona sigue funcionando igual")
+    void changeRole_aOtroSigueFuncionando() {
+        UUID otro = UUID.randomUUID();
+        User u = User.builder().id(otro).email("u@x.com").role(UserRole.USER).build();
+        when(userRepository.getById(otro)).thenReturn(u);
+        when(userRepository.update(u)).thenReturn(u);
+        autenticadoComo(UUID.randomUUID());
+
+        useCase.changeRole(otro, "admin");
+
+        assertThat(u.getRole()).isEqualTo(UserRole.ADMIN);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void limpiarLaSesion() {
+        // El contexto de seguridad es un ThreadLocal: sin limpiarlo, la sesión de una prueba se cuela en
+        // la siguiente y el resultado depende del orden en que se ejecuten.
+        SecurityContextHolder.clearContext();
+    }
+
+    /** Deja en el contexto de seguridad al usuario indicado, como haría el filtro del token. */
+    private static void autenticadoComo(UUID id) {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(id.toString(), "n/a", List.of()));
+    }
+
+    @Test
     @DisplayName("editUser: aplica parcial + flag active y persiste")
     void editUser_appliesPartialUpdateAndActiveFlagThenSaves() {
         UUID id = UUID.randomUUID();
@@ -275,7 +333,7 @@ class UserUseCaseImplTest {
             return u;
         });
 
-        var outcome = useCase.resolveGoogleLogin("New@Gmail.com", "Ada", "Lovelace");
+        var outcome = useCase.resolveGoogleLogin("New@Gmail.com", "Ada", "Lovelace", "us");
 
         assertThat(outcome.isLinkRequired()).isFalse();
         assertThat(outcome.getUser()).isNotNull();
@@ -284,6 +342,8 @@ class UserUseCaseImplTest {
         assertThat(outcome.getUser().isActive()).isTrue();
         assertThat(outcome.getUser().isGoogleLinked()).isTrue();
         assertThat(outcome.getUser().getDisplayName()).isEqualTo("Ada Lovelace");
+        // El país por IP (CDN) se persiste en el alta social, normalizado a mayúsculas.
+        assertThat(outcome.getUser().getCountry()).isEqualTo("US");
     }
 
     @Test
@@ -293,7 +353,7 @@ class UserUseCaseImplTest {
                 .googleLinked(true).build();
         when(userRepository.findByEmail("me@gmail.com")).thenReturn(Optional.of(linked));
 
-        var outcome = useCase.resolveGoogleLogin("me@gmail.com", "Me", null);
+        var outcome = useCase.resolveGoogleLogin("me@gmail.com", "Me", null, null);
 
         assertThat(outcome.isLinkRequired()).isFalse();
         assertThat(outcome.getUser()).isSameAs(linked);
@@ -307,7 +367,7 @@ class UserUseCaseImplTest {
                 .googleLinked(false).build();
         when(userRepository.findByEmail("local@gmail.com")).thenReturn(Optional.of(local));
 
-        var outcome = useCase.resolveGoogleLogin("local@gmail.com", "L", "Ocal");
+        var outcome = useCase.resolveGoogleLogin("local@gmail.com", "L", "Ocal", "es");
 
         assertThat(outcome.isLinkRequired()).isTrue();
         assertThat(outcome.getUser()).isNull();

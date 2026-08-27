@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application;
 
+import com.nexaplatform.dropshipping.domain.enums.ReviewSource;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestPriceTier;
@@ -752,6 +753,24 @@ class Cov01CatalogBulkImportTest {
     }
 
     @Test
+    void unaFilaQueSoloVieneEnChinoSeAceptaYEsElChinoElQueHaceDeCanonico() {
+        // Un volcado de 1688 con translations {"zh": {...}} y nada más tiene que ENTRAR: rechazarlo por
+        // «falta el título» dejaría fuera un producto perfectamente vendible. El chino sigue siendo el
+        // título de trabajo del importador —de él salen el identificador externo, el nombre de las
+        // variantes y el slug degradado— y el canónico del producto; lo que ya no hace es acabar guardado
+        // como traducción española, inglesa y portuguesa (eso lo cubre CatalogFillWriterTest).
+        BulkProductDtoIn r = validRow();
+        r.setTitleEs(null);
+        r.setTranslations(Map.of("zh",
+                new BulkProductDtoIn.BulkTranslation("破洞牛仔裤男春季2025浅色修身弹力九分裤", null, "弹力牛仔裤")));
+
+        useCase.createProductManual(r);
+
+        assertThat(capturedSpanishTitle()).isEqualTo("破洞牛仔裤男春季2025浅色修身弹力九分裤");
+        assertThat(capturedIngest().titleZh()).isEqualTo("破洞牛仔裤男春季2025浅色修身弹力九分裤");
+    }
+
+    @Test
     void elTituloExplicitoDeLaFilaGanaAlDelMapaDeTraducciones() {
         BulkProductDtoIn r = validRow();
         r.setTranslations(Map.of("es", new BulkProductDtoIn.BulkTranslation("Otro título", null, null)));
@@ -884,7 +903,11 @@ class Cov01CatalogBulkImportTest {
         assertThat(captor.getValue().getRating()).isEqualTo((short) 5);
         assertThat(captor.getValue().getLanguage()).isEqualTo("en");
         assertThat(captor.getValue().getTags()).isEqualTo("calidad,envío");
-        assertThat(captor.getValue().isVerifiedPurchase()).isTrue();
+        // Aunque el fichero de carga diga que la reseña es de compra verificada, NO se marca: no hay
+        // ninguna compra en esta tienda detrás de ella. Presentarla como tal está en la lista negra de
+        // prácticas desleales de la Directiva Omnibus.
+        assertThat(captor.getValue().isVerifiedPurchase()).isFalse();
+        assertThat(captor.getValue().getSource()).isEqualTo(ReviewSource.SUPPLIER);
     }
 
     @Test
@@ -1157,6 +1180,7 @@ class Cov01CatalogBulkImportTest {
     private TypedQuery<ProductEntity> stubExportQuery() {
         TypedQuery<ProductEntity> query = mock(TypedQuery.class);
         when(em.createQuery(anyString(), eq(ProductEntity.class))).thenReturn(query);
+        when(query.setParameter(anyString(), any())).thenReturn(query);
         when(query.setFirstResult(anyInt())).thenReturn(query);
         when(query.setMaxResults(anyInt())).thenReturn(query);
         when(query.getResultList()).thenReturn(new ArrayList<>());
@@ -1168,7 +1192,7 @@ class Cov01CatalogBulkImportTest {
         // setFirstResult(-1) revienta: el rango del operador empieza en la fila 1, no en la 0.
         TypedQuery<ProductEntity> query = stubExportQuery();
 
-        useCase.exportProducts(0, 10);
+        useCase.exportProducts(0, 10, null, null);
 
         verify(query).setFirstResult(0);
         verify(query).setMaxResults(10);
@@ -1179,7 +1203,7 @@ class Cov01CatalogBulkImportTest {
         // "de la 50 a la 10" no puede traducirse en un maxResults negativo, que la consulta rechaza.
         TypedQuery<ProductEntity> query = stubExportQuery();
 
-        useCase.exportProducts(50, 10);
+        useCase.exportProducts(50, 10, null, null);
 
         verify(query).setFirstResult(49);
         verify(query).setMaxResults(1);

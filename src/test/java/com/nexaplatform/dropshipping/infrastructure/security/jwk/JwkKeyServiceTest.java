@@ -17,7 +17,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.Base64;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -59,16 +63,34 @@ class JwkKeyServiceTest {
         return svc;
     }
 
+    /**
+     * El par RSA se genera UNA VEZ para toda la clase, no una por entidad construida.
+     *
+     * <p>Generar una clave de 2048 bits cuesta unos 0,7 s y este método se llama cinco veces, así que
+     * se pagaban 3,5 s en generar claves que ninguna prueba compara entre sí: lo único que se afirma
+     * es que la pública no viene vacía y que dos entidades tienen `kid` distinto, y el `kid` se
+     * sortea aparte. Compartir el material de clave no cambia ninguna aserción.
+     */
+    private static final KeyPair PAR_RSA = generarParRsa();
+
+    private static KeyPair generarParRsa() {
+        try {
+            KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
+            gen.initialize(2048);
+            return gen.generateKeyPair();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("sin RSA no hay claves que rotar en las pruebas", e);
+        }
+    }
+
     /** Construye una entidad con un par RSA real, cifrando la privada igual que producción. */
     private JwkKeyEntity buildKeyEntity(boolean active, Instant createdAt) {
         try {
-            java.security.KeyPairGenerator gen = java.security.KeyPairGenerator.getInstance("RSA");
-            gen.initialize(2048);
-            java.security.KeyPair pair = gen.generateKeyPair();
-            String privB64 = java.util.Base64.getEncoder().encodeToString(pair.getPrivate().getEncoded());
+            KeyPair pair = PAR_RSA;
+            String privB64 = Base64.getEncoder().encodeToString(pair.getPrivate().getEncoded());
             JwkKeyEntity entity = JwkKeyEntity.builder()
                     .kid(UUID.randomUUID().toString())
-                    .publicKey(java.util.Base64.getEncoder().encodeToString(pair.getPublic().getEncoded()))
+                    .publicKey(Base64.getEncoder().encodeToString(pair.getPublic().getEncoded()))
                     .privateKey(tokenCryptoService.encrypt(privB64))
                     .active(active)
                     .build();

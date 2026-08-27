@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.TrackingSnapshot;
 import org.junit.jupiter.api.BeforeEach;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -24,7 +25,7 @@ class YunExpressTrackingMappingTest {
 
     @BeforeEach
     void setUp() {
-        service = new YunExpressFulfillmentService(null, null, null, null, null, null);
+        service = new YunExpressFulfillmentService(null, null, null, new CustomsDutyLinesService(null), null, null, null, null);
         mapper = new ObjectMapper();
     }
 

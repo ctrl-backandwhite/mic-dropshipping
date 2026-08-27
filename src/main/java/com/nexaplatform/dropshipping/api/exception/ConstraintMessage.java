@@ -7,6 +7,10 @@ package com.nexaplatform.dropshipping.api.exception;
  */
 public enum ConstraintMessage {
 
+    // --- Cuentas de usuario ---
+    UK_USERS_PHONE("uk_users_phone",
+            "Ese número de teléfono ya está registrado en otra cuenta. Usa un número distinto."),
+
     // --- Catálogo: productos y traducciones ---
     UX_PRODTR_PROD_LANG("ux_prodtr_prod_lang",
             "Ese producto ya existe en el catálogo (mismo origen + externalId) y ya tiene sus traducciones. "
@@ -52,6 +56,12 @@ public enum ConstraintMessage {
     UX_PLANFEAT_PLAN_KEY("ux_planfeat_plan_key", "Esa característica ya está definida para el plan."),
     UX_SHOP_PLATFORM_HANDLE("ux_shop_platform_handle", "Ya existe una tienda conectada con esa plataforma y handle."),
     STORE_LANGUAGE_CODE("uq_store_language_code", "Ese idioma de tienda ya está dado de alta."),
+
+    // --- Carrito sincronizado ---
+    // Solo salta en una carrera: dos dispositivos añadiendo la MISMA línea a la vez, cuando ninguno de
+    // los dos la ve todavía guardada. La cesta no se pierde; basta con repetir la última acción.
+    UQ_CART_ITEM_USER_PRODUCT_VARIANT("uq_cart_item_user_product_variant",
+            "Esa línea se estaba actualizando desde otro dispositivo. Vuelve a intentarlo: tu carrito no se ha perdido."),
 
     // --- Afiliados ---
     AFFILIATE_CODE_KEY("affiliate_code_key", "Ese código de afiliado ya está en uso."),

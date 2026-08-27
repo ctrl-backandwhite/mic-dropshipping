@@ -1,10 +1,13 @@
 package com.nexaplatform.dropshipping.application;
 
+import org.junit.jupiter.api.BeforeEach;
+import com.nexaplatform.dropshipping.application.service.FulfillmentProviderSelector;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService.TrackingProgress;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.User;
@@ -29,6 +32,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.mockito.Mockito.lenient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -50,6 +54,8 @@ class FulfillmentServiceTest {
     @Mock
     FulfillmentProvider cainiao;
     @Mock
+    FulfillmentProviderSelector transportistas;
+    @Mock
     UserRepository userRepository;
     @Mock
     OrderEmailService orderEmailService;
@@ -57,8 +63,22 @@ class FulfillmentServiceTest {
     OrderShipmentRepository shipmentRepository;
     @Mock
     TrackingViewMapper trackingViewMapper;
+    @Mock
+    SupplierPurchaseService supplierPurchaseService;
     @InjectMocks
     FulfillmentService service;
+
+    /**
+     * El escenario de estas pruebas es el de un solo transportista. Desde que el servicio elige a quién
+     * pedirle la guía según lo que el pedido tenga anotado, hay que decirle que ese único transportista
+     * es el que atiende a todos y que puede despachar ya; si no, un simulacro contesta «no» a las dos
+     * cosas y ninguna de estas pruebas llegaría a ejercitar lo que quiere comprobar.
+     */
+    @BeforeEach
+    void unSoloTransportistaQuePuedeDespachar() {
+        lenient().when(transportistas.para(any())).thenReturn(Optional.of(cainiao));
+        lenient().when(cainiao.readyToShip(any())).thenReturn(true);
+    }
 
     private static Order order(OrderStatus status, String trackingNumber) {
         return Order.builder().id(UUID.randomUUID()).orderNumber("NX-1").status(status)
@@ -109,6 +129,8 @@ class FulfillmentServiceTest {
     void createShipment_setsFulfillmentFieldsAndAppendsEvent() {
         Order o = order(OrderStatus.FORWARDED, null);
         when(orderRepository.findById(o.getId())).thenReturn(Optional.of(o));
+        // Este test va del transportista internacional: la mercancía ya está camino del almacén chino.
+        when(supplierPurchaseService.readyForInternationalShipment(o.getId())).thenReturn(true);
         when(cainiao.createShipments(o)).thenReturn(
                 List.of(new FulfillmentResult("Standard Shipping", "CN-TRACK", "LP-REF", 20)));
 

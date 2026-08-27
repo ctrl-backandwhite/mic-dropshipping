@@ -39,10 +39,20 @@ public enum InvoiceLabel {
             "Verzending")),
     DISCOUNT(new Translations("Descuento", "Discount", "Desconto", "折扣", "Remise", "Rabatt", "Sconto", "Korting")),
     VAT(new Translations("IVA", "VAT", "IVA", "增值税", "TVA", "MwSt.", "IVA", "btw")),
+    /**
+     * Derecho de aduana de la Unión. Se desglosa en la factura porque es un tributo que se recauda y se
+     * entrega a la aduana: sumarlo al envío hacía que la factura mostrara un transporte inflado y que no
+     * cuadrara con el desglose que el comprador vio al pagar.
+     */
+    CUSTOMS_DUTY(new Translations("Arancel UE", "EU customs duty", "Taxa aduaneira UE", "欧盟关税",
+            "Droit de douane UE", "EU-Zoll", "Dazio doganale UE", "EU-douanerechten")),
     TOTAL(new Translations(Word.TOTAL, Word.TOTAL, Word.TOTAL, "总计", Word.TOTAL, "Gesamt", "Totale", "Totaal")),
-    TAX_ID(new Translations("NIF/CIF", "Tax ID", "NIF", "税号", "N° fiscal", "USt-IdNr.", "P. IVA", "Btw-nr.")),
-    TAX_ID_PREFIX(new Translations("CIF: ", "Tax ID: ", "NIF: ", "税号: ", "N° fiscal : ", "USt-IdNr.: ", "P. IVA: ",
-            "Btw-nr.: ")),
+    // El emisor es una sociedad IRLANDESA: lo que se imprime es su número de IVA intracomunitario, no un
+    // CIF ni un NIF, que son identificadores españoles y no existen en Irlanda.
+    TAX_ID(new Translations("NIF-IVA", "VAT", "NIF-IVA", "增值税号", "N° de TVA", "USt-IdNr.", "P. IVA",
+            "Btw-nr.")),
+    TAX_ID_PREFIX(new Translations("NIF-IVA: ", "VAT: ", "NIF-IVA: ", "增值税号: ", "N° de TVA : ", "USt-IdNr.: ",
+            "P. IVA: ", "Btw-nr.: ")),
     VERIFY(new Translations("Verificar factura", "Verify invoice", "Verificar fatura", "验证发票",
             "Vérifier la facture", "Rechnung prüfen", "Verifica fattura", "Factuur verifiëren")),
     VERIFY_NOTE(new Translations(
@@ -67,7 +77,24 @@ public enum InvoiceLabel {
             "Ceci est le justificatif de votre commande. Conservez cette facture.",
             "Dies ist Ihr Bestellbeleg. Bitte bewahren Sie diese Rechnung auf.",
             "Questa è la ricevuta del tuo ordine. Conserva questa fattura.",
-            "Dit is je bestelbon. Bewaar deze factuur."));
+            "Dit is je bestelbon. Bewaar deze factuur.")),
+    // El art. 16.3 del Reglamento (UE) 2023/988 admite que el operador económico figure "en un documento de
+    // acompañamiento". Como el embalaje lo prepara el proveedor y no se controla, la factura ES ese
+    // documento: por eso el bloque va aquí y no solo en la ficha.
+    EU_RESPONSIBLE(new Translations("Operador económico responsable en la UE",
+            "Responsible economic operator in the EU", "Operador económico responsável na UE",
+            "欧盟责任经济经营者", "Opérateur économique responsable dans l'UE",
+            "Verantwortlicher Wirtschaftsakteur in der EU", "Operatore economico responsabile nell'UE",
+            "Verantwoordelijke marktdeelnemer in de EU")),
+    EU_RESPONSIBLE_NOTE(new Translations(
+            "Datos publicados conforme al artículo 16 del Reglamento (UE) 2023/988.",
+            "Information published pursuant to Article 16 of Regulation (EU) 2023/988.",
+            "Dados publicados nos termos do artigo 16.º do Regulamento (UE) 2023/988.",
+            "根据(欧盟)2023/988号条例第16条公布的信息。",
+            "Informations publiées conformément à l'article 16 du règlement (UE) 2023/988.",
+            "Angaben gemäß Artikel 16 der Verordnung (EU) 2023/988.",
+            "Dati pubblicati ai sensi dell'articolo 16 del regolamento (UE) 2023/988.",
+            "Gegevens gepubliceerd overeenkomstig artikel 16 van Verordening (EU) 2023/988."));
 
     private final Translations translations;
 

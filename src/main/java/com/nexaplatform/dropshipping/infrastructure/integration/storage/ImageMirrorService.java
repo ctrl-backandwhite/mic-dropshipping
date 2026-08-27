@@ -65,15 +65,65 @@ public class ImageMirrorService {
     @Value("${nexadrop.storage.mirror-batch:50}")
     private int mirrorBatch;
 
+    /**
+     * Hilos que descargan a la vez.
+     *
+     * <p>Eran 8 fijos, y con lotes de 50 cada 8 segundos —más otros 50 de variantes en el mismo ciclo— el
+     * origen deja de responder: el 25-ago-2026 fallaron así 4.835 imágenes seguidas contra alicdn, con
+     * tiempo de espera agotado, mientras esas mismas URLs devolvían 200 al pedirlas de una en una. Bajar el
+     * ritmo tarda más en drenar la cola, pero drena; la avalancha no drenaba nada.
+     */
+    @Value("${nexadrop.storage.mirror-concurrency:4}")
+    private int mirrorConcurrency;
+    /** Espera base entre reintentos de una imagen fallida; se duplica con cada intento. */
+    @Value("${nexadrop.storage.mirror-retry-base-minutes:5}")
+    private int retryBaseMinutes;
+    /** Tope de intentos: pasado eso la imagen se da por perdida y deja de consumir lote. */
+    @Value("${nexadrop.storage.mirror-retry-max-attempts:6}")
+    private int retryMaxAttempts;
+    /** Cuántas fallidas se examinan en cada barrido de reintento. */
+    @Value("${nexadrop.storage.mirror-retry-batch:100}")
+    private int retryBatch;
+
     // Redirects NO automáticos: se siguen a mano validando cada salto (anti-SSRF). Un origen no puede
     // redirigir a una IP interna/metadata sin pasar de nuevo por assertPublicHttpUrl.
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10))
+    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20))
             .followRedirects(HttpClient.Redirect.NEVER).build();
-    private final ExecutorService pool = Executors.newFixedThreadPool(8);
+
+    /**
+     * Hilos de descarga. No se crea en la declaración del campo porque ahí {@code mirrorConcurrency} vale
+     * todavía 0 y el pool nacería con el número de hilos equivocado, que es justo lo que este ajuste viene a
+     * controlar.
+     */
+    private volatile ExecutorService pool;
+
+    /**
+     * Devuelve el pool, creándolo la primera vez que hace falta.
+     *
+     * <p>Perezoso y no en un {@code @PostConstruct} porque las pruebas unitarias construyen el servicio con
+     * {@code @InjectMocks} y ahí nadie invoca los ganchos del ciclo de vida de Spring: con la creación en el
+     * gancho, el pool llegaba nulo y reventaba el primer lote.
+     */
+    private ExecutorService pool() {
+        ExecutorService actual = pool;
+        if (actual == null) {
+            synchronized (this) {
+                actual = pool;
+                if (actual == null) {
+                    actual = Executors.newFixedThreadPool(Math.max(1, mirrorConcurrency > 0 ? mirrorConcurrency : 4));
+                    pool = actual;
+                }
+            }
+        }
+        return actual;
+    }
 
     @PreDestroy
     void shutdown() {
-        pool.shutdownNow();
+        ExecutorService actual = pool;
+        if (actual != null) {
+            actual.shutdownNow();
+        }
     }
 
     /** Una vez por arranque: reencola las imágenes cuyo cdn_url no apunta al storage vigente. */
@@ -91,6 +141,55 @@ public class ImageMirrorService {
         }
         mirrorPendingBatch(mirrorBatch);
         mirrorVariantImagesBatch(mirrorBatch);
+    }
+
+    /**
+     * Job: devuelve a la cola las imágenes fallidas a las que ya les toca otro intento.
+     *
+     * <p>Antes solo las reencolaba el saneo del arranque, que corre una vez por proceso. Con eso, 415
+     * productos se quedaron fuera del escaparate hasta el siguiente reinicio —y al reiniciar se
+     * reintentaban todas a la vez, que es justo lo que las había tumbado—. Ahora se hace a ritmo lento y
+     * cada imagen espera más que la anterior vez.
+     */
+    @Scheduled(fixedDelayString = "${nexadrop.storage.mirror-retry-interval-ms:300000}")
+    public void requeueFailedScheduled() {
+        requeueFailedForRetry(Instant.now());
+    }
+
+    /**
+     * Reencola las fallidas cuya espera ya venció. El instante entra por parámetro para poder fijar en una
+     * prueba qué se reintenta y qué no sin depender del reloj de la máquina.
+     *
+     * @param ahora momento contra el que se mide la espera de cada imagen
+     */
+    public void requeueFailedForRetry(Instant ahora) {
+        if (!mirrorEnabled || !storage.isReady()) {
+            return;
+        }
+        List<ProductImageEntity> candidatas = imageRepository.findFailedForRetry(retryMaxAttempts, retryBatch);
+        List<UUID> listas = candidatas.stream().filter(img -> esperaCumplida(img, ahora))
+                .map(ProductImageEntity::getId).toList();
+        if (listas.isEmpty()) {
+            return;
+        }
+        imageRepository.requeueToPending(listas);
+        log.info("Mirror reintento: {} de {} imágenes fallidas vuelven a la cola", listas.size(),
+                candidatas.size());
+    }
+
+    /**
+     * ¿Le toca ya otro intento? Espera = base × 2^intentos, contada desde el último fallo.
+     *
+     * <p>Sin fecha de último intento se deja pasar: una imagen sin ese dato es anterior a este mecanismo y
+     * no tiene sentido retenerla para siempre.
+     */
+    private boolean esperaCumplida(ProductImageEntity img, Instant ahora) {
+        Instant ultimo = img.getUpdatedAt();
+        if (ultimo == null) {
+            return true;
+        }
+        long minutos = (long) retryBaseMinutes << Math.min(img.getMirrorAttempts(), 16);
+        return !ultimo.plus(Duration.ofMinutes(minutos)).isAfter(ahora);
     }
 
     /**
@@ -199,7 +298,7 @@ public class ImageMirrorService {
             pending = pending.subList(0, limit);
         }
         List<Future<Boolean>> futures = pending.stream()
-                .map(img -> pool.submit(() -> mirrorOne(img.getId(), img.getSourceUrl()))).toList();
+                .map(img -> pool().submit(() -> mirrorOne(img.getId(), img.getSourceUrl()))).toList();
         int ok = 0;
         List<UUID> mirroredImageIds = new ArrayList<>();
         for (int i = 0; i < futures.size(); i++) {
@@ -240,7 +339,7 @@ public class ImageMirrorService {
             return;
         }
         List<Future<Boolean>> futures = imgs.stream()
-                .map(img -> pool.submit(() -> mirrorOne(img.getId(), img.getSourceUrl()))).toList();
+                .map(img -> pool().submit(() -> mirrorOne(img.getId(), img.getSourceUrl()))).toList();
         List<UUID> mirroredImageIds = new ArrayList<>();
         for (int i = 0; i < futures.size(); i++) {
             try {
@@ -293,13 +392,16 @@ public class ImageMirrorService {
 
     private boolean mirrorOne(UUID id, String src) {
         if (src == null || src.isBlank()) {
-            imageRepository.markStatus(id, MirrorStatus.FAILED);
+            // Sin origen no hay nada que reintentar, pero se cuenta igual: así agota sus intentos y deja de
+            // aparecer en cada barrido ocupando el sitio de una que sí se puede recuperar.
+            imageRepository.markFailedAndCountAttempt(id);
             return false;
         }
         for (String candidate : candidateUrls(src)) {
             try {
                 Stored s = fetchAndStore(candidate);
                 imageRepository.markMirrored(id, s.url(), s.bytes(), s.hash(), MirrorStatus.MIRRORED, Instant.now());
+                imageRepository.resetAttempts(id);
                 return true;
             } catch (Exception e) {
                 if (e instanceof InterruptedException) {
@@ -308,7 +410,7 @@ public class ImageMirrorService {
                 log.debug("Mirror falló imagen {} ({}): {}", id, candidate, e.toString());
             }
         }
-        imageRepository.markStatus(id, MirrorStatus.FAILED);
+        imageRepository.markFailedAndCountAttempt(id);
         return false;
     }
 
@@ -367,7 +469,7 @@ public class ImageMirrorService {
             assertPublicHttpUrl(uri);
             HttpResponse<byte[]> res = http.send(HttpRequest.newBuilder(uri)
                     .header("User-Agent", "Mozilla/5.0 (compatible; NX036ImageMirror/1.0)")
-                    .timeout(Duration.ofSeconds(25)).GET().build(), HttpResponse.BodyHandlers.ofByteArray());
+                    .timeout(Duration.ofSeconds(45)).GET().build(), HttpResponse.BodyHandlers.ofByteArray());
             if (res.statusCode() / 100 == 3) {
                 String loc = res.headers().firstValue("location").orElse(null);
                 if (loc == null) {

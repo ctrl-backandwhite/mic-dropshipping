@@ -9,9 +9,11 @@ import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
 import com.nexaplatform.dropshipping.application.service.StockService;
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
+import com.nexaplatform.dropshipping.application.service.CartService;
 import com.nexaplatform.dropshipping.application.usecase.impl.PaymentUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
 import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
@@ -98,9 +100,9 @@ class RechargeInitiationTest {
     @BeforeEach
     void buildSubject() {
         subject = new PaymentUseCaseImpl(List.of(gateway), paymentRepository, paymentJpaRepositoryAdapter,
-                userRepository, orderRepository, walletUseCase, auditLogger, partnerPlanSyncService,
+                userRepository, orderRepository, walletUseCase, org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class), auditLogger, partnerPlanSyncService,
                 customerSubscriptionUseCase, subscriptionNotificationService, new ObjectMapper(), orderEmailService,
-                currencyRateService, new OrderAmounts(currencyRateService), stockService, opsAlertService);
+                currencyRateService, new OrderAmounts(currencyRateService), stockService, mock(SupplierPurchaseService.class), opsAlertService, mock(CartService.class));
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(mock(UserEntity.class)));
         Wallet w = new Wallet();

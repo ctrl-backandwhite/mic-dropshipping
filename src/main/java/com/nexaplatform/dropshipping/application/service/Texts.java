@@ -22,6 +22,21 @@ public final class Texts {
     }
 
     /**
+     * Recorta y devuelve {@code null} si no queda nada.
+     *
+     * <p>Para los campos de texto que el admin puede vaciar: distingue "no lo edito" (el DTO trae null y ni
+     * se llama a este método) de "bórralo" (trae cadena vacía). Guardar {@code ""} en vez de {@code null}
+     * haría que un campo vacío pareciera relleno en las comprobaciones de completitud.
+     */
+    public static String trimToNull(String s) {
+        if (s == null) {
+            return null;
+        }
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    /**
      * Primer candidato con contenido, en el orden dado.
      *
      * @return el primero utilizable, o {@code null} si ninguno lo es
@@ -64,5 +79,24 @@ public final class Texts {
             end--;
         }
         return url.substring(0, end);
+    }
+
+    /**
+     * Neutraliza los comodines de SQL en un término que se va a incrustar en un {@code LIKE}.
+     *
+     * <p>El valor viaja como parámetro, así que no hay inyección; el problema es de PRECISIÓN y de coste:
+     * sin escapar, buscar {@code %} devolvía el catálogo ENTERO y {@code %_%} cualquier producto con al
+     * menos un carácter. Es decir, dos pulsaciones bastaban para forzar el barrido completo de la tabla —
+     * justo lo que el muro de autenticación del catálogo pretende evitar. Detectado por SearchFlowIT.
+     *
+     * <p>Se escapa también la propia barra invertida, y primero, para no romper los escapes que se añaden
+     * después. PostgreSQL usa {@code \} como carácter de escape por defecto en {@code LIKE}, así que no
+     * hace falta cláusula {@code ESCAPE} en las consultas.
+     */
+    public static String escapeLikeWildcards(String term) {
+        if (term == null) {
+            return null;
+        }
+        return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 }

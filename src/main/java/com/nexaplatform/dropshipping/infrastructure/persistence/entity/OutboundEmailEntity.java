@@ -55,6 +55,14 @@ public class OutboundEmailEntity {
     @Column(name = "inline_images", columnDefinition = "TEXT")
     private String inlineImages;
 
+    // Adjunto opcional (PDF de la factura del plan). Los bytes viajan con el correo hasta que el envío
+    // diferido los adjunta como fichero.
+    @Column(name = "attachment_bytes")
+    private byte[] attachmentBytes;
+
+    @Column(name = "attachment_filename", length = 200)
+    private String attachmentFilename;
+
     @Column(nullable = false, length = 20)
     private String status;
 
@@ -63,6 +71,15 @@ public class OutboundEmailEntity {
 
     @Column(name = "sent_at")
     private Instant sentAt;
+
+    /**
+     * Momento a partir del cual el barrido puede volver a intentar enviar este correo. Null = puede
+     * salir ya. Al fallar por causa temporal (p. ej. rate-limit del proveedor) se aplaza aquí con
+     * backoff creciente, en lugar de reintentar cada 15 s y agotar los intentos dentro de la misma
+     * ventana de bloqueo.
+     */
+    @Column(name = "next_attempt_at")
+    private Instant nextAttemptAt;
 
     @Column(name = "error_message", length = 2000)
     private String errorMessage;

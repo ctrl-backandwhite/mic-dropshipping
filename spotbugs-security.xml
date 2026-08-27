@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Qué mira SpotBugs en el perfil `security`.
+
+  Se filtra a la categoría SECURITY (la que aporta Find Security Bugs: inyección SQL, XSS, XXE, SSRF,
+  path traversal, criptografía débil, deserialización insegura, secretos en claro…) más un puñado de
+  patrones de corrección que en esta aplicación tienen consecuencia de seguridad o de dinero.
+
+  El resto de categorías de SpotBugs (estilo, rendimiento, malas prácticas) queda fuera a propósito: ya
+  las cubre Sonar, y mezclarlas aquí ahogaría los hallazgos de seguridad en ruido.
+-->
+<FindBugsFilter>
+
+    <!-- Todo lo que Find Security Bugs clasifica como seguridad. -->
+    <Match>
+        <Bug category="SECURITY"/>
+    </Match>
+
+    <!-- Correcciones con impacto de seguridad o de importe, aunque SpotBugs no las llame SECURITY. -->
+    <Match>
+        <Or>
+            <!-- Comparación de credenciales/tokens con == en vez de equals. -->
+            <Bug pattern="ES_COMPARING_STRINGS_WITH_EQ"/>
+            <Bug pattern="ES_COMPARING_PARAMETER_STRING_WITH_EQ"/>
+            <!-- Desbordamiento en aritmética de enteros: aquí se calculan importes en céntimos. -->
+            <Bug pattern="ICAST_INTEGER_MULTIPLY_CAST_TO_LONG"/>
+            <Bug pattern="INT_VACUOUS_COMPARISON"/>
+            <!-- Aleatoriedad no criptográfica donde importa. -->
+            <Bug pattern="PREDICTABLE_RANDOM"/>
+            <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+            <!-- Rutas que ignoran el resultado de una comprobación. -->
+            <Bug pattern="RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
+            <Bug pattern="RV_RETURN_VALUE_IGNORED"/>
+        </Or>
+    </Match>
+
+</FindBugsFilter>

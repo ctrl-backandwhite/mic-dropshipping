@@ -66,6 +66,34 @@ class Cov03WalletAdminAndDisplayTest {
 
     private final UUID userId = UUID.randomUUID();
 
+    @org.junit.jupiter.api.BeforeEach
+    void delegaBloqueoAlFindNormal() {
+        // Los movimientos de saldo cargan la wallet con bloqueo (findByUserIdForUpdate); se delega al mismo
+        // stub que findByUserId para no duplicar cada `when(...)`.
+        when(walletRepository.findByUserIdForUpdate(any()))
+                .thenAnswer(inv -> walletRepository.findByUserId(inv.getArgument(0)));
+
+        // El saldo se mueve con un UPDATE atómico en la base (applyBalanceDelta), no leyendo y guardando la
+        // entidad: es lo que impide el doble gasto entre checkouts simultáneos. Se reproduce esa semántica
+        // sobre la wallet simulada para que la prueba siga comprobando la regla, no el mecanismo.
+        org.mockito.Mockito.lenient().when(walletRepository.applyBalanceDelta(any(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenAnswer(inv -> {
+                    var actual = walletRepository.findByUserId(inv.getArgument(0));
+                    if (actual.isEmpty()) {
+                        return false;
+                    }
+                    long nuevo = actual.get().getBalanceUsdCents() + (long) inv.getArgument(1);
+                    if (nuevo < 0) {
+                        return false;
+                    }
+                    actual.get().setBalanceUsdCents(nuevo);
+                    return true;
+                });
+        org.mockito.Mockito.lenient().when(walletRepository.currentBalanceCents(any()))
+                .thenAnswer(inv -> walletRepository.findByUserId(inv.getArgument(0))
+                        .map(w -> w.getBalanceUsdCents()).orElse(0L));
+    }
+
     @AfterEach
     void limpiaDivisa() {
         CurrencyHolder.clear();

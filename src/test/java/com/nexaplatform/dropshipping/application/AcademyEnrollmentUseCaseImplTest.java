@@ -59,11 +59,12 @@ class AcademyEnrollmentUseCaseImplTest {
     @Test
     void updateProgress_clampsToHundredAndCompletes() {
         UUID id = UUID.randomUUID();
-        AcademyEnrollment existing = AcademyEnrollment.builder().id(id).build();
+        UUID userId = UUID.randomUUID();
+        AcademyEnrollment existing = AcademyEnrollment.builder().id(id).userId(userId).build();
         when(academyEnrollmentRepository.getById(id)).thenReturn(existing);
         when(academyEnrollmentRepository.update(existing)).thenReturn(existing);
 
-        useCase.updateProgress(id, Map.of("progressPct", 150));
+        useCase.updateProgress(userId, id, Map.of("progressPct", 150));
 
         assertThat(existing.getProgressPct()).isEqualByComparingTo(new BigDecimal("100"));
         assertThat(existing.getCompletedAt()).isNotNull();
@@ -76,7 +77,20 @@ class AcademyEnrollmentUseCaseImplTest {
         when(academyEnrollmentRepository.getById(id)).thenReturn(null);
 
         Map<String, Number> progreso = Map.of("progressPct", 10);
-        assertThatThrownBy(() -> useCase.updateProgress(id, progreso))
+        assertThatThrownBy(() -> useCase.updateProgress(UUID.randomUUID(), id, progreso))
                 .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void updateProgress_throwsWhenNotOwner() {
+        // IDOR: la matrícula existe pero es de OTRO usuario → 404 y no se toca.
+        UUID id = UUID.randomUUID();
+        AcademyEnrollment ajeno = AcademyEnrollment.builder().id(id).userId(UUID.randomUUID()).build();
+        when(academyEnrollmentRepository.getById(id)).thenReturn(ajeno);
+
+        Map<String, Number> progreso = Map.of("progressPct", 10);
+        assertThatThrownBy(() -> useCase.updateProgress(UUID.randomUUID(), id, progreso))
+                .isInstanceOf(NotFoundException.class);
+        verify(academyEnrollmentRepository, never()).update(any());
     }
 }

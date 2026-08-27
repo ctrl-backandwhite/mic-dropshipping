@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.domain.model.CurrencyRate;
 import com.nexaplatform.dropshipping.domain.model.CurrencySyncResult;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -35,4 +36,10 @@ public interface CurrencyRateUseCase extends BaseUseCase<CurrencyRate, CurrencyR
 
     /** Syncs rates from the external provider and reports the outcome. */
     CurrencySyncResult sync();
+
+    /** Estado de la sincronización: última ejecución, próxima programada (desde el cron) y el cron en uso. */
+    record SyncStatus(Instant lastSyncedAt, Instant nextSyncAt, String cron) {}
+
+    /** Devuelve el estado de sincronización para pintar "última actualización" y la cuenta atrás. */
+    SyncStatus syncStatus();
 }

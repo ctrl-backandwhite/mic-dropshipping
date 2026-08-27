@@ -29,8 +29,10 @@ public class ShopifyConnector implements ShopConnector {
 
     private static final String API_VERSION = "2024-10";
     private final ObjectMapper objectMapper;
+    // Anti-SSRF: NUNCA seguir redirecciones automáticamente (solo se valida el host inicial; un 3xx a un
+    // host interno se seguiría sin re-validar). La API de Shopify (*.myshopify.com) no redirige a red interna.
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8))
-            .followRedirects(HttpClient.Redirect.NORMAL).build();
+            .followRedirects(HttpClient.Redirect.NEVER).build();
 
     @Override
     public String platform() {
@@ -90,11 +92,18 @@ public class ShopifyConnector implements ShopConnector {
         if (handle == null || handle.isBlank()) {
             return null;
         }
-        String h = handle.trim().replaceFirst("^https?://", "").replaceAll("/.*$", "");
+        String h = handle.trim().replaceFirst("^https?://", "").replaceAll("/.*$", "").toLowerCase();
         if (h.isEmpty()) {
             return null;
         }
-        return h.contains(".") ? h : h + ".myshopify.com";
+        String host = h.contains(".") ? h : h + ".myshopify.com";
+        // Anti-SSRF: el host de una tienda Shopify SIEMPRE es *.myshopify.com (dominio de Shopify, público).
+        // Exigirlo impide apuntar el conector a 169.254.169.254 u otros hosts internos. Doble comprobación:
+        // que además resuelva a una IP pública.
+        if (!host.endsWith(".myshopify.com") || !ShopHostGuard.isPublicHost(host)) {
+            return null;
+        }
+        return host;
     }
 
     private String truncate(String s) {

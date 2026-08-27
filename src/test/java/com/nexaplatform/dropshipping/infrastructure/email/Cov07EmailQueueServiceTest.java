@@ -22,11 +22,14 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 import org.thymeleaf.templateresolver.StringTemplateResolver;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
+import static org.mockito.Mockito.lenient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -70,6 +73,10 @@ class Cov07EmailQueueServiceTest {
         message = new MimeMessage(Session.getInstance(new Properties()));
         when(mailSender.createMimeMessage()).thenReturn(message);
         when(repo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        // El barrido RECLAMA la fila antes de enviar (UPDATE condicional que solo prospera si sigue en
+        // PENDING): es lo que impide que dos réplicas manden el mismo correo al cliente. Aquí se simula
+        // que la reclama siempre este barrido; el caso de perder la carrera se cubre aparte.
+        lenient().when(repo.reclamarParaEnvio(any())).thenReturn(1);
     }
 
     /* ==================== encolado ==================== */
@@ -163,12 +170,56 @@ class Cov07EmailQueueServiceTest {
 
         service.dispatchPending();
 
-        // El barrido no puede reventar: la fila queda marcada para poder diagnosticar y reintentar.
-        assertThat(email.getStatus()).isEqualTo("PENDING");   // sigue en cola: se reintenta hasta 5 veces
+        // El barrido no puede reventar: un SMTP caído es temporal, la fila se aplaza para reintentar.
+        assertThat(email.getStatus()).isEqualTo("PENDING");
         assertThat(email.getAttemptCount()).isEqualTo(3);
         assertThat(email.getErrorMessage()).isEqualTo("SMTP caído");
+        assertThat(email.getNextAttemptAt()).isNotNull();     // aplazado, no descartado
         assertThat(email.getSentAt()).isNull();
         verify(repo).save(email);
+    }
+
+    @Test
+    void unRateLimitDelProveedorAplazaElCorreoYNoLoDescartaNuncaPorMuchosIntentos() {
+        OutboundEmailEntity email = pending("<p>x</p>", "emails/welcome", null, null);
+        email.setAttemptCount(50);   // ya lleva muchísimos intentos...
+        doThrow(new RuntimeException(
+                "Failed messages: org.eclipse.angus.mail.smtp.SMTPSendFailedException: "
+                        + "451 4.7.1 Ratelimit \"hostinger_out_ratelimit\" exceeded"))
+                .when(mailSender).send(any(MimeMessage.class));
+
+        service.dispatchPending();
+
+        // ...pero un rate-limit es temporal: sigue en cola con un próximo intento programado.
+        assertThat(email.getStatus()).isEqualTo("PENDING");
+        assertThat(email.getNextAttemptAt()).isNotNull();
+        assertThat(email.getAttemptCount()).isEqualTo(51);
+    }
+
+    @Test
+    void unErrorPermanenteDescartaElCorreoAlPrimerIntento() {
+        OutboundEmailEntity email = pending("<p>x</p>", "emails/welcome", null, null);
+        doThrow(new RuntimeException("550 5.1.1 <destino@example.com>: user unknown"))
+                .when(mailSender).send(any(MimeMessage.class));
+
+        service.dispatchPending();
+
+        // Un 5xx (buzón inexistente) no se recupera reintentando: FAILED ya, sin aplazar.
+        assertThat(email.getStatus()).isEqualTo("FAILED");
+        assertThat(email.getAttemptCount()).isEqualTo(1);
+        assertThat(email.getNextAttemptAt()).isNull();
+    }
+
+    @Test
+    void unFalloTemporalSeRindeCuandoElCorreoYaEsDemasiadoViejo() {
+        OutboundEmailEntity email = pending("<p>x</p>", "emails/welcome", null, null);
+        email.setCreatedAt(Instant.now().minus(Duration.ofHours(25)));   // lleva más de 24 h reintentando
+        doThrow(new RuntimeException("451 4.7.1 Ratelimit exceeded"))
+                .when(mailSender).send(any(MimeMessage.class));
+
+        service.dispatchPending();
+
+        assertThat(email.getStatus()).isEqualTo("FAILED");
     }
 
     /* ==================== imágenes incrustadas (CID) ==================== */
@@ -243,8 +294,9 @@ class Cov07EmailQueueServiceTest {
 
         service.dispatchPending();
 
-        // setText(null) revienta dentro del try: el correo queda FAILED, pero el barrido continúa.
-        assertThat(email.getStatus()).isEqualTo("PENDING");   // sigue en cola: se reintenta hasta 5 veces
+        // setText(null) revienta dentro del try: sin código SMTP reconocible se trata como temporal
+        // (se aplaza y reintenta), y el barrido continúa con el resto de la cola.
+        assertThat(email.getStatus()).isEqualTo("PENDING");
         assertThat(email.getAttemptCount()).isEqualTo(1);
     }
 
@@ -253,7 +305,7 @@ class Cov07EmailQueueServiceTest {
         OutboundEmailEntity email = OutboundEmailEntity.builder().id(UUID.randomUUID())
                 .toAddress("destino@example.com").subject("Asunto").bodyHtml(html).template(template)
                 .inlineImages(inlineImages).replyTo(replyTo).status("PENDING").build();
-        when(repo.findTop20ByStatusOrderByCreatedAtAsc("PENDING")).thenReturn(List.of(email));
+        when(repo.findDispatchable(any(), any())).thenReturn(List.of(email));
         return email;
     }
 }

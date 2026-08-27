@@ -8,6 +8,7 @@ import com.nexaplatform.dropshipping.api.mapper.MeOrderDtoMapper;
 import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
 import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
+import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PaymentEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PaymentJpaRepositoryAdapter;
@@ -53,6 +54,8 @@ class Cov04MeOrderControllerTest {
     AdminOrderMapper adminOrderMapper;
     @Mock
     PaymentJpaRepositoryAdapter paymentRepository;
+    @Mock
+    com.nexaplatform.dropshipping.application.service.SupplierPurchaseService supplierPurchaseService;
 
     @InjectMocks
     MeOrderController controller;
@@ -104,6 +107,38 @@ class Cov04MeOrderControllerTest {
 
         assertThat(resp.getBody()).hasSize(1);
         assertThat(resp.getBody().getFirst().getTotalFormatted()).isEqualTo("19,22 €");
+    }
+
+    @Test
+    void laListaDiceQuePedidosSePuedenCancelarTodavia() {
+        // No se deduce del estado: un pedido PAGADO deja de poder cancelarse en cuanto se compra el
+        // género en 1688, y esa compra avanza en su propio tablero sin mover el estado del pedido. Si la
+        // fila no lo dijera, la pantalla ofrecería un botón que el servidor va a rechazar.
+        UUID compradoId = UUID.randomUUID();
+        Order comprado = Order.builder().id(compradoId).orderNumber("NX-300").userId(userId)
+                .status(OrderStatus.PAID).build();
+        pedido.setStatus(OrderStatus.PAID);
+        when(orderUseCase.listMyOrders(userId)).thenReturn(List.of(pedido, comprado));
+        when(adminOrderMapper.toMeRows(List.of(pedido, comprado))).thenReturn(List.of(
+                MeOrderRowDtoOut.builder().id(orderId).build(),
+                MeOrderRowDtoOut.builder().id(compradoId).build()));
+        when(supplierPurchaseService.ordersAlreadyBought(List.of(orderId, compradoId)))
+                .thenReturn(java.util.Set.of(compradoId));
+
+        List<MeOrderRowDtoOut> filas = controller.list(auth).getBody();
+
+        assertThat(filas).extracting(MeOrderRowDtoOut::isCancellable).containsExactly(true, false);
+    }
+
+    @Test
+    void unPedidoQueYaAvanzoNoSeAnunciaComoCancelable() {
+        // Enviado al proveedor: aunque no haya compra registrada, el estado ya lo impide.
+        pedido.setStatus(OrderStatus.FORWARDED);
+        when(orderUseCase.listMyOrders(userId)).thenReturn(List.of(pedido));
+        when(adminOrderMapper.toMeRows(List.of(pedido)))
+                .thenReturn(List.of(MeOrderRowDtoOut.builder().id(orderId).build()));
+
+        assertThat(controller.list(auth).getBody().getFirst().isCancellable()).isFalse();
     }
 
     @Test

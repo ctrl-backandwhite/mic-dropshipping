@@ -23,6 +23,9 @@ public interface UserUseCase extends BaseUseCase<User, User, UUID> {
     /** Activate an account with a (non-expired) activation code. */
     User activate(String code);
 
+    /** Reenvía el código de activación (respuesta neutra: no revela si la cuenta existe o ya está activa). */
+    void resendActivation(String email);
+
     /* ============ Login-failure tracking ============ */
 
     /** Increment the failed-login counter and lock the account past the threshold. */
@@ -105,7 +108,7 @@ public interface UserUseCase extends BaseUseCase<User, User, UUID> {
      * or signals that a deliberate password confirmation is required when a local
      * (unlinked) account already exists for that email.
      */
-    GoogleLoginOutcome resolveGoogleLogin(String email, String firstName, String lastName);
+    GoogleLoginOutcome resolveGoogleLogin(String email, String firstName, String lastName, String country);
 
     /** Confirms the Google link on an existing account (after a successful password login). */
     void linkGoogleAccount(UUID id);

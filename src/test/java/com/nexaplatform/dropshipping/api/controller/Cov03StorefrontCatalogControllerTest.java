@@ -21,8 +21,13 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
+import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService;
+import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
+import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService.DutyBadge;
 import com.nexaplatform.dropshipping.api.mapper.ProductListFilters;
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.ProductDetailQueryService;
@@ -48,6 +53,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Produ
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShippingRateRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShippingZoneRepository;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -129,9 +135,26 @@ class Cov03StorefrontCatalogControllerTest {
     CurrencyRateService currencyService;
     @Mock
     ProductPriceTierRepository priceTierRepository;
+    @Mock
+    CatalogDutyBadgeService dutyBadges;
+    @Mock
+    CustomsValuationService customsValuation;
 
     @InjectMocks
     StorefrontCatalogController controller;
+
+    /**
+     * {@link OrderAmounts} de verdad, no un doble: el carrito tiene que cotizar con la MISMA aritmética
+     * con la que se cobra —el importe de línea se multiplica en dólares y se convierte al final—, y con
+     * un doble estos casos dejarían de comprobarlo. Se inyecta a mano porque Mockito sólo sabe rellenar
+     * mocks, y la conversión se deja 1:1 para que los importes esperados se lean directamente.
+     */
+    @BeforeEach
+    void laCuentaDeLineaEsLaDeVerdad() {
+        when(currencyService.usdTo(any(BigDecimal.class), anyString())).thenAnswer(inv -> inv.getArgument(0));
+        when(currencyService.decimalsOf(anyString())).thenReturn(2);
+        ReflectionTestUtils.setField(controller, "orderAmounts", new OrderAmounts(currencyService));
+    }
 
     @AfterEach
     void limpiaSeguridad() {
@@ -163,9 +186,15 @@ class Cov03StorefrontCatalogControllerTest {
                 .minWeightGrams(minGramos).maxWeightGrams(maxGramos).active(true).build();
     }
 
+    /**
+     * Precio tarificado con el MISMO importe en dólares y en la divisa mostrada: en esta clase la
+     * conversión es 1:1 (ver {@link #laCuentaDeLineaEsLaDeVerdad()}), así que los importes esperados se
+     * leen solos. El canónico en dólares no puede faltar: es la base del importe de línea, que se
+     * multiplica en dólares y se convierte al final.
+     */
     private static PricingService.PricedAmount precio(BigDecimal display) {
-        return new PricingService.PricedAmount(null, null, display, "EUR", "€", null, null, null, null, null, null,
-                null, null, null);
+        return new PricingService.PricedAmount(null, display, display, "EUR", "€", null, null, null, null, null,
+                null, null, null, null);
     }
 
     private static ProductSummaryView resumen(UUID id) {
@@ -191,7 +220,7 @@ class Cov03StorefrontCatalogControllerTest {
         // `verified` es una marca interna de revisión: si un usuario cualquiera pudiera filtrar por ella,
         // se le estaría enseñando qué parte del catálogo está sin revisar.
         controller.list(0, 20, "es", null, null, null, null, null, null, null, null, null, null, null, null, null,
-                Boolean.TRUE);
+                Boolean.TRUE, null, null, null, null);
 
         ArgumentCaptor<ProductListFilters> captor = ArgumentCaptor.forClass(ProductListFilters.class);
         verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull());
@@ -203,7 +232,7 @@ class Cov03StorefrontCatalogControllerTest {
         autenticaComoAdmin();
 
         controller.list(0, 20, "es", null, null, null, null, null, null, null, null, null, null, null, null, null,
-                Boolean.FALSE);
+                Boolean.FALSE, null, null, null, null);
 
         ArgumentCaptor<ProductListFilters> captor = ArgumentCaptor.forClass(ProductListFilters.class);
         verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull());
@@ -855,5 +884,69 @@ class Cov03StorefrontCatalogControllerTest {
 
         assertThat(controller.newest(0, 12, "es")).isNotNull();
         verify(storefrontRead).productList(0, 12, "es", null, null, null, null, null, "newest");
+    }
+
+    @Test
+    void laFichaPrometeElMismoArancelQueLaTarjeta() {
+        // Si la tarjeta del catálogo dijera «sin arancel adicional» y la ficha del mismo producto dijera
+        // otra cosa, una de las dos estaría mintiendo. Las dos preguntan al mismo servicio.
+        UUID id = UUID.randomUUID();
+        ProductDetailView ficha = fichaVacia(id);
+        UUID grupo = UUID.randomUUID();
+        when(catalogUseCase.getProductBySlug("vestido", "es")).thenReturn(ficha);
+        when(dutyBadges.badgesFor(any(), eq(List.of(id)), any()))
+                .thenReturn(Map.of(id, new DutyBadge(0, "0,00 €", grupo)));
+
+        ProductDetailView conArancel = controller.detailBySlug("vestido", "es", List.of(UUID.randomUUID()));
+
+        assertThat(conArancel.extraDutyCents()).isZero();
+        assertThat(conArancel.dutyGroupId()).isEqualTo(grupo);
+    }
+
+    private static ProductDetailView fichaVacia(UUID id) {
+        return new ProductDetailView(id, "vestido", null, null, null, null, "Vestido", null, null, null, null,
+                null, null, 1, null, null, null, 0, 0, null, null, "ACTIVE", null, null, null, List.of(),
+                List.of(), List.of(), List.of(), null, null, null, null, null, null, null, null, null, null,
+                null, null, false, null, false);
+    }
+
+    @Test
+    void elFiltroDeArancelDelCarritoUsaTODASSusLineasDeDeclaracion() {
+        // Un carrito de tres productos de tres ternas paga TRES derechos, y lo que no le suma arancel es
+        // lo que encaje en cualquiera de los tres. Filtrar por uno solo —que es lo que hacía— le escondía
+        // al comprador dos tercios del catálogo que tampoco le habría costado nada.
+        UUID enCarrito = UUID.randomUUID();
+        List<CatalogDutyBadgeService.LineaDeclarada> tresLineas = List.of(
+                new CatalogDutyBadgeService.LineaDeclarada(UUID.randomUUID(), "CN"),
+                new CatalogDutyBadgeService.LineaDeclarada(UUID.randomUUID(), "CN"),
+                new CatalogDutyBadgeService.LineaDeclarada(UUID.randomUUID(), ""));
+        when(customsValuation.perArticleFeeUsdCents(any())).thenReturn(300);
+        when(dutyBadges.lineasDe(List.of(enCarrito))).thenReturn(tresLineas);
+
+        controller.list(0, 20, "es", null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, Boolean.TRUE, List.of(enCarrito));
+
+        ArgumentCaptor<ProductListFilters> captor = ArgumentCaptor.forClass(ProductListFilters.class);
+        verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull());
+        assertThat(captor.getValue().dutyLines()).extracting(ProductListFilters.DutyLine::groupId)
+                .isEqualTo(tresLineas.stream().map(CatalogDutyBadgeService.LineaDeclarada::grupoId).toList());
+        assertThat(captor.getValue().dutyLines()).extracting(ProductListFilters.DutyLine::originCountry)
+                .as("cada línea lleva SU origen: sin él, productos de otro país sumarían arancel igual")
+                .containsExactly("CN", "CN", "");
+    }
+
+    @Test
+    void fueraDeLaUnionElFiltroDeArancelSeIGNORA() {
+        // El régimen de 3 EUR es de los 27. En un destino que no cobra derecho por artículo, un enlace
+        // compartido —o quedarse el filtro puesto al cambiar de país— dejaría el catálogo recortado por
+        // una promesa que allí no significa nada.
+        when(customsValuation.perArticleFeeUsdCents(any())).thenReturn(0);
+
+        controller.list(0, 20, "es", null, null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, UUID.randomUUID(), null, null);
+
+        ArgumentCaptor<ProductListFilters> captor = ArgumentCaptor.forClass(ProductListFilters.class);
+        verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull());
+        assertThat(captor.getValue().dutyLines()).isNull();
     }
 }

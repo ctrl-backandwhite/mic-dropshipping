@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.application;
 
 import com.nexaplatform.dropshipping.application.service.ShippingQuoteService;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
+import com.nexaplatform.dropshipping.application.service.FulfillmentRouter;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.ParcelSpec;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
@@ -22,12 +23,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for {@link ShippingQuoteService}. Mockito drives the legacy product
- * Spring Data repository (weight resolution) and the Cainiao fulfillment service
- * (final rate by destination). Focus: cart weight aggregation and the guards.
+ * Cómo se pesa el carrito antes de pedir tarifa.
+ *
+ * <p>Lo que se comprueba aquí es el peso que sale del carrito y las salvaguardas de las líneas raras
+ * —cantidad cero, producto que ya no está, lista vacía—, no la tarifa: esa la ponen los transportistas.
+ *
+ * <p>Desde el 18-ago-2026 la cotización no va a un transportista fijo sino a {@link FulfillmentRouter},
+ * que pregunta a todos los que puedan llevar ese pedido. Por eso el doble que recibe el bulto pesado es
+ * el enrutador y no el proveedor: el proveedor se queda solo para la lista de países de la portada.
  */
 @ExtendWith(MockitoExtension.class)
 class ShippingQuoteServiceTest {
@@ -36,6 +43,8 @@ class ShippingQuoteServiceTest {
     ProductRepository productRepository;
     @Mock
     FulfillmentProvider cainiao;
+    @Mock
+    FulfillmentRouter router;
     @InjectMocks
     ShippingQuoteService service;
 
@@ -54,7 +63,7 @@ class ShippingQuoteServiceTest {
     void quote_usesPackageWeightTimesQuantity() {
         UUID id = UUID.randomUUID();
         when(productRepository.findById(id)).thenReturn(Optional.of(product(300, 100)));
-        when(cainiao.quote(eq("ES"), parcelCaptor.capture())).thenReturn(okQuote());
+        when(router.cotizar(eq("ES"), parcelCaptor.capture(), anyList())).thenReturn(okQuote());
 
         ShippingQuote result = service.quote("ES", List.of(new ShippingQuoteService.Line(id, null, 2)));
 
@@ -67,7 +76,7 @@ class ShippingQuoteServiceTest {
     void quote_fallsBackToWeightGramsWhenPackageWeightMissing() {
         UUID id = UUID.randomUUID();
         when(productRepository.findById(id)).thenReturn(Optional.of(product(null, 250)));
-        when(cainiao.quote(eq("ES"), parcelCaptor.capture())).thenReturn(okQuote());
+        when(router.cotizar(eq("ES"), parcelCaptor.capture(), anyList())).thenReturn(okQuote());
 
         service.quote("ES", List.of(new ShippingQuoteService.Line(id, null, 1)));
 
@@ -78,7 +87,7 @@ class ShippingQuoteServiceTest {
     void quote_defaultsTo500WhenProductHasNoWeights() {
         UUID id = UUID.randomUUID();
         when(productRepository.findById(id)).thenReturn(Optional.of(product(null, 0)));
-        when(cainiao.quote(eq("ES"), parcelCaptor.capture())).thenReturn(okQuote());
+        when(router.cotizar(eq("ES"), parcelCaptor.capture(), anyList())).thenReturn(okQuote());
 
         service.quote("ES", List.of(new ShippingQuoteService.Line(id, null, 1)));
 
@@ -89,7 +98,7 @@ class ShippingQuoteServiceTest {
     void quote_defaultsTo500WhenProductNotFound() {
         UUID id = UUID.randomUUID();
         when(productRepository.findById(id)).thenReturn(Optional.empty());
-        when(cainiao.quote(eq("ES"), parcelCaptor.capture())).thenReturn(okQuote());
+        when(router.cotizar(eq("ES"), parcelCaptor.capture(), anyList())).thenReturn(okQuote());
 
         service.quote("ES", List.of(new ShippingQuoteService.Line(id, null, 1)));
 
@@ -100,7 +109,7 @@ class ShippingQuoteServiceTest {
     void quote_treatsZeroOrNegativeQuantityAsOne() {
         UUID id = UUID.randomUUID();
         when(productRepository.findById(id)).thenReturn(Optional.of(product(200, null)));
-        when(cainiao.quote(eq("ES"), parcelCaptor.capture())).thenReturn(okQuote());
+        when(router.cotizar(eq("ES"), parcelCaptor.capture(), anyList())).thenReturn(okQuote());
 
         service.quote("ES", List.of(new ShippingQuoteService.Line(id, null, 0)));
 
@@ -114,7 +123,7 @@ class ShippingQuoteServiceTest {
         UUID b = UUID.randomUUID();
         when(productRepository.findById(a)).thenReturn(Optional.of(product(100, null)));
         when(productRepository.findById(b)).thenReturn(Optional.of(product(400, null)));
-        when(cainiao.quote(eq("ES"), parcelCaptor.capture())).thenReturn(okQuote());
+        when(router.cotizar(eq("ES"), parcelCaptor.capture(), anyList())).thenReturn(okQuote());
 
         service.quote("ES", List.of(new ShippingQuoteService.Line(a, null, 3), new ShippingQuoteService.Line(b, null, 1)));
 
@@ -124,7 +133,7 @@ class ShippingQuoteServiceTest {
 
     @Test
     void quote_nullLinesProducesMinimumWeightOfOne() {
-        when(cainiao.quote(eq("ES"), parcelCaptor.capture())).thenReturn(okQuote());
+        when(router.cotizar(eq("ES"), parcelCaptor.capture(), anyList())).thenReturn(okQuote());
 
         service.quote("ES", null);
 
@@ -135,26 +144,27 @@ class ShippingQuoteServiceTest {
 
     @Test
     void quote_emptyLinesProducesMinimumWeightOfOne() {
-        when(cainiao.quote(eq("ES"), parcelCaptor.capture())).thenReturn(okQuote());
+        when(router.cotizar(eq("ES"), parcelCaptor.capture(), anyList())).thenReturn(okQuote());
 
         service.quote("ES", List.of());
 
         assertThat(parcelCaptor.getValue().weightGrams()).isEqualTo(1);
     }
 
+    /** Un destino que ningún transportista cubre se devuelve tal cual, sin maquillarlo. */
     @Test
-    void quote_returnsUnsupportedFromCainiaoUnchanged() {
-        ShippingQuote unsupported = ShippingQuote.unsupported("XX");
-        when(cainiao.quote(eq("XX"), any(ParcelSpec.class))).thenReturn(unsupported);
+    void quote_devuelveSinCoberturaTalCual() {
+        ShippingQuote sinCobertura = ShippingQuote.unsupported("XX");
+        when(router.cotizar(eq("XX"), any(ParcelSpec.class), anyList())).thenReturn(sinCobertura);
 
         ShippingQuote result = service.quote("XX", List.of());
 
-        assertThat(result).isSameAs(unsupported);
+        assertThat(result).isSameAs(sinCobertura);
         assertThat(result.supported()).isFalse();
     }
 
     @Test
-    void supportedCountries_delegatesToCainiao() {
+    void supportedCountries_delegaEnElProveedor() {
         FulfillmentProvider.SupportedCountry es =
                 new FulfillmentProvider.SupportedCountry("ES", "Spain");
         when(cainiao.supportedCountries()).thenReturn(List.of(es));

@@ -6,9 +6,11 @@ import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PartnerPlanSyncService;
 import com.nexaplatform.dropshipping.application.service.StockService;
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
+import com.nexaplatform.dropshipping.application.service.CartService;
 import com.nexaplatform.dropshipping.application.usecase.impl.PaymentUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
@@ -102,10 +104,10 @@ class OrderChargeMatchesShownTotalTest {
                 new PaymentGateway.InitiateResult("ref-1", null, null, null, null, null, Map.of()));
 
         subject = new PaymentUseCaseImpl(List.of(tarjeta), paymentRepository, paymentJpaRepositoryAdapter, userRepository,
-                orderRepository, walletUseCase, auditLogger, mock(PartnerPlanSyncService.class),
+                orderRepository, walletUseCase, org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService.class), auditLogger, mock(PartnerPlanSyncService.class),
                 mock(CustomerSubscriptionUseCase.class), mock(SubscriptionNotificationService.class),
                 new ObjectMapper(), mock(OrderEmailService.class), currencyRateService, new OrderAmounts(currencyRateService), mock(StockService.class),
-                mock(OpsAlertService.class));
+                mock(SupplierPurchaseService.class), mock(OpsAlertService.class), mock(CartService.class));
 
         when(currencyRateService.usdTo(any(BigDecimal.class), anyString()))
                 .thenAnswer(inv -> inv.<BigDecimal>getArgument(0).multiply(USD_A_EUR));
@@ -162,10 +164,12 @@ class OrderChargeMatchesShownTotalTest {
         verify(paymentRepository, atLeastOnce()).save(captor.capture());
         BigDecimal cobrado = captor.getValue().getSettlementAmount().setScale(2, RoundingMode.HALF_UP);
 
-        // 44,67 (3 × 14,89) − 4,46 + 8,41 + 10,21 = 58,83 €, que es la cifra que el cliente leyó en el
-        // resumen del checkout. Convertir el total canónico de una vez daría 58,84: un céntimo que no es
-        // el que se le enseñó. Sin restar el descuento salían 63,29 €.
-        assertThat(cobrado).isEqualByComparingTo(new BigDecimal("58.83"));
+        // 44,68 (la LÍNEA: 3 × 16,98 = 50,94 $ convertidos) − 4,46 + 8,41 + 10,21 = 58,84 €, que es la
+        // cifra que el cliente leyó en el resumen del checkout: la vista previa hace exactamente esta
+        // misma cuenta. Redondear el unitario y multiplicarlo (14,89 × 3 = 44,67) daba 58,83 €, un
+        // céntimo de menos aquí y hasta un 1,45 % de MÁS con importes pequeños y cantidades grandes.
+        // Sin restar el descuento salían 63,30 €.
+        assertThat(cobrado).isEqualByComparingTo(new BigDecimal("58.84"));
     }
 
     @Test
@@ -189,8 +193,8 @@ class OrderChargeMatchesShownTotalTest {
 
         ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
         verify(paymentRepository, atLeastOnce()).save(captor.capture());
-        // 44,67 + 8,41 + 10,21 = 63,29 €, la misma cuenta sin el descuento.
+        // 44,68 + 8,41 + 10,21 = 63,30 €, la misma cuenta sin el descuento.
         assertThat(captor.getValue().getSettlementAmount().setScale(2, RoundingMode.HALF_UP))
-                .isEqualByComparingTo(new BigDecimal("63.29"));
+                .isEqualByComparingTo(new BigDecimal("63.30"));
     }
 }

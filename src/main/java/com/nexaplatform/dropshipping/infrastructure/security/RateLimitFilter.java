@@ -67,6 +67,19 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Value("${nexadrop.security.trusted-proxy-count:1}")
     private int trustedProxyCount;
 
+    /**
+     * Interruptor del límite. Por defecto ENCENDIDO: apagarlo deja la API sin defensa contra abuso, así
+     * que solo debe apagarse en el perfil de pruebas, donde una batería de integración dispara cientos de
+     * peticiones seguidas desde la misma IP y el límite las corta con 429 sin que nada esté mal.
+     *
+     * <p>Se inicializa a {@code true} en la propia declaración y no solo por configuración: un
+     * {@code boolean} sin inicializar vale {@code false}, así que quien construya el filtro sin Spring
+     * —los tests unitarios lo hacen— se quedaría sin límite y sin enterarse. El fallo por defecto tiene
+     * que ser hacia el lado seguro.
+     */
+    @Value("${nexadrop.ratelimit.enabled:true}")
+    private boolean rateLimitEnabled = true;
+
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
     /**
@@ -86,6 +99,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
+        if (!rateLimitEnabled) {
+            chain.doFilter(req, res);
+            return;
+        }
         String path = req.getRequestURI();
         // El plan se lee del JWT (claim `plan`); por defecto SANDBOX para
         // requests no-partner o JWT sin claim.
@@ -157,6 +174,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return new RateRule("auth.refresh", Scope.IP, 30, Duration.ofMinutes(1));
         if (path.equals("/api/auth/register"))
             return new RateRule("auth.register", Scope.IP, 5, Duration.ofHours(1));
+        // Reenvío del email de activación: sin freno se podía bombardear el buzón de una víctima (el CAPTCHA
+        // PoW es barato). 5/hora por IP, en línea con el registro.
+        if (path.equals("/api/auth/activate/resend"))
+            return new RateRule("auth.activate.resend", Scope.IP, 5, Duration.ofHours(1));
         if (path.equals("/api/auth/password-reset/request"))
             return new RateRule("auth.reset.req", Scope.IP, 20, Duration.ofHours(1));
         if (path.equals("/api/auth/password-reset/confirm"))
@@ -185,6 +206,22 @@ public class RateLimitFilter extends OncePerRequestFilter {
         // Inbound webhooks signed with HMAC — per shop connection (path segment).
         if (path.startsWith("/api/v1/integrations/shops/"))
             return new RateRule("inbound.shop", Scope.PATH_SEG_3, 240, Duration.ofMinutes(1));
+
+        // Asistente conversacional: cada mensaje se paga por tokens al proveedor del modelo, así que el
+        // freno no es anti-abuso, es control de gasto. Por sujeto del JWT cuando hay sesión (y por IP si
+        // no): 15 por minuto es más de lo que teclea una persona y muchísimo menos de lo que cuesta un
+        // bucle automatizado.
+        // Cada sugerencia cotiza hasta cuatro envíos con el transportista. Es barato para quien
+        // compra —una vez por añadir al carrito— y caro si alguien lo llama en bucle.
+        if (path.equals("/api/catalog/cart-suggestions"))
+            return new RateRule("cart.suggestions", Scope.PARTNER, 20, Duration.ofMinutes(1));
+
+        if (path.equals("/api/chat"))
+            return new RateRule("chat.ask", Scope.PARTNER, 15, Duration.ofMinutes(1));
+
+        // Emisión de challenges CAPTCHA: sin freno, un bot puede pedir retos sin límite (el PoW es barato).
+        if (path.equals("/api/captcha/challenge"))
+            return new RateRule("captcha.challenge", Scope.IP, 60, Duration.ofMinutes(1));
 
         // Public versioned API (for developers) — per IP, generous but bounded.
         if (path.startsWith("/api/v1/rate-limits") || path.startsWith("/api/v1/invoices"))
@@ -234,6 +271,15 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private String clientIp(HttpServletRequest req) {
+        // Detrás de Cloudflare (producción: api.nx036.com), CF-Connecting-IP es la IP REAL del cliente y
+        // Cloudflare SOBRESCRIBE cualquier valor que mande el cliente → no es falsificable por tráfico que
+        // pasa por CF. Es la fuente autoritativa cuando existe, y evita el bypass del rate-limit por
+        // X-Forwarded-For rotado. (Requiere además bloquear el acceso DIRECTO al origen Railway para que
+        // nadie salte Cloudflare; ver nota de despliegue.)
+        String cf = req.getHeader("CF-Connecting-IP");
+        if (cf != null && !cf.isBlank()) {
+            return cf.trim();
+        }
         String xff = req.getHeader("X-Forwarded-For");
         if (xff == null || xff.isBlank())
             return req.getRemoteAddr();
@@ -265,6 +311,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 policy("inbound.shop", "/api/v1/integrations/shops/{id}/**", "per shopConnection id", 240, "1m"),
                 policy("storefront", "/api/v1/rate-limits, /api/v1/invoices", PER_IP, 60, "1m"),
                 policy("storefront.web", "/api/catalog/**, /api/search, ... (navegación pública)", PER_IP, 100, "1m"),
+                policy("chat.ask", "/api/chat", PER_CLIENT_ID_JWT_SUB, 15, "1m"),
+                policy("cart.suggestions", "/api/catalog/cart-suggestions", PER_CLIENT_ID_JWT_SUB, 20, "1m"),
                 policy("oauth.token", "/oauth2/token", PER_IP, 30, "1m"),
                 policy("auth.login", "/login", PER_IP, 20, "1m"),
                 policy("auth.login.api", "/api/auth/login", PER_IP, 10, "1m"),
@@ -291,9 +339,20 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private record RateRule(String name, Scope scope, long capacity, Duration period) {
     }
 
-    /** Test hook to wipe state between tests. */
+    /**
+     * Gancho de pruebas: deja la cuota a cero entre casos.
+     *
+     * <p>Antes vaciaba SOLO el mapa local, que en la aplicación real no se rellena nunca: en cuanto hay
+     * una {@link BucketFactory} inyectada —siempre, salvo en las pruebas unitarias de este filtro, que
+     * usan el constructor sin argumentos— los cubos viven dentro de la factoría. El método prometía
+     * «wipe state between tests» y no vaciaba nada, así que la cuota que gastaba un caso se arrastraba
+     * al siguiente y aparecían 429 donde el caso medía 401/403.
+     */
     public void reset() {
         buckets.clear();
+        if (bucketFactory != null) {
+            bucketFactory.clear();
+        }
     }
 
     /** For dependency-free unit reflection. */

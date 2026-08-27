@@ -9,6 +9,9 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantOptionView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantValueView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
 import com.nexaplatform.dropshipping.application.service.MarginService;
+import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
+import com.nexaplatform.dropshipping.application.service.EuComplianceService;
+import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
@@ -39,6 +42,8 @@ public class ProductMapper {
     private final PricingService pricingService;
     private final CurrencyRateService currencyRateService;
     private final MarginService marginService;
+    private final CustomsValuationService customsValuationService;
+    private final EuComplianceService euComplianceService;
 
     public ProductSummaryView toSummary(ProductEntity p, String language) {
         if (p == null)
@@ -54,11 +59,26 @@ public class ProductMapper {
         } catch (Exception ignored) {
             /* lazy init fuera de tx → fallback a null */ }
 
-        return new ProductSummaryView(p.getId(), p.getSlug(), title, image, p.getBasePrice(), p.getCurrency(),
+        // Coste del proveedor SOLO para ADMIN, igual que en toDetail. `basePrice` NO es un precio de venta:
+        // es el importe que se paga al proveedor en CNY, la base sobre la que PricingService aplica el
+        // margen. Publicarlo junto al precio final permite a cualquiera calcular la ganancia exacta por
+        // producto — y el listado lo devolvía a todo el mundo, incluida la API de partners, mientras la
+        // ficha sí lo filtraba desde el principio. El escaparate ya pinta `displayFormatted`, que es la
+        // única cifra que le corresponde ver.
+        boolean admin = SecurityUtils.isAdmin();
+        return new ProductSummaryView(p.getId(), p.getSlug(), title, image,
+                admin ? p.getBasePrice() : null, admin ? p.getCurrency() : null,
                 p.getRating(), p.getMonthlySales(), p.getTrendScore(),
-                p.getStatus() != null ? p.getStatus().name() : null, priced.retailUsd(), priced.displayAmount(),
+                // `retailUsd` también SOLO para admin, por el mismo motivo y con la misma incoherencia que
+                // `basePrice`: la ficha ya lo ocultaba a quien no es admin (línea ~84) y el listado lo
+                // publicaba a todo el mundo. Es el precio canónico en USD antes de convertir; al cliente le
+                // corresponde `displayFormatted`, en su divisa.
+                p.getStatus() != null ? p.getStatus().name() : null, admin ? priced.retailUsd() : null,
+                priced.displayAmount(),
                 priced.displayCurrency(), priced.displaySymbol(), priced.displayFormatted(), p.getInventoryCount(),
-                availableUnits, Boolean.TRUE.equals(p.getVerified()));
+                availableUnits, Boolean.TRUE.equals(p.getVerified()),
+                // La rebaja viaja YA resuelta desde el motor de precios: el escaparate solo la pinta.
+                priced.originalFormatted(), priced.discountPercent(), priced.promotionName());
     }
 
     public ProductDetailView toDetail(ProductEntity p, String language, List<ProductPriceTierEntity> tiers) {
@@ -70,43 +90,74 @@ public class ProductMapper {
         BigDecimal costUsd = admin ? priced.costUsd() : null;
         BigDecimal retailUsd = admin ? priced.retailUsd() : null;
         BigDecimal appliedMarginPercent = admin ? priced.appliedMarginPercent() : null;
+        // Coste del proveedor en la FICHA, con el mismo criterio que ya se aplicaba aquí a costUsd/retailUsd
+        // y que se aplicó al listado (toSummary). `basePrice` es lo que se paga al proveedor en CNY y
+        // `currency` la etiqueta que lo delata: publicados junto al precio de venta, una sola división deja
+        // a la vista la ganancia exacta de cada producto. Cerrar el listado y dejar la ficha abierta no
+        // tapaba nada, porque a la ficha se llega con un enlace directo. El escaparate no los necesita —solo
+        // pinta `displayFormatted`, que ya viene compuesto y formateado—, mientras que el editor del admin sí
+        // tarifica con ellos, así que siguen viajando para ADMIN.
+        BigDecimal basePrice = admin ? p.getBasePrice() : null;
+        String currency = admin ? p.getCurrency() : null;
         // Desglose base/IVA/envío: SOLO admin (el usuario final ve únicamente el total = displayFormatted).
         String baseFormatted = admin ? priced.baseFormatted() : null;
         String ivaFormatted = admin ? priced.ivaFormatted() : null;
         String shippingFormatted = admin ? priced.shippingFormatted() : null;
+        // SOLO admin: arancel de aduana por artículo del país efectivo (3 €/artículo en la UE), formateado.
+        String customsFormatted = null;
+        if (admin) {
+            int customsCents = customsValuationService.perArticleFeeUsdCents(PricingCountryHolder.get());
+            if (customsCents > 0) {
+                customsFormatted = currencyRateService.formatDisplay(
+                        currencyRateService.usdToDisplay(BigDecimal.valueOf(customsCents).movePointLeft(2)),
+                        priced.displayCurrency());
+            }
+        }
         return new ProductDetailView(p.getId(), p.getSlug(), p.getSource(), p.getExternalId(),
                 p.getSupplier() != null ? supplierMapper.toView(p.getSupplier()) : null,
                 p.getCategory() != null ? p.getCategory().getId() : null, tr != null ? tr.getTitle() : p.getTitleZh(),
                 tr != null ? tr.getShortDescription() : p.getShortDescriptionZh(),
                 tr != null ? tr.getDescription() : p.getDescriptionZh(), p.getTitleZh(), p.getShortDescriptionZh(),
-                p.getDescriptionZh(), p.getBrand(), p.getMoq(), p.getBasePrice(), p.getCurrency(), p.getRating(),
+                p.getDescriptionZh(), p.getBrand(), p.getMoq(), basePrice, currency, p.getRating(),
                 p.getReviewCount(), p.getMonthlySales(), p.getRepurchaseRate(), p.getTrendScore(),
                 p.getStatus() != null ? p.getStatus().name() : null, p.getSourceUrl(), p.getIngestedAt(),
                 p.getLastSyncedAt(), p.getImages().stream().map(this::toImageView).toList(),
                 p.getVariantOptions().stream().map(o -> toOptionView(o, language)).toList(),
-                p.getVariants().stream().map(v -> toVariantView(p, v)).toList(),
+                p.getVariants().stream().map(v -> toVariantView(p, v, language)).toList(),
                 tiers == null ? Collections.emptyList() : tiers.stream().map(this::toPriceTierView).toList(),
                 costUsd, retailUsd, priced.displayAmount(), priced.displayCurrency(),
                 priced.displaySymbol(), priced.displayFormatted(), appliedMarginPercent,
                 baseFormatted, ivaFormatted, shippingFormatted,
                 tr != null ? tr.getMetaTitle() : null, tr != null ? tr.getMetaDescription() : null,
                 Boolean.TRUE.equals(p.getVerified()),
-                p.getVideoUrl(), Boolean.TRUE.equals(p.getHasVideo()));
+                p.getVideoUrl(), Boolean.TRUE.equals(p.getHasVideo()),
+                priced.originalFormatted(), priced.discountPercent(), priced.promotionName(), customsFormatted,
+                // Cumplimiento del Reglamento (UE) 2023/988. Va en TODAS las fichas, también las del admin:
+                // el art. 19 obliga a mostrarlo en la oferta, y el panel necesita el mismo bloque para saber
+                // qué le falta a cada referencia.
+                euComplianceService.forProduct(p.getCategory() != null ? p.getCategory().getId() : null,
+                        p.getManufacturerName(), p.getManufacturerAddress(), p.getManufacturerEmail(),
+                        language),
+                // El arancel adicional no se resuelve aquí: depende del CARRITO de quien mira, no del
+                // producto, y este mapeo va cacheado. Lo decora el controlador con la ficha ya construida.
+                null, null, null);
     }
 
     public ProductImageView toImageView(ProductImageEntity img) {
         return new ProductImageView(img.getId(), img.getPosition(), img.getRole(), img.getSourceUrl(), img.getCdnUrl());
     }
 
-    public VariantView toVariantView(ProductEntity product, ProductVariantEntity v) {
+    public VariantView toVariantView(ProductEntity product, ProductVariantEntity v, String language) {
         // Display variant price converted via PricingService too
         PricedAmount priced = pricingService.priceFor(product, v);
         // Peso por variante: usa el del paquete (bruto) si existe, si no el neto. Dimensiones tal cual (mm).
         Integer weight = (v.getPackageWeightGrams() != null && v.getPackageWeightGrams() > 0)
                 ? v.getPackageWeightGrams() : v.getWeightGrams();
         return new VariantView(v.getId(), v.getSku(), v.getTitle(), priced.displayAmount(), // shown in user currency
-                priced.displayFormatted(), v.getStock(), pickVariantImage(v), v.getOptions(), v.isActive(),
-                weight, v.getLengthMm(), v.getWidthMm(), v.getHeightMm());
+                priced.displayFormatted(), v.getStock(), pickVariantImage(v),
+                translateVariantOptions(v.getOptions(), product, language), v.isActive(),
+                weight, v.getLengthMm(), v.getWidthMm(), v.getHeightMm(),
+                priced.originalFormatted(), priced.discountPercent());
     }
 
     /** Back-compat overload (without product); used by ProductMapperTest. */
@@ -143,6 +194,62 @@ public class ProductMapper {
         }
         return new VariantValueView(v.getId(), v.getValueZh(), v.getValue(), localized, pickValueImage(v),
                 v.getImageSourceUrl(), v.getPosition(), tr);
+    }
+
+    /**
+     * Traduce el mapa {@code options} de UNA variante (SKU) al idioma pedido — el mismo dato que
+     * {@code toOptionView}/{@code toValueView} ya traducen para el selector visual, pero que hasta ahora
+     * viajaba crudo en chino para cada variante del carrito. Las claves (nombre del eje, p.ej. "Color")
+     * NO se tocan: el pipeline de carga ya las traduce antes de guardarlas. Solo el VALOR ("黑色") se
+     * resuelve contra {@code variant_value_translation}, emparejando por el chino igual que hace
+     * {@code BulkProductFields.applyVariantValueTranslations} al importar.
+     *
+     * <p>Si el valor no tiene traducción para el idioma pedido —o no aparece entre los ejes del
+     * producto—, se conserva el valor crudo tal cual llegó: nunca se deja el campo vacío.
+     */
+    private Map<String, String> translateVariantOptions(Map<String, String> rawOptions, ProductEntity product,
+            String language) {
+        if (rawOptions == null || rawOptions.isEmpty()) {
+            return rawOptions;
+        }
+        Map<String, String> localizedByChineseValue = valueTranslationIndex(product, language);
+        Map<String, String> translated = new LinkedHashMap<>();
+        for (Map.Entry<String, String> e : rawOptions.entrySet()) {
+            String localized = localizedByChineseValue.get(e.getValue());
+            translated.put(e.getKey(), localized != null && !localized.isBlank() ? localized : e.getValue());
+        }
+        return translated;
+    }
+
+    /** Índice valor-en-chino → valor localizado, aplanando TODOS los ejes del producto. */
+    private Map<String, String> valueTranslationIndex(ProductEntity product, String language) {
+        Map<String, String> index = new LinkedHashMap<>();
+        if (product == null || product.getVariantOptions() == null) {
+            return index;
+        }
+        for (VariantOptionEntity opt : product.getVariantOptions()) {
+            if (opt.getValues() == null) {
+                continue;
+            }
+            for (VariantValueEntity vv : opt.getValues()) {
+                if (vv.getValueZh() != null) {
+                    index.put(vv.getValueZh(), resolveLocalizedValue(vv, language));
+                }
+            }
+        }
+        return index;
+    }
+
+    /** Idioma pedido → override neutral (value). Mismo criterio que {@link #toValueView}. */
+    private String resolveLocalizedValue(VariantValueEntity v, String language) {
+        if (language != null && v.getTranslations() != null) {
+            for (VariantValueTranslationEntity t : v.getTranslations()) {
+                if (language.equalsIgnoreCase(t.getLanguage()) && t.getValue() != null) {
+                    return t.getValue();
+                }
+            }
+        }
+        return v.getValue();
     }
 
     public PriceTierView toPriceTierView(ProductPriceTierEntity t) {

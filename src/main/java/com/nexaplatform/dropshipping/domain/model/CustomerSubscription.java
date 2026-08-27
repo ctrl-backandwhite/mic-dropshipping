@@ -41,6 +41,9 @@ public class CustomerSubscription {
     private Instant cancelAt;
     private Instant canceledAt;
     private Instant trialEndsAt;
+    private String pendingPlanCode;
+    private Instant pendingPlanAt;
+    private Instant cancelReminderLastAt;
 
     /** Computed read field: the plan code of the related plan (admin/user views). */
     private String planCode;

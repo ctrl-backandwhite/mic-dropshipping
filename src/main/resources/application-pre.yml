@@ -1,7 +1,7 @@
 # =====================================================================================
-# Perfil PRE (preproducción, despliegue remoto Railway, entorno pre-produccion)
+# Perfil PRE (preproducción, VPS propio (k3s + Argo CD), entorno pre-produccion)
 #   Frontend: https://nx036.com
-#   Backend : https://mic-dropshipping-pre.up.railway.app  (servidor de autorización)
+#   Backend : ${NX_API_URL:https://api-pre.nx036.com}  (servidor de autorización)
 #
 # Réplica de application-dev.yml pero con las URLs públicas de PRE: issuer del authorization
 # server (backend), callback de Google, CORS y enlaces de email apuntan al entorno pre. Solo se
@@ -21,7 +21,7 @@ spring:
   kafka:
     # Kafka KRaft seguro (SASL/SCRAM) en Railway. El JAAS (usuario+password) llega por env.
     properties:
-      security.protocol: ${KAFKA_SECURITY_PROTOCOL:SASL_PLAINTEXT}
+      security.protocol: ${KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
       sasl.mechanism: ${KAFKA_SASL_MECHANISM:SCRAM-SHA-256}
       sasl.jaas.config: ${KAFKA_SASL_JAAS:}
   security:
@@ -37,7 +37,7 @@ spring:
             # da al backend un subdominio propio).
             redirect-uri: "${GOOGLE_REDIRECT_URI:https://api.nx036.com/login/oauth2/code/google}"
           github:
-            redirect-uri: "https://mic-dropshipping-pre.up.railway.app/login/oauth2/code/github"
+            redirect-uri: "${NX_API_URL:https://api-pre.nx036.com}/login/oauth2/code/github"
 
 server:
   servlet:
@@ -48,13 +48,16 @@ server:
 
 nexadrop:
   storefront:
-    base-url: https://nx036.com   # CTA / unsubscribe de los emails + redirect post-login Google
+    base-url: ${NX_WEB_URL:https://pre.nx036.com}   # CTA y baja de los correos, y regreso tras el acceso con Google
+  mobile:
+    # Enlace profundo de la app; debe coincidir con el `scheme` de app.config.ts.
+    oauth-callback-url: ${MOBILE_OAUTH_CALLBACK_URL:nx036://auth/callback}
   oauth:
     # Identidad del authorization server y emisor de los JWT de usuario (este backend).
-    issuer: https://mic-dropshipping-pre.up.railway.app
+    issuer: ${NX_API_URL:https://api-pre.nx036.com}
   cors:
     # Dominios de confianza desde los que se accede a la API (frontend + el propio backend).
-    allowed-origins: https://nx036.com,https://mic-dropshipping-pre.up.railway.app
+    allowed-origins: ${NX_WEB_URL:https://pre.nx036.com},${NX_API_URL:https://api-pre.nx036.com}
   cainiao:
     # En PRE la integración real (sandbox de Cainiao Link) está disponible; se controla por env
     # CAINIAO_ENABLED en Railway (déjala en false hasta que la app esté aprobada y mapeada).

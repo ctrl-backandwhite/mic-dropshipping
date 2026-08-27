@@ -12,6 +12,7 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Limit;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -23,6 +24,7 @@ import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -43,7 +45,7 @@ public class EmailQueueService {
 
     @Value("${nexadrop.email.from:noreply@nexadrop.local}")
     private String fromAddress;
-    @Value("${nexadrop.email.from-name:NX036 Dropshipping}")
+    @Value("${nexadrop.email.from-name:NX036}")
     private String fromName;
     // Remitentes por tipo de correo (alias del dominio). Si no se definen, caen al 'from' por defecto.
     @Value("${nexadrop.email.from-billing:${nexadrop.email.from:noreply@nexadrop.local}}")
@@ -65,13 +67,13 @@ public class EmailQueueService {
 
     @Transactional
     public OutboundEmailEntity enqueue(String to, String subject, String template, Map<String, Object> vars) {
-        return doEnqueue(to, null, subject, template, vars, Map.of());
+        return doEnqueue(to, null, subject, template, vars, Map.of(), null, null);
     }
 
     @Transactional
     public OutboundEmailEntity enqueue(String to, String replyTo, String subject, String template,
             Map<String, Object> vars) {
-        return doEnqueue(to, replyTo, subject, template, vars, Map.of());
+        return doEnqueue(to, replyTo, subject, template, vars, Map.of(), null, null);
     }
 
     /**
@@ -84,7 +86,14 @@ public class EmailQueueService {
     @Transactional
     public OutboundEmailEntity enqueue(String to, String replyTo, String subject, String template,
             Map<String, Object> vars, Map<String, String> inlineImages) {
-        return doEnqueue(to, replyTo, subject, template, vars, inlineImages);
+        return doEnqueue(to, replyTo, subject, template, vars, inlineImages, null, null);
+    }
+
+    /** Encola un correo con un adjunto (p. ej. el PDF de la factura del plan). */
+    @Transactional
+    public OutboundEmailEntity enqueueWithAttachment(String to, String subject, String template,
+            Map<String, Object> vars, byte[] attachment, String attachmentFilename) {
+        return doEnqueue(to, null, subject, template, vars, Map.of(), attachment, attachmentFilename);
     }
 
     /**
@@ -94,13 +103,15 @@ public class EmailQueueService {
      * se escribe.
      */
     private OutboundEmailEntity doEnqueue(String to, String replyTo, String subject, String template,
-            Map<String, Object> vars, Map<String, String> inlineImages) {
+            Map<String, Object> vars, Map<String, String> inlineImages, byte[] attachment, String attachmentFilename) {
         Context ctx = new Context();
         vars.forEach(ctx::setVariable);
         String html = templateEngine.process(template, ctx);
         OutboundEmailEntity email = OutboundEmailEntity.builder().toAddress(to).replyTo(replyTo).subject(subject)
                 .bodyHtml(html).template(template).status("PENDING")
-                .inlineImages(writeInlineImages(inlineImages)).build();
+                .inlineImages(writeInlineImages(inlineImages))
+                .attachmentBytes(attachment != null && attachment.length > 0 ? attachment : null)
+                .attachmentFilename(attachmentFilename).build();
         return repo.save(email);
     }
 
@@ -131,20 +142,52 @@ public class EmailQueueService {
         }
     }
 
-    /** Intentos de envío antes de rendirse. Un fallo de SMTP suele ser pasajero. */
-    private static final int MAX_SEND_ATTEMPTS = 5;
+    /** Cuántos correos se procesan por pasada del barrido. */
+    private static final int BATCH_SIZE = 20;
 
+    /**
+     * Backoff (espera hasta el siguiente intento) para fallos TEMPORALES, indexado por nº de intento.
+     * A partir del último valor se mantiene el tope. Pensado para superar un rate-limit horario del
+     * proveedor: 2, 5, 10, 20, 40 y 60 min, luego cada hora.
+     */
+    private static final Duration[] TRANSIENT_BACKOFF = {
+            Duration.ofMinutes(2), Duration.ofMinutes(5), Duration.ofMinutes(10),
+            Duration.ofMinutes(20), Duration.ofMinutes(40), Duration.ofMinutes(60)
+    };
+
+    /** Antigüedad máxima que un correo temporalmente fallido sigue reintentándose antes de rendirse. */
+    private static final Duration GIVE_UP_TRANSIENT_AFTER = Duration.ofHours(24);
+
+    /** Longitud de la columna error_message: el mensaje se recorta para no reventar el INSERT. */
+    private static final int ERROR_MESSAGE_MAX = 2000;
+
+    /**
+     * Barrido periódico de la cola. NO es {@code @Transactional} a propósito: cada correo se marca
+     * (SENT o el backoff del fallo) en su PROPIA transacción vía {@code repo.save} —que abre la suya—,
+     * de modo que un correo ya entregado queda persistido como SENT de inmediato. Si envolviéramos todo
+     * el lote en una sola transacción, un reinicio del proceso a mitad de lote (o un fallo al commitear)
+     * revertiría el estado de los correos YA ENVIADOS y el siguiente barrido los REENVIARÍA (duplicados).
+     * El envío SMTP es un efecto externo irreversible: hay que confirmarlo por correo, no por lote.
+     */
     @Scheduled(fixedDelay = 15_000)
-    @Transactional
     public void dispatchPending() {
-        for (OutboundEmailEntity email : repo.findTop20ByStatusOrderByCreatedAtAsc("PENDING")) {
+        Instant now = Instant.now();
+        for (OutboundEmailEntity email : repo.findDispatchable(now, Limit.of(BATCH_SIZE))) {
+            // Se RECLAMA la fila antes de enviar: el UPDATE condicional solo prospera si sigue en PENDING,
+            // así que si otra réplica se le adelantó, este barrido la salta. La lectura de arriba no basta
+            // — con dos instancias, ambas leen la misma fila y el cliente recibe el correo dos veces, y un
+            // envío SMTP no se puede deshacer al descubrirlo.
+            if (repo.reclamarParaEnvio(email.getId()) == 0) {
+                continue;
+            }
             try {
                 String html = email.getBodyHtml();
                 // Iconos FontAwesome incrustados como adjuntos inline (CID): funcionan en Gmail sin
                 // necesidad de hosting público (los data-URI/SVG los bloquea). multipart solo si hay alguno.
                 Set<String> cids = referencedCids(html);
+                boolean hasAttachment = email.getAttachmentBytes() != null && email.getAttachmentBytes().length > 0;
                 MimeMessage msg = mailSender.createMimeMessage();
-                MimeMessageHelper helper = new MimeMessageHelper(msg, !cids.isEmpty(),
+                MimeMessageHelper helper = new MimeMessageHelper(msg, !cids.isEmpty() || hasAttachment,
                         StandardCharsets.UTF_8.name());
                 helper.setTo(email.getToAddress());
                 helper.setSubject(email.getSubject());
@@ -165,27 +208,61 @@ public class EmailQueueService {
                     }
                     attachStorageImage(helper, cid, storageImages.get(cid));
                 }
+                if (hasAttachment) {
+                    String filename = email.getAttachmentFilename() != null ? email.getAttachmentFilename()
+                            : "factura.pdf";
+                    helper.addAttachment(filename, new ByteArrayResource(email.getAttachmentBytes()),
+                            "application/pdf");
+                }
                 mailSender.send(msg);
                 email.setStatus("SENT");
                 email.setSentAt(Instant.now());
+                email.setNextAttemptAt(null);
             } catch (Exception e) {
-                // El barrido sólo lee PENDING, así que marcar FAILED al primer tropiezo era rendirse
-                // para siempre: attemptCount no pasaba nunca de 1 y ningún correo fallido volvía a
-                // salir. Un SMTP que no responde suele estar de vuelta al minuto siguiente, así que la
-                // fila se queda PENDING hasta agotar los intentos y sólo entonces pasa a FAILED.
-                int attempts = email.getAttemptCount() + 1;
-                email.setAttemptCount(attempts);
-                email.setErrorMessage(e.getMessage());
-                if (attempts >= MAX_SEND_ATTEMPTS) {
-                    email.setStatus("FAILED");
-                    log.error("Email {} descartado tras {} intentos: {}", email.getId(), attempts, e.getMessage());
-                } else {
-                    log.warn("Email {} falló (intento {}/{}): {}", email.getId(), attempts, MAX_SEND_ATTEMPTS,
-                            e.getMessage());
-                }
+                handleSendFailure(email, e, now);
             }
             repo.save(email);
         }
+    }
+
+    /**
+     * Decide qué hacer con un correo que no se pudo enviar. Un fallo PERMANENTE (código SMTP 5xx:
+     * buzón inexistente, dirección inválida) se descarta ya. Un fallo TEMPORAL (rate-limit del
+     * proveedor, SMTP caído, timeout) se aplaza con backoff creciente y se sigue reintentando hasta
+     * {@link #GIVE_UP_TRANSIENT_AFTER}; así un rate-limit horario no hace perder el correo.
+     */
+    private void handleSendFailure(OutboundEmailEntity email, Exception e, Instant now) {
+        int attempts = email.getAttemptCount() + 1;
+        email.setAttemptCount(attempts);
+        email.setErrorMessage(truncate(e.getMessage()));
+
+        if (SmtpFailureClassifier.classify(e) == SmtpFailureClassifier.Kind.PERMANENT) {
+            email.setStatus("FAILED");
+            log.error("Email {} descartado (error permanente, intento {}): {}", email.getId(), attempts,
+                    e.getMessage());
+            return;
+        }
+
+        Instant createdAt = email.getCreatedAt();
+        if (createdAt != null && Duration.between(createdAt, now).compareTo(GIVE_UP_TRANSIENT_AFTER) > 0) {
+            email.setStatus("FAILED");
+            log.error("Email {} descartado tras {} h reintentando ({} intentos): {}",
+                    email.getId(), GIVE_UP_TRANSIENT_AFTER.toHours(), attempts, e.getMessage());
+            return;
+        }
+
+        Duration wait = TRANSIENT_BACKOFF[Math.min(attempts - 1, TRANSIENT_BACKOFF.length - 1)];
+        email.setNextAttemptAt(now.plus(wait));
+        log.warn("Email {} aplazado {} min por fallo temporal (intento {}): {}", email.getId(),
+                wait.toMinutes(), attempts, e.getMessage());
+    }
+
+    /** Recorta el mensaje de error a lo que cabe en la columna, preservando el principio (el código SMTP). */
+    private static String truncate(String message) {
+        if (message == null) {
+            return null;
+        }
+        return message.length() <= ERROR_MESSAGE_MAX ? message : message.substring(0, ERROR_MESSAGE_MAX);
     }
 
     /**
