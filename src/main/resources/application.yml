@@ -531,6 +531,9 @@ logging:
     com.nexaplatform.dropshipping: DEBUG
     org.springframework.security: INFO
     org.hibernate.SQL: WARN
+    # Desglose de bultos y líneas de declaración: la cuenta que acaba en la factura del cliente.
+    # En DEBUG solo cuando se está investigando un importe concreto; en producción va apagado.
+    com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService: ${LOG_ADUANA:INFO}
 
   # Avisos al responsable cuando un servicio del que depende el negocio deja de funcionar (transportista
   # que no acepta envíos, pasarela que no cobra). Se agrupan por causa y se silencian durante el cooldown

@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.dto.in.CartSuggestionsDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.CartSuggestionDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.CartSuggestionsDtoOut;
 import com.nexaplatform.dropshipping.application.service.CartSuggestionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,11 +27,15 @@ public class CartSuggestionController {
 
     @PostMapping
     @Operation(summary = "Productos que no suman arancel y apenas suman envío al carrito actual")
-    public ResponseEntity<List<CartSuggestionDtoOut>> suggest(@Valid @RequestBody CartSuggestionsDtoIn body) {
+    public ResponseEntity<CartSuggestionsDtoOut> suggest(@Valid @RequestBody CartSuggestionsDtoIn body) {
         List<CartSuggestionService.Linea> carrito = body.getItems().stream()
                 .map(l -> new CartSuggestionService.Linea(l.getProductId(), l.getVariantId(), l.getQuantity()))
                 .toList();
-        return ResponseEntity.ok(suggestions.para(carrito, body.getLang()).stream()
+        CartSuggestionService.Sugerencias resultado = suggestions.para(carrito, body.getLang());
+        return ResponseEntity.ok(CartSuggestionsDtoOut.builder()
+                .gramosLibres(resultado.gramosLibres())
+                .otroBultoFormatted(resultado.otroBultoFormatted())
+                .items(resultado.items().stream()
                 .map(s -> CartSuggestionDtoOut.builder()
                         .id(s.id())
                         .slug(s.slug())
@@ -38,7 +43,10 @@ public class CartSuggestionController {
                         .image(s.image())
                         .dutyExtraFormatted(s.dutyExtraFormatted())
                         .shippingExtraFormatted(s.shippingExtraFormatted())
+                        .shippingAloneFormatted(s.shippingAloneFormatted())
+                        .motivo(s.motivo())
                         .build())
-                .toList());
+                        .toList())
+                .build());
     }
 }

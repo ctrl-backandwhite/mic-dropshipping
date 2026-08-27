@@ -150,6 +150,20 @@ public class CustomsDutyLinesService {
         for (ParcelSplitter.Bin bin : bins) {
             parcels.add(new DutyParcel(bin.valueCents(), tariffLinesIn(bin, lines)));
         }
+        if (log.isDebugEnabled()) {
+            // Por qué un pedido paga las líneas que paga: es la cuenta que acaba en la factura del
+            // cliente, y sin verla desglosada solo se puede especular sobre ella.
+            for (int b = 0; b < bins.size(); b++) {
+                Set<String> claves = new LinkedHashSet<>();
+                for (int i = 0; i < lines.size(); i++) {
+                    if (bins.get(b).quantityOfLine(i) > 0) {
+                        claves.add(classificationKey(lines.get(i)));
+                    }
+                }
+                log.debug("Bulto {}/{}: {} unidades, {} línea(s) de declaración -> {}", b + 1, bins.size(),
+                        bins.get(b).units().size(), claves.size(), claves);
+            }
+        }
         return parcels;
     }
 

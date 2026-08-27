@@ -15,9 +15,15 @@ public class CartSuggestionDtoOut {
     String title;
     String image;
 
-    /** Lo que sube el arancel por llevárselo. Siempre cero: si subiera, no se sugeriría. */
+    /** Lo que sube el arancel. Solo viene cuando la sugerencia es por arancel y vale cero. */
     String dutyExtraFormatted;
 
     /** Lo que sube el envío por meterlo en el bulto ya pagado. Nulo si no se pudo cotizar. */
     String shippingExtraFormatted;
+
+    /** Lo que costaría enviarlo suelto. Es la referencia que hace entendible el ahorro. */
+    String shippingAloneFormatted;
+
+    /** Por qué se sugiere: DUTY (no suma arancel) o SHIPPING (viaja en el mismo paquete). */
+    String motivo;
 }
