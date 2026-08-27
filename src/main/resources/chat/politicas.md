@@ -47,6 +47,11 @@ página legal correspondiente: dos versiones distintas de la misma condición es
 
 ## Si un pedido no llega o llega mal
 
+- **Hay cinco (5) días desde la entrega para comunicar una incidencia** —producto dañado,
+  incompleto o distinto al pedido—. Avisar pronto es lo que permite reclamar al transportista a
+  tiempo.
+- Este plazo es para incidencias del envío y **no afecta al derecho de desistimiento de 14 días**,
+  que es un derecho legal aparte y no se puede recortar.
 - Se abre una incidencia y se informa de su curso.
 - Según el caso, la solución es el reenvío, la sustitución o el reembolso de lo pagado.
 - Cuando la responsabilidad es del transportista, NX036 gestiona la reclamación con él.
