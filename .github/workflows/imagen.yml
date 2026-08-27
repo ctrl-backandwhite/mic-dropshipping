@@ -56,8 +56,17 @@ jobs:
         env:
           LLAVE: ${{ secrets.DESPLIEGUE_SSH }}
         run: |
-          mkdir -p ~/.ssh && echo "$LLAVE" > ~/.ssh/id_ed25519
+          mkdir -p ~/.ssh
+          # printf con salto explícito: una llave privada SIN el salto de línea
+          # final hace que OpenSSH falle con "error in libcrypto", un mensaje que
+          # no menciona el salto por ningún lado y manda a buscar donde no es.
+          printf '%s\n' "$LLAVE" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+          # Se valida antes de usarla, para que el fallo diga qué pasa de verdad.
+          if ! ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null 2>&1; then
+            echo "::error::El secreto DESPLIEGUE_SSH no es una llave privada válida. Cópiala entera, desde -----BEGIN hasta -----END incluido."
+            exit 1
+          fi
           ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
           git clone git@github.com:ctrl-backandwhite/nexadrop-deploy.git /tmp/despliegue
           cd /tmp/despliegue
