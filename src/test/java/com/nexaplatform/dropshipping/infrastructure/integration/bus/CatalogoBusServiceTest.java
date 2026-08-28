@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 /**
@@ -149,6 +150,41 @@ class CatalogoBusServiceTest {
 
         assertThat(ocurrido).isNotBlank();
         assertThatCode(() -> Instant.parse(ocurrido)).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("La rama de categorías viaja entera y de la RAÍZ hacia abajo")
+    void laRamaViajaDeLaRaizHaciaAbajo() {
+        // Un entorno que se estrena tiene el árbol vacío: solo ve las categorías cuando alguien las
+        // edita, y eso no ha pasado nunca allí. Sin esto, el primer producto certificado llegaba con
+        // el código de una categoría inexistente, el importador lo rechazaba y el mensaje se
+        // reintentaba sin fin. Pasó de verdad: producción tenía CERO categorías frente a las 1.963
+        // de preproducción.
+        //
+        // Y de la raíz hacia abajo porque cada una necesita que su madre exista antes.
+        CategoryEntity raiz = CategoryEntity.builder().slug("moda").active(true).build();
+        CategoryEntity media = CategoryEntity.builder().slug("moda-calzado").parent(raiz).active(true).build();
+        CategoryEntity hoja = CategoryEntity.builder().slug("moda-cal-30").parent(media).active(true).build();
+
+        servicio.publicarCategoriaConAncestros(hoja);
+
+        ArgumentCaptor<String> codigos = ArgumentCaptor.captor();
+        verify(publicador, times(3)).publish(eq(EventoBus.CATEGORIA_PUBLICADA), anyString(),
+                codigos.capture(), anyString(), any(), any());
+        assertThat(codigos.getAllValues()).containsExactly("moda", "moda-calzado", "moda-cal-30");
+    }
+
+    @Test
+    @DisplayName("Una categoría que cuelga de sí misma no deja el proceso dando vueltas")
+    void unCicloNoCuelgaElProceso() {
+        // No debería ocurrir, pero un árbol con un ciclo colgaría la petición del administrador.
+        CategoryEntity a = CategoryEntity.builder().slug("bucle").active(true).build();
+        a.setParent(a);
+
+        servicio.publicarCategoriaConAncestros(a);
+
+        verify(publicador, times(1)).publish(eq(EventoBus.CATEGORIA_PUBLICADA), anyString(),
+                anyString(), anyString(), any(), any());
     }
 
     /** La carga útil que se ha encolado para el tema indicado. */

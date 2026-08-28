@@ -58,16 +58,20 @@ spring:
     # Las sesiones viven en Redis, compartidas por todas las réplicas.
     store-type: ${SESSION_STORE:redis}
     timeout: ${SESSION_TIMEOUT:30m}
-    redis:
-      namespace: nx036:sesion
-      # on-save y no immediate: una escritura por petición en lugar de una por
-      # cada cambio de atributo. Con miles de peticiones por segundo, la
-      # diferencia se nota en Redis.
-      flush-mode: on_save
-      # 'default' y no 'indexed': indexed permite buscar las sesiones de un
-      # usuario, pero cuesta escrituras extra en cada petición. Si algún día hace
-      # falta cerrar todas las sesiones de alguien desde el panel, se cambia aquí.
-      repository-type: default
+    # El prefijo correcto en Spring Boot 4 es `spring.session.data.redis`. Con el anterior
+    # (`spring.session.redis`) estas propiedades no las leía nadie: las claves habrían ido
+    # al espacio por defecto, «spring:session», y el resto de ajustes se perdían.
+    data:
+      redis:
+        namespace: nx036:sesion
+        # on-save y no immediate: una escritura por petición en lugar de una por
+        # cada cambio de atributo. Con miles de peticiones por segundo, la
+        # diferencia se nota en Redis.
+        flush-mode: on_save
+        # 'default' y no 'indexed': indexed permite buscar las sesiones de un
+        # usuario, pero cuesta escrituras extra en cada petición. Si algún día hace
+        # falta cerrar todas las sesiones de alguien desde el panel, se cambia aquí.
+        repository-type: default
   data:
     redis:
       host: ${REDIS_HOST:localhost}
