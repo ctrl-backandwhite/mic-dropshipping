@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.bus;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -16,7 +17,10 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.ContainerProperties.AckMode;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
+import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.JsonSerializer;
+import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -92,7 +96,8 @@ public class BusConfig {
 
     @Bean(defaultCandidate = false)
     public ConcurrentKafkaListenerContainerFactory<String, String> busListenerContainerFactory(
-            @Qualifier("busConsumerFactory") ConsumerFactory<String, String> busConsumerFactory) {
+            @Qualifier("busConsumerFactory") ConsumerFactory<String, String> busConsumerFactory,
+            @Qualifier("busKafkaTemplate") KafkaTemplate<String, Object> busKafkaTemplate) {
         ConcurrentKafkaListenerContainerFactory<String, String> factoria =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factoria.setConsumerFactory(busConsumerFactory);
@@ -100,6 +105,7 @@ public class BusConfig {
         // producto, el alta antes que la corrección— y con varios hilos se pierde.
         factoria.setConcurrency(1);
         factoria.getContainerProperties().setAckMode(AckMode.RECORD);
+        factoria.setCommonErrorHandler(manejadorDeErrores(busKafkaTemplate));
         return factoria;
     }
 
@@ -107,5 +113,28 @@ public class BusConfig {
     public KafkaTemplate<String, Object> busKafkaTemplate(
             @Qualifier("busProducerFactory") ProducerFactory<String, Object> busProducerFactory) {
         return new KafkaTemplate<>(busProducerFactory);
+    }
+
+    /**
+     * Qué hacer cuando un mensaje no se puede aplicar.
+     *
+     * <p>Se reintenta unas cuantas veces con un respiro entre medias, porque los motivos más
+     * frecuentes son pasajeros: la categoría padre que aún no ha llegado, la base ocupada, el
+     * espejado de una imagen que ha fallado. Si aun así no entra, el mensaje se aparta al tema de
+     * descartes en lugar de seguir reintentándolo.
+     *
+     * <p>Eso último es lo importante: sin apartarlo, UN mensaje atascado detiene la partición
+     * entera y ningún producto posterior llega a la tienda, sin más señal que un registro que se
+     * repite. Apartado, la propagación continúa y el mensaje queda guardado para mirarlo.
+     */
+    private DefaultErrorHandler manejadorDeErrores(KafkaTemplate<String, Object> plantilla) {
+        DeadLetterPublishingRecoverer aDescartes = new DeadLetterPublishingRecoverer(plantilla,
+                (registro, excepcion) -> new TopicPartition(EventoBus.DESCARTES, -1));
+        // 5 intentos separados 15 s: cerca de un minuto de margen, suficiente para que llegue una
+        // categoría que venía por detrás sin dejar la cola parada un cuarto de hora.
+        DefaultErrorHandler manejador = new DefaultErrorHandler(aDescartes, new FixedBackOff(15_000L, 4));
+        // Un mensaje ilegible no se arregla esperando: va derecho a descartes.
+        manejador.addNotRetryableExceptions(IllegalArgumentException.class);
+        return manejador;
     }
 }

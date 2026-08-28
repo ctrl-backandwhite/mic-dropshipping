@@ -64,6 +64,24 @@ class BusConfigTest {
                 });
     }
 
+    @Test
+    @DisplayName("El consumidor lleva manejador de errores: un mensaje atascado no puede parar la cola")
+    void llevaManejadorDeErrores() {
+        // Sin él, un mensaje que no se puede aplicar se reintenta sin fin y ningún producto
+        // posterior llega a la tienda, sin más señal que un registro que se repite.
+        runner.withPropertyValues("nexadrop.bus.enabled=true",
+                        "nexadrop.bus.bootstrap-servers=172.17.0.1:9122")
+                .run(contexto -> {
+                    ConcurrentKafkaListenerContainerFactory<?, ?> factoria =
+                            (ConcurrentKafkaListenerContainerFactory<?, ?>)
+                                    contexto.getBean("busListenerContainerFactory");
+                    // Se mira en el contenedor que la factoría produce, que es la pieza que de
+                    // verdad recibe los mensajes.
+                    assertThat(factoria.createContainer("catalogo.producto.certificado")
+                            .getCommonErrorHandler()).isNotNull();
+                });
+    }
+
     /** Alguien que pide el KafkaTemplate por tipo, como hacen el catálogo y el outbox. */
     static class QuienPideUnKafkaTemplate {
         final KafkaTemplate<String, Object> plantilla;

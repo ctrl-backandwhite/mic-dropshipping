@@ -9,11 +9,17 @@ spring:
   # entrega con miles de líneas de excepciones que tapan los fallos de verdad.
   # Sin el bean, el código que lo usa cae solo a su registro en memoria, que es
   # justo el camino que conviene ejercitar aquí.
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
-      - org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration
-      - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
+  # NO se excluye la autoconfiguración de Redis. Se intentó, y el contexto dejó de arrancar: el
+  # asistente (chatUseCaseImpl) exige un StringRedisTemplate y no sabe vivir sin él.
+  #
+  # Durante un tiempo pareció que sí se excluía —había un bloque con RedisAutoConfiguration y
+  # RedisRepositoriesAutoConfiguration—, pero esos nombres son de Spring Boot 3: aquí no existen, y
+  # una exclusión que no encuentra su clase no excluye nada. La configuración que llevaba meses
+  # funcionando era, en realidad, la de no excluir. Queda escrito para que nadie "arregle" los
+  # nombres y tumbe los tests de integración enteros.
+  #
+  # No hace falta excluirlo: el cliente de Redis no conecta al arrancar, sino al primer uso, y la
+  # sesión ya está en memoria por `session.store-type: none`.
   session:
     store-type: none
   # El perfil 'test' lo activa @ActiveProfiles; un recurso -test.yml no puede fijar spring.profiles.active.
@@ -53,13 +59,6 @@ spring:
   mail:
     host: localhost
     port: 1025
-  autoconfigure:
-    # Kafka SÍ se autoconfigura (varios beans necesitan KafkaTemplate); el productor es lazy y no
-    # conecta en el arranque, y los listeners no arrancan (auto-startup:false). Redis se excluye:
-    # JwtRevocationService y el rate-limit caen a memoria cuando no hay RedisTemplate.
-    exclude:
-      - org.springframework.boot.data.redis.autoconfigure.RedisAutoConfiguration
-      - org.springframework.boot.data.redis.autoconfigure.RedisRepositoriesAutoConfiguration
 
 server:
   port: 0

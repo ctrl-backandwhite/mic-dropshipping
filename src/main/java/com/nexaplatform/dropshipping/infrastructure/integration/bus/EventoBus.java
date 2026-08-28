@@ -19,6 +19,14 @@ public final class EventoBus {
     public static final String PRODUCTO_CERTIFICADO = "catalogo.producto.certificado";
     /** Un producto que deja de estar certificado o se retira del catálogo. */
     public static final String PRODUCTO_RETIRADO = "catalogo.producto.retirado";
+    /**
+     * Donde acaban los mensajes que no se han podido aplicar tras varios intentos.
+     *
+     * <p>Sin él, un solo mensaje ilegible o un producto que siempre falla bloquearían la partición
+     * para siempre: el consumidor lo reintentaría sin fin y ningún producto posterior llegaría a la
+     * tienda. Apartándolo aquí, la propagación sigue y el mensaje queda entero para repescarlo.
+     */
+    public static final String DESCARTES = "catalogo.descartes";
 
     /**
      * Versión del formato de los mensajes.
