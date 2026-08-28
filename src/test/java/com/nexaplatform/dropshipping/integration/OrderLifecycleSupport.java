@@ -3,17 +3,18 @@ package com.nexaplatform.dropshipping.integration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.junit.jupiter.api.BeforeEach;
 import com.nexaplatform.dropshipping.application.service.MarginService;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.config.BaseIntegration;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 
-import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;
 
@@ -40,6 +41,9 @@ abstract class OrderLifecycleSupport extends BaseIntegration {
     @Autowired
     private MarginService marginService;
 
+    @Autowired
+    private CurrencyRateService divisas;
+
     /**
      * Vacía la caché de reglas de margen ANTES de cada prueba.
      *
@@ -53,6 +57,31 @@ abstract class OrderLifecycleSupport extends BaseIntegration {
     @BeforeEach
     void vaciarCacheDeMargenes() {
         marginService.invalidateCache();
+        refrescarDivisas();
+    }
+
+    /**
+     * Repone las divisas que necesita cualquier pedido, sin depender de qué prueba corrió antes.
+     *
+     * <p>{@code cleanAllTables()} vacía también {@code currency_rate}, así que cada prueba tiene que
+     * sembrar las suyas. Sin esto, el derecho fijo de la Unión —tres euros por partida— no encuentra la
+     * tasa del euro y crear el pedido devuelve un 500. Funcionaba de casualidad cuando una prueba de
+     * aduanas había corrido antes en la misma JVM y había dejado la tasa en la caché de cinco minutos:
+     * una prueba que depende del orden de ejecución falla el día que ese orden cambia, y lo hace con un
+     * error que no señala a la causa.
+     *
+     * <p>Se insertan por SQL y no con {@code overrideRate}, que exige que la fila ya exista y falla
+     * justo después del vaciado. Paridad 1:1 a propósito: las pruebas de esta jerarquía comparan
+     * importes absolutos y miden cuánto se devuelve, no cuánto vale una divisa; la conversión con tasas
+     * reales está certificada aparte, en {@code CustomsDutyIT}.
+     */
+    private void refrescarDivisas() {
+        jdbcTemplate.update("""
+                INSERT INTO currency_rate (id, code, name, symbol, locale, rate_vs_usd, active, last_synced_at)
+                VALUES (gen_random_uuid(), 'USD', 'US Dollar', '$', 'en-US', 1, true, now()),
+                       (gen_random_uuid(), 'EUR', 'Euro', '€', 'es-ES', 1, true, now())
+                ON CONFLICT (code) DO UPDATE SET rate_vs_usd = EXCLUDED.rate_vs_usd, active = true""");
+        divisas.invalidateCache();
     }
 
     /** Cuerpo JSON genérico de las respuestas que hay que leer campo a campo. */
