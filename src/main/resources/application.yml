@@ -356,6 +356,12 @@ nexadrop:
 
   translation:
     enabled: ${TRANSLATION_ENABLED:false}
+    # Quién traduce: deepseek (por defecto) o google. DeepSeek reutiliza la cuenta, la clave y el
+    # modelo del asistente —nexadrop.chat.*—; una sola factura y un solo sitio donde cambiar de
+    # modelo. Un modelo de lenguaje entiende el contexto de una ficha de ropa; el traductor
+    # automático de Google, no.
+    provider: ${TRANSLATION_PROVIDER:deepseek}
+    timeout-seconds: ${TRANSLATION_TIMEOUT_SECONDS:60}
     project-id: ${GOOGLE_PROJECT_ID:}
     default-source: zh
     target-languages: es,en,pt

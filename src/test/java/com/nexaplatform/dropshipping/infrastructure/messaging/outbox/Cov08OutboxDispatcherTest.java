@@ -1,8 +1,10 @@
 package com.nexaplatform.dropshipping.infrastructure.messaging.outbox;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Pageable;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
@@ -37,6 +39,9 @@ class Cov08OutboxDispatcherTest {
 
     private EventOutboxRepository repo;
     private KafkaTemplate<String, Object> kafka;
+    /** El segundo broker: el bus de integración, que es una instalación distinta de la interna. */
+    private KafkaTemplate<String, Object> busKafka;
+    private ObjectProvider<KafkaTemplate<String, Object>> proveedorBus;
     private OutboxDispatcher dispatcher;
 
     @BeforeEach
@@ -44,7 +49,10 @@ class Cov08OutboxDispatcherTest {
     void setUp() {
         repo = mock(EventOutboxRepository.class);
         kafka = mock(KafkaTemplate.class);
-        dispatcher = new OutboxDispatcher(repo, kafka);
+        busKafka = mock(KafkaTemplate.class);
+        proveedorBus = mock(ObjectProvider.class);
+        when(proveedorBus.getIfAvailable()).thenReturn(busKafka);
+        dispatcher = new OutboxDispatcher(repo, kafka, proveedorBus);
     }
 
     /** Instante ya vencido con el que se dan de alta los eventos del outbox. */
@@ -169,5 +177,65 @@ class Cov08OutboxDispatcherTest {
         verify(repo).markSent(ids.capture(), any(Instant.class));
         assertThat(ids.getValue()).containsExactly(sano.getId());
         verify(repo).save(roto);
+    }
+
+    @Test
+    @DisplayName("Sin cabecera de destino el evento va al Kafka interno, no al bus")
+    void sinCabeceraVaAlBrokerInterno() {
+        EventOutboxEntity e = evento(null);
+        when(repo.claimBatch(any(), any(Pageable.class))).thenReturn(List.of(e));
+        when(kafka.send(anyString(), anyString(), any()))
+                .thenReturn(CompletableFuture.completedFuture(mock(SendResult.class)));
+
+        dispatcher.drain();
+
+        verify(kafka).send(eq(e.getTopic()), anyString(), any());
+        verify(busKafka, never()).send(anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("Con destino=bus el evento sale por el bus de integración y NUNCA por el interno")
+    void conCabeceraVaAlBus() {
+        // Es la separación que impide que el catálogo que ven los clientes se mezcle con el tráfico
+        // interno de la tienda, y al revés.
+        EventOutboxEntity e = evento(Map.of(OutboxDispatcher.CABECERA_DESTINO, OutboxDispatcher.DESTINO_BUS));
+        when(repo.claimBatch(any(), any(Pageable.class))).thenReturn(List.of(e));
+        when(busKafka.send(anyString(), anyString(), any()))
+                .thenReturn(CompletableFuture.completedFuture(mock(SendResult.class)));
+
+        dispatcher.drain();
+
+        verify(busKafka).send(eq(e.getTopic()), anyString(), any());
+        verify(kafka, never()).send(anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("Si el evento pide el bus y el bus está apagado, se reintenta en vez de perderse")
+    void busApagadoReintenta() {
+        // Descartarlo en silencio dejaría un producto certificado que nunca llega a la tienda.
+        when(proveedorBus.getIfAvailable()).thenReturn(null);
+        EventOutboxEntity e = evento(Map.of(OutboxDispatcher.CABECERA_DESTINO, OutboxDispatcher.DESTINO_BUS));
+        when(repo.claimBatch(any(), any(Pageable.class))).thenReturn(List.of(e));
+
+        dispatcher.drain();
+
+        assertThat(e.getAttempts()).isEqualTo(1);
+        assertThat(e.getStatus()).isEqualTo("PENDING");
+        assertThat(e.getNextAttemptAt()).isAfter(Instant.now());
+        verify(repo, never()).markSent(anyList(), any());
+    }
+
+    /** Evento del outbox listo para enviarse, con las cabeceras que se quieran probar. */
+    private EventOutboxEntity evento(Map<String, String> cabeceras) {
+        EventOutboxEntity e = new EventOutboxEntity();
+        e.setId(UUID.randomUUID());
+        e.setTopic("catalogo.producto.certificado");
+        e.setAggregateType("producto");
+        e.setAggregateId("1688-123");
+        e.setPartitionKey("1688-123");
+        e.setPayload(Map.of("externalId", "1688-123"));
+        e.setHeaders(cabeceras);
+        e.setStatus("PENDING");
+        return e;
     }
 }
