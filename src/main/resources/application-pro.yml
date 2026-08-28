@@ -50,6 +50,18 @@ server:
         same-site: lax
 
 nexadrop:
+  # ── Bus de integración ──────────────────────────────────────────────────────
+  # Kafka SEPARADO del interno de la tienda. Por aquí viaja el catálogo certificado
+  # hacia los demás entornos y, más adelante, hacia los clientes con plan de pago.
+  bus:
+    enabled: ${BUS_ENABLED:false}
+    bootstrap-servers: ${BUS_BOOTSTRAP_SERVERS:}
+    # Publicar y consumir son interruptores DISTINTOS a propósito: si el entorno que
+    # consume publicara además lo que recibe, cada producto volvería al bus al
+    # guardarse y se realimentaría sin fin.
+    publicar: ${BUS_PUBLICAR:false}
+    consumir: ${BUS_CONSUMIR:true}
+    group-id: ${BUS_GROUP_ID:nexadrop-catalogo-pro}
   storefront:
     base-url: ${NX_WEB_URL:https://nx036.com}
   mobile:
@@ -64,3 +76,4 @@ nexadrop:
     # appKey/appSecret de la cuenta de PROD se inyectan por env (CAINIAO_APP_KEY / CAINIAO_APP_SECRET).
     enabled: ${CAINIAO_ENABLED:true}
     base-url: ${CAINIAO_BASE_URL:https://link.cainiao.com/gateway/link.do}
+
