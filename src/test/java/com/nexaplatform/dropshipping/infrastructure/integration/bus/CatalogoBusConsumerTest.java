@@ -6,8 +6,7 @@ import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
-import com.nexaplatform.dropshipping.domain.model.Category;
-import com.nexaplatform.dropshipping.domain.repository.CategoryRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,14 +41,14 @@ class CatalogoBusConsumerTest {
     private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();
 
     private CatalogUseCase catalogo;
-    private CategoryRepository categorias;
+    private com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository categorias;
     private ProductRepository productos;
     private CatalogoBusConsumer consumidor;
 
     @BeforeEach
     void setUp() {
         catalogo = mock(CatalogUseCase.class);
-        categorias = mock(CategoryRepository.class);
+        categorias = mock(com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository.class);
         productos = mock(ProductRepository.class);
         consumidor = new CatalogoBusConsumer(catalogo, categorias, productos);
     }
@@ -75,8 +74,9 @@ class CatalogoBusConsumerTest {
     @DisplayName("El padre se resuelve por su CÓDIGO, porque el identificador de origen no existe aquí")
     void resuelveElPadrePorCodigo() {
         UUID idPadre = UUID.randomUUID();
-        when(categorias.findBySlug("moda-mujer"))
-                .thenReturn(Optional.of(Category.builder().id(idPadre).slug("moda-mujer").build()));
+        CategoryEntity padre = CategoryEntity.builder().slug("moda-mujer").build();
+        padre.setId(idPadre);
+        when(categorias.findBySlug("moda-mujer")).thenReturn(Optional.of(padre));
 
         consumidor.recibirCategoria(json(CategoriaPublicada.de(
                 "moda-mujer-abrigos", Map.of("es", "Abrigos"), "moda-mujer", true)));
