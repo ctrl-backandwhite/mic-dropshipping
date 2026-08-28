@@ -54,6 +54,10 @@ public class CatalogoBusConsumer {
 
     @KafkaListener(topics = EventoBus.CATEGORIA_PUBLICADA, containerFactory = "busListenerContainerFactory")
     public void recibirCategoria(String mensaje) {
+        conRastro("categoría", mensaje, () -> aplicarCategoria(mensaje));
+    }
+
+    private void aplicarCategoria(String mensaje) {
         CategoriaPublicada evento = leer(mensaje, CategoriaPublicada.class);
         // El padre se busca por su CÓDIGO: el identificador que trae el origen no existe aquí.
         UUID padre = evento.padre() == null ? null
@@ -73,6 +77,10 @@ public class CatalogoBusConsumer {
 
     @KafkaListener(topics = EventoBus.PRODUCTO_CERTIFICADO, containerFactory = "busListenerContainerFactory")
     public void recibirProducto(String mensaje) {
+        conRastro("producto", mensaje, () -> aplicarProducto(mensaje));
+    }
+
+    private void aplicarProducto(String mensaje) {
         ProductoCertificado evento = leer(mensaje, ProductoCertificado.class);
         // El importador hace upsert por identificador de origen: reprocesar el mismo mensaje deja
         // el producto igual, no duplicado. Es lo que permite reintentar sin miedo.
@@ -88,6 +96,10 @@ public class CatalogoBusConsumer {
 
     @KafkaListener(topics = EventoBus.PRODUCTO_RETIRADO, containerFactory = "busListenerContainerFactory")
     public void recibirRetirada(String mensaje) {
+        conRastro("retirada", mensaje, () -> aplicarRetirada(mensaje));
+    }
+
+    private void aplicarRetirada(String mensaje) {
         ProductoRetirado evento = leer(mensaje, ProductoRetirado.class);
         Optional<ProductEntity> producto = productos.findFirstByExternalId(evento.externalId());
         if (producto.isEmpty()) {
@@ -117,5 +129,32 @@ public class CatalogoBusConsumer {
             log.error("Mensaje del bus ilegible, se descarta: {}", mensaje, e);
             throw new IllegalArgumentException("Mensaje del bus ilegible", e);
         }
+    }
+
+    /**
+     * Ejecuta la aplicación de un mensaje dejando constancia de por qué falla, si falla.
+     *
+     * <p>Sin esto, un mensaje que no se puede aplicar se reintenta y acaba en el tema de descartes
+     * **sin una sola línea en el registro que diga qué pasó**: Spring anota los intentos fallidos en
+     * nivel de depuración, que en un entorno real está apagado. Costó una tarde entera de
+     * diagnóstico a ciegas —se veía el reintento cada quince segundos, pero no la causa—, así que la
+     * causa se registra aquí, con el principio del mensaje para poder identificarlo.
+     */
+    private void conRastro(String que, String mensaje, Runnable accion) {
+        try {
+            accion.run();
+        } catch (RuntimeException e) {
+            log.error("Bus -> NO se pudo aplicar {}: {}: {} · mensaje: {}",
+                    que, e.getClass().getSimpleName(), e.getMessage(), abreviar(mensaje), e);
+            throw e;
+        }
+    }
+
+    /** El principio del mensaje, lo justo para reconocerlo sin llenar el registro. */
+    private static String abreviar(String mensaje) {
+        if (mensaje == null) {
+            return "(vacío)";
+        }
+        return mensaje.length() > 400 ? mensaje.substring(0, 400) + "…" : mensaje;
     }
 }
