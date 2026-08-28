@@ -19,14 +19,23 @@ import java.util.Map;
 public record CategoriaPublicada(
         int version,
         String evento,
-        Instant ocurrido,
+        /**
+         * Cuándo ocurrió, en texto ISO-8601 (UTC).
+         *
+         * <p>Texto y no {@code Instant} a propósito. La bandeja de salida convierte el evento a JSON
+         * con el serializador de la aplicación, y ese no sabe escribir los tipos de fecha de Java sin
+         * un módulo aparte: al intentarlo fallaba, la transacción se deshacía entera y marcar un
+         * producto como verificado dejaba de guardarse. Además, del otro lado del bus puede haber
+         * servicios que no son Java, y una fecha ISO en texto la entiende cualquiera.
+         */
+        String ocurrido,
         String codigo,
         Map<String, String> nombre,
         String padre,
         boolean activa) {
 
     public static CategoriaPublicada de(String codigo, Map<String, String> nombre, String padre, boolean activa) {
-        return new CategoriaPublicada(EventoBus.VERSION, "categoria.publicada", Instant.now(),
+        return new CategoriaPublicada(EventoBus.VERSION, "categoria.publicada", Instant.now().toString(),
                 codigo, nombre, padre, activa);
     }
 }

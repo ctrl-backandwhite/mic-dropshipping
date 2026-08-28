@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.bus;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
 import com.nexaplatform.dropshipping.infrastructure.messaging.outbox.EventPublisher;
 import com.nexaplatform.dropshipping.infrastructure.messaging.outbox.OutboxDispatcher;
@@ -11,10 +12,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -119,6 +122,33 @@ class CatalogoBusServiceTest {
 
         assertThat(cabeceras(EventoBus.CATEGORIA_PUBLICADA))
                 .containsEntry(OutboxDispatcher.CABECERA_DESTINO, OutboxDispatcher.DESTINO_BUS);
+    }
+
+    @Test
+    @DisplayName("El evento se puede convertir a JSON con un serializador PELADO, sin módulos extra")
+    void elEventoSeSerializaSinModulosExtra() {
+        // Esto no es un capricho: la bandeja de salida convierte el evento a JSON con el serializador
+        // de la aplicación, y ese no sabe escribir los tipos de fecha de Java sin un módulo aparte.
+        // Cuando el evento llevaba un Instant, la conversión reventaba DENTRO de la transacción que
+        // guardaba el producto, así que marcar uno como verificado no llegaba a guardarse y en la
+        // pantalla seguía saliendo "Verificado: No", sin ningún error a la vista.
+        ObjectMapper pelado = new ObjectMapper();
+
+        assertThatCode(() -> {
+            pelado.convertValue(ProductoCertificado.de(ficha()), Map.class);
+            pelado.convertValue(ProductoRetirado.de("1688-987", "abrigo", "motivo"), Map.class);
+            pelado.convertValue(CategoriaPublicada.de("moda", Map.of("es", "Moda"), null, true), Map.class);
+        }).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("La marca de tiempo viaja como texto ISO, legible por cualquier consumidor")
+    void laMarcaDeTiempoEsTextoIso() {
+        // Del otro lado del bus puede haber servicios que no son Java.
+        String ocurrido = ProductoCertificado.de(ficha()).ocurrido();
+
+        assertThat(ocurrido).isNotBlank();
+        assertThatCode(() -> Instant.parse(ocurrido)).doesNotThrowAnyException();
     }
 
     /** La carga útil que se ha encolado para el tema indicado. */
