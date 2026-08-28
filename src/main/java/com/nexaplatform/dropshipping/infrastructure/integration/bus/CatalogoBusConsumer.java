@@ -4,9 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
 import com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
-import com.nexaplatform.dropshipping.domain.model.Category;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
-import com.nexaplatform.dropshipping.domain.repository.CategoryRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -42,13 +42,13 @@ public class CatalogoBusConsumer {
     private static final ObjectMapper MAPPER = new ObjectMapper().findAndRegisterModules();
 
     private final CatalogUseCase catalogo;
-    private final CategoryRepository categorias;
+    private final CategoryRepository categoriasJpa;
     private final ProductRepository productos;
 
-    public CatalogoBusConsumer(CatalogUseCase catalogo, CategoryRepository categorias,
+    public CatalogoBusConsumer(CatalogUseCase catalogo, CategoryRepository categoriasJpa,
             ProductRepository productos) {
         this.catalogo = catalogo;
-        this.categorias = categorias;
+        this.categoriasJpa = categoriasJpa;
         this.productos = productos;
     }
 
@@ -60,8 +60,14 @@ public class CatalogoBusConsumer {
     private void aplicarCategoria(String mensaje) {
         CategoriaPublicada evento = leer(mensaje, CategoriaPublicada.class);
         // El padre se busca por su CÓDIGO: el identificador que trae el origen no existe aquí.
+        //
+        // Con el repositorio de JPA y no con el de dominio: el de dominio construye la categoría
+        // entera y, al hacerlo, intenta cargar sus traducciones, que son perezosas. Aquí no hay
+        // transacción abierta, así que reventaba con «Cannot lazily initialize collection of role
+        // CategoryEntity.translations» y ninguna categoría hija llegaba a crearse. De todo el
+        // objeto solo hace falta el identificador.
         UUID padre = evento.padre() == null ? null
-                : categorias.findBySlug(evento.padre()).map(Category::getId).orElse(null);
+                : categoriasJpa.findBySlug(evento.padre()).map(CategoryEntity::getId).orElse(null);
         if (evento.padre() != null && padre == null) {
             // Se lanza para que el mensaje se reintente: la categoría padre puede estar aún en
             // camino. Crearla sin padre la dejaría colgando de la raíz del escaparate, y nadie se
