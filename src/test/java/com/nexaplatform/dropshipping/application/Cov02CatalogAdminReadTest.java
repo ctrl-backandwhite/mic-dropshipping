@@ -33,7 +33,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import com.nexaplatform.dropshipping.infrastructure.integration.bus.CatalogoBusService;
 import org.mockito.InjectMocks;
+import org.springframework.beans.factory.ObjectProvider;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -120,6 +122,14 @@ class Cov02CatalogAdminReadTest {
     CategoryAttributeSchemaRepository categoryAttributeSchemaRepository;
     @Mock
     ProductReviewJpaRepositoryAdapter productReviewJpaRepositoryAdapter;
+
+    /**
+     * El bus de integración está apagado en las pruebas: sin él, publicar no forma parte de lo que
+     * se está comprobando aquí. Hace falta declararlo igualmente porque Mockito solo inyecta los
+     * colaboradores que se le nombran, y el que falta llega como null.
+     */
+    @Mock
+    private ObjectProvider<CatalogoBusService> busCatalogo;
 
     @InjectMocks
     CatalogUseCaseImpl useCase;

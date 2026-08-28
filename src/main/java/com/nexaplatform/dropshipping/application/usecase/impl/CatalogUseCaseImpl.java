@@ -46,6 +46,7 @@ import com.nexaplatform.dropshipping.infrastructure.messaging.NexaTopics;
 import com.nexaplatform.dropshipping.infrastructure.messaging.ProductIngestedEvent;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryTranslationEntity;
+import com.nexaplatform.dropshipping.infrastructure.integration.bus.CatalogoBusService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductAttributeEntity;
 import com.nexaplatform.dropshipping.infrastructure.integration.storage.ImageMirrorService;
@@ -83,6 +84,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Varia
 import com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer;
 import com.nexaplatform.dropshipping.infrastructure.seed.CatalogFillWriter;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import java.math.BigDecimal;
@@ -175,6 +177,11 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final ProductVariantRepository variantRepository;
     private final ProductIndexer productIndexer;
+    /**
+     * El bus de integración está apagado por defecto y solo se enciende en preproducción, así que
+     * el bean puede no existir. ObjectProvider lo tolera sin condicionar el arranque del catálogo.
+     */
+    private final ObjectProvider<CatalogoBusService> busCatalogo;
     private final CategoryIndexer categoryIndexer;
     private final ProductAttributeRepository productAttributeRepository;
     private final ProductSpecificationRepository productSpecificationRepository;
@@ -287,6 +294,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             entity = categoryRepository.save(entity);
         }
         categoryIndexer.indexCategory(entity.getId());
+        CatalogoBusService bus = busCatalogo.getIfAvailable();
+        if (bus != null) {
+            bus.publicarCategoria(entity);
+        }
         return entity;
     }
 
@@ -761,12 +772,36 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     public ProductDetailView quickEdit(UUID id, AdminProductQuickEditDtoIn req, String lang) {
         ProductEntity p = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND + id));
+        boolean estabaCertificado = Boolean.TRUE.equals(p.getVerified());
         applyQuickEditScalars(p, req);
         applyQuickEditVideo(p, req);
         applyQuickEditTranslation(p, req, lang);
         productJpaRepository.save(p);
         productIndexer.indexProduct(id);
+        anunciarAlBus(p, estabaCertificado);
         return productMapper.toDetail(p, lang, priceTierRepository.findByProductIdOrderByMinQtyAsc(p.getId()));
+    }
+
+    /**
+     * Cuenta al bus lo que ha pasado con la certificación del producto.
+     *
+     * <p>Un producto que SIGUE certificado también se anuncia: si se le corrige el peso o una
+     * traducción, ese cambio tiene que llegar al destino. El evento es un «así queda ahora», de
+     * modo que reenviarlo no hace daño.
+     */
+    private void anunciarAlBus(ProductEntity p, boolean estabaCertificado) {
+        CatalogoBusService bus = busCatalogo.getIfAvailable();
+        if (bus == null) {
+            return;
+        }
+        boolean certificado = Boolean.TRUE.equals(p.getVerified());
+        if (certificado) {
+            // Se exporta aquí, dentro de la transacción, con la ficha ya guardada: así el evento
+            // lleva exactamente lo que ha quedado en la base y no una versión a medio escribir.
+            bus.publicarCertificado(exportProduct(p.getId()));
+        } else if (estabaCertificado) {
+            bus.publicarRetirado(p, "descertificado en la edición del catálogo");
+        }
     }
 
     @Override

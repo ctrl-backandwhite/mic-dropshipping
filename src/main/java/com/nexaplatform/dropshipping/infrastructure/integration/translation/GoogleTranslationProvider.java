@@ -3,11 +3,16 @@ package com.nexaplatform.dropshipping.infrastructure.integration.translation;
 import com.google.cloud.translate.Translate;
 import com.google.cloud.translate.TranslateOptions;
 import com.google.cloud.translate.Translation;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+// Ya NO es el proveedor por defecto: hay que pedirlo con nexadrop.translation.provider=google.
+// Fuera de Google Cloud, TranslateOptions.getDefaultInstance() no encuentra credenciales y revienta
+// al construirse, así que crear este bean «por si acaso» tumbaría el arranque entero.
 @Component
 @ConditionalOnProperty(prefix = "nexadrop.translation", name = "enabled", havingValue = "true")
+@ConditionalOnExpression("'${nexadrop.translation.provider:deepseek}'.equals('google')")
 public class GoogleTranslationProvider implements TranslationProvider {
 
     private final Translate translate = TranslateOptions.getDefaultInstance().getService();
