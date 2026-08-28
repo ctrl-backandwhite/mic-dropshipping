@@ -796,6 +796,12 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         }
         boolean certificado = Boolean.TRUE.equals(p.getVerified());
         if (certificado) {
+            // La categoría PRIMERO, con toda su rama. El destino puede no haberla visto nunca —una
+            // tienda que se estrena tiene el árbol vacío—, y un producto que llega antes que su
+            // categoría se queda fuera del catálogo.
+            if (p.getCategory() != null) {
+                bus.publicarCategoriaConAncestros(p.getCategory());
+            }
             // Se exporta aquí, dentro de la transacción, con la ficha ya guardada: así el evento
             // lleva exactamente lo que ha quedado en la base y no una versión a medio escribir.
             bus.publicarCertificado(exportProduct(p.getId()));

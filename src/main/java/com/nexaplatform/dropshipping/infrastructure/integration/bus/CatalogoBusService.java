@@ -10,8 +10,13 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Traduce lo que hay en la base a los eventos del bus, y los publica.
@@ -105,5 +110,33 @@ public class CatalogoBusService {
         publicador.publish(EventoBus.CATEGORIA_PUBLICADA, "categoria", c.getSlug(), c.getSlug(),
                 CategoriaPublicada.de(c.getSlug(), nombre, padre, c.isActive()), AL_BUS);
         log.info("Bus <- categoría {}", c.getSlug());
+    }
+
+    /**
+     * Publica la categoría de un producto y TODAS sus antecesoras, de la raíz hacia abajo.
+     *
+     * <p>Hace falta porque las categorías, por sí solas, únicamente se anuncian cuando alguien las
+     * crea o las edita. Un entorno que se estrena no ha visto ninguna de esas ediciones, así que su
+     * árbol está vacío: el primer producto certificado llegaba con el código de una categoría que
+     * allí no existía, el importador lo rechazaba y el mensaje se reintentaba sin fin. Pasó de
+     * verdad —producción tenía cero categorías frente a las 1.963 de preproducción.
+     *
+     * <p>De la raíz hacia abajo, y no al revés, porque cada categoría necesita que su madre exista
+     * antes: al contrario, el destino tendría que rechazarlas y esperar a que llegara la que falta.
+     */
+    public void publicarCategoriaConAncestros(CategoryEntity hoja) {
+        List<CategoryEntity> rama = new ArrayList<>();
+        Set<String> vistas = new HashSet<>();
+        for (CategoryEntity c = hoja; c != null; c = c.getParent()) {
+            // Un ciclo en el árbol dejaría este bucle dando vueltas para siempre. No debería
+            // haberlos, pero el coste de comprobarlo es nada comparado con colgar una petición.
+            if (!vistas.add(c.getSlug())) {
+                log.warn("Bus: la categoría {} cuelga de sí misma; se corta la rama", c.getSlug());
+                break;
+            }
+            rama.add(c);
+        }
+        Collections.reverse(rama);
+        rama.forEach(this::publicarCategoria);
     }
 }
