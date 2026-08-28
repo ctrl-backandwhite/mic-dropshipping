@@ -138,9 +138,17 @@
              Redis y no la base de datos: cada petición actualiza la marca de
              tiempo de su sesión, y ese caudal de escrituras competiría con los
              pedidos y el catálogo, además de hinchar la tabla. -->
+
+        <!-- Sesiones compartidas en Redis.
+             El STARTER, no las piezas sueltas. Con `spring-session-data-redis` a pelo, Spring Boot
+             RETIRA su autoconfiguración —lo dice su documentación— y hay que encenderla a mano con
+             @EnableRedisHttpSession. Como no estaba, las sesiones las seguía llevando Tomcat en la
+             memoria de cada pod: el acceso con Google empezaba en uno y Google devolvía a otro, que
+             no sabía nada, y salía «authorization_request_not_found». Por eso producción llevaba
+             meses limitada a una sola réplica. -->
         <dependency>
-            <groupId>org.springframework.session</groupId>
-            <artifactId>spring-session-data-redis</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-session-data-redis</artifactId>
         </dependency>
         <!-- La AUTOCONFIGURACIÓN de Spring Session. Hace falta explícitamente.
 
