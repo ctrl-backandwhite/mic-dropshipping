@@ -398,18 +398,56 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         }
     }
 
-    /** Variantes comprables. Sin stock declarado se guarda 0: el stock real no se inventa. */
+    /**
+     * Variantes comprables. UPSERT por externalId: las variantes que ya existen se ACTUALIZAN (mismo
+     * registro, sin borrar) y solo se crean las nuevas. Las que ya no vienen en el feed se DESACTIVAN
+     * (active=false) en vez de borrarse.
+     *
+     * <p>Antes se hacía clear() + re-crear: con orphanRemoval=true JPA borraba TODAS las variantes y las
+     * recreaba, y si una variante vieja estaba referenciada por un pedido (order_item) o un snapshot de
+     * inventario, el DELETE saltaba la FK y la reimportación de un producto ya cargado fallaba con
+     * "registro que no existe (categoría, proveedor o relación inválida)". El bulk es un UPSERT por JSON:
+     * reintentar debe actualizar el producto, no romperse.
+     */
     private void replaceVariants(ProductEntity product, IngestProductRequest req, String mainImageUrl) {
+        Map<String, ProductVariantEntity> existentes = new LinkedHashMap<>();
+        for (ProductVariantEntity v : product.getVariants()) {
+            if (v.getExternalId() != null) {
+                existentes.put(v.getExternalId(), v);
+            }
+        }
+        List<ProductVariantEntity> resultado = new ArrayList<>();
+        Set<String> vistos = new HashSet<>();
+        if (req.variants() != null) {
+            for (IngestVariant v : req.variants()) {
+                ProductVariantEntity ent;
+                if (v.externalId() != null && existentes.containsKey(v.externalId())) {
+                    ent = existentes.get(v.externalId());
+                    vistos.add(v.externalId());
+                } else {
+                    ent = ProductVariantEntity.builder().product(product)
+                            .externalId(v.externalId()).build();
+                }
+                ent.setSku(v.sku());
+                ent.setTitle(v.title());
+                ent.setPrice(v.price());
+                ent.setStock(v.stock() != null ? v.stock() : 0);
+                ent.setImageSourceUrl(v.imageSourceUrl() != null ? v.imageSourceUrl() : mainImageUrl);
+                ent.setOptions(v.options());
+                ent.setActive(true);
+                resultado.add(ent);
+            }
+        }
+        // Las variantes que ya no vienen en el feed se desactivan (no se borran: un pedido histórico
+        // puede seguir referenciándolas y la FK order_item_variant_id_fkey no debe romperse).
+        for (ProductVariantEntity v : product.getVariants()) {
+            if (v.getExternalId() != null && !vistos.contains(v.getExternalId())) {
+                v.setActive(false);
+                resultado.add(v);
+            }
+        }
         product.getVariants().clear();
-        if (req.variants() == null) {
-            return;
-        }
-        for (IngestVariant v : req.variants()) {
-            product.getVariants().add(ProductVariantEntity.builder().product(product).externalId(v.externalId())
-                    .sku(v.sku()).title(v.title()).price(v.price()).stock(v.stock() != null ? v.stock() : 0)
-                    .imageSourceUrl(v.imageSourceUrl() != null ? v.imageSourceUrl() : mainImageUrl)
-                    .options(v.options()).active(true).build());
-        }
+        product.getVariants().addAll(resultado);
     }
 
     /** Tramos de precio: van en su propia tabla, así que se borran y recrean aparte del producto. */

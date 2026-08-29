@@ -3,12 +3,14 @@ package com.nexaplatform.dropshipping.application;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariant;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontMapper;
 import com.nexaplatform.dropshipping.api.mapper.ProductBulkExportMapper;
 import com.nexaplatform.dropshipping.application.service.CustomsProfileService;
 import com.nexaplatform.dropshipping.application.usecase.impl.CatalogUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
 import com.nexaplatform.dropshipping.infrastructure.integration.storage.ImageMirrorService;
@@ -141,6 +143,49 @@ class CatalogUseCaseImplTest {
         assertThat(saved.getImages().get(0).getSourceUrl()).contains("cbu01.alicdn");
         // slug preservado (no se regenera si ya existe)
         assertThat(saved.getSlug()).isEqualTo("old-slug-offer-1");
+    }
+
+    @Test
+    void reimportar_actualizaLasVariantesPorExternalIdSinBorrarLasReferenciadasPorPedidos() {
+        // El bulk es un UPSERT por JSON: reintentar un producto ya cargado debe ACTUALIZAR sus variantes
+        // en su mismo registro, no borrarlas y recrearlas (eso rompía la FK order_item_variant_id_fkey
+        // cuando un pedido referenciaba una variante, y la reimportación fallaba con "registro que no
+        // existe"). Las variantes que ya no vienen en el feed se desactivan, no se borran.
+        ProductEntity existing = ProductEntity.builder().source("1688").externalId("OFFER-V")
+                .status(ProductStatus.DRAFT).titleZh("Old").slug("old-offer-v").moq(1).build();
+        existing.setId(UUID.randomUUID());
+        ProductVariantEntity v1 = ProductVariantEntity.builder().product(existing)
+                .externalId("V-1").sku("SKU-1").title("Rojo S").price(new BigDecimal("10.00"))
+                .stock(5).active(true).build();
+        ProductVariantEntity v2 = ProductVariantEntity.builder().product(existing)
+                .externalId("V-2").sku("SKU-2").title("Rojo M").price(new BigDecimal("11.00"))
+                .stock(7).active(true).build();
+        existing.setVariants(new java.util.ArrayList<>(List.of(v1, v2)));
+        when(productJpaRepository.findBySourceAndExternalId("1688", "OFFER-V")).thenReturn(Optional.of(existing));
+        when(productJpaRepository.save(any(ProductEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        IngestProductRequest req = new IngestProductRequest("1688", "OFFER-V", "Título nuevo", null, null, null,
+                1, new BigDecimal("19.90"), "CNY", 500, 100, null, new BigDecimal("4.8"), 30,
+                "https://detail.1688.com/offer/OFFER-V.html", null, null, List.of(), null,
+                List.of(new IngestVariant("V-1", "SKU-1", "Rojo S", new BigDecimal("9.50"), 8, null, null),
+                        new IngestVariant("V-3", "SKU-3", "Azul M", new BigDecimal("12.00"), 3, null, null)),
+                null);
+
+        ProductEntity saved = useCase.upsertProduct(req);
+
+        // V-1 se actualizó en su mismo registro (no se borró), V-2 se desactivó (no se borró), V-3 es nueva.
+        assertThat(saved.getVariants()).hasSize(3);
+        ProductVariantEntity v1Actualizado = saved.getVariants().stream()
+                .filter(v -> "V-1".equals(v.getExternalId())).findFirst().orElseThrow();
+        assertThat(v1Actualizado.getPrice()).isEqualByComparingTo("9.50");
+        assertThat(v1Actualizado.getStock()).isEqualTo(8);
+        assertThat(v1Actualizado.isActive()).isTrue();
+        assertThat(v1Actualizado.getId()).isEqualTo(v1.getId());
+        ProductVariantEntity v2Desactivado = saved.getVariants().stream()
+                .filter(v -> "V-2".equals(v.getExternalId())).findFirst().orElseThrow();
+        assertThat(v2Desactivado.isActive()).isFalse();
+        assertThat(v2Desactivado.getId()).isEqualTo(v2.getId());
+        assertThat(saved.getVariants()).anyMatch(v -> "V-3".equals(v.getExternalId()) && v.isActive());
     }
 
     @Test
