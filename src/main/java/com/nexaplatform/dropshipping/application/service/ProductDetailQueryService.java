@@ -16,9 +16,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -72,27 +74,60 @@ public class ProductDetailQueryService {
     }
 
     /**
-     * Especificaciones en el idioma pedido, con respaldo a inglés y, en último término, a las que no
-     * tienen idioma. Sin esa cascada, un producto sin traducir aparecería sin ficha técnica.
+     * Especificaciones en el idioma pedido. Cada posición se sirve en el idioma solicitado cuando esa
+     * fila existe; si no, se completa con la del idioma base (español) para que la ficha técnica NUNCA
+     * salga a medias (un idioma parcialmente traducido ya no deja huecos). Como último recurso —producto
+     * sin traducir— caen a las filas sin idioma.
+     *
+     * <p>Antes la cascada devolvía el idioma completo o, si estaba vacío, inglés o las neutrales: un
+     * idioma con solo unas filas traducidas dejaba la ficha incompleta y el escaparate la "rellenaba"
+     * mezclando con atributos en español. Ahora el escaparate recibe siempre la ficha completa en un
+     * único idioma coherente.
      */
     @Transactional(readOnly = true)
     public List<ProductSpecificationEntity> specifications(UUID id, String lang) {
-        List<ProductSpecificationEntity> specs =
-                specRepository.findByProduct_IdAndLocaleOrderByPositionAsc(id, lang);
-        if (specs.isEmpty()) {
-            specs = specRepository.findByProduct_IdAndLocaleOrderByPositionAsc(id, "en");
+        String pedido = (lang == null || lang.isBlank()) ? "es" : lang.trim().toLowerCase(Locale.ROOT);
+        List<ProductSpecificationEntity> todas =
+                specRepository.findByProduct_IdOrderByPositionAsc(id);
+        if (todas.isEmpty()) {
+            return todas;
         }
-        if (specs.isEmpty()) {
-            specs = specRepository.findByProduct_IdOrderByPositionAsc(id);
+        // Mejor fila por posición: la del idioma pedido si existe; si no, la del base (es).
+        Map<Integer, ProductSpecificationEntity> porPosicion = new LinkedHashMap<>();
+        Map<Integer, ProductSpecificationEntity> base = new LinkedHashMap<>();
+        for (ProductSpecificationEntity s : todas) {
+            String loc = s.getLocale() == null ? "" : s.getLocale().trim().toLowerCase(Locale.ROOT);
+            if (pedido.equals(loc)) {
+                porPosicion.putIfAbsent(s.getPosition(), s);
+            } else if ("es".equals(loc)) {
+                base.putIfAbsent(s.getPosition(), s);
+            }
         }
-        return specs;
+        // Si el idioma pedido no tiene NINGUNA fila, caemos primero a inglés (como antes) y luego al
+        // español, para que la ficha no quede vacía en un idioma aún sin traducir.
+        if (porPosicion.isEmpty() && !"en".equals(pedido) && !"es".equals(pedido)) {
+            for (ProductSpecificationEntity s : todas) {
+                String loc = s.getLocale() == null ? "" : s.getLocale().trim().toLowerCase(Locale.ROOT);
+                if ("en".equals(loc)) {
+                    porPosicion.putIfAbsent(s.getPosition(), s);
+                }
+            }
+        }
+        // Completamos los huecos (posiciones sin fila en el idioma pedido) con el idioma base.
+        for (Map.Entry<Integer, ProductSpecificationEntity> e : base.entrySet()) {
+            porPosicion.putIfAbsent(e.getKey(), e.getValue());
+        }
+        // Último recurso: filas sin idioma.
+        if (porPosicion.isEmpty()) {
+            for (ProductSpecificationEntity s : todas) {
+                if (s.getLocale() == null || s.getLocale().isBlank()) {
+                    porPosicion.putIfAbsent(s.getPosition(), s);
+                }
+            }
+        }
+        // Resultado ordenado por posición (el mapa ya lo mantiene: se inserta en orden).
+        return new ArrayList<>(porPosicion.values());
     }
-
-    /**
-     * Atributos del producto por clave: se parte de los neutrales (sin idioma) y se sobreescriben con la
-     * versión traducida cuando existe. Así el comprador ve su idioma sin perder los atributos que solo
-     * existen como neutrales.
-     */
     @Transactional(readOnly = true)
     public Map<String, String> attributes(UUID id, String lang) {
         List<ProductAttributeEntity> all = attributeRepository.findByProduct_Id(id);
