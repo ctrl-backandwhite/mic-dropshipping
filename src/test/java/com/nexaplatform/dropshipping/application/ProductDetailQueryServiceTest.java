@@ -103,15 +103,60 @@ class ProductDetailQueryServiceTest {
     }
 
     @Test
-    void lasEspecificacionesCaenDelIdiomaPedidoAInglesYLuegoALasNeutrales() {
+    void lasEspecificacionesCaenAlIdiomaPedidoYLuegoAlBaseCuandoNoHayNada() {
         UUID id = base.getId();
         ProductSpecificationEntity neutral = new ProductSpecificationEntity();
-        when(specs.findByProduct_IdAndLocaleOrderByPositionAsc(id, "de")).thenReturn(List.of());
-        when(specs.findByProduct_IdAndLocaleOrderByPositionAsc(id, "en")).thenReturn(List.of());
+        neutral.setLocale(null);
         when(specs.findByProduct_IdOrderByPositionAsc(id)).thenReturn(List.of(neutral));
 
         // Sin la cascada, un producto no traducido se quedaría sin ficha técnica.
         assertThat(service.specifications(id, "de")).containsExactly(neutral);
+    }
+
+    @Test
+    void lasEspecificacionesCompletanConElIdiomaBaseLasPosicionesSinTraducir() {
+        UUID id = base.getId();
+        ProductSpecificationEntity es1 = spec("es", "Tipo de estilo", "Deportivo", 1);
+        ProductSpecificationEntity en1 = spec("en", "Style type", "Sporty", 1);
+        ProductSpecificationEntity en2 = spec("en", "Material", "Cotton", 2);
+        ProductSpecificationEntity es3 = spec("es", "Origen", "China", 3);
+        ProductSpecificationEntity en3 = spec("en", "Origin", "China", 3);
+        when(specs.findByProduct_IdOrderByPositionAsc(id))
+                .thenReturn(List.of(es1, en1, en2, es3, en3));
+
+        // El idioma en tiene 3 filas y el es 2: la ficha en "en" debe salir completa en inglés,
+        // sin huecos que el escaparate luego rellenase con español.
+        List<ProductSpecificationEntity> result = service.specifications(id, "en");
+
+        assertThat(result).extracting(ProductSpecificationEntity::getLocale)
+                .containsExactly("en", "en", "en");
+        assertThat(result).extracting(ProductSpecificationEntity::getSpecKey)
+                .containsExactly("Style type", "Material", "Origin");
+    }
+
+    @Test
+    void lasEspecificacionesDeUnIdiomaSinNadaCaenAInglesYCompletanConBase() {
+        UUID id = base.getId();
+        ProductSpecificationEntity es1 = spec("es", "Tipo de estilo", "Deportivo", 1);
+        ProductSpecificationEntity en1 = spec("en", "Style type", "Sporty", 1);
+        ProductSpecificationEntity en2 = spec("en", "Material", "Cotton", 2);
+        when(specs.findByProduct_IdOrderByPositionAsc(id)).thenReturn(List.of(es1, en1, en2));
+
+        // "de" no tiene ninguna fila: primero se prueba con inglés (1 y 2) y el hueco 1 ya
+        // está, el hueco que falta se completa con el idioma base.
+        List<ProductSpecificationEntity> result = service.specifications(id, "de");
+
+        assertThat(result).extracting(ProductSpecificationEntity::getSpecKey)
+                .containsExactly("Style type", "Material");
+    }
+
+    private static ProductSpecificationEntity spec(String locale, String key, String value, int position) {
+        ProductSpecificationEntity s = new ProductSpecificationEntity();
+        s.setLocale(locale);
+        s.setSpecKey(key);
+        s.setSpecValue(value);
+        s.setPosition(position);
+        return s;
     }
 
     @Test
