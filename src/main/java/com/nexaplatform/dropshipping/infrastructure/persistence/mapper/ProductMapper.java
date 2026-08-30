@@ -99,10 +99,14 @@ public class ProductMapper {
         // tarifica con ellos, así que siguen viajando para ADMIN.
         BigDecimal basePrice = admin ? p.getBasePrice() : null;
         String currency = admin ? p.getCurrency() : null;
-        // Desglose base/IVA/envío: SOLO admin (el usuario final ve únicamente el total = displayFormatted).
+        // Desglose base/IVA/envío/recargo: SOLO admin (el usuario final ve únicamente el total = displayFormatted).
         String baseFormatted = admin ? priced.baseFormatted() : null;
         String ivaFormatted = admin ? priced.ivaFormatted() : null;
         String shippingFormatted = admin ? priced.shippingFormatted() : null;
+        // Recargo fijo por producto (30-ago-2026): el valor crudo en CNY (lo que edita el admin) y el
+        // formateado. SOLO admin; el cliente solo ve displayFormatted (que ya lo incluye en el total).
+        BigDecimal surchargeCny = admin ? p.getSurchargeCny() : null;
+        String surchargeFormatted = admin ? priced.surchargeFormatted() : null;
         // SOLO admin: arancel de aduana por artículo del país efectivo (3 €/artículo en la UE), formateado.
         String customsFormatted = null;
         if (admin) {
@@ -127,7 +131,7 @@ public class ProductMapper {
                 tiers == null ? Collections.emptyList() : tiers.stream().map(this::toPriceTierView).toList(),
                 costUsd, retailUsd, priced.displayAmount(), priced.displayCurrency(),
                 priced.displaySymbol(), priced.displayFormatted(), appliedMarginPercent,
-                baseFormatted, ivaFormatted, shippingFormatted,
+                baseFormatted, ivaFormatted, shippingFormatted, surchargeCny, surchargeFormatted,
                 tr != null ? tr.getMetaTitle() : null, tr != null ? tr.getMetaDescription() : null,
                 Boolean.TRUE.equals(p.getVerified()),
                 p.getVideoUrl(), Boolean.TRUE.equals(p.getHasVideo()),

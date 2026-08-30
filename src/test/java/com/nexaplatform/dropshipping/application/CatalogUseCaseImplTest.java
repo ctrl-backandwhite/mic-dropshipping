@@ -48,7 +48,8 @@ import static org.mockito.Mockito.when;
 
 /**
  * Mockito unit test for {@link CatalogUseCaseImpl}, mirroring the deleted
- * {@code CatalogServiceTest}. Mocks the domain port and the legacy collaborators
+ * {@code CatalogServiceTest}. Mocks the domain port and the legacy
+ * collaborators
  * used by the ingest/read flows.
  */
 @ExtendWith(MockitoExtension.class)
@@ -101,7 +102,8 @@ class CatalogUseCaseImplTest {
     @Mock
     ProductReviewJpaRepositoryAdapter productReviewJpaRepositoryAdapter;
 
-    // Con @InjectMocks los colaboradores se pasan por el constructor por tipo: añadir uno nuevo al
+    // Con @InjectMocks los colaboradores se pasan por el constructor por tipo:
+    // añadir uno nuevo al
     // caso de uso ya no obliga a retocar esta lista de argumentos.
     @InjectMocks
     CatalogUseCaseImpl useCase;
@@ -147,10 +149,14 @@ class CatalogUseCaseImplTest {
 
     @Test
     void reimportar_actualizaLasVariantesPorExternalIdSinBorrarLasReferenciadasPorPedidos() {
-        // El bulk es un UPSERT por JSON: reintentar un producto ya cargado debe ACTUALIZAR sus variantes
-        // en su mismo registro, no borrarlas y recrearlas (eso rompía la FK order_item_variant_id_fkey
-        // cuando un pedido referenciaba una variante, y la reimportación fallaba con "registro que no
-        // existe"). Las variantes que ya no vienen en el feed se desactivan, no se borran.
+        // El bulk es un UPSERT por JSON: reintentar un producto ya cargado debe
+        // ACTUALIZAR sus variantes
+        // en su mismo registro, no borrarlas y recrearlas (eso rompía la FK
+        // order_item_variant_id_fkey
+        // cuando un pedido referenciaba una variante, y la reimportación fallaba con
+        // "registro que no
+        // existe"). Las variantes que ya no vienen en el feed se desactivan, no se
+        // borran.
         ProductEntity existing = ProductEntity.builder().source("1688").externalId("OFFER-V")
                 .status(ProductStatus.DRAFT).titleZh("Old").slug("old-offer-v").moq(1).build();
         existing.setId(UUID.randomUUID());
@@ -173,7 +179,8 @@ class CatalogUseCaseImplTest {
 
         ProductEntity saved = useCase.upsertProduct(req);
 
-        // V-1 se actualizó en su mismo registro (no se borró), V-2 se desactivó (no se borró), V-3 es nueva.
+        // V-1 se actualizó en su mismo registro (no se borró), V-2 se desactivó (no se
+        // borró), V-3 es nueva.
         assertThat(saved.getVariants()).hasSize(3);
         ProductVariantEntity v1Actualizado = saved.getVariants().stream()
                 .filter(v -> "V-1".equals(v.getExternalId())).findFirst().orElseThrow();
@@ -190,8 +197,10 @@ class CatalogUseCaseImplTest {
 
     @Test
     void upsertProduct_cjkTitle_doesNotProduceSlugStartingWithDash() {
-        // Slugify descarta lo que no sea ASCII: con un título íntegramente en chino devolvía "" y el slug
-        // quedaba en "-<externalId>", una URL sin ninguna palabra. Debe caer en el prefijo neutro.
+        // Slugify descarta lo que no sea ASCII: con un título íntegramente en chino
+        // devolvía "" y el slug
+        // quedaba en "-<externalId>", una URL sin ninguna palabra. Debe caer en el
+        // prefijo neutro.
         when(productJpaRepository.findBySourceAndExternalId("1688", "OFFER-CJK")).thenReturn(Optional.empty());
         when(productJpaRepository.save(any(ProductEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -243,5 +252,57 @@ class CatalogUseCaseImplTest {
                 .repurchaseRate(new BigDecimal("30")).reviewCount(100).build();
         BigDecimal score = useCase.computeTrendScore(p);
         assertThat(score).isGreaterThan(BigDecimal.ZERO).isLessThanOrEqualTo(BigDecimal.ONE);
+    }
+
+    // ============ DROP-158: recargo fijo por producto (30-ago-2026) ============
+
+    /** Update masivo del recargo para TODO el catálogo: un único UPDATE sin filtro. */
+    @Test
+    void bulkUpdateSurcharge_sinFiltro_actualizaTodoElCatalogo() {
+        when(jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()",
+                new BigDecimal("2.00"))).thenReturn(1234);
+
+        int n = useCase.bulkUpdateSurcharge(null, null, new BigDecimal("2.00"));
+
+        assertThat(n).isEqualTo(1234);
+    }
+
+    /** Update masivo del recargo por categoría: WHERE category_id = ?. */
+    @Test
+    void bulkUpdateSurcharge_porCategoria_filtraPorCategoria() {
+        UUID cat = UUID.randomUUID();
+        when(jdbcTemplate.update(
+                "UPDATE product SET surcharge_cny = ?, updated_at = now() WHERE category_id = ?",
+                new BigDecimal("5.00"), cat)).thenReturn(42);
+
+        int n = useCase.bulkUpdateSurcharge(null, cat, new BigDecimal("5.00"));
+
+        assertThat(n).isEqualTo(42);
+    }
+
+    /** Update masivo del recargo por producto: WHERE id IN (…). */
+    @Test
+    void bulkUpdateSurcharge_porProductos_filtraPorIds() {
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+        when(jdbcTemplate.update(org.mockito.ArgumentMatchers.startsWith(
+                "UPDATE product SET surcharge_cny = ?, updated_at = now() WHERE id IN ("),
+                org.mockito.ArgumentMatchers.<Object>any(), org.mockito.ArgumentMatchers.<Object>any(),
+                org.mockito.ArgumentMatchers.<Object>any())).thenReturn(2);
+
+        int n = useCase.bulkUpdateSurcharge(List.of(a, b), null, new BigDecimal("3.00"));
+
+        assertThat(n).isEqualTo(2);
+    }
+
+    /** Recargo null se trata como 0 (reset del recargo). */
+    @Test
+    void bulkUpdateSurcharge_nullSeTrataComoCero() {
+        when(jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()",
+                BigDecimal.ZERO)).thenReturn(7);
+
+        int n = useCase.bulkUpdateSurcharge(null, null, null);
+
+        assertThat(n).isEqualTo(7);
     }
 }

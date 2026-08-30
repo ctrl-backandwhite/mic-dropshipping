@@ -198,9 +198,13 @@ public final class CatalogDtos {
             // pricing
             BigDecimal costUsd, BigDecimal retailUsd, BigDecimal displayPrice, String displayCurrency,
             String displaySymbol, String displayFormatted, BigDecimal appliedMarginPercent,
-            // Desglose del total (base×margen + IVA + envío). SOLO ADMIN (null para usuario final); el
-            // displayFormatted ya es el TOTAL que ve todo el mundo.
+            // Desglose del total (base×margen + IVA + envío + recargo). SOLO ADMIN (null para usuario
+            // final); el displayFormatted ya es el TOTAL que ve todo el mundo.
             String baseFormatted, String ivaFormatted, String shippingFormatted,
+            // Recargo fijo por producto (surcharge_cny, 30-ago-2026). surchargeCny = valor crudo en CNY
+            // (el que edita el admin); surchargeFormatted = ya convertido a la moneda de la petición.
+            // SOLO ADMIN (null para usuario final).
+            BigDecimal surchargeCny, String surchargeFormatted,
             // DROP-679: SEO por idioma (generado al publicar a partir del contenido real)
             String metaTitle, String metaDescription,
             // verificación manual del admin (false = pendiente/con error, true = revisado OK)
@@ -228,10 +232,10 @@ public final class CatalogDtos {
                     basePrice, currency, rating, reviewCount, monthlySales, repurchaseRate, trendScore, status,
                     sourceUrl, ingestedAt, lastSyncedAt, images, variantOptions, variants, priceTiers, costUsd,
                     retailUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted,
-                    appliedMarginPercent, baseFormatted, ivaFormatted, shippingFormatted, metaTitle,
-                    metaDescription, verified, videoUrl, hasVideo, originalFormatted, discountPercent,
-                    promotionName, customsFormatted, compliance, extraDutyCents, extraDutyFormatted,
-                    dutyGroupId);
+                    appliedMarginPercent, baseFormatted, ivaFormatted, shippingFormatted, surchargeCny,
+                    surchargeFormatted, metaTitle, metaDescription, verified, videoUrl, hasVideo,
+                    originalFormatted, discountPercent, promotionName, customsFormatted, compliance,
+                    extraDutyCents, extraDutyFormatted, dutyGroupId);
         }
 
         /** Sin promoción: atajo para los usos que no la calculan. */
@@ -251,8 +255,8 @@ public final class CatalogDtos {
                     reviewCount, monthlySales, repurchaseRate, trendScore, status, sourceUrl, ingestedAt,
                     lastSyncedAt, images, variantOptions, variants, priceTiers, costUsd, retailUsd, displayPrice,
                     displayCurrency, displaySymbol, displayFormatted, appliedMarginPercent, baseFormatted,
-                    ivaFormatted, shippingFormatted, metaTitle, metaDescription, verified, videoUrl, hasVideo,
-                    null, null, null, null, null, null, null, null);
+                    ivaFormatted, shippingFormatted, null, null, metaTitle, metaDescription, verified, videoUrl,
+                    hasVideo, null, null, null, null, null, null, null, null);
         }
     }
 
