@@ -241,6 +241,13 @@ public interface CatalogUseCase {
 
     ProductDetailView quickEdit(UUID id, AdminProductQuickEditDtoIn req, String lang);
 
+    /**
+     * Update del recargo fijo por producto (surcharge_cny) en lote: por producto, por categoría o para
+     * todo el catálogo (30-ago-2026). Devuelve cuántos productos se actualizaron.
+     */
+    int bulkUpdateSurcharge(java.util.List<java.util.UUID> productIds, java.util.UUID categoryId,
+            BigDecimal surchargeCny);
+
     /** Corrige el enlace a la ficha del proveedor (1688/Alibaba); rechaza cualquier otro dominio o esquema. */
     ProductDetailView updateSourceUrl(UUID id, String sourceUrl, String lang);
 

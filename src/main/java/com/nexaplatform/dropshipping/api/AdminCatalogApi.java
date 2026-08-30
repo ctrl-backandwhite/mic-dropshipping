@@ -12,6 +12,7 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AddProductImageDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductSourceUrlDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn;
@@ -88,6 +89,14 @@ public interface AdminCatalogApi {
     ProductDetailView quickEdit(@PathVariable UUID id,
             @Valid @RequestBody AdminProductQuickEditDtoIn req,
             @RequestParam(defaultValue = "es") String lang);
+
+    /**
+     * Update en lote del recargo fijo por producto (surcharge_cny, 30-ago-2026): por producto, por
+     * categoría o para todo el catálogo (productIds / categoryId / ninguno). Devuelve cuántos se tocaron.
+     */
+    @Operation(summary = "Set the product surcharge (CNY) in bulk: by product, by category or for all")
+    @PutMapping("/products/surcharge")
+    ResponseEntity<Map<String, Object>> bulkUpdateSurcharge(@Valid @RequestBody AdminSurchargeBulkDtoIn req);
 
     @Operation(summary = "Update the supplier listing URL (1688/Alibaba) of a product. "
             + "Rejects any other domain or scheme with 422 PRODUCT_SOURCE_URL_INVALID.")

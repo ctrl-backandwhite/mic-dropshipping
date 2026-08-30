@@ -336,6 +336,74 @@ class PricingServiceTest {
     }
 
     /**
+     * El recargo fijo por producto (surcharge_cny, 30-ago-2026) se suma al total SIN margen: es un cargo
+     * directo que fija el admin, no un coste de proveedor. Default 0 = sin efecto.
+     *
+     * <p>Qué se rompería en producción si esta prueba fallara: el admin fija un recargo de 2 CNY y el
+     * cliente lo pagaría multiplicado por el margen (o no se cobraría), desviándose de lo que el panel
+     * anunció.
+     */
+    @Test
+    void elRecargoSeSumaAlTotalSinMargen() {
+        when(currencyService.toUsd(any(BigDecimal.class), eq("CNY")))
+                .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("10")));
+        when(marginService.apply(any(), any(), any())).thenReturn(new PriceWithMargin(new BigDecimal("10.00"),
+                new BigDecimal("25.00"), null, new BigDecimal("150")));
+        when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(currencyService.symbolOf(anyString())).thenReturn("$");
+        when(currencyService.formatDisplay(any(BigDecimal.class), anyString())).thenReturn("2,00 $");
+
+        ProductEntity p = ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY")
+                .surchargeCny(new BigDecimal("20.00")).build();
+
+        PricedAmount priced = service.priceFor(p);
+
+        // base 25,00 + recargo 2,00 (20 CNY / 10) = 27,00. El recargo NO se multiplica por el margen.
+        assertThat(priced.surchargeUsd()).isEqualByComparingTo("2.00");
+        assertThat(priced.baseRetailUsd()).isEqualByComparingTo("25.00");
+        assertThat(priced.retailUsd()).isEqualByComparingTo("27.00");
+        assertThat(priced.surchargeFormatted()).isNotEmpty();
+    }
+
+    /** Recargo a 0 (default) no altera el total ni aparece en el desglose. */
+    @Test
+    void recargoCeroNoAlteraElPrecio() {
+        when(currencyService.toUsd(any(BigDecimal.class), eq("CNY")))
+                .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("10")));
+        when(marginService.apply(any(), any(), any())).thenReturn(new PriceWithMargin(new BigDecimal("10.00"),
+                new BigDecimal("25.00"), null, new BigDecimal("150")));
+        when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(currencyService.symbolOf(anyString())).thenReturn("$");
+
+        ProductEntity p = ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY")
+                .surchargeCny(BigDecimal.ZERO).build();
+
+        PricedAmount priced = service.priceFor(p);
+
+        assertThat(priced.surchargeUsd()).isEqualByComparingTo("0");
+        assertThat(priced.retailUsd()).isEqualByComparingTo("25.00");
+    }
+
+    /** Recargo null (producto sin valor) se trata como 0: no reventar la cadena de sumas. */
+    @Test
+    void recargoNullSeTrataComoCero() {
+        when(currencyService.toUsd(any(BigDecimal.class), eq("CNY")))
+                .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("10")));
+        when(marginService.apply(any(), any(), any())).thenReturn(new PriceWithMargin(new BigDecimal("10.00"),
+                new BigDecimal("25.00"), null, new BigDecimal("150")));
+        when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(currencyService.symbolOf(anyString())).thenReturn("$");
+
+        ProductEntity p = ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY")
+                .surchargeCny(null).build();
+
+        PricedAmount priced = service.priceFor(p);
+
+        assertThat(priced.surchargeUsd()).isEqualByComparingTo("0");
+        assertThat(priced.retailUsd()).isEqualByComparingTo("25.00");
+    }
+
+    /**
      * Motor de promociones que no rebaja nada: estas pruebas miden el pipeline de precio (coste →
      * margen → divisa), no las rebajas, y una promoción activa cambiaría todos los importes esperados.
      */

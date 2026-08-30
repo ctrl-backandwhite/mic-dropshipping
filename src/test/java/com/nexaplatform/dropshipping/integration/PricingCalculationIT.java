@@ -408,6 +408,37 @@ class PricingCalculationIT extends BaseIntegration {
     }
 
     /* ==================================================================================
+     * DROP-158: recargo fijo por producto (30-ago-2026)
+     * ================================================================================== */
+
+    /**
+     * El recargo (surcharge_cny) se suma al total tal cual, SIN margen. Con base 72,40 CNY (10 $), IVA
+     * 7,24 (1 $), envío 14,48 (2 $) y margen 150 %, el precio sin recargo es 32,50 $ (el margen también
+     * se aplica al IVA y al envío: 10×2,5 + 1×2,5 + 2×2,5 = 32,50). Un recargo de 7,24 CNY (1 $) se
+     * añade entero, SIN margen → 33,50 $.
+     */
+    @Test
+    @DisplayName("El recargo fijo se suma al precio final sin margen")
+    void elRecargoSeSumaAlPrecioFinalSinMargen() {
+        UUID producto = sembrarProductoConRecargo("con-recargo", BASE_CNY, IVA_CNY, ENVIO_CNY, 1,
+                new BigDecimal("7.24"));
+
+        // 10×2,5 + 1×2,5 + 2×2,5 = 32,50 (sin recargo) + 1 (recargo) = 33,50 $.
+        assertThat(precioDe(producto).retailUsd()).isEqualByComparingTo("33.50");
+        assertThat(precioDe(producto).surchargeUsd()).isEqualByComparingTo("1.00");
+    }
+
+    /** Recargo a 0 (default) no toca el precio de referencia de la clase (32,50 $). */
+    @Test
+    @DisplayName("Sin recargo el precio de referencia se mantiene")
+    void sinRecargoElPrecioDeReferenciaSeMantiene() {
+        UUID producto = sembrarProducto("sin-recargo", BASE_CNY, IVA_CNY, ENVIO_CNY, 1);
+
+        assertThat(precioDe(producto).retailUsd()).isEqualByComparingTo("32.50");
+        assertThat(precioDe(producto).surchargeUsd()).isEqualByComparingTo("0");
+    }
+
+    /* ==================================================================================
      * Utilidades de siembra
      * ================================================================================== */
 
@@ -421,11 +452,17 @@ class PricingCalculationIT extends BaseIntegration {
 
     private UUID sembrarProducto(String slug, BigDecimal baseCny, BigDecimal ivaCny, BigDecimal envioCny,
             int moq) {
+        return sembrarProductoConRecargo(slug, baseCny, ivaCny, envioCny, moq, BigDecimal.ZERO);
+    }
+
+    /** Igual que {@link #sembrarProducto} pero fijando el recargo fijo en CNY (30-ago-2026). */
+    private UUID sembrarProductoConRecargo(String slug, BigDecimal baseCny, BigDecimal ivaCny,
+            BigDecimal envioCny, int moq, BigDecimal surchargeCny) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update("INSERT INTO product (id, slug, external_id, source, title_zh, moq, base_price, "
-                + "currency, iva_cny, shipping_cny, status, hs_code, weight_grams) "
-                + "VALUES (?, ?, ?, '1688', ?, ?, ?, 'CNY', ?, ?, 'ACTIVE', '610910', 500)",
-                id, slug, "ext-" + slug, "测试商品 " + slug, moq, baseCny, ivaCny, envioCny);
+                + "currency, iva_cny, shipping_cny, surcharge_cny, status, hs_code, weight_grams) "
+                + "VALUES (?, ?, ?, '1688', ?, ?, ?, 'CNY', ?, ?, ?, 'ACTIVE', '610910', 500)",
+                id, slug, "ext-" + slug, "测试商品 " + slug, moq, baseCny, ivaCny, envioCny, surchargeCny);
         return id;
     }
 

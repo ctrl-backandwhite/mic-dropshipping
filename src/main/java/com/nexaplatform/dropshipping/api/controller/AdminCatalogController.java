@@ -14,6 +14,7 @@ import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AddProductImageDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.ReorderProductImagesDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductSourceUrlDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn;
@@ -111,6 +112,14 @@ public class AdminCatalogController implements AdminCatalogApi {
     @Override
     public ProductDetailView quickEdit(UUID id, AdminProductQuickEditDtoIn req, String lang) {
         return catalogUseCase.quickEdit(id, req, lang);
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> bulkUpdateSurcharge(AdminSurchargeBulkDtoIn req) {
+        // Recargo fijo por producto (30-ago-2026): por producto, por categoría o para todo el catálogo.
+        int actualizados = catalogUseCase.bulkUpdateSurcharge(req.getProductIds(), req.getCategoryId(),
+                req.getSurchargeCny());
+        return ResponseEntity.ok(Map.of("updated", actualizados));
     }
 
     @Override
