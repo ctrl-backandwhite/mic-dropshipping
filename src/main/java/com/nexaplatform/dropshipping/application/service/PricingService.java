@@ -91,6 +91,10 @@ public class PricingService {
                 ? currencyService.toUsd(product.getIvaCny(), sourceCurrency) : BigDecimal.ZERO;
         BigDecimal supplierShippingUsd = product.getShippingCny() != null
                 ? currencyService.toUsd(product.getShippingCny(), sourceCurrency) : BigDecimal.ZERO;
+        // Recargo fijo por producto (surcharge_cny, default 0): lo fija el admin y se suma al precio de
+        // venta tal cual, SIN margen — es un cargo directo que él decide, no un coste de proveedor.
+        BigDecimal surchargeUsd = product.getSurchargeCny() != null && product.getSurchargeCny().signum() != 0
+                ? currencyService.toUsd(product.getSurchargeCny(), sourceCurrency) : BigDecimal.ZERO;
         BigDecimal marginFactor = marginFactor(costUsd, retailBaseUsd);
         BigDecimal ivaUsd = supplierIvaUsd.multiply(marginFactor);
         BigDecimal shippingUsd = supplierShippingUsd.multiply(marginFactor);
@@ -100,15 +104,17 @@ public class PricingService {
         // Cada componente se convierte con PRECISIÓN COMPLETA en USD y se redondea a 2 decimales SOLO al
         // pasar a la moneda mostrada (usdToDisplay, HALF_UP). Así un monto exacto de origen sale exacto
         // (30 CNY → ¥30.00). El TOTAL = suma de los componentes YA redondeados en la moneda mostrada, de
-        // modo que el desglose SIEMPRE cuadra (base+IVA+envío = total) en cualquier divisa.
+        // modo que el desglose SIEMPRE cuadra (base+IVA+envío+recargo = total) en cualquier divisa.
         BigDecimal displayBase = currencyService.usdToDisplay(baseUsd);
         BigDecimal displayIva = currencyService.usdToDisplay(ivaUsd);
         BigDecimal displayShip = currencyService.usdToDisplay(shippingUsd);
-        // Cobro canónico en dólares: base, IVA y envío redondeados al céntimo y sumados. Es la cifra que
-        // guarda el pedido y con la que se cobra.
+        BigDecimal displaySurcharge = currencyService.usdToDisplay(surchargeUsd);
+        // Cobro canónico en dólares: base, IVA, envío y recargo redondeados al céntimo y sumados. Es la
+        // cifra que guarda el pedido y con la que se cobra.
         BigDecimal retailUsd = baseUsd == null ? null
                 : baseUsd.setScale(2, RoundingMode.HALF_UP).add(ivaUsd.setScale(2, RoundingMode.HALF_UP))
-                        .add(shippingUsd.setScale(2, RoundingMode.HALF_UP));
+                        .add(shippingUsd.setScale(2, RoundingMode.HALF_UP))
+                        .add(surchargeUsd.setScale(2, RoundingMode.HALF_UP));
         // Y el precio que se ENSEÑA es ese mismo importe convertido, no la suma de los tres componentes
         // convertidos por separado. Parece equivalente y no lo es: componer en euros y componer en
         // dólares dan resultados que difieren en un céntimo, y con eso el escaparate anunciaba 14,79 €
@@ -153,6 +159,7 @@ public class PricingService {
         String baseFormatted = currencyService.formatDisplay(displayBase, displayCode);
         String ivaFormatted = currencyService.formatDisplay(displayIva, displayCode);
         String shippingFormatted = currencyService.formatDisplay(displayShip, displayCode);
+        String surchargeFormatted = currencyService.formatDisplay(displaySurcharge, displayCode);
         // Ganancia real de la línea: lo que se cobra menos TODO lo que se le debe al proveedor (coste, su
         // IVA y su porte). Se calcula aquí, donde están los tres importes sin margen, y no en quien la
         // consume: la vista previa y el pedido la necesitaban por separado y cada uno la derivaba a su
@@ -162,7 +169,8 @@ public class PricingService {
         return new PricedAmount(costUsd, retailUsd, displayTotal, displayCode, currencyService.symbolOf(displayCode),
                 displayFormatted, withMargin.appliedRule() != null ? withMargin.appliedRule().getId() : null,
                 withMargin.appliedPercentage(), baseUsd, ivaUsd, shippingUsd, baseFormatted, ivaFormatted,
-                shippingFormatted, originalFormatted, discountPercent, promotionName, originalRetailUsd,
+                shippingFormatted, surchargeUsd, surchargeFormatted,
+                originalFormatted, discountPercent, promotionName, originalRetailUsd,
                 supplierShippingUsd, profitUsd);
     }
 
@@ -188,7 +196,8 @@ public class PricingService {
     private PricedAmount unpriced() {
         String displayCode = CurrencyHolder.get();
         return new PricedAmount(null, null, null, displayCode, currencyService.symbolOf(displayCode),
-                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null);
     }
 
     /** null → 0 (para sumar componentes de desglose cuando IVA/envío son 0 y la conversión devuelve null). */
@@ -239,9 +248,15 @@ public class PricingService {
     public record PricedAmount(BigDecimal costUsd, BigDecimal retailUsd, BigDecimal displayAmount,
             String displayCurrency, String displaySymbol, String displayFormatted, UUID appliedRuleId,
             BigDecimal appliedMarginPercent,
-            // Desglose (solo informativo, para el admin): base con margen + IVA + envío = total.
+            // Desglose (solo informativo, para el admin): base con margen + IVA + envío + recargo = total.
             BigDecimal baseRetailUsd, BigDecimal ivaUsd, BigDecimal shippingUsd,
             String baseFormatted, String ivaFormatted, String shippingFormatted,
+            /**
+             * Recargo fijo por producto (surcharge_cny, 30-ago-2026). Va en USD ya convertido y con su
+             * versión formateada para el admin. NO lleva margen: lo fija el admin por producto/categoría/
+             * masivamente y se suma tal cual al precio de venta, como un cargo directo.
+             */
+            BigDecimal surchargeUsd, String surchargeFormatted,
             // Rebaja. Nulos cuando el producto no está en promoción, que es lo que el escaparate usa
             // para decidir si pinta el precio tachado o solo uno.
             String originalFormatted, Integer discountPercent, String promotionName,
@@ -271,9 +286,10 @@ public class PricingService {
                 String displayCurrency, String displaySymbol, String displayFormatted, UUID appliedRuleId,
                 BigDecimal appliedMarginPercent, BigDecimal baseRetailUsd, BigDecimal ivaUsd,
                 BigDecimal shippingUsd, String baseFormatted, String ivaFormatted, String shippingFormatted) {
+            // Sin promoción ni recargo: los constructores heredados (tests/llamadas previas) no los usan.
             this(costUsd, retailUsd, displayAmount, displayCurrency, displaySymbol, displayFormatted,
                     appliedRuleId, appliedMarginPercent, baseRetailUsd, ivaUsd, shippingUsd, baseFormatted,
-                    ivaFormatted, shippingFormatted, null, null, null, null, shippingUsd, null);
+                    ivaFormatted, shippingFormatted, null, null, null, null, null, null, shippingUsd, null);
         }
 
         /** ¿Este precio lleva rebaja? Lo pregunta el frontend para tachar el precio anterior. */

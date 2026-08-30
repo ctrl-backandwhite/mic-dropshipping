@@ -345,4 +345,51 @@ class Cov08AdminCatalogControllerTest {
 
         verify(catalogUseCase).upsertCategoryAttributeSchema(categoryId, "material", "Material", true, 3);
     }
+
+    // ─────────────────────── DROP-158: recargo fijo por producto (30-ago-2026) ───────────────────────
+
+    /** Sin filtro (ni productIds ni categoryId) → update masivo para todo el catálogo. */
+    @Test
+    void elRecargoSinFiltroSeAplicaATodoElCatalogo() {
+        com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn req =
+                new com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn(new java.math.BigDecimal("2.00"),
+                        null, null);
+        when(catalogUseCase.bulkUpdateSurcharge(null, null, new java.math.BigDecimal("2.00"))).thenReturn(1234);
+
+        ResponseEntity<Map<String, Object>> r = controller.bulkUpdateSurcharge(req);
+
+        assertThat(r.getBody()).isEqualTo(Map.of("updated", 1234));
+        verify(catalogUseCase).bulkUpdateSurcharge(null, null, new java.math.BigDecimal("2.00"));
+    }
+
+    /** Con categoryId → update masivo solo de esa categoría. */
+    @Test
+    void elRecargoPorCategoriaSoloTocaLosProductosDeEsaCategoria() {
+        UUID cat = UUID.randomUUID();
+        com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn req =
+                new com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn(new java.math.BigDecimal("5.00"),
+                        null, cat);
+        when(catalogUseCase.bulkUpdateSurcharge(null, cat, new java.math.BigDecimal("5.00"))).thenReturn(42);
+
+        controller.bulkUpdateSurcharge(req);
+
+        verify(catalogUseCase).bulkUpdateSurcharge(null, cat, new java.math.BigDecimal("5.00"));
+    }
+
+    /** Con productIds → update solo de esos productos (manda sobre categoryId). */
+    @Test
+    void elRecargoPorProductoListaMandaSobreLaCategoria() {
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+        com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn req =
+                new com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn(new java.math.BigDecimal("3.00"),
+                        List.of(a, b), UUID.randomUUID());
+        when(catalogUseCase.bulkUpdateSurcharge(List.of(a, b), req.getCategoryId(), new java.math.BigDecimal("3.00")))
+                .thenReturn(2);
+
+        ResponseEntity<Map<String, Object>> r = controller.bulkUpdateSurcharge(req);
+
+        assertThat(r.getBody()).isEqualTo(Map.of("updated", 2));
+        verify(catalogUseCase).bulkUpdateSurcharge(List.of(a, b), req.getCategoryId(), new java.math.BigDecimal("3.00"));
+    }
 }

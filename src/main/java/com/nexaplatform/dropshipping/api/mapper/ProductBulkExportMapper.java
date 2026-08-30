@@ -76,6 +76,9 @@ public class ProductBulkExportMapper {
         d.setPrice(p.getBasePrice());
         d.setShippingCny(p.getShippingCny());
         d.setIvaCny(p.getIvaCny());
+        // El recargo fijo (surcharge_cny) viaja en el export igual que envío e IVA: es un componente
+        // del precio y el destino (el otro entorno por el bus) tiene que quedárselo igual.
+        d.setSurchargeCny(p.getSurchargeCny());
         d.setMoq(p.getMoq());
         d.setMonthlySales(p.getMonthlySales());
         d.setRating(p.getRating());

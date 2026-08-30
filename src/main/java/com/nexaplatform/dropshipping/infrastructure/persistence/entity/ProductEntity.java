@@ -92,6 +92,15 @@ public class ProductEntity extends BaseEntity {
     @Column(name = "iva_cny", precision = 12, scale = 4)
     private BigDecimal ivaCny;
 
+    /**
+     * Recargo fijo por producto en CNY (misma moneda que base_price). Default 0. Lo edita el admin
+     * por producto, por categoría o masivamente para todo el catálogo, y se suma como componente del
+     * precio final (igual que IVA y envío). Es un cargo directo del precio de venta, no un coste de
+     * proveedor.
+     */
+    @Column(name = "surcharge_cny", precision = 12, scale = 4)
+    private BigDecimal surchargeCny;
+
     @Column(length = 8)
     private String currency;
 

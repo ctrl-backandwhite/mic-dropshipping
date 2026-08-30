@@ -39,6 +39,9 @@ public class AdminProductQuickEditDtoIn {
     @Schema(description = "Import VAT in CNY")
     private BigDecimal ivaCny;
 
+    @Schema(description = "Recargo fijo por producto en CNY (default 0). Se suma al precio final.")
+    private BigDecimal surchargeCny;
+
     @Schema(description = "Localized short description")
     private String shortDescription;
 

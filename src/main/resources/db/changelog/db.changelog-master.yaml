@@ -321,3 +321,5 @@ databaseChangeLog:
       file: db/changelog/schema-v155-mirror-reintentos.sql
   - include:
       file: db/changelog/schema-v156-welcome-ejemplos.sql
+  - include:
+      file: db/changelog/schema-v157-surcharge-cny.sql

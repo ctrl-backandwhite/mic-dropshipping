@@ -82,6 +82,13 @@ public class BulkProductDtoIn {
      */
     private BigDecimal ivaCny;
 
+    /**
+     * Recargo fijo por producto en CNY (default 0). Lo fija el admin (por producto, categoría o en lote)
+     * y se suma al precio de venta SIN margen. Viaja en el export/import del bus para que el recargo sea
+     * el mismo en todos los entornos (PRE y PROD).
+     */
+    private BigDecimal surchargeCny;
+
     private Integer moq;
 
     private Integer monthlySales;
