@@ -44,6 +44,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -101,6 +102,8 @@ class CatalogUseCaseImplTest {
     CategoryAttributeSchemaRepository categoryAttributeSchemaRepository;
     @Mock
     ProductReviewJpaRepositoryAdapter productReviewJpaRepositoryAdapter;
+    @Mock
+    org.springframework.beans.factory.ObjectProvider<com.nexaplatform.dropshipping.infrastructure.integration.bus.CatalogoBusService> busCatalogo;
 
     // Con @InjectMocks los colaboradores se pasan por el constructor por tipo:
     // añadir uno nuevo al
@@ -304,5 +307,28 @@ class CatalogUseCaseImplTest {
         int n = useCase.bulkUpdateSurcharge(null, null, null);
 
         assertThat(n).isEqualTo(7);
+    }
+
+    /** El update masivo reanuncia al bus los productos certificados afectados (el recargo viaja). */
+    @Test
+    void bulkUpdateSurcharge_reanunciaLosCertificadosAlBus() {
+        UUID a = UUID.randomUUID();
+        when(jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()",
+                new BigDecimal("2.00"))).thenReturn(3);
+        when(jdbcTemplate.queryForList("SELECT id FROM product WHERE verified = true", UUID.class))
+                .thenReturn(List.of(a));
+        ProductEntity certificado = ProductEntity.builder().build();
+        certificado.setVerified(true);
+        certificado.setId(a);
+        when(productJpaRepository.findById(a)).thenReturn(Optional.of(certificado));
+        // Bus apagado en el test: anunciarAlBus corta antes de exportar.
+        when(busCatalogo.getIfAvailable()).thenReturn(null);
+
+        int n = useCase.bulkUpdateSurcharge(null, null, new BigDecimal("2.00"));
+
+        assertThat(n).isEqualTo(3);
+        // Los certificados afectados se localizan para reanunciarlos al bus.
+        verify(jdbcTemplate).queryForList("SELECT id FROM product WHERE verified = true", UUID.class);
+        verify(productJpaRepository).findById(a);
     }
 }

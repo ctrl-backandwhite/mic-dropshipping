@@ -122,7 +122,6 @@ import jakarta.persistence.PersistenceContext;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.regex.Pattern;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -952,21 +951,44 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true) })
     public int bulkUpdateSurcharge(List<UUID> productIds, UUID categoryId, BigDecimal surchargeCny) {
         BigDecimal valor = surchargeCny != null ? surchargeCny : BigDecimal.ZERO;
+        int actualizados;
         if (productIds != null && !productIds.isEmpty()) {
             // Recargo solo para los productos indicados.
             String in = String.join(",", java.util.Collections.nCopies(productIds.size(), "?"));
-            return jdbcTemplate.update(
+            actualizados = jdbcTemplate.update(
                     "UPDATE product SET surcharge_cny = ?, updated_at = now() WHERE id IN (" + in + ")",
                     parametrosConValor(valor, productIds));
-        }
-        if (categoryId != null) {
+        } else if (categoryId != null) {
             // Recargo para toda una categoría.
-            return jdbcTemplate.update(
+            actualizados = jdbcTemplate.update(
                     "UPDATE product SET surcharge_cny = ?, updated_at = now() WHERE category_id = ?",
                     valor, categoryId);
+        } else {
+            // Sin filtro: todo el catálogo (update masivo global).
+            actualizados = jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()", valor);
         }
-        // Sin filtro: todo el catálogo (update masivo global).
-        return jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()", valor);
+        // El recargo es un componente del precio: los productos certificados afectados se re-anuncian al
+        // bus para que el cambio llegue al destino (el export del bus lleva surcharge_cny).
+        for (UUID id : idsCertificadosAfectados(productIds, categoryId)) {
+            productJpaRepository.findById(id).ifPresent(p -> anunciarAlBus(p, false));
+        }
+        return actualizados;
+    }
+
+    /** Los productos certificados (verified) a los que afecta el update de recargo, para reanunciarlos. */
+    private List<UUID> idsCertificadosAfectados(List<UUID> productIds, UUID categoryId) {
+        if (productIds != null && !productIds.isEmpty()) {
+            String in = String.join(",", java.util.Collections.nCopies(productIds.size(), "?"));
+            return jdbcTemplate.queryForList(
+                    "SELECT id FROM product WHERE verified = true AND id IN (" + in + ")",
+                    UUID.class, productIds.toArray());
+        }
+        if (categoryId != null) {
+            return jdbcTemplate.queryForList(
+                    "SELECT id FROM product WHERE verified = true AND category_id = ?",
+                    UUID.class, categoryId);
+        }
+        return jdbcTemplate.queryForList("SELECT id FROM product WHERE verified = true", UUID.class);
     }
 
     /** Concatena el valor del recargo delante de los ids para el UPDATE ... IN (?). */
@@ -2261,6 +2283,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // (ver PricingService).
         p.setShippingCny(r.getShippingCny());
         p.setIvaCny(r.getIvaCny());
+        // Recargo fijo (CNY): opcional, default 0. Se aplica en la importación para que el recargo
+        // llegue igual por el bus/reexport (si no, el destino lo dejaría a 0).
+        p.setSurchargeCny(r.getSurchargeCny());
         BulkProductFields.applyPackageDimensions(p, r);
         BulkProductFields.applyCustomsFields(p, r);
         // Lo que la carga no traiga (partida arancelaria, material, uso, batería y
