@@ -331,3 +331,5 @@ databaseChangeLog:
       file: db/changelog/schema-v160-categorias-chino.sql
   - include:
       file: db/changelog/schema-v161-categorias-cuatro-idiomas.sql
+  - include:
+      file: db/changelog/schema-v162-taxonomia-completa.sql
