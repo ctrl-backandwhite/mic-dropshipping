@@ -420,10 +420,10 @@ nexadrop:
     sync-interval-ms: ${FULFILLMENT_SYNC_INTERVAL_MS:60000}
     # Cuántas formas de envío se le ofrecen al cliente, de la más barata a la más cara.
     #
-    # CJ devuelve QUINCE opciones para España y YunExpress añade las suyas: esa lista deja de ser
-    # elección y pasa a ser un catálogo en mitad del pago. El recorte se aplica DESPUÉS de ordenar por
-    # precio, así que lo que sobrevive son siempre las más baratas. Cero o menos = sin recorte, para
-    # depurar una cotización completa sin tocar el código.
+    # Un transportista puede devolver muchas opciones para un destino y otro añadir las suyas: esa
+    # lista deja de ser elección y pasa a ser un catálogo en mitad del pago. El recorte se aplica
+    # DESPUÉS de ordenar por precio, así que lo que sobrevive son siempre las más baratas. Cero o menos
+    # = sin recorte, para depurar una cotización completa sin tocar el código.
     max-shipping-options: ${FULFILLMENT_MAX_SHIPPING_OPTIONS:5}
     # Almacén chino de Yunfulfillment donde el proveedor de 1688 entrega la mercancía.
     #
@@ -507,26 +507,6 @@ nexadrop:
     # y las que lo aplican no dividen por lo mismo (la de carga general, entre 8000).
     volumetric-divisor: ${YUNEXPRESS_VOLUMETRIC_DIVISOR:6000}
     volumetric-min-cm3: ${YUNEXPRESS_VOLUMETRIC_MIN_CM3:6000}
-
-  # ── CJ Dropshipping: el SEGUNDO transportista ────────────────────────────────────────────────────
-  # Convive con YunExpress, no lo sustituye. Cuál de los dos puede llevar un pedido depende de la
-  # mercancía: la línea FZZXR de YunExpress solo admite textil, así que un pedido que no sea ropa —o que
-  # mezcle ropa con otra cosa— se ofrece por CJ.
-  cj:
-    enabled: ${CJ_ENABLED:false}
-    base-url: ${CJ_BASE_URL:https://developers.cjdropshipping.com}
-    # Formato CJ<numeroDeUsuario>@api@<clave>. NUNCA se escribe en el registro ni en un error.
-    api-key: ${CJ_API_KEY:}
-    # Cada cuántos días se renueva el token. La documentación de CJ dice que dura 15 días; la respuesta
-    # real medida el 18-ago-2026 daba 180, para el token y para el refresco. A los 10 hay margen con
-    # cualquiera de las dos, y un token revocado se descubre renovando y no en mitad de un checkout.
-    token-refresh-days: ${CJ_TOKEN_REFRESH_DAYS:10}
-    auth-timeout-seconds: ${CJ_AUTH_TIMEOUT:20}
-    # El sandbox de CJ NO es otro servidor: es el mismo, con isSandbox=1 al crear el pedido. Por eso
-    # esta bandera solo puede estar activa fuera de pre y producción, igual que el modo simulado.
-    sandbox: ${CJ_SANDBOX:false}
-    # País desde el que sale la mercancía almacenada en CJ.
-    from-country: ${CJ_FROM_COUNTRY:CN}
 
   # Almacenamiento de objetos (MinIO/S3) para el mirror de imágenes de producto. El backend descarga
   # la imagen de origen (1688/alicdn, sin Referer) y la sube al bucket; el `public-url` es la base con

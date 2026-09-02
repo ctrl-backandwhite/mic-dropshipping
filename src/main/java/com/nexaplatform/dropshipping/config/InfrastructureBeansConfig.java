@@ -22,9 +22,9 @@ public class InfrastructureBeansConfig {
      * El reloj del sistema, como bean.
      *
      * <p>Lo que se inyecta un reloj se puede probar. Quien llama a {@code Instant.now()} por su cuenta
-     * obliga a que sus pruebas esperen de verdad: el token de CJ se renueva a los diez días y comprobar
-     * eso sin un reloj sustituible no es que sea incómodo, es que no se hace, y el caso se queda sin
-     * probar. Con este bean, la prueba fija la hora que necesita y el caso queda cubierto.
+     * obliga a que sus pruebas esperen de verdad: un token externo que se renueva cada cierto tiempo y
+     * comprobar eso sin un reloj sustituible no es que sea incómodo, es que no se hace, y el caso se
+     * queda sin probar. Con este bean, la prueba fija la hora que necesita y el caso queda cubierto.
      */
     @Bean
     public Clock clock() {

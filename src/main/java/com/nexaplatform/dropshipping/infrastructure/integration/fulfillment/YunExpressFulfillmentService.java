@@ -76,11 +76,9 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-// Desde que hay un segundo transportista (CJ, 18-ago-2026) hay DOS beans de FulfillmentProvider, y tres
-// sitios lo inyectan por tipo: OrderUseCaseImpl, FulfillmentService y ShippingQuoteService. Sin este
-// @Primary el contexto no arranca por ambigüedad. Manda YunExpress porque es quien tiene la tabla de
-// zonas —de ahí sale el banner de cobertura— y quien ya despachaba todo lo anterior; lo que decide de
-// verdad qué transportista lleva cada pedido es FulfillmentRouter, que los recibe a los dos en lista.
+// @Primary queda como seguro por si mañana hay más de un FulfillmentProvider: sin él el contexto no
+// arranca por ambigüedad. Hoy solo existe YunExpress, que es quien despacha todos los pedidos; lo que
+// decide de verdad qué transportista lleva cada pedido es FulfillmentRouter, que los recibe en lista.
 @Primary
 @RequiredArgsConstructor
 public class YunExpressFulfillmentService implements FulfillmentProvider {

@@ -53,9 +53,9 @@ import java.util.Optional;
  *       AR, CL, CO, PE, UY, EC, DO, IL, TR y el Golfo. Por encima de su umbral <b>no se vende</b>, y hay
  *       tres motivos que apuntan al mismo sitio: por encima de 150 EUR la UE exige despacho formal con
  *       arancel; el canal contratado a YunExpress no acepta bultos de 150 EUR / 155 USD o más (así está
- *       cargado en {@code carrier_max_amount} en esos 27 países); y el IOSS de CJ <b>no cubre pedidos de
- *       más de 150 EUR</b>, de modo que por encima no podría prepagar el IVA y el envío dejaría de ser
- *       DDP. Por debajo del umbral sí se cobra el derecho por partida de la UE (3 EUR por línea de
+ *       cargado en {@code carrier_max_amount} en esos 27 países), de modo que por encima no se podría
+ *       prepagar el IVA y el envío dejaría de ser DDP. Por debajo del umbral sí se cobra el derecho por
+ *       partida de la UE (3 EUR por línea de
  *       declaración y bulto).</li>
  *   <li><b>2 sin franquicia y política {@code BLOCK}</b> — US y PR. Estados Unidos suspendió la suya de
  *       800 USD (indefinida y para todos los orígenes desde el 24-jun-2026; de ley el 1-jul-2027), y Puerto
@@ -76,15 +76,13 @@ import java.util.Optional;
  *
  * <p><b>Hueco 2: la comisión del transportista por prepagar el IVA se absorbe en el margen.</b>
  * {@code vat_prepay_percent_bps} está a 0 en los 86 países, y es el campo que la repercutiría. YunExpress
- * cobra el <b>2 % del valor declarado</b>; CJ cobra el IVA liquidado <b>más un 3 % de ese IVA</b> (sobre 25
- * EUR de mercancía al 21 % son 0,16 EUR frente a 0,50 EUR, así que CJ sale más barato porque la base es
- * mucho menor). Decisión del dueño el 19-ago-2026: <b>se absorbe a sabiendas</b>, igual que se hizo con el
- * 2 % de YunExpress. Queda escrito aquí para que no aparezca como una sorpresa al conciliar la factura: no
+ * cobra el <b>2 % del valor declarado</b> por prepagar el IVA. Decisión del dueño el 19-ago-2026:
+ * <b>se absorbe a sabiendas</b>, igual que se hizo con el 2 % de YunExpress. Queda escrito aquí para que no aparezca como una sorpresa al conciliar la factura: no
  * es un olvido, es una decisión, y el campo está listo para el día en que se quiera repercutir.
  *
- * <p><b>Lo que CJ cotiza es solo transporte.</b> Su {@code freightCalculateTip} devuelve {@code taxesFee},
- * {@code clearanceOperationFee} y {@code tariff} a nulo, y sigue igual aunque se le pase un número de
- * IOSS. El impuesto y el arancel del destino los pone esta clase; el porte, el transportista. Si algún día
+ * <p><b>El transportista cotiza solo transporte.</b> Su cotización devuelve el impuesto y el arancel a
+ * nulo, y sigue igual aunque se le pase un número de IOSS. El impuesto y el arancel del destino los
+ * pone esta clase; el porte, el transportista. Si algún día
  * eso cambia, se cobraría dos veces.
  */
 @Slf4j

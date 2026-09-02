@@ -80,7 +80,7 @@ public class CustomerOrderEntity extends BaseEntity {
     @Column(name = "shipping_carrier", length = 32)
     private String shippingCarrier;
 
-    /** Nombre de la línea contratada. CJ lo exige para emitir la guía; el código no le vale. */
+    /** Nombre de la línea contratada. El transportista lo exige para emitir la guía; el código no le vale. */
     @Column(name = "shipping_channel_name", length = 96)
     private String shippingChannelName;
 
