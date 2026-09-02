@@ -197,8 +197,7 @@ public class ShippingQuoteController {
      */
     public enum NombreDelTransportista {
 
-        YUNEXPRESS("YUNEXPRESS", "YunExpress"),
-        CJ("CJ", "CJ Dropshipping");
+        YUNEXPRESS("YUNEXPRESS", "YunExpress");
 
         private final String interno;
         private final String visible;

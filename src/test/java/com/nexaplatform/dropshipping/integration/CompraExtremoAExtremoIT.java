@@ -166,7 +166,7 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
         // más barato: es exactamente lo que devuelve el servicio real.
         when(fulfillment.isSupported(anyString())).thenReturn(true);
         // Cómo se llama y que ya puede emitir la guía. Lo primero es lo que el pedido guarda al cobrar y
-        // lo que decide después a quién pedírsela; lo segundo, lo que solo el transportista sabe —CJ no
+        // lo que decide después a quién pedírsela; lo segundo, lo que solo el transportista sabe —no
         // puede hasta tener la mercancía dada de alta—. Un simulacro contesta null y false a las dos
         // cosas, y entonces esta compra se quedaría sin despachar por un motivo ajeno a lo que prueba.
         when(fulfillment.nombre()).thenReturn(TRANSPORTISTA);

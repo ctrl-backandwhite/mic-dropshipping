@@ -99,7 +99,32 @@ public class ProductEntity extends BaseEntity {
      * proveedor.
      */
     @Column(name = "surcharge_cny", precision = 12, scale = 4)
-    private BigDecimal surchargeCny;
+    @Builder.Default
+    private BigDecimal surchargeCny = BigDecimal.ZERO;
+
+    /**
+     * Bolsa de subvención del PORTE, en CNY (misma moneda que base_price). Default 0. La asigna el
+     * admin por producto, por categoría o en lote, y en el checkout se suma UNA VEZ POR PRODUCTO —no
+     * por unidad— para descontarla del porte cotizado por el transportista. Si la suma iguala o supera
+     * el porte, el envío queda cubierto.
+     *
+     * <p>Sustituye al cálculo de la subvención a partir del margen: el envío ya no lo paga la ganancia
+     * del pedido, lo paga el importe que el admin haya asignado aquí.
+     */
+    @Column(name = "shipping_user_cny", precision = 12, scale = 4)
+    @Builder.Default
+    private BigDecimal shippingUserCny = BigDecimal.ZERO;
+
+    /**
+     * Bolsa de subvención del ARANCEL, en CNY. Espejo exacto de {@link #shippingUserCny}: se descuenta
+     * del derecho de aduana calculado.
+     *
+     * <p>Abarata lo que el cliente PAGA; el derecho declarado y remitido sigue siendo el íntegro.
+     * Bajar el declarado sería infradeclarar, y de eso responde el declarante.
+     */
+    @Column(name = "duty_user_cny", precision = 12, scale = 4)
+    @Builder.Default
+    private BigDecimal dutyUserCny = BigDecimal.ZERO;
 
     @Column(length = 8)
     private String currency;

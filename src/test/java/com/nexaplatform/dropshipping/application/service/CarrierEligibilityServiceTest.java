@@ -115,7 +115,7 @@ class CarrierEligibilityServiceTest {
         List<ProductEntity> taza = List.of(con("691200"));
 
         assertThat(servicio.admiteCanal("THPHR", taza)).isTrue();
-        assertThat(servicio.admiteCanal("CJPacket", taza)).isTrue();
+        assertThat(servicio.admiteCanal("CANAL_LIBRE", taza)).isTrue();
         assertThat(servicio.admiteCanal("FZZXR", taza))
                 .as("la de ropa es la única con restricción, y por eso es la única que se pregunta")
                 .isFalse();

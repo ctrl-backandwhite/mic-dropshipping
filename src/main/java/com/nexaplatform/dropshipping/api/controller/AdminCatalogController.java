@@ -14,6 +14,7 @@ import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AddProductImageDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.ReorderProductImagesDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.AdminSubsidyBulkDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductSourceUrlDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
@@ -119,6 +120,14 @@ public class AdminCatalogController implements AdminCatalogApi {
         // Recargo fijo por producto (30-ago-2026): por producto, por categoría o para todo el catálogo.
         int actualizados = catalogUseCase.bulkUpdateSurcharge(req.getProductIds(), req.getCategoryId(),
                 req.getSurchargeCny());
+        return ResponseEntity.ok(Map.of("updated", actualizados));
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> bulkUpdateSubsidy(AdminSubsidyBulkDtoIn req) {
+        // Bolsas de subvención (1-sep-2026): por producto, por categoría o para todo el catálogo.
+        int actualizados = catalogUseCase.bulkUpdateSubsidy(req.getProductIds(), req.getCategoryId(),
+                req.getShippingUserCny(), req.getDutyUserCny());
         return ResponseEntity.ok(Map.of("updated", actualizados));
     }
 

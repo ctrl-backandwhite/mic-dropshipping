@@ -43,21 +43,19 @@ public class Order {
      */
     private String shippingChannelCode;
     /**
-     * Quién lleva el envío: {@code YUNEXPRESS}, {@code CJ}.
+     * Quién lleva el envío: {@code YUNEXPRESS}.
      *
-     * <p>Con un solo transportista bastaba el código del canal. Con dos no se pueden distinguir
-     * mirándolos —{@code FZZXR} contra {@code 1868922929754472449}— y despachar por el que no era
-     * significa cobrar un porte y pagar otro. Lo rellena el cobro con el transportista de la opción que
-     * el cliente eligió, y lo lee el despacho para saber a quién pedirle la guía.
+     * <p>Con un solo transportista bastaba el código del canal, pero el nombre queda guardado en el
+     * pedido para saber a quién pedirle la guía cuando se despache.
      */
     private String shippingCarrier;
     /**
      * Cómo llama el transportista a la línea contratada.
      *
-     * <p>Se guarda además del código porque CJ pide el NOMBRE para emitir la guía y el pedido solo
-     * tenía el código: sin esto, el despacho tendría que volver a cotizar horas después solo para
-     * cruzarlos, gastando una llamada de una API limitada a una por segundo y quedándose sin despachar
-     * si para entonces CJ ya no ofrece esa línea.
+     * <p>Se guarda además del código porque el transportista pide el NOMBRE para emitir la guía y el
+     * pedido solo tenía el código: sin esto, el despacho tendría que volver a cotizar horas después
+     * solo para cruzarlos, gastando una llamada de una API limitada a una por segundo y quedándose sin
+     * despachar si para entonces ya no ofrece esa línea.
      */
     private String shippingChannelName;
 

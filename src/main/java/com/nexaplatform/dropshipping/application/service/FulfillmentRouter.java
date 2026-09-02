@@ -29,11 +29,11 @@ import java.util.List;
  *       para una taza acaba en guía rechazada en el almacén con el pedido ya cobrado.</li>
  *   <li><b>Un transportista caído.</b> Si su fallo se propaga, se pierde la venta por un problema ajeno
  *       que además tenía alternativa. Cada uno se pregunta por separado y su fallo solo le quita a él.</li>
- *   <li><b>La misma línea dos veces.</b> CJ revende YunExpress: entre sus opciones para España la más
- *       barata se llama «YunExpress Ordinary». Enseñarla junto a la nuestra, a precios distintos, parece
- *       un fallo de la tienda cuando en realidad es el mismo camión.</li>
- *   <li><b>Un destino que uno no cubre.</b> Preguntárselo igualmente es gastar una llamada —CJ limita a
- *       una por segundo— en el camino del checkout.</li>
+ *   <li><b>La misma línea dos veces.</b> Dos transportistas pueden ofrecer la misma línea (uno la
+ *       revende del otro): enseñarla dos veces, a precios distintos, parece un fallo de la tienda
+ *       cuando en realidad es el mismo camión.</li>
+ *   <li><b>Un destino que uno no cubre.</b> Preguntárselo igualmente es gastar una llamada de una API
+ *       con límite de peticiones en el camino del checkout.</li>
  * </ol>
  */
 @Slf4j
@@ -126,11 +126,10 @@ public class FulfillmentRouter {
      * dos cosas que para él son idénticas y deja la tienda con pinta de estar cobrando de más.
      *
      * <p><b>Y NO se compara por nombre, aunque sea tentador.</b> Se midió con tarifas reales el
-     * 19-ago-2026: lo que CJ revende como «YunExpress Ordinary» tarda 8-15 días, mientras que la línea
-     * FZZXR contratada directamente con YunExpress tarda 5-8. Los dos nombres mencionan a YunExpress y
-     * NO son el mismo servicio: CJ sale más barato porque vende uno más lento. Fundirlas por el nombre
-     * habría borrado la opción rápida, que además es la más barata de su tramo (10,79 $ frente a los
-     * 11,45 $ que pide CJ por un 4-8 días).
+     * 19-ago-2026: una opción revendida que menciona a YunExpress tarda 8-15 días, mientras que la
+     * línea FZZXR contratada directamente tarda 5-8. Comparten el nombre y NO son el mismo servicio:
+     * la revendida sale más barata porque es más lenta. Fundirlas por el nombre habría borrado la
+     * opción rápida, que además es la más barata de su tramo.
      *
      * <p>Gana la barata venga de quien venga: la regla es el precio, no el transportista.
      */
@@ -164,7 +163,7 @@ public class FulfillmentRouter {
     /**
      * Se queda con el principio de la lista ya ordenada: las más baratas.
      *
-     * <p>CJ devuelve quince formas de envío para España y YunExpress añade las suyas. Una lista así no
+     * <p>Un transportista puede devolver muchas formas de envío para un destino y otro añadir las suyas. Una lista así no
      * es más elección, es un catálogo en mitad del pago: el cliente que tenía que decidir entre dos
      * cosas acaba comparando quince y se va. Se le ofrece un abanico corto, y el criterio del corte es
      * el precio porque es lo que se le está pidiendo que compare.

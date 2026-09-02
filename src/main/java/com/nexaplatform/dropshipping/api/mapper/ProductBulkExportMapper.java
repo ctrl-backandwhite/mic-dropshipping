@@ -79,6 +79,10 @@ public class ProductBulkExportMapper {
         // El recargo fijo (surcharge_cny) viaja en el export igual que envío e IVA: es un componente
         // del precio y el destino (el otro entorno por el bus) tiene que quedárselo igual.
         d.setSurchargeCny(p.getSurchargeCny());
+        // Las bolsas de subvención viajan en el export igual que el recargo: son componentes de lo que
+        // paga el cliente y el destino tiene que quedárselas iguales.
+        d.setShippingUserCny(p.getShippingUserCny());
+        d.setDutyUserCny(p.getDutyUserCny());
         d.setMoq(p.getMoq());
         d.setMonthlySales(p.getMonthlySales());
         d.setRating(p.getRating());

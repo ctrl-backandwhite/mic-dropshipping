@@ -41,7 +41,7 @@ class CheckoutPreviewAgrupacionArancelariaTest {
     private final CustomsDeclarationGroupService declarationGroups =
             mock(CustomsDeclarationGroupService.class);
 
-    private final CheckoutPreviewService service = new CheckoutPreviewService(shipping, totals, subvencionDeEnvio(), pricing,
+    private final CheckoutPreviewService service = new CheckoutPreviewService(shipping, totals, subvenciones(), pricing,
             currency, products, dutyLines, affiliate, promociones, orderAmounts, declarationGroups);
 
     private final UUID zapatillas = UUID.randomUUID();
@@ -110,16 +110,11 @@ class CheckoutPreviewAgrupacionArancelariaTest {
      * <p>Real y no simulada a propósito: estas pruebas miden importes, y un doble que devolviera cero
      * escondería justo el descuento que hoy forma parte del desglose.
      */
-    private static com.nexaplatform.dropshipping.application.service.ShippingSubsidyService subvencionDeEnvio() {
-        com.nexaplatform.dropshipping.application.service.CustomsValuationService aduana =
-                org.mockito.Mockito.mock(com.nexaplatform.dropshipping.application.service.CustomsValuationService.class);
+    private static com.nexaplatform.dropshipping.application.service.ProductSubsidyService subvenciones() {
         com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService divisa =
                 org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService.class);
         org.mockito.Mockito.lenient().when(divisa.toUsd(org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.anyString())).thenReturn(new java.math.BigDecimal("5.85"));
-        com.nexaplatform.dropshipping.application.service.ShippingSubsidyService s =
-                new com.nexaplatform.dropshipping.application.service.ShippingSubsidyService(aduana, divisa);
-        org.springframework.test.util.ReflectionTestUtils.setField(s, "sueloDeGananciaEur", new java.math.BigDecimal("5"));
-        return s;
+        return new com.nexaplatform.dropshipping.application.service.ProductSubsidyService(divisa);
     }
 }

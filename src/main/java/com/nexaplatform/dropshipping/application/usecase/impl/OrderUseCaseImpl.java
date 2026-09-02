@@ -15,7 +15,7 @@ import com.nexaplatform.dropshipping.application.notifications.NotificationsPubl
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.application.service.CartService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
-import com.nexaplatform.dropshipping.application.service.ShippingSubsidyService;
+import com.nexaplatform.dropshipping.application.service.ProductSubsidyService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
 import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
 import com.nexaplatform.dropshipping.application.service.StockService;
@@ -137,7 +137,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
      */
     private final FulfillmentRouter router;
     private final CheckoutTotalsService checkoutTotalsService;
-    private final ShippingSubsidyService shippingSubsidyService;
+    private final ProductSubsidyService productSubsidyService;
     private final CustomsDutyLinesService customsDutyLinesService;
     private final UnserviceableZoneService unserviceableZoneService;
     private final OperatorCommissionService operatorCommissionService;
@@ -430,7 +430,7 @@ public class OrderUseCaseImpl implements OrderUseCase {
             // Sin esto, al despachar habría que adivinar a quién pedirle la guía: los códigos de dos
             // transportistas no se parecen en nada y no hay forma de deducirlo del código.
             order.setShippingCarrier(chosen.carrier());
-            // El nombre, además del código: es lo que CJ exige para emitir la guía.
+            // El nombre, además del código: es lo que el transportista exige para emitir la guía.
             order.setShippingChannelName(chosen.name());
         }
         int shippingCents = quote.supported()
@@ -474,11 +474,13 @@ public class OrderUseCaseImpl implements OrderUseCase {
         //  · Recargo de despacho formal si el valor de los bienes supera el umbral de minimis del destino.
         // Derecho fijo de la UE: se cobra por línea de declaración (partida arancelaria) dentro de cada
         // bulto, no por producto ni por unidad. Ver CustomsDutyLinesService.
-        // La bolsa de subvención va por el MISMO servicio que la vista previa: si el checkout enseñara un
-        // descuento y el cobro otro, el cliente pagaría distinto de lo que aceptó.
+        // Las bolsas van por el MISMO servicio que la vista previa: si el checkout enseñara un descuento
+        // y el cobro otro, el cliente pagaría distinto de lo que aceptó. Cada una cubre su concepto —una
+        // el porte y la otra el arancel—, sin mezclarse.
+        ProductSubsidyService.Bags bolsas = productSubsidyService.bagsFor(productosDelPedido(order));
         CheckoutTotalsService.CheckoutTotals totals = checkoutTotalsService.compute(order.getShippingCountry(),
                 order.getShippingState(), discountedSubtotal, shippingCents, customsParcelsOf(order),
-                shippingSubsidyService.subsidyUsdCents(lineasDeSubvencion(order), order.getShippingCountry()));
+                new CheckoutTotalsService.Subsidy(bolsas.shippingCents(), bolsas.dutyCents()));
         // Destino cuya política prohíbe vender por encima del umbral: se rechaza ANTES de cobrar, en vez de
         // aceptar un pedido que costaría aranceles y despacho formal no repercutidos.
         if (totals.blocked()) {
@@ -1488,33 +1490,21 @@ public class OrderUseCaseImpl implements OrderUseCase {
 
 
     /**
-     * Las líneas del pedido tal y como las necesita la bolsa de subvención.
+     * Los productos del pedido, para que la bolsa los cuente UNA VEZ CADA UNO.
      *
-     * <p>La ganancia por unidad es <b>lo cobrado menos el coste</b> descontando el IVA y el porte del
-     * proveedor, que son dinero suyo y no ganancia nuestra. El pedido ya guarda el coste por línea
-     * (`costCents`), así que no hay que volver a tarificar.
+     * <p>La cantidad ya no interviene: la subvención la asigna el admin por producto y el proveedor
+     * manda un solo bulto tenga el cliente una unidad o cinco.
      */
-    private List<ShippingSubsidyService.Linea> lineasDeSubvencion(Order order) {
-        List<ShippingSubsidyService.Linea> out = new ArrayList<>();
+    private List<ProductEntity> productosDelPedido(Order order) {
+        List<ProductEntity> out = new ArrayList<>();
         for (OrderItem item : order.getItems()) {
             if (item.getProductId() == null) {
                 continue;
             }
             ProductEntity p = productRepository.findById(item.getProductId()).orElse(null);
-            if (p == null) {
-                continue;
+            if (p != null) {
+                out.add(p);
             }
-            PricingService.PricedAmount priced = pricingService.priceFor(p, null);
-            // La ganancia sale ya calculada del tarificador —cobrado menos coste, IVA y porte del
-            // proveedor— y el porte que se devuelve es el del PROVEEDOR, sin margen: es el gasto que no se
-            // repite al pedir la segunda unidad. Cobrarle al cliente el porte con margen y devolvérselo
-            // también con margen regalaría ese margen dos veces, porque ya vuelve por la vía de la
-            // ganancia sobrante.
-            int ganancia = priced.profitUsd() == null ? 0
-                    : priced.profitUsd().setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
-            int porte = priced.supplierShippingUsd() == null ? 0
-                    : priced.supplierShippingUsd().setScale(2, RoundingMode.HALF_UP).movePointRight(2).intValueExact();
-            out.add(new ShippingSubsidyService.Linea(p.getId(), Math.max(1, item.getQuantity()), ganancia, porte));
         }
         return out;
     }

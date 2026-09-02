@@ -11,7 +11,6 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
 import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.application.service.EuComplianceService;
-import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
@@ -42,7 +41,6 @@ public class ProductMapper {
     private final PricingService pricingService;
     private final CurrencyRateService currencyRateService;
     private final MarginService marginService;
-    private final CustomsValuationService customsValuationService;
     private final EuComplianceService euComplianceService;
 
     public ProductSummaryView toSummary(ProductEntity p, String language) {
@@ -106,17 +104,13 @@ public class ProductMapper {
         // Recargo fijo por producto (30-ago-2026): el valor crudo en CNY (lo que edita el admin) y el
         // formateado. SOLO admin; el cliente solo ve displayFormatted (que ya lo incluye en el total).
         BigDecimal surchargeCny = admin ? p.getSurchargeCny() : null;
+        // Las bolsas de subvención son SOLO admin: el cliente ve su efecto en el desglose del checkout,
+        // nunca el importe que se les ha asignado.
+        BigDecimal shippingUserCny = admin ? p.getShippingUserCny() : null;
+        BigDecimal dutyUserCny = admin ? p.getDutyUserCny() : null;
         String surchargeFormatted = admin ? priced.surchargeFormatted() : null;
-        // SOLO admin: arancel de aduana por artículo del país efectivo (3 €/artículo en la UE), formateado.
-        String customsFormatted = null;
-        if (admin) {
-            int customsCents = customsValuationService.perArticleFeeUsdCents(PricingCountryHolder.get());
-            if (customsCents > 0) {
-                customsFormatted = currencyRateService.formatDisplay(
-                        currencyRateService.usdToDisplay(BigDecimal.valueOf(customsCents).movePointLeft(2)),
-                        priced.displayCurrency());
-            }
-        }
+        String shippingUserFormatted = admin ? priced.shippingUserFormatted() : null;
+        String dutyUserFormatted = admin ? priced.dutyUserFormatted() : null;
         return new ProductDetailView(p.getId(), p.getSlug(), p.getSource(), p.getExternalId(),
                 p.getSupplier() != null ? supplierMapper.toView(p.getSupplier()) : null,
                 p.getCategory() != null ? p.getCategory().getId() : null, tr != null ? tr.getTitle() : p.getTitleZh(),
@@ -132,10 +126,11 @@ public class ProductMapper {
                 costUsd, retailUsd, priced.displayAmount(), priced.displayCurrency(),
                 priced.displaySymbol(), priced.displayFormatted(), appliedMarginPercent,
                 baseFormatted, ivaFormatted, shippingFormatted, surchargeCny, surchargeFormatted,
+                shippingUserCny, dutyUserCny, shippingUserFormatted, dutyUserFormatted,
                 tr != null ? tr.getMetaTitle() : null, tr != null ? tr.getMetaDescription() : null,
                 Boolean.TRUE.equals(p.getVerified()),
                 p.getVideoUrl(), Boolean.TRUE.equals(p.getHasVideo()),
-                priced.originalFormatted(), priced.discountPercent(), priced.promotionName(), customsFormatted,
+                priced.originalFormatted(), priced.discountPercent(), priced.promotionName(),
                 // Cumplimiento del Reglamento (UE) 2023/988. Va en TODAS las fichas, también las del admin:
                 // el art. 19 obliga a mostrarlo en la oferta, y el panel necesita el mismo bloque para saber
                 // qué le falta a cada referencia.
