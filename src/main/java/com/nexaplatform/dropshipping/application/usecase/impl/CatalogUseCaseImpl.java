@@ -1847,7 +1847,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<BulkProductDtoIn> exportProducts(int from, int to, Instant createdFrom, Instant createdTo) {
+    public List<BulkProductDtoIn> exportProducts(int from, int to, Instant createdFrom, Instant createdTo,
+            Boolean verified) {
         int safeFrom = Math.max(1, from);
         int safeTo = Math.max(safeFrom, to);
         int offset = safeFrom - 1;
@@ -1865,6 +1866,11 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (createdTo != null) {
             jpql.append(" AND p.ingestedAt < :ct");
         }
+        // Certificación: se añade igual que las fechas, solo si viene informada. Nulo = da igual, y así el
+        // filtro se combina con el rango en vez de sustituirlo.
+        if (verified != null) {
+            jpql.append(" AND p.verified = :ver");
+        }
         jpql.append(" ORDER BY p.id ASC");
         TypedQuery<ProductEntity> query = em.createQuery(jpql.toString(), ProductEntity.class);
         if (createdFrom != null) {
@@ -1872,6 +1878,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         }
         if (createdTo != null) {
             query.setParameter("ct", createdTo);
+        }
+        if (verified != null) {
+            query.setParameter("ver", verified);
         }
         List<ProductEntity> products = query.setFirstResult(offset).setMaxResults(limit).getResultList();
         List<BulkProductDtoIn> out = new ArrayList<>();
@@ -1895,7 +1904,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public ProductExportBatch exportBatchAfter(UUID afterId, int limit, Instant createdFrom, Instant createdTo) {
+    public ProductExportBatch exportBatchAfter(UUID afterId, int limit, Instant createdFrom, Instant createdTo,
+            Boolean verified) {
         int safeLimit = Math.clamp(limit, 1, 1000);
         // Keyset pagination by id. A native query with an explicit uuid cast is used
         // because Hibernate does
@@ -1910,11 +1920,13 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 "SELECT * FROM product WHERE (CAST(:afterId AS uuid) IS NULL OR id > CAST(:afterId AS uuid)) "
                         + "AND (CAST(:cf AS timestamptz) IS NULL OR ingested_at >= CAST(:cf AS timestamptz)) "
                         + "AND (CAST(:ct AS timestamptz) IS NULL OR ingested_at < CAST(:ct AS timestamptz)) "
+                        + "AND (CAST(:ver AS boolean) IS NULL OR verified = CAST(:ver AS boolean)) "
                         + "ORDER BY id ASC LIMIT :lim",
                 ProductEntity.class)
                 .setParameter("afterId", afterId != null ? afterId.toString() : null)
                 .setParameter("cf", createdFrom != null ? createdFrom.toString() : null)
                 .setParameter("ct", createdTo != null ? createdTo.toString() : null)
+                .setParameter("ver", verified != null ? verified.toString() : null)
                 .setParameter("lim", safeLimit)
                 .getResultList();
         if (products.isEmpty()) {
@@ -1970,7 +1982,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public long countProducts(Instant createdFrom, Instant createdTo) {
+    public long countProducts(Instant createdFrom, Instant createdTo, Boolean verified) {
         // Filtro condicional (ver exportProducts): evita el bind nulo sin tipo que
         // Postgres rechaza.
         StringBuilder jpql = new StringBuilder("SELECT COUNT(p) FROM ProductEntity p WHERE 1 = 1");
@@ -1980,12 +1992,18 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (createdTo != null) {
             jpql.append(" AND p.ingestedAt < :ct");
         }
+        if (verified != null) {
+            jpql.append(" AND p.verified = :ver");
+        }
         TypedQuery<Long> query = em.createQuery(jpql.toString(), Long.class);
         if (createdFrom != null) {
             query.setParameter("cf", createdFrom);
         }
         if (createdTo != null) {
             query.setParameter("ct", createdTo);
+        }
+        if (verified != null) {
+            query.setParameter("ver", verified);
         }
         return query.getSingleResult();
     }

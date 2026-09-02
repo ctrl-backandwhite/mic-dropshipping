@@ -193,17 +193,21 @@ public interface AdminCatalogApi {
     ResponseEntity<BulkResultDtoOut> bulkProducts(@Valid @RequestBody List<BulkProductDtoIn> rows);
 
     @Operation(summary = "Export products in a 1-based range as the same bulk JSON shape (re-importable). "
-            + "Optional createdFrom/createdTo (yyyy-MM-dd) filter by upload date (ingestedAt).")
+            + "Optional createdFrom/createdTo (yyyy-MM-dd) filter by upload date (ingestedAt), and optional "
+            + "verified filter (true = only certified, false = only pending). All filters combine.")
     @GetMapping("/products/export")
     ResponseEntity<List<BulkProductDtoIn>> exportProducts(@RequestParam(defaultValue = "1") int from,
             @RequestParam(defaultValue = "1000") int to,
             @RequestParam(required = false) String createdFrom,
-            @RequestParam(required = false) String createdTo);
+            @RequestParam(required = false) String createdTo,
+            @RequestParam(required = false) Boolean verified);
 
-    @Operation(summary = "Total product count (to compute export segments); optional createdFrom/createdTo filter")
+    @Operation(summary = "Total product count (to compute export segments); optional createdFrom/createdTo and "
+            + "verified filters, combined the same way the export applies them")
     @GetMapping("/products/export/count")
     ResponseEntity<Map<String, Long>> exportCount(@RequestParam(required = false) String createdFrom,
-            @RequestParam(required = false) String createdTo);
+            @RequestParam(required = false) String createdTo,
+            @RequestParam(required = false) Boolean verified);
 
     @Operation(summary = "Export ONE product as the bulk JSON shape (to edit as JSON and re-import with upsert)")
     @GetMapping("/products/{id}/export")
@@ -214,7 +218,8 @@ public interface AdminCatalogApi {
     @GetMapping(value = "/products/export/ndjson", produces = "application/x-ndjson")
     ResponseEntity<StreamingResponseBody> exportProductsNdjson(@RequestParam(defaultValue = "200") int batch,
             @RequestParam(required = false) String createdFrom,
-            @RequestParam(required = false) String createdTo);
+            @RequestParam(required = false) String createdTo,
+            @RequestParam(required = false) Boolean verified);
 
     @Operation(summary = "Import products from an NDJSON body (one product per line), processed in batches with "
             + "bounded memory. The request body is read as a stream and never fully loaded into memory.")
