@@ -129,7 +129,7 @@ public class ProductMapper {
                 shippingUserCny, dutyUserCny, shippingUserFormatted, dutyUserFormatted,
                 tr != null ? tr.getMetaTitle() : null, tr != null ? tr.getMetaDescription() : null,
                 Boolean.TRUE.equals(p.getVerified()),
-                p.getVideoUrl(), Boolean.TRUE.equals(p.getHasVideo()),
+                videoUrlOf(p), Boolean.TRUE.equals(p.getHasVideo()),
                 priced.originalFormatted(), priced.discountPercent(), priced.promotionName(),
                 // Cumplimiento del Reglamento (UE) 2023/988. Va en TODAS las fichas, también las del admin:
                 // el art. 19 obliga a mostrarlo en la oferta, y el panel necesita el mismo bloque para saber
@@ -158,6 +158,19 @@ public class ProductMapper {
                 translateVariantOptions(v.getOptions(), product, language), v.isActive(),
                 weight, v.getLengthMm(), v.getWidthMm(), v.getHeightMm(),
                 priced.originalFormatted(), priced.discountPercent());
+    }
+
+    /**
+     * Dirección del vídeo que se le da al navegador: la NUESTRA si ya está espejado, la del proveedor si
+     * todavía no.
+     *
+     * <p>Es la misma preferencia que las imágenes hacen con {@code cdnUrl} sobre {@code sourceUrl}. Mientras
+     * el espejado no ha terminado se sigue sirviendo la del origen —vale más un vídeo de Alibaba que
+     * ninguno—, y en cuanto termina la ficha deja de salir de nuestro dominio sin que haya que tocar nada.
+     */
+    static String videoUrlOf(ProductEntity p) {
+        String propia = p.getVideoCdnUrl();
+        return propia != null && !propia.isBlank() ? propia : p.getVideoUrl();
     }
 
     /** Back-compat overload (without product); used by ProductMapperTest. */

@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.entity;
 
+import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -24,6 +25,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Entity
 @Table(name = "product", uniqueConstraints = @UniqueConstraint(columnNames = {"source", "external_id"}))
@@ -193,6 +195,51 @@ public class ProductEntity extends BaseEntity {
 
     @Column(name = "video_url", length = 800)
     private String videoUrl;
+
+    // ── v164: el vídeo también se espeja a nuestro almacenamiento, como las imágenes ──
+    // La vista prefiere videoCdnUrl sobre videoUrl, así que en cuanto el espejado termina el navegador
+    // deja de ir a pedirle el vídeo a Alibaba.
+    @Column(name = "video_cdn_url", length = 800)
+    private String videoCdnUrl;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "video_mirror_status", length = 20)
+    private MirrorStatus videoMirrorStatus;
+
+    @Column(name = "video_bytes")
+    private Long videoBytes;
+
+    @Column(name = "video_hash", length = 64)
+    private String videoHash;
+
+    @Column(name = "video_mirror_attempts")
+    private Integer videoMirrorAttempts;
+
+    @Column(name = "video_mirrored_at")
+    private Instant videoMirroredAt;
+
+    /**
+     * Cambia la dirección de origen del vídeo y lo deja en cola para espejar si de verdad es otra.
+     *
+     * <p>Va aquí y no en cada sitio que edita el producto —la importación masiva y el panel— porque
+     * olvidarlo en uno de los dos no rompe nada visible: el producto se guarda, la ficha enseña el vídeo
+     * del proveedor y nadie se entera de que ese no se ha traído nunca. Lo espejado antes se descarta
+     * porque pertenece a OTRO vídeo, y el contador de intentos vuelve a cero: la dirección nueva merece
+     * sus oportunidades aunque la vieja las hubiera agotado.
+     */
+    public void cambiarVideoUrl(String nueva) {
+        String anterior = this.videoUrl;
+        this.videoUrl = nueva;
+        if (Objects.equals(anterior, nueva)) {
+            return;
+        }
+        this.videoCdnUrl = null;
+        this.videoHash = null;
+        this.videoBytes = null;
+        this.videoMirroredAt = null;
+        this.videoMirrorAttempts = 0;
+        this.videoMirrorStatus = nueva != null && !nueva.isBlank() ? MirrorStatus.PENDING : null;
+    }
 
     // ── v44: campos internacionales/1688 que faltaban ──
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)

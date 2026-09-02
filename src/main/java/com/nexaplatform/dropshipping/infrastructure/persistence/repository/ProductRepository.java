@@ -1,13 +1,16 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository;
 
+import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -386,4 +389,50 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
     List<UUID> idsForCustomsTerna(@Param("status") ProductStatus status, @Param("hs6") String hs6,
             @Param("material") String material, @Param("usageCode") String usageCode,
             @Param("origin") String origin);
+
+    // ── v164: espejado del vídeo. Mismos métodos que ProductImageRepository usa para las imágenes, para
+    // que el servicio de vídeo sea el mismo mecanismo y no uno nuevo que haya que aprender aparte. ──
+
+    /** Lo recién importado primero: así el vídeo aparece en la ficha cuanto antes durante una carga. */
+    List<ProductEntity> findTop50ByVideoMirrorStatusOrderByUpdatedAtDesc(MirrorStatus status);
+
+    long countByVideoMirrorStatus(MirrorStatus status);
+
+    /** Vídeos de un conjunto de productos en un estado — para espejar YA lo que se acaba de guardar. */
+    List<ProductEntity> findByIdInAndVideoMirrorStatus(List<UUID> ids, MirrorStatus status);
+
+    /** Marca el vídeo como espejado: fija la dirección en nuestro almacenamiento y sus metadatos. */
+    @Modifying
+    @Transactional
+    @Query("UPDATE ProductEntity p SET p.videoCdnUrl = :cdnUrl, p.videoBytes = :bytes, p.videoHash = :hash, "
+            + "p.videoMirrorStatus = :status, p.videoMirroredAt = :at, p.videoMirrorAttempts = 0 "
+            + "WHERE p.id = :id")
+    void markVideoMirrored(@Param("id") UUID id, @Param("cdnUrl") String cdnUrl, @Param("bytes") Long bytes,
+            @Param("hash") String hash, @Param("status") MirrorStatus status, @Param("at") Instant at);
+
+    /** Marca el fallo y suma un intento, que es lo que espacia el siguiente y lo que acaba parándolos. */
+    @Modifying
+    @Transactional
+    @Query("UPDATE ProductEntity p SET p.videoMirrorStatus = "
+            + "com.nexaplatform.dropshipping.domain.enums.MirrorStatus.FAILED, "
+            + "p.videoMirrorAttempts = coalesce(p.videoMirrorAttempts, 0) + 1 WHERE p.id = :id")
+    void markVideoFailedAndCountAttempt(@Param("id") UUID id);
+
+    /**
+     * Candidatas a reintento: las fallidas que aún no han agotado sus intentos, de la más antigua a la
+     * más nueva. Cuál toca de verdad lo decide el servicio con la espera de cada una; aquí solo se acota
+     * el conjunto.
+     */
+    @Query("SELECT p FROM ProductEntity p "
+            + "WHERE p.videoMirrorStatus = com.nexaplatform.dropshipping.domain.enums.MirrorStatus.FAILED "
+            + "AND coalesce(p.videoMirrorAttempts, 0) < :maxAttempts ORDER BY p.updatedAt ASC LIMIT :limit")
+    List<ProductEntity> findVideosFailedForRetry(@Param("maxAttempts") int maxAttempts,
+            @Param("limit") int limit);
+
+    /** Devuelve un vídeo a la cola. El contador de intentos NO se toca: es lo que espacia los reintentos. */
+    @Modifying
+    @Transactional
+    @Query("UPDATE ProductEntity p SET p.videoMirrorStatus = "
+            + "com.nexaplatform.dropshipping.domain.enums.MirrorStatus.PENDING WHERE p.id IN :ids")
+    void requeueVideos(@Param("ids") List<UUID> ids);
 }
