@@ -895,7 +895,7 @@ class Cov03StorefrontCatalogControllerTest {
         UUID grupo = UUID.randomUUID();
         when(catalogUseCase.getProductBySlug("vestido", "es")).thenReturn(ficha);
         when(dutyBadges.badgesFor(any(), eq(List.of(id)), any()))
-                .thenReturn(Map.of(id, new DutyBadge(0, "0,00 €", grupo)));
+                .thenReturn(Map.of(id, new DutyBadge(0, "0,00 €", grupo, false)));
 
         ProductDetailView conArancel = controller.detailBySlug("vestido", "es", List.of(UUID.randomUUID()));
 

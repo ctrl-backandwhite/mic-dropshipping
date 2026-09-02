@@ -148,7 +148,10 @@ public final class CatalogDtos {
             // de declaración pertenece. Nulos = no hay nada que prometer (carrito vacío) o el país ya no
             // cobra derecho por artículo, y entonces el distintivo no se pinta. El importe viene formateado
             // por el backend: el front no calcula importes.
-            Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId) {
+            // dutyCovered = la tienda paga el derecho de aduana de este producto. NO depende del carrito,
+            // así que se sabe también con el carrito vacío, y solo puede ser cierto donde hay derecho por
+            // artículo que cubrir: hoy los 27 de la UE.
+            Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId, boolean dutyCovered) {
 
         /** Sin arancel resuelto: el listado lo decora después, fuera de la caché, porque depende del carrito. */
         public ProductSummaryView(UUID id, String slug, String title, String mainImage, BigDecimal basePrice,
@@ -159,7 +162,7 @@ public final class CatalogDtos {
             this(id, slug, title, mainImage, basePrice, currency, rating, monthlySales, trendScore, status,
                     priceUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted, inventoryCount,
                     availableUnits, verified, originalFormatted, discountPercent, promotionName, null, null,
-                    null);
+                    null, false);
         }
 
         /** Sin promoción: atajo para los usos que no la calculan. */
@@ -169,7 +172,7 @@ public final class CatalogDtos {
                 String displayFormatted, Integer inventoryCount, Integer availableUnits, boolean verified) {
             this(id, slug, title, mainImage, basePrice, currency, rating, monthlySales, trendScore, status,
                     priceUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted, inventoryCount,
-                    availableUnits, verified, null, null, null, null, null, null);
+                    availableUnits, verified, null, null, null, null, null, null, false);
         }
 
         /**
@@ -180,11 +183,12 @@ public final class CatalogDtos {
          * cada combinación de carrito —que no tiene fin— y echaría del hueco a las páginas que de verdad
          * se repiten.
          */
-        public ProductSummaryView withDuty(Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId) {
+        public ProductSummaryView withDuty(Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId,
+                boolean dutyCovered) {
             return new ProductSummaryView(id, slug, title, mainImage, basePrice, currency, rating, monthlySales,
                     trendScore, status, priceUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted,
                     inventoryCount, availableUnits, verified, originalFormatted, discountPercent, promotionName,
-                    extraDutyCents, extraDutyFormatted, dutyGroupId);
+                    extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered);
         }
     }
 
@@ -227,10 +231,13 @@ public final class CatalogDtos {
             // Arancel: lo mismo que en la tarjeta del catálogo. Cuánto sube el derecho de aduana del
             // carrito por llevarse ESTE producto y a qué grupo de declaración pertenece. La ficha promete
             // lo mismo que el listado porque lo calcula el mismo servicio.
-            Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId) {
+            // dutyCovered = la tienda paga el derecho de aduana de este producto; lo mismo que anuncia la
+            // tarjeta, calculado igual. Solo puede ser cierto donde hay derecho por artículo: hoy la UE.
+            Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId, boolean dutyCovered) {
 
         /** La misma ficha con el arancel resuelto; se decora fuera del detalle, que va cacheado. */
-        public ProductDetailView withDuty(Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId) {
+        public ProductDetailView withDuty(Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId,
+                boolean dutyCovered) {
             return new ProductDetailView(id, slug, source, externalId, supplier, categoryId, title,
                     shortDescription, description, titleZh, shortDescriptionZh, descriptionZh, brand, moq,
                     basePrice, currency, rating, reviewCount, monthlySales, repurchaseRate, trendScore, status,
@@ -241,7 +248,7 @@ public final class CatalogDtos {
                     shippingUserFormatted, dutyUserFormatted,
                     metaTitle, metaDescription, verified, videoUrl, hasVideo,
                     originalFormatted, discountPercent, promotionName, compliance,
-                    extraDutyCents, extraDutyFormatted, dutyGroupId);
+                    extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered);
         }
 
         /** Sin promoción: atajo para los usos que no la calculan. */
@@ -262,7 +269,7 @@ public final class CatalogDtos {
                     lastSyncedAt, images, variantOptions, variants, priceTiers, costUsd, retailUsd, displayPrice,
                     displayCurrency, displaySymbol, displayFormatted, appliedMarginPercent, baseFormatted,
                     ivaFormatted, shippingFormatted, null, null, null, null, null, null, metaTitle, metaDescription,
-                    verified, videoUrl, hasVideo, null, null, null, null, null, null, null);
+                    verified, videoUrl, hasVideo, null, null, null, null, null, null, null, false);
         }
     }
 

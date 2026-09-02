@@ -58,8 +58,13 @@ public class CatalogDutyBadgeService {
      * @param extraDutyFormatted  el mismo importe ya formateado por el backend: el front solo lo pinta
      * @param dutyGroupId         el grupo APROBADO al que pertenece, para el filtro «ver los que no suman
      *                            arancel»; {@code null} si no tiene grupo o si nadie lo ha firmado
+     * @param dutyCovered         la tienda paga el derecho de aduana de este producto: su bolsa de
+     *                            arancel llega al importe por artículo del país. A diferencia de
+     *                            {@code extraDutyCents}, NO depende del carrito —es una propiedad del
+     *                            producto—, así que se sabe también con el carrito vacío
      */
-    public record DutyBadge(Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId) {
+    public record DutyBadge(Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId,
+            boolean dutyCovered) {
     }
 
     /**
@@ -79,6 +84,7 @@ public class CatalogDutyBadgeService {
     private final CustomsValuationService customsValuation;
     private final CustomsDeclarationGroupService declarationGroups;
     private final CurrencyRateService currencyService;
+    private final ProductSubsidyService subsidies;
 
     /**
      * El distintivo de cada producto de la página.
@@ -105,7 +111,7 @@ public class CatalogDutyBadgeService {
             // arancel» tiene que funcionar desde la ficha de un producto aunque no haya nada comprado.
             Map<UUID, DutyBadge> soloGrupo = new HashMap<>();
             for (ProductEntity p : pagina) {
-                soloGrupo.put(p.getId(), new DutyBadge(null, null, grupos.get(p.getId())));
+                soloGrupo.put(p.getId(), new DutyBadge(null, null, grupos.get(p.getId()), cubierto(p, countryCode)));
             }
             return soloGrupo;
         }
@@ -118,9 +124,33 @@ public class CatalogDutyBadgeService {
             List<Line> conElProducto = new ArrayList<>(base);
             conElProducto.add(lineaDe(p, countryCode));
             int extra = Math.max(0, arancelDe(conElProducto, countryCode) - arancelBase);
-            badges.put(p.getId(), new DutyBadge(extra, formateado(extra), grupos.get(p.getId())));
+            badges.put(p.getId(),
+                    new DutyBadge(extra, formateado(extra), grupos.get(p.getId()), cubierto(p, countryCode)));
         }
         return badges;
+    }
+
+    /**
+     * ¿Paga la tienda el derecho de aduana de este producto?
+     *
+     * <p>Se compara su bolsa de arancel con el importe por artículo del país, que es lo que cuesta abrir
+     * una línea de declaración: si la bolsa llega, el comprador no pone nada por ese concepto. Se mide
+     * contra el derecho de UNA línea y no contra el arancel del carrito entero a propósito: el distintivo
+     * viaja en la tarjeta, donde todavía no hay pedido, y prometer sobre un carrito que aún no existe
+     * seria prometer lo que no se puede cumplir.
+     *
+     * <p><b>Solo lo dice donde hay derecho que pagar.</b> Ese importe por artículo son los 3 EUR del
+     * régimen de la Unión y hoy solo lo cobran los 27 países de la UE; en el resto de destinos vale cero,
+     * no hay arancel por línea que cubrir y el distintivo no se pinta. Sale de la tabla de reglas por
+     * país, no de una lista escrita aquí: cuando el régimen caduque (1-jul-2028) bastará con poner el
+     * importe a cero para que el catálogo deje de prometerlo, sin tocar código.
+     *
+     * <p>La conversión la hace el mismo servicio que reparte las bolsas al cobrar, así que un importe
+     * nulo, cero o negativo cuenta como cero aquí y allí por igual.
+     */
+    private boolean cubierto(ProductEntity producto, String countryCode) {
+        int derecho = customsValuation.perArticleFeeUsdCents(countryCode);
+        return derecho > 0 && subsidies.bagsFor(List.of(producto)).dutyCents() >= derecho;
     }
 
     /**

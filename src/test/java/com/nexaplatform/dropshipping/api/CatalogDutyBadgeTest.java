@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService
 import com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService;
 import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
+import com.nexaplatform.dropshipping.application.service.ProductSubsidyService;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomsDeclarationGroupEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
@@ -61,8 +62,11 @@ class CatalogDutyBadgeTest {
         ReflectionTestUtils.setField(dutyLines, "maxParcelWeightGrams", 0);
         ReflectionTestUtils.setField(dutyLines, "maxParcelValueCents", 0);
         ReflectionTestUtils.setField(dutyLines, "maxParcelUnits", 0);
+        // El cambio a dólares se deja uno a uno: estas pruebas hablan de la REGLA, no del tipo del día.
+        lenient().when(currencyService.toUsd(any(BigDecimal.class), anyString()))
+                .thenAnswer(i -> i.getArgument(0, BigDecimal.class));
         service = new CatalogDutyBadgeService(productRepository, groupRepository, dutyLines, customsValuation,
-                declarationGroups, currencyService);
+                declarationGroups, currencyService, new ProductSubsidyService(currencyService));
 
         lenient().when(customsValuation.perArticleFeeUsdCents("ES")).thenReturn(300);
         // El derecho real lo cuenta el mismo servicio que cobra: aquí se emula su regla —3 USD por línea
@@ -147,6 +151,56 @@ class CatalogDutyBadgeTest {
         Map<UUID, DutyBadge> badges = service.badgesFor(List.of(), List.of(MISMO_GRUPO), "ES");
 
         assertThat(badges.get(MISMO_GRUPO).dutyGroupId()).isNull();
+    }
+
+    /**
+     * Quién paga el derecho: el distintivo que la tarjeta enseña junto a la valoración.
+     *
+     * <p>Es una propiedad del PRODUCTO y no una comparación con el carrito, así que se sabe también con el
+     * carrito vacío —al revés que el «sin arancel adicional» de arriba—. Se mide contra el derecho de UNA
+     * línea porque el distintivo viaja en la tarjeta, donde todavía no hay pedido.
+     */
+    @Test
+    void laBolsaQueCubreElDerechoSeAnuncia() {
+        ProductEntity p = producto(MISMO_GRUPO, "620443", "Dress");
+        p.setCurrency("CNY");
+        p.setDutyUserCny(new BigDecimal("3.00"));
+        catalogoCon(p);
+
+        assertThat(service.badgesFor(List.of(), List.of(p.getId()), "ES").get(p.getId()).dutyCovered()).isTrue();
+    }
+
+    @Test
+    void laBolsaCortaNoSeAnuncia() {
+        ProductEntity p = producto(MISMO_GRUPO, "620443", "Dress");
+        p.setCurrency("CNY");
+        p.setDutyUserCny(new BigDecimal("1.00"));
+        catalogoCon(p);
+
+        assertThat(service.badgesFor(List.of(), List.of(p.getId()), "ES").get(p.getId()).dutyCovered()).isFalse();
+    }
+
+    @Test
+    void sinBolsaNoHayPromesa() {
+        ProductEntity p = producto(MISMO_GRUPO, "620443", "Dress");
+        catalogoCon(p);
+
+        assertThat(service.badgesFor(List.of(), List.of(p.getId()), "ES").get(p.getId()).dutyCovered()).isFalse();
+    }
+
+    /**
+     * Los 3 EUR son del régimen de la Unión: hoy solo los cobran los 27 de la UE. Prometer «aranceles
+     * pagados» a quien compra desde un país que no los cobra es anunciar una ventaja que no existe.
+     */
+    @Test
+    void fueraDeLaUnionNoSePrometeNada() {
+        ProductEntity p = producto(MISMO_GRUPO, "620443", "Dress");
+        p.setCurrency("CNY");
+        p.setDutyUserCny(new BigDecimal("50.00"));
+        catalogoCon(p);
+        when(customsValuation.perArticleFeeUsdCents("US")).thenReturn(0);
+
+        assertThat(service.badgesFor(List.of(), List.of(p.getId()), "US")).isEmpty();
     }
 
     private void catalogoCon(ProductEntity... productos) {

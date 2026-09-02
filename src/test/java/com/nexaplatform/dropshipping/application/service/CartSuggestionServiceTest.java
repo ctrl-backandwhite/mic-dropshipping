@@ -90,9 +90,9 @@ class CartSuggestionServiceTest {
     }
 
     private ProductSummaryView producto(UUID id, String slug, String titulo) {
-        // Veinticuatro componentes, de los que a esta prueba solo le importan cuatro:
+        // Veinticinco componentes, de los que a esta prueba solo le importan cuatro:
         // identificador, ruta, título e imagen. El resto va vacío a propósito.
-        return new ProductSummaryView(id, slug, titulo, "http://img/" + slug, null, null, null, 0, null, null, null, new java.math.BigDecimal("10.00"), null, null, null, null, null, false, null, null, null, null, null, null);
+        return new ProductSummaryView(id, slug, titulo, "http://img/" + slug, null, null, null, 0, null, null, null, new java.math.BigDecimal("10.00"), null, null, null, null, null, false, null, null, null, null, null, null, false);
     }
 
     private void conCandidatos(ProductSummaryView... vistas) {
@@ -124,8 +124,8 @@ class CartSuggestionServiceTest {
         conCandidatos(producto(candidatoGratis, "calcetines", "Calcetines"),
                 producto(candidatoCaro, "reloj", "Reloj"));
         Mockito.when(dutyBadges.badgesFor(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(Map.of(
-                candidatoGratis, new DutyBadge(0, "0,00 €", grupo),
-                candidatoCaro, new DutyBadge(330, "3,00 €", UUID.randomUUID())));
+                candidatoGratis, new DutyBadge(0, "0,00 €", grupo, false),
+                candidatoCaro, new DutyBadge(330, "3,00 €", UUID.randomUUID(), false)));
         Mockito.when(shippingQuotes.quote(Mockito.any(), Mockito.any()))
                 .thenReturn(new ShippingQuote(true, "ES", 500, "YunExpress", "BPA", 5, 9, "EU"))
                 .thenReturn(new ShippingQuote(true, "ES", 540, "YunExpress", "BPA", 5, 9, "EU"));
@@ -161,7 +161,7 @@ class CartSuggestionServiceTest {
     void transportistaCaido() {
         conCandidatos(producto(candidatoGratis, "calcetines", "Calcetines"));
         Mockito.when(dutyBadges.badgesFor(Mockito.any(), Mockito.any(), Mockito.any()))
-                .thenReturn(Map.of(candidatoGratis, new DutyBadge(0, "0,00 €", grupo)));
+                .thenReturn(Map.of(candidatoGratis, new DutyBadge(0, "0,00 €", grupo, false)));
         Mockito.when(shippingQuotes.quote(Mockito.any(), Mockito.any()))
                 .thenThrow(new IllegalStateException("transportista caído"));
 
@@ -179,7 +179,7 @@ class CartSuggestionServiceTest {
         conCandidatos(producto(candidatoGratis, "calcetines", "Calcetines"));
         // Ni uno solo sale gratis de aduana.
         Mockito.when(dutyBadges.badgesFor(Mockito.any(), Mockito.any(), Mockito.any()))
-                .thenReturn(Map.of(candidatoGratis, new DutyBadge(330, "3,00 €", grupo)));
+                .thenReturn(Map.of(candidatoGratis, new DutyBadge(330, "3,00 €", grupo, false)));
         Mockito.when(shippingQuotes.quote(Mockito.any(), Mockito.any()))
                 .thenReturn(new ShippingQuote(true, "ES", 500, "YunExpress", "BPA", 5, 9, "EU"))
                 .thenReturn(new ShippingQuote(true, "ES", 540, "YunExpress", "BPA", 5, 9, "EU"))
@@ -235,7 +235,7 @@ class CartSuggestionServiceTest {
             return salida;
         });
         Mockito.when(dutyBadges.badgesFor(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(Map.of(
-                ligero, new DutyBadge(0, "0,00 €", grupo), pesado, new DutyBadge(0, "0,00 €", grupo)));
+                ligero, new DutyBadge(0, "0,00 €", grupo, false), pesado, new DutyBadge(0, "0,00 €", grupo, false)));
         Mockito.when(shippingQuotes.quote(Mockito.any(), Mockito.any()))
                 .thenReturn(new ShippingQuote(true, "ES", 500, "YunExpress", "BPA", 5, 9, "EU"));
 
@@ -255,7 +255,7 @@ class CartSuggestionServiceTest {
         for (int i = 0; i < 6; i++) {
             UUID id = UUID.randomUUID();
             muchos[i] = producto(id, "p" + i, "Producto " + i);
-            badges.put(id, new DutyBadge(0, "0,00 €", grupo));
+            badges.put(id, new DutyBadge(0, "0,00 €", grupo, false));
         }
         conCandidatos(muchos);
         Mockito.when(dutyBadges.badgesFor(Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(badges);
