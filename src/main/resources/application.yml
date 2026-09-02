@@ -523,6 +523,22 @@ nexadrop:
     mirror-enabled: ${STORAGE_MIRROR_ENABLED:true}
     mirror-batch: ${STORAGE_MIRROR_BATCH:25}
 
+    # Lo mismo para el vídeo de la ficha (v164). Va aparte y más despacio porque un vídeo pesa cien
+    # veces lo que una foto: medido sobre el catálogo, 5,4 MB de media y 26,6 MB el mayor, unos 19 GB
+    # entre los 3.674 que hay. Con lotes y concurrencia de imágenes, eso son cientos de megas en vuelo
+    # a la vez contra el mismo origen, que es justo lo que en agosto tumbó el espejado de fotos.
+    video-mirror-enabled: ${STORAGE_VIDEO_MIRROR_ENABLED:true}
+    video-mirror-batch: ${STORAGE_VIDEO_MIRROR_BATCH:10}
+    video-mirror-concurrency: ${STORAGE_VIDEO_MIRROR_CONCURRENCY:2}
+    video-mirror-interval-ms: ${STORAGE_VIDEO_MIRROR_INTERVAL_MS:30000}
+    # 50 MB. El vídeo más grande del catálogo son 26,6 MB, así que deja el doble de margen; lo que pase
+    # de aquí no es el vídeo de un producto y no se trae.
+    video-mirror-max-bytes: ${STORAGE_VIDEO_MIRROR_MAX_BYTES:52428800}
+    video-mirror-retry-base-minutes: ${STORAGE_VIDEO_MIRROR_RETRY_BASE_MINUTES:15}
+    video-mirror-retry-max-attempts: ${STORAGE_VIDEO_MIRROR_RETRY_MAX_ATTEMPTS:5}
+    video-mirror-retry-batch: ${STORAGE_VIDEO_MIRROR_RETRY_BATCH:50}
+    video-mirror-retry-interval-ms: ${STORAGE_VIDEO_MIRROR_RETRY_INTERVAL_MS:600000}
+
   usdt:
     enabled: ${USDT_ENABLED:true}
     manual-address: ${USDT_MANUAL_ADDRESS:}  # sin default: si no se define, el pago USDT manual no opera

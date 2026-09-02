@@ -50,6 +50,7 @@ import com.nexaplatform.dropshipping.infrastructure.integration.bus.CatalogoBusS
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductAttributeEntity;
 import com.nexaplatform.dropshipping.infrastructure.integration.storage.ImageMirrorService;
+import com.nexaplatform.dropshipping.infrastructure.integration.storage.VideoMirrorService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductSpecificationEntity;
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
@@ -200,6 +201,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private final JdbcTemplate jdbcTemplate;
     private final ProductBulkExportMapper bulkExportMapper;
     private final ImageMirrorService imageMirrorService;
+
+    private final VideoMirrorService videoMirrorService;
     /**
      * Ejecutor del reindexado completo en segundo plano (evita el timeout del
      * proxy/edge).
@@ -1185,7 +1188,9 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             return;
         }
         String url = req.getVideoUrl().trim();
-        p.setVideoUrl(url.isEmpty() ? null : url);
+        // cambiarVideoUrl y no setVideoUrl: pone el vídeo nuevo en cola para espejarlo y tira lo espejado
+        // del anterior, que ya no corresponde a este producto.
+        p.cambiarVideoUrl(url.isEmpty() ? null : url);
         // Borrar el vídeo principal no significa que el producto se quede sin vídeo:
         // puede quedar alguno
         // en la lista secundaria, y en ese caso la ficha lo sigue anunciando.
@@ -2048,11 +2053,31 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    imageMirrorService.mirrorProductsAsync(ids);
+                    espejarMedios(ids);
                 }
             });
         } else {
+            espejarMedios(ids);
+        }
+    }
+
+    /**
+     * Lleva a nuestro almacenamiento las fotos y el vídeo de lo que se acaba de guardar.
+     *
+     * <p>Los dos van juntos y ninguno puede tumbar al otro: si el vídeo no se puede traer —pesa de más,
+     * el origen no responde— las fotos ya están, y al revés. Cada servicio se encarga de reintentar lo
+     * suyo por su cuenta.
+     */
+    private void espejarMedios(List<UUID> ids) {
+        try {
             imageMirrorService.mirrorProductsAsync(ids);
+        } catch (Exception e) {
+            log.debug("Espejado de imágenes tras guardar falló: {}", e.toString());
+        }
+        try {
+            videoMirrorService.mirrorProductsAsync(ids);
+        } catch (Exception e) {
+            log.debug("Espejado de vídeo tras guardar falló: {}", e.toString());
         }
     }
 

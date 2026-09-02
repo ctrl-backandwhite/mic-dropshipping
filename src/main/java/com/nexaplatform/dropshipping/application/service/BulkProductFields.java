@@ -87,7 +87,9 @@ public final class BulkProductFields {
             p.setLeadTimeDays(r.getLeadTimeDays());
         }
         if (has(r.getVideoUrl())) {
-            p.setVideoUrl(r.getVideoUrl());
+            // cambiarVideoUrl y no setVideoUrl: si la dirección es otra, deja el vídeo en cola para
+            // espejarlo y descarta lo que hubiera espejado del anterior.
+            p.cambiarVideoUrl(r.getVideoUrl());
             p.setHasVideo(true);
         }
         if (r.getVideoUrls() != null && !r.getVideoUrls().isEmpty()) {
