@@ -409,6 +409,15 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             return;
         }
         for (IngestImage img : req.images()) {
+            // Los iconos e insignias de la interfaz del proveedor llegan mezclados con las fotos y se
+            // espejan igual de bien —existen—, así que nada los delata después: acaban en la galería
+            // como una imagen más. Se descartan aquí, en la puerta. La posición de las demás no se
+            // recalcula: un hueco en la numeración no cambia el orden, y el orden viene de 1688.
+            if (!BulkProductRules.isProductPhoto(img.sourceUrl())) {
+                log.info("Imagen descartada por ser un recurso de la interfaz del proveedor: {}",
+                        img.sourceUrl());
+                continue;
+            }
             product.getImages().add(ProductImageEntity.builder().product(product).position(img.position())
                     .role(img.role() != null ? img.role() : GALLERY).sourceUrl(img.sourceUrl())
                     .mirrorStatus(MirrorStatus.PENDING).build());
