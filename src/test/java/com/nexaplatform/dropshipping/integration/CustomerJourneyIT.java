@@ -53,7 +53,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   base      = 10,0000 × (1 + 150/100) = 25,0000 USD
  *   IVA prod. =  8,00 CNY / 8 =  1,0000 USD   (se suma SIN margen)
  *   envío pr. = 16,00 CNY / 8 =  2,0000 USD   (se suma SIN margen)
- *   precio unitario = 25,00 + 1,00 + 2,00 = 28,00 USD → 2.800 céntimos
+ *   precio unitario = 25,00 + 2,50 + 5,00 = 32,50 USD → 3.250 céntimos (el IVA y el envío
+ *   del proveedor llevan el mismo margen que el coste desde el 25-ago-2026)
  * </pre>
  *
  * <p><b>Alcance.</b> El recorrido cubre el doble factor REAL (alta, acceso con código de un solo uso,
@@ -96,8 +97,14 @@ class CustomerJourneyIT extends BaseIntegration {
 
     /* ── Importes del escenario, calculados a mano (céntimos USD) ───────────────────────────────── */
 
-    /** Precio unitario de venta: 25,00 (base con margen) + 1,00 (IVA) + 2,00 (envío del producto). */
-    private static final int UNIDAD_CENTIMOS = 2800;
+    /**
+     * Precio unitario de venta: 25,00 de base con margen + 2,50 de IVA + 5,00 de envío del producto.
+     *
+     * <p>El IVA y el porte del proveedor son 1,00 y 2,00 en origen y llevan el MISMO factor de margen que
+     * el coste (2,5) desde el 25-ago-2026: el margen grava el desembolso completo al proveedor, no solo
+     * el precio del artículo. Casi todos los importes de esta clase se derivan de aquí.
+     */
+    private static final int UNIDAD_CENTIMOS = 3250;
     /** Tarifa del transportista a España: 4,99 fijos + 3,50/kg. */
     private static final int ENVIO_BASE_CENTIMOS = 499;
     private static final int ENVIO_POR_KG_CENTIMOS = 350;
@@ -459,7 +466,7 @@ class CustomerJourneyIT extends BaseIntegration {
                         assertThat(llamar(HttpMethod.GET, "/api/catalog/products?lang=es", null, null).status())
                                 .isEqualTo(401)),
 
-                paso("El escaparate lista el producto con su precio EXACTO de 28,00 $", () -> {
+                paso("El escaparate lista el producto con su precio EXACTO de 32,50 $", () -> {
                     Respuesta r = llamar(HttpMethod.GET, "/api/catalog/products?lang=es&size=24",
                             tokenCliente, null);
                     assertThat(r.status()).isEqualTo(200);
@@ -467,10 +474,11 @@ class CustomerJourneyIT extends BaseIntegration {
                     JsonNode ficha = r.cuerpo().get("items").get(0);
                     assertThat(ficha.get("id").asText()).isEqualTo(idProducto.toString());
                     assertThat(ficha.get("title").asText()).isEqualTo("Camiseta de certificación");
-                    // 80 CNY / 8 = 10 USD de coste → ×2,5 por el margen = 25 → +1 IVA +2 envío = 28,00.
-                    importeExacto("precio mostrado en el listado", ficha.get("displayPrice"), "28.00");
+                    // 80 CNY / 8 = 10 USD de coste → ×2,5 = 25 de base; el IVA (1) y el envío (2) llevan el
+                    // mismo factor 2,5 → +2,50 +5,00 = 32,50.
+                    importeExacto("precio mostrado en el listado", ficha.get("displayPrice"), "32.50");
                     assertThat(ficha.get("displayCurrency").asText()).isEqualTo("USD");
-                    assertThat(ficha.get("displayFormatted").asText()).isEqualTo("$28.00");
+                    assertThat(ficha.get("displayFormatted").asText()).isEqualTo("$32.50");
                 }),
 
                 paso("La segunda página del listado viene vacía pero con el total correcto", () -> {
@@ -510,8 +518,8 @@ class CustomerJourneyIT extends BaseIntegration {
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("slug").asText()).isEqualTo(slugProducto);
                     assertThat(r.cuerpo().get("moq").asInt()).isEqualTo(1);
-                    importeExacto("precio mostrado en la ficha", r.cuerpo().get("displayPrice"), "28.00");
-                    assertThat(r.cuerpo().get("displayFormatted").asText()).isEqualTo("$28.00");
+                    importeExacto("precio mostrado en la ficha", r.cuerpo().get("displayPrice"), "32.50");
+                    assertThat(r.cuerpo().get("displayFormatted").asText()).isEqualTo("$32.50");
                     assertThat(r.cuerpo().get("variants")).hasSize(1);
                     idVariante = UUID.fromString(r.cuerpo().get("variants").get(0).get("id").asText());
                     assertThat(r.cuerpo().get("variants").get(0).get("active").asBoolean()).isTrue();
@@ -562,7 +570,7 @@ class CustomerJourneyIT extends BaseIntegration {
                     Respuesta lista = llamar(HttpMethod.GET, "/api/me/favorites?lang=es", tokenCliente, null);
                     assertThat(lista.cuerpo().get("totalElements").asInt()).isEqualTo(1);
                     importeExacto("precio en la lista de favoritos",
-                            lista.cuerpo().get("items").get(0).get("displayPrice"), "28.00");
+                            lista.cuerpo().get("items").get(0).get("displayPrice"), "32.50");
                 }),
 
                 paso("Los favoritos de otro cliente no se mezclan con los suyos", () -> {
@@ -590,23 +598,23 @@ class CustomerJourneyIT extends BaseIntegration {
 
     private List<DynamicTest> bloqueCarrito() {
         return List.of(
-                paso("Añade DOS unidades al carrito y el subtotal es exactamente 56,00 $", () -> {
+                paso("Añade DOS unidades al carrito y el subtotal es exactamente 65,00 $", () -> {
                     Respuesta r = llamar(HttpMethod.POST, "/api/catalog/cart-quote", tokenCliente,
                             List.of(linea(idProducto, idVariante, 2)));
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("currency").asText()).isEqualTo("USD");
                     assertThat(r.cuerpo().get("items")).hasSize(1);
-                    importeExacto("precio unitario del carrito", r.cuerpo().get("items").get(0).get("unit"), "28.00");
-                    importeExacto("total de la línea", r.cuerpo().get("items").get(0).get("lineTotal"), "56.00");
-                    // 2.800 × 2 = 5.600 céntimos. Ni uno más.
-                    importeExacto("subtotal del carrito", r.cuerpo().get("subtotal"), "56.00");
-                    assertThat(r.cuerpo().get("subtotalFormatted").asText()).isEqualTo("$56.00");
+                    importeExacto("precio unitario del carrito", r.cuerpo().get("items").get(0).get("unit"), "32.50");
+                    importeExacto("total de la línea", r.cuerpo().get("items").get(0).get("lineTotal"), "65.00");
+                    // 3.250 × 2 = 6.500 céntimos. Ni uno más.
+                    importeExacto("subtotal del carrito", r.cuerpo().get("subtotal"), "65.00");
+                    assertThat(r.cuerpo().get("subtotalFormatted").asText()).isEqualTo("$65.00");
                 }),
 
                 paso("Con UNA unidad (el mínimo) el subtotal es el precio unitario", () -> {
                     Respuesta r = llamar(HttpMethod.POST, "/api/catalog/cart-quote", tokenCliente,
                             List.of(linea(idProducto, idVariante, 1)));
-                    importeExacto("subtotal de una unidad", r.cuerpo().get("subtotal"), "28.00");
+                    importeExacto("subtotal de una unidad", r.cuerpo().get("subtotal"), "32.50");
                 }),
 
                 paso("Un carrito VACÍO cotiza a cero sin romperse", () -> {
@@ -620,7 +628,7 @@ class CustomerJourneyIT extends BaseIntegration {
                     Respuesta r = llamar(HttpMethod.POST, "/api/catalog/cart-quote", tokenCliente,
                             List.of(linea(idProducto, idVariante, 1), linea(UUID.randomUUID(), null, 5)));
                     assertThat(r.cuerpo().get("items")).as("solo cotiza la línea vendible").hasSize(1);
-                    importeExacto("subtotal ignorando la línea rota", r.cuerpo().get("subtotal"), "28.00");
+                    importeExacto("subtotal ignorando la línea rota", r.cuerpo().get("subtotal"), "32.50");
                 }),
 
                 paso("Recupera el carrito: volver a cotizarlo da EXACTAMENTE el mismo importe", () -> {
@@ -628,7 +636,7 @@ class CustomerJourneyIT extends BaseIntegration {
                     // re-cotizarlo no cambia el precio mientras no cambie el catálogo.
                     Respuesta r = llamar(HttpMethod.POST, "/api/catalog/cart-quote", tokenCliente,
                             List.of(linea(idProducto, idVariante, 2)));
-                    importeExacto("subtotal al recuperar el carrito", r.cuerpo().get("subtotal"), "56.00");
+                    importeExacto("subtotal al recuperar el carrito", r.cuerpo().get("subtotal"), "65.00");
                 }));
     }
 
@@ -846,9 +854,9 @@ class CustomerJourneyIT extends BaseIntegration {
 
                     Respuesta r = llamar(HttpMethod.POST, "/api/shipping/quote", tokenCliente,
                             Map.of("country", "ES", "items", List.of(linea(idProducto, idVariante, 2))));
-                    // 10 % de 5.600 = 560 céntimos exactos.
-                    assertThat(r.cuerpo().get("discountCents").asInt()).isEqualTo(560);
-                    assertThat(r.cuerpo().get("discountFormatted").asText()).isEqualTo("$5.60");
+                    // 10 % de 6.500 = 650 céntimos exactos.
+                    assertThat(r.cuerpo().get("discountCents").asInt()).isEqualTo(650);
+                    assertThat(r.cuerpo().get("discountFormatted").asText()).isEqualTo("$6.50");
                 }),
 
                 paso("Un código de referido inexistente no atribuye nada", () -> {
@@ -884,10 +892,10 @@ class CustomerJourneyIT extends BaseIntegration {
                     assertThat(r.cuerpo().get("live").asBoolean()).isTrue();
                 }),
 
-                paso("Con el cupón puesto, el carrito descuenta 5,60 $ EXACTOS y el total baja a 73,76 $",
+                paso("Con el cupón puesto, el carrito descuenta 6,50 $ EXACTOS y el total baja a 83,56 $",
                         () -> {
-                            // 10 % de 5.600 = 560 (truncado a la baja, a favor de la tienda).
-                            // Base imponible = (5.600 − 560) + 849 = 5.889 → IVA 21 % = 1.236,69 → 1.237.
+                            // 10 % de 6.500 = 650 (truncado a la baja, a favor de la tienda).
+                            // Base imponible = (6.500 − 650) + 849 = 6.699 → IVA 21 % = 1.406,79 → 1.407.
                             // Total = 5.040 + (849 + 250) + 1.237 = 7.376.
                             Respuesta r = llamar(HttpMethod.POST, "/api/shipping/quote", tokenCliente,
                                     Map.of("country", "ES", "couponCode", "CERT10",
@@ -895,26 +903,26 @@ class CustomerJourneyIT extends BaseIntegration {
                             assertThat(r.status()).isEqualTo(200);
                             assertThat(r.cuerpo().get("couponCode").asText()).isEqualTo("CERT10");
                             assertThat(r.cuerpo().get("couponError").isNull()).isTrue();
-                            assertThat(r.cuerpo().get("discountCents").asInt()).isEqualTo(560);
-                            assertThat(r.cuerpo().get("discountFormatted").asText()).isEqualTo("$5.60");
-                            assertThat(r.cuerpo().get("taxFormatted").asText()).isEqualTo("$12.37");
-                            assertThat(r.cuerpo().get("totalFormatted").asText()).isEqualTo("$73.76");
-                            totalConCuponCentimos = 7376L;
+                            assertThat(r.cuerpo().get("discountCents").asInt()).isEqualTo(650);
+                            assertThat(r.cuerpo().get("discountFormatted").asText()).isEqualTo("$6.50");
+                            assertThat(r.cuerpo().get("taxFormatted").asText()).isEqualTo("$14.07");
+                            assertThat(r.cuerpo().get("totalFormatted").asText()).isEqualTo("$83.56");
+                            totalConCuponCentimos = 8356L;
                         }),
 
-                paso("El porcentaje se trunca a la BAJA: 3,33 % de 56,00 $ son 1,86 $ y no 1,87 $", () -> {
-                    // 3,33 × 5.600 / 100 = 186,48 → el redondeo es DOWN, así que el cliente recibe 186.
+                paso("El porcentaje se trunca a la BAJA: 3,33 % de 65,00 $ son 2,16 $ y no 2,17 $", () -> {
+                    // 3,33 × 6.500 / 100 = 216,45 → el redondeo es DOWN, así que el cliente recibe 216.
                     assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin,
                             cupon("CERTFRAC", new BigDecimal("3.33"), null)).status()).isEqualTo(200);
                     Respuesta r = llamar(HttpMethod.POST, "/api/shipping/quote", tokenCliente,
                             Map.of("country", "ES", "couponCode", "CERTFRAC",
                                     "items", List.of(linea(idProducto, idVariante, 2))));
-                    assertThat(r.cuerpo().get("discountCents").asInt()).isEqualTo(186);
-                    assertThat(r.cuerpo().get("discountFormatted").asText()).isEqualTo("$1.86");
+                    assertThat(r.cuerpo().get("discountCents").asInt()).isEqualTo(216);
+                    assertThat(r.cuerpo().get("discountFormatted").asText()).isEqualTo("$2.16");
                 }),
 
                 paso("Un cupón de importe fijo MAYOR que el carrito se topa en el propio carrito", () -> {
-                    // Valor límite: 999,00 $ de descuento sobre 56,00 $ de producto no puede dejar el
+                    // Valor límite: 999,00 $ de descuento sobre 65,00 $ de producto no puede dejar el
                     // subtotal en negativo; el descuento se recorta al subtotal exacto.
                     assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin,
                             cupon("CERTMAX", null, 99900)).status()).isEqualTo(200);
@@ -936,7 +944,7 @@ class CustomerJourneyIT extends BaseIntegration {
                     assertThat(r.cuerpo().get("couponError").asText()).isEqualTo("Ese código no existe");
                     assertThat(r.cuerpo().get("discountCents").asInt()).isZero();
                     assertThat(r.cuerpo().get("totalFormatted").asText())
-                            .as("el total es el de siempre").isEqualTo("$80.53");
+                            .as("el total es el de siempre").isEqualTo("$91.42");
                 }),
 
                 paso("Un cupón CADUCADO se rechaza con su motivo", () -> {
@@ -978,7 +986,7 @@ class CustomerJourneyIT extends BaseIntegration {
                 }),
 
                 paso("Un cupón con pedido mínimo por encima del carrito no se puede usar", () -> {
-                    // Borde exacto: el carrito son 5.600 y el mínimo 5.601 → un céntimo de menos.
+                    // Borde exacto: el carrito son 6.500 y el mínimo 6.501 → un céntimo de menos.
                     Map<String, Object> minimo = cupon("CERTMINIMO", new BigDecimal("50"), null);
                     minimo.put("minOrderCents", UNIDAD_CENTIMOS * 2 + 1);
                     assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin, minimo).status())
@@ -991,7 +999,7 @@ class CustomerJourneyIT extends BaseIntegration {
                 }),
 
                 paso("Con el mínimo EXACTAMENTE igual al carrito, el cupón sí entra", () -> {
-                    // El otro lado del borde: 5.600 no es menor que 5.600, así que la condición no salta.
+                    // El otro lado del borde: 6.500 no es menor que 6.500, así que la condición no salta.
                     Map<String, Object> justo = cupon("CERTJUSTO", new BigDecimal("50"), null);
                     justo.put("minOrderCents", UNIDAD_CENTIMOS * 2);
                     assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin, justo).status())
@@ -1000,7 +1008,7 @@ class CustomerJourneyIT extends BaseIntegration {
                             Map.of("country", "ES", "couponCode", "CERTJUSTO",
                                     "items", List.of(linea(idProducto, idVariante, 2))));
                     assertThat(r.cuerpo().get("couponError").isNull()).isTrue();
-                    assertThat(r.cuerpo().get("discountCents").asInt()).isEqualTo(2800);
+                    assertThat(r.cuerpo().get("discountCents").asInt()).isEqualTo(UNIDAD_CENTIMOS);
                 }),
 
                 paso("Un cupón NOMINATIVO de otra cuenta no se lo puede poner", () -> {
@@ -1017,9 +1025,9 @@ class CustomerJourneyIT extends BaseIntegration {
                 }),
 
                 paso("El cupón NO se suma al descuento de referido: gana el mayor de los dos", () -> {
-                    // Se devuelve la atribución de referido (10 % = 560) y se prueba un cupón del 5 %
-                    // (280). Como 280 no supera a 560, el cupón se descarta entero y el descuento sigue
-                    // siendo 560: nunca 840.
+                    // Se devuelve la atribución de referido (10 % = 650) y se prueba un cupón del 5 %
+                    // (325). Como 325 no supera a 650, el cupón se descarta entero y el descuento sigue
+                    // siendo 650: nunca 975.
                     jdbcTemplate.update("UPDATE affiliate_attribution SET referred_user_id = ?"
                             + " WHERE visitor_token = ?", idCliente, tokenVisitante);
                     assertThat(llamar(HttpMethod.POST, "/api/admin/promotions", tokenAdmin,
@@ -1028,7 +1036,7 @@ class CustomerJourneyIT extends BaseIntegration {
                             Map.of("country", "ES", "couponCode", "CERTPEOR",
                                     "items", List.of(linea(idProducto, idVariante, 2))));
                     assertThat(r.cuerpo().get("discountCents").asInt())
-                            .as("ni 840 (suma) ni 280 (cupón): manda el mejor de los dos").isEqualTo(560);
+                            .as("ni 975 (suma) ni 325 (cupón): manda el mejor de los dos").isEqualTo(650);
                     assertThat(r.cuerpo().get("couponError").asText())
                             .isEqualTo("Ya tienes un descuento mejor aplicado");
                     jdbcTemplate.update("UPDATE affiliate_attribution SET referred_user_id = NULL"
@@ -1058,24 +1066,24 @@ class CustomerJourneyIT extends BaseIntegration {
                                 Map.of("fullName", "Ada", "line1", "Calle Mayor 1", "country", "ES"))
                                 .status()).isEqualTo(400)),
 
-                paso("La vista previa del checkout cuadra al céntimo: 56,00 + 10,99 + 13,54 = 80,53 $", () -> {
+                paso("La vista previa del checkout cuadra al céntimo: 65,00 + 10,99 + 15,43 = 91,42 $", () -> {
                     Respuesta r = llamar(HttpMethod.POST, "/api/shipping/quote", tokenCliente,
                             Map.of("country", "ES", "items", List.of(linea(idProducto, idVariante, 2))));
                     assertThat(r.status()).isEqualTo(200);
-                    // Base imponible = (5.600 − 0) + 849 de porte SIN el despacho = 6.449.
-                    // Impuesto = 6.449 × 2.100 / 10.000 = 1.354,29 → 1.354 al céntimo más cercano.
+                    // Base imponible = (6.500 − 0) + 849 de porte SIN el despacho = 7.349.
+                    // Impuesto = 7.349 × 2.100 / 10.000 = 1.543,29 → 1.543 al céntimo más cercano.
                     int baseImponible = UNIDAD_CENTIMOS * 2 + ENVIO_BASE_CENTIMOS + ENVIO_POR_KG_CENTIMOS;
-                    assertThat(baseImponible).isEqualTo(6449);
+                    assertThat(baseImponible).isEqualTo(7349);
                     int impuesto = Math.round(baseImponible * IVA_ES_BPS / 10000.0f);
-                    assertThat(impuesto).isEqualTo(1354);
+                    assertThat(impuesto).isEqualTo(1543);
                     totalPedidoCentimos = (long) UNIDAD_CENTIMOS * 2
                             + ENVIO_BASE_CENTIMOS + ENVIO_POR_KG_CENTIMOS + DESPACHO_ES_CENTIMOS + impuesto;
-                    assertThat(totalPedidoCentimos).isEqualTo(8053L);
+                    assertThat(totalPedidoCentimos).isEqualTo(9142L);
 
-                    assertThat(r.cuerpo().get("taxFormatted").asText()).isEqualTo("$13.54");
+                    assertThat(r.cuerpo().get("taxFormatted").asText()).isEqualTo("$15.43");
                     assertThat(r.cuerpo().get("shippingFormatted").asText()).isEqualTo("$10.99");
                     assertThat(r.cuerpo().get("totalFormatted").asText())
-                            .as("lo que se enseña antes de pagar").isEqualTo("$80.53");
+                            .as("lo que se enseña antes de pagar").isEqualTo("$91.42");
                 }),
 
                 paso("Sin monedero, pagar con saldo se rechaza y NO deja ningún pedido", () -> {
@@ -1145,7 +1153,7 @@ class CustomerJourneyIT extends BaseIntegration {
                             .isEqualTo(404);
                 }),
 
-                paso("Paga el pedido bueno CON el cupón: 73,76 $ EXACTOS", () -> {
+                paso("Paga el pedido bueno CON el cupón: 83,56 $ EXACTOS", () -> {
                     jdbcTemplate.update("UPDATE wallet SET balance_usd_cents = ? WHERE user_id = ?",
                             SALDO_INICIAL, idCliente);
                     Respuesta r = llamar(HttpMethod.POST, "/api/me/orders/checkout", tokenCliente,
@@ -1153,17 +1161,17 @@ class CustomerJourneyIT extends BaseIntegration {
                     assertThat(r.status()).isEqualTo(201);
                     idPedido = UUID.fromString(r.cuerpo().get("id").asText());
                     assertThat(r.cuerpo().get("status").asText()).isEqualTo("PAID");
-                    importeExacto("subtotal del pedido", r.cuerpo().get("subtotal"), "56.00");
-                    importeExacto("descuento del cupón", r.cuerpo().get("discount"), "5.60");
+                    importeExacto("subtotal del pedido", r.cuerpo().get("subtotal"), "65.00");
+                    importeExacto("descuento del cupón", r.cuerpo().get("discount"), "6.50");
                     importeExacto("envío del pedido", r.cuerpo().get("shipping"), "10.99");
-                    importeExacto("impuesto del pedido", r.cuerpo().get("tax"), "12.37");
-                    importeExacto("TOTAL del pedido", r.cuerpo().get("total"), "73.76");
+                    importeExacto("impuesto del pedido", r.cuerpo().get("tax"), "14.07");
+                    importeExacto("TOTAL del pedido", r.cuerpo().get("total"), "83.56");
                     assertThat(r.cuerpo().get("totalFormatted").asText())
-                            .as("lo cobrado es EXACTAMENTE lo que enseñó la vista previa").isEqualTo("$73.76");
+                            .as("lo cobrado es EXACTAMENTE lo que enseñó la vista previa").isEqualTo("$83.56");
                 }),
 
-                paso("El monedero queda en 126,24 $: ni un céntimo de más ni de menos", () ->
-                        // 20.000 − 7.376 = 12.624. Comprobado contra el saldo REAL, no contra la respuesta.
+                paso("El monedero queda en 116,44 $: ni un céntimo de más ni de menos", () ->
+                        // 20.000 − 8.356 = 11.644. Comprobado contra el saldo REAL, no contra la respuesta.
                         assertThat(saldo()).isEqualTo(SALDO_INICIAL - totalConCuponCentimos)),
 
                 paso("El cupón queda CANJEADO: un uso contado y su apunte de canje", () -> {
@@ -1175,7 +1183,7 @@ class CustomerJourneyIT extends BaseIntegration {
                     assertThat(canje.get("user_id")).hasToString(idCliente.toString());
                     assertThat(canje.get("order_id")).hasToString(idPedido.toString());
                     assertThat(((Number) canje.get("amount_cents")).intValue())
-                            .as("se anota el descuento realmente aplicado").isEqualTo(560);
+                            .as("se anota el descuento realmente aplicado").isEqualTo(650);
                 }),
 
                 paso("El apunte del monedero registra el cargo exacto y su saldo posterior", () -> {
@@ -1229,7 +1237,7 @@ class CustomerJourneyIT extends BaseIntegration {
                     JsonNode fila = pagados.get(0);
                     assertThat(fila.get("id").asText()).isEqualTo(idPedido.toString());
                     assertThat(fila.get("totalCents").asLong()).isEqualTo(totalConCuponCentimos);
-                    assertThat(fila.get("totalFormatted").asText()).isEqualTo("$73.76");
+                    assertThat(fila.get("totalFormatted").asText()).isEqualTo("$83.56");
                 }),
 
                 paso("El detalle del pedido conserva la dirección y la línea comprada", () -> {
@@ -1241,8 +1249,8 @@ class CustomerJourneyIT extends BaseIntegration {
                     assertThat(r.cuerpo().get("items")).hasSize(1);
                     JsonNode linea = r.cuerpo().get("items").get(0);
                     assertThat(linea.get("quantity").asInt()).isEqualTo(2);
-                    importeExacto("precio unitario congelado", linea.get("unitPrice"), "28.00");
-                    importeExacto("total de la línea", linea.get("lineTotal"), "56.00");
+                    importeExacto("precio unitario congelado", linea.get("unitPrice"), "32.50");
+                    importeExacto("total de la línea", linea.get("lineTotal"), "65.00");
                     assertThat(linea.get("productTitle").asText()).isEqualTo("Camiseta de certificación");
                 }),
 
@@ -1332,7 +1340,7 @@ class CustomerJourneyIT extends BaseIntegration {
                             tokenCliente, null);
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("status").asText()).isEqualTo("CANCELLED");
-                    importeExacto("el importe cancelado no se reescribe", r.cuerpo().get("total"), "73.76");
+                    importeExacto("el importe cancelado no se reescribe", r.cuerpo().get("total"), "83.56");
                 }));
     }
 
