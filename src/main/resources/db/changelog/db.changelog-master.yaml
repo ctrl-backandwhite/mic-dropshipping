@@ -333,3 +333,5 @@ databaseChangeLog:
       file: db/changelog/schema-v161-categorias-cuatro-idiomas.sql
   - include:
       file: db/changelog/schema-v162-taxonomia-completa.sql
+  - include:
+      file: db/changelog/schema-v163-quitar-recursos-de-interfaz.sql

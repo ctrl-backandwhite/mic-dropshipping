@@ -332,4 +332,76 @@ class BulkProductRulesTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Reloj de pulsera");
     }
+
+    /**
+     * Las tres que se encontraron coladas en el catálogo: una equis gris de 200x200, una silueta de
+     * vaca y el sello CCC. Son piezas de la web de 1688, no fotos, y se distinguen por venir de
+     * {@code /tfs/} en vez de {@code /img/ibank/}.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "https://gw.alicdn.com/tfs/TB1QZN.CYj1gK0jSZFuXXcrHpXa-200-200.png",
+            "https://gw.alicdn.com/tfs/TB1i56xWhv1gK0jSZFFXXb0sXXa-200-200.png",
+            "https://gw.alicdn.com/tfs/TB10qL.khnaK1RjSZFtXXbC2VXa-256-172.png",
+    })
+    void losRecursosDeLaInterfazDelProveedorNoSonFotosDeProducto(String url) {
+        assertThat(BulkProductRules.isProductPhoto(url)).isFalse();
+    }
+
+    @Test
+    void unaFotoDeProductoDelProveedorSiCuentaComoFoto() {
+        assertThat(BulkProductRules.isProductPhoto(
+                "https://cbu01.alicdn.com/img/ibank/O1CN01E9k8Sl1JfhChRb5BB_!!3900301056-0-cib.jpg")).isTrue();
+    }
+
+    @Test
+    void unaUrlAusenteOEnBlancoNoEsUnaFoto() {
+        assertThat(BulkProductRules.isProductPhoto(null)).isFalse();
+        assertThat(BulkProductRules.isProductPhoto("   ")).isFalse();
+    }
+
+    @Test
+    void elIconoDeLaInterfazSeCaeDeLaGaleriaYLasFotosSeQuedan() {
+        // Llegaba SIEMPRE en la última posición, detrás de las fotos buenas: por eso el producto se
+        // veía bien hasta que alguien pasaba la galería hasta el final.
+        BulkProductDtoIn r = row();
+        r.setImageUrls(List.of("https://cdn/a.jpg",
+                "https://gw.alicdn.com/tfs/TB1QZN.CYj1gK0jSZFuXXcrHpXa-200-200.png"));
+
+        assertThat(BulkProductRules.imageUrlsOf(r, "Reloj")).containsExactly("https://cdn/a.jpg");
+    }
+
+    @Test
+    void siLaUnicaImagenDeProductoEsUnIconoSeRecurreALaDeLaVariante() {
+        // El icono no puede tapar el respaldo: si lo hiciera, un producto con una foto de color buena
+        // se cargaría enseñando la equis gris como imagen principal.
+        BulkProductDtoIn r = row();
+        r.setImageUrls(List.of("https://gw.alicdn.com/tfs/TB1QZN.CYj1gK0jSZFuXXcrHpXa-200-200.png"));
+        BulkVariant v = new BulkVariant();
+        v.setImageUrl("https://cdn/rojo.jpg");
+        r.setVariants(List.of(v));
+
+        assertThat(BulkProductRules.imageUrlsOf(r, "Reloj")).containsExactly("https://cdn/rojo.jpg");
+    }
+
+    @Test
+    void elAtajoDeUnaSolaImagenTambienDescartaElIcono() {
+        BulkProductDtoIn r = row();
+        r.setImageUrls(List.of("https://cdn/a.jpg"));
+        r.setImageUrl("https://gw.alicdn.com/tfs/TB1QZN.CYj1gK0jSZFuXXcrHpXa-200-200.png");
+
+        assertThat(BulkProductRules.imageUrlsOf(r, "Reloj")).containsExactly("https://cdn/a.jpg");
+    }
+
+    @Test
+    void unProductoQueSoloTraeIconosCuentaComoProductoSinImagenes() {
+        BulkProductDtoIn r = row();
+        r.setExternalId("1688-123456789");
+        r.setImageUrls(List.of("https://gw.alicdn.com/tfs/TB1QZN.CYj1gK0jSZFuXXcrHpXa-200-200.png"));
+
+        assertThatThrownBy(() -> BulkProductRules.imageUrlsOf(r, "Reloj"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("no tiene imágenes")
+                .hasMessageContaining("1688-123456789");
+    }
 }

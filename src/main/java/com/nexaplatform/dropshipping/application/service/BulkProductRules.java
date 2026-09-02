@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -33,7 +34,26 @@ public final class BulkProductRules {
     /** Deja hueco para el prefijo "BULK-" y el sufijo de tiempo dentro del límite de la columna. */
     public static final int MAX_SLUG_BASE = 90;
 
+    /**
+     * Recursos de la interfaz de Alibaba: iconos, insignias y sellos. Las fotos de producto viajan por
+     * {@code .../img/ibank/O1CN...}; por {@code /tfs/} solo bajan piezas de la web de 1688.
+     */
+    private static final String RECURSOS_DE_INTERFAZ = "alicdn.com/tfs/";
+
     private BulkProductRules() {
+    }
+
+    /**
+     * Si una dirección sirve como foto de producto.
+     *
+     * <p>Se colaban recursos de la interfaz del proveedor como una imagen más de la galería, y el
+     * comprador acababa viendo una equis gris de 200x200 entre las fotos —364 productos en local y 586
+     * en preproducción, siempre en la última posición—. No es un fallo de descarga: la imagen se espeja
+     * perfectamente porque existe; lo que no es, es una foto.
+     */
+    public static boolean isProductPhoto(String url) {
+        return url != null && !url.isBlank()
+                && !url.toLowerCase(Locale.ROOT).contains(RECURSOS_DE_INTERFAZ);
     }
 
     /**
@@ -146,7 +166,7 @@ public final class BulkProductRules {
         if (r.getImageUrls() != null) {
             addNonBlank(urls, r.getImageUrls());
         }
-        if (r.getImageUrl() != null && !r.getImageUrl().isBlank()) {
+        if (isProductPhoto(r.getImageUrl())) {
             urls.add(r.getImageUrl().trim());
         }
         if (urls.isEmpty()) {
@@ -165,7 +185,7 @@ public final class BulkProductRules {
     private static void addVariantImages(LinkedHashSet<String> urls, BulkProductDtoIn r) {
         if (r.getVariants() != null) {
             for (BulkVariant v : r.getVariants()) {
-                if (v.getImageUrl() != null && !v.getImageUrl().isBlank()) {
+                if (isProductPhoto(v.getImageUrl())) {
                     urls.add(v.getImageUrl().trim());
                 }
             }
@@ -181,7 +201,7 @@ public final class BulkProductRules {
 
     private static void addNonBlank(LinkedHashSet<String> target, Iterable<String> source) {
         for (String u : source) {
-            if (u != null && !u.isBlank()) {
+            if (isProductPhoto(u)) {
                 target.add(u.trim());
             }
         }
