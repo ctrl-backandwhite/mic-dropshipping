@@ -201,10 +201,25 @@ public class AuthUseCaseImpl implements AuthUseCase {
         if (session == null) {
             return;
         }
-        Object pendingEmail = session.getAttribute(GoogleOAuth2SuccessHandler.PENDING_GOOGLE_LINK_EMAIL);
-        if (pendingEmail != null && pendingEmail.toString().equalsIgnoreCase(user.getEmail())) {
-            userUseCase.linkGoogleAccount(user.getId());
-            session.removeAttribute(GoogleOAuth2SuccessHandler.PENDING_GOOGLE_LINK_EMAIL);
+        // Que la sesión EXISTA no quiere decir que siga viva: el navegador puede traer la cookie de una
+        // que ya se invalidó —caducó, o se cerró desde otra pestaña— y entonces getAttribute lanza
+        // IllegalStateException.
+        //
+        // Sin este resguardo la excepción tumbaba el LOGIN entero, no solo esta comprobación: quien
+        // llegara con una cookie de sesión muerta no podía entrar, y como al fallar el login la cookie
+        // seguía ahí, volvía a fallar en el siguiente intento. Un bucle contra la pantalla de acceso
+        // del que solo se salía borrando las cookies del navegador.
+        //
+        // Y lo que se pierde al fallar es lo de menos: enlazar una cuenta de Google que quedó pendiente.
+        // Si la sesión ya no está, tampoco está el marcador que se venía a leer.
+        try {
+            Object pendingEmail = session.getAttribute(GoogleOAuth2SuccessHandler.PENDING_GOOGLE_LINK_EMAIL);
+            if (pendingEmail != null && pendingEmail.toString().equalsIgnoreCase(user.getEmail())) {
+                userUseCase.linkGoogleAccount(user.getId());
+                session.removeAttribute(GoogleOAuth2SuccessHandler.PENDING_GOOGLE_LINK_EMAIL);
+            }
+        } catch (IllegalStateException ex) {
+            log.debug("Sesión invalidada al comprobar el enlace de Google pendiente; el acceso continúa");
         }
     }
 
