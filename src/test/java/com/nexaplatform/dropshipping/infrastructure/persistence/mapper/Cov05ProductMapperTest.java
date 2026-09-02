@@ -524,4 +524,48 @@ class Cov05ProductMapperTest {
         assertThat(mapper.toImageView(img).sourceUrl()).isEqualTo("https://cbu01.alicdn.com/a.jpg");
         assertThat(mapper.toImageView(img).cdnUrl()).isEqualTo("https://cdn.nexadrop.io/a.webp");
     }
+
+    // ─────────────────────────────── v164: qué dirección de vídeo se le da al navegador
+
+    /**
+     * En cuanto el vídeo está en nuestro almacenamiento, la ficha sirve ESA dirección y no la del
+     * proveedor. Es lo que hace que el navegador del comprador deje de ir a pedirle el vídeo a Alibaba
+     * —que es quien decide si sigue existiendo y quién puede verlo—.
+     */
+    @Test
+    void conElVideoYaEspejadoLaFichaSirveNuestraDireccion() {
+        ProductEntity p = new ProductEntity();
+        p.setVideoUrl("https://cloud.video.taobao.com/play/u/1/v.mp4");
+        p.setVideoCdnUrl("https://img.nx036.com/video/ab/abcd.mp4");
+
+        assertThat(ProductMapper.videoUrlOf(p)).isEqualTo("https://img.nx036.com/video/ab/abcd.mp4");
+    }
+
+    /**
+     * Mientras el espejado no ha terminado se sigue sirviendo la del proveedor: vale más un vídeo de
+     * Alibaba que ninguno, y la ficha se arregla sola en cuanto la cola llega a él.
+     */
+    @Test
+    void sinEspejarTodaviaSeSirveLaDelProveedor() {
+        ProductEntity p = new ProductEntity();
+        p.setVideoUrl("https://cloud.video.taobao.com/play/u/1/v.mp4");
+
+        assertThat(ProductMapper.videoUrlOf(p)).isEqualTo("https://cloud.video.taobao.com/play/u/1/v.mp4");
+    }
+
+    /** Una cadena vacía en la columna del espejo no es una dirección: no puede tapar a la del origen. */
+    @Test
+    void unaDireccionEspejadaEnBlancoNoTapaALaDelProveedor() {
+        ProductEntity p = new ProductEntity();
+        p.setVideoUrl("https://cloud.video.taobao.com/play/u/1/v.mp4");
+        p.setVideoCdnUrl("   ");
+
+        assertThat(ProductMapper.videoUrlOf(p)).isEqualTo("https://cloud.video.taobao.com/play/u/1/v.mp4");
+    }
+
+    /** Un producto sin vídeo sigue sin vídeo: ni se inventa una dirección ni revienta. */
+    @Test
+    void unProductoSinVideoNoTieneDireccionDeVideo() {
+        assertThat(ProductMapper.videoUrlOf(new ProductEntity())).isNull();
+    }
 }

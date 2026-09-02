@@ -335,3 +335,5 @@ databaseChangeLog:
       file: db/changelog/schema-v162-taxonomia-completa.sql
   - include:
       file: db/changelog/schema-v163-quitar-recursos-de-interfaz.sql
+  - include:
+      file: db/changelog/schema-v164-espejado-de-video.sql
