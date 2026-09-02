@@ -203,25 +203,6 @@ public class GlobalExceptionHandler {
                 List.of(ex.getMessage() == null ? "" : ex.getMessage())), HttpStatus.BAD_REQUEST);
     }
 
-    /**
-     * Una sesión invalidada a mitad de petición no es un error del servidor: es que hay que volver a
-     * identificarse.
-     *
-     * <p>Sin esto caía en el manejador de abajo, que respondía 500 y —al construir el cuerpo sobre una
-     * sesión muerta— fallaba también: «Could not write JSON: Session was invalidated». El navegador
-     * recibía una respuesta corrupta, y donde debía leerse «tu sesión ha caducado» aparecía «no se ha
-     * podido cargar este producto». Devolviendo 401 el cliente ya sabe qué hacer: renovar o pedir
-     * identificación.
-     */
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<ApiResponseDtoOut<?>> handleSesionInvalidada(IllegalStateException ex) {
-        if (ex.getMessage() == null || !ex.getMessage().contains("Session was invalidated")) {
-            return handleGlobal(ex);
-        }
-        log.debug("Petición con la sesión ya invalidada: se responde 401");
-        return new ResponseEntity<>(body("AU001", "Tu sesión ha caducado. Vuelve a iniciar sesión.", List.of()),
-                HttpStatus.UNAUTHORIZED);
-    }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponseDtoOut<?>> handleGlobal(Exception ex) {
