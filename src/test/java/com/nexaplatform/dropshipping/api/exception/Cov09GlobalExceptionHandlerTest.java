@@ -260,4 +260,27 @@ class Cov09GlobalExceptionHandlerTest {
         assertThat(res.getBody().getMessage()).doesNotContain("getUser()");
         assertThat(res.getBody().getDetails()).isEmpty();
     }
+
+    /**
+     * Una sesión invalidada a mitad de petición se responde con 401, no con un 500 que además revienta.
+     *
+     * <p>Qué se rompía: caía en el manejador genérico, que respondía 500 y al escribir el cuerpo sobre
+     * una sesión muerta fallaba otra vez —«Could not write JSON: Session was invalidated»—. El navegador
+     * recibía una respuesta corrupta y enseñaba «no se ha podido cargar este producto» donde debía poner
+     * que la sesión había caducado.
+     */
+    @Test
+    void unaSesionInvalidadaDevuelve401YNoUn500() {
+        var r = subject.handleSesionInvalidada(new IllegalStateException("Session was invalidated"));
+
+        assertThat(r.getStatusCode().value()).isEqualTo(401);
+    }
+
+    /** Cualquier otro IllegalStateException sigue siendo un error del servidor: no se disfraza de 401. */
+    @Test
+    void otroIllegalStateSigueSiendo500() {
+        var r = subject.handleSesionInvalidada(new IllegalStateException("otra cosa distinta"));
+
+        assertThat(r.getStatusCode().value()).isEqualTo(500);
+    }
 }
