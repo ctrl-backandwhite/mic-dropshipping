@@ -102,4 +102,33 @@ class DeviceSessionRevocationFilterTest {
         verify(chain, times(1)).doFilter(req, res);
         verify(deviceSessionService, never()).isRevoked(any());
     }
+
+    /**
+     * Un dispositivo revocado NO puede invalidar la sesión bajo los pies de la petición en curso.
+     *
+     * <p>Qué se rompía: al llamar a {@code session.invalidate()} aquí, cualquier OTRA petición que
+     * compartiera esa sesión —y una ficha de producto lanza cinco a la vez— reventaba al terminar con
+     * «Session was invalidated». Y el fallo no se quedaba ahí: el manejador global de errores tampoco
+     * podía escribir su JSON, así que el navegador recibía una respuesta corrupta y enseñaba «no se ha
+     * podido cargar este producto» en vez de mandar a identificarse.
+     *
+     * <p>Rechazar con 401 y limpiar el contexto basta: el filtro corta TODAS las peticiones mientras el
+     * dispositivo siga revocado, así que invalidar la sesión no añadía seguridad, solo daños colaterales.
+     */
+    @Test
+    void unDispositivoRevocadoSeRechazaSinInvalidarLaSesionEnCurso() throws Exception {
+        authenticate();
+        req.setSession(new org.springframework.mock.web.MockHttpSession());
+        org.springframework.mock.web.MockHttpSession sesion =
+                (org.springframework.mock.web.MockHttpSession) req.getSession(false);
+        when(deviceSessionService.isRevoked(any())).thenReturn(true);
+
+        filter.doFilter(req, res, chain);
+
+        assertThat(res.getStatus()).isEqualTo(401);
+        assertThat(sesion.isInvalid()).as("la sesión NO se invalida a mitad de petición").isFalse();
+        assertThat(SecurityContextHolder.getContext().getAuthentication())
+                .as("pero deja de estar autenticado").isNull();
+        verifyNoInteractions(chain);
+    }
 }

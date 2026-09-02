@@ -49,8 +49,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code /api/admin/operators/**} (plural) es solo del administrador.
  *
  * <p><b>Dinero.</b> Todo importe se comprueba EXACTO. El escenario usa 8 CNY por dólar y un margen
- * global del 150 %: 80 CNY de coste → 10,00 $ → 25,00 $ con margen → 28,00 $ con el IVA y el envío del
- * producto. Los casos borde (cero, uno, el máximo, el máximo + 1, vacíos, nulos, repeticiones, estados
+ * global del 150 %: 80 CNY de coste → 10,00 $ → 25,00 $ con margen → 32,50 $ con el IVA y el envío del
+ * producto, que desde el 25-ago-2026 también llevan margen (el margen grava el desembolso COMPLETO al
+ * proveedor: 25,00 + 3,00 × 2,5). Los casos borde (cero, uno, el máximo, el máximo + 1, vacíos, nulos, repeticiones, estados
  * imposibles y recursos ajenos) van dentro de cada bloque, no en un apartado suelto.
  */
 @DisplayName("Certificación e2e · recorrido completo del administrador")
@@ -72,13 +73,19 @@ class AdminJourneyIT extends BaseIntegration {
 
     /* ── Importes del escenario (céntimos USD), calculados a mano ───────────────────────────────── */
 
-    private static final int UNIDAD_CENTIMOS = 2800;
+    /**
+     * Precio unitario de venta: 25,00 de base con margen + 2,50 de IVA + 5,00 de envío del producto.
+     *
+     * <p>El IVA y el porte del proveedor son 1,00 y 2,00 en origen y llevan el MISMO factor de margen
+     * que el coste (2,5) desde el 25-ago-2026: el margen grava el desembolso completo al proveedor.
+     */
+    private static final int UNIDAD_CENTIMOS = 3250;
     private static final int ENVIO_ES_CENTIMOS = 849;   // 4,99 fijos + 3,50 × 1 kg
     private static final int DESPACHO_ES_CENTIMOS = 250;
     private static final int IVA_ES_BPS = 2100;
     private static final long SALDO_INICIAL = 20000L;
-    /** 5.600 (producto) + 849 (porte) + 250 (despacho) + 1.354 (IVA sobre 6.449) = 8.053. */
-    private static final long TOTAL_PEDIDO = 8053L;
+    /** 6.500 (producto) + 849 (porte) + 250 (despacho) + 1.543 (IVA sobre 7.349) = 9.142. */
+    private static final long TOTAL_PEDIDO = 9142L;
     /** Comisión del operador al entregar: (8.000 × 2 / 1,13) × 10 % = 1.415,9292 → 1.416 fen. */
     private static final long COMISION_CNY_CENTIMOS = 1416L;
 
@@ -173,7 +180,7 @@ class AdminJourneyIT extends BaseIntegration {
 
     private List<DynamicTest> bloqueProducto() {
         return List.of(
-                paso("Da de alta el producto y queda tarificado a 28,00 $", () -> {
+                paso("Da de alta el producto y queda tarificado a 32,50 $", () -> {
                     Respuesta r = llamar(HttpMethod.POST, "/api/admin/catalog/products/create", tokenAdmin,
                             producto("Camiseta de certificación", 80.0, 1));
                     assertThat(r.status()).isEqualTo(200);
@@ -190,13 +197,15 @@ class AdminJourneyIT extends BaseIntegration {
                     assertThat(detalle.status()).isEqualTo(200);
                     slugProducto = detalle.cuerpo().get("slug").asText();
                     assertThat(detalle.cuerpo().get("title").asText()).isEqualTo("Camiseta de certificación");
-                    importeExacto("precio de venta del alta", detalle.cuerpo().get("retailUsd"), "28.00");
+                    importeExacto("precio de venta del alta", detalle.cuerpo().get("retailUsd"), "32.50");
                     assertThat(detalle.cuerpo().get("variants")).hasSize(1);
                     idVariante = UUID.fromString(detalle.cuerpo().get("variants").get(0).get("id").asText());
-                    // El administrador SÍ ve el desglose del precio: 25,00 de base, 1,00 de IVA, 2,00 de envío.
+                    // El administrador SÍ ve el desglose: 25,00 de base, 2,50 de IVA y 5,00 de envío. El IVA
+                    // y el porte del proveedor —1,00 y 2,00 sin margen— llevan el mismo factor 2,5 que el
+                    // coste desde el 25-ago-2026, y las tres cifras suman los 32,50 que se cobran.
                     assertThat(detalle.cuerpo().get("baseFormatted").asText()).isEqualTo("$25.00");
-                    assertThat(detalle.cuerpo().get("ivaFormatted").asText()).isEqualTo("$1.00");
-                    assertThat(detalle.cuerpo().get("shippingFormatted").asText()).isEqualTo("$2.00");
+                    assertThat(detalle.cuerpo().get("ivaFormatted").asText()).isEqualTo("$2.50");
+                    assertThat(detalle.cuerpo().get("shippingFormatted").asText()).isEqualTo("$5.00");
                 }),
 
                 paso("Un producto SIN título se rechaza y no deja nada a medias", () -> {
@@ -252,7 +261,7 @@ class AdminJourneyIT extends BaseIntegration {
                     assertThat(r.cuerpo().get("title").asText()).isEqualTo("Camiseta de certificación (editada)");
                     assertThat(r.cuerpo().get("brand").asText()).isEqualTo("NX036");
                     assertThat(r.cuerpo().get("moq").asInt()).as("lo no enviado no se toca").isEqualTo(1);
-                    importeExacto("el precio no cambia al editar textos", r.cuerpo().get("retailUsd"), "28.00");
+                    importeExacto("el precio no cambia al editar textos", r.cuerpo().get("retailUsd"), "32.50");
                 }),
 
                 paso("Editar un producto inexistente responde 404", () ->
@@ -267,9 +276,9 @@ class AdminJourneyIT extends BaseIntegration {
                     vaciarCaches();
                     Respuesta detalle = llamar(HttpMethod.GET,
                             "/api/admin/catalog/products/" + idProducto + "?lang=es", tokenAdmin, null);
-                    // La variante sigue a 80 CNY y es la que manda en el precio de cabecera: 28,00.
+                    // La variante sigue a 80 CNY y es la que manda en el precio de cabecera: 32,50.
                     importeExacto("manda la variante comprable, no el precio base", detalle.cuerpo().get("retailUsd"),
-                            "28.00");
+                            "32.50");
                 }),
 
                 paso("Devuelve el precio base a 80 CNY para el resto del recorrido", () -> {
@@ -578,7 +587,7 @@ class AdminJourneyIT extends BaseIntegration {
                                 Map.of("scope", "GLOBAL", "marginType", "PERCENTAGE",
                                         "description", "sin valor")).status()).isEqualTo(400)),
 
-                paso("Crea un margen del 300 % SOLO para este producto y el precio pasa a 43,00 $", () -> {
+                paso("Crea un margen del 300 % SOLO para este producto y el precio pasa a 52,00 $", () -> {
                     Respuesta r = llamar(HttpMethod.POST, "/api/admin/pricing/rules", tokenAdmin,
                             Map.of("scope", "PRODUCT", "scopeId", idProducto.toString(),
                                     "marginType", "PERCENTAGE", "marginValue", 300, "active", true,
@@ -586,26 +595,28 @@ class AdminJourneyIT extends BaseIntegration {
                     assertThat(r.status()).isEqualTo(201);
                     idReglaProducto = UUID.fromString(r.cuerpo().get("id").asText());
                     vaciarCaches();
-                    // 10,00 de coste × (1 + 300/100) = 40,00 de base; + 1,00 IVA + 2,00 envío = 43,00.
+                    // 10,00 de coste × (1 + 300/100) = 40,00 de base; el IVA y el envío llevan el mismo factor
+                    // 4 → 4,00 + 8,00; total 52,00.
                     // El precio de venta en dólares (retailUsd) solo se sirve al ADMIN: el escaparate
                     // enseña displayPrice y nada más. Por eso el desglose se comprueba por su ficha.
                     Respuesta detalle = llamar(HttpMethod.GET,
                             "/api/admin/catalog/products/" + idProducto + "?lang=es", tokenAdmin, null);
-                    importeExacto("precio con el margen del producto", detalle.cuerpo().get("retailUsd"), "43.00");
+                    importeExacto("precio con el margen del producto", detalle.cuerpo().get("retailUsd"), "52.00");
                     assertThat(detalle.cuerpo().get("baseFormatted").asText()).isEqualTo("$40.00");
                     Respuesta escaparate = llamar(HttpMethod.GET,
                             "/api/catalog/products/" + slugProducto + "?lang=es", null, null);
                     assertThat(escaparate.cuerpo().get("displayFormatted").asText())
-                            .as("y el cliente ve exactamente ese precio").isEqualTo("$43.00");
+                            .as("y el cliente ve exactamente ese precio").isEqualTo("$52.00");
                 }),
 
                 paso("El margen del producto MANDA sobre el global (el ámbito más específico gana)", () -> {
                     Respuesta otro = llamar(HttpMethod.GET, "/api/admin/catalog/products?q=Gorra&lang=es",
                             tokenAdmin, null);
                     // La gorra no tiene regla propia: sigue con el global. 40 CNY / 8 = 5,00 → ×2,5 = 12,50.
-                    // Su envío y su IVA en yuanes son los mismos del alta: +1,00 y +2,00 → 15,50.
+                    // Su envío y su IVA en yuanes son los mismos del alta, y llevan el mismo factor 2,5
+                    // que el coste: +2,50 y +5,00 → 20,00.
                     importeExacto("la gorra conserva el margen global",
-                            otro.cuerpo().get("items").get(0).get("displayPrice"), "15.50");
+                            otro.cuerpo().get("items").get(0).get("displayPrice"), "20.00");
                 }),
 
                 paso("Un rango que empieza UN CÉNTIMO por encima del coste NO se aplica", () -> {
@@ -621,7 +632,7 @@ class AdminJourneyIT extends BaseIntegration {
                     Respuesta gorra = llamar(HttpMethod.GET, "/api/admin/catalog/products?q=Gorra&lang=es",
                             tokenAdmin, null);
                     importeExacto("un céntimo fuera del rango deja el precio intacto",
-                            gorra.cuerpo().get("items").get(0).get("displayPrice"), "15.50");
+                            gorra.cuerpo().get("items").get(0).get("displayPrice"), "20.00");
                     assertThat(llamar(HttpMethod.DELETE, "/api/admin/pricing/rules/" + fueraDeRango, tokenAdmin,
                             null).status()).isEqualTo(204);
                     vaciarCaches();
@@ -648,13 +659,13 @@ class AdminJourneyIT extends BaseIntegration {
                             Respuesta detalle = llamar(HttpMethod.GET,
                                     "/api/admin/catalog/products/" + idProducto + "?lang=es", tokenAdmin, null);
                             importeExacto("el producto principal queda fuera del rango",
-                                    detalle.cuerpo().get("retailUsd"), "43.00");
+                                    detalle.cuerpo().get("retailUsd"), "52.00");
                             assertThat(llamar(HttpMethod.DELETE, "/api/admin/pricing/rules/" + enElBorde,
                                     tokenAdmin, null).status()).isEqualTo(204);
                             vaciarCaches();
                         }),
 
-                paso("Apaga el margen del producto y el precio vuelve a 28,00 $", () -> {
+                paso("Apaga el margen del producto y el precio vuelve a 32,50 $", () -> {
                     Respuesta r = llamar(HttpMethod.PUT, "/api/admin/pricing/rules/" + idReglaProducto + "/toggle",
                             tokenAdmin, null);
                     assertThat(r.status()).isEqualTo(200);
@@ -663,7 +674,7 @@ class AdminJourneyIT extends BaseIntegration {
                     Respuesta detalle = llamar(HttpMethod.GET,
                             "/api/admin/catalog/products/" + idProducto + "?lang=es", tokenAdmin, null);
                     importeExacto("sin la regla del producto manda la global", detalle.cuerpo().get("retailUsd"),
-                            "28.00");
+                            "32.50");
                 }),
 
                 paso("Un lote de reglas SIN identificadores se rechaza", () ->
@@ -685,13 +696,14 @@ class AdminJourneyIT extends BaseIntegration {
                     importeExacto("factor del ajuste MOQ", r.cuerpo().get("factorPercent"), "50");
                 }),
 
-                paso("Con MOQ 1 el margen va entero: 28,00 $. Al exigir 2 unidades baja a 20,50 $", () -> {
+                paso("Con MOQ 1 el margen va entero: 32,50 $. Al exigir 2 unidades baja a 22,75 $", () -> {
                     // El pedido mínimo se paga con margen: si el cliente tiene que llevarse 2 o más, el
                     // margen que le corresponda se reduce a la mitad. 150 % → 75 %:
-                    //   10,00 de coste × (1 + 0,75) = 17,50 de base; + 1,00 IVA + 2,00 envío = 20,50.
+                    //   10,00 de coste × (1 + 0,75) = 17,50 de base; el IVA y el envío llevan el mismo
+                    //   factor 1,75 → 1,75 + 3,50; total 22,75.
                     Respuesta antes = llamar(HttpMethod.GET,
                             "/api/admin/catalog/products/" + idProducto + "?lang=es", tokenAdmin, null);
-                    importeExacto("con MOQ 1 el margen es entero", antes.cuerpo().get("retailUsd"), "28.00");
+                    importeExacto("con MOQ 1 el margen es entero", antes.cuerpo().get("retailUsd"), "32.50");
 
                     assertThat(llamar(HttpMethod.PUT, "/api/admin/catalog/products/" + idProducto + "?lang=es",
                             tokenAdmin, Map.of("moq", 2)).status()).isEqualTo(200);
@@ -699,7 +711,7 @@ class AdminJourneyIT extends BaseIntegration {
                     Respuesta conMoq = llamar(HttpMethod.GET,
                             "/api/admin/catalog/products/" + idProducto + "?lang=es", tokenAdmin, null);
                     importeExacto("con MOQ 2 el margen se parte por la mitad",
-                            conMoq.cuerpo().get("retailUsd"), "20.50");
+                            conMoq.cuerpo().get("retailUsd"), "22.75");
                     assertThat(conMoq.cuerpo().get("baseFormatted").asText()).isEqualTo("$17.50");
                 }),
 
@@ -710,7 +722,7 @@ class AdminJourneyIT extends BaseIntegration {
                     vaciarCaches();
                     importeExacto("MOQ 1 queda fuera del ajuste",
                             llamar(HttpMethod.GET, "/api/admin/catalog/products/" + idProducto + "?lang=es",
-                                    tokenAdmin, null).cuerpo().get("retailUsd"), "28.00");
+                                    tokenAdmin, null).cuerpo().get("retailUsd"), "32.50");
                 }),
 
                 paso("Apagar el ajuste devuelve el margen entero aunque el MOQ sea mayor que uno", () -> {
@@ -721,7 +733,7 @@ class AdminJourneyIT extends BaseIntegration {
                     vaciarCaches();
                     importeExacto("sin ajuste, el MOQ deja de importar",
                             llamar(HttpMethod.GET, "/api/admin/catalog/products/" + idProducto + "?lang=es",
-                                    tokenAdmin, null).cuerpo().get("retailUsd"), "28.00");
+                                    tokenAdmin, null).cuerpo().get("retailUsd"), "32.50");
                 }),
 
                 paso("Un factor del 0 % deja el producto con MOQ al precio de COSTE más IVA y envío", () -> {
@@ -750,7 +762,7 @@ class AdminJourneyIT extends BaseIntegration {
                     vaciarCaches();
                     importeExacto("de vuelta al precio del recorrido",
                             llamar(HttpMethod.GET, "/api/admin/catalog/products/" + idProducto + "?lang=es",
-                                    tokenAdmin, null).cuerpo().get("retailUsd"), "28.00");
+                                    tokenAdmin, null).cuerpo().get("retailUsd"), "32.50");
                 }));
     }
 
@@ -758,8 +770,8 @@ class AdminJourneyIT extends BaseIntegration {
 
     private List<DynamicTest> bloquePromociones() {
         return List.of(
-                paso("Crea una rebaja automática del 5 % sobre el producto: 28,00 → 26,60 $", () -> {
-                    // Sin código: se aplica sola en el escaparate. 28,00 × 0,95 = 26,60 exactos.
+                paso("Crea una rebaja automática del 5 % sobre el producto: 32,50 → 30,88 $", () -> {
+                    // Sin código: se aplica sola en el escaparate. 32,50 × 0,95 = 30,875 → 30,88 al céntimo.
                     Map<String, Object> rebaja = promocion("Rebaja de certificación", null,
                             new BigDecimal("5"), null);
                     rebaja.put("scope", "PRODUCT");
@@ -772,15 +784,15 @@ class AdminJourneyIT extends BaseIntegration {
 
                     Respuesta ficha = llamar(HttpMethod.GET,
                             "/api/catalog/products/" + slugProducto + "?lang=es", null, null);
-                    importeExacto("precio ya rebajado", ficha.cuerpo().get("displayPrice"), "26.60");
+                    importeExacto("precio ya rebajado", ficha.cuerpo().get("displayPrice"), "30.88");
                     assertThat(ficha.cuerpo().get("originalFormatted").asText())
-                            .as("y se enseña tachado el de antes").isEqualTo("$28.00");
+                            .as("y se enseña tachado el de antes").isEqualTo("$32.50");
                     assertThat(ficha.cuerpo().get("discountPercent").asInt()).isEqualTo(5);
                 }),
 
                 paso("El SUELO del precio protege el margen: un 25 % no puede bajar del precio base", () -> {
-                    // 28,00 × 0,75 = 21,00, por debajo de los 25,00 de base con margen. El suelo lo corta
-                    // ahí: se vende a 25,00 y el porcentaje anunciado se recalcula → (28−25)/28 = 10,71 → 10.
+                    // 32,50 × 0,75 = 24,375, por debajo de los 25,00 de base con margen. El suelo lo corta
+                    // ahí: se vende a 25,00 y el porcentaje anunciado se recalcula → (32,50−25)/32,50 = 23,07 → 23.
                     assertThat(llamar(HttpMethod.PUT, "/api/admin/promotions/" + idPromocion, tokenAdmin,
                             promocionProducto("Rebaja de certificación", new BigDecimal("25"))).status())
                             .isEqualTo(200);
@@ -789,7 +801,7 @@ class AdminJourneyIT extends BaseIntegration {
                             "/api/catalog/products/" + slugProducto + "?lang=es", null, null);
                     importeExacto("el suelo corta la rebaja", ficha.cuerpo().get("displayPrice"), "25.00");
                     assertThat(ficha.cuerpo().get("discountPercent").asInt())
-                            .as("el porcentaje anunciado es el REAL tras el suelo").isEqualTo(10);
+                            .as("el porcentaje anunciado es el REAL tras el suelo").isEqualTo(23);
                 }),
 
                 paso("La rebaja se anuncia en el escaparate de promociones vivas", () -> {
@@ -869,7 +881,7 @@ class AdminJourneyIT extends BaseIntegration {
                             .isEqualTo(400);
                 }),
 
-                paso("Apaga la rebaja con el interruptor y el precio vuelve a 28,00 $", () -> {
+                paso("Apaga la rebaja con el interruptor y el precio vuelve a 32,50 $", () -> {
                     Respuesta r = llamar(HttpMethod.POST, "/api/admin/promotions/" + idPromocion + "/toggle",
                             tokenAdmin, null);
                     assertThat(r.status()).isEqualTo(200);
@@ -878,7 +890,7 @@ class AdminJourneyIT extends BaseIntegration {
                     Respuesta ficha = llamar(HttpMethod.GET,
                             "/api/catalog/products/" + slugProducto + "?lang=es", null, null);
                     importeExacto("sin rebaja, el precio de siempre", ficha.cuerpo().get("displayPrice"),
-                            "28.00");
+                            "32.50");
                     assertThat(ficha.cuerpo().get("discountPercent").isNull()).isTrue();
                 }),
 
@@ -914,7 +926,7 @@ class AdminJourneyIT extends BaseIntegration {
 
     private List<DynamicTest> bloquePedidoDelCliente() {
         return List.of(
-                paso("Un cliente compra dos unidades y paga 80,53 $ con su monedero", () -> {
+                paso("Un cliente compra dos unidades y paga 91,42 $ con su monedero", () -> {
                     Respuesta direccion = llamar(HttpMethod.POST, "/api/me/addresses", tokenCliente,
                             Map.of("fullName", "Cliente Cert", "line1", "Calle Mayor 1", "city", "Madrid",
                                     "postalCode", "28001", "country", "ES"));
@@ -927,7 +939,7 @@ class AdminJourneyIT extends BaseIntegration {
                     Respuesta r = llamar(HttpMethod.POST, "/api/me/orders/checkout", tokenCliente, compra);
                     assertThat(r.status()).isEqualTo(201);
                     idPedido = UUID.fromString(r.cuerpo().get("id").asText());
-                    importeExacto("total pagado por el cliente", r.cuerpo().get("total"), "80.53");
+                    importeExacto("total pagado por el cliente", r.cuerpo().get("total"), "91.42");
                     assertThat(saldoCliente()).isEqualTo(SALDO_INICIAL - TOTAL_PEDIDO);
                 }),
 
@@ -943,7 +955,7 @@ class AdminJourneyIT extends BaseIntegration {
                     assertThat(fila.get("shippingCents").asLong())
                             .isEqualTo(ENVIO_ES_CENTIMOS + DESPACHO_ES_CENTIMOS);
                     assertThat(fila.get("source").asText()).isEqualTo("PLATFORM");
-                    assertThat(fila.get("totalFormatted").asText()).isEqualTo("$80.53");
+                    assertThat(fila.get("totalFormatted").asText()).isEqualTo("$91.42");
                 }),
 
                 paso("Filtrar la bandeja por un estado que nadie tiene la deja vacía", () -> {
@@ -1104,7 +1116,7 @@ class AdminJourneyIT extends BaseIntegration {
                             .isEqualTo(1);
                 }),
 
-                paso("Reembolsa el pedido entregado y el cliente recupera 80,53 $ EXACTOS", () -> {
+                paso("Reembolsa el pedido entregado y el cliente recupera 91,42 $ EXACTOS", () -> {
                     long antes = saldoCliente();
                     Respuesta r = llamar(HttpMethod.POST, "/api/admin/orders/" + idPedido + "/refund",
                             tokenAdmin, null);
@@ -1305,9 +1317,9 @@ class AdminJourneyIT extends BaseIntegration {
                     assertThat(r.status()).isEqualTo(200);
                     importeExacto("tasa guardada", r.cuerpo().get("rateVsUsd"), "0.5");
                     vaciarCaches();
-                    // Con 0,5 € por dólar, el producto de 28,00 $ se enseña a 14,00 €, exacto.
+                    // Con 0,5 € por dólar, el producto de 32,50 $ se enseña a 16,25 €, exacto.
                     Respuesta ficha = llamarConMoneda("/api/catalog/products/" + slugProducto + "?lang=es", "EUR");
-                    importeExacto("precio en euros", ficha.cuerpo().get("displayPrice"), "14.00");
+                    importeExacto("precio en euros", ficha.cuerpo().get("displayPrice"), "16.25");
                     assertThat(ficha.cuerpo().get("displayCurrency").asText()).isEqualTo("EUR");
                 }),
 
@@ -1375,12 +1387,12 @@ class AdminJourneyIT extends BaseIntegration {
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("handlingPercentBps").asInt()).isEqualTo(1000);
 
-                    // El impuesto sobre (5.600 + 849) sigue siendo 1.354; el recargo pasa a ser
-                    // 250 + 10 % de 1.354 = 250 + 135,4 → 135 al céntimo más cercano = 385.
+                    // El impuesto sobre (6.500 + 849) es 1.543; el recargo pasa a ser
+                    // 250 + 10 % de 1.543 = 250 + 154,3 → 154 al céntimo más cercano = 404.
                     Respuesta cotizacion = llamar(HttpMethod.POST, "/api/shipping/quote", tokenCliente,
                             Map.of("country", "ES", "items", List.of(linea(idProducto, idVariante, 2))));
                     assertThat(cotizacion.cuerpo().get("amountUsdCents").asInt())
-                            .isEqualTo(ENVIO_ES_CENTIMOS + 250 + 135);
+                            .isEqualTo(ENVIO_ES_CENTIMOS + 250 + 154);
                 }),
 
                 paso("Un recargo NEGATIVO se rechaza por validación", () ->
@@ -1403,9 +1415,9 @@ class AdminJourneyIT extends BaseIntegration {
                 }),
 
                 paso("Un umbral JUSTO por encima del pedido no lo supera", () -> {
-                    // Borde exacto: el valor de los bienes son 56,00 $ y el umbral 56,01 → no se supera.
+                    // Borde exacto: el valor de los bienes son 65,00 $ y el umbral 65,01 → no se supera.
                     assertThat(llamar(HttpMethod.PUT, "/api/admin/customs-rules/ES", tokenAdmin,
-                            reglaAduanera("DDP", 56.01, "SURCHARGE", 0, 0, 5000, 0)).status()).isEqualTo(200);
+                            reglaAduanera("DDP", 65.01, "SURCHARGE", 0, 0, 5000, 0)).status()).isEqualTo(200);
                     Respuesta r = llamar(HttpMethod.POST, "/api/shipping/quote", tokenCliente,
                             Map.of("country", "ES", "items", List.of(linea(idProducto, idVariante, 2))));
                     assertThat(r.cuerpo().get("customsThresholdExceeded").asBoolean()).isFalse();
@@ -1415,7 +1427,7 @@ class AdminJourneyIT extends BaseIntegration {
                 paso("Un umbral EXACTAMENTE igual al pedido tampoco lo supera (la comparación es estricta)",
                         () -> {
                             assertThat(llamar(HttpMethod.PUT, "/api/admin/customs-rules/ES", tokenAdmin,
-                                    reglaAduanera("DDP", 56.00, "SURCHARGE", 0, 0, 5000, 0)).status())
+                                    reglaAduanera("DDP", 65.00, "SURCHARGE", 0, 0, 5000, 0)).status())
                                     .isEqualTo(200);
                             Respuesta r = llamar(HttpMethod.POST, "/api/shipping/quote", tokenCliente,
                                     Map.of("country", "ES", "items", List.of(linea(idProducto, idVariante, 2))));
@@ -1423,19 +1435,19 @@ class AdminJourneyIT extends BaseIntegration {
                         }),
 
                 paso("Un céntimo por debajo del pedido SÍ lo supera y aparece el recargo formal", () -> {
-                    // 55,99 < 56,00 → superado. Recargo = 50,00 fijos + 5 % del valor (2,80) = 52,80.
+                    // 64,99 < 65,00 → superado. Recargo = 50,00 fijos + 5 % del valor (3,25) = 53,25.
                     assertThat(llamar(HttpMethod.PUT, "/api/admin/customs-rules/ES", tokenAdmin,
-                            reglaAduanera("DDP", 55.99, "SURCHARGE", 0, 0, 5000, 500)).status()).isEqualTo(200);
+                            reglaAduanera("DDP", 64.99, "SURCHARGE", 0, 0, 5000, 500)).status()).isEqualTo(200);
                     Respuesta r = llamar(HttpMethod.POST, "/api/shipping/quote", tokenCliente,
                             Map.of("country", "ES", "items", List.of(linea(idProducto, idVariante, 2))));
                     assertThat(r.cuerpo().get("customsThresholdExceeded").asBoolean()).isTrue();
                     assertThat(r.cuerpo().get("amountUsdCents").asInt())
-                            .isEqualTo(ENVIO_ES_CENTIMOS + 5000 + 280);
+                            .isEqualTo(ENVIO_ES_CENTIMOS + 5000 + 325);
                 }),
 
                 paso("Con la política de BLOQUEO, el destino rechaza la compra ANTES de cobrar", () -> {
                     assertThat(llamar(HttpMethod.PUT, "/api/admin/customs-rules/ES", tokenAdmin,
-                            reglaAduanera("DDP", 55.99, "BLOCK", 0, 0, 0, 0)).status()).isEqualTo(200);
+                            reglaAduanera("DDP", 64.99, "BLOCK", 0, 0, 0, 0)).status()).isEqualTo(200);
                     Respuesta cotizacion = llamar(HttpMethod.POST, "/api/shipping/quote", tokenCliente,
                             Map.of("country", "ES", "items", List.of(linea(idProducto, idVariante, 2))));
                     assertThat(cotizacion.cuerpo().get("customsBlocked").asBoolean()).isTrue();
@@ -1475,7 +1487,7 @@ class AdminJourneyIT extends BaseIntegration {
 
     private List<DynamicTest> bloqueMetricas() {
         return List.of(
-                paso("El panel cuadra: seis productos, un pedido y 80,53 $ de volumen", () -> {
+                paso("El panel cuadra: seis productos, un pedido y 91,42 $ de volumen", () -> {
                     Respuesta r = llamar(HttpMethod.GET, "/api/admin/dashboard/metrics", tokenAdmin, null);
                     assertThat(r.status()).isEqualTo(200);
                     assertThat(r.cuerpo().get("totalProducts").asLong()).isEqualTo(6);
@@ -1483,7 +1495,7 @@ class AdminJourneyIT extends BaseIntegration {
                     assertThat(r.cuerpo().get("draftProducts").asLong()).isZero();
                     assertThat(r.cuerpo().get("totalOrders").asLong()).isEqualTo(1);
                     // El volumen es la suma de los totales de los pedidos: un único pedido de 80,53.
-                    importeExacto("volumen bruto en dólares", r.cuerpo().get("gmvUsd"), "80.53");
+                    importeExacto("volumen bruto en dólares", r.cuerpo().get("gmvUsd"), "91.42");
                     assertThat(r.cuerpo().get("displayCurrency").asText()).isEqualTo("USD");
                     // Sin planes contratados no hay ingreso recurrente que enseñar.
                     importeExacto("ingreso recurrente mensual", r.cuerpo().get("mrrUsd"), "0.00");
@@ -1690,7 +1702,7 @@ class AdminJourneyIT extends BaseIntegration {
         vaciarCaches();
     }
 
-    /** Producto de certificación: 80 CNY de coste, 16 de envío y 8 de IVA → 28,00 $ con el margen global. */
+    /** Producto de certificación: 80 CNY de coste, 16 de envío y 8 de IVA → 32,50 $ con el margen global. */
     private Map<String, Object> producto(String titulo, double precioCny, int moq) {
         Map<String, Object> cuerpo = new LinkedHashMap<>();
         cuerpo.put("categorySlug", SLUG_CATEGORIA);

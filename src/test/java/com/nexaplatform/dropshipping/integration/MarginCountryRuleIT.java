@@ -148,15 +148,22 @@ class MarginCountryRuleIT extends BaseIntegration {
     }
 
     @Test
-    @DisplayName("El país del front manda sobre el del CDN: usuario mexicano conectado desde España → 22,00 $")
-    void elPaisDelFrontMandaSobreElDelCdn() {
-        // Manda a dónde se ENVÍA (país de registro), no desde dónde se navega: el margen de la UE cubre el
-        // prepago del IVA europeo, y un envío a México no lo paga por mucho que el cliente esté de viaje.
+    @DisplayName("Sin usuario identificado, el país del CDN gana a la cabecera del navegador: 'MX' del front + 'ES' del CDN → 20,40 $")
+    void sinUsuarioIdentificadoElCdnGanaALaCabeceraDelNavegador() {
+        // El orden de resolución es: país del usuario en la base → país del CDN → cabecera del navegador.
+        //
+        // Hasta el 26-ago-2026 la cabecera del navegador iba primero, y con ella cualquiera podía declarar
+        // el país de menor margen y pagar de menos: la pone el cliente, no la infraestructura. Se cerró
+        // como fallo de seguridad, y por eso aquí gana el CDN.
+        //
+        // La regla de negocio —manda a dónde se ENVÍA, no desde dónde se navega— NO se pierde: para quien
+        // ha entrado, el país sale de `users.country`, que es el de registro y va por delante de las dos
+        // cabeceras. Lo que ya no se acepta es la palabra del navegador de un anónimo.
         client.get().uri(FICHA, producto)
                 .header(PricingCountryFilter.HEADER_COUNTRY, "MX")
                 .header(CABECERA_CDN, "ES")
                 .exchange().expectStatus().isOk()
-                .expectBody().jsonPath("$.displayFormatted").isEqualTo(PRECIO_RESTO_DEL_MUNDO);
+                .expectBody().jsonPath("$.displayFormatted").isEqualTo(PRECIO_UE);
     }
 
     /* ==================================================================================
