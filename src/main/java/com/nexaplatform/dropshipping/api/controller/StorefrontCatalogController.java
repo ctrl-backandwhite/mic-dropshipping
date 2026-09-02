@@ -273,7 +273,8 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         List<ProductSummaryView> conArancel = pagina.items().stream().map(v -> {
             CatalogDutyBadgeService.DutyBadge badge = badges.get(v.id());
             return badge == null ? v
-                    : v.withDuty(badge.extraDutyCents(), badge.extraDutyFormatted(), badge.dutyGroupId());
+                    : v.withDuty(badge.extraDutyCents(), badge.extraDutyFormatted(), badge.dutyGroupId(),
+                            badge.dutyCovered());
         }).toList();
         return new PageResponse<>(conArancel, pagina.page(), pagina.size(), pagina.totalElements(),
                 pagina.totalPages());
@@ -300,7 +301,8 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         CatalogDutyBadgeService.DutyBadge badge = dutyBadges
                 .badgesFor(cartProductIds, List.of(ficha.id()), PricingCountryHolder.get()).get(ficha.id());
         return badge == null ? ficha
-                : ficha.withDuty(badge.extraDutyCents(), badge.extraDutyFormatted(), badge.dutyGroupId());
+                : ficha.withDuty(badge.extraDutyCents(), badge.extraDutyFormatted(), badge.dutyGroupId(),
+                        badge.dutyCovered());
     }
 
     @Override
