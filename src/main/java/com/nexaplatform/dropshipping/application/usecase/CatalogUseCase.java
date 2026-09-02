@@ -248,6 +248,14 @@ public interface CatalogUseCase {
     int bulkUpdateSurcharge(java.util.List<java.util.UUID> productIds, java.util.UUID categoryId,
             BigDecimal surchargeCny);
 
+    /**
+     * Update en lote de las dos bolsas de subvención por producto: por producto, por categoría o para
+     * todo el catálogo (1-sep-2026). Un importe nulo deja esa bolsa como estaba, para poder tocar una
+     * sin pisar la otra. Devuelve cuántos productos se actualizaron.
+     */
+    int bulkUpdateSubsidy(java.util.List<java.util.UUID> productIds, java.util.UUID categoryId,
+            BigDecimal shippingUserCny, BigDecimal dutyUserCny);
+
     /** Corrige el enlace a la ficha del proveedor (1688/Alibaba); rechaza cualquier otro dominio o esquema. */
     ProductDetailView updateSourceUrl(UUID id, String sourceUrl, String lang);
 

@@ -975,6 +975,60 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         return actualizados;
     }
 
+    /**
+     * Update en lote de las dos bolsas de subvención por producto.
+     *
+     * <p>Un importe nulo no se toca: la parte SET se arma solo con los que vienen, para poder cambiar la
+     * bolsa del porte sin pisar la del arancel. Si no viene ninguno no hay nada que hacer y se devuelve
+     * 0 en vez de lanzar un UPDATE sin asignaciones, que sería SQL inválido.
+     */
+    @Override
+    @Transactional
+    @Caching(evict = { @CacheEvict(value = CACHE_PRODUCT_DETAIL, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_SUMMARY, allEntries = true),
+            @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true) })
+    public int bulkUpdateSubsidy(List<UUID> productIds, UUID categoryId, BigDecimal shippingUserCny,
+            BigDecimal dutyUserCny) {
+        List<String> asignaciones = new ArrayList<>();
+        List<Object> valores = new ArrayList<>();
+        if (shippingUserCny != null) {
+            asignaciones.add("shipping_user_cny = ?");
+            valores.add(shippingUserCny);
+        }
+        if (dutyUserCny != null) {
+            asignaciones.add("duty_user_cny = ?");
+            valores.add(dutyUserCny);
+        }
+        if (asignaciones.isEmpty()) {
+            return 0;
+        }
+        String sets = String.join(", ", asignaciones);
+        int actualizados;
+        if (productIds != null && !productIds.isEmpty()) {
+            String in = String.join(",", java.util.Collections.nCopies(productIds.size(), "?"));
+            List<Object> args = new ArrayList<>(valores);
+            args.addAll(productIds);
+            actualizados = jdbcTemplate.update(
+                    "UPDATE product SET " + sets + ", updated_at = now() WHERE id IN (" + in + ")",
+                    args.toArray());
+        } else if (categoryId != null) {
+            List<Object> args = new ArrayList<>(valores);
+            args.add(categoryId);
+            actualizados = jdbcTemplate.update(
+                    "UPDATE product SET " + sets + ", updated_at = now() WHERE category_id = ?",
+                    args.toArray());
+        } else {
+            actualizados = jdbcTemplate.update(
+                    "UPDATE product SET " + sets + ", updated_at = now()", valores.toArray());
+        }
+        // Las bolsas son componentes de lo que paga el cliente: los productos certificados afectados se
+        // re-anuncian al bus para que el cambio llegue al destino (el export del bus las lleva).
+        for (UUID id : idsCertificadosAfectados(productIds, categoryId)) {
+            productJpaRepository.findById(id).ifPresent(p -> anunciarAlBus(p, false));
+        }
+        return actualizados;
+    }
+
     /** Los productos certificados (verified) a los que afecta el update de recargo, para reanunciarlos. */
     private List<UUID> idsCertificadosAfectados(List<UUID> productIds, UUID categoryId) {
         if (productIds != null && !productIds.isEmpty()) {
@@ -1093,6 +1147,12 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // masivo (por categoría / todo el catálogo) va por su propio endpoint.
         if (req.getSurchargeCny() != null) {
             p.setSurchargeCny(req.getSurchargeCny());
+        }
+        if (req.getShippingUserCny() != null) {
+            p.setShippingUserCny(req.getShippingUserCny());
+        }
+        if (req.getDutyUserCny() != null) {
+            p.setDutyUserCny(req.getDutyUserCny());
         }
         // Verificación manual del admin (checkbox del listado): true = revisado OK,
         // false = pendiente/reimportar.
@@ -2285,7 +2345,15 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         p.setIvaCny(r.getIvaCny());
         // Recargo fijo (CNY): opcional, default 0. Se aplica en la importación para que el recargo
         // llegue igual por el bus/reexport (si no, el destino lo dejaría a 0).
-        p.setSurchargeCny(r.getSurchargeCny());
+        //
+        // Ausente vale 0, NUNCA null: la columna es NOT NULL desde la v157, así que un JSON de carga
+        // sin este campo —que es lo normal, es opcional— tumbaba el alta entera con un 23502 y el
+        // producto no se creaba. Mismo cuidado que con las dos bolsas de abajo.
+        p.setSurchargeCny(r.getSurchargeCny() != null ? r.getSurchargeCny() : BigDecimal.ZERO);
+        // Las bolsas de subvención llegan por el bulk y por el bus; ausentes valen 0, nunca null, que la
+        // columna es NOT NULL y el cálculo del checkout las suma sin preguntar.
+        p.setShippingUserCny(r.getShippingUserCny() != null ? r.getShippingUserCny() : BigDecimal.ZERO);
+        p.setDutyUserCny(r.getDutyUserCny() != null ? r.getDutyUserCny() : BigDecimal.ZERO);
         BulkProductFields.applyPackageDimensions(p, r);
         BulkProductFields.applyCustomsFields(p, r);
         // Lo que la carga no traiga (partida arancelaria, material, uso, batería y

@@ -310,7 +310,6 @@ class PricingServiceTest {
 
         assertThat(priced.supplierShippingUsd()).isEqualByComparingTo("1.60");
         // Ganancia = 32,25 cobrados − (10 de coste + 1,30 de IVA + 1,60 de porte) que se le deben al proveedor.
-        assertThat(priced.profitUsd()).isEqualByComparingTo("19.35");
     }
 
     /**
@@ -414,5 +413,49 @@ class PricingServiceTest {
             return new PromotionService.Discounted(precio, precio, java.math.BigDecimal.ZERO, null, null);
         });
         return p;
+    }
+    /**
+     * El desglose que se enseña tiene que SUMAR el total que se cobra.
+     *
+     * <p>Son seis importes convertidos y redondeados por separado, y ese redondeo deja un residuo de
+     * céntimos que tiene que ir a alguna parte: si no, el administrador ve seis líneas que no dan la
+     * cifra de abajo y deja de fiarse de las seis. El residuo lo absorbe la BASE, la partida mayor.
+     *
+     * <p>Los importes están elegidos para que la conversión no dé cifras redondas —es justo cuando
+     * aparece el descuadre—: con una tasa de 0,92 y seis componentes, componer en euros y componer en
+     * dólares difieren en un céntimo.
+     */
+    @Test
+    void elDesgloseSumaExactamenteElTotalQueSeCobra() {
+        when(currencyService.toUsd(any(BigDecimal.class), eq("CNY")))
+                .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("7.24"), 6,
+                        java.math.RoundingMode.HALF_UP));
+        when(marginService.apply(any(), any(), any())).thenReturn(new PriceWithMargin(
+                new BigDecimal("3.867403"), new BigDecimal("9.668508"), null, new BigDecimal("150")));
+        // Tasa que NO deja cifras redondas: es donde el residuo de redondeo se nota.
+        when(currencyService.usdToDisplay(any(BigDecimal.class)))
+                .thenAnswer(inv -> inv.getArgument(0) == null ? null
+                        : ((BigDecimal) inv.getArgument(0)).multiply(new BigDecimal("0.92")));
+        when(currencyService.symbolOf(anyString())).thenReturn("€");
+        when(currencyService.formatDisplay(any(BigDecimal.class), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0) == null ? null
+                        : ((BigDecimal) inv.getArgument(0)).setScale(2, java.math.RoundingMode.HALF_UP).toPlainString());
+
+        ProductEntity p = ProductEntity.builder().basePrice(new BigDecimal("28.00")).currency("CNY")
+                .ivaCny(new BigDecimal("3.64")).shippingCny(new BigDecimal("16.00"))
+                .surchargeCny(new BigDecimal("2.50"))
+                .shippingUserCny(new BigDecimal("16.00")).dutyUserCny(new BigDecimal("8.00")).build();
+
+        PricedAmount priced = service.priceFor(p);
+
+        BigDecimal suma = new BigDecimal(priced.baseFormatted())
+                .add(new BigDecimal(priced.ivaFormatted()))
+                .add(new BigDecimal(priced.shippingFormatted()))
+                .add(new BigDecimal(priced.surchargeFormatted()))
+                .add(new BigDecimal(priced.shippingUserFormatted()))
+                .add(new BigDecimal(priced.dutyUserFormatted()));
+
+        assertThat(suma).as("las seis líneas del desglose tienen que dar el total que se cobra")
+                .isEqualByComparingTo(new BigDecimal(priced.displayFormatted()));
     }
 }

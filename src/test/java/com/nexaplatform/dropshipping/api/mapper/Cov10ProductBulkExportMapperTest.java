@@ -75,6 +75,22 @@ class Cov10ProductBulkExportMapperTest {
     }
 
     @Test
+    void lasDosBolsasDeSubvencionSeExportanParaQueViajenPorElBus() {
+        // 1-sep-2026: shipping_user_cny y duty_user_cny deciden cuánto se le cubre al cliente del porte
+        // y del arancel. Si no viajaran en el export, el producto llegaría al otro entorno sin
+        // cobertura y el cliente pagaría el envío entero — exactamente el fallo que tuvo el recargo,
+        // que hubo que corregir con un arreglo aparte.
+        ProductEntity p = ProductEntity.builder().externalId("1688-1").build();
+        p.setShippingUserCny(new java.math.BigDecimal("4.00"));
+        p.setDutyUserCny(new java.math.BigDecimal("2.00"));
+
+        BulkProductDtoIn d = mapper.toBulk(p, null, null, null, null);
+
+        assertThat(d.getShippingUserCny()).isEqualByComparingTo("4.00");
+        assertThat(d.getDutyUserCny()).isEqualByComparingTo("2.00");
+    }
+
+    @Test
     void categoriaProveedorYEstadoSalenPlanosParaPoderReimportarse() {
         ProductEntity p = ProductEntity.builder().externalId("1688-1").brand("Acme")
                 .status(ProductStatus.ACTIVE)

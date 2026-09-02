@@ -142,7 +142,7 @@ class CheckoutCartEmptiedTest {
         subject = new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository,
                 userRepository, shopConnectionRepository, userAddressRepository, webhooks, walletUseCase,
                 notificationsPublisher, pricingService, affiliateProgramService, stockService, paymentUseCase,
-                orderEmailService, fulfillment, router, checkoutTotalsService, subvencionDeEnvio(), new CustomsDutyLinesService(null), mock(UnserviceableZoneService.class),
+                orderEmailService, fulfillment, router, checkoutTotalsService, subvenciones(), new CustomsDutyLinesService(null), mock(UnserviceableZoneService.class),
                 operatorCommissionService, promotionService, supplierPurchaseService,
                 mock(com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService.class),
                 trackingRepository, orderIndexer,
@@ -168,7 +168,7 @@ class CheckoutCartEmptiedTest {
         when(totals.shippingCents()).thenReturn(0);
         when(totals.taxCents()).thenReturn(0);
         when(totals.totalCents(anyInt())).thenAnswer(i -> i.getArgument(0));
-        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList(), anyInt())).thenReturn(totals);
+        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList(), any())).thenReturn(totals);
 
         // El pedido guardado se recuerda para que el findById posterior del checkout devuelva ESE pedido.
         when(orderRepository.save(any())).thenAnswer(i -> {
@@ -252,16 +252,11 @@ class CheckoutCartEmptiedTest {
     }
 
     /** La bolsa de subvención del envío, real y con su suelo puesto (mide importes, no puede ser un cero). */
-    private static com.nexaplatform.dropshipping.application.service.ShippingSubsidyService subvencionDeEnvio() {
-        com.nexaplatform.dropshipping.application.service.CustomsValuationService aduana =
-                org.mockito.Mockito.mock(com.nexaplatform.dropshipping.application.service.CustomsValuationService.class);
+    private static com.nexaplatform.dropshipping.application.service.ProductSubsidyService subvenciones() {
         com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService divisa =
                 org.mockito.Mockito.mock(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService.class);
         org.mockito.Mockito.lenient().when(divisa.toUsd(org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.anyString())).thenReturn(new java.math.BigDecimal("5.85"));
-        com.nexaplatform.dropshipping.application.service.ShippingSubsidyService s =
-                new com.nexaplatform.dropshipping.application.service.ShippingSubsidyService(aduana, divisa);
-        org.springframework.test.util.ReflectionTestUtils.setField(s, "sueloDeGananciaEur", new java.math.BigDecimal("5"));
-        return s;
+        return new com.nexaplatform.dropshipping.application.service.ProductSubsidyService(divisa);
     }
 }

@@ -89,6 +89,15 @@ public class BulkProductDtoIn {
      */
     private BigDecimal surchargeCny;
 
+    /**
+     * Bolsas de subvención por producto en CNY (default 0). La del porte cubre porte y la del arancel
+     * cubre arancel, cada una la suya. Viajan en el export/import del bus para que la cobertura sea la
+     * misma en todos los entornos: el recargo se olvidó de esto y el destino perdía el valor en silencio.
+     */
+    private BigDecimal shippingUserCny;
+
+    private BigDecimal dutyUserCny;
+
     private Integer moq;
 
     private Integer monthlySales;

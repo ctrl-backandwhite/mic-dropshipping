@@ -42,6 +42,12 @@ public class AdminProductQuickEditDtoIn {
     @Schema(description = "Recargo fijo por producto en CNY (default 0). Se suma al precio final.")
     private BigDecimal surchargeCny;
 
+    @Schema(description = "Bolsa de subvención del porte en CNY (default 0). Se descuenta del envío del pedido.")
+    private BigDecimal shippingUserCny;
+
+    @Schema(description = "Bolsa de subvención del arancel en CNY (default 0). Se descuenta del arancel.")
+    private BigDecimal dutyUserCny;
+
     @Schema(description = "Localized short description")
     private String shortDescription;
 

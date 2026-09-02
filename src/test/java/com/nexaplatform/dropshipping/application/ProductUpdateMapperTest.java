@@ -28,7 +28,7 @@ class ProductUpdateMapperTest {
         UUID id = UUID.randomUUID();
         Instant createdAt = Instant.parse("2020-01-01T00:00:00Z");
         Product target = Product.builder()
-                .id(id).source("CJ").externalId("EXT-1").slug("the-slug")
+                .id(id).source("OTRO").externalId("EXT-1").slug("the-slug")
                 .titleZh("旧标题").brand("OldBrand").basePrice(new BigDecimal("10.00"))
                 .inventoryCount(5).status(ProductStatus.ACTIVE)
                 .certifications(new ArrayList<>(List.of("CE")))
@@ -55,7 +55,7 @@ class ProductUpdateMapperTest {
 
         // Identidad / claves canónicas de origen / auditoría: se preservan
         assertThat(target.getId()).isEqualTo(id);
-        assertThat(target.getSource()).isEqualTo("CJ");
+        assertThat(target.getSource()).isEqualTo("OTRO");
         assertThat(target.getExternalId()).isEqualTo("EXT-1");
         assertThat(target.getSlug()).isEqualTo("the-slug");
         assertThat(target.getCreatedAt()).isEqualTo(createdAt);
