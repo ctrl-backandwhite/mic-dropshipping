@@ -329,3 +329,5 @@ databaseChangeLog:
       file: db/changelog/schema-v159-retirar-token-transportista.sql
   - include:
       file: db/changelog/schema-v160-categorias-chino.sql
+  - include:
+      file: db/changelog/schema-v161-categorias-cuatro-idiomas.sql
