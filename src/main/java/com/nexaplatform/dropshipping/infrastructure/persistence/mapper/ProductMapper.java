@@ -138,8 +138,9 @@ public class ProductMapper {
                         p.getManufacturerName(), p.getManufacturerAddress(), p.getManufacturerEmail(),
                         language),
                 // El arancel adicional no se resuelve aquí: depende del CARRITO de quien mira, no del
-                // producto, y este mapeo va cacheado. Lo decora el controlador con la ficha ya construida.
-                null, null, null);
+                // producto, y este mapeo va cacheado. Lo decora el controlador con la ficha ya construida,
+                // y con él el indicador de quién paga el derecho, que además depende del país.
+                null, null, null, false);
     }
 
     public ProductImageView toImageView(ProductImageEntity img) {
