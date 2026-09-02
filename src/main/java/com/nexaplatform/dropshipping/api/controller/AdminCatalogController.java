@@ -280,15 +280,17 @@ public class AdminCatalogController implements AdminCatalogApi {
 
     @Override
     public ResponseEntity<List<BulkProductDtoIn>> exportProducts(int from, int to, String createdFrom,
-            String createdTo) {
+            String createdTo, Boolean verified) {
         return ResponseEntity.ok(catalogUseCase.exportProducts(from, to, startOfDay(createdFrom),
-                endOfDayExclusive(createdTo)));
+                endOfDayExclusive(createdTo), verified));
     }
 
     @Override
-    public ResponseEntity<Map<String, Long>> exportCount(String createdFrom, String createdTo) {
+    public ResponseEntity<Map<String, Long>> exportCount(String createdFrom, String createdTo, Boolean verified) {
+        // Cuenta con los MISMOS filtros que exporta: los segmentos que ofrece el panel salen de aquí, y si
+        // contara de más ofrecería tramos que después vienen vacíos.
         return ResponseEntity.ok(Map.of("count",
-                catalogUseCase.countProducts(startOfDay(createdFrom), endOfDayExclusive(createdTo))));
+                catalogUseCase.countProducts(startOfDay(createdFrom), endOfDayExclusive(createdTo), verified)));
     }
 
     /** Fecha ISO (yyyy-MM-dd) al inicio del día UTC; null si vacía. Para el límite inferior del rango. */
@@ -321,7 +323,8 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
-    public ResponseEntity<StreamingResponseBody> exportProductsNdjson(int batch, String createdFrom, String createdTo) {
+    public ResponseEntity<StreamingResponseBody> exportProductsNdjson(int batch, String createdFrom,
+            String createdTo, Boolean verified) {
         int safeBatch = Math.clamp(batch, 1, MAX_BATCH);
         java.time.Instant cf = startOfDay(createdFrom);
         java.time.Instant ct = endOfDayExclusive(createdTo);
@@ -331,7 +334,8 @@ public class AdminCatalogController implements AdminCatalogApi {
             UUID after = null;
             boolean hasMore = true;
             while (hasMore) {
-                CatalogUseCase.ProductExportBatch page = catalogUseCase.exportBatchAfter(after, safeBatch, cf, ct);
+                CatalogUseCase.ProductExportBatch page = catalogUseCase.exportBatchAfter(after, safeBatch, cf, ct,
+                        verified);
                 for (BulkProductDtoIn dto : page.items()) {
                     out.write(objectMapper.writeValueAsBytes(dto));
                     out.write('\n');
