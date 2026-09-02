@@ -5,7 +5,7 @@ import com.nexaplatform.dropshipping.api.dto.in.MeCheckoutDtoIn;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
-import com.nexaplatform.dropshipping.application.service.ShippingSubsidyService;
+import com.nexaplatform.dropshipping.application.service.ProductSubsidyService;
 import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import com.nexaplatform.dropshipping.application.service.FulfillmentRouter;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
@@ -62,12 +62,12 @@ import static org.mockito.Mockito.when;
  * El pedido recuerda POR QUIÉN se cobró el envío.
  *
  * <p>Con un solo transportista bastaba con guardar el código de la línea. Con dos no: un {@code FZZXR}
- * de YunExpress y un {@code 1868922929754472449} de CJ no se distinguen mirándolos, y despachar por el
+ * de YunExpress y un {@code 1868922929754472449} de SEGUNDO no se distinguen mirándolos, y despachar por el
  * que no era significa cobrar un porte y pagar otro.
  *
  * <p>Y hay un fallo más silencioso todavía. Al cobrar, la forma de envío elegida se <b>revalida contra
  * una cotización nueva</b> —el código llega del navegador y aceptarlo a ciegas dejaría pagar el precio
- * de un canal más barato—. Si esa cotización solo le pregunta a un transportista, la opción de CJ que el
+ * de un canal más barato—. Si esa cotización solo le pregunta a un transportista, la opción de SEGUNDO que el
  * cliente eligió no aparece, el resolutor la da por inválida y cae a la más barata de YunExpress: el
  * cliente elige una cosa y se le cobra y se le envía otra. Es la misma familia de fallo que el descuadre
  * de esta mañana, por otra puerta, así que aquí se fija que el cobro cotiza con el mismo enrutador que
@@ -95,7 +95,7 @@ class PedidoGuardaElTransportistaTest {
     @Mock FulfillmentProvider fulfillment;
     @Mock FulfillmentRouter router;
     @Mock CheckoutTotalsService checkoutTotalsService;
-    @Mock ShippingSubsidyService shippingSubsidyService;
+    @Mock ProductSubsidyService productSubsidyService;
     @Mock OperatorCommissionService operatorCommissionService;
     @Mock OrderIndexer orderIndexer;
     @Mock OrderSearchService orderSearchService;
@@ -112,9 +112,9 @@ class PedidoGuardaElTransportistaTest {
     private static final UUID USUARIO = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID PRODUCTO = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
-    /** Las dos opciones que ve el cliente: la de CJ es más barata que la de YunExpress. */
-    private static final ShippingOption DE_CJ =
-            new ShippingOption("1868922929754472449", "YunExpress Ordinary", 767, 8, 15, "CJ");
+    /** Las dos opciones que ve el cliente: la de SEGUNDO es más barata que la de YunExpress. */
+    private static final ShippingOption DE_SEGUNDO =
+            new ShippingOption("1868922929754472449", "YunExpress Ordinary", 767, 8, 15, "SEGUNDO");
     private static final ShippingOption DE_YUNEXPRESS =
             new ShippingOption("FZZXR", "Apparel line", 785, 5, 8, "YUNEXPRESS");
 
@@ -122,6 +122,10 @@ class PedidoGuardaElTransportistaTest {
 
     @BeforeEach
     void carritoListoParaPagar() {
+        // Sin bolsas asignadas: estas pruebas no miden la subvención, y un mock sin preparar devolvería
+        // null donde el contrato dice que siempre hay dos importes.
+        org.mockito.Mockito.lenient().when(productSubsidyService.bagsFor(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(com.nexaplatform.dropshipping.application.service.ProductSubsidyService.Bags.NONE);
         ProductEntity p = new ProductEntity();
         p.setId(PRODUCTO);
         p.setSlug("camiseta");
@@ -136,7 +140,7 @@ class PedidoGuardaElTransportistaTest {
 
         when(fulfillment.isSupported(anyString())).thenReturn(true);
         when(router.cotizar(anyString(), any(), anyList())).thenReturn(new ShippingQuote(true, "ES",
-                767, "Transportista", "Standard", 8, 15, "EU", List.of(DE_CJ, DE_YUNEXPRESS)));
+                767, "Transportista", "Standard", 8, 15, "EU", List.of(DE_SEGUNDO, DE_YUNEXPRESS)));
         when(affiliateProgramService.referralDiscountCents(any(), anyLong())).thenReturn(0L);
 
         CheckoutTotalsService.CheckoutTotals totals = mock(CheckoutTotalsService.CheckoutTotals.class);
@@ -144,7 +148,7 @@ class PedidoGuardaElTransportistaTest {
         when(totals.shippingCents()).thenReturn(0);
         when(totals.taxCents()).thenReturn(0);
         when(totals.totalCents(anyInt())).thenAnswer(i -> i.getArgument(0));
-        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList(), anyInt())).thenReturn(totals);
+        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList(), any())).thenReturn(totals);
 
         when(orderRepository.save(any())).thenAnswer(i -> {
             Order o = i.getArgument(0);
@@ -176,14 +180,14 @@ class PedidoGuardaElTransportistaTest {
     }
 
     @Test
-    @DisplayName("elegir una opción de CJ deja el pedido marcado como de CJ")
+    @DisplayName("elegir una opción de SEGUNDO deja el pedido marcado como de SEGUNDO")
     void guardaElTransportistaDeLaOpcionElegida() {
-        comprarEligiendo(DE_CJ.code());
+        comprarEligiendo(DE_SEGUNDO.code());
 
         assertThat(guardado.getShippingCarrier())
                 .as("sin esto, al despachar no se sabe a quién pedirle la guía")
-                .isEqualTo("CJ");
-        assertThat(guardado.getShippingChannelCode()).isEqualTo(DE_CJ.code());
+                .isEqualTo("SEGUNDO");
+        assertThat(guardado.getShippingChannelCode()).isEqualTo(DE_SEGUNDO.code());
     }
 
     @Test
@@ -198,13 +202,13 @@ class PedidoGuardaElTransportistaTest {
     @Test
     @DisplayName("el cobro cotiza con el enrutador, o la opción del otro transportista no existiría")
     void elCobroPreguntaALosDosTransportistas() {
-        comprarEligiendo(DE_CJ.code());
+        comprarEligiendo(DE_SEGUNDO.code());
 
-        // Si el cobro cotizara solo contra un transportista, la opción de CJ no aparecería en la
+        // Si el cobro cotizara solo contra un transportista, la opción de SEGUNDO no aparecería en la
         // cotización de revalidación, se daría por inválida y se caería a la más barata de YunExpress:
         // el cliente elige una cosa y se le cobra y se le envía otra.
-        assertThat(guardado.getShippingCarrier()).isEqualTo("CJ");
-        assertThat(guardado.getShippingChannelCode()).isEqualTo(DE_CJ.code());
+        assertThat(guardado.getShippingCarrier()).isEqualTo("SEGUNDO");
+        assertThat(guardado.getShippingChannelCode()).isEqualTo(DE_SEGUNDO.code());
     }
 
     @Test
@@ -214,8 +218,8 @@ class PedidoGuardaElTransportistaTest {
 
         assertThat(guardado.getShippingChannelCode())
                 .as("el código llega del navegador: aceptarlo sin revalidar dejaría elegir precio")
-                .isEqualTo(DE_CJ.code());
-        assertThat(guardado.getShippingCarrier()).isEqualTo("CJ");
+                .isEqualTo(DE_SEGUNDO.code());
+        assertThat(guardado.getShippingCarrier()).isEqualTo("SEGUNDO");
     }
 
     @Test
@@ -223,7 +227,7 @@ class PedidoGuardaElTransportistaTest {
     void sinElegirSeCobraLaMasBarata() {
         comprarEligiendo(null);
 
-        assertThat(guardado.getShippingChannelCode()).isEqualTo(DE_CJ.code());
-        assertThat(guardado.getShippingCarrier()).isEqualTo("CJ");
+        assertThat(guardado.getShippingChannelCode()).isEqualTo(DE_SEGUNDO.code());
+        assertThat(guardado.getShippingCarrier()).isEqualTo("SEGUNDO");
     }
 }

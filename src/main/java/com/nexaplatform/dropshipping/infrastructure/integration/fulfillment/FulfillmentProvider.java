@@ -118,7 +118,7 @@ public interface FulfillmentProvider {
     }
 
     /**
-     * Cómo se llama este transportista dentro de la plataforma: {@code YUNEXPRESS}, {@code CJ}.
+     * Cómo se llama este transportista dentro de la plataforma: {@code YUNEXPRESS}.
      *
      * <p>Hace falta desde que hay más de uno (18-ago-2026). Es lo que se guarda en el pedido al cobrar y
      * lo que decide, al despachar, a quién se le pide la guía: los códigos de línea de dos

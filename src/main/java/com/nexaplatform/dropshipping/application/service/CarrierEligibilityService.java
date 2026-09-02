@@ -58,9 +58,8 @@ public class CarrierEligibilityService {
     /**
      * Líneas con restricción de mercancía.
      *
-     * <p>Solo están aquí las que la tienen. Lo que no aparece admite carga general, que es el caso de
-     * {@code THPHR} y de las líneas de CJ, y por eso la lista es corta y no una tabla de todo el catálogo
-     * de canales.
+     * <p>Solo están aquí las que la tienen. Lo que no aparece admite carga general, y por eso la lista
+     * es corta y no una tabla de todo el catálogo de canales.
      */
     private enum CanalRestringido {
 

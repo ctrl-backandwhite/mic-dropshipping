@@ -323,3 +323,7 @@ databaseChangeLog:
       file: db/changelog/schema-v156-welcome-ejemplos.sql
   - include:
       file: db/changelog/schema-v157-surcharge-cny.sql
+  - include:
+      file: db/changelog/schema-v158-subsidio-por-producto.sql
+  - include:
+      file: db/changelog/schema-v159-retirar-token-transportista.sql

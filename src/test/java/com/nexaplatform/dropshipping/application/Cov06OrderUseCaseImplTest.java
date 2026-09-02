@@ -10,7 +10,7 @@ import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
-import com.nexaplatform.dropshipping.application.service.ShippingSubsidyService;
+import com.nexaplatform.dropshipping.application.service.ProductSubsidyService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
@@ -123,7 +123,7 @@ class Cov06OrderUseCaseImplTest {
     @Mock
     CheckoutTotalsService checkoutTotalsService;
     @Mock
-    ShippingSubsidyService shippingSubsidyService;
+    ProductSubsidyService productSubsidyService;
     @Mock
     OperatorCommissionService operatorCommissionService;
     @Mock
@@ -152,10 +152,14 @@ class Cov06OrderUseCaseImplTest {
 
     @BeforeEach
     void preparar() {
+        // Sin bolsas asignadas: estas pruebas no miden la subvención, y un mock sin preparar devolvería
+        // null donde el contrato dice que siempre hay dos importes.
+        org.mockito.Mockito.lenient().when(productSubsidyService.bagsFor(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(com.nexaplatform.dropshipping.application.service.ProductSubsidyService.Bags.NONE);
         when(fulfillment.isSupported(anyString())).thenReturn(true);
         when(router.cotizar(any(), any(FulfillmentProvider.ParcelSpec.class), anyList()))
                 .thenReturn(ShippingQuote.unsupported("XX"));
-        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList(), anyInt()))
+        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList(), any()))
                 .thenAnswer(inv -> totalesNeutros(inv.getArgument(3)));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
             Order o = inv.getArgument(0);

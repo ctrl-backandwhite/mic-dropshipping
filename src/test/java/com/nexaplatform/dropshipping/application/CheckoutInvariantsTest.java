@@ -8,7 +8,7 @@ import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
-import com.nexaplatform.dropshipping.application.service.ShippingSubsidyService;
+import com.nexaplatform.dropshipping.application.service.ProductSubsidyService;
 import com.nexaplatform.dropshipping.application.service.OperatorCommissionService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
@@ -113,7 +113,7 @@ class CheckoutInvariantsTest {
     @Mock
     CheckoutTotalsService checkoutTotalsService;
     @Mock
-    ShippingSubsidyService shippingSubsidyService;
+    ProductSubsidyService productSubsidyService;
     @Mock
     OperatorCommissionService operatorCommissionService;
     @Mock
@@ -142,6 +142,10 @@ class CheckoutInvariantsTest {
 
     @BeforeEach
     void destinoSoportadoPorDefecto() {
+        // Sin bolsas asignadas: estas pruebas no miden la subvención, y un mock sin preparar devolvería
+        // null donde el contrato dice que siempre hay dos importes.
+        org.mockito.Mockito.lenient().when(productSubsidyService.bagsFor(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(com.nexaplatform.dropshipping.application.service.ProductSubsidyService.Bags.NONE);
         when(fulfillment.isSupported(anyString())).thenReturn(true);
     }
 
@@ -184,7 +188,7 @@ class CheckoutInvariantsTest {
         when(totals.shippingCents()).thenReturn(0);
         when(totals.taxCents()).thenReturn(0);
         when(totals.totalCents(anyInt())).thenReturn(totalCents);
-        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList(), anyInt())).thenReturn(totals);
+        when(checkoutTotalsService.compute(any(), any(), anyInt(), anyInt(), anyList(), any())).thenReturn(totals);
         when(orderRepository.save(any())).thenAnswer(i -> {
             Order o = i.getArgument(0);
             if (o.getId() == null) {

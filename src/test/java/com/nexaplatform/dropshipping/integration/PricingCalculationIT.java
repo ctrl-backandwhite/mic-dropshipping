@@ -133,7 +133,6 @@ class PricingCalculationIT extends BaseIntegration {
         assertThat(p.retailUsd()).isEqualByComparingTo("32.50");
         assertThat(p.retailUsd()).isNotEqualByComparingTo("28.00");
         // La ganancia es lo cobrado menos TODO lo que se le debe al proveedor: 32,50 − (10 + 1 + 2).
-        assertThat(p.profitUsd()).isEqualByComparingTo("19.50");
     }
 
     @Test

@@ -89,7 +89,7 @@ public class CheckoutPreviewService {
 
     private final ShippingQuoteService shippingQuoteService;
     private final CheckoutTotalsService checkoutTotalsService;
-    private final ShippingSubsidyService shippingSubsidyService;
+    private final ProductSubsidyService productSubsidyService;
     private final PricingService pricingService;
     private final CurrencyRateService currencyService;
     private final ProductRepository productRepository;
@@ -239,9 +239,10 @@ public class CheckoutPreviewService {
                 country);
         // Impuesto + despacho aduanero por el MISMO servicio que usa el cobro (CheckoutTotalsService), para
         // que el desglose mostrado coincida al céntimo con el pedido.
+        ProductSubsidyService.Bags bolsas = productSubsidyService.bagsFor(productosDeLasLineas(items));
         CheckoutTotalsService.CheckoutTotals totals = checkoutTotalsService.compute(country, region,
                 discountedSubtotalUsdCents, shippingBaseUsdCents, parcels,
-                shippingSubsidyService.subsidyUsdCents(lineasDeSubvencion(items), country));
+                new CheckoutTotalsService.Subsidy(bolsas.shippingCents(), bolsas.dutyCents()));
 
         // Importes en la moneda activa: cada componente convertido y REDONDEADO a 2 decimales; el total
         // es la SUMA de esos componentes redondeados (igual que el detalle del pedido), para que el
@@ -303,29 +304,22 @@ public class CheckoutPreviewService {
     }
 
     /**
-     * Las líneas tal y como las necesita la bolsa de subvención: qué producto, cuántas unidades, cuánto se
-     * gana por unidad y cuánto porte del proveedor lleva dentro.
+     * Los productos de las líneas, para que la bolsa los cuente UNA VEZ CADA UNO.
      *
-     * <p>La ganancia es <b>base con margen menos coste</b>, no el precio de venta menos coste: el IVA y el
-     * porte que van dentro del unitario son dinero que se le debe al proveedor, no ganancia nuestra.
-     * Contarlos como tal regalaría un margen que no existe.
+     * <p>Se devuelven los productos y no unas líneas con cantidad porque la cantidad ya no interviene:
+     * la subvención la asigna el admin por producto y el proveedor manda un solo bulto tenga el cliente
+     * una unidad o cinco.
      */
-    private List<ShippingSubsidyService.Linea> lineasDeSubvencion(List<Line> items) {
-        List<ShippingSubsidyService.Linea> out = new ArrayList<>();
+    private List<ProductEntity> productosDeLasLineas(List<Line> items) {
+        List<ProductEntity> out = new ArrayList<>();
         for (Line it : items) {
             if (it == null || it.productId() == null) {
                 continue;
             }
             ProductEntity p = productRepository.findById(it.productId()).orElse(null);
-            if (p == null) {
-                continue;
+            if (p != null) {
+                out.add(p);
             }
-            ProductVariantEntity v = it.variantId() == null ? null
-                    : p.getVariants().stream().filter(x -> it.variantId().equals(x.getId())).findFirst()
-                            .orElse(null);
-            PricingService.PricedAmount priced = pricingService.priceFor(p, v);
-            out.add(new ShippingSubsidyService.Linea(p.getId(), Math.max(1, it.quantity()),
-                    centimos(priced.profitUsd()), centimos(priced.supplierShippingUsd())));
         }
         return out;
     }

@@ -80,9 +80,9 @@ public class FulfillmentService {
     /**
      * A quién se le pide la guía y el seguimiento de cada pedido.
      *
-     * <p>Antes aquí había un {@code FulfillmentProvider} suelto, y con dos transportistas eso significaba
-     * usar siempre el primario: un pedido cobrado por CJ se despachaba por YunExpress y se seguía
-     * preguntándole a YunExpress por una guía que no era suya.
+     * <p>Antes aquí había un {@code FulfillmentProvider} suelto, y con varios transportistas eso
+     * significaba usar siempre el primario: un pedido cobrado por uno se despachaba por otro y se seguía
+     * preguntándole al equivocado por una guía que no era suya.
      */
     private final FulfillmentProviderSelector transportistas;
     private final UserRepository userRepository;
@@ -141,7 +141,7 @@ public class FulfillmentService {
         if (!readyForAttempt(o)) {
             return; // rendido, o aún dentro de la espera del backoff
         }
-        // La guía se le pide a quien cobró el porte. Si ese transportista no está —CJ apagado, o un valor
+        // La guía se le pide a quien cobró el porte. Si ese transportista no está —apagado, o un valor
         // que ya no existe—, NO se despacha por el otro: sería pagar un porte distinto del cobrado y
         // enviar por quien el cliente no eligió. Se deja en la bandeja para que alguien lo mire.
         FulfillmentProvider transportista = transportistas.para(o).orElse(null);
@@ -152,10 +152,10 @@ public class FulfillmentService {
                             + " por otro: habría que cobrar de nuevo. Actívalo o corrige el pedido."));
             return;
         }
-        // Lo que solo el transportista sabe: CJ no puede emitir la guía mientras no tenga la mercancía
+        // Lo que solo el transportista sabe: no puede emitir la guía mientras no tenga la mercancía
         // dada de alta en su inventario. Es «todavía no», no un fallo, así que se espera al siguiente
-        // intento sin ensuciar la bandeja de incidencias. Va detrás del backoff a propósito: CJ admite
-        // una petición por segundo y así el ritmo lo marca la espera que ya existe.
+        // intento sin ensuciar la bandeja de incidencias. Va detrás del backoff a propósito: la API
+        // admite una petición por segundo y así el ritmo lo marca la espera que ya existe.
         if (!transportista.readyToShip(o)) {
             log.debug("Fulfillment: {} aún no puede emitir la guía del pedido {}; se reintentará",
                     transportista.nombre(), o.getOrderNumber());
@@ -467,7 +467,7 @@ public class FulfillmentService {
     }
 
     private TrackingSnapshot pollShipments(Order o, List<OrderShipmentEntity> shipments) {
-        // Al transportista del pedido, no al primario: preguntarle a YunExpress por una guía de CJ no da
+        // Al transportista del pedido, no al primario: preguntarle a YunExpress por una guía de otro no da
         // error, devuelve «no sé nada» —y el cliente se queda mirando un seguimiento que nunca avanza—.
         FulfillmentProvider transportista = transportistas.para(o).orElse(null);
         if (transportista == null) {

@@ -25,14 +25,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 class FulfillmentProviderSelectorTest {
 
     private final FulfillmentProvider yunExpress = new TransportistaDePrueba("YUNEXPRESS");
-    private final FulfillmentProvider cj = new TransportistaDePrueba("CJ");
+    private final FulfillmentProvider segundo = new TransportistaDePrueba("SEGUNDO");
 
     private final FulfillmentProviderSelector selector =
-            new FulfillmentProviderSelector(List.of(yunExpress, cj), yunExpress);
+            new FulfillmentProviderSelector(List.of(yunExpress, segundo), yunExpress);
 
     @Test
     void eligeAlTransportistaQueCobroElPorte() {
-        assertThat(selector.para(pedidoDe("CJ"))).contains(cj);
+        assertThat(selector.para(pedidoDe("SEGUNDO"))).contains(segundo);
         assertThat(selector.para(pedidoDe("YUNEXPRESS"))).contains(yunExpress);
     }
 
@@ -45,7 +45,7 @@ class FulfillmentProviderSelectorTest {
 
     @Test
     void noEligeANadieSiElTransportistaAnotadoNoEstaDisponible() {
-        // CJ apagado, o un valor que ya no existe. Despachar por el otro sería pagar un porte distinto
+        // SEGUNDO apagado, o un valor que ya no existe. Despachar por el otro sería pagar un porte distinto
         // del que se cobró, así que aquí no se sustituye: se devuelve vacío y quien llame decide.
         assertThat(selector.para(pedidoDe("DHL"))).isEmpty();
         assertThat(selector.para(pedidoDe("DESCONOCIDO"))).isEmpty();
@@ -56,7 +56,7 @@ class FulfillmentProviderSelectorTest {
         // El webhook de un transportista llega sin pedido: trae su propio identificador y hay que
         // localizar a quien sabe descifrarlo.
         assertThat(selector.llamado("YUNEXPRESS")).contains(yunExpress);
-        assertThat(selector.llamado("CJ")).contains(cj);
+        assertThat(selector.llamado("SEGUNDO")).contains(segundo);
         assertThat(selector.llamado("DHL")).isEmpty();
         assertThat(selector.llamado(null)).isEmpty();
     }
@@ -73,7 +73,7 @@ class FulfillmentProviderSelectorTest {
     @Test
     void reconoceElNombreConEspaciosOEnMinusculas() {
         // El valor viene de una columna de texto, no de un enum.
-        assertThat(selector.para(pedidoDe("  cj  "))).contains(cj);
+        assertThat(selector.para(pedidoDe("  segundo  "))).contains(segundo);
         assertThat(selector.para(pedidoDe("YunExpress"))).contains(yunExpress);
     }
 

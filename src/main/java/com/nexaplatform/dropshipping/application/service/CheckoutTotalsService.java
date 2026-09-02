@@ -48,8 +48,10 @@ public class CheckoutTotalsService {
      *                              con la subvención: esa abarata lo que paga el cliente, nunca lo que se
      *                              declara, porque declarar de menos es infradeclarar ante 27 aduanas
      * @param shippingCents         lo que se le cobra al cliente por envío y aduana, ya subvencionado
-     * @param shippingSubsidyCents  cuánto se ha gastado de la bolsa. Es lo que pinta el desglose como
-     *                              «descuento en el envío»; lo que sobre de la bolsa se queda como ganancia
+     * @param shippingSubsidyCents  cuánto se ha gastado de la bolsa DEL PORTE. Es lo que pinta el desglose
+     *                              como «descuento en el envío»; lo que sobre se queda como ganancia
+     * @param customsSubsidyCents   lo mismo para la bolsa DEL ARANCEL. Son dos bolsas independientes:
+     *                              ninguna cubre el concepto de la otra
      */
     public record CheckoutTotals(int shippingBaseCents, int customsHandlingCents, int shippingCents,
             int taxCents, int taxRateBps, CustomsValuation customs, int shippingSubsidyCents,
@@ -134,32 +136,48 @@ public class CheckoutTotalsService {
      * @param parcels                  bultos a declarar con sus partidas arancelarias: sobre ellos se calcula
      *                                 el derecho fijo de la UE y se mide la franquicia (uno por declaración)
      */
+    /**
+     * Las dos bolsas de subvención del pedido, en céntimos de dólar.
+     *
+     * <p>Van en un record y no como dos {@code int} sueltos en la firma a propósito: son dos enteros
+     * contiguos del mismo tipo y, sueltos, nada impide intercambiarlos al llamar —y el compilador no
+     * diría nada—. Aquí hay que nombrar cada uno.
+     */
+    public record Subsidy(int shippingCents, int dutyCents) {
+
+        /** Sin subvención: el atajo de los llamantes y las pruebas que no la usan. */
+        public static final Subsidy NONE = new Subsidy(0, 0);
+    }
+
     /** Sin subvención. */
     @Transactional(readOnly = true)
     public CheckoutTotals compute(String country, String region, int discountedSubtotalCents,
             int shippingBaseCents, List<CustomsDutyLinesService.DutyParcel> parcels) {
-        return compute(country, region, discountedSubtotalCents, shippingBaseCents, parcels, 0);
+        return compute(country, region, discountedSubtotalCents, shippingBaseCents, parcels, Subsidy.NONE);
     }
 
     /**
-     * El desglose con la bolsa de subvención aplicada.
+     * El desglose con las dos bolsas de subvención aplicadas.
      *
-     * <p>La bolsa se come <b>primero el porte y después el arancel</b>. El orden no es indiferente para el
-     * cliente: al revés vería el envío intacto y el arancel a cero, que se lee como que no hay aduana que
-     * pagar — justo lo contrario de lo que ocurre.
+     * <p><b>Cada bolsa subvenciona una sola cosa.</b> La del porte cubre porte y la del arancel cubre
+     * arancel; lo que sobre de una NO pasa a la otra. Hasta el 1-sep-2026 había una bolsa única que se
+     * comía primero el porte y después el arancel, y ese reparto en cascada tenía sentido porque la
+     * cantidad la calculaba el sistema a partir del margen, sin estar asignada a ningún concepto. Ahora
+     * los dos importes los asigna el admin producto a producto: trasvasar el sobrante de uno al otro
+     * haría que lo que ve el cliente dejara de deducirse de lo que se teclea.
      *
      * <p>Dos cosas NO cambian con la subvención, y son las dos que se liquidan con terceros: el
      * <b>derecho de aduana</b>, que se declara y se remite íntegro, y el <b>impuesto</b>, que lo fija la
      * base imponible real —mercancía más porte— y no lo que acabemos regalando. Bajar cualquiera de los
      * dos sería liquidar de menos.
      *
-     * @param shippingSubsidyCents lo que hay en la bolsa (ver {@link ShippingSubsidyService}); lo que
-     *                             sobre tras cubrir envío y arancel se queda como ganancia, no se devuelve
+     * @param subsidy las dos bolsas (ver {@link ProductSubsidyService}); lo que sobre tras cubrir su
+     *                concepto se queda como ganancia, no se devuelve ni se traspasa a la otra
      */
     @Transactional(readOnly = true)
     public CheckoutTotals compute(String country, String region, int discountedSubtotalCents,
             int shippingBaseCents, List<CustomsDutyLinesService.DutyParcel> parcels,
-            int shippingSubsidyCents) {
+            Subsidy subsidy) {
         int base = Math.max(0, shippingBaseCents);
         int intrinsic = Math.max(0, discountedSubtotalCents);
         int taxableBase = Math.addExact(intrinsic, base);
@@ -173,12 +191,13 @@ public class CheckoutTotalsService {
             log.debug("Despacho {}: modo={} declarado={} umbralSuperado={} recargo={}", country,
                     customs.taxMode(), customs.declaredValueCents(), customs.deMinimisExceeded(), handling);
         }
-        // La bolsa se reparte por conceptos y en este orden: PRIMERO el porte y, si sobra, el arancel.
-        // Se lleva la cuenta separada porque el resumen enseña el porcentaje cubierto DE CADA UNO —«envío
-        // gratis, subsidio 100 %» y «arancel, subsidio 40 %»—, y con un solo número no se puede.
-        int bolsa = Math.max(0, shippingSubsidyCents);
-        int subvencionPorte = Math.min(bolsa, base);
-        int subvencionArancel = Math.min(bolsa - subvencionPorte, handling);
+        // Bolsas estancas: cada una cubre SU concepto y como mucho lo que ese concepto cuesta. Sin
+        // trasvase; el sobrante se queda como ganancia. Se llevan por separado además porque el resumen
+        // enseña el porcentaje cubierto DE CADA UNO —«envío gratis, subsidio 100 %» y «arancel, subsidio
+        // 40 %»—, y con un solo número no se puede.
+        Subsidy bolsas = subsidy != null ? subsidy : Subsidy.NONE;
+        int subvencionPorte = Math.min(Math.max(0, bolsas.shippingCents()), base);
+        int subvencionArancel = Math.min(Math.max(0, bolsas.dutyCents()), handling);
         int porteCobrado = base - subvencionPorte;
 
         // El IVA se recalcula sobre lo que de VERDAD se cobra de porte. Un descuento concedido en el

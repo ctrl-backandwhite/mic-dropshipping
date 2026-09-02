@@ -22,7 +22,7 @@ import java.util.Optional;
  *   <li><b>El pedido dice quién es y está disponible</b> → ese, sin más.</li>
  *   <li><b>El pedido no lo dice</b> → el primario. Son los pedidos anteriores a que existiera la columna:
  *       todos eran de YunExpress y hay que poder seguir despachándolos.</li>
- *   <li><b>El pedido lo dice pero no está disponible</b> —CJ apagado en producción, o un valor que ya no
+ *   <li><b>El pedido lo dice pero no está disponible</b> —el transportista apagado, o un valor que ya no
  *       existe— → <b>ninguno</b>. Sustituirlo por otro sería justo el fallo que esta clase evita, así que
  *       se devuelve vacío y quien llama decide qué hacer: al despachar, un fallo permanente que alguien
  *       tiene que mirar; al seguir, no inventar hitos.</li>

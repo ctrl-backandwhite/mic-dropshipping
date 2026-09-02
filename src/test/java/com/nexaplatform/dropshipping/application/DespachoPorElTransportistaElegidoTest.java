@@ -45,14 +45,14 @@ class DespachoPorElTransportistaElegidoTest {
 
     private OrderRepository orderRepository;
     private FulfillmentProvider yunExpress;
-    private FulfillmentProvider cj;
+    private FulfillmentProvider segundo;
     private Order pedido;
 
     @BeforeEach
     void prepararEscenario() {
         orderRepository = mock(OrderRepository.class);
         yunExpress = transportista("YUNEXPRESS");
-        cj = transportista("CJ");
+        segundo = transportista("SEGUNDO");
         pedido = new Order();
         pedido.setId(UUID.randomUUID());
         pedido.setOrderNumber("NX-1787000000-0001");
@@ -63,11 +63,11 @@ class DespachoPorElTransportistaElegidoTest {
 
     @Test
     void unPedidoCobradoPorCjSeDespachaPorCj() {
-        pedido.setShippingCarrier("CJ");
+        pedido.setShippingCarrier("SEGUNDO");
 
         servicio().createShipment(pedido.getId());
 
-        verify(cj).createShipments(pedido);
+        verify(segundo).createShipments(pedido);
         verify(yunExpress, never()).createShipments(any(Order.class));
     }
 
@@ -79,54 +79,54 @@ class DespachoPorElTransportistaElegidoTest {
         servicio().createShipment(pedido.getId());
 
         verify(yunExpress).createShipments(pedido);
-        verify(cj, never()).createShipments(any(Order.class));
+        verify(segundo, never()).createShipments(any(Order.class));
     }
 
     @Test
     void siElTransportistaDelPedidoNoEstaDisponibleNoSeDespachaPorOtro() {
-        // CJ apagado en producción, o un valor que ya no existe. Sustituirlo sería pagar un porte
+        // SEGUNDO apagado en producción, o un valor que ya no existe. Sustituirlo sería pagar un porte
         // distinto del cobrado, así que no se despacha y alguien tiene que mirarlo.
         pedido.setShippingCarrier("DHL");
 
         servicio().createShipment(pedido.getId());
 
         verify(yunExpress, never()).createShipments(any(Order.class));
-        verify(cj, never()).createShipments(any(Order.class));
+        verify(segundo, never()).createShipments(any(Order.class));
         assertThat(pedido.getFulfillmentError()).contains("DHL");
         assertThat(pedido.getFulfillmentFailedAt()).isNotNull();
     }
 
     @Test
     void siElTransportistaAunNoPuedeEmitirLaGuiaSeEsperaSinDejarloPorFallido() {
-        // CJ todavía no tiene la mercancía dada de alta: es «todavía no», no un error. Si esto se
+        // SEGUNDO todavía no tiene la mercancía dada de alta: es «todavía no», no un error. Si esto se
         // registrara como fallo, la bandeja de incidencias se llenaría de pedidos que solo esperan.
-        pedido.setShippingCarrier("CJ");
-        when(cj.readyToShip(pedido)).thenReturn(false);
+        pedido.setShippingCarrier("SEGUNDO");
+        when(segundo.readyToShip(pedido)).thenReturn(false);
 
         servicio().createShipment(pedido.getId());
 
-        verify(cj, never()).createShipments(any(Order.class));
+        verify(segundo, never()).createShipments(any(Order.class));
         assertThat(pedido.getFulfillmentError()).isNull();
         assertThat(pedido.getFulfillmentFailedAt()).isNull();
     }
 
     @Test
     void elSeguimientoSeLePreguntaAlTransportistaDelPedido() {
-        // Preguntarle a YunExpress por una guía de CJ no da error: contesta que no sabe nada, y el
+        // Preguntarle a YunExpress por una guía de SEGUNDO no da error: contesta que no sabe nada, y el
         // cliente se queda mirando un seguimiento que no avanza nunca.
-        pedido.setShippingCarrier("CJ");
-        pedido.setTrackingNumber("CJ-123456789");
-        when(cj.track(any(), any(), any())).thenReturn(new TrackingSnapshot(OrderStatus.SHIPPED, List.of()));
+        pedido.setShippingCarrier("SEGUNDO");
+        pedido.setTrackingNumber("SEGUNDO-123456789");
+        when(segundo.track(any(), any(), any())).thenReturn(new TrackingSnapshot(OrderStatus.SHIPPED, List.of()));
 
         servicio().pollEvents(pedido.getId());
 
-        verify(cj).track("CJ-123456789", pedido.getForwardedAt(), pedido.getShippingCountry());
+        verify(segundo).track("SEGUNDO-123456789", pedido.getForwardedAt(), pedido.getShippingCountry());
         verify(yunExpress, never()).track(any(), any(), any());
     }
 
     private FulfillmentService servicio() {
         FulfillmentProviderSelector selector =
-                new FulfillmentProviderSelector(List.of(yunExpress, cj), yunExpress);
+                new FulfillmentProviderSelector(List.of(yunExpress, segundo), yunExpress);
         return new FulfillmentService(orderRepository, mock(OrderTrackingEventRepository.class), selector,
                 mock(UserRepository.class), mock(NotificationsPublisher.class), mock(OrderEmailService.class),
                 new ObjectMapper(), new YunExpressEventCipher(), mock(OpsAlertService.class),

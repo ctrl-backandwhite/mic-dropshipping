@@ -12,6 +12,7 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AddProductImageDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.AdminSubsidyBulkDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminSurchargeBulkDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductSourceUrlDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
@@ -97,6 +98,14 @@ public interface AdminCatalogApi {
     @Operation(summary = "Set the product surcharge (CNY) in bulk: by product, by category or for all")
     @PutMapping("/products/surcharge")
     ResponseEntity<Map<String, Object>> bulkUpdateSurcharge(@Valid @RequestBody AdminSurchargeBulkDtoIn req);
+
+    /**
+     * Update en lote de las dos bolsas de subvención por producto (1-sep-2026): por producto, por
+     * categoría o para todo el catálogo. Un importe ausente deja esa bolsa como estaba.
+     */
+    @Operation(summary = "Set the product subsidy bags (CNY) in bulk: by product, by category or for all")
+    @PutMapping("/products/subsidy")
+    ResponseEntity<Map<String, Object>> bulkUpdateSubsidy(@Valid @RequestBody AdminSubsidyBulkDtoIn req);
 
     @Operation(summary = "Update the supplier listing URL (1688/Alibaba) of a product. "
             + "Rejects any other domain or scheme with 422 PRODUCT_SOURCE_URL_INVALID.")
