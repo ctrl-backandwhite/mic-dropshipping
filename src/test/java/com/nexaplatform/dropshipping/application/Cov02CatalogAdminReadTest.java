@@ -33,6 +33,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import com.nexaplatform.dropshipping.domain.enums.BusAnuncioEstado;
 import com.nexaplatform.dropshipping.infrastructure.integration.bus.CatalogoBusService;
 import org.mockito.InjectMocks;
 import org.springframework.beans.factory.ObjectProvider;
@@ -66,6 +67,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -130,6 +132,10 @@ class Cov02CatalogAdminReadTest {
      */
     @Mock
     private ObjectProvider<CatalogoBusService> busCatalogo;
+
+    /** El bus en sí, para comprobar que la petición NO publica nada mientras responde. */
+    @Mock
+    private CatalogoBusService bus;
 
     @InjectMocks
     CatalogUseCaseImpl useCase;
@@ -603,6 +609,58 @@ class Cov02CatalogAdminReadTest {
         useCase.quickEdit(producto.getId(), AdminProductQuickEditDtoIn.builder().verified(true).build(), "es");
 
         assertThat(producto.getVerified()).isTrue();
+    }
+
+    /**
+     * Certificar solo DEJA LA MARCA; la ficha del evento no se construye en la transacción de la
+     * petición.
+     *
+     * <p>Es el motivo del cambio del 4-sep-2026: antes se exportaba el producto entero aquí dentro
+     * —consultas, los ocho idiomas, variantes, imágenes y reseñas, todo a JSON— y marcar un producto
+     * tardaba segundos; aplicar un recargo a un lote, eso multiplicado por el número de productos. La
+     * marca va en la MISMA transacción a propósito: es lo que impide que un producto certificado se
+     * quede sin anunciar si el proceso muere justo después de guardar.
+     */
+    @Test
+    void certificarDejaLaMarcaSinConstruirLaFichaEnLaPeticion() {
+        when(productJpaRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
+        when(busCatalogo.getIfAvailable()).thenReturn(bus);
+
+        useCase.quickEdit(producto.getId(), AdminProductQuickEditDtoIn.builder().verified(true).build(), "es");
+
+        assertThat(producto.getBusEstado()).isEqualTo(BusAnuncioEstado.PENDIENTE);
+        verifyNoInteractions(bus);
+    }
+
+    /**
+     * Descertificar también deja la marca. Si solo se anunciara el alta, un producto retirado aquí
+     * seguiría a la venta en el entorno de destino.
+     */
+    @Test
+    void descertificarTambienDejaLaMarcaParaQueLaRetiradaViaje() {
+        producto.setVerified(true);
+        when(productJpaRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
+        when(busCatalogo.getIfAvailable()).thenReturn(bus);
+
+        useCase.quickEdit(producto.getId(), AdminProductQuickEditDtoIn.builder().verified(false).build(), "es");
+
+        assertThat(producto.getBusEstado()).isEqualTo(BusAnuncioEstado.PENDIENTE);
+    }
+
+    /** Un intento fallido anterior no deja al producto fuera de la cola: al volver a tocarlo, vuelve. */
+    @Test
+    void volverACertificarRescataUnProductoQueSeHabiaDadoPorPerdido() {
+        producto.setBusEstado(BusAnuncioEstado.FALLIDO);
+        producto.setBusIntentos(5);
+        producto.setBusError("el bus no respondía");
+        when(productJpaRepository.findById(producto.getId())).thenReturn(Optional.of(producto));
+        when(busCatalogo.getIfAvailable()).thenReturn(bus);
+
+        useCase.quickEdit(producto.getId(), AdminProductQuickEditDtoIn.builder().verified(true).build(), "es");
+
+        assertThat(producto.getBusEstado()).isEqualTo(BusAnuncioEstado.PENDIENTE);
+        assertThat(producto.getBusIntentos()).isZero();
+        assertThat(producto.getBusError()).isNull();
     }
 
     @Test

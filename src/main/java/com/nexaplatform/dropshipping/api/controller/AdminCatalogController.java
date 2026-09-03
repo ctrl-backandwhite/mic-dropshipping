@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.AdminCatalogApi;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.AnuncioBusFallidoView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.CustomsAuditView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
@@ -271,6 +272,16 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     public record BulkStatusRequest(List<UUID> ids, String status) {
+    }
+
+    @Override
+    public ResponseEntity<List<AnuncioBusFallidoView>> anunciosAlBusFallidos() {
+        return ResponseEntity.ok(catalogUseCase.anunciosAlBusFallidos());
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Integer>> reintentarAnunciosAlBusFallidos() {
+        return ResponseEntity.ok(Map.of("reencolados", catalogUseCase.reintentarAnunciosAlBusFallidos()));
     }
 
     @Override

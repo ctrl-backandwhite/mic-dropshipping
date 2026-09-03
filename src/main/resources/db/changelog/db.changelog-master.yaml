@@ -337,3 +337,5 @@ databaseChangeLog:
       file: db/changelog/schema-v163-quitar-recursos-de-interfaz.sql
   - include:
       file: db/changelog/schema-v164-espejado-de-video.sql
+  - include:
+      file: db/changelog/schema-v165-anuncio-al-bus-diferido.sql

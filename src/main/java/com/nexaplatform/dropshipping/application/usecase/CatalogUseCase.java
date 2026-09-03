@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase;
 
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.AnuncioBusFallidoView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.CustomsAuditView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
@@ -269,4 +270,15 @@ public interface CatalogUseCase {
     void deletePriceTier(UUID productId, int minQty);
 
     ProductDetailView duplicateProduct(UUID id, String lang);
+
+    /**
+     * Los productos cuyo anuncio al bus del catálogo se dio por perdido.
+     *
+     * <p>Certificar responde al instante porque el envío va diferido; el precio de eso es que un fallo
+     * ya no puede devolverse en la respuesta. Esta lista es donde se ve.
+     */
+    List<AnuncioBusFallidoView> anunciosAlBusFallidos();
+
+    /** Devuelve a la cola los anuncios dados por perdidos. Devuelve cuántos se reencolaron. */
+    int reintentarAnunciosAlBusFallidos();
 }
