@@ -73,11 +73,19 @@ public class ProductIndexer {
         return index != null ? index : schema.indexName(logicalIndex);
     }
 
+    // El parámetro es un Map y no ProductIngestedEvent a propósito: el consumidor deserializa SIEMPRE
+    // a mapa, así que declarar el tipo hacía que Spring no supiera convertirlo y el listener reventara
+    // con CADA mensaje del tema, reintentando sin fin. La conversión vive en ProductIngestedEvent.desde.
     @KafkaListener(topics = NexaTopics.PRODUCT_INGESTED, groupId = "nexadrop-search-indexer")
     // La transacción tiene que abrirse AQUÍ: el cuerpo del indexado se llama en la misma clase y una
     // llamada interna no pasa por el proxy de Spring, así que el indexado corría sin sesión JPA.
     @Transactional(readOnly = true)
-    public void onProductIngested(ProductIngestedEvent event) {
+    public void onProductIngested(Map<String, Object> mensaje) {
+        ProductIngestedEvent event = ProductIngestedEvent.desde(mensaje);
+        if (event == null) {
+            log.warn("Indexado: mensaje de product.ingested sin identificador utilizable, se ignora");
+            return;
+        }
         indexProductDoc(event.productId());
     }
 

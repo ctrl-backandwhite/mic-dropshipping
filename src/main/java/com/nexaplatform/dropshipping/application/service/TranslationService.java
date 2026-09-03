@@ -19,6 +19,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -42,9 +43,16 @@ public class TranslationService {
         return Arrays.stream(targetLanguagesRaw.split(",")).map(String::trim).toList();
     }
 
+    // Map y no ProductIngestedEvent: el consumidor deserializa siempre a mapa, así que con el tipo
+    // declarado este listener no llegaba a ejecutarse nunca —fallaba la conversión con cada mensaje—.
     @KafkaListener(topics = "product.ingested", groupId = "nexadrop-translation")
     @Transactional
-    public void onProductIngested(ProductIngestedEvent event) {
+    public void onProductIngested(Map<String, Object> mensaje) {
+        ProductIngestedEvent event = ProductIngestedEvent.desde(mensaje);
+        if (event == null) {
+            log.warn("Traducción: mensaje de product.ingested sin identificador utilizable, se ignora");
+            return;
+        }
         doTranslateProduct(event.productId());
     }
 

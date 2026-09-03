@@ -1,6 +1,5 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.search;
 
-import com.nexaplatform.dropshipping.infrastructure.messaging.ProductIngestedEvent;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
@@ -105,15 +104,29 @@ class Cov07ProductIndexerSetupTest {
         assertThat(indexer.isFreshlyCreated()).isFalse();
     }
 
+    /**
+     * El listener recibe un MAPA, no el evento tipado: el consumidor está configurado para
+     * deserializar siempre a mapa, y declarar el tipo hacía que Spring no supiera convertirlo y que el
+     * listener fallara con cada mensaje, reintentando sin fin.
+     */
     @Test
     void elEventoDeIngestaIndexaElProductoQueTraeElEvento() throws IOException {
         ProductEntity p = product();
         when(productRepository.findWithDetailsById(p.getId())).thenReturn(Optional.of(p));
         when(client.index(any(IndexRequest.class))).thenReturn(mock(IndexResponse.class));
 
-        indexer.onProductIngested(new ProductIngestedEvent(p.getId(), "camisa-lino", "1688", "EXT-1"));
+        indexer.onProductIngested(Map.of("productId", p.getId().toString(), "slug", "camisa-lino",
+                "source", "1688", "externalId", "EXT-1"));
 
         verify(client).index(any(IndexRequest.class));
+    }
+
+    /** Un mensaje ilegible no puede tumbar el listener: se ignora y no se indexa nada. */
+    @Test
+    void unMensajeSinIdentificadorSeIgnoraSinIndexarNada() throws IOException {
+        indexer.onProductIngested(Map.of("source", "1688"));
+
+        verify(client, never()).index(any(IndexRequest.class));
     }
 
     @Test
