@@ -86,6 +86,12 @@ public final class BulkProductFields {
         if (r.getLeadTimeDays() != null) {
             p.setLeadTimeDays(r.getLeadTimeDays());
         }
+        // Nulo es «no lo toques», no «desmárcalo»: una importación por JSON que no traiga el campo no
+        // puede descertificar un producto que ya estaba verificado en el destino. Por el bus llega
+        // siempre con valor, que es lo que hace que producción muestre lo mismo que preproducción.
+        if (r.getVerified() != null) {
+            p.setVerified(r.getVerified());
+        }
         if (has(r.getVideoUrl())) {
             // cambiarVideoUrl y no setVideoUrl: si la dirección es otra, deja el vídeo en cola para
             // espejarlo y descarta lo que hubiera espejado del anterior.

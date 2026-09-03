@@ -131,6 +131,19 @@ public class BulkProductDtoIn {
     /** ACTIVE (default) or DRAFT. */
     private String status;
 
+    /**
+     * Si el producto ya pasó la verificación.
+     *
+     * <p>Existe por el bus. La ficha viaja de preproducción a producción en este mismo formato, y sin
+     * este campo el producto llegaba certificado —el evento se llama {@code producto.certificado}— pero
+     * marcado como NO verificado en el destino: el panel de producción decía «sin verificar» de algo
+     * que sí lo estaba, que es peor que no enseñar nada.
+     *
+     * <p>Nulo significa «no lo toques»: una importación por JSON que no lo traiga no puede desmarcar lo
+     * que ya estaba verificado en el destino.
+     */
+    private Boolean verified;
+
     /** Optional stable id; generated from the title when omitted. */
     private String externalId;
 

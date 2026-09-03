@@ -56,6 +56,9 @@ public class ProductBulkExportMapper {
         d.setManufacturer(p.getBrand());
         d.setExternalId(p.getExternalId());
         d.setStatus(p.getStatus() != null ? p.getStatus().name() : null);
+        // Viaja al bus: sin esto el producto llega a producción certificado pero marcado como no
+        // verificado, y el panel de allí dice «sin verificar» de algo que sí lo está.
+        d.setVerified(p.getVerified());
 
         // Canonical fixed-language fields (the unlimited `translations` map below carries every language).
         d.setTitleZh(p.getTitleZh());
