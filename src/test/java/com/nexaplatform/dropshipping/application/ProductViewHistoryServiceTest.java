@@ -8,6 +8,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -22,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -85,6 +87,36 @@ class ProductViewHistoryServiceTest {
 
         verify(viewRepository).findProductIdsByUserId(eq(userId),
                 eq(Limit.of(ProductViewHistoryService.MAX_HISTORIAL)));
+    }
+
+    /**
+     * El historial es una VENTANA de cincuenta fichas: la que entra empuja fuera a la más antigua.
+     *
+     * <p>Antes el tope era solo de LECTURA —se guardaba todo y se leían las primeras doscientas—, así que
+     * la tabla crecía sin fin con filas que nadie iba a mirar y que solo desaparecían al cumplir noventa
+     * días. Si esta prueba deja de podar, vuelve a acumularse el rastro entero de cada persona.
+     */
+    @Test
+    @DisplayName("al pasar de cincuenta, la visita nueva empuja fuera a la más antigua")
+    void alPasarDeCincuentaSeEmpujaFueraLaMasAntigua() {
+        UUID userId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        when(productRepository.existsById(productId)).thenReturn(true);
+
+        service.record(userId, productId);
+
+        // Primero se anota la visita y DESPUÉS se poda: al revés, la ficha recién abierta podría ser la
+        // que se borra cuando el historial está justo en el tope.
+        InOrder enOrden = inOrder(viewRepository);
+        enOrden.verify(viewRepository).registrarVisita(eq(userId), eq(productId), any(Instant.class));
+        enOrden.verify(viewRepository).podarExcedente(userId, 50);
+    }
+
+    /** Cincuenta, el número acordado. Va aquí para que cambiarlo sea una decisión, no un descuido. */
+    @Test
+    @DisplayName("el historial guarda cincuenta fichas por usuario")
+    void elHistorialGuardaCincuentaFichas() {
+        assertThat(ProductViewHistoryService.MAX_HISTORIAL).isEqualTo(50);
     }
 
     /** La retención acordada con el dueño del producto: 90 días, ni el historial ni el correo más allá. */

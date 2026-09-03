@@ -27,11 +27,18 @@ import java.util.UUID;
 public class ProductViewHistoryService {
 
     /**
-     * Tope de fichas que se devuelven. El historial de un usuario que lleva meses mirando puede ser de
-     * miles de filas y nadie baja tan abajo: sin tope, cada apertura de la página cargaría el catálogo
-     * entero de esa persona para enseñar las primeras veinticuatro.
+     * Cuántas fichas conserva el historial de cada usuario.
+     *
+     * <p>Es un tope DURO, no solo de lectura: al abrir la ficha número cincuenta y uno se borra la visita
+     * más antigua. Antes se guardaban todas y solo se leían las primeras doscientas, de modo que la tabla
+     * crecía sin fin con filas que nadie iba a mirar y que únicamente desaparecían al cumplir los noventa
+     * días de retención.
+     *
+     * <p>Cincuenta es lo que se pidió y encaja con para qué sirve esto: recordarle a alguien por dónde ha
+     * pasado hace poco. Nadie baja a la visita número doscientos, y guardar el rastro entero de una
+     * persona sin que vaya a usarse es acumular dato personal por acumularlo.
      */
-    public static final int MAX_HISTORIAL = 200;
+    public static final int MAX_HISTORIAL = 50;
 
     /** Retención del historial: pasados estos días, la visita se borra. */
     public static final Duration RETENCION = Duration.ofDays(90);
@@ -51,6 +58,11 @@ public class ProductViewHistoryService {
             throw new NotFoundException("Product");
         }
         viewRepository.registrarVisita(userId, productId, Instant.now());
+        // La ficha recién vista empuja fuera a la más antigua en cuanto se pasa del tope. Se poda aquí y
+        // no en un barrido nocturno porque el historial se lee justo después de escribirlo —el usuario
+        // vuelve a su página desde la propia ficha— y con la poda diferida vería una lista más larga de
+        // lo que promete hasta que el barrido pasara.
+        viewRepository.podarExcedente(userId, MAX_HISTORIAL);
     }
 
     /** IDs del historial del usuario, del visitado más recientemente al más antiguo. */

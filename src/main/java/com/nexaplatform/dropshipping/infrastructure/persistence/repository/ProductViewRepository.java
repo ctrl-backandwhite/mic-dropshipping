@@ -59,4 +59,23 @@ public interface ProductViewRepository extends JpaRepository<ProductViewEntity, 
     @Modifying(clearAutomatically = true)
     @Query("delete from ProductViewEntity v where v.viewedAt < :limite")
     int deleteByViewedAtBefore(@Param("limite") Instant limite);
+
+    /**
+     * Deja en el historial del usuario solo las {@code tope} visitas más recientes; el resto se borra.
+     *
+     * <p>El historial es una VENTANA, no un archivo: la ficha número cincuenta y uno empuja fuera a la
+     * más antigua. Antes solo había un tope de lectura —se guardaban todas y se leían las primeras—, así
+     * que la tabla crecía sin fin con filas que nadie iba a mirar nunca y que solo desaparecían a los
+     * noventa días.
+     *
+     * <p>Va en SQL nativo y en una sola sentencia a propósito: traer los identificadores sobrantes para
+     * borrarlos después son dos viajes y una carrera —dos pestañas del mismo usuario podrían borrar cada
+     * una lo que la otra acaba de decidir conservar—. La subconsulta ordena por el mismo índice que usa
+     * la lectura, así que el coste es el de leer cincuenta filas.
+     */
+    @Modifying(clearAutomatically = true)
+    @Query(value = "DELETE FROM product_view WHERE user_id = :userId AND id NOT IN ("
+            + "SELECT id FROM product_view WHERE user_id = :userId ORDER BY viewed_at DESC LIMIT :tope)",
+            nativeQuery = true)
+    int podarExcedente(@Param("userId") UUID userId, @Param("tope") int tope);
 }
