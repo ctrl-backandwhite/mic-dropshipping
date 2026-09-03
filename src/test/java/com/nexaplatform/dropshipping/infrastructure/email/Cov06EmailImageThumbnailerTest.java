@@ -14,14 +14,22 @@ import java.nio.charset.StandardCharsets;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Miniaturas de las imágenes que viajan adjuntas en el correo. La regla de fondo es la misma en todos
- * los casos: si algo no se puede procesar se devuelve el original, porque adjuntar una imagen grande es
- * malo pero no mostrar nada en la factura es peor.
+ * Miniaturas de las imágenes que viajan adjuntas en el correo.
+ *
+ * <p>La regla de fondo es la misma en todos los casos: si algo no se puede procesar se devuelve el
+ * original, porque adjuntar una imagen grande es malo pero no mostrar nada en la factura es peor.
+ *
+ * <p><b>Y salen CUADRADAS, recortadas por el centro.</b> Antes se reducían conservando la proporción a
+ * 104 px de lado —el tamaño calculado para los 52 px de la factura— y esa misma miniatura se usaba en
+ * el correo de productos vistos, que las pinta a 180: llegaban borrosas por ampliar desde 104, y encima
+ * deformadas, porque la plantilla fijaba {@code height:168px} confiando en {@code object-fit:cover},
+ * que Gmail ignora. Las pruebas de este fichero fijan el comportamiento nuevo: quien lo cambie a
+ * «conservar proporción» vuelve a romper el correo, y no se notará hasta que alguien lo abra.
  */
 class Cov06EmailImageThumbnailerTest {
 
-    /** Lado máximo que produce el reductor (2× los 52 px que pinta la plantilla). */
-    private static final int LADO_MAXIMO = 104;
+    /** Lado de la miniatura cuadrada: 2× los 180 px de la tarjeta más grande, para pantallas HiDPI. */
+    private static final int LADO = 360;
 
     @Test
     void sinBytesDevuelveLoQueLeDieron() {
@@ -41,39 +49,54 @@ class Cov06EmailImageThumbnailerTest {
         assertThat(EmailImageThumbnailer.thumbnail(noEsImagen)).isSameAs(noEsImagen);
     }
 
-    /** Ya cabe en la miniatura: recodificar solo añadiría pérdida de calidad sin ahorrar peso. */
+    /**
+     * Una foto grande sale CUADRADA y como JPEG. Que sea cuadrada es lo que permite a la plantilla
+     * pintarla con alto y ancho fijos sin deformarla, sin depender de object-fit.
+     */
     @Test
-    void imagenPequenaNoSeRecodifica() throws IOException {
-        byte[] pequena = png(60, 40, Color.RED);
-
-        assertThat(EmailImageThumbnailer.thumbnail(pequena)).isSameAs(pequena);
-    }
-
-    /** Se reduce al lado máximo CONSERVANDO la proporción, y sale como JPEG (más ligero para el correo). */
-    @Test
-    void imagenGrandeSeReduceConservandoLaProporcion() throws IOException {
-        byte[] grande = png(400, 200, Color.BLUE);
+    void unaFotoGrandeSaleCuadradaYComoJpeg() throws IOException {
+        byte[] grande = png(800, 800, Color.BLUE);
 
         byte[] mini = EmailImageThumbnailer.thumbnail(grande);
 
         BufferedImage leida = ImageIO.read(new ByteArrayInputStream(mini));
-        assertThat(leida.getWidth()).isEqualTo(LADO_MAXIMO);
-        assertThat(leida.getHeight()).isEqualTo(LADO_MAXIMO / 2);
+        assertThat(leida.getWidth()).isEqualTo(LADO);
+        assertThat(leida.getHeight()).isEqualTo(LADO);
         assertThat(mini).isNotSameAs(grande);
         // Cabecera SOI de JPEG: confirma que se recodificó y no es el PNG original.
         assertThat(mini[0]).isEqualTo((byte) 0xFF);
         assertThat(mini[1]).isEqualTo((byte) 0xD8);
     }
 
-    /** El lado largo manda: una imagen apaisada al revés se reduce por la altura. */
+    /** Una foto apaisada se recorta por los lados, no se encoge: el resultado sigue siendo cuadrado. */
     @Test
-    void laReduccionSeAplicaSobreElLadoMasLargo() throws IOException {
-        byte[] alta = png(200, 600, Color.GREEN);
+    void unaFotoApaisadaSeRecortaACuadrado() throws IOException {
+        BufferedImage leida = ImageIO.read(new ByteArrayInputStream(
+                EmailImageThumbnailer.thumbnail(png(1200, 400, Color.BLUE))));
 
-        BufferedImage leida = ImageIO.read(new ByteArrayInputStream(EmailImageThumbnailer.thumbnail(alta)));
+        assertThat(leida.getWidth()).isEqualTo(leida.getHeight());
+    }
 
-        assertThat(leida.getHeight()).isEqualTo(LADO_MAXIMO);
-        assertThat(leida.getWidth()).isEqualTo(35); // 200 * (104/600) redondeado
+    /** Y una vertical, por arriba y por abajo. Es el caso de la ropa de 694x925. */
+    @Test
+    void unaFotoVerticalTambienSaleCuadrada() throws IOException {
+        BufferedImage leida = ImageIO.read(new ByteArrayInputStream(
+                EmailImageThumbnailer.thumbnail(png(694, 925, Color.GREEN))));
+
+        assertThat(leida.getWidth()).isEqualTo(leida.getHeight());
+    }
+
+    /**
+     * Una foto más pequeña que la miniatura no se AMPLÍA: se recorta a cuadrado con el lado que tiene.
+     * Ampliar de 104 a 180 es justo lo que se veía borroso en el correo.
+     */
+    @Test
+    void unaFotoPequenaNoSeAmplia() throws IOException {
+        BufferedImage leida = ImageIO.read(new ByteArrayInputStream(
+                EmailImageThumbnailer.thumbnail(png(120, 90, Color.RED))));
+
+        assertThat(leida.getWidth()).isEqualTo(90);
+        assertThat(leida.getHeight()).isEqualTo(90);
     }
 
     /**
