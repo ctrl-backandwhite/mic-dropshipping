@@ -8,6 +8,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantVa
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductImageRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.VariantValueRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -56,6 +57,16 @@ class Cov09ImageMirrorBatchTest {
     ProductIndexer productIndexer;
     @InjectMocks
     ImageMirrorService service;
+
+    /**
+     * El barrido encarga el lote a otro hilo para no dejar bloqueado al planificador —que es uno solo
+     * para las 18 tareas programadas—. En las pruebas se sustituye por uno que ejecuta en el hilo que
+     * llama, y así se comprueba el resultado del lote sin esperas ni relojes.
+     */
+    @BeforeEach
+    void ejecutarElLoteEnEsteMismoHilo() {
+        service.orquestador = Runnable::run;
+    }
 
     /** URL sintácticamente válida pero interna: el guard anti-SSRF la rechaza sin salir a la red. */
     private static final String ORIGEN_INALCANZABLE = "http://127.0.0.1/foto.jpg";

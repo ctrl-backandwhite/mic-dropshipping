@@ -9,19 +9,27 @@ spring:
 
   task:
     scheduling:
+      # El planificador ejecuta las 18 tareas @Scheduled con MUY poca concurrencia, y cualquiera de
+      # ellas puede parar a las demás con solo tardar. No es teórico: los días 2 y 3-sep-2026, en
+      # preproducción, el espejado de vídeo se quedó esperando descargas y con él se pararon durante
+      # HORAS el despachador del outbox —los productos certificados dejaron de llegar a producción—,
+      # el barrido de imágenes y los reintentos. Sin un solo error en el registro: las tareas no
+      # fallaban, es que no llegaban a ejecutarse.
+      #
+      # ⚠️ OJO CON ESTAS DOS CLAVES: con `spring.threads.virtual.enabled: true` —que está activado
+      # arriba— Spring NO usa el pool clásico, así que `pool.size` se IGNORA. Se comprobó en el
+      # entorno: con size 8 configurado, en el registro seguía apareciendo un único hilo,
+      # `[scheduling-2]`, en 552 líneas y ningún `scheduling-3`. La que manda con hilos virtuales es
+      # `simple.concurrency-limit`. Se dejan las dos: la primera para el día que se apaguen los hilos
+      # virtuales, la segunda para hoy.
+      #
+      # Y ninguna de las dos es EL arreglo: lo que de verdad lo resuelve es que las tareas largas
+      # encarguen el trabajo a su propio hilo y vuelvan enseguida, que es lo que hacen ahora los dos
+      # servicios de espejado. Esto es la red por debajo.
       pool:
-        # UN solo hilo para las 18 tareas @Scheduled era el valor por defecto de Spring, y significa que
-        # CUALQUIERA de ellas puede parar a las otras diecisiete con solo tardar. No es teórico: el
-        # 2-sep-2026, en preproducción, el espejado de vídeo se quedó esperando una descarga que no
-        # volvía y con él se pararon durante CUATRO HORAS el despachador del outbox —los productos
-        # certificados dejaron de llegar a producción—, el barrido de imágenes, los reintentos y los
-        # correos. Sin un solo error en el registro: las tareas no fallaban, es que no llegaban a
-        # ejecutarse.
-        #
-        # Con varios hilos, una tarea lenta se lleva el suyo y las demás siguen. Ocho sobran para 18
-        # tareas que casi siempre terminan en milisegundos, y las que descargan del proveedor
-        # (imágenes y vídeo) tienen además su propio plazo para devolver el hilo pase lo que pase.
         size: ${SCHEDULING_POOL_SIZE:8}
+      simple:
+        concurrency-limit: ${SCHEDULING_CONCURRENCY_LIMIT:8}
   mvc:
     async:
       # No timeout for async/streaming responses (StreamingResponseBody). The NDJSON export streams the
