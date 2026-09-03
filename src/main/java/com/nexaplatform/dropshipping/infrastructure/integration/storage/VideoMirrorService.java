@@ -24,9 +24,11 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -104,6 +106,41 @@ public class VideoMirrorService {
     private volatile ExecutorService pool;
 
     /**
+     * Un hilo aparte que se encarga de esperar al lote, para que el del planificador vuelva enseguida.
+     *
+     * <p>No se reutiliza el pool de descargas: si el orquestador ocupara uno de sus dos hilos, se
+     * quedaría esperando a los otros con uno menos trabajando.
+     */
+    /**
+     * Sustituible en pruebas por uno que ejecute en el hilo que llama. Es un {@link Executor} y no un
+     * {@code ExecutorService} justo por eso: la interfaz mínima permite pasarle {@code Runnable::run} y
+     * comprobar el resultado del lote en la misma prueba, sin esperas ni relojes.
+     */
+    volatile Executor orquestador;
+
+    /** El que se crea aquí, guardado aparte para poder cerrarlo al apagar. */
+    private volatile ExecutorService orquestadorPropio;
+
+    /** Impide que se solapen dos lotes cuando el anterior tarda más que el intervalo del barrido. */
+    private final AtomicBoolean loteEnMarcha = new AtomicBoolean(false);
+
+    private Executor orquestador() {
+        Executor actual = orquestador;
+        if (actual == null) {
+            synchronized (this) {
+                actual = orquestador;
+                if (actual == null) {
+                    ExecutorService creado = Executors.newSingleThreadExecutor();
+                    orquestadorPropio = creado;
+                    orquestador = creado;
+                    actual = creado;
+                }
+            }
+        }
+        return actual;
+    }
+
+    /**
      * El pool se crea al primer uso, no en un gancho del ciclo de vida: las pruebas unitarias construyen
      * el servicio con {@code @InjectMocks} y ahí nadie invoca esos ganchos, así que el pool llegaría nulo.
      * Es la misma razón por la que {@link ImageMirrorService} lo hace así.
@@ -128,15 +165,41 @@ public class VideoMirrorService {
         if (actual != null) {
             actual.shutdownNow();
         }
+        ExecutorService orq = orquestadorPropio;
+        if (orq != null) {
+            orq.shutdownNow();
+        }
     }
 
-    /** Barrido: espeja un lote de los vídeos que están en cola. */
+    /**
+     * Barrido: encarga un lote y VUELVE. El trabajo no se hace aquí.
+     *
+     * <p>Esto no es un detalle de estilo. El planificador ejecuta las tareas en un solo hilo —y con
+     * los hilos virtuales activados, {@code spring.task.scheduling.pool.size} ni siquiera se aplica,
+     * así que no se arregla con configuración—. Mientras este método no volviera, las otras diecisiete
+     * tareas programadas no se ejecutaban: el 3-sep-2026 se pararon durante horas el despachador del
+     * outbox —los productos certificados dejaron de llegar a producción—, el espejado de imágenes y
+     * los reintentos, sin un solo error en el registro.
+     *
+     * <p>El candado impide que se solapen dos lotes cuando el anterior tarda más que el intervalo.
+     */
     @Scheduled(fixedDelayString = "${nexadrop.storage.video-mirror-interval-ms:30000}")
     public void mirrorPendingScheduled() {
         if (!mirrorEnabled || !storage.isReady()) {
             return;
         }
-        mirrorPendingBatch(mirrorBatch);
+        if (!loteEnMarcha.compareAndSet(false, true)) {
+            return;
+        }
+        orquestador().execute(() -> {
+            try {
+                mirrorPendingBatch(mirrorBatch);
+            } catch (Exception e) {
+                log.warn("Espejado de vídeo: el lote terminó mal: {}", e.toString());
+            } finally {
+                loteEnMarcha.set(false);
+            }
+        });
     }
 
     /** Barrido: devuelve a la cola los vídeos fallidos a los que ya les toca otro intento. */

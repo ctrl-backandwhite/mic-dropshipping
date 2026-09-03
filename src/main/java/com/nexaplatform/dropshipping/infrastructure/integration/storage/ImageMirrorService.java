@@ -36,9 +36,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -108,6 +110,39 @@ public class ImageMirrorService {
     private volatile ExecutorService pool;
 
     /**
+     * Hilo aparte que espera al lote, para que el del planificador vuelva enseguida. No se reutiliza el
+     * pool de descargas: ocuparía uno de sus hilos esperando a los otros.
+     */
+    /**
+     * Sustituible en pruebas por uno que ejecute en el hilo que llama. Es un {@link Executor} y no un
+     * {@code ExecutorService} justo por eso: la interfaz mínima permite pasarle {@code Runnable::run} y
+     * comprobar el resultado del lote en la misma prueba, sin esperas ni relojes.
+     */
+    volatile Executor orquestador;
+
+    /** El que se crea aquí, guardado aparte para poder cerrarlo al apagar. */
+    private volatile ExecutorService orquestadorPropio;
+
+    /** Impide que se solapen dos lotes cuando el anterior tarda más que el intervalo del barrido. */
+    private final AtomicBoolean loteEnMarcha = new AtomicBoolean(false);
+
+    private Executor orquestador() {
+        Executor actual = orquestador;
+        if (actual == null) {
+            synchronized (this) {
+                actual = orquestador;
+                if (actual == null) {
+                    ExecutorService creado = Executors.newSingleThreadExecutor();
+                    orquestadorPropio = creado;
+                    orquestador = creado;
+                    actual = creado;
+                }
+            }
+        }
+        return actual;
+    }
+
+    /**
      * Devuelve el pool, creándolo la primera vez que hace falta.
      *
      * <p>Perezoso y no en un {@code @PostConstruct} porque las pruebas unitarias construyen el servicio con
@@ -134,6 +169,10 @@ public class ImageMirrorService {
         if (actual != null) {
             actual.shutdownNow();
         }
+        ExecutorService orq = orquestadorPropio;
+        if (orq != null) {
+            orq.shutdownNow();
+        }
     }
 
     /** Una vez por arranque: reencola las imágenes cuyo cdn_url no apunta al storage vigente. */
@@ -145,12 +184,28 @@ public class ImageMirrorService {
         if (!mirrorEnabled || !storage.isReady()) {
             return;
         }
-        if (!healedStaleUrls) {
-            healStaleCdnUrls();
-            healedStaleUrls = true; // se marca aunque falle: es un saneo oportunista, no puede bloquear el job
+        // Se encarga el lote y se VUELVE: el trabajo no se hace en el hilo del planificador. Ese hilo es
+        // uno solo para las 18 tareas programadas —y con los hilos virtuales activados,
+        // spring.task.scheduling.pool.size ni siquiera se aplica—, así que quedarse aquí esperando
+        // descargas para el resto. El 3-sep-2026 fue lo que dejó cuatro horas sin despachar el outbox,
+        // sin un solo error en el registro. El candado evita que se solapen dos lotes.
+        if (!loteEnMarcha.compareAndSet(false, true)) {
+            return;
         }
-        mirrorPendingBatch(mirrorBatch);
-        mirrorVariantImagesBatch(mirrorBatch);
+        orquestador().execute(() -> {
+            try {
+                if (!healedStaleUrls) {
+                    healStaleCdnUrls();
+                    healedStaleUrls = true; // oportunista: se marca aunque falle, no puede bloquear el job
+                }
+                mirrorPendingBatch(mirrorBatch);
+                mirrorVariantImagesBatch(mirrorBatch);
+            } catch (Exception e) {
+                log.warn("Mirror: el lote terminó mal: {}", e.toString());
+            } finally {
+                loteEnMarcha.set(false);
+            }
+        });
     }
 
     /**
