@@ -39,6 +39,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Espeja a object storage (MinIO/S3) las imágenes de producto: descarga la {@code source_url} de origen
@@ -95,6 +97,14 @@ public class ImageMirrorService {
      * todavía 0 y el pool nacería con el número de hilos equivocado, que es justo lo que este ajuste viene a
      * controlar.
      */
+    /**
+     * Plazo del lote entero. Esperar un Future que no vuelve deja colgado al HILO DEL PLANIFICADOR, y
+     * con él todas las demás tareas programadas. Pasó el 2-sep-2026 con el espejado de vídeo, que
+     * seguía este mismo patrón: cuatro horas sin despachar el outbox y sin un solo error en el
+     * registro. Lo que no cabe en el plazo se cancela y vuelve en el siguiente barrido.
+     */
+    private static final Duration PLAZO_DEL_LOTE = Duration.ofMinutes(10);
+
     private volatile ExecutorService pool;
 
     /**
@@ -301,12 +311,21 @@ public class ImageMirrorService {
                 .map(img -> pool().submit(() -> mirrorOne(img.getId(), img.getSourceUrl()))).toList();
         int ok = 0;
         List<UUID> mirroredImageIds = new ArrayList<>();
+        Instant limiteLote = Instant.now().plus(PLAZO_DEL_LOTE);
         for (int i = 0; i < futures.size(); i++) {
             try {
-                if (Boolean.TRUE.equals(futures.get(i).get())) {
+                long queda = Duration.between(Instant.now(), limiteLote).toMillis();
+                if (queda <= 0) {
+                    futures.get(i).cancel(true);
+                    continue;
+                }
+                if (Boolean.TRUE.equals(futures.get(i).get(queda, TimeUnit.MILLISECONDS))) {
                     ok++;
                     mirroredImageIds.add(pending.get(i).getId());
                 }
+            } catch (TimeoutException ex) {
+                futures.get(i).cancel(true);
+                log.warn("Mirror: se agotó el plazo del lote, lo que falte va al siguiente barrido");
             } catch (InterruptedException ex) {
                 // Tragarse la interrupción deja al pool sin enterarse de que le han pedido parar.
                 Thread.currentThread().interrupt();
@@ -341,11 +360,20 @@ public class ImageMirrorService {
         List<Future<Boolean>> futures = imgs.stream()
                 .map(img -> pool().submit(() -> mirrorOne(img.getId(), img.getSourceUrl()))).toList();
         List<UUID> mirroredImageIds = new ArrayList<>();
+        Instant limiteLote = Instant.now().plus(PLAZO_DEL_LOTE);
         for (int i = 0; i < futures.size(); i++) {
             try {
-                if (Boolean.TRUE.equals(futures.get(i).get())) {
+                long queda = Duration.between(Instant.now(), limiteLote).toMillis();
+                if (queda <= 0) {
+                    futures.get(i).cancel(true);
+                    continue;
+                }
+                if (Boolean.TRUE.equals(futures.get(i).get(queda, TimeUnit.MILLISECONDS))) {
                     mirroredImageIds.add(imgs.get(i).getId());
                 }
+            } catch (TimeoutException ex) {
+                futures.get(i).cancel(true);
+                log.warn("Mirror variantes: se agotó el plazo del lote, lo que falte va al siguiente barrido");
             } catch (InterruptedException ex) {
                 // Tragarse la interrupción deja al pool sin enterarse de que le han pedido parar.
                 Thread.currentThread().interrupt();

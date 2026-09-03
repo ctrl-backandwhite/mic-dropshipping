@@ -27,6 +27,8 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Espeja a nuestro almacenamiento el vídeo de la ficha, igual que {@link ImageMirrorService} hace con las
@@ -89,6 +91,15 @@ public class VideoMirrorService {
     // dirección de cloud.video.taobao.com es un redirector que devuelve un 302 a otra firmada con caducidad.
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20))
             .followRedirects(HttpClient.Redirect.NEVER).build();
+
+    /**
+     * Lo que puede tardar un lote entero antes de que se le corte.
+     *
+     * <p>Con lotes de 10, dos hilos y 120 s de espera por vídeo, un lote normal tarda menos de diez
+     * minutos. Este plazo no es para el caso normal: es el tope que garantiza que el hilo del
+     * planificador SIEMPRE vuelve.
+     */
+    private static final Duration PLAZO_DEL_LOTE = Duration.ofMinutes(10);
 
     private volatile ExecutorService pool;
 
@@ -199,10 +210,24 @@ public class VideoMirrorService {
             String origen = p.getVideoUrl();
             tareas.add(pool().submit(() -> mirrorOne(id, origen)));
         }
+        // El lote entero tiene un plazo, y se cuenta desde aquí. Sin esto, esperar un Future que no
+        // vuelve deja colgado al HILO DEL PLANIFICADOR, que es UNO para las 18 tareas programadas:
+        // pasó el 2-sep-2026 en preproducción, un vídeo no terminó y se pararon el despachador del
+        // outbox, el espejado de imágenes y todo lo demás durante cuatro horas, sin un solo error en
+        // el registro. Lo que no cabe en el plazo se cancela y se queda para el siguiente barrido.
+        Instant limite = Instant.now().plus(PLAZO_DEL_LOTE);
         int ok = 0;
         for (Future<Boolean> t : tareas) {
+            long queda = Duration.between(Instant.now(), limite).toMillis();
             try {
-                ok += Boolean.TRUE.equals(t.get()) ? 1 : 0;
+                if (queda <= 0) {
+                    t.cancel(true);
+                    continue;
+                }
+                ok += Boolean.TRUE.equals(t.get(queda, TimeUnit.MILLISECONDS)) ? 1 : 0;
+            } catch (TimeoutException e) {
+                t.cancel(true);
+                log.warn("Espejado de vídeo: se agotó el plazo del lote, lo que falte va al siguiente barrido");
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
