@@ -44,11 +44,26 @@ public class ProductMapper {
     private final EuComplianceService euComplianceService;
 
     public ProductSummaryView toSummary(ProductEntity p, String language) {
+        return toSummary(p, language, null);
+    }
+
+    /**
+     * Igual, pero con el precio YA RESUELTO en vez de calcularlo.
+     *
+     * <p>Lo usa el historial de visitas, que guarda el precio tal como lo vio la persona en el momento de
+     * abrir la ficha. Rehacerlo al pintar la página son, por cada una de las cincuenta fichas, una
+     * conversión de divisa, el margen del país de registro, el IVA, el envío, las dos bolsas de subvención
+     * y el recargo fijo: eso era lo que hacía lento el historial, no leer las visitas.
+     *
+     * <p>Con {@code precioYaResuelto} a nulo se calcula como siempre, que es lo que necesitan las visitas
+     * anteriores a que se empezara a guardar.
+     */
+    public ProductSummaryView toSummary(ProductEntity p, String language, PricedAmount precioYaResuelto) {
         if (p == null)
             return null;
         String title = pickTitle(p, language);
         String image = p.getImages().stream().findFirst().map(this::pickImageUrl).orElse(null);
-        PricedAmount priced = pricingService.priceFor(p);
+        PricedAmount priced = precioYaResuelto != null ? precioYaResuelto : pricingService.priceFor(p);
         Integer availableUnits = null;
         try {
             availableUnits = p.getVariants() == null

@@ -79,13 +79,22 @@ class CategoryRepositoryIT extends PersistenceITBase {
         assertThat(adapter.findBySlug("does-not-exist")).isEmpty();
     }
 
+    /**
+     * Comprueba el CONTRATO del método —devolver solo raíces— y no que la tabla esté vacía.
+     *
+     * <p>Antes exigía que «electronica» fuera la única raíz, lo que solo era cierto cuando la base no
+     * traía nada más. Hoy Liquibase siembra la taxonomía real del catálogo (moda, hogar, industrial…), así
+     * que esa versión fallaba por el ENTORNO y no por el repositorio. Lo que de verdad promete el método
+     * es que ninguna de las que devuelve tiene padre.
+     */
     @Test
     void findByParentIsNullOrderByPositionAsc_returnsOnlyRoots() {
         List<CategoryEntity> roots = repository.findByParentIsNullOrderByPositionAsc();
 
-        assertThat(roots)
-                .extracting(CategoryEntity::getSlug)
-                .containsExactly("electronica");
+        assertThat(roots).extracting(CategoryEntity::getSlug).contains("electronica");
+        assertThat(roots).allSatisfy(c -> assertThat(c.getParent()).isNull());
+        // Y las hijas del fixture NO salen: son exactamente lo que el método debe dejar fuera.
+        assertThat(roots).extracting(CategoryEntity::getSlug).doesNotContain("moviles", "audio");
     }
 
     @Test
@@ -126,9 +135,12 @@ class CategoryRepositoryIT extends PersistenceITBase {
     void search_bySlugFragment_isPaginatedAndCaseInsensitive() {
         Page<CategoryEntity> page = adapter.search("MOV", PageRequest.of(0, 10));
 
-        assertThat(page.getContent())
-                .extracting(CategoryEntity::getSlug)
-                .containsExactly("moviles");
+        // «MOV» en mayúsculas encuentra el slug en minúsculas: eso es lo que se está probando.
+        assertThat(page.getContent()).extracting(CategoryEntity::getSlug).contains("moviles");
+        // La página se respeta. No se exige que «moviles» sea el ÚNICO resultado porque la búsqueda
+        // también mira los nombres traducidos, y en la taxonomía real hay categorías que llevan «mov»
+        // dentro (removedor, y demás). Que aparezcan es la búsqueda funcionando, no un fallo.
+        assertThat(page.getContent()).hasSizeLessThanOrEqualTo(10);
     }
 
     @Test

@@ -42,11 +42,12 @@ public class MeProductViewsController {
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "24") int size,
             @RequestParam(defaultValue = "es") String lang) {
         UUID userId = UUID.fromString(auth.getName());
-        List<UUID> ids = historyService.viewedProductIds(userId);
-        // Se reutiliza el listado por IDs de los favoritos: es exactamente lo que hace falta —respeta el
-        // orden recibido, descarta los que ya no están activos y aplica el mismo pipeline de precios—, y
-        // duplicarlo solo conseguiría que el historial y los favoritos pintaran precios distintos.
-        return ResponseEntity.ok(catalogReadService.favorites(ids, page, size, lang));
+        // Con el precio que vio la persona, ya calculado y guardado al abrir la ficha. Antes se reutilizaba
+        // el listado de los favoritos, que vuelve a resolver el precio de cada producto: por cada una de
+        // las cincuenta fichas, una conversión de divisa con su margen, su IVA, su envío, sus dos bolsas de
+        // subvención y su recargo. Eso era lo que hacía lenta esta página.
+        return ResponseEntity.ok(catalogReadService.historial(historyService.fichasVistas(userId), page, size,
+                lang));
     }
 
     @Operation(summary = "Record that the authenticated user opened a product page (idempotent)")

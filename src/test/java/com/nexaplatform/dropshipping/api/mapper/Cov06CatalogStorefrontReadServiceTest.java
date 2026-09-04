@@ -317,6 +317,83 @@ class Cov06CatalogStorefrontReadServiceTest {
         assertThat(service.sortFor("inventory")).isEqualTo(Sort.by(Sort.Direction.DESC, "inventoryCount").and(id));
     }
 
+    /**
+     * Con semilla, el criterio NO cambia: lo que se baraja es el desempate.
+     *
+     * <p>Es la diferencia entre «enseñar variedad» y «romper la ordenación». Si el azar entrara en el
+     * criterio, pedir «precio ascendente» dejaría de ordenar por precio.
+     */
+    @Test
+    void laSemillaBarajaElDesempatePeroRespetaElCriterio() {
+        Sort conSemilla = service.sortFor("price_asc", 7);
+
+        assertThat(conSemilla).hasSize(2);
+        assertThat(conSemilla.iterator().next()).isEqualTo(Sort.Order.asc("basePrice"));
+        // El segundo ya no es `id`: es la expresión barajada.
+        assertThat(conSemilla.getOrderFor("id")).isNull();
+    }
+
+    /** Sin semilla se mantiene EXACTAMENTE el orden fijo de siempre: el cambio no toca a quien no la manda. */
+    @Test
+    void sinSemillaElOrdenSigueSiendoElDeSiempre() {
+        assertThat(service.sortFor("price_asc", null)).isEqualTo(service.sortFor("price_asc"));
+    }
+
+    /**
+     * La misma semilla da SIEMPRE el mismo orden, y semillas distintas dan órdenes distintos.
+     *
+     * <p>Lo primero es lo que sostiene la paginación: con el scroll infinito, si la página 3 se pidiera con
+     * otro orden que la 2, al comprador le saldrían productos repetidos y otros no le saldrían nunca.
+     */
+    @Test
+    void laMismaSemillaDaSiempreElMismoOrden() {
+        assertThat(service.sortFor("best_match", 7)).isEqualTo(service.sortFor("best_match", 7));
+        assertThat(service.sortFor("best_match", 7)).isNotEqualTo(service.sortFor("best_match", 8));
+    }
+
+    /**
+     * Cualquier entero cae dentro de las 32 barajas, incluidos los negativos y los enormes.
+     *
+     * <p>La semilla la manda el navegador, así que llega texto de fuera hasta la consulta. No se sanea con
+     * una expresión regular: se recibe como {@code int} y se reduce con {@code floorMod}, de modo que lo
+     * que se interpola solo puede ser un número entre 0 y 31. Aquí se comprueba que no hay valor —ni
+     * negativo, ni desbordado— que se escape de ese rango.
+     */
+    @Test
+    void cualquierEnteroCaeDentroDeLasBarajas() {
+        assertThat(service.sortFor("best_match", -5)).isEqualTo(service.sortFor("best_match", 27));
+        assertThat(service.sortFor("best_match", 32)).isEqualTo(service.sortFor("best_match", 0));
+        assertThat(service.sortFor("best_match", Integer.MIN_VALUE))
+                .isEqualTo(service.sortFor("best_match", Math.floorMod(Integer.MIN_VALUE, 32)));
+        // Y en ningún caso la expresión lleva algo que no sean dígitos entre las comillas.
+        assertThat(service.sortFor("best_match", Integer.MAX_VALUE).toString()).matches(".*'\\d+'.*");
+    }
+
+    /**
+     * «Variado» deja que mande la baraja: no hay criterio por delante.
+     *
+     * <p>Es lo que hace que el catálogo enseñe cosas distintas al recargar. Con cualquier otro orden el
+     * azar solo rompe EMPATES, y el orden por defecto del escaparate era «más recientes», donde cada
+     * producto tiene su fecha y no empata con nadie: la baraja no cambiaba nada. Se detectó mirando el
+     * catálogo en el navegador, no en las pruebas, porque estas lo ejercitaban por relevancia —donde
+     * 5.181 de 5.485 productos empatan— y allí sí barajaba.
+     */
+    @Test
+    void elOrdenVariadoLoDecideLaBaraja() {
+        Sort variado = service.sortFor("random", 7);
+
+        assertThat(variado).hasSize(1);
+        assertThat(variado.getOrderFor("createdAt")).isNull();
+        assertThat(variado.getOrderFor("trendScore")).isNull();
+        assertThat(variado).isNotEqualTo(service.sortFor("random", 8));
+    }
+
+    /** Sin semilla, «variado» cae al orden estable por id: nunca a un orden que PostgreSQL decida. */
+    @Test
+    void elOrdenVariadoSinSemillaSigueSiendoEstable() {
+        assertThat(service.sortFor("random", null)).isEqualTo(Sort.by(Sort.Direction.ASC, "id"));
+    }
+
     /** Sin criterio (o con uno desconocido) manda la relevancia: nunca un orden arbitrario. */
     @Test
     void sinCriterioDeOrdenMandaLaRelevancia() {

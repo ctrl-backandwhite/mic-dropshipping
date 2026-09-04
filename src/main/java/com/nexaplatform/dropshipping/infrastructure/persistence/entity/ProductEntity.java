@@ -1,7 +1,9 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.entity;
 
+import com.nexaplatform.dropshipping.domain.enums.BusAnuncioEstado;
 import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
+import org.hibernate.annotations.BatchSize;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -218,6 +220,38 @@ public class ProductEntity extends BaseEntity {
     @Column(name = "video_mirrored_at")
     private Instant videoMirroredAt;
 
+    // ── v165: anuncio al bus, diferido ──
+    // La petición solo deja la marca; el barrido construye la ficha y publica. Se marca dentro de la
+    // MISMA transacción que el cambio: es lo que garantiza que un producto certificado no se quede sin
+    // anunciar si el proceso se cae justo después de guardar.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "bus_estado", length = 20)
+    private BusAnuncioEstado busEstado;
+
+    @Column(name = "bus_intentos")
+    private Integer busIntentos;
+
+    /** Motivo del último fallo. Se guarda para poder ENSEÑARLO: un producto que no llega, se ve. */
+    @Column(name = "bus_error", columnDefinition = "text")
+    private String busError;
+
+    @Column(name = "bus_anunciado_at")
+    private Instant busAnunciadoAt;
+
+    /**
+     * Deja constancia de que hay algo que contarle al bus sobre este producto.
+     *
+     * <p>Es lo único que hace la petición: un cambio de columna, sin consultas ni serialización. El
+     * evento concreto —certificado o retirado— lo decide el barrido mirando cómo ha quedado el
+     * producto, así que si se marca y desmarca varias veces seguidas se anuncia el estado final, que
+     * es justo lo que tiene que llegar al destino.
+     */
+    public void marcarParaAnunciarAlBus() {
+        this.busEstado = BusAnuncioEstado.PENDIENTE;
+        this.busIntentos = 0;
+        this.busError = null;
+    }
+
     /**
      * Cambia la dirección de origen del vídeo y lo deja en cola para espejar si de verdad es otra.
      *
@@ -318,16 +352,32 @@ public class ProductEntity extends BaseEntity {
     @Column(name = "last_synced_at")
     private Instant lastSyncedAt;
 
+    /*
+     * Las tres colecciones se traen POR LOTES, no una consulta por producto.
+     *
+     * <p>Cualquier pantalla que pinte una lista —el historial de visitas, los favoritos, el listado del
+     * escaparate— carga los productos de golpe y después pide a cada uno su título, su foto y sus
+     * variantes. Con carga perezosa suelta, eso son dos o tres consultas MÁS por producto: una página de
+     * cincuenta fichas se iba a más de ciento cincuenta viajes a la base para enseñar un dato que cabía
+     * en tres. Con el lote, Hibernate junta los que tiene pendientes y los resuelve en una sola consulta
+     * por colección.
+     *
+     * <p>El tamaño es mayor que la página más grande que se sirve (cien), así que ninguna lista se parte
+     * en dos lotes.
+     */
     @Builder.Default
+    @BatchSize(size = 100)
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("position ASC")
     private List<ProductImageEntity> images = new ArrayList<>();
 
     @Builder.Default
+    @BatchSize(size = 100)
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<ProductVariantEntity> variants = new ArrayList<>();
 
     @Builder.Default
+    @BatchSize(size = 100)
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<ProductTranslationEntity> translations = new ArrayList<>();
 

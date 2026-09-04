@@ -55,7 +55,10 @@ class Cov08AdminCatalogControllerTest {
     void setUp() {
         catalogUseCase = mock(CatalogUseCase.class);
         objectMapper = new ObjectMapper();
-        controller = new AdminCatalogController(catalogUseCase, objectMapper);
+        // El espejado entra en el constructor desde que el panel puede devolver imágenes a la cola para
+        // que pasen por el compresor. Aquí no se ejerce, pero el controlador lo necesita para construirse.
+        controller = new AdminCatalogController(catalogUseCase, objectMapper,
+                mock(com.nexaplatform.dropshipping.infrastructure.integration.storage.ImageMirrorService.class));
     }
 
     private static BulkProductDtoIn producto(String titulo) {

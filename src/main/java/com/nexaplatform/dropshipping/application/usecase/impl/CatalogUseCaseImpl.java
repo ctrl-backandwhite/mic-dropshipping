@@ -41,6 +41,8 @@ import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.domain.model.Product;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.AnuncioBusFallidoView;
+import com.nexaplatform.dropshipping.domain.enums.BusAnuncioEstado;
 import com.nexaplatform.dropshipping.domain.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.messaging.NexaTopics;
 import com.nexaplatform.dropshipping.infrastructure.messaging.ProductIngestedEvent;
@@ -981,9 +983,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         }
         // El recargo es un componente del precio: los productos certificados afectados se re-anuncian al
         // bus para que el cambio llegue al destino (el export del bus lleva surcharge_cny).
-        for (UUID id : idsCertificadosAfectados(productIds, categoryId)) {
-            productJpaRepository.findById(id).ifPresent(p -> anunciarAlBus(p, false));
-        }
+        marcarCertificadosParaElBus(productIds, categoryId);
         return actualizados;
     }
 
@@ -1035,26 +1035,34 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         }
         // Las bolsas son componentes de lo que paga el cliente: los productos certificados afectados se
         // re-anuncian al bus para que el cambio llegue al destino (el export del bus las lleva).
-        for (UUID id : idsCertificadosAfectados(productIds, categoryId)) {
-            productJpaRepository.findById(id).ifPresent(p -> anunciarAlBus(p, false));
-        }
+        marcarCertificadosParaElBus(productIds, categoryId);
         return actualizados;
     }
 
-    /** Los productos certificados (verified) a los que afecta el update de recargo, para reanunciarlos. */
-    private List<UUID> idsCertificadosAfectados(List<UUID> productIds, UUID categoryId) {
+    /**
+     * Deja marcados para anunciar al bus los productos CERTIFICADOS a los que afecta un update masivo.
+     *
+     * <p>En UNA sentencia, no producto a producto. Antes se traían los ids y se cargaba cada entidad
+     * para marcarla: aplicar un recargo a todo el catálogo eran miles de consultas dentro de la
+     * petición, y el administrador se quedaba mirando la pantalla hasta tener que recargarla. El
+     * barrido construye después las fichas, que es donde de verdad cuesta el trabajo.
+     */
+    private void marcarCertificadosParaElBus(List<UUID> productIds, UUID categoryId) {
+        if (busCatalogo.getIfAvailable() == null) {
+            return; // entorno sin bus: no hay a quién contárselo, y la cola no debe llenarse
+        }
+        String marca = "UPDATE product SET bus_estado = 'PENDIENTE', bus_intentos = 0, bus_error = null "
+                + "WHERE verified = true";
         if (productIds != null && !productIds.isEmpty()) {
             String in = String.join(",", java.util.Collections.nCopies(productIds.size(), "?"));
-            return jdbcTemplate.queryForList(
-                    "SELECT id FROM product WHERE verified = true AND id IN (" + in + ")",
-                    UUID.class, productIds.toArray());
+            jdbcTemplate.update(marca + " AND id IN (" + in + ")", productIds.toArray());
+            return;
         }
         if (categoryId != null) {
-            return jdbcTemplate.queryForList(
-                    "SELECT id FROM product WHERE verified = true AND category_id = ?",
-                    UUID.class, categoryId);
+            jdbcTemplate.update(marca + " AND category_id = ?", categoryId);
+            return;
         }
-        return jdbcTemplate.queryForList("SELECT id FROM product WHERE verified = true", UUID.class);
+        jdbcTemplate.update(marca);
     }
 
     /** Concatena el valor del recargo delante de los ids para el UPDATE ... IN (?). */
@@ -1078,28 +1086,22 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
      * modo que reenviarlo no hace daño.
      */
     private void anunciarAlBus(ProductEntity p, boolean estabaCertificado) {
-        CatalogoBusService bus = busCatalogo.getIfAvailable();
-        if (bus == null) {
+        if (busCatalogo.getIfAvailable() == null) {
             return;
         }
-        boolean certificado = Boolean.TRUE.equals(p.getVerified());
-        if (certificado) {
-            // La categoría PRIMERO, con toda su rama. El destino puede no haberla visto
-            // nunca —una
-            // tienda que se estrena tiene el árbol vacío—, y un producto que llega antes
-            // que su
-            // categoría se queda fuera del catálogo.
-            if (p.getCategory() != null) {
-                bus.publicarCategoriaConAncestros(p.getCategory());
-            }
-            // Se exporta aquí, dentro de la transacción, con la ficha ya guardada: así el
-            // evento
-            // lleva exactamente lo que ha quedado en la base y no una versión a medio
-            // escribir.
-            bus.publicarCertificado(exportProduct(p.getId()));
-        } else if (estabaCertificado) {
-            bus.publicarRetirado(p, "descertificado en la edición del catálogo");
+        if (!Boolean.TRUE.equals(p.getVerified()) && !estabaCertificado) {
+            return; // ni está certificado ni lo estaba: no hay nada que contar
         }
+        // Solo se deja la MARCA. Antes se construía aquí la ficha entera —cuatro consultas más el
+        // mapeo de los ocho idiomas, las variantes, las imágenes y las reseñas, serializado a JSON—
+        // dentro de la transacción de la petición, y por eso marcar un producto como verificado
+        // tardaba segundos y aplicar un recargo a un lote tardaba eso multiplicado por N.
+        //
+        // La marca va en la MISMA transacción que el cambio a propósito: es lo que garantiza que un
+        // producto certificado no se quede sin anunciar. Publicar después del commit habría sido más
+        // sencillo, pero deja una ventana en la que el proceso se cae y el producto no llega nunca a
+        // producción sin que nadie se entere. Quien construye y publica es AnuncioBusScheduler.
+        p.marcarParaAnunciarAlBus();
     }
 
     @Override
@@ -1709,7 +1711,11 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     public void deleteProductVideo(UUID id) {
         ProductEntity product = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND + id));
-        product.setVideoUrl(null);
+        // cambiarVideoUrl y no setVideoUrl: desde que el vídeo se espeja, la ficha PREFIERE
+        // videoCdnUrl sobre videoUrl. Limpiando solo la dirección del proveedor quedaba la copia en
+        // nuestro almacenamiento y el reproductor la seguía sirviendo: el vídeo se borraba de la base
+        // y se seguía viendo en la ficha.
+        product.cambiarVideoUrl(null);
         product.setHasVideo(false);
         product.setVideoUrls(null);
         productJpaRepository.save(product);
@@ -2686,6 +2692,40 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (suppliers.isEmpty())
             throw new BusinessException("No hay proveedores; crea uno antes de importar productos");
         return suppliers.get(0).getId();
+    }
+
+    /**
+     * Los anuncios al bus que se dieron por perdidos, del más reciente al más antiguo.
+     *
+     * <p>Certificar un producto responde al instante porque el envío al bus va diferido; el precio de
+     * eso es que un fallo ya no cabe en la respuesta de la petición. Aquí es donde se ve.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<AnuncioBusFallidoView> anunciosAlBusFallidos() {
+        return productJpaRepository.findTop100ByBusEstadoOrderByUpdatedAtDesc(BusAnuncioEstado.FALLIDO).stream()
+                .map(p -> new AnuncioBusFallidoView(p.getId(), p.getExternalId(), p.getSlug(), tituloCorto(p),
+                        p.getBusIntentos() == null ? 0 : p.getBusIntentos(), p.getBusError(), p.getUpdatedAt()))
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public int reintentarAnunciosAlBusFallidos() {
+        int reencolados = productJpaRepository.reencolarAnunciosFallidos();
+        log.info("Anuncio al bus: {} producto(s) vuelven a la cola por petición del admin", reencolados);
+        return reencolados;
+    }
+
+    /** Con qué nombre se reconoce el producto en la lista de fallos: español, inglés o el chino original. */
+    private String tituloCorto(ProductEntity p) {
+        if (p.getTranslations() == null) {
+            return p.getTitleZh();
+        }
+        return p.getTranslations().stream()
+                .filter(tr -> "es".equalsIgnoreCase(tr.getLanguage()) || "en".equalsIgnoreCase(tr.getLanguage()))
+                .map(ProductTranslationEntity::getTitle).filter(s -> s != null && !s.isBlank()).findFirst()
+                .orElse(p.getTitleZh());
     }
 
 }

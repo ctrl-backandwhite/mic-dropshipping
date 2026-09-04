@@ -7,6 +7,9 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.nexaplatform.dropshipping.application.service.ProductViewHistoryService;
+
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -27,15 +30,33 @@ public interface ProductViewRepository extends JpaRepository<ProductViewEntity, 
      */
     @Modifying(clearAutomatically = true)
     @Query(value = """
-            INSERT INTO product_view (id, user_id, product_id, viewed_at, view_count, created_at, updated_at)
-            VALUES (gen_random_uuid(), :userId, :productId, :now, 1, :now, :now)
+            INSERT INTO product_view (id, user_id, product_id, viewed_at, view_count, created_at, updated_at,
+                                      precio_visto, moneda_vista, precio_visto_formateado)
+            VALUES (gen_random_uuid(), :userId, :productId, :now, 1, :now, :now,
+                    :precio, :moneda, :formateado)
             ON CONFLICT (user_id, product_id) DO UPDATE
             SET viewed_at = EXCLUDED.viewed_at,
                 view_count = product_view.view_count + 1,
-                updated_at = EXCLUDED.viewed_at
+                updated_at = EXCLUDED.viewed_at,
+                precio_visto = EXCLUDED.precio_visto,
+                moneda_vista = EXCLUDED.moneda_vista,
+                precio_visto_formateado = EXCLUDED.precio_visto_formateado
             """, nativeQuery = true)
     void registrarVisita(@Param("userId") UUID userId, @Param("productId") UUID productId,
-            @Param("now") Instant now);
+            @Param("now") Instant now, @Param("precio") BigDecimal precio, @Param("moneda") String moneda,
+            @Param("formateado") String formateado);
+
+    /**
+     * El historial del usuario con el PRECIO QUE VIO, de la visita más reciente a la más antigua.
+     *
+     * <p>Existe para poder pintar la página sin volver a calcular cincuenta precios: el importe se resolvió
+     * cuando la persona abrió la ficha y se guardó entonces.
+     */
+    @Query("select new com.nexaplatform.dropshipping.application.service.ProductViewHistoryService"
+            + "$FichaVista(v.productId, v.precioVisto, v.monedaVista, v.precioVistoFormateado) "
+            + "from ProductViewEntity v where v.userId = :userId order by v.viewedAt desc")
+    List<ProductViewHistoryService.FichaVista> findFichasVistasByUserId(@Param("userId") UUID userId,
+            Limit limit);
 
     /** IDs del historial del usuario, de la visita más reciente a la más antigua. */
     @Query("select v.productId from ProductViewEntity v where v.userId = :userId order by v.viewedAt desc")
@@ -59,4 +80,23 @@ public interface ProductViewRepository extends JpaRepository<ProductViewEntity, 
     @Modifying(clearAutomatically = true)
     @Query("delete from ProductViewEntity v where v.viewedAt < :limite")
     int deleteByViewedAtBefore(@Param("limite") Instant limite);
+
+    /**
+     * Deja en el historial del usuario solo las {@code tope} visitas más recientes; el resto se borra.
+     *
+     * <p>El historial es una VENTANA, no un archivo: la ficha número cincuenta y uno empuja fuera a la
+     * más antigua. Antes solo había un tope de lectura —se guardaban todas y se leían las primeras—, así
+     * que la tabla crecía sin fin con filas que nadie iba a mirar nunca y que solo desaparecían a los
+     * noventa días.
+     *
+     * <p>Va en SQL nativo y en una sola sentencia a propósito: traer los identificadores sobrantes para
+     * borrarlos después son dos viajes y una carrera —dos pestañas del mismo usuario podrían borrar cada
+     * una lo que la otra acaba de decidir conservar—. La subconsulta ordena por el mismo índice que usa
+     * la lectura, así que el coste es el de leer cincuenta filas.
+     */
+    @Modifying(clearAutomatically = true)
+    @Query(value = "DELETE FROM product_view WHERE user_id = :userId AND id NOT IN ("
+            + "SELECT id FROM product_view WHERE user_id = :userId ORDER BY viewed_at DESC LIMIT :tope)",
+            nativeQuery = true)
+    int podarExcedente(@Param("userId") UUID userId, @Param("tope") int tope);
 }

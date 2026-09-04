@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.pricing;
 
 import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
+import com.nexaplatform.dropshipping.infrastructure.security.GeolocalizacionDelCdn;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
 import jakarta.servlet.FilterChain;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -46,6 +48,14 @@ class PricingCountryFilterTest {
 
     @Mock
     UserRepository userRepository;
+
+    /*
+     * Instancia REAL y no un doble: sin secreto configurado se comporta como siempre —confía en la
+     * geolocalización—, que es justo lo que ejercitan los casos de abajo. Un mock devolvería null y todos
+     * ellos pasarían a probar el camino equivocado sin decir nada.
+     */
+    @Spy
+    GeolocalizacionDelCdn cdn = new GeolocalizacionDelCdn();
 
     @InjectMocks
     PricingCountryFilter filter;

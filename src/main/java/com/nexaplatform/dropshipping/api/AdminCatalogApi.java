@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api;
 
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.AnuncioBusFallidoView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.CustomsAuditView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
@@ -125,6 +126,13 @@ public interface AdminCatalogApi {
     @PostMapping("/reindex")
     ResponseEntity<Map<String, Object>> reindex();
 
+    @Operation(summary = "Send a batch of already-stored images back to the mirror queue so they get "
+            + "compressed. Only images saved before the compressor existed are picked, heaviest first. "
+            + "Returns how many were requeued and how many remain, so it can be run batch by batch.")
+    @PostMapping("/imagenes/comprimir-historico")
+    ResponseEntity<Map<String, Object>> comprimirHistoricoDeImagenes(
+            @RequestParam(defaultValue = "200") int limite);
+
     @Operation(summary = "Status of the background reindex ({running, indexed}) so the panel can poll it")
     @GetMapping("/reindex/status")
     ResponseEntity<Map<String, Object>> reindexStatus();
@@ -226,6 +234,16 @@ public interface AdminCatalogApi {
     @PostMapping(value = "/products/import/ndjson", consumes = "application/x-ndjson")
     ResponseEntity<BulkResultDtoOut> importProductsNdjson(HttpServletRequest request,
             @RequestParam(defaultValue = "200") int batch);
+
+    @Operation(summary = "Products whose announcement to the catalogue bus was given up on. Certifying a product "
+            + "answers immediately because the announcement is deferred, so a failure no longer fits in that "
+            + "response: this is where the admin panel sees it.")
+    @GetMapping("/bus/anuncios-fallidos")
+    ResponseEntity<List<AnuncioBusFallidoView>> anunciosAlBusFallidos();
+
+    @Operation(summary = "Put the given-up announcements back in the queue and reset their attempt counter")
+    @PostMapping("/bus/anuncios-fallidos/reintentar")
+    ResponseEntity<Map<String, Integer>> reintentarAnunciosAlBusFallidos();
 
     @Operation(summary = "Bulk-create categories from a JSON array")
     @PostMapping("/categories/bulk")

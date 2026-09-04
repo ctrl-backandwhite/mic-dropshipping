@@ -119,7 +119,11 @@ public interface StorefrontCatalogApi {
             @RequestParam(required = false) Boolean dutyGroupsFromCart,
             // Lo que el comprador ya lleva en el carrito. Es la REFERENCIA del distintivo de arancel: sin
             // ella no hay incremento que calcular y el distintivo no se pinta.
-            @RequestParam(required = false) List<UUID> cartProductIds);
+            @RequestParam(required = false) List<UUID> cartProductIds,
+            // Baraja el DESEMPATE del listado para que al refrescar no salgan siempre los mismos. Cualquier
+            // entero vale: el servicio lo reduce a una de 32 barajas, así que no hay valor «inválido» que
+            // rechazar ni nada que sanear. Sin él, el orden es el fijo de siempre.
+            @RequestParam(required = false) Integer seed);
 
     @Operation(summary = "Get a product detail by slug")
     @GetMapping("/products/{slug}")

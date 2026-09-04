@@ -9,6 +9,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Produ
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.VariantValueRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -132,7 +134,7 @@ class Cov09ImageMirrorBatchTest {
         // Desde el 26-ago-2026 el fallo no solo marca estado: suma un intento, que es lo que espacia
         // el siguiente y evita repetir la avalancha que dejó 415 productos fuera del escaparate.
         verify(imageRepository).markFailedAndCountAttempt(imagenId);
-        verify(imageRepository, never()).markMirrored(any(), any(), any(), any(), any(), any());
+        verify(imageRepository, never()).markMirrored(any(), any(), any(), any(), any(), any(), any(), any());
         verifyNoInteractions(productIndexer);
     }
 
@@ -249,5 +251,37 @@ class Cov09ImageMirrorBatchTest {
 
         verify(imageRepository, times(1)).requeueNotMirrored(any());
         verify(imageRepository, times(2)).findTop100ByMirrorStatusOrderByCreatedAtDesc(MirrorStatus.PENDING);
+    }
+
+    /**
+     * Las anotaciones están donde deben, y ningún método asíncrono devuelve algo que Spring no admita.
+     *
+     * <p>Esta prueba existe por un fallo concreto: al añadir {@code reencolarParaComprimir} se coló entre
+     * el {@code @Async} y el método al que pertenecía. El resultado fue doble y ninguna prueba con dobles
+     * lo veía —el proxy de Spring no participa ahí—: el método nuevo pasó a ser asíncrono devolviendo un
+     * record, que Spring rechaza en tiempo de ejecución con «Invalid return type for async method»; y
+     * {@code mirrorAllPendingAsync}, que es el pase completo que dispara «reindexar» desde el panel, se
+     * quedó SIN anotación y habría bloqueado la petición HTTP hasta drenar 500 rondas de lotes.
+     */
+    @Test
+    @DisplayName("ningún método @Async devuelve algo distinto de void o Future")
+    void ningunMetodoAsincronoDevuelveUnValorNoSoportado() {
+        for (java.lang.reflect.Method m : ImageMirrorService.class.getDeclaredMethods()) {
+            if (m.isAnnotationPresent(org.springframework.scheduling.annotation.Async.class)) {
+                assertThat(m.getReturnType())
+                        .as("El método @Async %s debe devolver void o Future", m.getName())
+                        .satisfiesAnyOf(
+                                tipo -> assertThat(tipo).isEqualTo(void.class),
+                                tipo -> assertThat(java.util.concurrent.Future.class).isAssignableFrom(tipo));
+            }
+        }
+    }
+
+    /** El pase completo que dispara «reindexar» TIENE que ser asíncrono: si no, la petición se cuelga. */
+    @Test
+    @DisplayName("el pase completo tras reindexar sigue siendo asíncrono")
+    void elPaseCompletoSigueSiendoAsincrono() throws Exception {
+        assertThat(ImageMirrorService.class.getDeclaredMethod("mirrorAllPendingAsync")
+                .isAnnotationPresent(org.springframework.scheduling.annotation.Async.class)).isTrue();
     }
 }

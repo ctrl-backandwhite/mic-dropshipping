@@ -349,6 +349,18 @@ nexadrop:
   # Seguridad: nº de proxies de confianza por delante (para resolver la IP real en el rate limit).
   security:
     trusted-proxy-count: ${TRUSTED_PROXY_COUNT:1}
+    # Secreto que el CDN inyecta en cada petición (regla de transformación en Cloudflare) para demostrar
+    # que la petición ha pasado por él. Sin esto, la geolocalización por IP —CF-IPCountry y equivalentes—
+    # es una cabecera cualquiera: el origen responde 200 llamándolo directo con --resolve, así que
+    # cualquiera podía declararse de otro país y llevarse su precio.
+    #
+    # Se valida por SECRETO y no por rango de IP a propósito: Traefik ya ha traducido a la IP real del
+    # comprador antes de llegar aquí, así que una lista blanca de rangos de Cloudflare da 403 a todo el
+    # mundo (probado el 27-ago). Los pull certificados (mTLS) también se descartaron: Cloudflare devolvía 520.
+    #
+    # VACÍO = comportamiento anterior (se confía en la cabecera). Es lo que hace falta en local y en
+    # cualquier despliegue sin CDN delante; en pre y producción TIENE que estar puesto.
+    cdn-shared-secret: ${CDN_SHARED_SECRET:}
 
   # AES-256-GCM key encryption for at-rest secrets (shop access tokens, webhook secrets).
   # Comma-separated list of Base64-encoded 32-byte keys. First entry is the active KEK.

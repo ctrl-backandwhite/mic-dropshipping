@@ -10,6 +10,7 @@ import com.nexaplatform.dropshipping.api.dto.StorefrontViews.VariantView;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.SupplierSearchService;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.SupplierSearchService.IndexedSupplier;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
+import com.nexaplatform.dropshipping.application.service.ProductViewHistoryService;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
@@ -33,6 +34,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.JpaSort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -167,7 +169,7 @@ public class CatalogStorefrontReadService {
     public PageResponse<ProductSummaryView> productsByCategory(String idOrSlug, int page, int size, String lang,
             String sort) {
         UUID categoryId = resolveCategory(idOrSlug).getId();
-        return listing(page, size, lang, ProductListFilters.basic(null, categoryId, null, null, null), sort);
+        return listing(page, size, lang, ProductListFilters.basic(null, categoryId, null, null, null), sort, null);
     }
 
     /* ============================ Suppliers ============================ */
@@ -198,7 +200,7 @@ public class CatalogStorefrontReadService {
             + "+ ':' + T(com.nexaplatform.dropshipping.application.service.PricingCountryHolder).get()")
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productsBySupplier(UUID id, int page, int size, String lang, String sort) {
-        return listing(page, size, lang, ProductListFilters.basic(null, null, id, null, null), sort);
+        return listing(page, size, lang, ProductListFilters.basic(null, null, id, null, null), sort, null);
     }
 
     /* ============================ Variants ============================ */
@@ -233,7 +235,24 @@ public class CatalogStorefrontReadService {
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productListFull(int page, int size, String lang,
             ProductListFilters filters, String sort) {
-        return listing(page, size, lang, filters, sort);
+        return listing(page, size, lang, filters, sort, null);
+    }
+
+    /**
+     * El listado con el orden barajado por una semilla.
+     *
+     * <p>Va como sobrecarga y no como un parámetro más porque la semilla solo la usa el escaparate: las
+     * sugerencias del carrito y el catálogo de partners quieren el orden estable de siempre.
+     *
+     * <p>Lleva su propio {@code @Cacheable} —no delega en el método de arriba— porque una llamada de una
+     * clase a sí misma no pasa por el proxy de Spring y la anotación no se aplicaría. Es el mismo motivo
+     * por el que el cuerpo real vive en {@code listing}.
+     */
+    @Cacheable(value = CACHE_PRODUCT_LIST, keyGenerator = "currencyAwareKeyGenerator")
+    @Transactional(readOnly = true)
+    public PageResponse<ProductSummaryView> productListFull(int page, int size, String lang,
+            ProductListFilters filters, String sort, Integer semilla) {
+        return listing(page, size, lang, filters, sort, semilla);
     }
 
     /**
@@ -243,7 +262,7 @@ public class CatalogStorefrontReadService {
      * anotaciones quedan solo donde de verdad actúan: el método público por el que entra la petición.
      */
     private PageResponse<ProductSummaryView> listing(int page, int size, String lang, ProductListFilters filters,
-            String sort) {
+            String sort, Integer semilla) {
         String q = filters.q();
         UUID categoryId = filters.categoryId();
         UUID supplierId = filters.supplierId();
@@ -262,7 +281,7 @@ public class CatalogStorefrontReadService {
         // Acotar `page`: un offset gigante (page*size) desbordaba y caía en un 500 genérico. Con un techo
         // razonable devolvemos una página vacía en vez de reventar (el catálogo real nunca llega ahí).
         int safePage = Math.max(0, Math.min(page, 100_000));
-        Sort sortSpec = sortFor(sort);
+        Sort sortSpec = sortFor(sort, semilla);
         Pageable pageable = PageRequest.of(safePage, safeSize, sortSpec);
 
         String needle = (q == null || q.isBlank()) ? null : Texts.escapeLikeWildcards(q.trim().toLowerCase());
@@ -506,6 +525,44 @@ public class CatalogStorefrontReadService {
         return PageResponse.from(new PageImpl<>(all.subList(from, to), pageable, all.size()));
     }
 
+    /**
+     * El historial de visitas, con el precio que vio la persona en cada ficha.
+     *
+     * <p>Es igual que {@link #favorites}, salvo en el precio: aquí NO se recalcula. El importe se resolvió
+     * cuando se abrió la ficha y se guardó con la visita, así que pintar cincuenta fichas deja de suponer
+     * cincuenta conversiones de divisa con su margen, su IVA, su envío, sus dos bolsas de subvención y su
+     * recargo. Las visitas anteriores a que se empezara a guardar el precio caen al cálculo de siempre.
+     *
+     * <p>El precio guardado es el de aquel momento, no el de hoy: sirve para reconocer lo que se estuvo
+     * mirando. Lo que se cobra se vuelve a calcular en la cesta, como en cualquier otra vía de compra.
+     */
+    // @Transactional por el mismo motivo que en `favorites`: construir el resumen toca las traducciones,
+    // que son LAZY, y sin sesión abierta el endpoint entero devuelve un 500. Sin esto, las cinco pruebas
+    // de ProductHistoryFlowIT fallaban con LazyInitializationException.
+    @Transactional(readOnly = true)
+    public PageResponse<ProductSummaryView> historial(List<ProductViewHistoryService.FichaVista> fichas,
+            int page, int size, String lang) {
+        int safe = Math.min(size, 100);
+        Pageable pageable = PageRequest.of(page, safe);
+        if (fichas == null || fichas.isEmpty()) {
+            return PageResponse.from(new PageImpl<>(List.of(), pageable, 0));
+        }
+        List<UUID> ids = fichas.stream().map(ProductViewHistoryService.FichaVista::productId).toList();
+        Map<UUID, ProductEntity> byId = productRepository.findAllById(ids).stream()
+                .filter(p -> p.getStatus() == ProductStatus.ACTIVE)
+                .collect(Collectors.toMap(ProductEntity::getId, p -> p, (a, b) -> a));
+        List<ProductSummaryView> all = fichas.stream()
+                .filter(ficha -> byId.containsKey(ficha.productId()))
+                .map(ficha -> productMapper.toSummary(byId.get(ficha.productId()), lang,
+                        ficha.formateado() != null
+                                ? pricingService.precioYaVisto(ficha.precio(), ficha.moneda(), ficha.formateado())
+                                : null))
+                .toList();
+        int from = (int) Math.min((long) page * safe, all.size());
+        int to = Math.min(from + safe, all.size());
+        return PageResponse.from(new PageImpl<>(all.subList(from, to), pageable, all.size()));
+    }
+
     /** El precio ya viene en la moneda del usuario (displayPrice); rango inclusivo, excluye nulos si hay filtro. */
     private boolean withinPrice(BigDecimal price, BigDecimal min, BigDecimal max) {
         if (min == null && max == null) {
@@ -530,7 +587,7 @@ public class CatalogStorefrontReadService {
     public PageResponse<ProductSummaryView> productList(int page, int size, String lang, String q, UUID categoryId,
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String sort) {
         return listing(page, size, lang, ProductListFilters.basic(q, categoryId, supplierId, minPrice, maxPrice),
-                sort);
+                sort, null);
     }
 
     /* ============================ helpers ============================ */
@@ -577,7 +634,30 @@ public class CatalogStorefrontReadService {
     }
 
     public Sort sortFor(String sort) {
+        return sortFor(sort, null);
+    }
+
+    /**
+     * La misma ordenación, con el DESEMPATE barajado por una semilla.
+     *
+     * <p>El azar entra en el desempate y no en el criterio, y eso es deliberado: «precio ascendente» sigue
+     * ordenando por precio. Lo que cambia es a quién le toca ir primero entre los que empatan, que en este
+     * catálogo es casi todo el mundo —5.181 de 5.485 productos tienen {@code trendScore = 0}—. Por eso el
+     * escaparate enseñaba SIEMPRE los mismos: no los elegía la relevancia, los elegía el id.
+     *
+     * @param semilla cualquier entero; {@code null} mantiene el orden fijo por id
+     */
+    public Sort sortFor(String sort, Integer semilla) {
         Sort criterio = switch (sort == null ? "best_match" : sort) {
+            /*
+             * «Variado»: no hay criterio, manda la baraja.
+             *
+             * Existe porque con cualquier otro orden el azar solo puede romper EMPATES, y el orden por
+             * defecto del escaparate era «más recientes», donde cada producto tiene su propia fecha y no
+             * empata con nadie: la baraja no cambiaba absolutamente nada y el catálogo seguía enseñando
+             * siempre lo mismo. Sin semilla se cae al desempate por id, que es estable.
+             */
+            case "random" -> Sort.unsorted();
             case "price_asc" -> Sort.by(Sort.Direction.ASC, "basePrice");
             case "price_desc" -> Sort.by(Sort.Direction.DESC, "basePrice");
             case "newest" -> Sort.by(Sort.Direction.DESC, "createdAt");
@@ -586,7 +666,33 @@ public class CatalogStorefrontReadService {
             case "inventory" -> Sort.by(Sort.Direction.DESC, "inventoryCount");
             default -> Sort.by(Sort.Direction.DESC, "trendScore");
         };
-        return criterio.and(DESEMPATE);
+        return criterio.and(desempate(semilla));
+    }
+
+    /** Cuántas barajas distintas existen. Acotarlas es lo que deja la caché del listado utilizable. */
+    private static final int BARAJAS = 32;
+
+    /**
+     * El desempate, fijo o barajado.
+     *
+     * <p>La semilla llega del navegador, así que sería una vía de inyección si se concatenara tal cual en
+     * la consulta. NO se valida con una expresión regular sobre texto: se recibe ya como {@code int} y se
+     * reduce con {@code floorMod}, de modo que lo que se interpola solo puede ser un número entre 0 y 31.
+     * La garantía es del tipo, no de la vigilancia.
+     *
+     * <p>Se acota a {@value #BARAJAS} barajas a propósito. Con una semilla libre, cada visita generaría su
+     * propio orden y la caché del listado —que va por clave de argumentos— no acertaría nunca; con 32 hay
+     * variedad de sobra al refrescar y la caché se multiplica por un factor conocido.
+     */
+    private static Sort desempate(Integer semilla) {
+        if (semilla == null) {
+            return DESEMPATE;
+        }
+        int baraja = Math.floorMod(semilla, BARAJAS);
+        // El alias `p` es el de TODAS las consultas del escaparate que reciben este Sort; Spring Data no
+        // cualifica las expresiones marcadas como «unsafe», así que hay que escribirlo aquí.
+        return JpaSort.unsafe(Sort.Direction.ASC,
+                "function('md5', concat(cast(p.id as string), '" + baraja + "'))");
     }
 
     /**

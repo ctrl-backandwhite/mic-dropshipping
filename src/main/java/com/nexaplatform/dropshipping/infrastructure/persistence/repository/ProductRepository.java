@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository;
 
+import com.nexaplatform.dropshipping.domain.enums.BusAnuncioEstado;
 import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
@@ -428,6 +429,59 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             + "AND coalesce(p.videoMirrorAttempts, 0) < :maxAttempts ORDER BY p.updatedAt ASC LIMIT :limit")
     List<ProductEntity> findVideosFailedForRetry(@Param("maxAttempts") int maxAttempts,
             @Param("limit") int limit);
+
+    // ── v165: anuncio al bus, diferido. La petición marca; el barrido construye y publica. ──
+
+    /** Los que esperan a ser anunciados, del más antiguo al más nuevo: nadie se queda atrás. */
+    List<ProductEntity> findTop50ByBusEstadoOrderByUpdatedAtAsc(BusAnuncioEstado estado);
+
+    long countByBusEstado(BusAnuncioEstado estado);
+
+    /** Anunciado: la ficha ya está en la bandeja de salida. Se limpia el error de intentos previos. */
+    @Modifying
+    @Transactional
+    @Query("UPDATE ProductEntity p SET p.busEstado = "
+            + "com.nexaplatform.dropshipping.domain.enums.BusAnuncioEstado.ANUNCIADO, "
+            + "p.busAnunciadoAt = :at, p.busError = null WHERE p.id = :id")
+    void marcarBusAnunciado(@Param("id") UUID id, @Param("at") Instant at);
+
+    /**
+     * No se pudo anunciar. Se guarda el motivo —para poder enseñarlo en el panel— y se suma el intento.
+     * Sigue en PENDIENTE mientras le queden intentos; el barrido decide cuándo darlo por perdido.
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE ProductEntity p SET p.busIntentos = coalesce(p.busIntentos, 0) + 1, "
+            + "p.busError = :error WHERE p.id = :id")
+    void anotarFalloDeAnuncio(@Param("id") UUID id, @Param("error") String error);
+
+    /**
+     * Los que se dieron por perdidos, para ENSENARLOS en el panel. El admin marca un producto como
+     * certificado y se va; si el anuncio no llegó a producción, nadie se enteraría sin esta lista.
+     */
+    List<ProductEntity> findTop100ByBusEstadoOrderByUpdatedAtDesc(BusAnuncioEstado estado);
+
+    /**
+     * Devuelve a la cola todo lo que se dio por perdido, con el contador a cero.
+     *
+     * <p>El contador se reinicia a propósito: quien pulsa «reintentar» lo hace porque ha arreglado lo
+     * que fallaba —el bus caído, una categoría que faltaba—, así que los intentos gastados contra el
+     * problema anterior no deben restarle oportunidades al nuevo.
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE ProductEntity p SET p.busEstado = "
+            + "com.nexaplatform.dropshipping.domain.enums.BusAnuncioEstado.PENDIENTE, "
+            + "p.busIntentos = 0 WHERE p.busEstado = "
+            + "com.nexaplatform.dropshipping.domain.enums.BusAnuncioEstado.FALLIDO")
+    int reencolarAnunciosFallidos();
+
+    /** Se agotaron los intentos: deja de barrerse y queda a la vista con su motivo. */
+    @Modifying
+    @Transactional
+    @Query("UPDATE ProductEntity p SET p.busEstado = "
+            + "com.nexaplatform.dropshipping.domain.enums.BusAnuncioEstado.FALLIDO WHERE p.id = :id")
+    void darAnuncioPorPerdido(@Param("id") UUID id);
 
     /** Devuelve un vídeo a la cola. El contador de intentos NO se toca: es lo que espacia los reintentos. */
     @Modifying
