@@ -57,6 +57,7 @@
         <google.translate.version>2.55.0</google.translate.version>
         <resilience4j.version>2.3.0</resilience4j.version>
         <thumbnailator.version>0.4.20</thumbnailator.version>
+        <webp.imageio.version>0.9.0</webp.imageio.version>
         <liquibase.version>4.31.1</liquibase.version>
 
         <!-- ============ Versiones forzadas por seguridad (Snyk, 30-jul-2026) ============
@@ -263,6 +264,21 @@
             <groupId>net.coobird</groupId>
             <artifactId>thumbnailator</artifactId>
             <version>${thumbnailator.version}</version>
+        </dependency>
+        <!--
+            Escritura de WebP. Java no lo trae de serie: sin esto solo se puede guardar JPEG o PNG.
+
+            Hace falta porque las fotos llegan de 1688 con resolución de cámara —se midieron varias de
+            3072x4096 y 4096x2304, casi 10 MB cada una— para enseñarse a unos 600 píxeles en la ficha.
+            Reducidas a 1600 y guardadas en WebP, esas mismas fotos pesan entre 59 y 647 kB.
+
+            Se elige `usefulness` y no otras: es la que mantiene el proyecto vivo, trae los binarios
+            nativos para las plataformas que usamos y no arrastra dependencias.
+        -->
+        <dependency>
+            <groupId>com.github.usefulness</groupId>
+            <artifactId>webp-imageio</artifactId>
+            <version>${webp.imageio.version}</version>
         </dependency>
 
         <!-- ============ Translation ============ -->
@@ -567,12 +583,10 @@
                     <includes>
                         <include>**/*IT.java</include>
                     </includes>
-                    <!-- docker-java de Testcontainers usa por defecto la API 1.32; los daemons
-                         modernos exigen >=1.44. docker-java lee la versión de la system property
-                         'api.version' (no del env DOCKER_API_VERSION), así que la fijamos aquí. -->
-                    <systemPropertyVariables>
-                        <api.version>1.44</api.version>
-                    </systemPropertyVariables>
+                    <!-- La versión de la API de Docker NO se fija aquí: ni <systemPropertyVariables> ni
+                         <argLine> llegaban a tiempo, y docker-java negociaba igualmente la 1.32. Se fija en
+                         un bloque estático de TestContainersConfiguration, que es el único punto que se
+                         ejecuta con seguridad antes de crear el primer contenedor. -->
                 </configuration>
                 <executions>
                     <execution>
