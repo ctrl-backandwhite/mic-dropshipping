@@ -7,6 +7,9 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.nexaplatform.dropshipping.application.service.ProductViewHistoryService;
+
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -27,15 +30,33 @@ public interface ProductViewRepository extends JpaRepository<ProductViewEntity, 
      */
     @Modifying(clearAutomatically = true)
     @Query(value = """
-            INSERT INTO product_view (id, user_id, product_id, viewed_at, view_count, created_at, updated_at)
-            VALUES (gen_random_uuid(), :userId, :productId, :now, 1, :now, :now)
+            INSERT INTO product_view (id, user_id, product_id, viewed_at, view_count, created_at, updated_at,
+                                      precio_visto, moneda_vista, precio_visto_formateado)
+            VALUES (gen_random_uuid(), :userId, :productId, :now, 1, :now, :now,
+                    :precio, :moneda, :formateado)
             ON CONFLICT (user_id, product_id) DO UPDATE
             SET viewed_at = EXCLUDED.viewed_at,
                 view_count = product_view.view_count + 1,
-                updated_at = EXCLUDED.viewed_at
+                updated_at = EXCLUDED.viewed_at,
+                precio_visto = EXCLUDED.precio_visto,
+                moneda_vista = EXCLUDED.moneda_vista,
+                precio_visto_formateado = EXCLUDED.precio_visto_formateado
             """, nativeQuery = true)
     void registrarVisita(@Param("userId") UUID userId, @Param("productId") UUID productId,
-            @Param("now") Instant now);
+            @Param("now") Instant now, @Param("precio") BigDecimal precio, @Param("moneda") String moneda,
+            @Param("formateado") String formateado);
+
+    /**
+     * El historial del usuario con el PRECIO QUE VIO, de la visita más reciente a la más antigua.
+     *
+     * <p>Existe para poder pintar la página sin volver a calcular cincuenta precios: el importe se resolvió
+     * cuando la persona abrió la ficha y se guardó entonces.
+     */
+    @Query("select new com.nexaplatform.dropshipping.application.service.ProductViewHistoryService"
+            + "$FichaVista(v.productId, v.precioVisto, v.monedaVista, v.precioVistoFormateado) "
+            + "from ProductViewEntity v where v.userId = :userId order by v.viewedAt desc")
+    List<ProductViewHistoryService.FichaVista> findFichasVistasByUserId(@Param("userId") UUID userId,
+            Limit limit);
 
     /** IDs del historial del usuario, de la visita más reciente a la más antigua. */
     @Query("select v.productId from ProductViewEntity v where v.userId = :userId order by v.viewedAt desc")
