@@ -462,24 +462,24 @@ class ProductRepositoryIT extends PersistenceITBase {
         Pageable firstPage = PageRequest.of(0, 20);
 
         // Spanish full-ish title finds the PAUSED, image-less product across the whole catalogue.
-        assertThat(adminRepo.searchAdmin(null, null, "sandalias de tacón", null, "es", false, firstPage).getContent())
+        assertThat(adminRepo.searchAdmin(null, null, "sandalias de tacón", null, "es", false, null, null, null, null, firstPage).getContent())
                 .extracting(ProductEntity::getSlug)
                 .containsExactly("sandalias-tacon-alto");
 
         // Chinese needle finds the ARCHIVED product → multilingual.
-        assertThat(adminRepo.searchAdmin(null, null, "透明", null, "es", false, firstPage).getContent())
+        assertThat(adminRepo.searchAdmin(null, null, "透明", null, "es", false, null, null, null, null, firstPage).getContent())
                 .extracting(ProductEntity::getSlug)
                 .containsExactly("producto-chino");
 
         // Optional status filter still narrows results.
-        assertThat(adminRepo.searchAdmin(ProductStatus.PAUSED, null, "sandalias", null, "es", false, firstPage).getContent())
+        assertThat(adminRepo.searchAdmin(ProductStatus.PAUSED, null, "sandalias", null, "es", false, null, null, null, null, firstPage).getContent())
                 .extracting(ProductEntity::getSlug)
                 .containsExactly("sandalias-tacon-alto");
-        assertThat(adminRepo.searchAdmin(ProductStatus.ACTIVE, null, "sandalias", null, "es", false, firstPage).getContent())
+        assertThat(adminRepo.searchAdmin(ProductStatus.ACTIVE, null, "sandalias", null, "es", false, null, null, null, null, firstPage).getContent())
                 .isEmpty();
 
         // A needle that matches nothing returns an empty page.
-        assertThat(adminRepo.searchAdmin(null, null, "zzz-no-match", null, "es", false, firstPage).getContent()).isEmpty();
+        assertThat(adminRepo.searchAdmin(null, null, "zzz-no-match", null, "es", false, null, null, null, null, firstPage).getContent()).isEmpty();
     }
 
     // ── precisión del texto libre (fallback SQL) ────────────────────────────────────────

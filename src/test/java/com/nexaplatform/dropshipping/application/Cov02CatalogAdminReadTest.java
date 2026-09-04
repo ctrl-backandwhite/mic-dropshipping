@@ -30,6 +30,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Produ
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.VariantValueRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -161,15 +162,15 @@ class Cov02CatalogAdminReadTest {
     void conTextoDeBusquedaSeConsultaTodoElCatalogoNoSoloLaPaginaActual() {
         // La caja de búsqueda del admin debe encontrar el producto esté en la página que esté y en
         // cualquier idioma; filtrar en cliente solo miraría las 20 filas visibles.
-        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(Pageable.class)))
+        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(pagina(producto));
 
         Page<ProductSummaryView> page = useCase.listProductsForAdmin("ACTIVE", null, "  Bailarinas  ", 0, 20,
-                "es", null, null);
+                "es", null, null, null, null, null, null);
 
         assertThat(page.getTotalElements()).isEqualTo(1);
         verify(productJpaRepository).searchAdmin(eq(ProductStatus.ACTIVE), isNull(), eq("bailarinas"), isNull(), eq("es"),
-                eq(false), any(Pageable.class));
+                eq(false), isNull(), isNull(), isNull(), isNull(), any(Pageable.class));
         // El listado se traduce al idioma pedido: el admin en español no puede ver títulos en chino.
         verify(productMapper).toSummary(producto, "es");
     }
@@ -177,23 +178,23 @@ class Cov02CatalogAdminReadTest {
     @Test
     void elFiltroDeVerificadosUsaLaBusquedaAunqueNoHayaTexto() {
         // needle "" (no nulo) evita el error de tipo de Postgres al bindear null en el LIKE.
-        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(Pageable.class)))
+        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(pagina(producto));
 
-        useCase.listProductsForAdmin(null, null, null, 0, 20, "es", null, Boolean.FALSE);
+        useCase.listProductsForAdmin(null, null, null, 0, 20, "es", null, Boolean.FALSE, null, null, null, null);
 
         verify(productJpaRepository).searchAdmin(isNull(), isNull(), eq(""), eq(Boolean.FALSE), eq("es"), eq(false),
-                any(Pageable.class));
+                isNull(), isNull(), isNull(), isNull(), any(Pageable.class));
     }
 
     @Test
     void sinTextoNiCategoriaSeListaTodoElCatalogo() {
         when(productJpaRepository.findAll(any(Pageable.class))).thenReturn(pagina(producto));
 
-        useCase.listProductsForAdmin("ALL", null, "", 0, 20, "es", null, null);
+        useCase.listProductsForAdmin("ALL", null, "", 0, 20, "es", null, null, null, null, null, null);
 
         verify(productJpaRepository).findAll(any(Pageable.class));
-        verify(productJpaRepository, never()).searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(Pageable.class));
+        verify(productJpaRepository, never()).searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(), any(), any(), any(), any(Pageable.class));
     }
 
     @Test
@@ -202,7 +203,7 @@ class Cov02CatalogAdminReadTest {
         when(productJpaRepository.findAll(any(Pageable.class))).thenReturn(pagina(producto));
 
         for (String estado : new String[] {"undefined", "null", "  ", "INVENTADO"}) {
-            useCase.listProductsForAdmin(estado, null, null, 0, 20, "es", null, null);
+            useCase.listProductsForAdmin(estado, null, null, 0, 20, "es", null, null, null, null, null, null);
         }
 
         verify(productJpaRepository, times(4)).findAll(any(Pageable.class));
@@ -214,7 +215,7 @@ class Cov02CatalogAdminReadTest {
         UUID categoria = UUID.randomUUID();
         when(productJpaRepository.findByCategoryId(eq(categoria), any(Pageable.class))).thenReturn(pagina(producto));
 
-        useCase.listProductsForAdmin("ALL", categoria, null, 0, 20, "es", null, null);
+        useCase.listProductsForAdmin("ALL", categoria, null, 0, 20, "es", null, null, null, null, null, null);
 
         verify(productJpaRepository).findByCategoryId(eq(categoria), any(Pageable.class));
     }
@@ -225,7 +226,7 @@ class Cov02CatalogAdminReadTest {
         when(productJpaRepository.findByCategoryIdAndStatus(eq(categoria), eq(ProductStatus.PAUSED),
                 any(Pageable.class))).thenReturn(pagina(producto));
 
-        useCase.listProductsForAdmin("paused", categoria, null, 0, 20, "es", null, null);
+        useCase.listProductsForAdmin("paused", categoria, null, 0, 20, "es", null, null, null, null, null, null);
 
         verify(productJpaRepository).findByCategoryIdAndStatus(eq(categoria), eq(ProductStatus.PAUSED),
                 any(Pageable.class));
@@ -237,7 +238,7 @@ class Cov02CatalogAdminReadTest {
         when(productJpaRepository.findAll(any(Pageable.class))).thenReturn(pagina(producto));
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
 
-        useCase.listProductsForAdmin(null, null, null, 0, 100000, "es", null, null);
+        useCase.listProductsForAdmin(null, null, null, 0, 100000, "es", null, null, null, null, null, null);
 
         verify(productJpaRepository).findAll(captor.capture());
         assertThat(captor.getValue().getPageSize()).isEqualTo(200);
@@ -249,7 +250,7 @@ class Cov02CatalogAdminReadTest {
         when(productJpaRepository.findAll(any(Pageable.class))).thenReturn(pagina(producto));
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
 
-        useCase.listProductsForAdmin(null, null, null, 0, 20, "es", "price_desc", null);
+        useCase.listProductsForAdmin(null, null, null, 0, 20, "es", "price_desc", null, null, null, null, null);
 
         verify(productJpaRepository).findAll(captor.capture());
         assertThat(captor.getValue().getSort().getOrderFor("basePrice"))
@@ -262,7 +263,7 @@ class Cov02CatalogAdminReadTest {
         when(productJpaRepository.findAll(any(Pageable.class))).thenReturn(pagina(producto));
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
 
-        useCase.listProductsForAdmin(null, null, null, 0, 20, "es", "por_lo_que_sea", null);
+        useCase.listProductsForAdmin(null, null, null, 0, 20, "es", "por_lo_que_sea", null, null, null, null, null);
 
         verify(productJpaRepository).findAll(captor.capture());
         // Un criterio desconocido NO puede dejar el listado sin ordenar: paginar con LIMIT/OFFSET sin
@@ -276,7 +277,7 @@ class Cov02CatalogAdminReadTest {
         when(productJpaRepository.findAll(any(Pageable.class))).thenReturn(pagina(producto));
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
 
-        useCase.listProductsForAdmin(null, null, null, 0, 20, "es", "oldest", null);
+        useCase.listProductsForAdmin(null, null, null, 0, 20, "es", "oldest", null, null, null, null, null);
 
         verify(productJpaRepository).findAll(captor.capture());
         assertThat(captor.getValue().getSort().getOrderFor("ingestedAt"))
@@ -744,5 +745,61 @@ class Cov02CatalogAdminReadTest {
         assertThat(copia.getTranslations()).hasSize(1);
         assertThat(copia.getTranslations().get(0).getTitle()).isEqualTo("Bailarinas (copy)");
         assertThat(copia.getTranslations().get(0).getProvider()).isEqualTo("admin-duplicate");
+    }
+
+    /**
+     * El filtro de precio llega a la CONSULTA, no se resuelve en memoria.
+     *
+     * <p>La columna «Precio» del panel muestra el COSTE del proveedor convertido a la moneda del
+     * administrador, no el precio de venta. Se descubrió filtrando 20-30 y viendo 16,52 € en la tabla:
+     * el filtro miraba una cosa y la columna enseñaba otra. Al ser una columna real, se compara en SQL,
+     * así que el total y la paginación son exactos y no hay tope de barrido.
+     */
+    @Test
+    @DisplayName("el filtro de coste viaja a la consulta")
+    void elFiltroDeCosteViajaALaConsulta() {
+        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(), any(), any(), any(),
+                any(Pageable.class))).thenReturn(pagina());
+        useCase.listProductsForAdmin(null, null, null, 0, 20, "es", null, null,
+                BigDecimal.ZERO, BigDecimal.valueOf(50), null, null);
+
+        verify(productJpaRepository).searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(),
+                eq(BigDecimal.ZERO), eq(BigDecimal.valueOf(50)), isNull(), isNull(), any(Pageable.class));
+    }
+
+    /** Ventas y tendencia son MÍNIMOS: lo que se busca en una tabla es «de aquí para arriba». */
+    @Test
+    @DisplayName("ventas y tendencia filtran por mínimo")
+    void ventasYTendenciaFiltranPorMinimo() {
+        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(), any(), any(), any(),
+                any(Pageable.class))).thenReturn(pagina());
+        useCase.listProductsForAdmin(null, null, null, 0, 20, "es", null, null,
+                null, null, 1000, BigDecimal.valueOf(0.5));
+
+        verify(productJpaRepository).searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(),
+                isNull(), isNull(), eq(1000), eq(BigDecimal.valueOf(0.5)), any(Pageable.class));
+    }
+
+    /**
+     * Con filtros de tabla se pagina NORMAL: no hay barrido en memoria.
+     *
+     * <p>La primera versión filtraba el precio en memoria sobre un barrido de 5.000, porque se creía que
+     * la columna mostraba el precio de venta —que no es una columna y no se puede consultar—. Resultó
+     * mostrar el COSTE, que sí lo es, así que los cuatro filtros bajaron a la consulta. Esta prueba
+     * defiende esa mejora: si alguien volviera a resolverlos en memoria, el total dejaría de ser exacto
+     * y aparecería un tope silencioso a partir del cual el filtro deja de ver productos.
+     */
+    @Test
+    @DisplayName("con filtros de tabla se pagina normal, sin barrido en memoria")
+    void conFiltrosDeTablaSePaginaNormal() {
+        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(), any(),
+                any(), any(), any(Pageable.class))).thenReturn(pagina());
+
+        useCase.listProductsForAdmin(null, null, null, 0, 20, "es", null, null, null, null, 1, null);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(productJpaRepository).searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(),
+                any(), any(), any(), any(), captor.capture());
+        assertThat(captor.getValue().getPageSize()).isEqualTo(20);
     }
 }

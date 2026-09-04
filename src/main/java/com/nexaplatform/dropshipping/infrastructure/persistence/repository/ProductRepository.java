@@ -303,6 +303,10 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             WHERE (:status IS NULL OR p.status = :status)
               AND (:categoryId IS NULL OR p.category.id = :categoryId)
               AND (:verified IS NULL OR p.verified = :verified)
+              AND (:minCost IS NULL OR p.basePrice >= :minCost)
+              AND (:maxCost IS NULL OR p.basePrice <= :maxCost)
+              AND (:minSales IS NULL OR p.monthlySales >= :minSales)
+              AND (:minTrend IS NULL OR p.trendScore >= :minTrend)
               AND (:needle = ''
                    OR nx_norm(p.titleZh)    LIKE CONCAT('%', nx_norm(:needle), '%')
                    OR nx_norm(p.externalId) LIKE CONCAT('%', nx_norm(:needle), '%')
@@ -329,9 +333,16 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
                                      AND (nx_norm(t2.shortDescription) LIKE CONCAT('%', nx_norm(:needle), '%')
                                           OR nx_norm(t2.description)   LIKE CONCAT('%', nx_norm(:needle), '%')))))
             """)
+    @SuppressWarnings("java:S107")
     Page<ProductEntity> searchAdmin(@Param("status") ProductStatus status, @Param("categoryId") UUID categoryId,
             @Param("needle") String needle, @Param("verified") Boolean verified, @Param("lang") String lang,
-            @Param("wide") boolean wide, Pageable pageable);
+            @Param("wide") boolean wide,
+            // Filtros de la tabla del panel. El COSTE va en CNY, que es como está guardado: la columna del
+            // panel lo convierte a la moneda del administrador, así que el navegador deshace esa conversión
+            // antes de mandarlo. Filtrar aquí y no en memoria mantiene exacto el total y la paginación.
+            @Param("minCost") BigDecimal minCost, @Param("maxCost") BigDecimal maxCost,
+            @Param("minSales") Integer minSales, @Param("minTrend") BigDecimal minTrend,
+            Pageable pageable);
 
     /** IDs (distintos) de categorías con productos del estado dado ingeridos desde {@code since} — campaña de novedades. */
     @Query("""

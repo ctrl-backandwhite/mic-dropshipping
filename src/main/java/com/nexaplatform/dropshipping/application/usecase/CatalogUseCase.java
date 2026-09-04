@@ -68,8 +68,9 @@ public interface CatalogUseCase {
      * llega cuando se migren de golpe el controlador de admin y sus pruebas.
      */
     @SuppressWarnings("java:S107")
-    Page<ProductSummaryView> listProductsForAdmin(String status, UUID categoryId, String query, int page, int size,
-            String language, String sort, Boolean verified);
+    Page<ProductSummaryView> listProductsForAdmin(String status, UUID categoryId, String query, int page,
+            int size, String language, String sort, Boolean verified, BigDecimal minCost,
+            BigDecimal maxCost, Integer minSales, BigDecimal minTrend);
 
     /** Reindexes every product into OpenSearch; returns the number indexed. */
     int reindexAllProducts();

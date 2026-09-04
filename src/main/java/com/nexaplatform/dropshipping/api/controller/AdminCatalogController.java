@@ -92,9 +92,10 @@ public class AdminCatalogController implements AdminCatalogApi {
 
     @Override
     public PageResponse<ProductSummaryView> list(String status, UUID categoryId, String q, int page, int size,
-            String lang, String sort, Boolean verified) {
-        return PageResponse
-                .from(catalogUseCase.listProductsForAdmin(status, categoryId, q, page, size, lang, sort, verified));
+            String lang, String sort, Boolean verified, BigDecimal minCost, BigDecimal maxCost,
+            Integer minSales, BigDecimal minTrend) {
+        return PageResponse.from(catalogUseCase.listProductsForAdmin(status, categoryId, q, page, size, lang, sort,
+                verified, minCost, maxCost, minSales, minTrend));
     }
 
     @Override
@@ -168,6 +169,12 @@ public class AdminCatalogController implements AdminCatalogApi {
         ImageMirrorService.ReencoladoParaComprimir r = imageMirrorService.reencolarParaComprimir(limite);
         return ResponseEntity.accepted().body(Map.of(
                 "reencoladas", r.reencoladas(), "pendientes", r.pendientes()));
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> estadoDeCompresionDeImagenes() {
+        ImageMirrorService.EstadoDeCompresion e = imageMirrorService.estadoDeCompresion();
+        return ResponseEntity.ok(Map.of("pendientes", e.pendientes(), "enCola", e.enCola()));
     }
 
     @Override

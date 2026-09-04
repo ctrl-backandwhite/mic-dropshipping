@@ -485,6 +485,24 @@ public class ImageMirrorService {
     public record ReencoladoParaComprimir(int reencoladas, long pendientes) {
     }
 
+    /**
+     * Cuánto falta para tener el histórico comprimido.
+     *
+     * <p>{@code enCola} es lo que el espejador está procesando AHORA. El panel lo necesita para encadenar
+     * lotes sin amontonarlos: pedir otro lote con la cola todavía llena no acelera nada —el espejador va a
+     * su ritmo— y sí deja miles de imágenes marcadas como pendientes, que es el estado en el que una caída
+     * del proceso hace más daño.
+     */
+    @Transactional(readOnly = true)
+    public EstadoDeCompresion estadoDeCompresion() {
+        return new EstadoDeCompresion(imageRepository.countByMirrorStatusAndWidthIsNull(MirrorStatus.MIRRORED),
+                imageRepository.countByMirrorStatus(MirrorStatus.PENDING));
+    }
+
+    /** Lo que queda por comprimir y lo que el espejador tiene ahora mismo entre manos. */
+    public record EstadoDeCompresion(long pendientes, long enCola) {
+    }
+
     /** Reindexa los productos afectados por un lote de imágenes recién espejadas (hasImage → true). */
     private void reindexAffectedProducts(List<UUID> mirroredImageIds) {
         if (mirroredImageIds.isEmpty()) {

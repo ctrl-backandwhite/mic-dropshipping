@@ -109,6 +109,7 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -543,7 +544,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     @Override
     @Transactional(readOnly = true)
     public Page<ProductSummaryView> listProductsForAdmin(String status, UUID categoryId, String query, int page,
-            int size, String language, String sort, Boolean verified) {
+            int size, String language, String sort, Boolean verified, BigDecimal minCost, BigDecimal maxCost,
+            Integer minSales, BigDecimal minTrend) {
         Pageable pageable = PageRequest.of(page, Math.min(size, 200), adminSort(sort));
         ProductStatus st = parseStatusTolerant(status);
         // Free-text search runs server-side across the WHOLE catalogue and ALL
@@ -567,12 +569,26 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             // admin sigue pudiendo localizar un producto por una frase que solo está en su
             // descripción.
             String lang = (language == null || language.isBlank()) ? "es" : language.toLowerCase();
-            Page<ProductEntity> found = productJpaRepository.searchAdmin(st, categoryId, needle, verified, lang,
-                    false, pageable);
+            Page<ProductEntity> found = productJpaRepository.searchAdmin(st, categoryId, needle, verified, lang, false,
+                    minCost, maxCost, minSales, minTrend, pageable);
             if (!needle.isEmpty() && found.getTotalElements() == 0) {
-                found = productJpaRepository.searchAdmin(st, categoryId, needle, verified, lang, true, pageable);
+                found = productJpaRepository.searchAdmin(st, categoryId, needle, verified, lang, true,
+                        minCost, maxCost, minSales, minTrend, pageable);
             }
             return found.map(p -> productMapper.toSummary(p, language));
+        }
+        /*
+         * Sin texto ni filtro de verificado se usaba una consulta más simple. Ahora TAMBIÉN se pasa por
+         * `searchAdmin` cuando hay filtros de tabla: son parte del WHERE, y resolverlos por otro camino
+         * dejaría el total sin cuadrar con las filas —el síntoma clásico de un listado que dice «7729»
+         * mientras enseña 61—.
+         */
+        if (minCost != null || maxCost != null || minSales != null || minTrend != null) {
+            String lang = (language == null || language.isBlank()) ? "es" : language.toLowerCase();
+            return productJpaRepository
+                    .searchAdmin(st, categoryId, "", null, lang, false, minCost, maxCost, minSales, minTrend,
+                            pageable)
+                    .map(p -> productMapper.toSummary(p, language));
         }
         if (categoryId == null) {
             return pageProducts(st, pageable, language);
