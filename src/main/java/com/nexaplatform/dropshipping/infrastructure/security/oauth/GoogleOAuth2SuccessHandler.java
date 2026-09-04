@@ -4,6 +4,7 @@ import com.nexaplatform.dropshipping.application.service.DeviceSessionService;
 import com.nexaplatform.dropshipping.application.usecase.GoogleLoginOutcome;
 import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
 import com.nexaplatform.dropshipping.domain.model.User;
+import com.nexaplatform.dropshipping.infrastructure.security.GeolocalizacionDelCdn;
 import com.nexaplatform.dropshipping.infrastructure.security.jwt.UserTokenService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -39,18 +40,22 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
     private final DeviceSessionService deviceSessionService;
     private final com.nexaplatform.dropshipping.application.service.TotpService totpService;
     private final OAuthRedirectResolver redirects;
+    /** Decide si puede creerse la geolocalización del CDN. Ver {@link GeolocalizacionDelCdn}. */
+    private final GeolocalizacionDelCdn cdn;
 
     public GoogleOAuth2SuccessHandler(UserUseCase userUseCase, UserTokenService userTokenService,
             DeviceSessionService deviceSessionService,
-            com.nexaplatform.dropshipping.application.service.TotpService totpService, String frontBaseUrl) {
+            com.nexaplatform.dropshipping.application.service.TotpService totpService, String frontBaseUrl,
+            GeolocalizacionDelCdn cdn) {
         this(userUseCase, userTokenService, deviceSessionService, totpService,
-                new OAuthRedirectResolver(frontBaseUrl, ""));
+                new OAuthRedirectResolver(frontBaseUrl, ""), cdn);
     }
 
     public GoogleOAuth2SuccessHandler(UserUseCase userUseCase, UserTokenService userTokenService,
             DeviceSessionService deviceSessionService,
             com.nexaplatform.dropshipping.application.service.TotpService totpService,
-            OAuthRedirectResolver redirects) {
+            OAuthRedirectResolver redirects, GeolocalizacionDelCdn cdn) {
+        this.cdn = cdn;
         this.userUseCase = userUseCase;
         this.userTokenService = userTokenService;
         this.deviceSessionService = deviceSessionService;
@@ -89,9 +94,13 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         String firstName = "github".equals(provider) ? principal.getAttribute("name")
                 : principal.getAttribute("given_name");
         String lastName = "github".equals(provider) ? null : principal.getAttribute("family_name");
-        // País por IP del CDN (Cloudflare CF-IPCountry, etc.) para prerrellenar el país del alta social.
-        // Solo se usa al CREAR la cuenta; a un usuario ya existente no se le toca el país.
-        GoogleLoginOutcome outcome = userUseCase.resolveGoogleLogin(email, firstName, lastName, ipCountry(request));
+        // País por IP del CDN para prerrellenar el país del alta social. Solo se usa al CREAR la cuenta;
+        // a un usuario ya existente no se le toca el país.
+        //
+        // Pasa por `GeolocalizacionDelCdn` y no se lee la cabecera a pelo porque AQUÍ el país queda
+        // GRABADO en la ficha, y la ficha es la fuente en la que más se confía luego para el precio.
+        // Sin CDN de por medio, quien alcance el origen elegiría el país con el que se registra.
+        GoogleLoginOutcome outcome = userUseCase.resolveGoogleLogin(email, firstName, lastName, cdn.paisDeConfianza(request));
 
         if (outcome.isLinkRequired()) {
             // Existing local account: stash the verified email and ask for password confirmation
@@ -124,18 +133,4 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         response.sendRedirect(redirects.success(target, tokens.accessToken(), tokens.refreshToken()));
     }
 
-    /** Cabeceras de país por IP que inyectan los CDN/proxys (mismas que usa PricingCountryFilter). */
-    private static final String[] GEO_HEADERS = { "CF-IPCountry", "X-Vercel-IP-Country", "X-Geo-Country",
-            "X-Country-Code" };
-
-    /** País ISO-2 del CDN, o {@code null} si no viene o es "XX"/"T1" (país desconocido / Tor). */
-    private static String ipCountry(HttpServletRequest request) {
-        for (String h : GEO_HEADERS) {
-            String v = request.getHeader(h);
-            if (v != null && v.length() == 2 && !"XX".equalsIgnoreCase(v) && !"T1".equalsIgnoreCase(v)) {
-                return v;
-            }
-        }
-        return null;
-    }
 }

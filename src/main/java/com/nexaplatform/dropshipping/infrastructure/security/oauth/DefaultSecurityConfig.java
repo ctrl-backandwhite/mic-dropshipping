@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.infrastructure.security.oauth;
 
 import com.nexaplatform.dropshipping.application.service.DeviceSessionService;
 import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
+import com.nexaplatform.dropshipping.infrastructure.security.GeolocalizacionDelCdn;
 import com.nexaplatform.dropshipping.infrastructure.security.jwt.UserTokenService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -88,9 +89,9 @@ public class DefaultSecurityConfig {
     public GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler(UserUseCase userUseCase,
             UserTokenService userTokenService, DeviceSessionService deviceSessionService,
             com.nexaplatform.dropshipping.application.service.TotpService totpService,
-            OAuthRedirectResolver oauthRedirectResolver) {
+            OAuthRedirectResolver oauthRedirectResolver, GeolocalizacionDelCdn geolocalizacionDelCdn) {
         return new GoogleOAuth2SuccessHandler(userUseCase, userTokenService, deviceSessionService, totpService,
-                oauthRedirectResolver);
+                oauthRedirectResolver, geolocalizacionDelCdn);
     }
 
     @Bean

@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.security.oauth;
 
+import com.nexaplatform.dropshipping.infrastructure.security.GeolocalizacionDelCdn;
 import com.nexaplatform.dropshipping.application.usecase.GoogleLoginOutcome;
 import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
 import com.nexaplatform.dropshipping.domain.enums.UserRole;
@@ -60,8 +61,10 @@ class GoogleOAuth2SuccessHandlerTest {
     void setUp() {
         // Trailing slash must be trimmed by the handler.
         // La barra final debe recortarla el resolutor.
+        // Geolocalización REAL y sin secreto: se comporta como siempre —confía en la cabecera—, que es lo
+        // que estos casos dan por hecho. Su propio comportamiento se prueba en GeolocalizacionDelCdnTest.
         handler = new GoogleOAuth2SuccessHandler(userUseCase, userTokenService, deviceSessionService, totpService,
-                new OAuthRedirectResolver(FRONT + "/", MOBILE));
+                new OAuthRedirectResolver(FRONT + "/", MOBILE), new GeolocalizacionDelCdn());
         request = new MockHttpServletRequest();
         response = new MockHttpServletResponse();
     }
