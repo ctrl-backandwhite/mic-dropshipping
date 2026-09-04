@@ -231,6 +231,36 @@ class CatalogFlowIT extends BaseIntegration {
         assertThat(desc).isSortedAccordingTo((a, b) -> b.compareTo(a));
     }
 
+    /**
+     * La semilla baraja el catálogo, y solo contra una base de datos real se sabe si funciona.
+     *
+     * <p>El desempate sembrado es una expresión SQL construida a mano —{@code md5} sobre el id más la
+     * baraja—, así que las pruebas unitarias solo pueden comprobar que se arma bien: si Hibernate no
+     * supiera traducirla, o PostgreSQL la rechazara, el listado entero devolvería un 500 y ningún test de
+     * unidad se enteraría. Por eso este caso pide el listado de verdad.
+     *
+     * <p>Comprueba además lo que sostiene el scroll infinito: la misma semilla devuelve SIEMPRE el mismo
+     * orden. Si no, al bajar por el catálogo saldrían productos repetidos y otros no saldrían nunca.
+     */
+    @Test
+    @DisplayName("Con semilla el catálogo se baraja, pero la misma semilla da siempre el mismo orden")
+    void elOrdenSeBarajaConLaSemilla() {
+        List<String> conSemilla = slugs(getJson(PRODUCTS + "?size=50&seed=7", userToken));
+        assertThat(conSemilla).hasSize(4);
+        assertThat(conSemilla).isEqualTo(slugs(getJson(PRODUCTS + "?size=50&seed=7", userToken)));
+
+        // Sin semilla se mantiene el orden fijo de siempre: quien no la manda no nota el cambio.
+        assertThat(slugs(getJson(PRODUCTS + "?size=50", userToken)))
+                .containsExactly(SLUG_VESTIDO, SLUG_BOTAS, SLUG_CAMISETA, SLUG_BOTONES);
+
+        // Una semilla negativa o desbordada tampoco rompe la consulta: se reduce al rango de barajas.
+        assertThat(slugs(getJson(PRODUCTS + "?size=50&seed=-1", userToken))).hasSize(4);
+        assertThat(slugs(getJson(PRODUCTS + "?size=50&seed=2147483647", userToken))).hasSize(4);
+
+        // Y el criterio sigue mandando sobre la baraja: con semilla, «precio ascendente» ordena por precio.
+        assertThat(displayPrices(getJson(PRODUCTS + "?size=50&sort=price_asc&seed=13", userToken))).isSorted();
+    }
+
     @Test
     @DisplayName("Ordenación por novedad, por ventas y por relevancia (tendencia) por defecto")
     void ordenPorNovedadVentasYRelevancia() {

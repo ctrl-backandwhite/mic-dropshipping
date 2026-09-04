@@ -339,3 +339,7 @@ databaseChangeLog:
       file: db/changelog/schema-v164-espejado-de-video.sql
   - include:
       file: db/changelog/schema-v165-anuncio-al-bus-diferido.sql
+  - include:
+      file: db/changelog/schema-v166-precio-visto-en-el-historial.sql
+  - include:
+      file: db/changelog/schema-v167-titular-llc-en-los-documentos.sql

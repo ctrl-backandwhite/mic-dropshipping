@@ -220,10 +220,10 @@ class Cov03StorefrontCatalogControllerTest {
         // `verified` es una marca interna de revisión: si un usuario cualquiera pudiera filtrar por ella,
         // se le estaría enseñando qué parte del catálogo está sin revisar.
         controller.list(0, 20, "es", null, null, null, null, null, null, null, null, null, null, null, null, null,
-                Boolean.TRUE, null, null, null, null);
+                Boolean.TRUE, null, null, null, null, null);
 
         ArgumentCaptor<ProductListFilters> captor = ArgumentCaptor.forClass(ProductListFilters.class);
-        verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull());
+        verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull(), isNull());
         assertThat(captor.getValue().verified()).isNull();
     }
 
@@ -232,10 +232,10 @@ class Cov03StorefrontCatalogControllerTest {
         autenticaComoAdmin();
 
         controller.list(0, 20, "es", null, null, null, null, null, null, null, null, null, null, null, null, null,
-                Boolean.FALSE, null, null, null, null);
+                Boolean.FALSE, null, null, null, null, null);
 
         ArgumentCaptor<ProductListFilters> captor = ArgumentCaptor.forClass(ProductListFilters.class);
-        verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull());
+        verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull(), isNull());
         assertThat(captor.getValue().verified()).isFalse();
     }
 
@@ -924,10 +924,10 @@ class Cov03StorefrontCatalogControllerTest {
         when(dutyBadges.lineasDe(List.of(enCarrito))).thenReturn(tresLineas);
 
         controller.list(0, 20, "es", null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, Boolean.TRUE, List.of(enCarrito));
+                null, null, null, Boolean.TRUE, List.of(enCarrito), null);
 
         ArgumentCaptor<ProductListFilters> captor = ArgumentCaptor.forClass(ProductListFilters.class);
-        verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull());
+        verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull(), isNull());
         assertThat(captor.getValue().dutyLines()).extracting(ProductListFilters.DutyLine::groupId)
                 .isEqualTo(tresLineas.stream().map(CatalogDutyBadgeService.LineaDeclarada::grupoId).toList());
         assertThat(captor.getValue().dutyLines()).extracting(ProductListFilters.DutyLine::originCountry)
@@ -943,10 +943,10 @@ class Cov03StorefrontCatalogControllerTest {
         when(customsValuation.perArticleFeeUsdCents(any())).thenReturn(0);
 
         controller.list(0, 20, "es", null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, UUID.randomUUID(), null, null);
+                null, null, UUID.randomUUID(), null, null, null);
 
         ArgumentCaptor<ProductListFilters> captor = ArgumentCaptor.forClass(ProductListFilters.class);
-        verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull());
+        verify(storefrontRead).productListFull(eq(0), eq(20), eq("es"), captor.capture(), isNull(), isNull());
         assertThat(captor.getValue().dutyLines()).isNull();
     }
 }

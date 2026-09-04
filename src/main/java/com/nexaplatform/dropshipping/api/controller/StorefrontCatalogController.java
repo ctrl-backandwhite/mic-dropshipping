@@ -203,14 +203,14 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping,
             Boolean selfPickup, Boolean hasVideo, Integer minRating, Integer inventoryMin, String certification,
             String sort, Boolean verified, UUID promotionId, UUID dutyGroupId, Boolean dutyGroupsFromCart,
-            List<UUID> cartProductIds) {
+            List<UUID> cartProductIds, Integer seed) {
         // El filtro de verificación es SOLO para admin: si el que consulta no es admin, se ignora.
         Boolean verifiedFilter = SecurityUtils.isAdmin() ? verified : null;
         PageResponse<ProductSummaryView> pagina = storefrontRead.productListFull(page, size, lang,
                 new ProductListFilters(q, categoryId, supplierId, minPrice, maxPrice, shipFrom, freeShipping,
                         selfPickup, hasVideo, minRating, inventoryMin, certification, verifiedFilter, promotionId,
                         gruposDelFiltro(dutyGroupId, dutyGroupsFromCart, cartProductIds)),
-                sort);
+                sort, seed);
         return conElArancel(pagina, cartProductIds);
     }
 
