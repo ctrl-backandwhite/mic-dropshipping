@@ -450,6 +450,17 @@ public class ImageMirrorService {
      * (cada lote reindexa sus productos vía {@link #reindexAffectedProducts}). Acotado por nº de rondas.
      */
     @Async
+    public void mirrorAllPendingAsync() {
+        if (!mirrorEnabled) {
+            return;
+        }
+        int rounds = 0;
+        while (imageRepository.countByMirrorStatus(MirrorStatus.PENDING) > 0 && rounds++ < 500) {
+            mirrorPendingBatch(mirrorBatch);
+        }
+        log.info("Mirror: pase completo tras reindex terminado ({} rondas)", rounds);
+    }
+
     /**
      * Devuelve a la cola un lote de imágenes guardadas SIN comprimir, para aligerar el histórico.
      *
@@ -472,17 +483,6 @@ public class ImageMirrorService {
 
     /** Cuántas se han devuelto a la cola en este lote y cuántas siguen sin comprimir. */
     public record ReencoladoParaComprimir(int reencoladas, long pendientes) {
-    }
-
-    public void mirrorAllPendingAsync() {
-        if (!mirrorEnabled) {
-            return;
-        }
-        int rounds = 0;
-        while (imageRepository.countByMirrorStatus(MirrorStatus.PENDING) > 0 && rounds++ < 500) {
-            mirrorPendingBatch(mirrorBatch);
-        }
-        log.info("Mirror: pase completo tras reindex terminado ({} rondas)", rounds);
     }
 
     /** Reindexa los productos afectados por un lote de imágenes recién espejadas (hasImage → true). */
