@@ -369,6 +369,31 @@ class Cov06CatalogStorefrontReadServiceTest {
         assertThat(service.sortFor("best_match", Integer.MAX_VALUE).toString()).matches(".*'\\d+'.*");
     }
 
+    /**
+     * «Variado» deja que mande la baraja: no hay criterio por delante.
+     *
+     * <p>Es lo que hace que el catálogo enseñe cosas distintas al recargar. Con cualquier otro orden el
+     * azar solo rompe EMPATES, y el orden por defecto del escaparate era «más recientes», donde cada
+     * producto tiene su fecha y no empata con nadie: la baraja no cambiaba nada. Se detectó mirando el
+     * catálogo en el navegador, no en las pruebas, porque estas lo ejercitaban por relevancia —donde
+     * 5.181 de 5.485 productos empatan— y allí sí barajaba.
+     */
+    @Test
+    void elOrdenVariadoLoDecideLaBaraja() {
+        Sort variado = service.sortFor("random", 7);
+
+        assertThat(variado).hasSize(1);
+        assertThat(variado.getOrderFor("createdAt")).isNull();
+        assertThat(variado.getOrderFor("trendScore")).isNull();
+        assertThat(variado).isNotEqualTo(service.sortFor("random", 8));
+    }
+
+    /** Sin semilla, «variado» cae al orden estable por id: nunca a un orden que PostgreSQL decida. */
+    @Test
+    void elOrdenVariadoSinSemillaSigueSiendoEstable() {
+        assertThat(service.sortFor("random", null)).isEqualTo(Sort.by(Sort.Direction.ASC, "id"));
+    }
+
     /** Sin criterio (o con uno desconocido) manda la relevancia: nunca un orden arbitrario. */
     @Test
     void sinCriterioDeOrdenMandaLaRelevancia() {

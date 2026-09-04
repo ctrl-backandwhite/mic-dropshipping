@@ -649,6 +649,15 @@ public class CatalogStorefrontReadService {
      */
     public Sort sortFor(String sort, Integer semilla) {
         Sort criterio = switch (sort == null ? "best_match" : sort) {
+            /*
+             * «Variado»: no hay criterio, manda la baraja.
+             *
+             * Existe porque con cualquier otro orden el azar solo puede romper EMPATES, y el orden por
+             * defecto del escaparate era «más recientes», donde cada producto tiene su propia fecha y no
+             * empata con nadie: la baraja no cambiaba absolutamente nada y el catálogo seguía enseñando
+             * siempre lo mismo. Sin semilla se cae al desempate por id, que es estable.
+             */
+            case "random" -> Sort.unsorted();
             case "price_asc" -> Sort.by(Sort.Direction.ASC, "basePrice");
             case "price_desc" -> Sort.by(Sort.Direction.DESC, "basePrice");
             case "newest" -> Sort.by(Sort.Direction.DESC, "createdAt");
