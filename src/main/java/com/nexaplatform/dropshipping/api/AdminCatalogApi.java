@@ -126,6 +126,13 @@ public interface AdminCatalogApi {
     @PostMapping("/reindex")
     ResponseEntity<Map<String, Object>> reindex();
 
+    @Operation(summary = "Send a batch of already-stored images back to the mirror queue so they get "
+            + "compressed. Only images saved before the compressor existed are picked, heaviest first. "
+            + "Returns how many were requeued and how many remain, so it can be run batch by batch.")
+    @PostMapping("/imagenes/comprimir-historico")
+    ResponseEntity<Map<String, Object>> comprimirHistoricoDeImagenes(
+            @RequestParam(defaultValue = "200") int limite);
+
     @Operation(summary = "Status of the background reindex ({running, indexed}) so the panel can poll it")
     @GetMapping("/reindex/status")
     ResponseEntity<Map<String, Object>> reindexStatus();

@@ -84,7 +84,10 @@ class ProductImageRepositoryIT extends PersistenceITBase {
         UUID id = saved.getId();
         Instant at = Instant.parse("2026-01-15T10:00:00Z");
 
-        images.markMirrored(id, "https://cdn.nexa.local/x.jpg", 4096L, "sha256:abc", MirrorStatus.MIRRORED, at);
+        // Las dimensiones se guardan desde el 4-sep-2026: hasta entonces las columnas existían y nadie
+        // las escribía, así que la ficha no podía reservar el hueco de la foto antes de que llegara.
+        images.markMirrored(id, "https://cdn.nexa.local/x.jpg", 4096L, "sha256:abc", 1600, 1200,
+                MirrorStatus.MIRRORED, at);
 
         // El contexto de persistencia cachea la entidad: hay que limpiar y releer para ver el UPDATE en BD.
         em.flush();

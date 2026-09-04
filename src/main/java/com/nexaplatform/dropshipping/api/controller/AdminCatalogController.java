@@ -27,6 +27,7 @@ import com.nexaplatform.dropshipping.api.dto.out.CategoryAttributeSchemaDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
+import com.nexaplatform.dropshipping.infrastructure.integration.storage.ImageMirrorService;
 import lombok.RequiredArgsConstructor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -72,6 +73,7 @@ public class AdminCatalogController implements AdminCatalogApi {
 
     private final CatalogUseCase catalogUseCase;
     private final ObjectMapper objectMapper;
+    private final ImageMirrorService imageMirrorService;
 
     @Override
     public ResponseEntity<UUID> upsertSupplier(IngestSupplierRequest req) {
@@ -149,6 +151,23 @@ public class AdminCatalogController implements AdminCatalogApi {
         CatalogUseCase.ReindexStatus s = catalogUseCase.startReindex();
         return ResponseEntity.accepted().body(Map.of(
                 "started", s.started(), "running", s.running(), "indexed", s.lastIndexed()));
+    }
+
+    /**
+     * Devuelve a la cola un lote de imágenes ya guardadas para que pasen por el compresor.
+     *
+     * <p>Reindexar NO hace esto, aunque lo parezca: arrastra el espejado, pero el barrido solo mira las
+     * imágenes pendientes, y estas constan como hechas. Sin este empujón, la compresión solo alcanzaría a
+     * las fotos que se carguen a partir de ahora.
+     *
+     * <p>Va por lotes porque reprocesar es volver a descargar del origen y recomprimir: casi setenta y
+     * tres mil de golpe saturarían la red, el almacén y la CPU a la vez, y mientras hay gente comprando.
+     */
+    @Override
+    public ResponseEntity<Map<String, Object>> comprimirHistoricoDeImagenes(int limite) {
+        ImageMirrorService.ReencoladoParaComprimir r = imageMirrorService.reencolarParaComprimir(limite);
+        return ResponseEntity.accepted().body(Map.of(
+                "reencoladas", r.reencoladas(), "pendientes", r.pendientes()));
     }
 
     @Override
