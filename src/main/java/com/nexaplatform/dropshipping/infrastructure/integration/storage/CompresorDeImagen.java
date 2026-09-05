@@ -119,6 +119,24 @@ public class CompresorDeImagen {
     }
 
     /** Escribe la imagen en WebP con pérdida. Devuelve {@code null} si no hay escritor disponible. */
+    /*
+     * NO se decodifica saltando píxeles, aunque acotaría la memoria.
+     *
+     * Es tentador: descomprimir ocupa `ancho x alto x 4` bytes —una foto de 4000x5000 son 80 MB—, y
+     * pedirle al lector que tome uno de cada N píxeles dejaría ese consumo fijo. Se probó el 5-sep-2026
+     * y se DESCARTÓ con medición: sobre una imagen de trama fina y rayas de un píxel —un tejido, que es
+     * lo que hay en este catálogo— la salida daba **PSNR 15,5 dB** frente a la decodificación completa,
+     * es decir, diferencia claramente visible. El salto de píxeles no promedia, así que produce aliasing
+     * justo en los estampados.
+     *
+     * Además la división entera redondea hacia abajo: con 5000 de lado y un máximo de 1600 salía paso 3
+     * y la imagen se decodificaba a 1334x1667, POR DEBAJO del objetivo.
+     *
+     * La memoria se acota donde no cuesta calidad: limitando cuántas imágenes se procesan a la vez
+     * (`nexadrop.storage.mirror-concurrency`, ajustado por entorno). Con 4 hilos el pico son ~320 MB
+     * sobre montones de 7 GB en pre y 9,8 GB en producción.
+     */
+
     private byte[] aWebp(BufferedImage imagen) throws Exception {
         Iterator<ImageWriter> escritores = ImageIO.getImageWritersByMIMEType("image/webp");
         if (!escritores.hasNext()) {
