@@ -12,10 +12,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.interceptor.KeyGenerator;
 
 import java.lang.reflect.Field;
 import java.util.List;
@@ -24,6 +28,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -49,6 +55,12 @@ class PrecalentadorDeCatalogoTest {
     StorefrontCatalogApi catalogo;
     @Mock
     CatalogStorefrontReadService lectura;
+    @Mock
+    CacheManager cacheManager;
+    @Mock
+    Cache cache;
+    @Mock
+    KeyGenerator currencyAwareKeyGenerator;
 
     @InjectMocks
     PrecalentadorDeCatalogo precalentador;
@@ -58,6 +70,11 @@ class PrecalentadorDeCatalogoTest {
         set("activo", true);
         set("porSeccion", 6);
         set("combinaciones", List.of("es:EUR", "en:USD"));
+        when(cacheManager.getCache(any())).thenReturn(cache);
+        // generate(target, metodo, Object... params): la portada pasa DOS parámetros, así que hacen
+        // falta cuatro comparadores. Con tres, el stub no casaba y la clave salía nula — que es
+        // exactamente lo que este test destapó.
+        when(currencyAwareKeyGenerator.generate(any(), any(), any(), any())).thenReturn("clave");
         CurrencyHolder.clear();
         PricingChannelHolder.clear();
         PricingCountryHolder.clear();
@@ -123,6 +140,30 @@ class PrecalentadorDeCatalogoTest {
 
         verify(catalogo).homeSections("en", 6);
         verify(catalogo, never()).homeSections("esto-esta-mal", 6);
+    }
+
+    @Test
+    @DisplayName("desaloja la entrada ANTES de pedirla: si no, el precalentado deja de calentar tras la primera vez")
+    void desaloja_antes_de_pedir() {
+        precalentador.precalienta();
+
+        // Es EL fallo que tuvo la primera version. @Cacheable devuelve lo guardado sin reescribirlo,
+        // asi que la caducidad seguia contando desde la primera escritura: medido en PRE, el segundo
+        // ciclo tardaba 2 ms (acierto de cache, no calentaba) y quedaban TRES minutos frios de cada
+        // ocho. Sin este desalojo el precalentado parece funcionar y no funciona.
+        InOrder orden = inOrder(cache, catalogo);
+        orden.verify(cache).evict(any());
+        orden.verify(catalogo).homeSections("es", 6);
+    }
+
+    @Test
+    @DisplayName("la clave la pide al MISMO generador que usa la cache, no la compone a mano")
+    void usa_el_generador_de_claves_real() {
+        precalentador.precalienta();
+
+        // Componer aqui una copia del formato del generador dejaria el precalentado desalojando una
+        // clave inexistente en cuanto alguien tocara el generador, y sin que nada fallara.
+        verify(currencyAwareKeyGenerator, atLeastOnce()).generate(any(), any(), eq("es"), eq(6));
     }
 
     private void set(String campo, Object valor) throws Exception {

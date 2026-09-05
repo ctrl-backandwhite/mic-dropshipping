@@ -5,13 +5,19 @@ import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
 import com.nexaplatform.dropshipping.api.mapper.ProductListFilters;
 import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.interceptor.KeyGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.lang.reflect.Method;
 import java.util.List;
+
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_LIST;
 
 /**
  * Mantiene calientes las respuestas que abre TODO el mundo al entrar.
@@ -57,6 +63,8 @@ public class PrecalentadorDeCatalogo {
 
     private final StorefrontCatalogApi catalogo;
     private final CatalogStorefrontReadService lectura;
+    private final CacheManager cacheManager;
+    private final KeyGenerator currencyAwareKeyGenerator;
 
     @Value("${nexadrop.catalogo.precalentar:true}")
     private boolean activo;
@@ -112,6 +120,17 @@ public class PrecalentadorDeCatalogo {
             PricingChannelHolder.set(PriceRuleChannel.STOREFRONT);
             PricingCountryHolder.clear();
 
+            // Se TIRA la entrada antes de pedirla. Sin esto el precalentado no calienta nada pasada la
+            // primera vez: `@Cacheable` devuelve lo guardado sin reescribirlo, así que la caducidad
+            // sigue contando desde la primera escritura. Medido en PRE el 5-sep-2026: el primer ciclo
+            // tardó 18 segundos (calentó) y el segundo 2 milisegundos (acierto de caché, no calentó),
+            // y la entrada caducaba a los 5 minutos dejando TRES minutos fríos de cada ocho — justo el
+            // hueco que esto viene a cerrar.
+            //
+            // El desalojo abre una ventana de unos segundos hasta que se rehace. No es un problema:
+            // Caffeine bloquea por clave, así que a lo sumo un visitante espera lo que habría esperado
+            // igualmente, y solo durante esos segundos en vez de durante tres minutos.
+            olvida(PORTADA, idioma, porSeccion);
             catalogo.homeSections(idioma, porSeccion);
             catalogo.categoriesFlat(idioma);
             lectura.categoriesTree(idioma);
@@ -128,5 +147,33 @@ public class PrecalentadorDeCatalogo {
             PricingChannelHolder.clear();
             PricingCountryHolder.clear();
         }
+    }
+
+    /** El método de la portada, para poder pedirle su clave al MISMO generador que usa la caché. */
+    private static final Method PORTADA = metodoDePortada();
+
+    private static Method metodoDePortada() {
+        try {
+            return StorefrontCatalogApi.class.getMethod("homeSections", String.class, int.class);
+        } catch (NoSuchMethodException e) {
+            // Si alguien cambia la firma, que se vea al arrancar y no como un precalentado que en
+            // silencio deja de calentar.
+            throw new IllegalStateException("No se encuentra homeSections: revisa StorefrontCatalogApi", e);
+        }
+    }
+
+    /**
+     * Tira la entrada de caché de esa llamada, para que la siguiente la vuelva a calcular Y a escribir.
+     *
+     * <p>La clave la pide al MISMO generador que usa {@code @Cacheable} ({@code currencyAwareKeyGenerator}),
+     * no se compone a mano: si se escribiera aquí una copia de su formato, cualquier cambio en el
+     * generador dejaría el precalentado desalojando una clave que no existe, sin que nada fallara.
+     */
+    private void olvida(Method metodo, Object... argumentos) {
+        Cache cache = cacheManager.getCache(CACHE_PRODUCT_LIST);
+        if (cache == null) {
+            return;
+        }
+        cache.evict(currencyAwareKeyGenerator.generate(catalogo, metodo, argumentos));
     }
 }
