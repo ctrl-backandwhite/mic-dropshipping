@@ -56,6 +56,41 @@ public interface ProductImageRepository extends JpaRepository<ProductImageEntity
     @Query("UPDATE ProductImageEntity i SET i.mirrorStatus = :status WHERE i.id = :id")
     void markStatus(@Param("id") UUID id, @Param("status") MirrorStatus status);
 
+    /**
+     * Suma un intento ANTES de tocar la imagen, y se compromete en el acto.
+     *
+     * <p>Existe porque el 5-sep-2026 una imagen mató el proceso entero: el codificador WebP nativo
+     * provocó un SIGSEGV, que NO es una excepción y por tanto no pasa por ningún {@code catch}. Como el
+     * intento solo se anotaba DESPUÉS de procesar, esa imagen volvía intacta al siguiente lote y
+     * tumbaba las dos réplicas una y otra vez. Un bucle de caídas del que el sistema no podía salir
+     * solo.
+     *
+     * <p>Anotando el intento antes, aunque el proceso desaparezca a mitad la cuenta ya está guardada:
+     * la imagen agota sus intentos y deja de intentarse. Es la diferencia entre un fallo y una avería
+     * permanente.
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE ProductImageEntity i SET i.mirrorAttempts = i.mirrorAttempts + 1 WHERE i.id = :id")
+    void anotaIntentoAntesDeProcesar(@Param("id") UUID id);
+
+    /** Cuántas veces se ha intentado ya con esta imagen. */
+    @Query("SELECT i.mirrorAttempts FROM ProductImageEntity i WHERE i.id = :id")
+    Integer intentosDeODesconocido(@Param("id") UUID id);
+
+    /** Igual, pero 0 si la imagen ya no está: nunca nulo para quien decide con este número. */
+    default int intentosDe(UUID id) {
+        Integer n = intentosDeODesconocido(id);
+        return n == null ? 0 : n;
+    }
+
+    /** Marca el fallo SIN sumar intento: ya lo sumó {@link #anotaIntentoAntesDeProcesar}. */
+    @Modifying
+    @Transactional
+    @Query("UPDATE ProductImageEntity i SET i.mirrorStatus = com.nexaplatform.dropshipping.domain.enums.MirrorStatus.FAILED "
+            + "WHERE i.id = :id")
+    void markFailed(@Param("id") UUID id);
+
     /** Marca el fallo y suma un intento, que es lo que espacia el siguiente. */
     @Modifying
     @Transactional

@@ -111,6 +111,27 @@ public class CompresorDeImagen {
         }
     }
 
+    /**
+     * Guarda la imagen tal cual, sin pasarla por el codificador nativo.
+     *
+     * <p>Lo usa el espejado con las imágenes que ya provocaron un reinicio: comprimir es una mejora,
+     * pero no a costa de volver a tumbar el proceso. Se conservan las medidas, que sí se pueden leer
+     * sin codificar nada.
+     */
+    public Comprimida sinComprimir(byte[] originales, String tipoOriginal) {
+        try {
+            BufferedImage imagen = ImageIO.read(new ByteArrayInputStream(originales));
+            if (imagen == null) {
+                return sinTocar(originales, tipoOriginal);
+            }
+            return new Comprimida(originales, tipoOriginal, contentTypeDe(tipoOriginal),
+                    imagen.getWidth(), imagen.getHeight());
+        } catch (Exception e) {
+            log.warn("No se pudieron leer las medidas de la imagen ({} bytes): {}", originales.length, e.toString());
+            return sinTocar(originales, tipoOriginal);
+        }
+    }
+
     private Comprimida sinTocar(byte[] datos, String tipo) {
         return new Comprimida(datos, tipo, contentTypeDe(tipo), 0, 0);
     }

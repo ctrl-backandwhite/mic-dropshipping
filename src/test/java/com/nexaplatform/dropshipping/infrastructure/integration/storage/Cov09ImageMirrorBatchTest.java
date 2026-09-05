@@ -133,7 +133,14 @@ class Cov09ImageMirrorBatchTest {
 
         // Desde el 26-ago-2026 el fallo no solo marca estado: suma un intento, que es lo que espacia
         // el siguiente y evita repetir la avalancha que dejó 415 productos fuera del escaparate.
-        verify(imageRepository).markFailedAndCountAttempt(imagenId);
+        //
+        // Desde el 5-sep-2026 ese intento se anota ANTES de tocar la imagen, no después. El motivo:
+        // una imagen mató el proceso entero con un SIGSEGV dentro del codificador WebP, y como el
+        // conteo iba al final, esa imagen volvía intacta al siguiente lote y tumbaba las réplicas en
+        // bucle. Anotándolo antes, la cuenta sobrevive aunque el proceso no.
+        verify(imageRepository).anotaIntentoAntesDeProcesar(imagenId);
+        verify(imageRepository).markFailed(imagenId);
+
         verify(imageRepository, never()).markMirrored(any(), any(), any(), any(), any(), any(), any(), any());
         verifyNoInteractions(productIndexer);
     }

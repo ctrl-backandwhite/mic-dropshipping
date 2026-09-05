@@ -109,6 +109,15 @@ public class ImageMirrorService {
      */
     private static final Duration PLAZO_DEL_LOTE = Duration.ofMinutes(10);
 
+    /**
+     * Cuántas veces se intenta comprimir una imagen antes de renunciar y guardarla tal cual.
+     *
+     * <p>Uno. Si al primer intento el proceso siguió vivo pero la imagen no se espejó, puede ser la red;
+     * si hubo que reiniciar por su culpa, no merece un segundo intento con el compresor. Aligerar una
+     * foto es una mejora; tumbar el backend es una avería.
+     */
+    private static final int INTENTOS_ANTES_DE_RENDIRSE_CON_LA_COMPRESION = 1;
+
     private volatile ExecutorService pool;
 
     /**
@@ -327,7 +336,7 @@ public class ImageMirrorService {
         int ok = 0;
         for (ProductVariantEntity v : variantRepository.findNeedingImageMirror(prefix, top)) {
             try {
-                variantRepository.markImageCdn(v.getId(), fetchAndStore(v.getImageSourceUrl()).url());
+                variantRepository.markImageCdn(v.getId(), fetchAndStore(v.getImageSourceUrl(), true).url());
                 ok++;
             } catch (Exception e) {
                 if (e instanceof InterruptedException) {
@@ -339,7 +348,7 @@ public class ImageMirrorService {
         }
         for (VariantValueEntity vv : variantValueRepository.findNeedingImageMirror(prefix, top)) {
             try {
-                variantValueRepository.markImageCdn(vv.getId(), fetchAndStore(vv.getImageSourceUrl()).url());
+                variantValueRepository.markImageCdn(vv.getId(), fetchAndStore(vv.getImageSourceUrl(), true).url());
                 ok++;
             } catch (Exception e) {
                 if (e instanceof InterruptedException) {
@@ -524,9 +533,23 @@ public class ImageMirrorService {
             imageRepository.markFailedAndCountAttempt(id);
             return false;
         }
+        // El intento se anota AQUÍ, antes de tocar nada, y se compromete en el acto. Si lo que viene
+        // después mata el proceso —y comprimir puede: el codificador WebP es código nativo y un SIGSEGV
+        // no se puede capturar—, la cuenta ya está guardada y esta imagen no volverá para siempre.
+        int intentosPrevios = imageRepository.intentosDe(id);
+        imageRepository.anotaIntentoAntesDeProcesar(id);
+
+        // Y si ya lo intentamos y seguimos aquí, es que algo de esta imagen no le sienta bien al
+        // compresor. Se guarda SIN comprimir: una foto que pesa de más es un inconveniente; un proceso
+        // que se muere deja el escaparate sin servir.
+        boolean comprimir = intentosPrevios < INTENTOS_ANTES_DE_RENDIRSE_CON_LA_COMPRESION;
+        if (!comprimir) {
+            log.warn("::> [MIRROR] La imagen {} ya falló {} veces: se espeja SIN comprimir para no "
+                    + "arriesgar el proceso.", id, intentosPrevios);
+        }
         for (String candidate : candidateUrls(src)) {
             try {
-                Stored s = fetchAndStore(candidate);
+                Stored s = fetchAndStore(candidate, comprimir);
                 imageRepository.markMirrored(id, s.url(), s.bytes(), s.hash(), enteroONulo(s.ancho()),
                         enteroONulo(s.alto()), MirrorStatus.MIRRORED, Instant.now());
                 imageRepository.resetAttempts(id);
@@ -538,7 +561,7 @@ public class ImageMirrorService {
                 log.debug("Mirror falló imagen {} ({}): {}", id, candidate, e.toString());
             }
         }
-        imageRepository.markFailedAndCountAttempt(id);
+        imageRepository.markFailed(id);
         return false;
     }
 
@@ -583,7 +606,7 @@ public class ImageMirrorService {
      *       origen mienta en el header) se descarta y NUNCA entra al bucket → no se puede servir ni ejecutar.</li>
      * </ul>
      */
-    private Stored fetchAndStore(String src) throws IOException, InterruptedException {
+    private Stored fetchAndStore(String src, boolean comprimir) throws IOException, InterruptedException {
         HttpResponse<byte[]> res = fetchFollowingRedirects(src.trim(), 5);
         byte[] data = res.body();
         if (res.statusCode() / 100 != 2 || data == null || data.length == 0) {
@@ -594,7 +617,9 @@ public class ImageMirrorService {
         // El sniff va ANTES de comprimir, y es importante que siga así: lo que se decodifica aquí ya se
         // ha comprobado que es una imagen ráster de verdad. Comprimir primero significaría abrir con el
         // decodificador algo que todavía no se sabe qué es.
-        CompresorDeImagen.Comprimida lista = compresor.comprimir(data, type);
+        CompresorDeImagen.Comprimida lista = comprimir
+                ? compresor.comprimir(data, type)
+                : compresor.sinComprimir(data, type);
 
         // El hash se calcula sobre lo que se GUARDA, no sobre lo descargado: es la clave del fichero en
         // el almacén y sirve para no subir dos veces lo mismo. Con el hash del original, dos ajustes

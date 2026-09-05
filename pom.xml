@@ -57,7 +57,7 @@
         <google.translate.version>2.55.0</google.translate.version>
         <resilience4j.version>2.3.0</resilience4j.version>
         <thumbnailator.version>0.4.20</thumbnailator.version>
-        <webp.imageio.version>0.9.0</webp.imageio.version>
+        <webp.imageio.version>0.11.0</webp.imageio.version>
         <liquibase.version>4.31.1</liquibase.version>
 
         <!-- ============ Versiones forzadas por seguridad (Snyk, 30-jul-2026) ============
