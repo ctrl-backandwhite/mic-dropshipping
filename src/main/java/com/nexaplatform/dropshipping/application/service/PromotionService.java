@@ -14,18 +14,20 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -57,17 +59,22 @@ public class PromotionService {
     private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository productRepository;
 
     /**
-     * Cuánto vale la foto de «qué promociones están vivas» antes de volver a preguntarlo.
+     * Claves con las que se guarda, DENTRO de la petición en curso, lo que no cambia durante ella.
      *
-     * <p>Cinco segundos porque el precio ya viaja cacheado cinco MINUTOS aguas abajo: afinar más aquí
-     * no adelantaría en nada la aparición de una promoción y sí devolvería la tormenta de consultas.
+     * <p>Se probó antes con una memoria de unos segundos y estaba mal, por un motivo que las pruebas
+     * unitarias no podían ver: una promoción metida por SQL —una migración, un arreglo a mano, o los
+     * propios tests de integración, que insertan con {@code jdbcTemplate}— no pasa por el panel y por
+     * tanto no puede avisar de que hay que refrescar. La lista se quedaba vieja sin que nadie lo
+     * supiera. Cinco pruebas de cupones lo destaparon.
+     *
+     * <p>Con el alcance de la PETICIÓN no hay nada que invalidar y no hay dato viejo posible: cada
+     * petición pregunta una vez y reutiliza esa respuesta para todos sus productos, que es exactamente
+     * donde estaba el problema — un listado pinta hasta 5.000 fichas y una ficha hasta 280 variantes,
+     * y todas preguntaban lo mismo.
      */
-    private static final Duration VENTANA_VIVAS = Duration.ofSeconds(5);
-
-    private volatile List<PromotionEntity> vivasCache = List.of();
-    private volatile Instant vivasStamp = Instant.EPOCH;
-    private final Map<UUID, List<PromotionTargetEntity>> destinosCache = new ConcurrentHashMap<>();
-    private final Map<UUID, Set<UUID>> ancestrosCache = new ConcurrentHashMap<>();
+    private static final String MEMO_VIVAS = PromotionService.class.getName() + ".vivas";
+    private static final String MEMO_DESTINOS = PromotionService.class.getName() + ".destinos";
+    private static final String MEMO_ANCESTROS = PromotionService.class.getName() + ".ancestros";
 
     /**
      * Precio rebajado y de dónde sale la rebaja.
@@ -354,8 +361,10 @@ public class PromotionService {
     }
 
     /** La categoría del producto y todas sus ascendientes hasta la raíz. */
+    @SuppressWarnings("unchecked")
     private Set<UUID> ancestorsOf(UUID categoryId) {
-        return ancestrosCache.computeIfAbsent(categoryId, this::cadenaDeAncestros);
+        Map<UUID, Set<UUID>> memo = (Map<UUID, Set<UUID>>) recordar(MEMO_ANCESTROS, HashMap::new);
+        return memo.computeIfAbsent(categoryId, this::cadenaDeAncestros);
     }
 
     private Set<UUID> cadenaDeAncestros(UUID categoryId) {
@@ -373,63 +382,60 @@ public class PromotionService {
         return Discounted.none(price);
     }
 
-    /* ============ Memoria de corta duración ============ */
+    /* ============ Memoria dentro de la petición ============ */
 
     /**
-     * Las promociones automáticas vigentes, resueltas una vez cada pocos segundos y NO una vez por
-     * producto.
+     * Las promociones automáticas vigentes: se preguntan UNA vez por petición, no una por producto.
      *
      * <p>Esto es lo que hacía lento el escaparate. El listado con filtro de precio barre hasta 5.000
-     * fichas y de cada una calculaba el precio, y calcular un precio preguntaba a la base de datos qué
+     * fichas y de cada una calcula el precio, y calcular un precio preguntaba a la base de datos qué
      * promociones están vivas: la misma respuesta, cinco mil veces. Medido en PRE el 5-sep-2026 con el
      * catálogo real (7.710 referencias) y con CERO promociones dadas de alta, una página de 24
-     * productos tardaba <b>78 segundos</b> en responder — todo el tiempo se iba en preguntar una y otra
-     * vez por una tabla vacía. La respuesta es idéntica para todos los productos de la misma petición,
-     * así que se guarda.
+     * productos tardaba <b>78 segundos</b> — todo el tiempo se iba en preguntar una y otra vez por una
+     * tabla vacía. En la ficha pasa lo mismo por VARIANTE: 22,7 de media en producción, 280 la peor.
      *
-     * <p>La ventana es de segundos y no de minutos porque el borrado explícito ({@link #invalidar()})
-     * cubre los cambios del panel; la ventana solo protege del caso en que la promoción se active sola
-     * al llegar su fecha de inicio.
+     * <p>Fuera de una petición HTTP —un consumidor de Kafka, una tarea programada— no hay dónde
+     * guardar nada y se consulta como siempre. Ahí no hay miles de productos seguidos, así que no
+     * hace falta.
      */
+    @SuppressWarnings("unchecked")
     private List<PromotionEntity> automaticasVivas() {
-        refrescarSiToca();
-        return vivasCache;
+        return (List<PromotionEntity>) recordar(MEMO_VIVAS, this::consultaAutomaticasVivas);
     }
 
-    /** Los destinos de una promoción (productos o categorías), dentro de la misma ventana. */
+    private List<PromotionEntity> consultaAutomaticasVivas() {
+        return promotionRepository.findLive(Instant.now()).stream()
+                .filter(p -> p.getKind().isAutomatic())
+                .toList();
+    }
+
+    /** Los destinos de una promoción (productos o categorías), preguntados una vez por petición. */
+    @SuppressWarnings("unchecked")
     private List<PromotionTargetEntity> destinosDe(UUID promotionId) {
-        refrescarSiToca();
-        return destinosCache.computeIfAbsent(promotionId, targetRepository::findByPromotionId);
-    }
-
-    private void refrescarSiToca() {
-        Instant ahora = Instant.now();
-        if (Duration.between(vivasStamp, ahora).compareTo(VENTANA_VIVAS) < 0) {
-            return;
-        }
-        synchronized (this) {
-            if (Duration.between(vivasStamp, Instant.now()).compareTo(VENTANA_VIVAS) < 0) {
-                return;
-            }
-            // Se copia la lista: PromotionEntity no tiene ninguna relación perezosa, así que sobrevive
-            // fuera de la transacción que la trajo. Si algún día la tuviera, esto dejaría de valer.
-            vivasCache = List.copyOf(promotionRepository.findLive(Instant.now()).stream()
-                    .filter(p -> p.getKind().isAutomatic())
-                    .toList());
-            destinosCache.clear();
-            ancestrosCache.clear();
-            vivasStamp = Instant.now();
-        }
+        Map<UUID, List<PromotionTargetEntity>> memo =
+                (Map<UUID, List<PromotionTargetEntity>>) recordar(MEMO_DESTINOS, HashMap::new);
+        return memo.computeIfAbsent(promotionId, targetRepository::findByPromotionId);
     }
 
     /**
-     * Tira la memoria: lo llama el panel al crear, cambiar o borrar una promoción, para que el cambio
-     * se vea en el escaparate sin esperar a que venza la ventana.
+     * Guarda algo en la petición en curso y lo reutiliza mientras dure.
+     *
+     * <p>Se usa el alcance de la PETICIÓN y no una ventana de tiempo a propósito. Con una ventana, una
+     * promoción metida por SQL —una migración, un arreglo a mano, los tests de integración— no tiene
+     * forma de avisar de que hay que refrescar, y la lista se queda vieja sin que nadie lo note. Aquí
+     * no hay nada que invalidar: la petición siguiente vuelve a preguntar.
      */
-    public void invalidar() {
-        vivasStamp = Instant.EPOCH;
-        destinosCache.clear();
-        ancestrosCache.clear();
+    private Object recordar(String clave, Supplier<Object> calcula) {
+        RequestAttributes peticion = RequestContextHolder.getRequestAttributes();
+        if (peticion == null) {
+            return calcula.get();
+        }
+        Object guardado = peticion.getAttribute(clave, RequestAttributes.SCOPE_REQUEST);
+        if (guardado == null) {
+            guardado = calcula.get();
+            peticion.setAttribute(clave, guardado, RequestAttributes.SCOPE_REQUEST);
+        }
+        return guardado;
     }
 
     /** Promociones automáticas vivas, para que el admin vea de un vistazo qué está corriendo. */

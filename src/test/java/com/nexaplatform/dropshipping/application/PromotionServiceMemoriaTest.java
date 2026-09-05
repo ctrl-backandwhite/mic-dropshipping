@@ -11,6 +11,8 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Categ
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PromotionRedemptionRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PromotionRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PromotionTargetRepository;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -18,6 +20,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -27,7 +32,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -60,6 +64,17 @@ class PromotionServiceMemoriaTest {
 
     private static final BigDecimal PRECIO = new BigDecimal("100.00");
 
+    /** La memoria vive DENTRO de una petición, así que hay que simular una. */
+    @BeforeEach
+    void abrePeticion() {
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
+    }
+
+    @AfterEach
+    void cierraPeticion() {
+        RequestContextHolder.resetRequestAttributes();
+    }
+
     private static ProductEntity producto(UUID categoryId) {
         ProductEntity p = new ProductEntity();
         p.setId(UUID.randomUUID());
@@ -79,9 +94,9 @@ class PromotionServiceMemoriaTest {
             service.applyAutomatic(producto(null), PRECIO, null);
         }
 
-        // Una sola vez. Se deja holgura de una segunda por si el reloj cruza la ventana de 5 s
-        // mientras corre el bucle; lo que NO puede volver a pasar es que sean mil.
-        verify(promotionRepository, atMost(2)).findLive(any());
+        // Exactamente una. Dentro de una misma petición no hay reloj de por medio: o se pregunta una
+        // vez y se reutiliza, o el defecto ha vuelto.
+        verify(promotionRepository, times(1)).findLive(any());
     }
 
     @Test
@@ -101,19 +116,33 @@ class PromotionServiceMemoriaTest {
             assertThat(service.applyAutomatic(producto(categoria), PRECIO, null).applies()).isTrue();
         }
 
-        verify(targetRepository, atMost(2)).findByPromotionId(p.getId());
+        verify(targetRepository, times(1)).findByPromotionId(p.getId());
         // La cadena de ancestros tampoco se reconstruye producto a producto.
-        verify(categoryRepository, atMost(2)).findById(categoria);
+        verify(categoryRepository, times(1)).findById(categoria);
     }
 
     @Test
-    void invalidar_obliga_a_volver_a_preguntar() {
+    void cada_peticion_vuelve_a_preguntar() {
         when(promotionRepository.findLive(any())).thenReturn(List.of());
 
         service.applyAutomatic(producto(null), PRECIO, null);
-        service.invalidar();
+        // Una petición nueva: es lo que garantiza que una promoción metida por SQL se vea enseguida,
+        // sin depender de que alguien avise. Con una memoria por tiempo esto no pasaba, y por eso
+        // fallaban cinco pruebas de cupones que insertan la promoción con jdbcTemplate.
+        RequestContextHolder.resetRequestAttributes();
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
         service.applyAutomatic(producto(null), PRECIO, null);
 
         verify(promotionRepository, times(2)).findLive(any());
+    }
+
+    @Test
+    void fuera_de_una_peticion_sigue_funcionando() {
+        when(promotionRepository.findLive(any())).thenReturn(List.of());
+        RequestContextHolder.resetRequestAttributes();
+
+        // Un consumidor de Kafka o una tarea programada no tienen petición donde guardar nada: la
+        // respuesta tiene que seguir siendo correcta, aunque no se memorice.
+        assertThat(service.applyAutomatic(producto(null), PRECIO, null).applies()).isFalse();
     }
 }
