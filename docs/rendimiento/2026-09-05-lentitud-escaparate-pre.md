@@ -170,3 +170,49 @@ encargo; queda anotado.
   a 0,029 s. El problema es que la PRIMERA cuesta lo que cuesta, y con TTL de 5
   minutos, caché por réplica y muchas combinaciones de filtros, la mayoría de
   visitantes pagaba la primera.
+
+## Resultado tras desplegar en PRE
+
+Comparación honesta: mismo producto, mismo idioma y misma divisa (o sea, la misma
+clave de caché, fría en los dos), pod viejo y pod nuevo en el mismo instante.
+
+| ficha | pod viejo | pod nuevo | |
+|---|---|---|---|
+| `2026-573449521236` | 8,10 s | **0,70 s** | 11,6× |
+| `2026-768888105988` | 1,44 s | **0,082 s** | 17,5× |
+
+Portada, mismo método: 3,1 s → **0,03 s**.
+
+Listado con filtro de precio, en frío: 78,6 s → **16-25 s**. Mejora de 3-5×, pero
+sigue siendo malo, y por un motivo distinto (ver abajo).
+
+Batería del backend: **3.946 tests, 0 fallos** (3.943 + 3 nuevos que fijan que mil
+productos no pueden volver a ser mil consultas).
+
+## Lo que queda pendiente
+
+### El barrido de 5.000 productos del filtro de precio
+
+Quitadas las consultas por producto, lo que queda son 16-25 s de **materializar
+5.000 productos** —con sus ~113.000 variantes, sus imágenes y sus traducciones—
+para devolver 24. Ya no hay coste de base de datos por ficha: es el peso de
+construir los objetos.
+
+Las salidas posibles, y por qué ninguna se ha tomado hoy:
+
+- **Filtrar el precio en SQL.** Es lo correcto, pero el precio visible sale de
+  coste → margen por país → IVA → envío → recargo → subvenciones → divisa, y varios
+  de esos sumandos son columnas propias de CADA producto. No es una función
+  monótona del `base_price`, así que una banda «generosa» en SQL puede dejar fuera
+  resultados válidos. Tocar el precio a ciegas es exactamente lo que ya costó una
+  venta a pérdida del −71 %.
+- **Parar en cuanto haya suficientes.** Cambiaría el total que ve el paginador.
+- **Bajar el tope de 5.000.** Cambia qué productos salen.
+
+En producción el catálogo es de 226 referencias, así que allí el barrido se agota
+enseguida y el filtro responde en menos de un segundo. Es un problema de PRE y del
+catálogo grande que viene, no de hoy en producción.
+
+### La búsqueda de texto de PRE, vacía
+
+`?q=vestido` responde 200 sin resultados. Índice de OpenSearch, no rendimiento.
