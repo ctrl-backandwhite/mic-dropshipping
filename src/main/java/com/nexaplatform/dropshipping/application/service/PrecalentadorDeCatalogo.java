@@ -87,8 +87,17 @@ public class PrecalentadorDeCatalogo {
      *
      * <p>{@code fixedDelay} y no {@code fixedRate}: cuenta desde que TERMINA la pasada anterior, así
      * que si una tarda más de lo normal no se solapa consigo misma.
+     *
+     * <p>La primera pasada espera CINCO MINUTOS, y no veinte segundos como al principio. El motivo:
+     * la aplicación tarda entre 200 y 367 segundos en arrancar —Liquibase migra antes de servir—, y
+     * ponerse a calentar mientras todavía está levantándose le añade trabajo justo cuando menos
+     * margen tiene. El 5-sep-2026 una réplica de PRE se quedó dando vueltas por eso: la sonda de
+     * vida la mataba antes de que terminara.
+     *
+     * <p>Nadie pierde nada esperando: durante esos cinco minutos la caché se llena sola con las
+     * primeras visitas, que es como funcionaba antes de que existiera esta tarea.
      */
-    @Scheduled(initialDelay = 20_000, fixedDelay = 240_000)
+    @Scheduled(initialDelay = 300_000, fixedDelay = 240_000)
     public void precalienta() {
         if (!activo) {
             return;

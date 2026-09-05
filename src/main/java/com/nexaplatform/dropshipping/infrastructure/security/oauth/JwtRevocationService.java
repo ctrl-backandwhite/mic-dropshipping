@@ -57,15 +57,37 @@ public class JwtRevocationService {
         }
     }
 
-    /** Marca todos los tokens del client como revocados con efecto inmediato. */
+    /**
+     * Marca todos los tokens del client como revocados con efecto inmediato.
+     *
+     * <p>Si Redis no responde se anota en el registro en memoria, igual que hace la lectura. La razón
+     * es la misma que allí, y aquí pesa incluso más: quien revoca una credencial suele estar
+     * respondiendo a una filtración. Dejar que un Redis caído devuelva un error significaría que la
+     * clave comprometida NO se revoca —la transacción entera se deshace, incluido el borrado— y que la
+     * persona se queda mirando un 500 sin saber si su clave sigue viva. Es exactamente el momento en
+     * que el sistema no se puede permitir fallar.
+     *
+     * <p>Lo que se pierde con el respaldo en memoria es que la revocación no llegue a las demás
+     * réplicas mientras Redis esté caído. Pero el borrado en la base de datos SÍ ocurre, así que la
+     * credencial deja de servir para pedir tokens nuevos en todas ellas; lo único que sobrevive es
+     * algún token ya emitido, hasta que caduque. Se avisa en el registro para que no pase inadvertido.
+     */
     public void revokeAllForClient(String clientId) {
         if (clientId == null || clientId.isBlank())
             return;
         long now = Instant.now().getEpochSecond();
-        if (redis != null) {
-            redis.opsForValue().set(PREFIX + clientId, Long.toString(now), TTL);
-        } else {
+        if (redis == null) {
             fallback.put(clientId, now);
+        } else {
+            try {
+                redis.opsForValue().set(PREFIX + clientId, Long.toString(now), TTL);
+            } catch (RuntimeException e) {
+                fallback.put(clientId, now);
+                log.warn("::> [REVOCACION] Redis no responde al revocar client_id={} ({}). La revocación "
+                        + "queda en memoria: la credencial YA está borrada, pero un token vivo podría "
+                        + "seguir siéndolo en otras réplicas hasta que caduque.", clientId,
+                        e.getClass().getSimpleName());
+            }
         }
         log.info("Revoked all tokens for client_id={} at epoch={}", clientId, now);
     }
