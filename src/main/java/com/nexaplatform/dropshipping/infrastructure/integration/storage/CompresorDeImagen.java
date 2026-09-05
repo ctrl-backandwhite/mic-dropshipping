@@ -14,6 +14,7 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.Iterator;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Deja las fotos de producto en un tamaño y un peso razonables antes de guardarlas.
@@ -137,13 +138,41 @@ public class CompresorDeImagen {
      * sobre montones de 7 GB en pre y 9,8 GB en producción.
      */
 
+    /**
+     * Cerrojo del codificador nativo. UNA sola imagen se codifica a la vez en toda la JVM.
+     *
+     * <p>No es una precaución teórica: el 5-sep-2026 las dos réplicas de PRE se cayeron a la vez con
+     * la JVM muerta por SIGSEGV dentro de la biblioteca nativa —
+     * {@code C [libwebp-imageio.so+0x4a15] encode+0x55} — mientras cuatro hilos comprimían en
+     * paralelo. Un fallo de segmento en código nativo NO se puede capturar desde Java: no hay
+     * excepción que atrapar, el proceso entero desaparece y con él todas las peticiones que estuviera
+     * atendiendo. Producción, que corría con un solo hilo, no reinició ni una vez.
+     *
+     * <p>Serializar aquí no es caro donde importa: lo que se serializa es solo la codificación, y la
+     * descarga, la decodificación y el escalado —que es donde se va el tiempo— siguen yendo en
+     * paralelo. Y es trabajo de fondo: al comprador no le espera nadie por esto.
+     *
+     * <p>Con el cerrojo, {@code mirror-concurrency} vuelve a ser un ajuste de rendimiento y deja de
+     * ser una bomba: subirlo ya no puede tumbar el backend.
+     */
+    private static final ReentrantLock CERROJO_NATIVO = new ReentrantLock();
+
     private byte[] aWebp(BufferedImage imagen) throws Exception {
         Iterator<ImageWriter> escritores = ImageIO.getImageWritersByMIMEType("image/webp");
         if (!escritores.hasNext()) {
             log.warn("No hay escritor de WebP registrado: las imágenes se guardarán sin comprimir.");
             return null;
         }
-        ImageWriter escritor = escritores.next();
+        CERROJO_NATIVO.lock();
+        try {
+            return codificaEnWebp(escritores.next(), imagen);
+        } finally {
+            CERROJO_NATIVO.unlock();
+        }
+    }
+
+    /** La codificación en sí. Siempre bajo {@link #CERROJO_NATIVO}: toca la biblioteca nativa. */
+    private byte[] codificaEnWebp(ImageWriter escritor, BufferedImage imagen) throws Exception {
         try (ByteArrayOutputStream salida = new ByteArrayOutputStream();
              MemoryCacheImageOutputStream flujo = new MemoryCacheImageOutputStream(salida)) {
             ImageWriteParam parametros = escritor.getDefaultWriteParam();
