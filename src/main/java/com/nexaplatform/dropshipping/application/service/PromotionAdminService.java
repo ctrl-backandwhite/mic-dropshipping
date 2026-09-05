@@ -49,6 +49,7 @@ public class PromotionAdminService {
     private final PromotionTargetRepository targetRepository;
     private final CategoryRepository categoryRepository;
     private final NotificationUseCase notificationUseCase;
+    private final PromotionService promotionService;
 
     @Transactional(readOnly = true)
     public List<PromotionEntity> list() {
@@ -75,6 +76,9 @@ public class PromotionAdminService {
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true),
             @CacheEvict(value = CACHE_SEARCH, allEntries = true)})
     public PromotionEntity create(AdminPromotionDtoIn req) {
+        // La caché de Spring de arriba no alcanza a la memoria de corta duración de PromotionService,
+        // que es la que consulta el escaparate en cada precio. Sin esto el cambio tardaría en verse.
+        promotionService.invalidar();
         validate(req, null);
         PromotionEntity p = PromotionEntity.builder()
                 .name(req.getName().trim())
@@ -118,6 +122,9 @@ public class PromotionAdminService {
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true),
             @CacheEvict(value = CACHE_SEARCH, allEntries = true)})
     public PromotionEntity update(UUID id, AdminPromotionDtoIn req) {
+        // La caché de Spring de arriba no alcanza a la memoria de corta duración de PromotionService,
+        // que es la que consulta el escaparate en cada precio. Sin esto el cambio tardaría en verse.
+        promotionService.invalidar();
         PromotionEntity p = require(id);
         validate(req, p);
         p.setName(req.getName().trim());
@@ -163,6 +170,9 @@ public class PromotionAdminService {
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true),
             @CacheEvict(value = CACHE_SEARCH, allEntries = true)})
     public PromotionEntity toggle(UUID id) {
+        // La caché de Spring de arriba no alcanza a la memoria de corta duración de PromotionService,
+        // que es la que consulta el escaparate en cada precio. Sin esto el cambio tardaría en verse.
+        promotionService.invalidar();
         PromotionEntity p = require(id);
         p.setActive(!p.isActive());
         p.setUpdatedAt(Instant.now());
@@ -184,6 +194,9 @@ public class PromotionAdminService {
             @CacheEvict(value = CACHE_PRODUCT_LIST, allEntries = true),
             @CacheEvict(value = CACHE_SEARCH, allEntries = true)})
     public void delete(UUID id) {
+        // La caché de Spring de arriba no alcanza a la memoria de corta duración de PromotionService,
+        // que es la que consulta el escaparate en cada precio. Sin esto el cambio tardaría en verse.
+        promotionService.invalidar();
         targetRepository.deleteByPromotionId(id);
         promotionRepository.deleteById(id);
     }

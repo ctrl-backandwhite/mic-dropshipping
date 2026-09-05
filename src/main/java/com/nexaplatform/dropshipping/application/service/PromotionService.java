@@ -17,8 +17,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -55,6 +57,19 @@ public class PromotionService {
     private final com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository productRepository;
 
     /**
+     * Cuánto vale la foto de «qué promociones están vivas» antes de volver a preguntarlo.
+     *
+     * <p>Cinco segundos porque el precio ya viaja cacheado cinco MINUTOS aguas abajo: afinar más aquí
+     * no adelantaría en nada la aparición de una promoción y sí devolvería la tormenta de consultas.
+     */
+    private static final Duration VENTANA_VIVAS = Duration.ofSeconds(5);
+
+    private volatile List<PromotionEntity> vivasCache = List.of();
+    private volatile Instant vivasStamp = Instant.EPOCH;
+    private final Map<UUID, List<PromotionTargetEntity>> destinosCache = new ConcurrentHashMap<>();
+    private final Map<UUID, Set<UUID>> ancestrosCache = new ConcurrentHashMap<>();
+
+    /**
      * Precio rebajado y de dónde sale la rebaja.
      *
      * @param original    lo que costaría sin promoción
@@ -84,9 +99,7 @@ public class PromotionService {
      */
     @Transactional(readOnly = true)
     public Discounted applyAutomatic(ProductEntity product, BigDecimal price, BigDecimal floor) {
-        List<PromotionEntity> live = promotionRepository.findLive(Instant.now()).stream()
-                .filter(p -> p.getKind().isAutomatic())
-                .toList();
+        List<PromotionEntity> live = automaticasVivas();
         return applyBest(product, price, floor, live);
     }
 
@@ -100,9 +113,7 @@ public class PromotionService {
     @Transactional(readOnly = true)
     public Discounted applyWithCoupon(ProductEntity product, BigDecimal price, BigDecimal floor,
                                       PromotionEntity coupon) {
-        List<PromotionEntity> candidates = new ArrayList<>(promotionRepository.findLive(Instant.now()).stream()
-                .filter(p -> p.getKind().isAutomatic())
-                .toList());
+        List<PromotionEntity> candidates = new ArrayList<>(automaticasVivas());
         if (coupon != null) {
             candidates.add(coupon);
         }
@@ -268,7 +279,7 @@ public class PromotionService {
         if (p.getScope() == PromotionScope.ALL) {
             return true;
         }
-        List<PromotionTargetEntity> targets = targetRepository.findByPromotionId(p.getId());
+        List<PromotionTargetEntity> targets = destinosDe(p.getId());
         if (p.getScope() == PromotionScope.PRODUCT) {
             return targets.stream().anyMatch(t -> product.getId().equals(t.getProductId()));
         }
@@ -344,6 +355,10 @@ public class PromotionService {
 
     /** La categoría del producto y todas sus ascendientes hasta la raíz. */
     private Set<UUID> ancestorsOf(UUID categoryId) {
+        return ancestrosCache.computeIfAbsent(categoryId, this::cadenaDeAncestros);
+    }
+
+    private Set<UUID> cadenaDeAncestros(UUID categoryId) {
         Set<UUID> chain = new HashSet<>();
         UUID current = categoryId;
         // Tope de profundidad: una jerarquía con un ciclo por un dato mal metido colgaría el listado.
@@ -356,6 +371,65 @@ public class PromotionService {
 
     private static Discounted none(BigDecimal price) {
         return Discounted.none(price);
+    }
+
+    /* ============ Memoria de corta duración ============ */
+
+    /**
+     * Las promociones automáticas vigentes, resueltas una vez cada pocos segundos y NO una vez por
+     * producto.
+     *
+     * <p>Esto es lo que hacía lento el escaparate. El listado con filtro de precio barre hasta 5.000
+     * fichas y de cada una calculaba el precio, y calcular un precio preguntaba a la base de datos qué
+     * promociones están vivas: la misma respuesta, cinco mil veces. Medido en PRE el 5-sep-2026 con el
+     * catálogo real (7.710 referencias) y con CERO promociones dadas de alta, una página de 24
+     * productos tardaba <b>78 segundos</b> en responder — todo el tiempo se iba en preguntar una y otra
+     * vez por una tabla vacía. La respuesta es idéntica para todos los productos de la misma petición,
+     * así que se guarda.
+     *
+     * <p>La ventana es de segundos y no de minutos porque el borrado explícito ({@link #invalidar()})
+     * cubre los cambios del panel; la ventana solo protege del caso en que la promoción se active sola
+     * al llegar su fecha de inicio.
+     */
+    private List<PromotionEntity> automaticasVivas() {
+        refrescarSiToca();
+        return vivasCache;
+    }
+
+    /** Los destinos de una promoción (productos o categorías), dentro de la misma ventana. */
+    private List<PromotionTargetEntity> destinosDe(UUID promotionId) {
+        refrescarSiToca();
+        return destinosCache.computeIfAbsent(promotionId, targetRepository::findByPromotionId);
+    }
+
+    private void refrescarSiToca() {
+        Instant ahora = Instant.now();
+        if (Duration.between(vivasStamp, ahora).compareTo(VENTANA_VIVAS) < 0) {
+            return;
+        }
+        synchronized (this) {
+            if (Duration.between(vivasStamp, Instant.now()).compareTo(VENTANA_VIVAS) < 0) {
+                return;
+            }
+            // Se copia la lista: PromotionEntity no tiene ninguna relación perezosa, así que sobrevive
+            // fuera de la transacción que la trajo. Si algún día la tuviera, esto dejaría de valer.
+            vivasCache = List.copyOf(promotionRepository.findLive(Instant.now()).stream()
+                    .filter(p -> p.getKind().isAutomatic())
+                    .toList());
+            destinosCache.clear();
+            ancestrosCache.clear();
+            vivasStamp = Instant.now();
+        }
+    }
+
+    /**
+     * Tira la memoria: lo llama el panel al crear, cambiar o borrar una promoción, para que el cambio
+     * se vea en el escaparate sin esperar a que venza la ventana.
+     */
+    public void invalidar() {
+        vivasStamp = Instant.EPOCH;
+        destinosCache.clear();
+        ancestrosCache.clear();
     }
 
     /** Promociones automáticas vivas, para que el admin vea de un vistazo qué está corriendo. */
