@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api;
 
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.AnuncioBusFallidoView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.CustomsAuditView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
@@ -35,6 +36,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
+import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;
 
@@ -64,7 +66,12 @@ public interface AdminCatalogApi {
             @RequestParam(required = false) UUID categoryId, @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "30") int size, @RequestParam(defaultValue = "es") String lang,
-            @RequestParam(required = false) String sort, @RequestParam(required = false) Boolean verified);
+            @RequestParam(required = false) String sort, @RequestParam(required = false) Boolean verified,
+            // Filtros de la tabla del panel. El COSTE va en CNY, que es como está guardado y lo que muestra
+            // la columna «Precio» (el navegador la convierte para enseñarla, y deshace esa conversión antes
+            // de mandar el filtro). Ventas y tendencia son mínimos, no rangos.
+            @RequestParam(required = false) BigDecimal minCost, @RequestParam(required = false) BigDecimal maxCost,
+            @RequestParam(required = false) Integer minSales, @RequestParam(required = false) BigDecimal minTrend);
 
     /**
      * Repaso del catálogo en busca de productos que la aduana no aceptaría.
@@ -124,6 +131,18 @@ public interface AdminCatalogApi {
             + "Long reindexes of large catalogs would otherwise die on the proxy/edge timeout.")
     @PostMapping("/reindex")
     ResponseEntity<Map<String, Object>> reindex();
+
+    @Operation(summary = "Send a batch of already-stored images back to the mirror queue so they get "
+            + "compressed. Only images saved before the compressor existed are picked, heaviest first. "
+            + "Returns how many were requeued and how many remain, so it can be run batch by batch.")
+    @PostMapping("/imagenes/comprimir-historico")
+    ResponseEntity<Map<String, Object>> comprimirHistoricoDeImagenes(
+            @RequestParam(defaultValue = "200") int limite);
+
+    @Operation(summary = "How much of the image backlog is left to compress ({pendientes, enCola}), so the "
+            + "panel can chain batches without piling them up")
+    @GetMapping("/imagenes/comprimir-historico/estado")
+    ResponseEntity<Map<String, Object>> estadoDeCompresionDeImagenes();
 
     @Operation(summary = "Status of the background reindex ({running, indexed}) so the panel can poll it")
     @GetMapping("/reindex/status")
@@ -226,6 +245,16 @@ public interface AdminCatalogApi {
     @PostMapping(value = "/products/import/ndjson", consumes = "application/x-ndjson")
     ResponseEntity<BulkResultDtoOut> importProductsNdjson(HttpServletRequest request,
             @RequestParam(defaultValue = "200") int batch);
+
+    @Operation(summary = "Products whose announcement to the catalogue bus was given up on. Certifying a product "
+            + "answers immediately because the announcement is deferred, so a failure no longer fits in that "
+            + "response: this is where the admin panel sees it.")
+    @GetMapping("/bus/anuncios-fallidos")
+    ResponseEntity<List<AnuncioBusFallidoView>> anunciosAlBusFallidos();
+
+    @Operation(summary = "Put the given-up announcements back in the queue and reset their attempt counter")
+    @PostMapping("/bus/anuncios-fallidos/reintentar")
+    ResponseEntity<Map<String, Integer>> reintentarAnunciosAlBusFallidos();
 
     @Operation(summary = "Bulk-create categories from a JSON array")
     @PostMapping("/categories/bulk")

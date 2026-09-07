@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase;
 
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.AnuncioBusFallidoView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.CustomsAuditView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
@@ -67,8 +68,9 @@ public interface CatalogUseCase {
      * llega cuando se migren de golpe el controlador de admin y sus pruebas.
      */
     @SuppressWarnings("java:S107")
-    Page<ProductSummaryView> listProductsForAdmin(String status, UUID categoryId, String query, int page, int size,
-            String language, String sort, Boolean verified);
+    Page<ProductSummaryView> listProductsForAdmin(String status, UUID categoryId, String query, int page,
+            int size, String language, String sort, Boolean verified, BigDecimal minCost,
+            BigDecimal maxCost, Integer minSales, BigDecimal minTrend);
 
     /** Reindexes every product into OpenSearch; returns the number indexed. */
     int reindexAllProducts();
@@ -269,4 +271,15 @@ public interface CatalogUseCase {
     void deletePriceTier(UUID productId, int minQty);
 
     ProductDetailView duplicateProduct(UUID id, String lang);
+
+    /**
+     * Los productos cuyo anuncio al bus del catálogo se dio por perdido.
+     *
+     * <p>Certificar responde al instante porque el envío va diferido; el precio de eso es que un fallo
+     * ya no puede devolverse en la respuesta. Esta lista es donde se ve.
+     */
+    List<AnuncioBusFallidoView> anunciosAlBusFallidos();
+
+    /** Devuelve a la cola los anuncios dados por perdidos. Devuelve cuántos se reencolaron. */
+    int reintentarAnunciosAlBusFallidos();
 }

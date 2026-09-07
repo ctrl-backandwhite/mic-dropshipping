@@ -128,6 +128,17 @@ public final class CatalogDtos {
             String unitPriceFormatted) {
     }
 
+    /**
+     * Un producto que no se pudo anunciar al bus del catálogo.
+     *
+     * <p>Existe para que el fallo SE VEA. El admin marca un producto como certificado, la petición
+     * responde al instante y el envío se hace después: si ese envío no llega, sin esta lista nadie se
+     * enteraría hasta echar en falta el producto en producción, semanas más tarde.
+     */
+    public record AnuncioBusFallidoView(UUID id, String externalId, String slug, String title, int intentos,
+            String error, Instant actualizadoEn) {
+    }
+
     public record ProductSummaryView(UUID id, String slug, String title, String mainImage, BigDecimal basePrice, // legacy display in CNY (kept for back-compat)
             String currency, // legacy CNY label
             BigDecimal rating, int monthlySales, BigDecimal trendScore, String status,

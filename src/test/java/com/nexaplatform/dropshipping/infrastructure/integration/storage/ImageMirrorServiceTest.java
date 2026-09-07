@@ -97,7 +97,7 @@ class ImageMirrorServiceTest {
         int mirrored = service.mirrorPendingBatch(50);
 
         assertThat(mirrored).isZero();
-        verify(imageRepository, never()).markMirrored(any(), any(), any(), any(), any(), any());
+        verify(imageRepository, never()).markMirrored(any(), any(), any(), any(), any(), any(), any(), any());
         verify(imageRepository, never()).markFailedAndCountAttempt(any());
     }
 
@@ -115,7 +115,7 @@ class ImageMirrorServiceTest {
         // Desde el 26-ago-2026 el fallo no solo marca estado: suma un intento, que es lo que espacia
         // el siguiente y evita repetir la avalancha que dejó 415 productos fuera del escaparate.
         verify(imageRepository).markFailedAndCountAttempt(id);
-        verify(imageRepository, never()).markMirrored(any(), any(), any(), any(), any(), any());
+        verify(imageRepository, never()).markMirrored(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -130,7 +130,7 @@ class ImageMirrorServiceTest {
         // Desde el 26-ago-2026 el fallo no solo marca estado: suma un intento, que es lo que espacia
         // el siguiente y evita repetir la avalancha que dejó 415 productos fuera del escaparate.
         verify(imageRepository).markFailedAndCountAttempt(id);
-        verify(imageRepository, never()).markMirrored(any(), any(), any(), any(), any(), any());
+        verify(imageRepository, never()).markMirrored(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

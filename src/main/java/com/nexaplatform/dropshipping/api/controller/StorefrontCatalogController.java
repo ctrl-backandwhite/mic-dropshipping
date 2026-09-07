@@ -65,6 +65,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.cache.annotation.Cacheable;
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_LIST;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -203,14 +205,14 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
             UUID supplierId, BigDecimal minPrice, BigDecimal maxPrice, String shipFrom, Boolean freeShipping,
             Boolean selfPickup, Boolean hasVideo, Integer minRating, Integer inventoryMin, String certification,
             String sort, Boolean verified, UUID promotionId, UUID dutyGroupId, Boolean dutyGroupsFromCart,
-            List<UUID> cartProductIds) {
+            List<UUID> cartProductIds, Integer seed) {
         // El filtro de verificación es SOLO para admin: si el que consulta no es admin, se ignora.
         Boolean verifiedFilter = SecurityUtils.isAdmin() ? verified : null;
         PageResponse<ProductSummaryView> pagina = storefrontRead.productListFull(page, size, lang,
                 new ProductListFilters(q, categoryId, supplierId, minPrice, maxPrice, shipFrom, freeShipping,
                         selfPickup, hasVideo, minRating, inventoryMin, certification, verifiedFilter, promotionId,
                         gruposDelFiltro(dutyGroupId, dutyGroupsFromCart, cartProductIds)),
-                sort);
+                sort, seed);
         return conElArancel(pagina, cartProductIds);
     }
 
@@ -568,7 +570,23 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
 
 
+    /*
+     * La portada entera se cachea, no solo sus partes.
+     *
+     * Medido en pre el 5-sep-2026: 4,9 s por visita. El método hace SEIS operaciones caras en serie
+     * —bestsellers, novedades, ventas, vídeo, el árbol de categorías aplanado y un recuento sobre toda la
+     * tabla de productos— y solo dos de ellas estaban cacheadas. Las otras cuatro se rehacían en cada
+     * carga de la portada, que es la página que más gente ve y la primera que ve.
+     *
+     * Se usa el MISMO almacén que el listado (`product-list`) a propósito: así los `@CacheEvict` que ya
+     * existen sobre él —al tocar precios, promociones o el catálogo— refrescan también la portada. Con un
+     * almacén propio habría que acordarse de invalidarlo en 152 sitios, y alguien se olvidaría.
+     *
+     * El generador de clave incluye la MONEDA, que es imprescindible: la respuesta lleva precios ya
+     * calculados, y servir a un comprador en euros la copia cacheada en dólares sería un error de cobro.
+     */
     @Override
+    @Cacheable(value = CACHE_PRODUCT_LIST, keyGenerator = "currencyAwareKeyGenerator")
     @Transactional(readOnly = true)
     public HomeSectionsResponse homeSections(String lang, int perSection) {
         Pageable p = PageRequest.of(0, Math.min(perSection, 24));

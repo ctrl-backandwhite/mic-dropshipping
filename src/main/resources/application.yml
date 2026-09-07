@@ -277,6 +277,13 @@ nexadrop:
     replica-enabled: ${DB_REPLICA_ENABLED:false} # routing primary/replica
   ratelimit:
     redis-enabled: ${RATELIMIT_REDIS_ENABLED:false} # Bucket4j sobre Redis
+    # Testigo con el que la COMPILACIÓN del front se identifica para no chocar con el límite del
+    # escaparate. Vacío = apagado, que es lo que debe estar en cualquier entorno donde no se compile.
+    # Ver RateLimitFilter: solo levanta el cupo, nunca el límite, y solo para GET del catálogo público.
+    build-token: ${RATELIMIT_BUILD_TOKEN:}
+    # Cupo de esa compilación, por minuto. 1.200 dan de sobra para las ~300 fichas que se prerenderizan
+    # (unas cuatro peticiones cada una) sin dejar la puerta abierta de par en par si el testigo se filtra.
+    build-capacity: ${RATELIMIT_BUILD_CAPACITY:1200}
   outbox:
     poll-ms: ${OUTBOX_POLL_MS:500}              # dispatcher polling interval
   storefront:
@@ -349,6 +356,18 @@ nexadrop:
   # Seguridad: nº de proxies de confianza por delante (para resolver la IP real en el rate limit).
   security:
     trusted-proxy-count: ${TRUSTED_PROXY_COUNT:1}
+    # Secreto que el CDN inyecta en cada petición (regla de transformación en Cloudflare) para demostrar
+    # que la petición ha pasado por él. Sin esto, la geolocalización por IP —CF-IPCountry y equivalentes—
+    # es una cabecera cualquiera: el origen responde 200 llamándolo directo con --resolve, así que
+    # cualquiera podía declararse de otro país y llevarse su precio.
+    #
+    # Se valida por SECRETO y no por rango de IP a propósito: Traefik ya ha traducido a la IP real del
+    # comprador antes de llegar aquí, así que una lista blanca de rangos de Cloudflare da 403 a todo el
+    # mundo (probado el 27-ago). Los pull certificados (mTLS) también se descartaron: Cloudflare devolvía 520.
+    #
+    # VACÍO = comportamiento anterior (se confía en la cabecera). Es lo que hace falta en local y en
+    # cualquier despliegue sin CDN delante; en pre y producción TIENE que estar puesto.
+    cdn-shared-secret: ${CDN_SHARED_SECRET:}
 
   # AES-256-GCM key encryption for at-rest secrets (shop access tokens, webhook secrets).
   # Comma-separated list of Base64-encoded 32-byte keys. First entry is the active KEK.
@@ -546,6 +565,19 @@ nexadrop:
     # Cadencia/tamaño del job que espeja imágenes PENDING (importación + backfill).
     mirror-enabled: ${STORAGE_MIRROR_ENABLED:true}
     mirror-batch: ${STORAGE_MIRROR_BATCH:25}
+    # Hilos que descargan Y COMPRIMEN. Faltaba esta línea, y sin ella la variable de entorno no llegaba
+    # a la aplicación: el @Value de ImageMirrorService caía siempre en su valor por defecto de 4. Los
+    # tres entornos llevaban meses declarando STORAGE_MIRROR_CONCURRENCY sin ningún efecto, y cuando el
+    # 5-sep-2026 se bajó a 1 para frenar las caídas de PRE, no frenó nada: los registros seguían
+    # enseñando cuatro hilos (pool-8-thread-1..4) comprimiendo a la vez.
+    mirror-concurrency: ${STORAGE_MIRROR_CONCURRENCY:4}
+
+    # Compresión de las fotos de producto. Tampoco estaban declaradas: se leían con @Value y por tanto
+    # NO se podían ajustar por entorno — la calidad de imagen, que es lo que más cuida el catálogo,
+    # quedaba clavada en el valor del código sin que nadie pudiera cambiarla sin desplegar.
+    imagen-lado-maximo: ${STORAGE_IMAGEN_LADO_MAXIMO:1600}
+    imagen-calidad: ${STORAGE_IMAGEN_CALIDAD:0.82}
+    imagen-minimo-bytes: ${STORAGE_IMAGEN_MINIMO_BYTES:120000}
 
     # Lo mismo para el vídeo de la ficha (v164). Va aparte y más despacio porque un vídeo pesa cien
     # veces lo que una foto: medido sobre el catálogo, 5,4 MB de media y 26,6 MB el mayor, unos 19 GB

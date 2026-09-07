@@ -10,6 +10,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -41,4 +42,27 @@ public class ProductViewEntity extends BaseEntity {
     @Column(name = "view_count", nullable = false)
     @Builder.Default
     private int viewCount = 1;
+
+    /*
+     * El precio TAL COMO LO VIO esa persona, ya con todos los cálculos hechos.
+     *
+     * <p>Se guarda para no tener que rehacerlos al pintar el historial: por cada una de las cincuenta
+     * fichas habría que convertir la divisa, aplicar el margen del país de registro, el IVA, el envío, las
+     * dos bolsas de subvención y el recargo fijo. Eso es lo que hacía lenta la página.
+     *
+     * <p>Lo calcula el servidor al anotar la visita. No llega del navegador: un importe que viajara desde
+     * el cliente lo podría poner cualquiera.
+     *
+     * <p>Es el precio de ese momento, no el de hoy. Sirve para que la persona reconozca lo que estuvo
+     * mirando; lo que se cobra se recalcula en la cesta, como siempre.
+     */
+    @Column(name = "precio_visto", precision = 18, scale = 4)
+    private BigDecimal precioVisto;
+
+    @Column(name = "moneda_vista", length = 3)
+    private String monedaVista;
+
+    /** Ya formateado ("28,26 €"): el formato depende del idioma y la moneda de quien miraba. */
+    @Column(name = "precio_visto_formateado", length = 40)
+    private String precioVistoFormateado;
 }

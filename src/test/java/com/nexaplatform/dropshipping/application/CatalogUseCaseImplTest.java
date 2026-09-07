@@ -45,6 +45,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.when;
 
 /**
@@ -309,26 +312,38 @@ class CatalogUseCaseImplTest {
         assertThat(n).isEqualTo(7);
     }
 
-    /** El update masivo reanuncia al bus los productos certificados afectados (el recargo viaja). */
+    /**
+     * El update masivo deja marcados para el bus los certificados afectados, en UNA sentencia.
+     *
+     * <p>Antes se traían los ids y se cargaba cada producto para marcarlo uno a uno: aplicar un recargo
+     * a todo el catálogo eran miles de consultas dentro de la petición y el administrador se quedaba
+     * mirando la pantalla hasta tener que recargarla. Si esta prueba vuelve a pasar cargando entidades,
+     * esa espera ha vuelto.
+     */
     @Test
-    void bulkUpdateSurcharge_reanunciaLosCertificadosAlBus() {
-        UUID a = UUID.randomUUID();
+    void bulkUpdateSurcharge_dejaMarcadosLosCertificadosEnUnaSolaSentencia() {
         when(jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()",
                 new BigDecimal("2.00"))).thenReturn(3);
-        when(jdbcTemplate.queryForList("SELECT id FROM product WHERE verified = true", UUID.class))
-                .thenReturn(List.of(a));
-        ProductEntity certificado = ProductEntity.builder().build();
-        certificado.setVerified(true);
-        certificado.setId(a);
-        when(productJpaRepository.findById(a)).thenReturn(Optional.of(certificado));
-        // Bus apagado en el test: anunciarAlBus corta antes de exportar.
-        when(busCatalogo.getIfAvailable()).thenReturn(null);
+        when(busCatalogo.getIfAvailable())
+                .thenReturn(mock(com.nexaplatform.dropshipping.infrastructure.integration.bus.CatalogoBusService.class));
 
         int n = useCase.bulkUpdateSurcharge(null, null, new BigDecimal("2.00"));
 
         assertThat(n).isEqualTo(3);
-        // Los certificados afectados se localizan para reanunciarlos al bus.
-        verify(jdbcTemplate).queryForList("SELECT id FROM product WHERE verified = true", UUID.class);
-        verify(productJpaRepository).findById(a);
+        verify(jdbcTemplate).update("UPDATE product SET bus_estado = 'PENDIENTE', bus_intentos = 0, "
+                + "bus_error = null WHERE verified = true");
+        verify(productJpaRepository, never()).findById(any());
+    }
+
+    /** Sin bus configurado no se marca nada: la cola no debe llenarse en un entorno que no publica. */
+    @Test
+    void bulkUpdateSurcharge_sinBusNoMarcaNada() {
+        when(jdbcTemplate.update("UPDATE product SET surcharge_cny = ?, updated_at = now()",
+                new BigDecimal("2.00"))).thenReturn(3);
+        when(busCatalogo.getIfAvailable()).thenReturn(null);
+
+        useCase.bulkUpdateSurcharge(null, null, new BigDecimal("2.00"));
+
+        verify(jdbcTemplate, never()).update(contains("bus_estado"));
     }
 }

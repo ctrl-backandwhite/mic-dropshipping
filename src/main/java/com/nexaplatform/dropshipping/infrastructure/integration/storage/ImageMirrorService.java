@@ -13,6 +13,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Varia
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Async;
@@ -62,6 +63,7 @@ public class ImageMirrorService {
     private final ProductVariantRepository variantRepository;
     private final VariantValueRepository variantValueRepository;
     private final ObjectStorageService storage;
+    private final CompresorDeImagen compresor;
     private final ProductIndexer productIndexer;
 
     @Value("${nexadrop.storage.mirror-enabled:true}")
@@ -106,6 +108,15 @@ public class ImageMirrorService {
      * registro. Lo que no cabe en el plazo se cancela y vuelve en el siguiente barrido.
      */
     private static final Duration PLAZO_DEL_LOTE = Duration.ofMinutes(10);
+
+    /**
+     * Cuántas veces se intenta comprimir una imagen antes de renunciar y guardarla tal cual.
+     *
+     * <p>Uno. Si al primer intento el proceso siguió vivo pero la imagen no se espejó, puede ser la red;
+     * si hubo que reiniciar por su culpa, no merece un segundo intento con el compresor. Aligerar una
+     * foto es una mejora; tumbar el backend es una avería.
+     */
+    private static final int INTENTOS_ANTES_DE_RENDIRSE_CON_LA_COMPRESION = 1;
 
     private volatile ExecutorService pool;
 
@@ -325,7 +336,7 @@ public class ImageMirrorService {
         int ok = 0;
         for (ProductVariantEntity v : variantRepository.findNeedingImageMirror(prefix, top)) {
             try {
-                variantRepository.markImageCdn(v.getId(), fetchAndStore(v.getImageSourceUrl()).url());
+                variantRepository.markImageCdn(v.getId(), fetchAndStore(v.getImageSourceUrl(), true).url());
                 ok++;
             } catch (Exception e) {
                 if (e instanceof InterruptedException) {
@@ -337,7 +348,7 @@ public class ImageMirrorService {
         }
         for (VariantValueEntity vv : variantValueRepository.findNeedingImageMirror(prefix, top)) {
             try {
-                variantValueRepository.markImageCdn(vv.getId(), fetchAndStore(vv.getImageSourceUrl()).url());
+                variantValueRepository.markImageCdn(vv.getId(), fetchAndStore(vv.getImageSourceUrl(), true).url());
                 ok++;
             } catch (Exception e) {
                 if (e instanceof InterruptedException) {
@@ -459,6 +470,48 @@ public class ImageMirrorService {
         log.info("Mirror: pase completo tras reindex terminado ({} rondas)", rounds);
     }
 
+    /**
+     * Devuelve a la cola un lote de imágenes guardadas SIN comprimir, para aligerar el histórico.
+     *
+     * <p>Hace falta porque la compresión solo actúa al espejar: las que ya estaban guardadas no se tocan
+     * solas, y reindexar tampoco las alcanza —el barrido solo mira las que están pendientes, y estas
+     * constan como hechas—. Esto las marca como pendientes otra vez para que vuelvan a pasar por el
+     * compresor.
+     *
+     * <p>Devuelve cuántas se reencolaron y cuántas quedan, para poder ir dando lotes hasta terminar sin
+     * tener que adivinar cuánto falta.
+     */
+    @Transactional
+    public ReencoladoParaComprimir reencolarParaComprimir(int limite) {
+        int reencoladas = imageRepository.reencolarSinComprimir(Math.max(1, Math.min(limite, 2000)));
+        long quedan = imageRepository.countByMirrorStatusAndWidthIsNull(MirrorStatus.MIRRORED);
+        log.info("Compresión del histórico: {} imágenes vuelven a la cola, quedan {} sin comprimir",
+                reencoladas, quedan);
+        return new ReencoladoParaComprimir(reencoladas, quedan);
+    }
+
+    /** Cuántas se han devuelto a la cola en este lote y cuántas siguen sin comprimir. */
+    public record ReencoladoParaComprimir(int reencoladas, long pendientes) {
+    }
+
+    /**
+     * Cuánto falta para tener el histórico comprimido.
+     *
+     * <p>{@code enCola} es lo que el espejador está procesando AHORA. El panel lo necesita para encadenar
+     * lotes sin amontonarlos: pedir otro lote con la cola todavía llena no acelera nada —el espejador va a
+     * su ritmo— y sí deja miles de imágenes marcadas como pendientes, que es el estado en el que una caída
+     * del proceso hace más daño.
+     */
+    @Transactional(readOnly = true)
+    public EstadoDeCompresion estadoDeCompresion() {
+        return new EstadoDeCompresion(imageRepository.countByMirrorStatusAndWidthIsNull(MirrorStatus.MIRRORED),
+                imageRepository.countByMirrorStatus(MirrorStatus.PENDING));
+    }
+
+    /** Lo que queda por comprimir y lo que el espejador tiene ahora mismo entre manos. */
+    public record EstadoDeCompresion(long pendientes, long enCola) {
+    }
+
     /** Reindexa los productos afectados por un lote de imágenes recién espejadas (hasImage → true). */
     private void reindexAffectedProducts(List<UUID> mirroredImageIds) {
         if (mirroredImageIds.isEmpty()) {
@@ -480,10 +533,25 @@ public class ImageMirrorService {
             imageRepository.markFailedAndCountAttempt(id);
             return false;
         }
+        // El intento se anota AQUÍ, antes de tocar nada, y se compromete en el acto. Si lo que viene
+        // después mata el proceso —y comprimir puede: el codificador WebP es código nativo y un SIGSEGV
+        // no se puede capturar—, la cuenta ya está guardada y esta imagen no volverá para siempre.
+        int intentosPrevios = imageRepository.intentosDe(id);
+        imageRepository.anotaIntentoAntesDeProcesar(id);
+
+        // Y si ya lo intentamos y seguimos aquí, es que algo de esta imagen no le sienta bien al
+        // compresor. Se guarda SIN comprimir: una foto que pesa de más es un inconveniente; un proceso
+        // que se muere deja el escaparate sin servir.
+        boolean comprimir = intentosPrevios < INTENTOS_ANTES_DE_RENDIRSE_CON_LA_COMPRESION;
+        if (!comprimir) {
+            log.warn("::> [MIRROR] La imagen {} ya falló {} veces: se espeja SIN comprimir para no "
+                    + "arriesgar el proceso.", id, intentosPrevios);
+        }
         for (String candidate : candidateUrls(src)) {
             try {
-                Stored s = fetchAndStore(candidate);
-                imageRepository.markMirrored(id, s.url(), s.bytes(), s.hash(), MirrorStatus.MIRRORED, Instant.now());
+                Stored s = fetchAndStore(candidate, comprimir);
+                imageRepository.markMirrored(id, s.url(), s.bytes(), s.hash(), enteroONulo(s.ancho()),
+                        enteroONulo(s.alto()), MirrorStatus.MIRRORED, Instant.now());
                 imageRepository.resetAttempts(id);
                 return true;
             } catch (Exception e) {
@@ -493,7 +561,7 @@ public class ImageMirrorService {
                 log.debug("Mirror falló imagen {} ({}): {}", id, candidate, e.toString());
             }
         }
-        imageRepository.markFailedAndCountAttempt(id);
+        imageRepository.markFailed(id);
         return false;
     }
 
@@ -513,7 +581,15 @@ public class ImageMirrorService {
     }
 
     /** Resultado de subir una imagen al storage: URL pública navegable + metadatos para auditoría/dedup. */
-    private record Stored(String url, long bytes, String hash) {
+    /** Un cero es «no se pudo averiguar», y eso se guarda como nulo: decir que una foto mide cero
+     *  píxeles es peor que no decir nada, porque el navegador reservaría un hueco vacío. */
+    private static Integer enteroONulo(int valor) {
+        return valor > 0 ? valor : null;
+    }
+
+    /** Lo que quedó guardado. El ancho y el alto van a la base para que la ficha pueda reservar el hueco
+     *  de la foto antes de que llegue: sin ellos, el texto salta cuando cada imagen termina de cargar. */
+    private record Stored(String url, long bytes, String hash, int ancho, int alto) {
     }
 
     /**
@@ -530,17 +606,28 @@ public class ImageMirrorService {
      *       origen mienta en el header) se descarta y NUNCA entra al bucket → no se puede servir ni ejecutar.</li>
      * </ul>
      */
-    private Stored fetchAndStore(String src) throws IOException, InterruptedException {
+    private Stored fetchAndStore(String src, boolean comprimir) throws IOException, InterruptedException {
         HttpResponse<byte[]> res = fetchFollowingRedirects(src.trim(), 5);
         byte[] data = res.body();
         if (res.statusCode() / 100 != 2 || data == null || data.length == 0) {
             throw new IllegalStateException("HTTP " + res.statusCode());
         }
         String type = sniffRasterImage(data); // jpg/png/webp/gif o lanza (descarta SVG/HTML/otros)
-        String contentType = "image/" + ("jpg".equals(type) ? "jpeg" : type);
-        String hash = sha256(data);
-        String key = "media/" + hash.substring(0, 2) + "/" + hash + "." + type;
-        return new Stored(storage.upload(key, data, contentType), data.length, hash);
+
+        // El sniff va ANTES de comprimir, y es importante que siga así: lo que se decodifica aquí ya se
+        // ha comprobado que es una imagen ráster de verdad. Comprimir primero significaría abrir con el
+        // decodificador algo que todavía no se sabe qué es.
+        CompresorDeImagen.Comprimida lista = comprimir
+                ? compresor.comprimir(data, type)
+                : compresor.sinComprimir(data, type);
+
+        // El hash se calcula sobre lo que se GUARDA, no sobre lo descargado: es la clave del fichero en
+        // el almacén y sirve para no subir dos veces lo mismo. Con el hash del original, dos ajustes
+        // distintos de compresión escribirían en la misma clave y el segundo no llegaría a subirse.
+        String hash = sha256(lista.datos());
+        String key = "media/" + hash.substring(0, 2) + "/" + hash + "." + lista.tipo();
+        return new Stored(storage.upload(key, lista.datos(), lista.contentType()), lista.datos().length, hash,
+                lista.ancho(), lista.alto());
     }
 
     /** Sigue redirects MANUALMENTE (máx {@code maxHops}), validando cada URL contra SSRF antes de pedirla. */

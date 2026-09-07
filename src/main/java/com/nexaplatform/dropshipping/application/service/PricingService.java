@@ -221,6 +221,21 @@ public class PricingService {
     }
 
     /** Resultado "no se puede tarificar": todos los importes a null, nunca 0. */
+    /**
+     * Un precio que ya se resolvió antes y solo hay que enseñar.
+     *
+     * <p>Lo usa el historial de visitas: el importe se calculó cuando la persona abrió la ficha y se guardó
+     * entonces, así que al listar no se vuelve a pasar por la conversión de divisa, el margen, el IVA, el
+     * envío, las bolsas de subvención y el recargo. Solo se rellena lo que se pinta; el desglose para el
+     * administrador no se guarda porque el historial no lo enseña.
+     */
+    public PricedAmount precioYaVisto(BigDecimal importe, String moneda, String formateado) {
+        String codigo = moneda != null ? moneda : CurrencyHolder.get();
+        return new PricedAmount(null, null, importe, codigo, currencyService.symbolOf(codigo), formateado,
+                null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null);
+    }
+
     private PricedAmount unpriced() {
         String displayCode = CurrencyHolder.get();
         return new PricedAmount(null, null, null, displayCode, currencyService.symbolOf(displayCode),

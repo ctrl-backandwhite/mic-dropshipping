@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.nexaplatform.dropshipping.infrastructure.security.GeolocalizacionDelCdn;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -56,11 +57,9 @@ import java.util.UUID;
 public class PricingCountryFilter extends OncePerRequestFilter {
 
     public static final String HEADER_COUNTRY = "X-Country";
-    /** Cabeceras de país por IP que inyectan los CDN/proxys. Las pone la infraestructura, no el cliente. */
-    private static final String[] GEO_HEADERS = { "CF-IPCountry", "X-Vercel-IP-Country", "X-Geo-Country",
-            "X-Country-Code" };
 
     private final UserRepository userRepository;
+    private final GeolocalizacionDelCdn cdn;
 
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
@@ -78,7 +77,7 @@ public class PricingCountryFilter extends OncePerRequestFilter {
         if (delUsuario != null) {
             return delUsuario;
         }
-        String delCdn = paisSegunElCdn(req);
+        String delCdn = cdn.paisDeConfianza(req);
         if (delCdn != null) {
             return delCdn;
         }
@@ -111,14 +110,4 @@ public class PricingCountryFilter extends OncePerRequestFilter {
         }
     }
 
-    private static String paisSegunElCdn(HttpServletRequest req) {
-        for (String h : GEO_HEADERS) {
-            String v = req.getHeader(h);
-            // Algunos CDN mandan "XX" o "T1" (Tor) cuando no saben el país: se ignoran.
-            if (v != null && v.length() == 2 && !"XX".equalsIgnoreCase(v) && !"T1".equalsIgnoreCase(v)) {
-                return v;
-            }
-        }
-        return null;
-    }
 }
