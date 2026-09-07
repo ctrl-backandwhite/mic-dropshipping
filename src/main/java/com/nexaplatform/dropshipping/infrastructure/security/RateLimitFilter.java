@@ -18,6 +18,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
@@ -80,6 +82,28 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Value("${nexadrop.ratelimit.enabled:true}")
     private boolean rateLimitEnabled = true;
 
+    /**
+     * Cabecera con la que la COMPILACIÓN del front se identifica.
+     *
+     * <p>Prerenderizar fichas es, visto desde aquí, exactamente lo que la regla {@code storefront.web}
+     * existe para frenar: un volcado del catálogo lo más deprisa posible. Solo que no es un extraño, es
+     * la propia compilación, y con 100 peticiones por minuto no le caben más de unas quince fichas: el
+     * resto se prerenderizaba con una página de error dentro y el build terminaba en verde.
+     */
+    private static final String CABECERA_DE_COMPILACION = "X-Prerender-Token";
+
+    /**
+     * El testigo que trae esa compilación. VACÍO por defecto, o sea apagado: un entorno que no compila
+     * nada no debe tener esta puerta abierta, y un despliegue que se olvide de configurarlo se queda
+     * exactamente como estaba.
+     */
+    @Value("${nexadrop.ratelimit.build-token:}")
+    private String buildToken = "";
+
+    /** Cuántas peticiones por minuto se le conceden a esa compilación. */
+    @Value("${nexadrop.ratelimit.build-capacity:1200}")
+    private long buildCapacity = 1200;
+
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
     /**
@@ -109,7 +133,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
         JwtInfo info = bearerInfo(req).orElse(null);
         String plan = info != null ? info.plan() : SANDBOX;
 
-        RateRule rule = ruleFor(path, plan);
+        RateRule rule = esCompilacionInterna(req, path)
+                ? new RateRule("build.prerender", Scope.IP, buildCapacity, Duration.ofMinutes(1))
+                : ruleFor(path, plan);
         if (rule == null) {
             chain.doFilter(req, res);
             return;
@@ -229,15 +255,53 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
         // Public API used by the web SPA (catalog browse + navegación) — per IP. Anti-clonado: frena el
         // volcado masivo del catálogo/fichas sin molestar a un humano (una página son ~3-5 llamadas).
-        if (path.startsWith("/api/catalog/") || path.startsWith("/api/search") || path.startsWith("/api/shipping/")
+        if (esCaminoDeEscaparate(path))
+            return new RateRule("storefront.web", Scope.IP, 100, Duration.ofMinutes(1));
+
+        return null;
+    }
+
+    /**
+     * Los caminos que sirve el escaparate. Se pregunta desde DOS sitios —la regla pública y la exención
+     * de la compilación— y por eso está aquí: si las dos listas se escribieran por separado acabarían
+     * discrepando, y la que se quedara corta sería justamente la que decide qué se exime.
+     */
+    private boolean esCaminoDeEscaparate(String path) {
+        return path.startsWith("/api/catalog/") || path.startsWith("/api/search") || path.startsWith("/api/shipping/")
                 || path.startsWith("/api/currency/") || path.startsWith("/api/languages")
                 || path.startsWith("/api/warehouses") || path.startsWith("/api/academy/")
                 || path.startsWith("/api/mentors") || path.startsWith("/api/pod/")
                 || path.startsWith("/api/billing/") || path.startsWith("/api/contact")
-                || path.startsWith("/api/newsletter/") || path.startsWith("/api/affiliate/"))
-            return new RateRule("storefront.web", Scope.IP, 100, Duration.ofMinutes(1));
+                || path.startsWith("/api/newsletter/") || path.startsWith("/api/affiliate/");
+    }
 
-        return null;
+    /**
+     * Si esta petición viene de la compilación del front, y por tanto merece el cupo alto.
+     *
+     * <p>Tres condiciones, y las tres importan. El testigo tiene que estar CONFIGURADO —sin él la puerta
+     * ni existe—; el método tiene que ser GET, de modo que el testigo no abra ningún camino que escriba;
+     * y el camino tiene que ser del escaparate público, así que no roza ni la autenticación ni la API de
+     * socios, que tienen sus propias reglas y las conservan.
+     *
+     * <p>Y lo que concede es un CUPO MÁS ALTO, no la ausencia de límite. La diferencia importa el día
+     * que el testigo se filtre: quien lo tenga podrá leer el catálogo más deprisa, no vaciarlo sin
+     * freno. Es la misma defensa de siempre, con el listón donde le corresponde a una compilación.
+     *
+     * <p>La comparación es de tiempo constante. Un {@code equals} de cadenas se corta en el primer
+     * carácter distinto, y esa diferencia de tiempo es medible: se puede adivinar el testigo letra a
+     * letra.
+     */
+    private boolean esCompilacionInterna(HttpServletRequest req, String path) {
+        if (buildToken == null || buildToken.isBlank() || !"GET".equalsIgnoreCase(req.getMethod())) {
+            return false;
+        }
+        String presentado = req.getHeader(CABECERA_DE_COMPILACION);
+        if (presentado == null) {
+            return false;
+        }
+        return MessageDigest.isEqual(presentado.getBytes(StandardCharsets.UTF_8),
+                buildToken.getBytes(StandardCharsets.UTF_8))
+                && esCaminoDeEscaparate(path);
     }
 
     /** Extracts the bucket key part (without the rule name) based on the rule scope. */

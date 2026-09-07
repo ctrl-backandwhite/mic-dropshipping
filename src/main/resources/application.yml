@@ -277,6 +277,13 @@ nexadrop:
     replica-enabled: ${DB_REPLICA_ENABLED:false} # routing primary/replica
   ratelimit:
     redis-enabled: ${RATELIMIT_REDIS_ENABLED:false} # Bucket4j sobre Redis
+    # Testigo con el que la COMPILACIÓN del front se identifica para no chocar con el límite del
+    # escaparate. Vacío = apagado, que es lo que debe estar en cualquier entorno donde no se compile.
+    # Ver RateLimitFilter: solo levanta el cupo, nunca el límite, y solo para GET del catálogo público.
+    build-token: ${RATELIMIT_BUILD_TOKEN:}
+    # Cupo de esa compilación, por minuto. 1.200 dan de sobra para las ~300 fichas que se prerenderizan
+    # (unas cuatro peticiones cada una) sin dejar la puerta abierta de par en par si el testigo se filtra.
+    build-capacity: ${RATELIMIT_BUILD_CAPACITY:1200}
   outbox:
     poll-ms: ${OUTBOX_POLL_MS:500}              # dispatcher polling interval
   storefront:
