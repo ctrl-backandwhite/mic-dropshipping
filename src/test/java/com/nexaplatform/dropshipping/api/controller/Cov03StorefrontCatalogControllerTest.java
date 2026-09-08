@@ -903,6 +903,99 @@ class Cov03StorefrontCatalogControllerTest {
         assertThat(conArancel.dutyGroupId()).isEqualTo(grupo);
     }
 
+    /** Una ficha CON todo lo interno puesto, para comprobar qué sale y qué no según quién pregunte. */
+    private static ProductDetailView fichaConDatosDeProveedor(UUID id) {
+        return new ProductDetailView(id, "vestido", "1688", "993114937459", null, null, "Vestido", null, null,
+                null, null, null, null, 1, null, null, null, 0, 0, new BigDecimal("33.33"), null, "ACTIVE",
+                "https://detail.1688.com/offer/993114937459.html", null, null, List.of(), List.of(), List.of(),
+                List.of(), new BigDecimal("4.10"), null, null, null, null, "30,11 €", new BigDecimal("150"),
+                "11,43 €", "1,49 €", "2,05 €", new BigDecimal("8.98"), "8,98 €", new BigDecimal("3.08"),
+                new BigDecimal("2.00"), "3,08 €", "2,00 €", null, null, false, null, false, null, null, null,
+                null, null, null, null, false);
+    }
+
+    /**
+     * LA FUGA, y por qué esta prueba existe.
+     *
+     * <p>Medido contra producción el 8-sep-2026: la ficha pública entregaba a cualquiera —sin sesión
+     * siquiera— el enlace exacto a la oferta de origen en 1688, su identificador y el proveedor. Seis de
+     * seis fichas comprobadas. La interfaz ocultaba el bloque de administración, pero el JSON viajaba
+     * igual: bastaba abrir las herramientas del navegador para saber de qué oferta sale cada producto y
+     * comprarla al coste. En una tienda de dropshipping eso es el activo entero.
+     */
+    @Test
+    void laFichaPublicaNoDelataAlProveedor() {
+        UUID id = UUID.randomUUID();
+        when(catalogUseCase.getProductBySlug("vestido", "es")).thenReturn(fichaConDatosDeProveedor(id));
+
+        ProductDetailView paraCualquiera = controller.detailBySlug("vestido", "es", List.of());
+
+        assertThat(paraCualquiera.sourceUrl()).isNull();
+        assertThat(paraCualquiera.externalId()).isNull();
+        assertThat(paraCualquiera.source()).isNull();
+        assertThat(paraCualquiera.supplier()).isNull();
+        assertThat(paraCualquiera.repurchaseRate()).isNull();
+    }
+
+    /** Y tampoco los importes internos, que el propio record ya declaraba «SOLO ADMIN». */
+    @Test
+    void laFichaPublicaNoDelataElCosteNiElMargen() {
+        UUID id = UUID.randomUUID();
+        when(catalogUseCase.getProductBySlug("vestido", "es")).thenReturn(fichaConDatosDeProveedor(id));
+
+        ProductDetailView paraCualquiera = controller.detailBySlug("vestido", "es", List.of());
+
+        assertThat(paraCualquiera.costUsd()).isNull();
+        assertThat(paraCualquiera.appliedMarginPercent()).isNull();
+        assertThat(paraCualquiera.surchargeCny()).isNull();
+        assertThat(paraCualquiera.shippingUserCny()).isNull();
+        assertThat(paraCualquiera.dutyUserCny()).isNull();
+        assertThat(paraCualquiera.baseFormatted()).isNull();
+    }
+
+    /** Lo que SÍ es público sigue estando: si se recortara de más, la ficha dejaría de poder pintarse. */
+    @Test
+    void laFichaPublicaConservaLoQueSeVende() {
+        UUID id = UUID.randomUUID();
+        when(catalogUseCase.getProductBySlug("vestido", "es")).thenReturn(fichaConDatosDeProveedor(id));
+
+        ProductDetailView paraCualquiera = controller.detailBySlug("vestido", "es", List.of());
+
+        assertThat(paraCualquiera.id()).isEqualTo(id);
+        assertThat(paraCualquiera.title()).isEqualTo("Vestido");
+        assertThat(paraCualquiera.displayFormatted()).isEqualTo("30,11 €");
+        assertThat(paraCualquiera.status()).isEqualTo("ACTIVE");
+    }
+
+    /**
+     * Y al ADMIN se le sigue dando todo: es la MISMA ficha que pinta el panel dentro de la página de
+     * producto. Recortársela también le dejaría sin el bloque de origen ni el desglose en yuanes.
+     */
+    @Test
+    void alAdministradorSeLeSigueDandoElOrigen() {
+        UUID id = UUID.randomUUID();
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "jefe", "x", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+        when(catalogUseCase.getProductBySlug("vestido", "es")).thenReturn(fichaConDatosDeProveedor(id));
+
+        ProductDetailView paraElAdmin = controller.detailBySlug("vestido", "es", List.of());
+
+        assertThat(paraElAdmin.sourceUrl()).isEqualTo("https://detail.1688.com/offer/993114937459.html");
+        assertThat(paraElAdmin.externalId()).isEqualTo("993114937459");
+        assertThat(paraElAdmin.surchargeCny()).isEqualByComparingTo("8.98");
+    }
+
+    /** Un OPERATOR es personal interno, pero no administra el catálogo: tampoco ve el origen. */
+    @Test
+    void elOperadorTampocoVeElOrigen() {
+        UUID id = UUID.randomUUID();
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "soporte", "x", List.of(new SimpleGrantedAuthority("ROLE_OPERATOR"))));
+        when(catalogUseCase.getProductBySlug("vestido", "es")).thenReturn(fichaConDatosDeProveedor(id));
+
+        assertThat(controller.detailBySlug("vestido", "es", List.of()).sourceUrl()).isNull();
+    }
+
     private static ProductDetailView fichaVacia(UUID id) {
         return new ProductDetailView(id, "vestido", null, null, null, null, "Vestido", null, null, null, null,
                 null, null, 1, null, null, null, 0, 0, null, null, "ACTIVE", null, null, null, List.of(),
