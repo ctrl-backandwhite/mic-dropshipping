@@ -442,6 +442,16 @@ nexadrop:
     # admin también consumen cuota, así que conviene no apurar el límite del plan.
     sync-cron: ${NEXADROP_CURRENCY_SYNC_CRON:0 30 4 * * *}
 
+  # Avisos del sistema operativo en la aplicación móvil. Se reparten con el servicio de Expo y no
+  # contra FCM/APNs directamente: la app se compila con Expo, su servicio ya habla con las dos
+  # tiendas y así el servidor no tiene que guardar las claves de firma de Apple ni de Google.
+  #
+  # Apagado por defecto: sin dispositivos registrados no hay nada que mandar, y en local encenderlo
+  # solo produciría llamadas fallidas a exp.host.
+  push:
+    enabled: ${NEXADROP_PUSH_ENABLED:false}
+    expo-url: ${NEXADROP_PUSH_EXPO_URL:https://exp.host/--/api/v2/push/send}
+
   paypal:
     enabled: ${PAYPAL_ENABLED:false}
     client-id: ${PAYPAL_CLIENT_ID:}
@@ -450,6 +460,15 @@ nexadrop:
     base-url: ${PAYPAL_BASE_URL:https://api-m.sandbox.paypal.com}
     return-url: ${PAYPAL_RETURN_URL:http://localhost:3003/wallet/paypal-return}
     cancel-url: ${PAYPAL_CANCEL_URL:http://localhost:3003/wallet/recharge?cancelled=1}
+    # Vuelta para la aplicación móvil. Tiene que ser el ESQUEMA de la app y no una dirección web: la
+    # app abre la aprobación en la vista de navegador del sistema, y esa vista solo se cierra sola
+    # cuando la navegación llega a su propio esquema. Con una dirección web se queda abierta, la
+    # persona la cierra a mano y la app entiende «cancelado» habiendo pagado.
+    #
+    # Las dos comparten el prefijo `nx036://pago` a propósito: la app le pasa ese prefijo al
+    # navegador para que cierre en los dos casos, y distingue aprobado de cancelado por la ruta.
+    mobile-return-url: ${PAYPAL_MOBILE_RETURN_URL:nx036://pago/retorno}
+    mobile-cancel-url: ${PAYPAL_MOBILE_CANCEL_URL:nx036://pago/cancelado}
 
   coinbase:
     api-key: ${COINBASE_API_KEY:}

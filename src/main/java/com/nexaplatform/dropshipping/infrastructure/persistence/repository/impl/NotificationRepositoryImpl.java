@@ -8,6 +8,8 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.Notificat
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.NotificationJpaRepositoryAdapter;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import com.nexaplatform.dropshipping.application.notifications.AvisoCreado;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -28,13 +30,23 @@ public class NotificationRepositoryImpl implements NotificationRepository {
     private final NotificationEntityMapper notificationEntityMapper;
     private final NotificationJpaRepositoryAdapter notificationJpaRepositoryAdapter;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventos;
 
     @Override
     public PlatformNotification save(PlatformNotification model) {
+        // Sin id es un aviso NUEVO; con id es una actualización —marcar leído, archivar—. La
+        // distinción importa: publicar el hecho en los dos casos mandaría un aviso al teléfono cada
+        // vez que alguien abre el que ya tenía.
+        boolean esAlta = model.getId() == null;
         NotificationEntity entity = resolveEntity(model);
         applyModel(entity, model);
         NotificationEntity saved = notificationJpaRepositoryAdapter.save(entity);
-        return notificationEntityMapper.toDomain(saved);
+        PlatformNotification guardado = notificationEntityMapper.toDomain(saved);
+        if (esAlta) {
+            eventos.publishEvent(new AvisoCreado(guardado.getUserId(), guardado.getId(), guardado.getTitle(),
+                    guardado.getBody(), guardado.getEventType()));
+        }
+        return guardado;
     }
 
     @Override
