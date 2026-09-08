@@ -48,6 +48,7 @@ import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.api.mapper.ProductListFilters;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
 import com.nexaplatform.dropshipping.application.service.ProductDetailQueryService;
+import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
 import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.application.service.PricingService;
@@ -284,12 +285,32 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
 
     @Override
     public ProductDetailView detailBySlug(String slug, String lang, List<UUID> cartProductIds) {
-        return conElArancel(catalogUseCase.getProductBySlug(slug, lang), cartProductIds);
+        return paraQuienPregunta(conElArancel(catalogUseCase.getProductBySlug(slug, lang), cartProductIds));
     }
 
     @Override
     public ProductDetailView detailById(UUID id, String lang, List<UUID> cartProductIds) {
-        return conElArancel(catalogUseCase.getProductById(id, lang), cartProductIds);
+        return paraQuienPregunta(conElArancel(catalogUseCase.getProductById(id, lang), cartProductIds));
+    }
+
+    /**
+     * Quita de la ficha lo que solo le incumbe a quien administra, salvo que quien pregunta lo sea.
+     *
+     * <p>Esta es la MISMA ficha que pinta el panel de administración dentro de la propia página de
+     * producto —el bloque de origen, el desglose en yuanes—, y por eso los datos internos viajan en
+     * ella. Lo que faltaba era la puerta: sin sesión de administración, la respuesta llevaba igualmente
+     * el enlace a la oferta de origen en 1688, su identificador y el proveedor. Medido contra
+     * producción el 8-sep-2026: seis de seis fichas. La interfaz los ocultaba; el JSON no.
+     *
+     * <p>Va AQUÍ, en el controlador, y no dentro del caso de uso: la ficha se sirve cacheada y la caché
+     * no puede depender de quién pregunta —una entrada guardada para el administrador se le serviría al
+     * siguiente visitante—. Se decora fuera, igual que el arancel, y por el mismo motivo.
+     */
+    private ProductDetailView paraQuienPregunta(ProductDetailView ficha) {
+        if (ficha == null || SecurityUtils.isAdmin()) {
+            return ficha;
+        }
+        return ficha.sinDatosInternos();
     }
 
     /**

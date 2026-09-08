@@ -262,6 +262,47 @@ public final class CatalogDtos {
                     extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered);
         }
 
+        /**
+         * La misma ficha SIN nada que solo le incumba a quien administra.
+         *
+         * <p>FUGA QUE CIERRA ESTO, medida contra producción el 8-sep-2026: la ficha pública entregaba a
+         * cualquiera —sin sesión siquiera— el enlace exacto a la oferta de origen en 1688, su
+         * identificador y el proveedor entero. Seis de seis fichas comprobadas. La interfaz sí ocultaba
+         * el panel de administración, pero el JSON viajaba igual: bastaba abrir las herramientas del
+         * navegador, o pedir la API a pelo, para saber de qué oferta sale cada producto y comprarla al
+         * coste. En una tienda de dropshipping eso no es un dato de más, es el activo.
+         *
+         * <p>Se limpian TRES familias:
+         * <ul>
+         *   <li>el ORIGEN —proveedor, enlace, identificador externo, tasa de recompra—, que es lo que se
+         *       filtraba;
+         *   <li>los importes internos —coste, margen aplicado, recargo y las dos bolsas de subvención—,
+         *       que este mismo record ya declara «SOLO ADMIN» y que hoy llegan vacíos por cómo se
+         *       construyen: aquí se hace explícito, para que dejen de depender de eso;
+         *   <li>las marcas de tiempo de ingesta, que delatan cuándo se cargó y cuándo se sincronizó.
+         * </ul>
+         *
+         * <p>NO se toca el sourceUrl de las IMÁGENES, que es otra cosa: la dirección de origen de cada
+         * foto, necesaria para servirlas. Solo se limpia el del producto.
+         *
+         * <p>Va como copia del record y no como filtro de serialización a propósito: el día que alguien
+         * añada un campo, el compilador le obliga a pasar por aquí y a decidir si es público. Un filtro
+         * por anotaciones se olvida en silencio, que es exactamente como se llegó a esto.
+         */
+        public ProductDetailView sinDatosInternos() {
+            return new ProductDetailView(id, slug, null, null, null, categoryId, title,
+                    shortDescription, description, titleZh, shortDescriptionZh, descriptionZh, brand, moq,
+                    basePrice, currency, rating, reviewCount, monthlySales, null, trendScore, status,
+                    null, null, null, images, variantOptions, variants, priceTiers, null,
+                    null, displayPrice, displayCurrency, displaySymbol, displayFormatted,
+                    null, null, null, null, null,
+                    null, null, null,
+                    null, null,
+                    metaTitle, metaDescription, verified, videoUrl, hasVideo,
+                    originalFormatted, discountPercent, promotionName, compliance,
+                    extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered);
+        }
+
         /** Sin promoción: atajo para los usos que no la calculan. */
         public ProductDetailView(UUID id, String slug, String source, String externalId, SupplierView supplier,
                 UUID categoryId, String title, String shortDescription, String description, String titleZh,
