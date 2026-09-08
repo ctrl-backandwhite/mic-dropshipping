@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.payment;
 
+import com.nexaplatform.dropshipping.domain.enums.PaymentClientTarget;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
 import com.nexaplatform.dropshipping.infrastructure.integration.payment.PaymentGateway.ConfirmResult;
 import com.nexaplatform.dropshipping.infrastructure.integration.payment.PaymentGateway.InitiateResult;
@@ -100,7 +101,26 @@ class PayPalGatewayTest {
         when(p.getUser()).thenReturn(user);
         when(p.getAmountUsdCents()).thenReturn(usdCents);
         when(p.getIdempotencyKey()).thenReturn(idempotencyKey);
+        when(p.getClientTarget()).thenReturn(PaymentClientTarget.WEB);
         return p;
+    }
+
+    /** El mismo pago, pero abierto desde la aplicación móvil. */
+    private PaymentEntity mobilePayment(UUID orderId) {
+        PaymentEntity p = payment(orderId, 12_345L, "idem-movil");
+        when(p.getClientTarget()).thenReturn(PaymentClientTarget.MOBILE);
+        return p;
+    }
+
+    /** Direcciones de vuelta que la orden creada en PayPal declara. */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> applicationContextOf() {
+        ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
+        verify(bodySpec, Mockito.atLeastOnce()).bodyValue(captor.capture());
+        Map<String, Object> body = captor.getAllValues().stream()
+                .filter(b -> b instanceof Map && ((Map<?, ?>) b).containsKey("intent"))
+                .map(b -> (Map<String, Object>) b).findFirst().orElseThrow();
+        return (Map<String, Object>) body.get("application_context");
     }
 
     // ---------------------------------------------------------------- supports / providerName
@@ -322,5 +342,78 @@ class PayPalGatewayTest {
         assertThat(PayPalGateway.extractCaptureId(Map.of("purchase_units", List.of()))).isNull();
         assertThat(PayPalGateway.extractCaptureId(Map.of("purchase_units", List.of(Map.of("payments", Map.of())))))
                 .isNull();
+    }
+
+    // ------------------------------------------------------- vuelta según quién paga
+
+    /**
+     * La aplicación abre la aprobación en la vista de navegador del sistema, y esa vista solo se
+     * cierra sola cuando la navegación llega a SU esquema. Devolviendo a una dirección web se quedaba
+     * abierta, la persona la cerraba a mano y la app entendía «cancelado» habiendo pagado: el pedido
+     * quedaba pendiente y se podía volver a cobrar.
+     */
+    @Test
+    void initiateOrderFromMobileReturnsToTheAppScheme() {
+        enable();
+        ReflectionTestUtils.setField(gateway, "mobileReturnUrl", "nx036://pago/retorno");
+        ReflectionTestUtils.setField(gateway, "mobileCancelUrl", "nx036://pago/cancelado");
+
+        enqueueResponses(Map.of("access_token", "tok_abc"),
+                Map.of("id", "ORDER-1", "links",
+                        List.of(Map.of("rel", "approve", "href", "https://paypal.test/approve/ORDER-1"))));
+
+        gateway.initiate(mobilePayment(ORDER_ID));
+
+        assertThat(applicationContextOf()).containsEntry("return_url", "nx036://pago/retorno")
+                .containsEntry("cancel_url", "nx036://pago/cancelado");
+    }
+
+    /** La recarga de monedero desde la aplicación vuelve al mismo sitio: no es un caso aparte. */
+    @Test
+    void initiateWalletFromMobileReturnsToTheAppScheme() {
+        enable();
+        ReflectionTestUtils.setField(gateway, "mobileReturnUrl", "nx036://pago/retorno");
+        ReflectionTestUtils.setField(gateway, "mobileCancelUrl", "nx036://pago/cancelado");
+
+        enqueueResponses(Map.of("access_token", "tok_abc"),
+                Map.of("id", "ORDER-2", "links",
+                        List.of(Map.of("rel", "approve", "href", "https://paypal.test/approve/ORDER-2"))));
+
+        gateway.initiate(mobilePayment(null));
+
+        assertThat(applicationContextOf()).containsEntry("return_url", "nx036://pago/retorno")
+                .containsEntry("cancel_url", "nx036://pago/cancelado");
+    }
+
+    /** La web sigue volviendo a sus pantallas, con los identificadores que su retorno necesita. */
+    @Test
+    void initiateOrderFromWebKeepsTheStorefrontReturn() {
+        enable();
+        enqueueResponses(Map.of("access_token", "tok_abc"),
+                Map.of("id", "ORDER-3", "links",
+                        List.of(Map.of("rel", "approve", "href", "https://paypal.test/approve/ORDER-3"))));
+
+        gateway.initiate(payment(ORDER_ID, 12_345L, "idem-web"));
+
+        Map<String, Object> context = applicationContextOf();
+        assertThat(String.valueOf(context.get("return_url")))
+                .startsWith("https://shop.test/checkout/return")
+                .contains("orderId=" + ORDER_ID);
+        assertThat(context).containsEntry("cancel_url", "https://shop.test/checkout?cancelled=1");
+    }
+
+    /** Y la recarga desde la web, a la suya. */
+    @Test
+    void initiateWalletFromWebKeepsTheWalletReturn() {
+        enable();
+        enqueueResponses(Map.of("access_token", "tok_abc"),
+                Map.of("id", "ORDER-4", "links",
+                        List.of(Map.of("rel", "approve", "href", "https://paypal.test/approve/ORDER-4"))));
+
+        gateway.initiate(payment(null, 100L, null));
+
+        assertThat(applicationContextOf())
+                .containsEntry("return_url", "https://shop.test/wallet/paypal-return")
+                .containsEntry("cancel_url", "https://shop.test/wallet/recharge?cancelled=1");
     }
 }

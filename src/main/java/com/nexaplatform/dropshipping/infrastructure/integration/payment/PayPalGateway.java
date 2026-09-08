@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.payment;
 
+import com.nexaplatform.dropshipping.domain.enums.PaymentClientTarget;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PaymentEntity;
 import lombok.extern.slf4j.Slf4j;
@@ -61,6 +62,16 @@ public class PayPalGateway implements PaymentGateway {
     /** Base pública del storefront, para la URL de retorno de los pagos de pedido. */
     @Value("${nexadrop.storefront.base-url:http://localhost:3003}")
     private String storefrontBaseUrl;
+    /**
+     * Vuelta para la aplicación móvil: su ESQUEMA, no una dirección web. La app abre la aprobación en
+     * la vista de navegador del sistema y esa vista solo se cierra sola cuando la navegación llega a
+     * su esquema. Con una dirección web se queda abierta, la persona la cierra a mano y la app
+     * entiende «cancelado» habiendo pagado.
+     */
+    @Value("${nexadrop.paypal.mobile-return-url:nx036://pago/retorno}")
+    private String mobileReturnUrl;
+    @Value("${nexadrop.paypal.mobile-cancel-url:nx036://pago/cancelado}")
+    private String mobileCancelUrl;
 
     private final WebClient.Builder webClientBuilder;
     public PayPalGateway(WebClient.Builder b) {
@@ -80,12 +91,26 @@ public class PayPalGateway implements PaymentGateway {
     @Override
     public InitiateResult initiate(PaymentEntity p) {
         boolean isOrder = p.getOrderId() != null;
+        // Quien abrió el cobro decide la forma del destino, no solo la ruta: la web vuelve a una
+        // pantalla suya y la aplicación a su enlace profundo. El identificador se guardó en el pago
+        // cuando se abrió, porque esta respuesta llega en otra petición y ya no hay cabecera que mirar.
+        boolean isMobile = p.getClientTarget() == PaymentClientTarget.MOBILE;
         // Pagos de pedido vuelven al retorno unificado del checkout; recargas de wallet, al de wallet.
-        String effReturnUrl = isOrder
-                ? storefrontBaseUrl + "/checkout/return?provider=paypal&orderId=" + p.getOrderId() + "&paymentId="
-                        + p.getId()
-                : returnUrl;
-        String effCancelUrl = isOrder ? storefrontBaseUrl + "/checkout?cancelled=1" : cancelUrl;
+        String effReturnUrl;
+        String effCancelUrl;
+        if (isMobile) {
+            // La app distingue aprobado de cancelado por la ruta, así que los identificadores del
+            // pedido no hacen falta aquí: los tiene ya, y es él quien confirma contra el backend.
+            effReturnUrl = mobileReturnUrl;
+            effCancelUrl = mobileCancelUrl;
+        } else if (isOrder) {
+            effReturnUrl = storefrontBaseUrl + "/checkout/return?provider=paypal&orderId=" + p.getOrderId()
+                    + "&paymentId=" + p.getId();
+            effCancelUrl = storefrontBaseUrl + "/checkout?cancelled=1";
+        } else {
+            effReturnUrl = returnUrl;
+            effCancelUrl = cancelUrl;
+        }
 
         if (!isActive()) {
             String mock = "paypal_mock_" + p.getId();
