@@ -100,9 +100,20 @@ jobs:
           # mientras esta construía, el empujón se rechaza con "cannot lock ref".
           # Es una carrera normal entre cadenas, no un error que deba tumbar la
           # entrega.
+          empujado=0
           for i in 1 2 3 4 5; do
-            git push && break
+            if git push; then empujado=1; break; fi
             echo "empujón rechazado, reintentando ($i)"
             git pull --rebase
             sleep 3
           done
+          # Y si tras cinco intentos no entró, la entrega FALLA. Antes no: el bucle
+          # terminaba y el trabajo seguía en verde. Le pasó al flujo del frontend, que
+          # es una copia de este, el 7-sep-2026 con tres ramas construyendo a la vez:
+          # la imagen quedó publicada en Harbor, la línea del tag no se escribió, y el
+          # entorno se quedó apuntando a la imagen anterior sin que nada lo dijera. Se
+          # descubrió comparando los tags a mano.
+          if [ "$empujado" = "0" ]; then
+            echo "::error::No se pudo anotar la entrega en nexadrop-deploy tras 5 intentos. La imagen SÍ está publicada, pero el entorno NO apunta a ella: hay que escribir el tag a mano o relanzar."
+            exit 1
+          fi
