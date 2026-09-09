@@ -95,13 +95,45 @@ public class CustomsDeclarationGroupSync {
         return ternas;
     }
 
+    /**
+     * Lo que se escribe cuando la partida NO está en la nomenclatura que conocemos: el número y nada
+     * más. Es un relleno para que el borrador exista, no una descripción de mercancía.
+     */
+    private static String enGenerico(String hs6) {
+        return "Goods of HS heading " + hs6;
+    }
+
+    private static String zhGenerico(String hs6) {
+        return "税则号列 " + hs6 + " 项下货品";
+    }
+
+    /**
+     * ¿La descripción de este grupo sigue siendo el relleno con el que nació?
+     *
+     * <p>Existe para que NO se pueda firmar. «Goods of HS heading 611212» no describe una mercancía:
+     * describe un número, y una declaración así es la que hace que la aduana retenga el paquete.
+     * Mientras el grupo esté sin aprobar el relleno es inofensivo —cada producto va en su propia
+     * línea y se paga de más—, pero aprobarlo lo pone en la declaración de verdad.
+     *
+     * <p>Se mira el TEXTO y no si la partida está en la nomenclatura: quien redacte a mano la
+     * descripción de una partida que no conocemos tiene que poder firmarla igual.
+     */
+    public static boolean esRellenoSinRedactar(CustomsDeclarationGroupEntity grupo) {
+        String hs6 = grupo.getHs6();
+        if (hs6 == null || hs6.isBlank()) {
+            return false;
+        }
+        String ename = grupo.getEname() == null ? "" : grupo.getEname().trim();
+        return ename.startsWith(enGenerico(hs6));
+    }
+
     /** Un grupo nuevo: el borrador, sin firma y por tanto sin agrupar todavía. */
     private static CustomsDeclarationGroupEntity borradorDe(Terna terna, Instant ahora) {
         Optional<Hs6DeclarationText> partida = Hs6DeclarationText.byCode(terna.hs6());
         String enPartida = partida.map(Hs6DeclarationText::ename)
-                .orElseGet(() -> "Goods of HS heading " + terna.hs6());
+                .orElseGet(() -> enGenerico(terna.hs6()));
         String zhPartida = partida.map(Hs6DeclarationText::cname)
-                .orElseGet(() -> "税则号列 " + terna.hs6() + " 项下货品");
+                .orElseGet(() -> zhGenerico(terna.hs6()));
         return CustomsDeclarationGroupEntity.builder()
                 .hs6(terna.hs6())
                 .material(terna.material())
