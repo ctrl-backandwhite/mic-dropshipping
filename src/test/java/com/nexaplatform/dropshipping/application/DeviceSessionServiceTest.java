@@ -64,6 +64,8 @@ class DeviceSessionServiceTest {
         // Helper compartido: no todos los tests consumen los 3 stubs → lenient para no romper en STRICT.
         lenient().when(req.getCookies()).thenReturn(cookies);
         lenient().when(req.getHeader("User-Agent")).thenReturn(userAgent);
+        // Sin cabecera de dispositivo por defecto: la traen solo las pruebas que la ejercitan.
+        lenient().when(req.getHeader(DeviceSessionService.DEVICE_HEADER)).thenReturn(null);
         lenient().when(req.getRemoteAddr()).thenReturn(ip);
         return req;
     }
@@ -274,6 +276,8 @@ class DeviceSessionServiceTest {
             "'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Safari/604',       'Safari · iOS'",
             "'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) Safari/604',                'Safari · iOS'",
             "'Mozilla/5.0 (Linux; Android 14) Chrome/120 Safari/537',                   'Chrome · Android'",
+            "'NX036/0.1.0 (Android 14; sdk_gphone64_x86_64)',                          'App NX036 · Android'",
+            "'NX036/0.1.0 (iOS 17.4; iPhone15,2)',                                      'App NX036 · iOS'",
             "'algo-que-no-reconocemos/1.0',                                             'Navegador'"
     })
     void recordLogin_nombraElDispositivoSegunElOrdenDeComprobacion(String userAgent, String expected) {
@@ -286,6 +290,152 @@ class DeviceSessionServiceTest {
         ArgumentCaptor<UserSessionEntity> captor = ArgumentCaptor.forClass(UserSessionEntity.class);
         verify(repository).save(captor.capture());
         assertThat(captor.getValue().getDevice()).isEqualTo(expected);
+    }
+
+    /**
+     * Un cliente nativo no lleva cookies. Mientras la cookie fue el único camino, cada entrada desde
+     * la aplicación creaba una sesión NUEVA: la pantalla de seguridad acumulaba cientos de filas y
+     * ninguna salía marcada como el propio teléfono.
+     */
+    @Test
+    void recordLogin_reutilizaLaFilaCuandoElDispositivoLlegaPorCabecera() {
+        HttpServletRequest req = requestWith(null, "NX036/0.1.0 (Android 14)", "9.9.9.9");
+        when(req.getHeader(DeviceSessionService.DEVICE_HEADER)).thenReturn(TOKEN_EXISTENTE);
+        when(req.getHeader("X-Forwarded-For")).thenReturn(null);
+        UUID userId = UUID.randomUUID();
+        UserSessionEntity existente = UserSessionEntity.builder().userId(userId)
+                .deviceToken(TOKEN_EXISTENTE).createdAt(Instant.now()).build();
+        when(repository.findByDeviceToken(TOKEN_EXISTENTE)).thenReturn(Optional.of(existente));
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.recordLogin(userId, req, mock(HttpServletResponse.class));
+
+        ArgumentCaptor<UserSessionEntity> captor = ArgumentCaptor.forClass(UserSessionEntity.class);
+        verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getDeviceToken()).isEqualTo(TOKEN_EXISTENTE);
+        assertThat(captor.getValue().getDevice()).isEqualTo("App NX036 · Android");
+    }
+
+    /**
+     * La PRIMERA vez que un teléfono entra no hay fila con su identificador, y generar uno del
+     * servidor lo dejaba sin adoptar: la cookie de vuelta no la recibe nadie en un cliente nativo, así
+     * que el aparato volvía a darse de alta en cada entrada y la lista crecía sin parar.
+     */
+    @Test
+    void recordLogin_adoptaElIdentificadorDeLaCabeceraLaPrimeraVez() {
+        HttpServletRequest req = requestWith(null, "NX036/0.1.0 (Android 14)", "9.9.9.9");
+        when(req.getHeader(DeviceSessionService.DEVICE_HEADER)).thenReturn(TOKEN_UNO);
+        when(req.getHeader("X-Forwarded-For")).thenReturn(null);
+        when(repository.findByDeviceToken(TOKEN_UNO)).thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.recordLogin(UUID.randomUUID(), req, mock(HttpServletResponse.class));
+
+        ArgumentCaptor<UserSessionEntity> captor = ArgumentCaptor.forClass(UserSessionEntity.class);
+        verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getDeviceToken()).isEqualTo(TOKEN_UNO);
+    }
+
+    /** Si el identificador ya es de OTRA cuenta no se adopta: se emite uno nuevo y no se toca su fila. */
+    @Test
+    void recordLogin_noAdoptaUnIdentificadorQueYaEsDeOtraCuenta() {
+        HttpServletRequest req = requestWith(null, "NX036/0.1.0 (Android 14)", "9.9.9.9");
+        when(req.getHeader(DeviceSessionService.DEVICE_HEADER)).thenReturn(TOKEN_AJENO);
+        when(req.getHeader("X-Forwarded-For")).thenReturn(null);
+        when(repository.findByDeviceToken(TOKEN_AJENO)).thenReturn(Optional.of(
+                UserSessionEntity.builder().userId(UUID.randomUUID()).deviceToken(TOKEN_AJENO)
+                        .createdAt(Instant.now()).build()));
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.recordLogin(UUID.randomUUID(), req, mock(HttpServletResponse.class));
+
+        ArgumentCaptor<UserSessionEntity> captor = ArgumentCaptor.forClass(UserSessionEntity.class);
+        verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getDeviceToken()).isNotEqualTo(TOKEN_AJENO);
+    }
+
+    /** El navegador SÍ recibe la cookie de vuelta, así que ahí el identificador lo sigue emitiendo el servidor. */
+    @Test
+    void recordLogin_desdeElNavegadorElIdentificadorLoSigueEmitiendoElServidor() {
+        HttpServletRequest req = requestWith(TOKEN_UNO, "Mozilla/5.0 (Windows NT) Chrome/120", "9.9.9.9");
+        when(req.getHeader("X-Forwarded-For")).thenReturn(null);
+        when(repository.findByDeviceToken(TOKEN_UNO)).thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.recordLogin(UUID.randomUUID(), req, mock(HttpServletResponse.class));
+
+        ArgumentCaptor<UserSessionEntity> captor = ArgumentCaptor.forClass(UserSessionEntity.class);
+        verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getDeviceToken()).isNotEqualTo(TOKEN_UNO);
+    }
+
+    /** La cabecera manda sobre la cookie cuando llegan las dos. */
+    @Test
+    void recordLogin_laCabeceraGanaALaCookie() {
+        HttpServletRequest req = requestWith(TOKEN_OTRO, "NX036/0.1.0 (iOS 17.4)", "9.9.9.9");
+        when(req.getHeader(DeviceSessionService.DEVICE_HEADER)).thenReturn(TOKEN_EXISTENTE);
+        when(req.getHeader("X-Forwarded-For")).thenReturn(null);
+        UUID userId = UUID.randomUUID();
+        when(repository.findByDeviceToken(TOKEN_EXISTENTE)).thenReturn(Optional.of(
+                UserSessionEntity.builder().userId(userId).deviceToken(TOKEN_EXISTENTE)
+                        .createdAt(Instant.now()).build()));
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.recordLogin(userId, req, mock(HttpServletResponse.class));
+
+        ArgumentCaptor<UserSessionEntity> captor = ArgumentCaptor.forClass(UserSessionEntity.class);
+        verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getDeviceToken()).isEqualTo(TOKEN_EXISTENTE);
+    }
+
+    /**
+     * El valor lo controla el cliente y acaba reescrito en `Set-Cookie`: una cabecera con otra forma
+     * se descarta entera, igual que se hacía con la cookie.
+     */
+    @Test
+    void recordLogin_ignoraUnaCabeceraConFormaExtrana() {
+        HttpServletRequest req = requestWith(TOKEN_EXISTENTE, "Mozilla/5.0 (Windows NT) Chrome/120", "9.9.9.9");
+        when(req.getHeader(DeviceSessionService.DEVICE_HEADER)).thenReturn("no-es-un-identificador\r\nSet-Cookie: x=1");
+        when(req.getHeader("X-Forwarded-For")).thenReturn(null);
+        UUID userId = UUID.randomUUID();
+        when(repository.findByDeviceToken(TOKEN_EXISTENTE)).thenReturn(Optional.of(
+                UserSessionEntity.builder().userId(userId).deviceToken(TOKEN_EXISTENTE)
+                        .createdAt(Instant.now()).build()));
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.recordLogin(userId, req, mock(HttpServletResponse.class));
+
+        ArgumentCaptor<UserSessionEntity> captor = ArgumentCaptor.forClass(UserSessionEntity.class);
+        verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getDeviceToken()).isEqualTo(TOKEN_EXISTENTE);
+    }
+
+    /** Sin esto, cerrar la sesión del móvil desde la lista no la echaba de verdad. */
+    @Test
+    void isRevoked_miraTambienLaCabecera() {
+        HttpServletRequest req = requestWith(null, "NX036/0.1.0 (Android 14)", "9.9.9.9");
+        when(req.getHeader(DeviceSessionService.DEVICE_HEADER)).thenReturn(TOKEN_EXISTENTE);
+        when(repository.findByDeviceToken(TOKEN_EXISTENTE)).thenReturn(Optional.of(
+                UserSessionEntity.builder().deviceToken(TOKEN_EXISTENTE).revokedAt(Instant.now()).build()));
+
+        assertThat(service.isRevoked(req)).isTrue();
+    }
+
+    /** Y la lista tiene que marcar como «esta» la sesión que llega por cabecera. */
+    @Test
+    void list_marcaComoActualLaSesionQueLlegaPorCabecera() {
+        HttpServletRequest req = requestWith(null, "NX036/0.1.0 (Android 14)", "9.9.9.9");
+        when(req.getHeader(DeviceSessionService.DEVICE_HEADER)).thenReturn(TOKEN_ACTUAL);
+        UUID userId = UUID.randomUUID();
+        when(repository.findByUserIdAndRevokedAtIsNullOrderByLastSeenAtDesc(userId)).thenReturn(List.of(
+                UserSessionEntity.builder().id(UUID.randomUUID()).userId(userId).deviceToken(TOKEN_ACTUAL)
+                        .device("App NX036 · Android").createdAt(Instant.now()).lastSeenAt(Instant.now()).build(),
+                UserSessionEntity.builder().id(UUID.randomUUID()).userId(userId).deviceToken(TOKEN_OTRO)
+                        .device("Chrome · Windows").createdAt(Instant.now()).lastSeenAt(Instant.now()).build()));
+
+        List<DeviceSessionService.SessionView> vistas = service.list(userId, req);
+
+        assertThat(vistas).extracting(DeviceSessionService.SessionView::current).containsExactly(true, false);
     }
 
     @Test

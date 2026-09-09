@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.application.usecase.impl;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.usecase.NotificationUseCase;
+import com.nexaplatform.dropshipping.domain.enums.OrderEmailLabel;
 import com.nexaplatform.dropshipping.domain.model.PlatformNotification;
 import com.nexaplatform.dropshipping.domain.model.UnreadCount;
 import com.nexaplatform.dropshipping.domain.model.User;
@@ -232,6 +233,16 @@ public class NotificationUseCaseImpl implements NotificationUseCase {
                 .orElseThrow(() -> new BusinessException("Usuario no encontrado: " + target));
         create(user.getId(), title, body, "ADMIN_MESSAGE");
         return 1;
+    }
+
+    @Override
+    @Transactional
+    public void orderPaid(UUID userId, String orderNumber, String lang) {
+        if (userId == null || orderNumber == null || orderNumber.isBlank()) {
+            return;
+        }
+        create(userId, OrderEmailLabel.PAID_TITLE.of(lang),
+                OrderEmailLabel.PAID_BODY.of(lang, orderNumber), "ORDER_PAID");
     }
 
     private void create(UUID userId, String title, String body, String eventType) {
