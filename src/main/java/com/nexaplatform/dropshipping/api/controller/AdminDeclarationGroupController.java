@@ -6,7 +6,6 @@ import com.nexaplatform.dropshipping.api.dto.out.AdminDeclarationGroupDtoOut;
 import com.nexaplatform.dropshipping.api.exception.ArgumentException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupSync;
-import com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupSync;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomsDeclarationGroupEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CustomsDeclarationGroupRepository;
 import lombok.RequiredArgsConstructor;
@@ -75,15 +74,10 @@ public class AdminDeclarationGroupController implements AdminDeclarationGroupApi
         if (grupo.getEname() == null || grupo.getEname().isBlank()) {
             throw new ArgumentException("No se puede aprobar un grupo sin descripción en inglés");
         }
-        // Y tampoco con la descripción de relleno: «Goods of HS heading 611212» no describe una
-        // mercancía, describe un número, y firmarlo lo pone tal cual en la declaración ante la aduana
-        // del destino. Sin aprobar, ese relleno es inofensivo —cada producto va en su línea y se paga
-        // de más—; aprobado, es una declaración vaga de las que retienen el paquete. Hay que redactar
-        // primero la descripción, aquí mismo, y luego firmar.
-        if (CustomsDeclarationGroupSync.esRellenoSinRedactar(grupo)) {
-            throw new ArgumentException(
-                    "Este grupo todavía tiene la descripción de relleno de su partida: redáctala antes de aprobarlo");
-        }
+        // Firmar un grupo cuya descripción sigue siendo el relleno de su partida —«Goods of HS heading
+        // 611212»— SÍ se permite: es lo que se hace en producción, y quien firma es quien responde de
+        // lo que se declara. La vista lo marca como «sin redactar» para que se vea lo que se está
+        // firmando, pero no lo impide: el freno estaría decidiendo por quien tiene la responsabilidad.
         grupo.setApprovedAt(Instant.now());
         grupo.setApprovedBy(auth != null ? auth.getName() : "admin");
         grupo.setUpdatedAt(Instant.now());

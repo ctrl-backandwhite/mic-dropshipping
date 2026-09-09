@@ -91,31 +91,20 @@ class AdminDeclarationGroupControllerTest {
 
     /**
      * «Goods of HS heading 620443» es el relleno con el que nace un grupo cuya partida no está en la
-     * nomenclatura que conocemos: describe un NÚMERO, no una mercancía. Sin firmar es inofensivo
-     * —cada producto va en su línea y se paga de más—; firmado, va tal cual en la declaración ante la
-     * aduana del destino, que es como se retiene un paquete.
+     * nomenclatura que conocemos: describe un NÚMERO, no una mercancía. Se MARCA en la vista, pero no
+     * se impide firmarlo: es lo que se hace en producción y de lo declarado responde quien firma.
+     * Poner aquí un freno sería decidir por quien tiene esa responsabilidad.
      */
     @Test
-    void noSeFirmaElRellenoConElQueNacioElGrupo() {
+    void elRellenoSeMarcaPeroNoImpideFirmar() {
         CustomsDeclarationGroupEntity g = grupo("Goods of HS heading 620443 · Cotton · Casual wear", null);
-        when(groupRepository.findById(ID)).thenReturn(Optional.of(g));
-
-        assertThatThrownBy(() -> controller.approve(ID, autenticacionDe("admin@nexadrop.com")))
-                .isInstanceOf(ArgumentException.class)
-                .hasMessageContaining("relleno");
-        verify(groupRepository, never()).save(any());
-    }
-
-    /** Redactada la descripción, se firma con normalidad: el freno es al relleno, no a la partida. */
-    @Test
-    void unaVezRedactadaLaDescripcionSeFirmaIgual() {
-        CustomsDeclarationGroupEntity g = grupo("Women's or girls' dresses, of synthetic fibres", null);
         when(groupRepository.findById(ID)).thenReturn(Optional.of(g));
         when(groupRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         controller.approve(ID, autenticacionDe("admin@nexadrop.com"));
 
         assertThat(g.getApprovedAt()).isNotNull();
+        assertThat(g.getApprovedBy()).isEqualTo("admin@nexadrop.com");
     }
 
     /** El panel tiene que poder distinguir «por redactar» de «redactado y pendiente de firma». */
