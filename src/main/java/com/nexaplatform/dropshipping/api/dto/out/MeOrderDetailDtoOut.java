@@ -35,6 +35,10 @@ public class MeOrderDetailDtoOut {
     boolean cancellable;
     BigDecimal subtotal;
     BigDecimal shipping;
+    // Derecho de aduana, APARTE del porte aunque en la base vivan sumados. El comprador lo ve separado
+    // al pagar; enseñarlo dentro del envío en el pedido hacía dudar de lo cobrado, y en régimen DDP es
+    // un concepto con nombre propio.
+    BigDecimal customsDuty;
     BigDecimal tax;
     BigDecimal total;
     // Descuento de referido del comprador (0 si no aplica). total ya lo resta.
@@ -43,6 +47,7 @@ public class MeOrderDetailDtoOut {
     // DROP-637: importes ya FORMATEADOS por el backend en la moneda mostrada (el front solo pinta).
     String subtotalFormatted;
     String shippingFormatted;
+    String customsDutyFormatted;
     String taxFormatted;
     String totalFormatted;
     String discountFormatted;
@@ -64,7 +69,11 @@ public class MeOrderDetailDtoOut {
     public static MeOrderDetailDtoOut from(CustomerOrderEntity o, String lang) {
         return MeOrderDetailDtoOut.builder().id(o.getId()).orderNumber(o.getOrderNumber())
                 .externalOrderId(o.getExternalOrderId()).status(o.getStatus().name())
-                .subtotal(cents(o.getSubtotalCents())).shipping(cents(o.getShippingCents())).tax(cents(o.getTaxCents()))
+                // `shipping_cents` lleva el arancel dentro; se resta para poder enseñarlos separados sin
+                // mover el total, igual que hace el desglose de OrderAmounts.
+                .subtotal(cents(o.getSubtotalCents()))
+                .shipping(cents(o.getShippingCents() - o.getCustomsDutyCents()))
+                .customsDuty(cents(o.getCustomsDutyCents())).tax(cents(o.getTaxCents()))
                 .total(cents(o.getTotalCents())).discount(cents(o.getDiscountCents())).currency(o.getCurrency())
                 .shippingAddress(MeOrderAddressDtoOut.from(o.getShippingAddress()))
                 .billingAddress(MeOrderAddressDtoOut.from(o.getBillingAddress())).notes(o.getNotes())

@@ -70,6 +70,7 @@ public class MeOrderDtoMapper {
         OrderAmounts.Breakdown amounts = orderAmounts.of(model, ccy);
         BigDecimal subtotal = amounts.subtotal();
         BigDecimal shipping = amounts.shipping();
+        BigDecimal customsDuty = amounts.customsDuty();
         BigDecimal tax = amounts.tax();
         BigDecimal discount = amounts.discount();
         BigDecimal total = amounts.total();
@@ -93,17 +94,22 @@ public class MeOrderDtoMapper {
             BigDecimal f = settle.divide(total, 10, RoundingMode.HALF_UP);
             subtotal = subtotal.multiply(f).setScale(2, RoundingMode.HALF_UP);
             shipping = shipping.multiply(f).setScale(2, RoundingMode.HALF_UP);
+            customsDuty = customsDuty.multiply(f).setScale(2, RoundingMode.HALF_UP);
             discount = discount.multiply(f).setScale(2, RoundingMode.HALF_UP);
             total = settle.setScale(2, RoundingMode.HALF_UP);
-            tax = total.subtract(subtotal).add(discount).subtract(shipping);
+            // El impuesto se despeja del resto: es el único componente que no se escala directamente,
+            // así que absorbe el céntimo de redondeo y la suma sigue dando lo cobrado.
+            tax = total.subtract(subtotal).add(discount).subtract(shipping).subtract(customsDuty);
         }
 
         return MeOrderDetailDtoOut.builder().id(model.getId()).orderNumber(model.getOrderNumber())
                 .externalOrderId(model.getExternalOrderId())
                 .status(model.getStatus() != null ? model.getStatus().name() : null)
-                .subtotal(subtotal).shipping(shipping).tax(tax).total(total).discount(discount).currency(ccy)
+                .subtotal(subtotal).shipping(shipping).customsDuty(customsDuty).tax(tax).total(total)
+                .discount(discount).currency(ccy)
                 .subtotalFormatted(currencyRateService.formatDisplay(subtotal, ccy))
                 .shippingFormatted(currencyRateService.formatDisplay(shipping, ccy))
+                .customsDutyFormatted(currencyRateService.formatDisplay(customsDuty, ccy))
                 .taxFormatted(currencyRateService.formatDisplay(tax, ccy))
                 .totalFormatted(currencyRateService.formatDisplay(total, ccy))
                 .discountFormatted(currencyRateService.formatDisplay(discount, ccy))

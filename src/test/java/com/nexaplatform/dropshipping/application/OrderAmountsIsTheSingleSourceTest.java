@@ -261,4 +261,40 @@ class OrderAmountsIsTheSingleSourceTest {
         assertThat(b.discount()).isEqualByComparingTo("0.00");
         assertThat(b.total()).isEqualByComparingTo(b.subtotal().add(b.shipping()).add(b.tax()));
     }
+
+    /**
+     * El pedido de la certificación: 8,78 $ de producto, 9,74 $ de «envío» —que llevaba el arancel
+     * dentro— y 3,49 $ de derecho de aduana. La ficha del pedido decía «Envío 9,74 $» donde el
+     * resumen del pago había dicho «Envío 6,25 $ · Aranceles 3,49 $»: el mismo dinero contado de dos
+     * formas.
+     */
+    @Test
+    @DisplayName("el arancel sale del envío sin mover el total")
+    void elArancelSeSeparaDelEnvioSinMoverElTotal() {
+        Order pedido = Order.builder().currency("USD")
+                .subtotalCents(878).discountCents(0).shippingCents(974).customsDutyCents(349).taxCents(316)
+                .totalCents(2168)
+                .items(List.of(OrderItem.builder().unitPriceCents(878).quantity(1).build()))
+                .build();
+
+        OrderAmounts.Breakdown d = amounts.of(pedido, "USD");
+
+        assertThat(d.shipping()).isEqualByComparingTo("6.25");
+        assertThat(d.customsDuty()).isEqualByComparingTo("3.49");
+        // Lo importante: el total no se mueve ni un céntimo.
+        assertThat(d.total()).isEqualByComparingTo("21.68");
+        assertThat(d.subtotal().subtract(d.discount()).add(d.shipping()).add(d.customsDuty()).add(d.tax()))
+                .isEqualByComparingTo(d.total());
+    }
+
+    /** Un pedido sin arancel —fuera de la UE, o por debajo del mínimo— no cambia en nada. */
+    @Test
+    @DisplayName("sin arancel, el envío es todo el envío")
+    void sinArancelElEnvioNoCambia() {
+        OrderAmounts.Breakdown d = amounts.of(pedido(), "USD");
+
+        assertThat(d.customsDuty()).isEqualByComparingTo("0.00");
+        assertThat(d.shipping()).isEqualByComparingTo("11.12");
+        assertThat(d.total()).isEqualByComparingTo("87.42");
+    }
 }

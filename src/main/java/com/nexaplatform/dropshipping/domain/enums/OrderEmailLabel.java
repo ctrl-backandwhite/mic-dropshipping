@@ -48,6 +48,22 @@ public enum OrderEmailLabel {
             "Deine Bestellung <strong>{order}</strong> ist registriert und wartet auf die Zahlung. Sobald die Zahlung bestätigt ist, senden wir dir die Rechnung und beginnen mit der Vorbereitung.",
             "Il tuo ordine <strong>{order}</strong> è registrato e in attesa di pagamento. Non appena il pagamento sarà confermato ti invieremo la fattura e inizieremo a prepararlo.",
             "Je bestelling <strong>{order}</strong> is geregistreerd en wacht op betaling. Zodra de betaling is bevestigd, sturen we je de factuur en beginnen we met de voorbereiding.")),
+    /**
+     * Aviso IN-APP del pago confirmado. Va sin etiquetas HTML —a diferencia de los cuerpos de correo—
+     * porque el buzón de la aplicación pinta texto plano: enseñaría los &lt;strong&gt; tal cual.
+     */
+    PAID_TITLE(new Translations(
+            "Pago confirmado", "Payment confirmed", "Pagamento confirmado", "付款已确认",
+            "Paiement confirmé", "Zahlung bestätigt", "Pagamento confermato", "Betaling bevestigd")),
+    PAID_BODY(new Translations(
+            "Hemos recibido el pago de tu pedido {order}. Ya estamos preparándolo.",
+            "We have received the payment for your order {order}. We are already preparing it.",
+            "Recebemos o pagamento do seu pedido {order}. Já o estamos a preparar.",
+            "我们已收到您订单 {order} 的付款,正在为您备货。",
+            "Nous avons reçu le paiement de votre commande {order}. Nous la préparons déjà.",
+            "Wir haben die Zahlung für deine Bestellung {order} erhalten. Wir bereiten sie bereits vor.",
+            "Abbiamo ricevuto il pagamento del tuo ordine {order}. Lo stiamo già preparando.",
+            "We hebben de betaling voor je bestelling {order} ontvangen. We maken hem al klaar.")),
     REFUNDED_TITLE(new Translations(
             "Reembolso procesado", "Refund processed", "Reembolso processado", "退款已处理",
             "Remboursement traité", "Rückerstattung verarbeitet", "Rimborso elaborato", "Terugbetaling verwerkt")),

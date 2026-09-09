@@ -141,7 +141,9 @@ class CheckoutCartEmptiedTest {
     void setUp() {
         subject = new OrderUseCaseImpl(orderRepository, orderEntityRepository, productRepository, variantRepository,
                 userRepository, shopConnectionRepository, userAddressRepository, webhooks, walletUseCase,
-                notificationsPublisher, pricingService, affiliateProgramService, stockService, paymentUseCase,
+                notificationsPublisher,
+                mock(com.nexaplatform.dropshipping.application.usecase.NotificationUseCase.class),
+                pricingService, affiliateProgramService, stockService, paymentUseCase,
                 orderEmailService, fulfillment, router, checkoutTotalsService, subvenciones(), new CustomsDutyLinesService(null), mock(UnserviceableZoneService.class),
                 operatorCommissionService, promotionService, supplierPurchaseService,
                 mock(com.nexaplatform.dropshipping.application.service.CustomsDeclarationGroupService.class),

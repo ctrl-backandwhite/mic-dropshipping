@@ -37,6 +37,7 @@ import com.nexaplatform.dropshipping.domain.model.ShippingOption;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
+import com.nexaplatform.dropshipping.application.usecase.NotificationUseCase;
 import com.nexaplatform.dropshipping.application.usecase.OrderUseCase;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
@@ -125,6 +126,8 @@ public class OrderUseCaseImpl implements OrderUseCase {
     private final WebhookDispatcherService webhooks;
     private final WalletUseCase walletUseCase;
     private final NotificationsPublisher notificationsPublisher;
+    /** El buzón de la aplicación; el publicador de arriba solo saca el evento al bus. */
+    private final NotificationUseCase notificationUseCase;
     private final PricingService pricingService;
     private final AffiliateProgramService affiliateProgramService;
     private final StockService stockService;
@@ -1172,6 +1175,15 @@ public class OrderUseCaseImpl implements OrderUseCase {
             }
             if (placed.getStatus() == OrderStatus.PAID) {
                 orderEmailService.paymentConfirmed(placed, u.getEmail(), u.getLanguage(), WALLET);
+                // Y en el buzón de la aplicación. Hasta ahora el pago solo salía por correo y por el
+                // bus: quien pagaba desde el móvil abría «Avisos» y lo encontraba VACÍO con el pedido
+                // ya cobrado. Best-effort: un fallo aquí no puede tumbar un cobro que ya ha ocurrido.
+                try {
+                    notificationUseCase.orderPaid(userId, placed.getOrderNumber(), u.getLanguage());
+                } catch (RuntimeException e) {
+                    log.warn("No se pudo dejar el aviso de pago del pedido {}: {}",
+                            placed.getOrderNumber(), e.getMessage());
+                }
             }
         });
     }
