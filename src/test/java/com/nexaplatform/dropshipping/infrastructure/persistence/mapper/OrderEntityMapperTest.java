@@ -3,9 +3,14 @@ package com.nexaplatform.dropshipping.infrastructure.persistence.mapper;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
+import com.nexaplatform.dropshipping.infrastructure.integration.locale.LocaleHolder;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomerOrderEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderItemEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantOptionEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueTranslationEntity;
 import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
 
@@ -141,15 +146,70 @@ class OrderEntityMapperTest {
         ProductVariantEntity v = new ProductVariantEntity();
         v.setOptions(opts);
         v.setTitle("Zapatillas deportivas (título del producto)"); // no debe usarse
-        assertThat(mapper.variantLabel(v)).isEqualTo("Negro / 27");
+        assertThat(mapper.variantLabel(v, null)).isEqualTo("Negro / 27");
+    }
+
+    /**
+     * `options_json` guarda SIEMPRE el texto del proveedor. Sin traducirlo, un pedido ya pagado
+     * enseñaba «黑色 / M» al comprador, al panel y a la compra al proveedor.
+     */
+    @Test
+    void variantLabel_translatesSupplierTextToRequestLanguage() {
+        Map<String, String> opts = new LinkedHashMap<>();
+        opts.put("Color", "黑色");
+        opts.put("Talla", "M");
+        ProductVariantEntity v = new ProductVariantEntity();
+        v.setOptions(opts);
+
+        ProductEntity product = new ProductEntity();
+        product.setVariantOptions(List.of(
+                optionWith(valueWith("黑色", "Negro")),
+                optionWith(valueWith("M", "M"))));
+
+        LocaleHolder.set("es");
+        try {
+            assertThat(mapper.variantLabel(v, product)).isEqualTo("Negro / M");
+        } finally {
+            LocaleHolder.clear();
+        }
+    }
+
+    /** Un valor sin traducción se queda como viene: es preferible al hueco. */
+    @Test
+    void variantLabel_keepsSupplierTextWhenThereIsNoTranslation() {
+        Map<String, String> opts = new LinkedHashMap<>();
+        opts.put("Color", "藏青色");
+        ProductVariantEntity v = new ProductVariantEntity();
+        v.setOptions(opts);
+
+        ProductEntity product = new ProductEntity();
+        product.setVariantOptions(List.of(optionWith(valueWith("黑色", "Negro"))));
+
+        assertThat(mapper.variantLabel(v, product)).isEqualTo("藏青色");
+    }
+
+    private static VariantOptionEntity optionWith(VariantValueEntity value) {
+        VariantOptionEntity option = new VariantOptionEntity();
+        option.setValues(List.of(value));
+        return option;
+    }
+
+    private static VariantValueEntity valueWith(String zh, String es) {
+        VariantValueEntity value = new VariantValueEntity();
+        value.setValueZh(zh);
+        VariantValueTranslationEntity translation = new VariantValueTranslationEntity();
+        translation.setLanguage("es");
+        translation.setValue(es);
+        value.setTranslations(List.of(translation));
+        return value;
     }
 
     @Test
     void variantLabel_nullWhenNoOptions() {
         ProductVariantEntity v = new ProductVariantEntity();
         v.setTitle("Producto X");
-        assertThat(mapper.variantLabel(v)).isNull();
-        assertThat(mapper.variantLabel(null)).isNull();
+        assertThat(mapper.variantLabel(v, null)).isNull();
+        assertThat(mapper.variantLabel(null, null)).isNull();
     }
 
     // ---------------- resolveVariantImage: imagen propia de la variante, CDN preferido ----------------

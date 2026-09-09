@@ -4,6 +4,7 @@ import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CustomerOrderEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderItemEntity;
+import com.nexaplatform.dropshipping.infrastructure.integration.locale.LocaleHolder;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
@@ -139,7 +140,7 @@ public interface OrderEntityMapper {
     @Mapping(target = "quantity", source = "quantity")
     @Mapping(target = "lineTotalCents", source = "lineTotalCents")
     @Mapping(target = "productTitleZh", expression = "java(item.getProduct() != null ? item.getProduct().getTitleZh() : null)")
-    @Mapping(target = "variantName", expression = "java(variantLabel(item.getVariant()))")
+    @Mapping(target = "variantName", expression = "java(variantLabel(item.getVariant(), item.getProduct()))")
     @Mapping(target = "supplierName", expression = "java(item.getProduct() != null && item.getProduct().getSupplier() != null ? item.getProduct().getSupplier().getName() : null)")
     @Mapping(target = "productImageUrl", source = "product", qualifiedByName = "resolveLiveImage")
     @Mapping(target = "variantImageUrl", source = "variant", qualifiedByName = "resolveVariantImage")
@@ -157,14 +158,17 @@ public interface OrderEntityMapper {
      * productos importados, que solo traen {@code options_json}), compone la
      * etiqueta uniendo los valores de opción (p. ej. "Negro / M").
      */
-    default String variantLabel(ProductVariantEntity v) {
+    default String variantLabel(ProductVariantEntity v, ProductEntity product) {
         if (v == null) {
             return null;
         }
         // Etiqueta = valores de opción (Color/Talla), p. ej. "Negro / 27". Se compone PRIMERO desde las
         // opciones porque en los productos importados (1688) el `title` de la variante suele ser el título
         // del producto, y usarlo duplicaba la descripción en la factura/pedido en vez de mostrar la variante.
-        Map<String, String> opts = v.getOptions();
+        //
+        // Y se TRADUCEN: `options_json` guarda siempre el texto del proveedor, así que sin esto un pedido
+        // ya pagado enseñaba «黑色 / M（推荐112-128斤» al comprador, al panel y a la compra al proveedor.
+        Map<String, String> opts = VariantOptionTranslator.translate(v.getOptions(), product, LocaleHolder.get());
         if (opts != null && !opts.isEmpty()) {
             StringBuilder sb = new StringBuilder();
             for (String val : opts.values()) {
