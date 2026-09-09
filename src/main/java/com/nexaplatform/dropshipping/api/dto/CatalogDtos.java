@@ -162,7 +162,12 @@ public final class CatalogDtos {
             // dutyCovered = la tienda paga el derecho de aduana de este producto. NO depende del carrito,
             // así que se sabe también con el carrito vacío, y solo puede ser cierto donde hay derecho por
             // artículo que cubrir: hoy los 27 de la UE.
-            Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId, boolean dutyCovered) {
+            Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId, boolean dutyCovered,
+            // shippingCovered = la tienda pone algo del porte de este producto de su bolsa de envío.
+            // A diferencia del arancel, NO depende del país: la bolsa se descuenta del porte del pedido
+            // vaya a donde vaya, así que se resuelve DENTRO del listado —es una propiedad del producto,
+            // como `verified`— y no fuera con el carrito.
+            boolean shippingCovered) {
 
         /** Sin arancel resuelto: el listado lo decora después, fuera de la caché, porque depende del carrito. */
         public ProductSummaryView(UUID id, String slug, String title, String mainImage, BigDecimal basePrice,
@@ -173,7 +178,7 @@ public final class CatalogDtos {
             this(id, slug, title, mainImage, basePrice, currency, rating, monthlySales, trendScore, status,
                     priceUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted, inventoryCount,
                     availableUnits, verified, originalFormatted, discountPercent, promotionName, null, null,
-                    null, false);
+                    null, false, false);
         }
 
         /** Sin promoción: atajo para los usos que no la calculan. */
@@ -183,7 +188,7 @@ public final class CatalogDtos {
                 String displayFormatted, Integer inventoryCount, Integer availableUnits, boolean verified) {
             this(id, slug, title, mainImage, basePrice, currency, rating, monthlySales, trendScore, status,
                     priceUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted, inventoryCount,
-                    availableUnits, verified, null, null, null, null, null, null, false);
+                    availableUnits, verified, null, null, null, null, null, null, false, false);
         }
 
         /**
@@ -199,7 +204,21 @@ public final class CatalogDtos {
             return new ProductSummaryView(id, slug, title, mainImage, basePrice, currency, rating, monthlySales,
                     trendScore, status, priceUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted,
                     inventoryCount, availableUnits, verified, originalFormatted, discountPercent, promotionName,
-                    extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered);
+                    extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered, shippingCovered);
+        }
+
+        /**
+         * La misma ficha declarando que la tienda pone parte del porte.
+         *
+         * <p>Va aparte de {@link #withDuty} porque no comparte nada con él: el arancel depende del carrito
+         * y del país y se resuelve fuera de la caché; esto es una propiedad fija del producto. Mezclarlos
+         * en un decorador único obligaría a conocer el carrito para contestar algo que no lo necesita.
+         */
+        public ProductSummaryView withShippingCovered(boolean cubierto) {
+            return new ProductSummaryView(id, slug, title, mainImage, basePrice, currency, rating, monthlySales,
+                    trendScore, status, priceUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted,
+                    inventoryCount, availableUnits, verified, originalFormatted, discountPercent, promotionName,
+                    extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered, cubierto);
         }
     }
 
