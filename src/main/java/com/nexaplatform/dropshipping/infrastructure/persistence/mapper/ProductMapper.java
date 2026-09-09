@@ -91,7 +91,23 @@ public class ProductMapper {
                 priced.displayCurrency(), priced.displaySymbol(), priced.displayFormatted(), p.getInventoryCount(),
                 availableUnits, Boolean.TRUE.equals(p.getVerified()),
                 // La rebaja viaja YA resuelta desde el motor de precios: el escaparate solo la pinta.
-                priced.originalFormatted(), priced.discountPercent(), priced.promotionName());
+                priced.originalFormatted(), priced.discountPercent(), priced.promotionName())
+                // La tienda pone parte del porte de este producto. Se resuelve AQUÍ, dentro del listado,
+                // y no fuera con el arancel: la bolsa de envío se descuenta del porte del pedido vaya a
+                // donde vaya, así que no depende del país ni del carrito y puede viajar en la caché.
+                .withShippingCovered(poneParteDelPorte(p));
+    }
+
+    /**
+     * ¿Pone la tienda parte del porte de este producto?
+     *
+     * <p>Un importe nulo, cero o negativo cuenta como que no: un negativo no es una subvención al revés
+     * —que le cobraría al cliente MÁS porte del cotizado—, es un dato mal metido. Misma regla que aplica
+     * {@code ProductSubsidyService} al repartir las bolsas en el cobro, para que el catálogo no prometa
+     * algo que luego no se descuenta.
+     */
+    private static boolean poneParteDelPorte(ProductEntity p) {
+        return p.getShippingUserCny() != null && p.getShippingUserCny().signum() > 0;
     }
 
     public ProductDetailView toDetail(ProductEntity p, String language, List<ProductPriceTierEntity> tiers) {

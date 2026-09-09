@@ -343,3 +343,7 @@ databaseChangeLog:
       file: db/changelog/schema-v166-precio-visto-en-el-historial.sql
   - include:
       file: db/changelog/schema-v167-titular-llc-en-los-documentos.sql
+  - include:
+      file: db/changelog/schema-v168-canal-del-pago.sql
+  - include:
+      file: db/changelog/schema-v169-dispositivos-para-avisos.sql

@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.domain.model;
 
+import com.nexaplatform.dropshipping.domain.enums.PaymentClientTarget;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
 import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
 import lombok.AllArgsConstructor;
@@ -31,6 +32,13 @@ public class Payment {
     private UUID walletId;
     private UUID orderId;
     private String purpose;
+    /**
+     * Desde dónde se abrió el cobro. Decide a qué dirección devuelve la pasarela al terminar: la web
+     * vuelve a una pantalla suya y la aplicación a su enlace profundo. Se guarda porque la respuesta
+     * de la pasarela llega DESPUÉS, en otra petición, y para entonces ya no hay cabecera que mirar.
+     */
+    @lombok.Builder.Default
+    private PaymentClientTarget clientTarget = PaymentClientTarget.WEB;
     private PaymentMethod method;
     private PaymentStatus status;
     private BigDecimal amountDisplay;

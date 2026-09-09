@@ -12,7 +12,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import com.nexaplatform.dropshipping.application.notifications.AvisoCreado;
 import org.mockito.InjectMocks;
+import org.springframework.context.ApplicationEventPublisher;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -47,6 +49,8 @@ class Cov05NotificationRepositoryImplTest {
     NotificationJpaRepositoryAdapter notificationJpaRepositoryAdapter;
     @Mock
     UserRepository userRepository;
+    @Mock
+    ApplicationEventPublisher eventos;
 
     @InjectMocks
     NotificationRepositoryImpl repository;
@@ -208,5 +212,43 @@ class Cov05NotificationRepositoryImplTest {
 
         verify(notificationJpaRepositoryAdapter).deleteById(NOTIFICATION_ID);
         assertThat(repository.existsById(NOTIFICATION_ID)).isTrue();
+    }
+
+    /**
+     * Al dar de alta se publica el hecho para que llegue al teléfono. Va por evento y no por llamada
+     * directa porque el buzón se escribe desde cuatro sitios distintos, y engancharlo en cada uno
+     * garantizaba que el quinto se olvidara.
+     */
+    @Test
+    void elAltaAnunciaElAvisoNuevo() {
+        when(notificationEntityMapper.toDomain(any())).thenReturn(PlatformNotification.builder()
+                .id(NOTIFICATION_ID).userId(USER_ID).title("Tu pedido va en camino").body("NX-1")
+                .eventType("ORDER_SHIPPED").build());
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user()));
+
+        repository.save(PlatformNotification.builder().userId(USER_ID).title("Tu pedido va en camino")
+                .body("NX-1").eventType("ORDER_SHIPPED").build());
+
+        ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
+        verify(eventos).publishEvent(captor.capture());
+        assertThat(captor.getValue()).isInstanceOf(AvisoCreado.class);
+        AvisoCreado anunciado = (AvisoCreado) captor.getValue();
+        assertThat(anunciado.userId()).isEqualTo(USER_ID);
+        assertThat(anunciado.titulo()).isEqualTo("Tu pedido va en camino");
+    }
+
+    /**
+     * Marcar leído o archivar pasa por el mismo `save`. Si también anunciara, sonaría un aviso en el
+     * teléfono cada vez que alguien abre el que ya tenía.
+     */
+    @Test
+    void actualizarNoAnunciaNada() {
+        when(notificationJpaRepositoryAdapter.findById(NOTIFICATION_ID))
+                .thenReturn(Optional.of(new NotificationEntity()));
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user()));
+
+        repository.save(PlatformNotification.builder().id(NOTIFICATION_ID).userId(USER_ID).build());
+
+        verify(eventos, never()).publishEvent(any(Object.class));
     }
 }

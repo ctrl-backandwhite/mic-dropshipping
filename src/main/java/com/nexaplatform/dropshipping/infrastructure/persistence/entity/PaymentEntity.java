@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.entity;
 
+import com.nexaplatform.dropshipping.domain.enums.PaymentClientTarget;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
 import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
 import jakarta.persistence.Column;
@@ -48,6 +49,19 @@ public class PaymentEntity extends BaseEntity {
     @Column(name = "purpose", length = 20, nullable = false)
     @Builder.Default
     private String purpose = "WALLET_RECHARGE";
+
+    /**
+     * Desde dónde se abrió el cobro. Decide a qué dirección devuelve la pasarela al terminar: la web
+     * tiene rutas y la aplicación un enlace profundo, y equivocarse deja al comprador fuera.
+     *
+     * <p>El valor por defecto va AQUÍ además de en la columna: un DEFAULT de base de datos no salva
+     * de un INSERT que mande NULL de forma explícita, que es lo que hace JPA con un campo sin
+     * inicializar.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "client_target", length = 16, nullable = false)
+    @Builder.Default
+    private PaymentClientTarget clientTarget = PaymentClientTarget.WEB;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

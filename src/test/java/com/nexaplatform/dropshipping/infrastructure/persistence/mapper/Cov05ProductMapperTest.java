@@ -568,4 +568,39 @@ class Cov05ProductMapperTest {
     void unProductoSinVideoNoTieneDireccionDeVideo() {
         assertThat(ProductMapper.videoUrlOf(new ProductEntity())).isNull();
     }
+
+    @Test
+    @DisplayName("el catálogo dice que la tienda pone parte del porte cuando el producto lleva bolsa de envío")
+    void elCatalogoDiceQueLaTiendaPoneParteDelPorte() {
+        ProductEntity p = product();
+        p.setShippingUserCny(new BigDecimal("12.50"));
+
+        assertThat(mapper.toSummary(p, "es").shippingCovered()).isTrue();
+    }
+
+    @Test
+    @DisplayName("sin bolsa de envío no lo dice")
+    void sinBolsaDeEnvioNoLoDice() {
+        ProductEntity p = product();
+        p.setShippingUserCny(null);
+
+        assertThat(mapper.toSummary(p, "es").shippingCovered()).isFalse();
+    }
+
+    /**
+     * Cero o negativo cuentan como que NO. Un negativo no es una subvención al revés —le cobraría al
+     * cliente más porte del cotizado—, es un dato mal metido, y el catálogo no puede prometer por él
+     * algo que luego no se descuenta.
+     */
+    @Test
+    @DisplayName("un importe de cero o negativo no cuenta como subvención")
+    void unImporteDeCeroONegativoNoCuenta() {
+        ProductEntity cero = product();
+        cero.setShippingUserCny(BigDecimal.ZERO);
+        ProductEntity negativo = product();
+        negativo.setShippingUserCny(new BigDecimal("-3"));
+
+        assertThat(mapper.toSummary(cero, "es").shippingCovered()).isFalse();
+        assertThat(mapper.toSummary(negativo, "es").shippingCovered()).isFalse();
+    }
 }

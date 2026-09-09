@@ -21,6 +21,7 @@ import com.nexaplatform.dropshipping.application.usecase.RechargeOptions;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
+import com.nexaplatform.dropshipping.infrastructure.integration.payment.PaymentClientHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
@@ -159,6 +160,10 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         Payment p = Payment.builder().userId(userId).walletId(wallet.getId()).method(method)
                 .status(PaymentStatus.PENDING).amountDisplay(amountDisplay).currencyDisplay(currencyDisplay)
                 .amountUsdCents(usdCents).settlementCurrency(settlementCcy).settlementAmount(settlementAmount)
+                // Desde dónde se paga decide a qué dirección devuelve la pasarela al terminar. Se
+                // guarda con el pago porque su respuesta llega después, en otra petición, y para
+                // entonces ya no hay cabecera que mirar.
+                .clientTarget(PaymentClientHolder.get())
                 .idempotencyKey(idempotencyKey).build();
         p = paymentRepository.save(p);
 
@@ -797,6 +802,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 .amountDisplay(perLineSettlementAmount(order, displayCcy))
                 .currencyDisplay(displayCcy)
                 .settlementCurrency(settlementCcy).settlementAmount(settlementAmount).idempotencyKey(idempotencyKey)
+                .clientTarget(PaymentClientHolder.get())
                 .orderId(orderId).purpose(ORDER_PAYMENT).build();
         p = paymentRepository.save(p);
 
