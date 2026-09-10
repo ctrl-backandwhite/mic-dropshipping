@@ -211,7 +211,12 @@ class CompraExtremoAExtremoIT extends BaseIntegration {
 
         assertThat(pedido.get("status").asText()).isEqualTo(OrderStatus.PAID.name());
         assertThat(centimos(pedido, "subtotal")).isEqualTo(SUBTOTAL_CENTS);
-        assertThat(centimos(pedido, "shipping")).isEqualTo(ENVIO_COBRADO_CENTS);
+        assertThat(centimos(pedido, "shipping"))
+                .as("en el PEDIDO el envío es solo el porte: el arancel va en su propia línea, no dentro")
+                .isEqualTo(PORTE_ELEGIDO);
+        assertThat(centimos(pedido, "customsDuty"))
+                .as("y el arancel se devuelve aparte, para que el desglose no tenga que deducirlo")
+                .isEqualTo(ARANCEL_CENTS);
         assertThat(centimos(pedido, "tax")).isEqualTo(IVA_CENTS);
         assertThat(centimos(pedido, "total")).isEqualTo(TOTAL_CENTS);
         assertThat(enteroDe("SELECT customs_duty_cents FROM customer_order WHERE id = ?", pedidoId))
