@@ -22,6 +22,16 @@ public interface NotificationUseCase {
     /** Cambia el estado de gestión de una notificación (transición manual del gestor). */
     void setStatus(UUID id, UUID ownerUserId, Status status);
 
+    /**
+     * Deja en el buzón de la aplicación el aviso de que un pedido ha quedado pagado.
+     *
+     * <p>Hasta ahora el pago solo salía por correo y por Kafka hacia el servicio de notificaciones:
+     * quien pagaba desde la aplicación abría «Avisos» y lo encontraba VACÍO, con el pedido ya cobrado.
+     *
+     * <p>No puede tumbar el cobro: se llama best-effort desde el checkout y su fallo se registra.
+     */
+    void orderPaid(UUID userId, String orderNumber, String lang);
+
     /** Lists the user's notifications in a folder, newest first. */
     List<PlatformNotification> myNotifications(UUID userId, Folder folder);
 

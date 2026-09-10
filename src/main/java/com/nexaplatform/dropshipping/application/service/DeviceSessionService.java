@@ -30,6 +30,8 @@ import java.util.UUID;
 public class DeviceSessionService {
 
     public static final String COOKIE = "nx_device";
+    /** El mismo identificador, para clientes que no llevan cookies: la aplicación móvil. */
+    public static final String DEVICE_HEADER = "X-Device-Id";
     /** Forma del identificador de dispositivo: UUID sin guiones, tal y como se genera. */
     private static final Pattern DEVICE_TOKEN = Pattern.compile("[0-9a-f]{32}");
 
@@ -43,10 +45,19 @@ public class DeviceSessionService {
     /** Registra/actualiza el dispositivo en cada login y emite/renueva la cookie nx_device. */
     @Transactional
     public void recordLogin(UUID userId, HttpServletRequest req, HttpServletResponse res) {
-        String token = readCookie(req);
-        UserSessionEntity row = token != null ? repository.findByDeviceToken(token).orElse(null) : null;
-        if (row == null || !userId.equals(row.getUserId())) {
-            token = UUID.randomUUID().toString().replace("-", "");
+        String token = readDeviceToken(req);
+        UserSessionEntity existente = token != null ? repository.findByDeviceToken(token).orElse(null) : null;
+        UserSessionEntity row;
+        if (existente != null && userId.equals(existente.getUserId())) {
+            row = existente;
+        } else {
+            // Fila nueva. Si el identificador lo trae la CABECERA y no lo está usando ya otra cuenta, se
+            // adopta tal cual: un cliente nativo no recibe la cookie de vuelta, así que generar uno del
+            // servidor lo dejaba sin adoptar y el teléfono volvía a darse de alta en CADA entrada.
+            // Cuando llega por cookie —o cuando el identificador ya es de otro— se emite uno nuevo, que
+            // es como funcionaba y como se le devuelve al navegador.
+            boolean adoptable = token != null && token.equals(req.getHeader(DEVICE_HEADER)) && existente == null;
+            token = adoptable ? token : UUID.randomUUID().toString().replace("-", "");
             row = UserSessionEntity.builder().userId(userId).deviceToken(token).createdAt(Instant.now()).build();
         }
         row.setDevice(parseDevice(req.getHeader("User-Agent")));
@@ -61,7 +72,7 @@ public class DeviceSessionService {
     /** Dispositivos conectados (no revocados) del usuario, marcando el actual. */
     @Transactional(readOnly = true)
     public List<SessionView> list(UUID userId, HttpServletRequest req) {
-        String current = readCookie(req);
+        String current = readDeviceToken(req);
         return repository.findByUserIdAndRevokedAtIsNullOrderByLastSeenAtDesc(userId).stream()
                 .map(s -> new SessionView(s.getId(), s.getDevice(), s.getIp(), s.getCreatedAt(), s.getLastSeenAt(),
                         s.getDeviceToken().equals(current)))
@@ -80,7 +91,7 @@ public class DeviceSessionService {
     /** ¿La cookie de dispositivo de esta petición corresponde a una sesión revocada? (enforcement). */
     @Transactional(readOnly = true)
     public boolean isRevoked(HttpServletRequest req) {
-        String token = readCookie(req);
+        String token = readDeviceToken(req);
         if (token == null) {
             return false;
         }
@@ -97,7 +108,15 @@ public class DeviceSessionService {
      * cosa se descarta y se emite un identificador nuevo, así que por ahí no puede colarse un salto de
      * línea que parta la respuesta en dos.
      */
-    private String readCookie(HttpServletRequest req) {
+    private String readDeviceToken(HttpServletRequest req) {
+        // La CABECERA manda sobre la cookie. Un cliente nativo no lleva cookies, así que mientras
+        // este fue el único camino la aplicación móvil no se reconocía nunca: cada entrada creaba
+        // una sesión nueva y ninguna salía marcada como la propia. La forma se valida igual, y por
+        // el mismo motivo: el valor lo controla el cliente y acaba reescrito en `Set-Cookie`.
+        String header = req.getHeader(DEVICE_HEADER);
+        if (header != null && DEVICE_TOKEN.matcher(header).matches()) {
+            return header;
+        }
         if (req.getCookies() == null) {
             return null;
         }
@@ -137,6 +156,10 @@ public class DeviceSessionService {
      */
     private static final List<Map.Entry<String[], String>> BROWSERS = List.of(
             Map.entry(new String[] {"Edg"}, "Edge"),
+            // La aplicación se anuncia con su propio nombre y va la PRIMERA: si algún día su texto
+            // llevara el nombre de un motor web, se etiquetaría como navegador y volveríamos a no
+            // distinguir el teléfono de un ordenador cualquiera.
+            Map.entry(new String[] {"NX036"}, "App NX036"),
             Map.entry(new String[] {"OPR", "Opera"}, "Opera"),
             Map.entry(new String[] {"Chrome"}, "Chrome"),
             Map.entry(new String[] {"Firefox"}, "Firefox"),

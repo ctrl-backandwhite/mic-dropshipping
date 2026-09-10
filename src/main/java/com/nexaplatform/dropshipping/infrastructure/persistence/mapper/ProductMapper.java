@@ -186,7 +186,7 @@ public class ProductMapper {
                 ? v.getPackageWeightGrams() : v.getWeightGrams();
         return new VariantView(v.getId(), v.getSku(), v.getTitle(), priced.displayAmount(), // shown in user currency
                 priced.displayFormatted(), v.getStock(), pickVariantImage(v),
-                translateVariantOptions(v.getOptions(), product, language), v.isActive(),
+                VariantOptionTranslator.translate(v.getOptions(), product, language), v.isActive(),
                 weight, v.getLengthMm(), v.getWidthMm(), v.getHeightMm(),
                 priced.originalFormatted(), priced.discountPercent());
     }
@@ -251,50 +251,10 @@ public class ProductMapper {
      * <p>Si el valor no tiene traducción para el idioma pedido —o no aparece entre los ejes del
      * producto—, se conserva el valor crudo tal cual llegó: nunca se deja el campo vacío.
      */
-    private Map<String, String> translateVariantOptions(Map<String, String> rawOptions, ProductEntity product,
-            String language) {
-        if (rawOptions == null || rawOptions.isEmpty()) {
-            return rawOptions;
-        }
-        Map<String, String> localizedByChineseValue = valueTranslationIndex(product, language);
-        Map<String, String> translated = new LinkedHashMap<>();
-        for (Map.Entry<String, String> e : rawOptions.entrySet()) {
-            String localized = localizedByChineseValue.get(e.getValue());
-            translated.put(e.getKey(), localized != null && !localized.isBlank() ? localized : e.getValue());
-        }
-        return translated;
-    }
 
     /** Índice valor-en-chino → valor localizado, aplanando TODOS los ejes del producto. */
-    private Map<String, String> valueTranslationIndex(ProductEntity product, String language) {
-        Map<String, String> index = new LinkedHashMap<>();
-        if (product == null || product.getVariantOptions() == null) {
-            return index;
-        }
-        for (VariantOptionEntity opt : product.getVariantOptions()) {
-            if (opt.getValues() == null) {
-                continue;
-            }
-            for (VariantValueEntity vv : opt.getValues()) {
-                if (vv.getValueZh() != null) {
-                    index.put(vv.getValueZh(), resolveLocalizedValue(vv, language));
-                }
-            }
-        }
-        return index;
-    }
 
     /** Idioma pedido → override neutral (value). Mismo criterio que {@link #toValueView}. */
-    private String resolveLocalizedValue(VariantValueEntity v, String language) {
-        if (language != null && v.getTranslations() != null) {
-            for (VariantValueTranslationEntity t : v.getTranslations()) {
-                if (language.equalsIgnoreCase(t.getLanguage()) && t.getValue() != null) {
-                    return t.getValue();
-                }
-            }
-        }
-        return v.getValue();
-    }
 
     public PriceTierView toPriceTierView(ProductPriceTierEntity t) {
         // El tramo se guarda en la moneda del proveedor (CNY) como COSTE, y se tarifica por la MISMA vía

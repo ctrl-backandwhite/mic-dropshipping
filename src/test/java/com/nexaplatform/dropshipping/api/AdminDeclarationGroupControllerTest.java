@@ -89,6 +89,38 @@ class AdminDeclarationGroupControllerTest {
         verify(groupRepository, never()).save(any());
     }
 
+    /**
+     * «Goods of HS heading 620443» es el relleno con el que nace un grupo cuya partida no está en la
+     * nomenclatura que conocemos: describe un NÚMERO, no una mercancía. Se MARCA en la vista, pero no
+     * se impide firmarlo: es lo que se hace en producción y de lo declarado responde quien firma.
+     * Poner aquí un freno sería decidir por quien tiene esa responsabilidad.
+     */
+    @Test
+    void elRellenoSeMarcaPeroNoImpideFirmar() {
+        CustomsDeclarationGroupEntity g = grupo("Goods of HS heading 620443 · Cotton · Casual wear", null);
+        when(groupRepository.findById(ID)).thenReturn(Optional.of(g));
+        when(groupRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        controller.approve(ID, autenticacionDe("admin@nexadrop.com"));
+
+        assertThat(g.getApprovedAt()).isNotNull();
+        assertThat(g.getApprovedBy()).isEqualTo("admin@nexadrop.com");
+    }
+
+    /** El panel tiene que poder distinguir «por redactar» de «redactado y pendiente de firma». */
+    @Test
+    void laVistaDiceSiLaDescripcionSigueSiendoElRelleno() {
+        CustomsDeclarationGroupEntity relleno = grupo("Goods of HS heading 620443 · Cotton", null);
+        CustomsDeclarationGroupEntity redactado = grupo("Women's or girls' dresses, of synthetic fibres", null);
+        when(groupRepository.findAllByOrderByProductCountDesc()).thenReturn(List.of(relleno, redactado));
+
+        List<AdminDeclarationGroupDtoOut> vistas = controller.list().getBody();
+
+        assertThat(vistas).isNotNull();
+        assertThat(vistas.get(0).sinRedactar()).isTrue();
+        assertThat(vistas.get(1).sinRedactar()).isFalse();
+    }
+
     @Test
     void retirarLaAprobacionDevuelveCadaProductoASuPropiaLinea() {
         // Es el freno de mano: si una aduana discrepa del texto, se retira la firma y esa terna vuelve a

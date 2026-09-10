@@ -48,9 +48,17 @@ public class OrderAmounts {
 
     private final CurrencyRateService currencyRateService;
 
-    /** Desglose de un pedido en una moneda, con todos los componentes ya redondeados. */
-    public record Breakdown(BigDecimal subtotal, BigDecimal discount, BigDecimal shipping, BigDecimal tax,
-            BigDecimal total, String currency) {
+    /**
+     * Desglose de un pedido en una moneda, con todos los componentes ya redondeados.
+     *
+     * <p>{@code shipping} es SOLO el transporte y {@code customsDuty} SOLO el derecho de aduana, aunque
+     * en la base los dos vivan sumados en {@code shipping_cents}. Van separados porque son cosas
+     * distintas y el comprador las ve separadas al pagar: enseñarlas juntas en el pedido —«Envío
+     * 9,74 €» donde el checkout decía «Envío 6,25 € · Aranceles 3,49 €»— hace dudar de lo cobrado, y
+     * el arancel en régimen DDP es además un concepto con nombre propio.
+     */
+    public record Breakdown(BigDecimal subtotal, BigDecimal discount, BigDecimal shipping,
+            BigDecimal customsDuty, BigDecimal tax, BigDecimal total, String currency) {
     }
 
     /**
@@ -63,10 +71,15 @@ public class OrderAmounts {
     public Breakdown of(Order order, String currency) {
         BigDecimal subtotal = subtotalOf(order, currency);
         BigDecimal discount = convert(order.getDiscountCents(), currency);
-        BigDecimal shipping = convert(order.getShippingCents(), currency);
+        // `shipping_cents` guarda el porte CON el arancel dentro; `customs_duty_cents` es la parte que
+        // corresponde al derecho. Se restan para poder enseñarlos por separado sin mover un céntimo el
+        // total, que es exactamente lo cobrado.
+        BigDecimal shippingWithDuty = convert(order.getShippingCents(), currency);
+        BigDecimal customsDuty = convert(order.getCustomsDutyCents(), currency);
+        BigDecimal shipping = shippingWithDuty.subtract(customsDuty);
         BigDecimal tax = convert(order.getTaxCents(), currency);
-        BigDecimal total = subtotal.subtract(discount).add(shipping).add(tax);
-        return new Breakdown(subtotal, discount, shipping, tax, total, currency);
+        BigDecimal total = subtotal.subtract(discount).add(shippingWithDuty).add(tax);
+        return new Breakdown(subtotal, discount, shipping, customsDuty, tax, total, currency);
     }
 
     /** Sólo el total, para quien no necesita el desglose (el importe a cobrar, el listado del panel). */

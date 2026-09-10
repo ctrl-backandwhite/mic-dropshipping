@@ -74,6 +74,10 @@ public class AdminDeclarationGroupController implements AdminDeclarationGroupApi
         if (grupo.getEname() == null || grupo.getEname().isBlank()) {
             throw new ArgumentException("No se puede aprobar un grupo sin descripción en inglés");
         }
+        // Firmar un grupo cuya descripción sigue siendo el relleno de su partida —«Goods of HS heading
+        // 611212»— SÍ se permite: es lo que se hace en producción, y quien firma es quien responde de
+        // lo que se declara. La vista lo marca como «sin redactar» para que se vea lo que se está
+        // firmando, pero no lo impide: el freno estaría decidiendo por quien tiene la responsabilidad.
         grupo.setApprovedAt(Instant.now());
         grupo.setApprovedBy(auth != null ? auth.getName() : "admin");
         grupo.setUpdatedAt(Instant.now());
@@ -104,6 +108,6 @@ public class AdminDeclarationGroupController implements AdminDeclarationGroupApi
     private static AdminDeclarationGroupDtoOut vista(CustomsDeclarationGroupEntity g) {
         return new AdminDeclarationGroupDtoOut(g.getId(), g.getHs6(), g.getMaterial(), g.getUsageCode(),
                 g.getEname(), g.getCname(), g.getProductCount(), g.getApprovedAt() != null, g.getApprovedAt(),
-                g.getApprovedBy());
+                g.getApprovedBy(), CustomsDeclarationGroupSync.esRellenoSinRedactar(g));
     }
 }
