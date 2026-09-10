@@ -6,7 +6,9 @@ import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CartItemEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CartItemJpaRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductImageRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,7 +16,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -49,12 +54,92 @@ public class CartService {
     /** Tope duro de unidades por línea, coherente con la validación del checkout. */
     private static final int MAX_QTY = 100_000;
 
+    /** El papel que marca la foto principal en la galería. Conviven mayúsculas y minúsculas. */
+    private static final String PAPEL_PRINCIPAL = "MAIN";
+
+    /** El papel del vídeo, que NO sirve como foto de la línea. */
+    private static final String PAPEL_VIDEO = "VIDEO";
+
     private final CartItemJpaRepository repo;
     private final ProductRepository productRepository;
+    private final ProductImageRepository productImageRepository;
 
     @Transactional(readOnly = true)
     public List<CartItemDto> list(UUID userId) {
-        return repo.findByUserIdOrderByCreatedAtAscIdAsc(userId).stream().map(CartItemDto::fromEntity).toList();
+        return conLaFotoQueFalte(repo.findByUserIdOrderByCreatedAtAscIdAsc(userId).stream()
+                .map(CartItemDto::fromEntity).toList());
+    }
+
+    /**
+     * Rellena la foto de las líneas que se guardaron sin ella.
+     *
+     * <p>La línea guarda una FOTO FIJA de lo que se veía al añadirla —título, precio, imagen—, y eso es
+     * deliberado. El problema es que una foto fija hereda para siempre los fallos del día en que se tomó:
+     * hasta el 9-sep-2026 la web mandaba la imagen vacía al añadir desde una ficha con variantes, y esas
+     * líneas se quedaron con un hueco gris que no se arregla solo. Arreglar el cliente no las recupera:
+     * ya están guardadas así, y para quien las tiene en su cesta el defecto sigue ahí cada vez que entra.
+     *
+     * <p>Así que se resuelve al SERVIR, que es lo único que alcanza a lo ya guardado. No se escribe nada
+     * en la base: si mañana el producto cambia de foto, la cesta enseña la buena sin arrastrar la vieja.
+     *
+     * <p>Solo se pregunta por los productos a los que les falta, y en UNA consulta para todos. Una cesta
+     * de quince líneas no puede costar quince viajes a la base de datos para pintar una pantalla.
+     */
+    private List<CartItemDto> conLaFotoQueFalte(List<CartItemDto> lineas) {
+        List<UUID> sinFoto = lineas.stream().filter(l -> enBlanco(l.image())).map(CartItemDto::productId).distinct()
+                .toList();
+        if (sinFoto.isEmpty()) {
+            return lineas;
+        }
+
+        Map<UUID, String> fotos = fotosDe(sinFoto);
+        List<CartItemDto> salida = new ArrayList<>(lineas.size());
+        for (CartItemDto linea : lineas) {
+            String foto = enBlanco(linea.image()) ? fotos.get(linea.productId()) : linea.image();
+            salida.add(enBlanco(foto) ? linea : linea.conImagen(foto));
+        }
+        return salida;
+    }
+
+    /** La foto que representa a cada producto: la marcada como principal y, si no hay, la primera. */
+    private Map<UUID, String> fotosDe(List<UUID> productIds) {
+        Map<UUID, ProductImageEntity> elegidas = new HashMap<>();
+        for (ProductImageEntity imagen : productImageRepository.findByProductIdInOrderByPositionAsc(productIds)) {
+            if (esVideo(imagen) || enBlanco(direccionDe(imagen))) {
+                continue;
+            }
+            UUID producto = imagen.getProduct().getId();
+            ProductImageEntity actual = elegidas.get(producto);
+            if (actual == null || (esPrincipal(imagen) && !esPrincipal(actual))) {
+                elegidas.put(producto, imagen);
+            }
+        }
+
+        Map<UUID, String> fotos = new HashMap<>();
+        elegidas.forEach((producto, imagen) -> fotos.put(producto, direccionDe(imagen)));
+        return fotos;
+    }
+
+    /**
+     * La copia espejada, y solo si falta, la del proveedor.
+     *
+     * <p>El orden importa: la del proveedor apunta a un servidor ajeno que bloquea las peticiones desde
+     * otros dominios, así que servirla es enseñar una imagen rota con otro nombre.
+     */
+    private static String direccionDe(ProductImageEntity imagen) {
+        return enBlanco(imagen.getCdnUrl()) ? imagen.getSourceUrl() : imagen.getCdnUrl();
+    }
+
+    private static boolean esPrincipal(ProductImageEntity imagen) {
+        return imagen.getRole() != null && PAPEL_PRINCIPAL.equalsIgnoreCase(imagen.getRole());
+    }
+
+    private static boolean esVideo(ProductImageEntity imagen) {
+        return imagen.getRole() != null && PAPEL_VIDEO.equalsIgnoreCase(imagen.getRole());
+    }
+
+    private static boolean enBlanco(String texto) {
+        return texto == null || texto.isBlank();
     }
 
     /** Añade o actualiza una línea FIJANDO su cantidad; devuelve la cesta completa. */
@@ -159,7 +244,12 @@ public class CartService {
         entity.setSku(dto.sku());
         entity.setSlug(dto.slug());
         entity.setTitle(dto.title());
-        entity.setImageUrl(dto.image());
+        // La imagen solo se pisa si la nueva TRAE algo. Una línea guardada con su foto no puede perderla
+        // porque un cliente la mande vacía —una pestaña con la versión vieja de la web, o la app— y el
+        // borrado sería permanente: la siguiente lectura ya no tendría de dónde sacarla.
+        if (!enBlanco(dto.image())) {
+            entity.setImageUrl(dto.image());
+        }
         entity.setVariantLabel(dto.variantLabel());
         entity.setUnitPriceSource(dto.unitPriceSource());
         entity.setSourceCurrency(dto.sourceCurrency());

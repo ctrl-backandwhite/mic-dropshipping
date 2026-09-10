@@ -7,7 +7,9 @@ import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CartItemEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CartItemJpaRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductImageRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -46,6 +48,8 @@ class CartServiceTest {
     CartItemJpaRepository repo;
     @Mock
     ProductRepository productRepository;
+    @Mock
+    ProductImageRepository productImageRepository;
 
     private CartService service;
     private UUID userId;
@@ -54,7 +58,7 @@ class CartServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new CartService(repo, productRepository);
+        service = new CartService(repo, productRepository, productImageRepository);
         userId = UUID.randomUUID();
         productId = UUID.randomUUID();
         variantId = UUID.randomUUID();
@@ -326,5 +330,123 @@ class CartServiceTest {
         assertThat(out.get(0).variantId()).isEqualTo(variantId);
         assertThat(out.get(0).quantity()).isEqualTo(4);
         assertThat(out.get(0).title()).isEqualTo("Camisa roja");
+    }
+
+    /* ── La foto de las líneas que se guardaron sin ella ──────────────────────────────────────── */
+
+    /**
+     * El caso REAL que motiva todo esto: hasta el 9-sep-2026 la web mandaba la imagen vacía al añadir
+     * desde una ficha con variantes. Esas líneas quedaron guardadas con un hueco y arreglar el cliente no
+     * las recupera —ya están así en la base—, de modo que quien las tenga en su cesta seguiría viendo un
+     * rectángulo gris con el nombre al lado cada vez que entrara, y también al pagar.
+     */
+    @Test
+    @DisplayName("una línea guardada sin foto se sirve con la del producto")
+    void unaLineaGuardadaSinFotoSeSirveConLaDelProducto() {
+        when(repo.findByUserIdOrderByCreatedAtAscIdAsc(userId)).thenReturn(List.of(lineaSinFoto()));
+        when(productImageRepository.findByProductIdInOrderByPositionAsc(List.of(productId)))
+                .thenReturn(List.of(imagen("GALLERY", 0, "https://img.nx036.com/a.jpg")));
+
+        List<CartItemDto> out = service.list(userId);
+
+        assertThat(out.get(0).image()).isEqualTo("https://img.nx036.com/a.jpg");
+    }
+
+    /** Con varias fotos manda la marcada como principal, aunque no sea la primera de la galería. */
+    @Test
+    @DisplayName("entre varias fotos gana la principal, no la primera")
+    void entreVariasFotosGanaLaPrincipalNoLaPrimera() {
+        when(repo.findByUserIdOrderByCreatedAtAscIdAsc(userId)).thenReturn(List.of(lineaSinFoto()));
+        when(productImageRepository.findByProductIdInOrderByPositionAsc(List.of(productId)))
+                .thenReturn(List.of(
+                        imagen("GALLERY", 0, "https://img.nx036.com/primera.jpg"),
+                        imagen("MAIN", 1, "https://img.nx036.com/principal.jpg")));
+
+        assertThat(service.list(userId).get(0).image()).isEqualTo("https://img.nx036.com/principal.jpg");
+    }
+
+    /**
+     * El vídeo NO vale como foto de la línea: se pintaría como imagen rota. Y si la galería solo tiene
+     * vídeo, la línea se queda sin foto, que es honesto — mejor el hueco que un enlace que no carga.
+     */
+    @Test
+    @DisplayName("el vídeo no se usa como foto de la línea")
+    void elVideoNoSeUsaComoFotoDeLaLinea() {
+        when(repo.findByUserIdOrderByCreatedAtAscIdAsc(userId)).thenReturn(List.of(lineaSinFoto()));
+        when(productImageRepository.findByProductIdInOrderByPositionAsc(List.of(productId)))
+                .thenReturn(List.of(imagen("video", 0, "https://img.nx036.com/clip.mp4")));
+
+        assertThat(service.list(userId).get(0).image()).isNull();
+    }
+
+    /**
+     * La copia espejada gana a la del proveedor. La del proveedor apunta a un servidor ajeno que bloquea
+     * las peticiones desde otros dominios: servirla es enseñar una imagen rota con otro nombre.
+     */
+    @Test
+    @DisplayName("se prefiere la copia espejada a la dirección del proveedor")
+    void sePrefiereLaCopiaEspejadaALaDelProveedor() {
+        ProductImageEntity conLasDos = imagen("MAIN", 0, "https://img.nx036.com/espejada.jpg");
+        conLasDos.setSourceUrl("https://cbu01.alicdn.com/original.jpg");
+        when(repo.findByUserIdOrderByCreatedAtAscIdAsc(userId)).thenReturn(List.of(lineaSinFoto()));
+        when(productImageRepository.findByProductIdInOrderByPositionAsc(List.of(productId)))
+                .thenReturn(List.of(conLasDos));
+
+        assertThat(service.list(userId).get(0).image()).isEqualTo("https://img.nx036.com/espejada.jpg");
+    }
+
+    /** Si la línea YA trae su foto no se pregunta por el producto: sería un viaje a la base para nada. */
+    @Test
+    @DisplayName("con la foto guardada no se consulta la galería")
+    void conLaFotoGuardadaNoSeConsultaLaGaleria() {
+        CartItemEntity conFoto = lineaSinFoto();
+        conFoto.setImageUrl("https://img.nx036.com/guardada.jpg");
+        when(repo.findByUserIdOrderByCreatedAtAscIdAsc(userId)).thenReturn(List.of(conFoto));
+
+        assertThat(service.list(userId).get(0).image()).isEqualTo("https://img.nx036.com/guardada.jpg");
+        verify(productImageRepository, never()).findByProductIdInOrderByPositionAsc(any());
+    }
+
+    /**
+     * Y guardar con la imagen vacía NO borra la que ya había. Pasaba con una pestaña abierta en la
+     * versión vieja de la web o con la app: sincronizaba la cesta sin imagen y el borrado era definitivo.
+     */
+    @Test
+    @DisplayName("guardar sin imagen no borra la que ya estaba")
+    void guardarSinImagenNoBorraLaQueYaEstaba() {
+        CartItemEntity existente = lineaSinFoto();
+        existente.setImageUrl("https://img.nx036.com/ya-estaba.jpg");
+        catalogoConMoq(1);
+        when(repo.findByUserIdAndProductIdAndVariantId(userId, productId, variantId))
+                .thenReturn(Optional.of(existente));
+
+        service.upsert(userId, sinImagen(dto(productId, variantId, 3)));
+
+        ArgumentCaptor<CartItemEntity> guardada = ArgumentCaptor.forClass(CartItemEntity.class);
+        verify(repo).save(guardada.capture());
+        assertThat(guardada.getValue().getImageUrl()).isEqualTo("https://img.nx036.com/ya-estaba.jpg");
+    }
+
+    private CartItemEntity lineaSinFoto() {
+        return CartItemEntity.builder()
+                .userId(userId).productId(productId).variantId(variantId).quantity(2)
+                .slug("camisa-roja").title("Camisa roja").unitPriceSource(new BigDecimal("10.00"))
+                .sourceCurrency("EUR").build();
+    }
+
+    private ProductImageEntity imagen(String papel, int posicion, String cdnUrl) {
+        ProductEntity duenyo = ProductEntity.builder().slug("camisa-roja").build();
+        duenyo.setId(productId);
+        ProductImageEntity imagen = new ProductImageEntity();
+        imagen.setProduct(duenyo);
+        imagen.setRole(papel);
+        imagen.setPosition(posicion);
+        imagen.setCdnUrl(cdnUrl);
+        return imagen;
+    }
+
+    /** La misma línea que manda el cliente, pero sin imagen: es el caso de una web o una app viejas. */
+    private CartItemDto sinImagen(CartItemDto original) {
+        return original.conImagen(null);
     }
 }

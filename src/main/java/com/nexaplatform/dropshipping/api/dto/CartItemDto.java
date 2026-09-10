@@ -39,4 +39,18 @@ public record CartItemDto(
                 e.getQuantity(), e.getMoq(), e.getUnitPriceDisplay(), e.getDisplayCurrency(),
                 e.getDisplaySymbol());
     }
+
+    /**
+     * La misma línea con otra imagen.
+     *
+     * <p>La usa el carrito para rellenar al SERVIR la foto de las líneas que se guardaron sin ella, sin
+     * tocar lo almacenado. Se devuelve una copia y no se muta el registro porque un {@code record} es
+     * inmutable a propósito: la línea que viaja al cliente no puede depender de en qué orden alguien la
+     * modificó por el camino.
+     */
+    public CartItemDto conImagen(String imagen) {
+        return new CartItemDto(productId, variantId, sku, slug, title, imagen, variantLabel,
+                unitPriceSource, sourceCurrency, quantity, moq, unitPriceDisplay, displayCurrency,
+                displaySymbol);
+    }
 }
