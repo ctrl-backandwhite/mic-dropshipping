@@ -27,6 +27,15 @@ public interface ProductImageRepository extends JpaRepository<ProductImageEntity
     /** Imágenes en un estado de un conjunto de productos — para espejar YA lo recién importado. */
     List<ProductImageEntity> findByProductIdInAndMirrorStatus(List<UUID> productIds, MirrorStatus status);
 
+    /**
+     * La galería de VARIOS productos, en una sola consulta.
+     *
+     * <p>Existe para rellenar la foto de las líneas de la cesta que se guardaron sin ella. En plural y no
+     * de una en una a propósito: una cesta con quince líneas haría quince viajes a la base de datos para
+     * pintar una pantalla, que es como el motor de precios llegó a tardar 78 segundos en un listado.
+     */
+    List<ProductImageEntity> findByProductIdInOrderByPositionAsc(List<UUID> productIds);
+
     /** Imágenes MIRRORED cuyo cdn_url empieza por el prefijo dado (nuestro storage) — para verificar objetos. */
     List<ProductImageEntity> findByMirrorStatusAndCdnUrlStartingWith(MirrorStatus status, String cdnUrlPrefix);
 

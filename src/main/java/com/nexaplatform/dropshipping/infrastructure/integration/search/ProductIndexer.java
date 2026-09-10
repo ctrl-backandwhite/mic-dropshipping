@@ -73,6 +73,22 @@ public class ProductIndexer {
         return index != null ? index : schema.indexName(logicalIndex);
     }
 
+    /**
+     * Cuántos documentos tiene el índice ahora mismo, o −1 si no se puede preguntar.
+     *
+     * <p>Se usa para comprobar al arrancar que el índice está COMPLETO. Devuelve −1 en vez de cero cuando
+     * falla: cero significaría «índice vacío» y dispararía una alarma cada vez que el buscador está caído,
+     * que es justo cuando menos falta hace añadir ruido.
+     */
+    public long documentCount() {
+        try {
+            return client.count(c -> c.index(indexName())).count();
+        } catch (OpenSearchException | IOException e) {
+            log.debug("No se ha podido contar el índice '{}': {}", indexName(), e.getMessage());
+            return -1;
+        }
+    }
+
     // El parámetro es un Map y no ProductIngestedEvent a propósito: el consumidor deserializa SIEMPRE
     // a mapa, así que declarar el tipo hacía que Spring no supiera convertirlo y el listener reventara
     // con CADA mensaje del tema, reintentando sin fin. La conversión vive en ProductIngestedEvent.desde.
