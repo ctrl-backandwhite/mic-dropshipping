@@ -66,6 +66,41 @@ public enum ErrorCode {
             "Si è verificato un errore imprevisto. Riprova tra qualche minuto.",
             "Er is een onverwachte fout opgetreden. Probeer het over een paar minuten opnieuw."),
 
+    // ---------- seguridad ----------
+    /*
+     * Los errores de acceso salían SIEMPRE en inglés: el manejador escribía «Unauthorized» a mano y aquí
+     * no había ningún código de seguridad, así que `localize` devolvía null y pasaba el literal tal cual.
+     * Quien entra con la contraseña mal en la aplicación, con el idioma en español, leía «Unauthorized».
+     *
+     * El texto sigue siendo el MISMO para todos los motivos —contraseña mala, cuenta sin activar,
+     * bloqueada o inexistente—: traducirlo no puede convertirlo en un delator de qué cuentas existen.
+     */
+    SE001("No tienes permiso para hacer esto.", "You do not have permission to do this.",
+            "Não tens permissão para fazer isto.", "您没有执行此操作的权限。",
+            "Vous n'avez pas l'autorisation d'effectuer cette action.",
+            "Du hast keine Berechtigung, das zu tun.", "Non hai i permessi per farlo.",
+            "Je hebt geen toestemming om dit te doen."),
+    SE002("El correo o la contraseña no son correctos.", "The email or password is incorrect.",
+            "O e-mail ou a palavra-passe não estão corretos.", "邮箱或密码不正确。",
+            "L'adresse e-mail ou le mot de passe est incorrect.",
+            "E-Mail-Adresse oder Passwort sind nicht korrekt.", "L'email o la password non sono corretti.",
+            "Het e-mailadres of wachtwoord is onjuist."),
+    MFA_REQUIRED("Introduce el código de verificación de tu aplicación de autenticación.",
+            "Enter the verification code from your authenticator app.",
+            "Introduz o código de verificação da tua aplicação de autenticação.",
+            "请输入身份验证器应用中的验证码。",
+            "Saisissez le code de vérification de votre application d'authentification.",
+            "Gib den Bestätigungscode aus deiner Authenticator-App ein.",
+            "Inserisci il codice di verifica della tua app di autenticazione.",
+            "Voer de verificatiecode uit je authenticator-app in."),
+    MFA_INVALID("El código de verificación no es correcto o ha caducado.",
+            "The verification code is incorrect or has expired.",
+            "O código de verificação não está correto ou expirou.", "验证码不正确或已过期。",
+            "Le code de vérification est incorrect ou a expiré.",
+            "Der Bestätigungscode ist falsch oder abgelaufen.",
+            "Il codice di verifica non è corretto o è scaduto.",
+            "De verificatiecode is onjuist of verlopen."),
+
     // ---------- específicos ----------
     ORDER_NOT_CANCELLABLE(
             "Este pedido ya ha sido procesado y no puede cancelarse. Si deseas devolverlo, contáctanos cuando lo recibas y gestionaremos la devolución.",

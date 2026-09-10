@@ -1163,7 +1163,10 @@ class CustomerJourneyIT extends BaseIntegration {
                     assertThat(r.cuerpo().get("status").asText()).isEqualTo("PAID");
                     importeExacto("subtotal del pedido", r.cuerpo().get("subtotal"), "65.00");
                     importeExacto("descuento del cupón", r.cuerpo().get("discount"), "6.50");
-                    importeExacto("envío del pedido", r.cuerpo().get("shipping"), "10.99");
+                    // 10,99 se cotizan, pero el pedido los guarda partidos: 8,49 de porte y 2,50 de
+                    // despacho. Un tributo que se recauda para la aduana no puede figurar como transporte.
+                    importeExacto("envío del pedido", r.cuerpo().get("shipping"), "8.49");
+                    importeExacto("arancel del pedido", r.cuerpo().get("customsDuty"), "2.50");
                     importeExacto("impuesto del pedido", r.cuerpo().get("tax"), "14.07");
                     importeExacto("TOTAL del pedido", r.cuerpo().get("total"), "83.56");
                     assertThat(r.cuerpo().get("totalFormatted").asText())
