@@ -64,11 +64,17 @@ public class ProductMapper {
         String title = pickTitle(p, language);
         String image = p.getImages().stream().findFirst().map(this::pickImageUrl).orElse(null);
         PricedAmount priced = precioYaResuelto != null ? precioYaResuelto : pricingService.priceFor(p);
+        // Unidades sumando las variantes ACTIVAS. Sin ninguna variante activa se devuelve `null`, no
+        // cero: son cosas distintas y el escaparate las trata distinto. Cero significa «lo hay y se ha
+        // agotado» y pinta la marca de agua «SIN STOCK»; null significa «este producto no lleva el
+        // stock por variante», que no impide venderlo. Sumar sobre una lista vacía da cero, así que
+        // los productos sin variantes salían marcados como agotados sin estarlo.
         Integer availableUnits = null;
         try {
-            availableUnits = p.getVariants() == null
-                    ? null
-                    : p.getVariants().stream().filter(v -> v != null && v.isActive()).mapToInt(v -> v.getStock()).sum();
+            List<ProductVariantEntity> activas = p.getVariants() == null
+                    ? List.of()
+                    : p.getVariants().stream().filter(v -> v != null && v.isActive()).toList();
+            availableUnits = activas.isEmpty() ? null : activas.stream().mapToInt(v -> v.getStock()).sum();
         } catch (Exception ignored) {
             /* lazy init fuera de tx → fallback a null */ }
 
