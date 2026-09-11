@@ -171,7 +171,11 @@ public class ProductMapper {
                 // El arancel adicional no se resuelve aquí: depende del CARRITO de quien mira, no del
                 // producto, y este mapeo va cacheado. Lo decora el controlador con la ficha ya construida,
                 // y con él el indicador de quién paga el derecho, que además depende del país.
-                null, null, null, false);
+                null, null, null, false,
+                // El porte que pone la tienda SÍ se resuelve aquí, igual que en el listado: no depende del
+                // carrito ni del país, así que puede viajar dentro de la caché. Con la misma regla que
+                // toSummary, para que la ficha no desmienta a la tarjeta que ha traído hasta ella.
+                poneParteDelPorte(p));
     }
 
     public ProductImageView toImageView(ProductImageEntity img) {

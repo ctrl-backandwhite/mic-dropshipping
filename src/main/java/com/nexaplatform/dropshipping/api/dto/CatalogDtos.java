@@ -263,7 +263,13 @@ public final class CatalogDtos {
             // lo mismo que el listado porque lo calcula el mismo servicio.
             // dutyCovered = la tienda paga el derecho de aduana de este producto; lo mismo que anuncia la
             // tarjeta, calculado igual. Solo puede ser cierto donde hay derecho por artículo: hoy la UE.
-            Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId, boolean dutyCovered) {
+            Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId, boolean dutyCovered,
+            // shippingCovered = la tienda pone algo del porte de este producto de su bolsa de envío. Es el
+            // mismo dato que ya anunciaba la TARJETA del catálogo y que la ficha no llevaba, así que el
+            // producto prometía en el listado algo que al abrirlo desaparecía. Es PÚBLICO —un booleano, no
+            // el importe— y por eso sobrevive a sinDatosInternos(): lo que no se publica es cuánto pone la
+            // tienda, no que lo ponga.
+            boolean shippingCovered) {
 
         /** La misma ficha con el arancel resuelto; se decora fuera del detalle, que va cacheado. */
         public ProductDetailView withDuty(Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId,
@@ -278,7 +284,7 @@ public final class CatalogDtos {
                     shippingUserFormatted, dutyUserFormatted,
                     metaTitle, metaDescription, verified, videoUrl, hasVideo,
                     originalFormatted, discountPercent, promotionName, compliance,
-                    extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered);
+                    extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered, shippingCovered);
         }
 
         /**
@@ -319,7 +325,7 @@ public final class CatalogDtos {
                     null, null,
                     metaTitle, metaDescription, verified, videoUrl, hasVideo,
                     originalFormatted, discountPercent, promotionName, compliance,
-                    extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered);
+                    extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered, shippingCovered);
         }
 
         /** Sin promoción: atajo para los usos que no la calculan. */
@@ -340,7 +346,7 @@ public final class CatalogDtos {
                     lastSyncedAt, images, variantOptions, variants, priceTiers, costUsd, retailUsd, displayPrice,
                     displayCurrency, displaySymbol, displayFormatted, appliedMarginPercent, baseFormatted,
                     ivaFormatted, shippingFormatted, null, null, null, null, null, null, metaTitle, metaDescription,
-                    verified, videoUrl, hasVideo, null, null, null, null, null, null, null, false);
+                    verified, videoUrl, hasVideo, null, null, null, null, null, null, null, false, false);
         }
     }
 
