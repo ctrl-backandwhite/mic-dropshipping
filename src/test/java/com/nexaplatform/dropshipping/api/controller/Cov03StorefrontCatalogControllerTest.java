@@ -911,7 +911,9 @@ class Cov03StorefrontCatalogControllerTest {
                 List.of(), new BigDecimal("4.10"), null, null, null, null, "30,11 €", new BigDecimal("150"),
                 "11,43 €", "1,49 €", "2,05 €", new BigDecimal("8.98"), "8,98 €", new BigDecimal("3.08"),
                 new BigDecimal("2.00"), "3,08 €", "2,00 €", null, null, false, null, false, null, null, null,
-                null, null, null, null, false);
+                null, null, null, null, false,
+                // La tienda pone parte del porte: es PÚBLICO y tiene que sobrevivir a la limpieza.
+                true);
     }
 
     /**
@@ -935,6 +937,26 @@ class Cov03StorefrontCatalogControllerTest {
         assertThat(paraCualquiera.source()).isNull();
         assertThat(paraCualquiera.supplier()).isNull();
         assertThat(paraCualquiera.repurchaseRate()).isNull();
+    }
+
+    /**
+     * Lo que SÍ tiene que llegar: que la tienda pone parte del porte.
+     *
+     * <p>Va con las pruebas de la fuga porque nace de la misma limpieza y es su contrapeso. Lo que se
+     * oculta es CUÁNTO pone la tienda —un importe interno—, no QUE lo pone: eso es una promesa
+     * comercial que la tarjeta del catálogo ya anuncia, y si la ficha la perdiera, el producto
+     * prometería en el listado algo que al abrirlo desaparece.
+     */
+    @Test
+    void laFichaPublicaSiDiceQueLaTiendaPoneParteDelPorte() {
+        UUID id = UUID.randomUUID();
+        when(catalogUseCase.getProductBySlug("vestido", "es")).thenReturn(fichaConDatosDeProveedor(id));
+
+        ProductDetailView paraCualquiera = controller.detailBySlug("vestido", "es", List.of());
+
+        assertThat(paraCualquiera.shippingCovered()).isTrue();
+        assertThat(paraCualquiera.shippingUserCny()).isNull();
+        assertThat(paraCualquiera.shippingUserFormatted()).isNull();
     }
 
     /** Y tampoco los importes internos, que el propio record ya declaraba «SOLO ADMIN». */
