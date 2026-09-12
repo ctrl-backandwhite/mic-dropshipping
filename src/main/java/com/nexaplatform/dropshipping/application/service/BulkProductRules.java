@@ -199,6 +199,38 @@ public final class BulkProductRules {
         }
     }
 
+    /**
+     * Las imágenes de la DESCRIPCIÓN, limpias y sin repetir la galería.
+     *
+     * <p>Son las fotos largas que el proveedor monta debajo de la ficha. Se guardan como filas de
+     * {@code product_image} con {@code role = "DETAIL"}, aparte de la galería, porque el escaparate
+     * las pinta en su propia galería horizontal dentro de la sección de detalle: mezclarlas en el
+     * carrusel principal lo llenaría de carteles en chino.
+     *
+     * <p><b>NO se quitan las que también están en la galería, y es una corrección del 12-sep-2026.</b>
+     * La primera versión lo hacía —parecía evidente: para qué enseñar dos veces la misma foto— y el
+     * efecto medido sobre el producto 1031738929572 fue el contrario: de las NUEVE imágenes de la
+     * descripción, CINCO eran las mismas del estudio que la galería. El filtro se llevó esas cinco y
+     * dejó las cuatro exclusivas, que eran tres carteles del proveedor y una foto. La sección de
+     * detalle quedaba sin contenido útil y llena de marketing.
+     *
+     * <p>En 1688 la descripción REPITE fotos de la galería a propósito, en otro orden y con otro
+     * contexto. Y no van al mismo sitio: el carrusel es una galería y el detalle es otra, así que
+     * repetirlas no molesta. Distinto es la foto de VARIANTE, que sí entra en el carrusel y ahí sí se
+     * deduplica.
+     *
+     * <p>A diferencia de {@link #imageUrlsOf}, no exige que haya ninguna: un producto sin descripción
+     * ilustrada es lo normal —la mayoría de los ya cargados no la tienen— y no es motivo de rechazo.
+     */
+    public static List<String> detailImageUrlsOf(BulkProductDtoIn r) {
+        if (r.getDetailImageUrls() == null || r.getDetailImageUrls().isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> detalle = new LinkedHashSet<>();
+        addNonBlank(detalle, r.getDetailImageUrls());
+        return List.copyOf(detalle);
+    }
+
     private static void addNonBlank(LinkedHashSet<String> target, Iterable<String> source) {
         for (String u : source) {
             if (isProductPhoto(u)) {

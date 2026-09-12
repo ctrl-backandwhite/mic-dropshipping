@@ -53,6 +53,17 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
     Page<UUID> findIdsForCustomsAudit(@Param("status") ProductStatus status, Pageable pageable);
 
     /**
+     * Solo los identificadores de TODO el catálogo, para barrerlo sin traerse las entidades.
+     *
+     * <p>El reindexado hacía {@code findAll()} y se quedaba con miles de {@code ProductEntity} vivas en
+     * la sesión durante todo el barrido. Con los ids, cada producto se carga y se suelta en su propia
+     * transacción corta, que es lo que impide que el barrido entero sea UNA transacción de minutos
+     * reteniendo cerrojos sobre {@code product}.
+     */
+    @Query("SELECT p.id FROM ProductEntity p")
+    List<UUID> findAllIds();
+
+    /**
      * Productos de una tanda con sus traducciones ya cargadas.
      *
      * <p>Va aparte de {@link #findWithVariantsByIds} a propósito: traer las dos colecciones en el mismo

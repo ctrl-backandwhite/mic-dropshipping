@@ -48,6 +48,9 @@ class ProductIndexerTest {
 
     @Mock
     ProductIndexSchema schema;
+    /** El indexador arma su TransactionTemplate con él; el doble basta porque aquí no se prueba la transacción. */
+    @Mock
+    org.springframework.transaction.PlatformTransactionManager gestorDeTransacciones;
 
     @InjectMocks
     ProductIndexer indexer;
@@ -202,7 +205,9 @@ class ProductIndexerTest {
     void reindexAll_indexesEveryProductAndReturnsCount() throws IOException {
         ProductEntity p1 = product();
         ProductEntity p2 = product();
-        when(productRepository.findAll()).thenReturn(List.of(p1, p2));
+        // El barrido pide solo los identificadores: cargar las entidades enteras era lo que dejaba
+        // miles de productos vivos en la sesión durante toda la pasada.
+        when(productRepository.findAllIds()).thenReturn(List.of(p1.getId(), p2.getId()));
         when(productRepository.findWithDetailsById(p1.getId())).thenReturn(Optional.of(p1));
         when(productRepository.findWithDetailsById(p2.getId())).thenReturn(Optional.of(p2));
         when(client.index(any(IndexRequest.class))).thenReturn(mock(IndexResponse.class));

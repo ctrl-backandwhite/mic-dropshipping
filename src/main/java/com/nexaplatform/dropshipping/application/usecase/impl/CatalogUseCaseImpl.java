@@ -164,6 +164,8 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     private static final String VARIANT_NOT_FOUND = "Variant not found";
     private static final String VARIANT_VALUE = "Variant value";
     private static final String GALLERY = "GALLERY";
+    /** Fotos de la DESCRIPCIÓN: van aparte de la galería y el escaparate las pinta en su propia sección. */
+    private static final String DETAIL = "DETAIL";
 
     private static final Slugify SLUG = Slugify.builder().lowerCase(true).build();
 
@@ -1778,10 +1780,80 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (imageIds == null || imageIds.isEmpty()) {
             return;
         }
-        // Reasigna position según el orden recibido; la primera pasa a MAIN y el resto
-        // a GALLERY.
-        // Las imágenes no incluidas en la lista se colocan al final preservando su
-        // orden previo.
+        if (sonTodasDeDetalle(product, imageIds)) {
+            reordenaElDetalle(product, imageIds);
+        } else {
+            reordenaLaGaleria(product, imageIds);
+        }
+        imageRepository.flush();
+        productIndexer.indexProduct(productId);
+    }
+
+    /**
+     * ¿La lista recibida son SOLO fotos de la descripción?
+     *
+     * <p>El escaparate tiene dos galerías independientes —el carrusel y las fotos de la descripción—
+     * y cada una manda sus propios identificadores, así que una lista nunca las mezcla. Distinguirlas
+     * por el papel de lo que llega evita un segundo camino en la API para hacer lo mismo.
+     */
+    private boolean sonTodasDeDetalle(ProductEntity product, List<UUID> imageIds) {
+        Map<UUID, String> papelPorId = new HashMap<>();
+        for (ProductImageEntity img : product.getImages()) {
+            papelPorId.put(img.getId(), img.getRole());
+        }
+        for (UUID id : imageIds) {
+            if (!DETAIL.equalsIgnoreCase(papelPorId.get(id))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Reordena SOLO las fotos de la descripción, dentro de los huecos que ya ocupaban.
+     *
+     * <p>No se puede reutilizar el reordenado del carrusel: aquel reasigna el papel por posición —la
+     * primera a MAIN y el resto a GALLERY—, así que arrastrar un cartel de medidas en la sección de
+     * detalle lo habría convertido en la foto de portada del producto y lo habría sacado de su
+     * sección. Aquí el papel no se toca y el carrusel ni se entera: las fotos de la descripción viven
+     * detrás de la galería en la misma secuencia de posiciones, y solo se permutan entre ellas.
+     */
+    private void reordenaElDetalle(ProductEntity product, List<UUID> imageIds) {
+        List<ProductImageEntity> detalle = product.getImages().stream()
+                .filter(img -> DETAIL.equalsIgnoreCase(img.getRole()))
+                .sorted(Comparator.comparingInt(ProductImageEntity::getPosition))
+                .toList();
+        List<Integer> huecos = detalle.stream().map(ProductImageEntity::getPosition).toList();
+
+        Map<UUID, ProductImageEntity> porId = new HashMap<>();
+        for (ProductImageEntity img : detalle) {
+            porId.put(img.getId(), img);
+        }
+        // Primero las pedidas, en el orden pedido; detrás, las que no venían en la lista, con su
+        // orden de antes. Así una lista incompleta no deja a nadie sin hueco ni duplica ninguno.
+        List<ProductImageEntity> nuevoOrden = new ArrayList<>();
+        for (UUID id : imageIds) {
+            ProductImageEntity img = porId.remove(id);
+            if (img != null) {
+                nuevoOrden.add(img);
+            }
+        }
+        for (ProductImageEntity img : detalle) {
+            if (porId.containsKey(img.getId())) {
+                nuevoOrden.add(img);
+            }
+        }
+        for (int i = 0; i < nuevoOrden.size(); i++) {
+            nuevoOrden.get(i).setPosition(huecos.get(i));
+        }
+    }
+
+    /**
+     * Reordena el CARRUSEL: la primera pasa a ser la imagen principal del producto y el resto,
+     * galería. Lo que no viene en la lista —las fotos de la descripción, sobre todo— se coloca detrás
+     * conservando su orden previo y SIN cambiarle el papel.
+     */
+    private void reordenaLaGaleria(ProductEntity product, List<UUID> imageIds) {
         Map<UUID, Integer> order = new HashMap<>();
         for (int i = 0; i < imageIds.size(); i++) {
             order.put(imageIds.get(i), i);
@@ -1796,8 +1868,6 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                 img.setRole(pos == 0 ? "MAIN" : GALLERY);
             }
         }
-        imageRepository.flush();
-        productIndexer.indexProduct(productId);
     }
 
     private void applyVariant(ProductVariantEntity v, AdminVariantUpsertDtoIn req) {
@@ -2333,6 +2403,13 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         int position = 0;
         for (String url : BulkProductRules.imageUrlsOf(r, esTitle)) {
             images.add(new IngestImage(url, position, position == 0 ? "MAIN" : GALLERY));
+            position++;
+        }
+        // Las de la descripción, DETRÁS de la galería y con su propio rol. La posición sigue la misma
+        // cuenta para que el orden dentro de cada grupo se conserve al reordenarlas desde el panel:
+        // son filas de product_image como las demás, así que heredan espejado, compresión y edición.
+        for (String url : BulkProductRules.detailImageUrlsOf(r)) {
+            images.add(new IngestImage(url, position, DETAIL));
             position++;
         }
         return images;

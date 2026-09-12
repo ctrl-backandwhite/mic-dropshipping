@@ -61,6 +61,9 @@ class Cov07ProductIndexerSetupTest {
     com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductAttributeRepository productAttributeRepository;
     @Mock
     ProductIndexSchema schema;
+    /** El indexador arma su TransactionTemplate con él; el doble basta porque aquí no se prueba la transacción. */
+    @Mock
+    org.springframework.transaction.PlatformTransactionManager gestorDeTransacciones;
 
     @InjectMocks
     ProductIndexer indexer;
@@ -132,7 +135,7 @@ class Cov07ProductIndexerSetupTest {
     @Test
     void elReindexadoPurgaElIndiceAntesDeReconstruirlo() throws IOException {
         ProductEntity p = product();
-        when(productRepository.findAll()).thenReturn(List.of(p));
+        when(productRepository.findAllIds()).thenReturn(List.of(p.getId()));
         when(productRepository.findWithDetailsById(p.getId())).thenReturn(Optional.of(p));
         when(client.index(any(IndexRequest.class))).thenReturn(mock(IndexResponse.class));
 
@@ -148,7 +151,7 @@ class Cov07ProductIndexerSetupTest {
     void siLaPurgaFallaElReindexadoSigueAdelante() throws IOException {
         ProductEntity p = product();
         when(client.deleteByQuery(deleteByQueryFn())).thenThrow(new IOException("opensearch caído"));
-        when(productRepository.findAll()).thenReturn(List.of(p));
+        when(productRepository.findAllIds()).thenReturn(List.of(p.getId()));
         when(productRepository.findWithDetailsById(p.getId())).thenReturn(Optional.of(p));
         when(client.index(any(IndexRequest.class))).thenReturn(mock(IndexResponse.class));
 

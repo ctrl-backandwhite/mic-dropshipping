@@ -10,6 +10,7 @@ import com.nexaplatform.dropshipping.application.service.CustomsProfileService;
 import com.nexaplatform.dropshipping.application.usecase.impl.CatalogUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
@@ -345,5 +346,88 @@ class CatalogUseCaseImplTest {
         useCase.bulkUpdateSurcharge(null, null, new BigDecimal("2.00"));
 
         verify(jdbcTemplate, never()).update(contains("bus_estado"));
+    }
+
+    /**
+     * Fija el producto con su galería y, detrás, las fotos de la descripción. Es la forma que tienen
+     * en la base de datos desde el 12-sep-2026: una sola secuencia de posiciones, primero el carrusel
+     * y después el detalle.
+     */
+    private static ProductEntity conGaleriaYDetalle(UUID... ids) {
+        ProductEntity p = ProductEntity.builder().source("1688").externalId("OFFER-9")
+                .status(ProductStatus.DRAFT).slug("offer-9").moq(1).build();
+        p.setId(UUID.randomUUID());
+        String[] papeles = { "MAIN", "GALLERY", "DETAIL", "DETAIL", "DETAIL" };
+        for (int i = 0; i < ids.length; i++) {
+            ProductImageEntity img = ProductImageEntity.builder()
+                    .product(p).position(i).role(papeles[i]).sourceUrl("https://x/" + i + ".jpg").build();
+            img.setId(ids[i]);
+            p.getImages().add(img);
+        }
+        return p;
+    }
+
+    private static ProductImageEntity porId(ProductEntity p, UUID id) {
+        return p.getImages().stream().filter(i -> id.equals(i.getId())).findFirst().orElseThrow();
+    }
+
+    /**
+     * Lo que se rompería en producción si esta prueba fallara: arrastrar una foto en la galería de la
+     * DESCRIPCIÓN la convertiría en foto del carrusel —y la primera, en la imagen principal del
+     * producto—, porque el reordenado reasigna el papel por posición. El comprador vería un cartel de
+     * medidas como foto de portada y las fotos de la descripción desaparecerían de su sección.
+     */
+    @Test
+    void reorderProductImages_reordenarElDetalleNoLoConvierteEnGaleria() {
+        UUID principal = UUID.randomUUID();
+        UUID galeria = UUID.randomUUID();
+        UUID d1 = UUID.randomUUID();
+        UUID d2 = UUID.randomUUID();
+        UUID d3 = UUID.randomUUID();
+        ProductEntity p = conGaleriaYDetalle(principal, galeria, d1, d2, d3);
+        when(productJpaRepository.findById(p.getId())).thenReturn(Optional.of(p));
+
+        useCase.reorderProductImages(p.getId(), List.of(d3, d1, d2));
+
+        assertThat(porId(p, d3).getRole()).isEqualTo("DETAIL");
+        assertThat(porId(p, d1).getRole()).isEqualTo("DETAIL");
+        assertThat(porId(p, d2).getRole()).isEqualTo("DETAIL");
+        // Las tres ocupan los MISMOS huecos de antes (2, 3 y 4), en el orden pedido.
+        assertThat(porId(p, d3).getPosition()).isEqualTo(2);
+        assertThat(porId(p, d1).getPosition()).isEqualTo(3);
+        assertThat(porId(p, d2).getPosition()).isEqualTo(4);
+        // Y el carrusel no se entera: ni papel ni posición.
+        assertThat(porId(p, principal).getRole()).isEqualTo("MAIN");
+        assertThat(porId(p, principal).getPosition()).isZero();
+        assertThat(porId(p, galeria).getRole()).isEqualTo("GALLERY");
+        assertThat(porId(p, galeria).getPosition()).isEqualTo(1);
+    }
+
+    /**
+     * El otro lado del mismo cambio: reordenar el CARRUSEL tiene que seguir haciendo lo de siempre
+     * —la primera pasa a principal— y dejar las fotos de la descripción detrás, sin cambiarles el
+     * papel. Sin esta prueba, arreglar el detalle podía romper lo que ya funcionaba.
+     */
+    @Test
+    void reorderProductImages_reordenarLaGaleriaDejaElDetalleDetrasYConSuPapel() {
+        UUID principal = UUID.randomUUID();
+        UUID galeria = UUID.randomUUID();
+        UUID d1 = UUID.randomUUID();
+        UUID d2 = UUID.randomUUID();
+        UUID d3 = UUID.randomUUID();
+        ProductEntity p = conGaleriaYDetalle(principal, galeria, d1, d2, d3);
+        when(productJpaRepository.findById(p.getId())).thenReturn(Optional.of(p));
+
+        useCase.reorderProductImages(p.getId(), List.of(galeria, principal));
+
+        assertThat(porId(p, galeria).getRole()).isEqualTo("MAIN");
+        assertThat(porId(p, galeria).getPosition()).isZero();
+        assertThat(porId(p, principal).getRole()).isEqualTo("GALLERY");
+        assertThat(porId(p, principal).getPosition()).isEqualTo(1);
+        assertThat(porId(p, d1).getRole()).isEqualTo("DETAIL");
+        assertThat(porId(p, d2).getRole()).isEqualTo("DETAIL");
+        assertThat(porId(p, d3).getRole()).isEqualTo("DETAIL");
+        assertThat(List.of(porId(p, d1).getPosition(), porId(p, d2).getPosition(),
+                porId(p, d3).getPosition())).containsExactly(2, 3, 4);
     }
 }

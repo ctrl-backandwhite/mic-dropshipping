@@ -128,6 +128,20 @@ public class BulkProductDtoIn {
     @JsonAlias({"image", "photo"})
     private String imageUrl;
 
+    /**
+     * Imágenes de la DESCRIPCIÓN del producto, aparte de la galería.
+     *
+     * <p>Son las fotos largas que el proveedor monta debajo de la ficha —medidas, materiales, cómo se
+     * lleva—. Van en su propio campo y no mezcladas en {@link #imageUrls} a propósito: la galería del
+     * escaparate es el carrusel de la ficha, y meter ahí carteles en chino la llenaría de ruido. El
+     * front las pinta en la sección de detalle, en una galería horizontal aparte.
+     *
+     * <p>En base se guardan como filas de {@code product_image} con {@code role = "DETAIL"}, así que
+     * heredan el espejado, la compresión y el reordenar/eliminar del panel sin nada propio.
+     */
+    @JsonAlias({"detailImages", "descriptionImages"})
+    private List<String> detailImageUrls;
+
     /** ACTIVE (default) or DRAFT. */
     private String status;
 
