@@ -92,7 +92,7 @@ class CartSuggestionServiceTest {
     private ProductSummaryView producto(UUID id, String slug, String titulo) {
         // Veintiséis componentes, de los que a esta prueba solo le importan cuatro:
         // identificador, ruta, título e imagen. El resto va vacío a propósito.
-        return new ProductSummaryView(id, slug, titulo, "http://img/" + slug, null, null, null, 0, null, null, null, new java.math.BigDecimal("10.00"), null, null, null, null, null, false, null, null, null, null, null, null, false, false);
+        return new ProductSummaryView(id, slug, titulo, "http://img/" + slug, null, null, null, 0, 0, null, null, null, new java.math.BigDecimal("10.00"), null, null, null, null, null, false, null, null, null, null, null, null, false, false);
     }
 
     private void conCandidatos(ProductSummaryView... vistas) {

@@ -56,7 +56,7 @@ class PromotionShowcaseServiceTest {
         List<ProductSummaryView> items = new java.util.ArrayList<>();
         for (int i = 0; i < cuantos; i++) {
             items.add(new ProductSummaryView(UUID.randomUUID(), "slug-" + i, "Producto " + i, null, null, null, null,
-                    0, null, null, null, null, null, null, null, null, null, false));
+                    0, 0, null, null, null, null, null, null, null, null, null, false));
         }
         return new PageResponse<>(items, 0, cuantos, cuantos, 1);
     }

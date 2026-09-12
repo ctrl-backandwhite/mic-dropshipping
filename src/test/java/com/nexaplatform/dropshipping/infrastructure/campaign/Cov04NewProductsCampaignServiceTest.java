@@ -88,7 +88,7 @@ class Cov04NewProductsCampaignServiceTest {
 
     private static ProductSummaryView producto(String titulo) {
         return new ProductSummaryView(UUID.randomUUID(), "slug", titulo, "https://img/1.jpg",
-                BigDecimal.ONE, "CNY", BigDecimal.valueOf(4.5), 10, BigDecimal.ONE, "ACTIVE",
+                BigDecimal.ONE, "CNY", BigDecimal.valueOf(4.5), 0, 10, BigDecimal.ONE, "ACTIVE",
                 BigDecimal.TEN, BigDecimal.TEN, "EUR", "€", "10,00 €", 5, 5, true);
     }
 

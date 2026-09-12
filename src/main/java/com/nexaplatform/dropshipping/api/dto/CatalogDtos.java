@@ -141,7 +141,11 @@ public final class CatalogDtos {
 
     public record ProductSummaryView(UUID id, String slug, String title, String mainImage, BigDecimal basePrice, // legacy display in CNY (kept for back-compat)
             String currency, // legacy CNY label
-            BigDecimal rating, int monthlySales, BigDecimal trendScore, String status,
+            // rating SIN reviewCount no se puede pintar: el catálogo trae un 5,0 de origen para lo que
+            // nadie ha valorado, y sin el recuento la tarjeta enseña cinco estrellas llenas de una nota
+            // que nadie ha puesto. La ficha ya lo recibía; el listado no, así que las dos pantallas
+            // contaban cosas distintas del mismo producto.
+            BigDecimal rating, int reviewCount, int monthlySales, BigDecimal trendScore, String status,
             // canonical + display
             BigDecimal priceUsd, // retail in USD canon
             BigDecimal displayPrice, // converted to user's currency (X-Currency)
@@ -171,11 +175,12 @@ public final class CatalogDtos {
 
         /** Sin arancel resuelto: el listado lo decora después, fuera de la caché, porque depende del carrito. */
         public ProductSummaryView(UUID id, String slug, String title, String mainImage, BigDecimal basePrice,
-                String currency, BigDecimal rating, int monthlySales, BigDecimal trendScore, String status,
+                String currency, BigDecimal rating, int reviewCount, int monthlySales, BigDecimal trendScore,
+                String status,
                 BigDecimal priceUsd, BigDecimal displayPrice, String displayCurrency, String displaySymbol,
                 String displayFormatted, Integer inventoryCount, Integer availableUnits, boolean verified,
                 String originalFormatted, Integer discountPercent, String promotionName) {
-            this(id, slug, title, mainImage, basePrice, currency, rating, monthlySales, trendScore, status,
+            this(id, slug, title, mainImage, basePrice, currency, rating, reviewCount, monthlySales, trendScore, status,
                     priceUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted, inventoryCount,
                     availableUnits, verified, originalFormatted, discountPercent, promotionName, null, null,
                     null, false, false);
@@ -183,10 +188,11 @@ public final class CatalogDtos {
 
         /** Sin promoción: atajo para los usos que no la calculan. */
         public ProductSummaryView(UUID id, String slug, String title, String mainImage, BigDecimal basePrice,
-                String currency, BigDecimal rating, int monthlySales, BigDecimal trendScore, String status,
+                String currency, BigDecimal rating, int reviewCount, int monthlySales, BigDecimal trendScore,
+                String status,
                 BigDecimal priceUsd, BigDecimal displayPrice, String displayCurrency, String displaySymbol,
                 String displayFormatted, Integer inventoryCount, Integer availableUnits, boolean verified) {
-            this(id, slug, title, mainImage, basePrice, currency, rating, monthlySales, trendScore, status,
+            this(id, slug, title, mainImage, basePrice, currency, rating, reviewCount, monthlySales, trendScore, status,
                     priceUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted, inventoryCount,
                     availableUnits, verified, null, null, null, null, null, null, false, false);
         }
@@ -201,10 +207,10 @@ public final class CatalogDtos {
          */
         public ProductSummaryView withDuty(Integer extraDutyCents, String extraDutyFormatted, UUID dutyGroupId,
                 boolean dutyCovered) {
-            return new ProductSummaryView(id, slug, title, mainImage, basePrice, currency, rating, monthlySales,
-                    trendScore, status, priceUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted,
-                    inventoryCount, availableUnits, verified, originalFormatted, discountPercent, promotionName,
-                    extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered, shippingCovered);
+            return new ProductSummaryView(id, slug, title, mainImage, basePrice, currency, rating, reviewCount,
+                    monthlySales, trendScore, status, priceUsd, displayPrice, displayCurrency, displaySymbol,
+                    displayFormatted, inventoryCount, availableUnits, verified, originalFormatted, discountPercent,
+                    promotionName, extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered, shippingCovered);
         }
 
         /**
@@ -215,10 +221,10 @@ public final class CatalogDtos {
          * en un decorador único obligaría a conocer el carrito para contestar algo que no lo necesita.
          */
         public ProductSummaryView withShippingCovered(boolean cubierto) {
-            return new ProductSummaryView(id, slug, title, mainImage, basePrice, currency, rating, monthlySales,
-                    trendScore, status, priceUsd, displayPrice, displayCurrency, displaySymbol, displayFormatted,
-                    inventoryCount, availableUnits, verified, originalFormatted, discountPercent, promotionName,
-                    extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered, cubierto);
+            return new ProductSummaryView(id, slug, title, mainImage, basePrice, currency, rating, reviewCount,
+                    monthlySales, trendScore, status, priceUsd, displayPrice, displayCurrency, displaySymbol,
+                    displayFormatted, inventoryCount, availableUnits, verified, originalFormatted, discountPercent,
+                    promotionName, extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered, cubierto);
         }
     }
 

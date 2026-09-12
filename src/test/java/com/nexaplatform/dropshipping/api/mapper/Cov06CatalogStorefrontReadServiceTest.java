@@ -623,7 +623,7 @@ class Cov06CatalogStorefrontReadServiceTest {
     }
 
     private static ProductSummaryView resumen(String slug, BigDecimal displayPrice) {
-        return new ProductSummaryView(UUID.randomUUID(), slug, slug, null, null, "CNY", null, 0, null, "ACTIVE", null,
+        return new ProductSummaryView(UUID.randomUUID(), slug, slug, null, null, "CNY", null, 0, 0, null, "ACTIVE", null,
                 displayPrice, "EUR", "€", null, null, null, false);
     }
 

@@ -87,7 +87,9 @@ public class ProductMapper {
         boolean admin = SecurityUtils.isAdmin();
         return new ProductSummaryView(p.getId(), p.getSlug(), title, image,
                 admin ? p.getBasePrice() : null, admin ? p.getCurrency() : null,
-                p.getRating(), p.getMonthlySales(), p.getTrendScore(),
+                // El recuento viaja junto a la nota: sin él, la tarjeta pinta las cinco estrellas del
+                // 5,0 de origen que trae el catálogo para lo que nadie ha valorado.
+                p.getRating(), p.getReviewCount(), p.getMonthlySales(), p.getTrendScore(),
                 // `retailUsd` también SOLO para admin, por el mismo motivo y con la misma incoherencia que
                 // `basePrice`: la ficha ya lo ocultaba a quien no es admin (línea ~84) y el listado lo
                 // publicaba a todo el mundo. Es el precio canónico en USD antes de convertir; al cliente le

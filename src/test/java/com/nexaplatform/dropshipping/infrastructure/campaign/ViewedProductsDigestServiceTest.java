@@ -84,7 +84,7 @@ class ViewedProductsDigestServiceTest {
 
     private static ProductSummaryView producto(String titulo, String imagen, String slug) {
         return new ProductSummaryView(UUID.randomUUID(), slug, titulo, imagen, BigDecimal.ONE, "CNY",
-                BigDecimal.valueOf(4.5), 10, BigDecimal.ONE, "ACTIVE", BigDecimal.TEN, BigDecimal.TEN, "EUR",
+                BigDecimal.valueOf(4.5), 0, 10, BigDecimal.ONE, "ACTIVE", BigDecimal.TEN, BigDecimal.TEN, "EUR",
                 "€", "10,00 €", 5, 5, true);
     }
 

@@ -273,7 +273,7 @@ class CatalogStorefrontSearchTest {
 
     private ProductSummaryView resumen(ProductEntity p, BigDecimal displayPrice) {
         String slug = nombres.getOrDefault(p.getId(), p.getSlug());
-        return new ProductSummaryView(p.getId(), slug, slug, null, null, "CNY", null, 0, null, "ACTIVE", null,
+        return new ProductSummaryView(p.getId(), slug, slug, null, null, "CNY", null, 0, 0, null, "ACTIVE", null,
                 displayPrice, "EUR", "€", null, null, null, false);
     }
 }

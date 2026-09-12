@@ -603,4 +603,27 @@ class Cov05ProductMapperTest {
         assertThat(mapper.toSummary(cero, "es").shippingCovered()).isFalse();
         assertThat(mapper.toSummary(negativo, "es").shippingCovered()).isFalse();
     }
+
+    /**
+     * El recuento de opiniones en el LISTADO.
+     *
+     * <p>El catálogo trae un 5,0 de origen para lo que nadie ha valorado, así que la tarjeta pintaba
+     * cinco estrellas llenas junto a un «(0)» —una nota inflada que nadie ha puesto—. La ficha ya lo
+     * resolvía porque sí recibe el recuento; el resumen no lo mandaba y desde el cliente no había
+     * forma de distinguir un 5,0 de verdad del de origen.
+     */
+    @Test
+    @DisplayName("el resumen lleva el recuento de opiniones, que es lo que permite no inflar la nota")
+    void elResumenLlevaElRecuentoDeOpiniones() {
+        ProductEntity p = product();
+        p.setReviewCount(128);
+
+        assertThat(mapper.toSummary(p, "es").reviewCount()).isEqualTo(128);
+    }
+
+    @Test
+    @DisplayName("un producto sin ninguna opinión manda cero, no la ausencia del dato")
+    void unProductoSinOpinionesMandaCero() {
+        assertThat(mapper.toSummary(product(), "es").reviewCount()).isZero();
+    }
 }
