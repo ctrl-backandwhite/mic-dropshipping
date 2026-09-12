@@ -107,6 +107,25 @@ public class ProductEntity extends BaseEntity {
     private BigDecimal surchargeCny = BigDecimal.ZERO;
 
     /**
+     * La categoría que 1688 declara para este producto, tal como viene.
+     *
+     * <p>NO decide dónde se archiva: de eso se encarga la categoría propia, que elige el pipeline de
+     * carga. Esto se guarda para poder AUDITAR esa decisión después, que es lo que no se podía hacer:
+     * el 11-sep-2026 había 656 productos mal archivados y hubo que deducirlo del título, el mismo
+     * dato con el que se había equivocado el clasificador. Con la categoría de origen delante se
+     * compara contra lo que dijo el proveedor.
+     *
+     * <p>También es lo que permite poblar {@code category_1688_mapping} sin adivinar: hoy ese mapeo se
+     * aprende por moda estadística del propio catálogo y hereda sus errores —19 de 42 contradecían el
+     * género declarado en el nombre chino—.
+     */
+    @Column(name = "category_1688_id", length = 60)
+    private String category1688Id;
+
+    @Column(name = "category_1688_name", length = 200)
+    private String category1688Name;
+
+    /**
      * Bolsa de subvención del PORTE, en CNY (misma moneda que base_price). Default 0. La asigna el
      * admin por producto, por categoría o en lote, y en el checkout se suma UNA VEZ POR PRODUCTO —no
      * por unidad— para descontarla del porte cotizado por el transportista. Si la suma iguala o supera

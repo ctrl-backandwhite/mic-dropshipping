@@ -44,11 +44,16 @@ public class ProductBulkExportMapper {
 
         if (p.getCategory() != null) {
             d.setCategorySlug(p.getCategory().getSlug());
-            d.setCategory1688Id(p.getCategory().getExternalId());
-            // Respaldo para el destino que aún no tenga esa categoría creada: con el slug basta si existe,
-            // pero si no existe el import resuelve por el par (id, nombre) de 1688.
-            d.setCategory1688Name(p.getCategory().getNameZh());
         }
+        // El par de 1688 sale del PRODUCTO (v170), no de nuestra categoría: es el rastro del origen y
+        // tiene que cruzar al destino, o allí la columna queda vacía y auditar dónde estaba en 1688
+        // vuelve a ser imposible. De paso arregla el respaldo: el destino resuelve por
+        // `category_1688_mapping`, que está tecleada por las hojas REALES de 1688, así que mandarle el
+        // `externalId` y el `nameZh` de una categoría nuestra casi nunca encontraba nada.
+        d.setCategory1688Id(p.getCategory1688Id() != null ? p.getCategory1688Id()
+                : (p.getCategory() != null ? p.getCategory().getExternalId() : null));
+        d.setCategory1688Name(p.getCategory1688Name() != null ? p.getCategory1688Name()
+                : (p.getCategory() != null ? p.getCategory().getNameZh() : null));
         if (p.getSupplier() != null) {
             d.setSupplierExternalId(p.getSupplier().getExternalId());
             d.setSupplierName(p.getSupplier().getName());
