@@ -12,7 +12,6 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Produ
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.opensearch._types.OpenSearchException;
@@ -20,10 +19,12 @@ import org.opensearch.client.opensearch.core.IndexRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -33,7 +34,6 @@ import java.util.stream.Stream;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ProductIndexer {
 
     /** Idiomas con analizador propio en el índice. El chino se indexa aparte, en {@code titleZh} (analizador cjk). */
@@ -43,6 +43,30 @@ public class ProductIndexer {
     private final ProductRepository productRepository;
     private final ProductAttributeRepository productAttributeRepository;
     private final ProductIndexSchema schema;
+
+    /**
+     * Transacción de SOLO LECTURA para construir el documento de UN producto.
+     *
+     * <p>Hace falta una sesión JPA porque el documento se arma recorriendo colecciones perezosas
+     * —traducciones, imágenes, opciones de variante y sus valores—, y {@code findWithDetailsById} solo
+     * trae por {@code @EntityGraph} el proveedor y la categoría.
+     *
+     * <p>Va con {@link TransactionTemplate} y no con {@code @Transactional} porque el cuerpo se invoca
+     * desde esta misma clase: una llamada interna no atraviesa el proxy de Spring y la anotación sería
+     * una promesa que nadie cumple. Es el mismo patrón que {@code AnuncioBusScheduler}.
+     */
+    private final TransactionTemplate lectura;
+
+    public ProductIndexer(OpenSearchClient client, ProductRepository productRepository,
+            ProductAttributeRepository productAttributeRepository, ProductIndexSchema schema,
+            PlatformTransactionManager gestorDeTransacciones) {
+        this.client = client;
+        this.productRepository = productRepository;
+        this.productAttributeRepository = productAttributeRepository;
+        this.schema = schema;
+        this.lectura = new TransactionTemplate(gestorDeTransacciones);
+        this.lectura.setReadOnly(true);
+    }
 
     @Value("${nexadrop.opensearch.products-index}")
     private String logicalIndex;
@@ -93,16 +117,13 @@ public class ProductIndexer {
     // a mapa, así que declarar el tipo hacía que Spring no supiera convertirlo y el listener reventara
     // con CADA mensaje del tema, reintentando sin fin. La conversión vive en ProductIngestedEvent.desde.
     @KafkaListener(topics = NexaTopics.PRODUCT_INGESTED, groupId = "nexadrop-search-indexer")
-    // La transacción tiene que abrirse AQUÍ: el cuerpo del indexado se llama en la misma clase y una
-    // llamada interna no pasa por el proxy de Spring, así que el indexado corría sin sesión JPA.
-    @Transactional(readOnly = true)
     public void onProductIngested(Map<String, Object> mensaje) {
         ProductIngestedEvent event = ProductIngestedEvent.desde(mensaje);
         if (event == null) {
             log.warn("Indexado: mensaje de product.ingested sin identificador utilizable, se ignora");
             return;
         }
-        indexProductDoc(event.productId());
+        indexaProducto(event.productId());
     }
 
     /** Removes a single product document from the search index (best-effort). */
@@ -115,24 +136,39 @@ public class ProductIndexer {
     }
 
     /**
-     * Re-indexes every product into OpenSearch. {@code @Transactional} keeps one session open
-     * for the whole sweep so the per-product indexing body can read the lazy
-     * {@code translations}/{@code images} collections. Returns the number indexed.
+     * Reindexa el catálogo entero en OpenSearch. Devuelve cuántos entraron de verdad en el índice.
+     *
+     * <p><b>Este método NO abre transacción, y es deliberado.</b> Antes llevaba
+     * {@code @Transactional(readOnly = true)} para mantener una sesión JPA abierta durante todo el
+     * barrido y poder recorrer las colecciones perezosas de cada producto. Funcionaba, y a cambio
+     * dejaba UNA transacción de Postgres abierta de principio a fin: medido en local sobre 7.646
+     * productos, <b>757 segundos</b>, el 27,7 % de ellos en estado «idle in transaction» mientras
+     * esperaba a cada llamada HTTP a OpenSearch.
+     *
+     * <p>Lo que eso provocó el 12-sep-2026: esa transacción retiene {@code AccessShareLock} sobre
+     * {@code product} y sus tablas hijas hasta que confirma. El {@code ALTER TABLE} de la migración
+     * v170 pidió cerrojo exclusivo, se encoló detrás, y una petición de cerrojo exclusivo EN ESPERA
+     * bloquea a todo lo que llegue después —incluidos los SELECT—: el catálogo de preproducción
+     * estuvo diecisiete minutos parado y el pod murió al agotar la sonda de arranque.
+     *
+     * <p>Ahora cada producto se lee en su propia transacción corta y la llamada a OpenSearch ocurre
+     * FUERA de ella. Lo fija {@code ReindexTransactionBoundariesIT}.
      */
-    @Transactional(readOnly = true)
     public int reindexAll() {
         // PURGA primero: borra los documentos obsoletos (productos ya eliminados de la BD) para que el
         // índice quede EXACTAMENTE igual que la BD. Sin esto, un producto borrado seguía apareciendo en
         // la búsqueda (documento huérfano con un UUID que ya no existe) porque el reindex solo hacía upsert.
         purgeIndex();
+        // Solo los ids: con findAll() el barrido se quedaba con miles de entidades vivas en la sesión.
+        List<UUID> ids = lectura.execute(estado -> productRepository.findAllIds());
         int[] counters = { 0, 0 };
-        productRepository.findAll().forEach(p -> {
-            if (indexProductDoc(p.getId())) {
+        for (UUID id : Objects.requireNonNullElse(ids, List.<UUID>of())) {
+            if (indexaProducto(id)) {
                 counters[0]++;
             } else {
                 counters[1]++;
             }
-        });
+        }
         // Se cuenta lo que REALMENTE entró en el índice, no lo que se intentó: contando intentos, un fallo
         // de serialización dejaba el índice vacío mientras el log (y el admin) decían "5.450 productos".
         if (counters[1] > 0) {
@@ -154,20 +190,46 @@ public class ProductIndexer {
         }
     }
 
-    @Transactional(readOnly = true)
     public void indexProduct(UUID productId) {
-        indexProductDoc(productId);
+        indexaProducto(productId);
     }
 
     /**
-     * Cuerpo del indexado, SIN anotar. Es al que llaman {@link #onProductIngested} y {@link #reindexAll},
-     * que ya abren la sesión JPA: anotarlo de nuevo aquí no serviría de nada porque una llamada dentro de
-     * la misma instancia no atraviesa el proxy de Spring.
+     * Indexa UN producto: arma el documento dentro de una transacción de solo lectura y lo manda a
+     * OpenSearch FUERA de ella.
+     *
+     * <p><b>Esa separación es el invariante de esta clase.</b> La llamada a OpenSearch es de red y
+     * bloquea; hacerla con la transacción abierta deja la conexión de Postgres «idle in transaction»
+     * reteniendo sus cerrojos durante todo el viaje. Con un producto suelto el daño es pequeño; con el
+     * barrido entero fue lo que congeló el catálogo de preproducción diecisiete minutos. Lo comprueba
+     * {@code ReindexTransactionBoundariesIT}.
      */
-    private boolean indexProductDoc(UUID productId) {
+    private boolean indexaProducto(UUID productId) {
+        Map<String, Object> doc = lectura.execute(estado -> construyeDoc(productId));
+        if (doc == null) {
+            return false;
+        }
+        try {
+            client.index(IndexRequest.of(b -> b.index(index).id(productId.toString()).document(doc)));
+            return true;
+        } catch (Exception e) {
+            // Con la causa: el mensaje de opensearch-java para un fallo de serialización es un escueto
+            // "Jackson exception" que no dice qué campo lo provocó, y con él un reindexado podía terminar
+            // "correctamente" con 5.000 productos fuera del índice.
+            log.error("Index failed for product {}: {} ({})", productId, e.getMessage(),
+                    e.getCause() != null ? e.getCause().getMessage() : "sin causa");
+            return false;
+        }
+    }
+
+    /**
+     * Arma el documento de un producto. Corre SIEMPRE dentro de {@link #lectura}: recorre colecciones
+     * perezosas y fuera de sesión reventaría. Devuelve {@code null} si el producto ya no existe.
+     */
+    private Map<String, Object> construyeDoc(UUID productId) {
         ProductEntity p = productRepository.findWithDetailsById(productId).orElse(null);
         if (p == null)
-            return false;
+            return null;
         Map<String, Object> doc = new HashMap<>();
         doc.put("id", p.getId().toString());
         doc.put("slug", p.getSlug());
@@ -234,23 +296,18 @@ public class ProductIndexer {
         // hasImage: true solo si hay al menos una imagen ya espejada a nuestro storage (cdn_url no nulo).
         // La búsqueda filtra por este flag para no devolver productos cuya imagen no renderiza (igual
         // criterio que el filtro SQL del escaparate).
-        boolean hasMirroredImage = p.getImages().stream().anyMatch(i -> i.getCdnUrl() != null);
+        // Las fotos de la DESCRIPCION no cuentan: el escaparate filtra por `hasImage` para no enseñar
+        // productos cuya imagen no renderiza, y un producto cuya unica foto espejada fuese un cartel
+        // de la descripcion saldria en el listado sin una sola foto de galeria que enseñar.
+        List<ProductImageEntity> deGaleria = p.getImages().stream()
+                .filter(i -> !"DETAIL".equalsIgnoreCase(i.getRole())).toList();
+        boolean hasMirroredImage = deGaleria.stream().anyMatch(i -> i.getCdnUrl() != null);
         doc.put("hasImage", hasMirroredImage);
-        if (!p.getImages().isEmpty()) {
-            ProductImageEntity img = p.getImages().get(0);
+        if (!deGaleria.isEmpty()) {
+            ProductImageEntity img = deGaleria.get(0);
             doc.put("mainImage", img.getCdnUrl() != null ? img.getCdnUrl() : img.getSourceUrl());
         }
-        try {
-            client.index(IndexRequest.of(b -> b.index(index).id(p.getId().toString()).document(doc)));
-            return true;
-        } catch (Exception e) {
-            // Con la causa: el mensaje de opensearch-java para un fallo de serialización es un escueto
-            // "Jackson exception" que no dice qué campo lo provocó, y con él un reindexado podía terminar
-            // "correctamente" con 5.000 productos fuera del índice.
-            log.error("Index failed for product {}: {} ({})", productId, e.getMessage(),
-                    e.getCause() != null ? e.getCause().getMessage() : "sin causa");
-            return false;
-        }
+        return doc;
     }
 
     /**
