@@ -8,6 +8,17 @@
 --puede comparar contra lo que dijo el proveedor, y poblar el mapeo category_1688_mapping sin
 --adivinar.
 
+-- ADD COLUMN es instantaneo, pero para entrar necesita el cerrojo exclusivo de la tabla y se pone
+-- A LA COLA. Si alguien tiene una transaccion abierta sobre product -el 12-sep-2026 una conexion del
+-- backend viejo llevaba 20 minutos «idle in transaction»-, la ALTER espera, y detras de ella se
+-- encola TODA consulta posterior a product: el catalogo de PRE se quedo parado 17 minutos y el pod
+-- murio al agotar la sonda de arranque, dejando ademas el cerrojo de Liquibase cogido.
+--
+-- Con lock_timeout la migracion falla en 5 segundos en vez de congelar la tienda. Fallar es
+-- preferible: el despliegue se reintenta y no hay nadie esperando. Vale para toda la sesion de
+-- Liquibase, asi que protege tambien al CREATE INDEX de abajo.
+SET lock_timeout = '5s';
+
 ALTER TABLE product ADD COLUMN category_1688_id varchar(60);
 ALTER TABLE product ADD COLUMN category_1688_name varchar(200);
 
