@@ -98,11 +98,12 @@ public class ProductBulkExportMapper {
         // imageUrls del export: se prefiere la URL de origen, pero si falta (p.ej. imagen añadida solo
         // con cdn_url) se cae a la cdn_url espejada. Así reexportar→reimportar conserva las imágenes y
         // el producto no se rechaza por "sin imágenes" en el round-trip.
-        d.setImageUrls(safe(p.getImages()).stream()
-                .sorted(Comparator.comparingInt(ProductImageEntity::getPosition))
-                .map(img -> img.getSourceUrl() != null && !img.getSourceUrl().isBlank()
-                        ? img.getSourceUrl() : img.getCdnUrl())
-                .filter(Objects::nonNull).toList());
+        // La galería y las fotos de la DESCRIPCIÓN salen en campos distintos, y esto no es cosmético:
+        // este DTO es el que viaja en el evento del bus, o sea LO QUE CRUZA DE PRE A PRO. Exportarlas
+        // mezcladas haría que al reimportarlas en producción entraran como galería, y aparecería un
+        // cartel en chino dentro del carrusel de la ficha.
+        d.setImageUrls(direccionesDeImagen(p, false));
+        d.setDetailImageUrls(direccionesDeImagen(p, true));
 
         // Logistics / customs (direct columns).
         d.setWeightGrams(p.getWeightGrams());
@@ -244,5 +245,24 @@ public class ProductBulkExportMapper {
 
     private <T> List<T> safe(List<T> list) {
         return list != null ? list : List.of();
+    }
+
+    /**
+     * Las direcciones de imagen del producto, separando la galería de las de la descripción.
+     *
+     * <p>Se prefiere la {@code source_url} de origen y solo se cae a la {@code cdn_url} espejada
+     * cuando falta —una imagen añadida a mano no tiene origen—, para que reexportar e reimportar
+     * conserve las imágenes y el producto no se rechace por «sin imágenes» en el viaje de vuelta.
+     *
+     * @param deDetalle {@code true} para las de la descripción ({@code role = DETAIL}), {@code false}
+     *                  para la galería (todo lo demás: MAIN y GALLERY).
+     */
+    private List<String> direccionesDeImagen(ProductEntity p, boolean deDetalle) {
+        return safe(p.getImages()).stream()
+                .filter(img -> "DETAIL".equalsIgnoreCase(img.getRole()) == deDetalle)
+                .sorted(Comparator.comparingInt(ProductImageEntity::getPosition))
+                .map(img -> img.getSourceUrl() != null && !img.getSourceUrl().isBlank()
+                        ? img.getSourceUrl() : img.getCdnUrl())
+                .filter(Objects::nonNull).toList();
     }
 }

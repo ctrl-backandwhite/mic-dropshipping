@@ -382,4 +382,28 @@ class Cov10ProductBulkExportMapperTest {
         assertThat(d.getCategory1688Id()).isEqualTo("126546700");
         assertThat(d.getCategory1688Name()).isEqualTo("连衣裙");
     }
+
+    @Test
+    void lasFotosDeDetalleSalenEnSuPropioCampoYNuncaEnLaGaleria() {
+        // El evento del bus viaja como BulkProductDtoIn, asi que esto es LO QUE CRUZA DE PRE A PRO.
+        // Si las de detalle salieran mezcladas en imageUrls, al reimportarlas en produccion entrarian
+        // como galeria y apareceria un cartel en chino dentro del carrusel de la ficha.
+        ProductEntity p = ProductEntity.builder().externalId("1688-detalle").build();
+        p.getImages().add(imagen(0, "https://origen/portada.jpg", null));
+        p.getImages().add(imagenConRol(1, "https://origen/galeria.jpg", null, "GALLERY"));
+        p.getImages().add(imagenConRol(2, "https://origen/detalle-a.jpg", null, "DETAIL"));
+        p.getImages().add(imagenConRol(3, "https://origen/detalle-b.jpg", null, "DETAIL"));
+
+        BulkProductDtoIn d = mapper.toBulk(p, List.of(), List.of(), List.of(), List.of());
+
+        assertThat(d.getImageUrls())
+                .containsExactly("https://origen/portada.jpg", "https://origen/galeria.jpg");
+        assertThat(d.getDetailImageUrls())
+                .containsExactly("https://origen/detalle-a.jpg", "https://origen/detalle-b.jpg");
+    }
+
+    private static ProductImageEntity imagenConRol(int position, String sourceUrl, String cdnUrl, String role) {
+        return ProductImageEntity.builder().position(position).sourceUrl(sourceUrl).cdnUrl(cdnUrl)
+                .role(role).build();
+    }
 }

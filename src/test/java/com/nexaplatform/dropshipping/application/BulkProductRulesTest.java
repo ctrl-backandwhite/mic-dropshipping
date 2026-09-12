@@ -404,4 +404,36 @@ class BulkProductRulesTest {
                 .hasMessageContaining("no tiene imágenes")
                 .hasMessageContaining("1688-123456789");
     }
+
+    @Test
+    void lasImagenesDeDetalleConservanLasQueTambienEstanEnLaGaleria() {
+        // CORRECCIÓN del 12-sep-2026. Antes se quitaban las que ya estaban en la galería, para que el
+        // comprador no viera una foto dos veces. Medido sobre el producto 1031738929572: de las nueve
+        // imágenes de la descripción, CINCO eran las mismas del estudio que la galería. El filtro se
+        // llevó esas cinco y dejó las cuatro exclusivas: tres carteles del proveedor y una foto.
+        //
+        // Lo que se rompería en producción si esta prueba fallara: la sección de detalle volvería a
+        // quedarse con el marketing del proveedor y sin las fotos del producto.
+        BulkProductDtoIn r = new BulkProductDtoIn();
+        r.setImageUrls(List.of("https://cdn.test/a.jpg"));
+        r.setDetailImageUrls(java.util.Arrays.asList(
+                "https://cdn.test/a.jpg",     // también en la galería: SE QUEDA
+                "https://cdn.test/b.jpg",     // solo en la descripción
+                "https://cdn.test/b.jpg",     // repetida: una sola vez
+                "   ",                        // en blanco
+                null));
+
+        assertThat(BulkProductRules.detailImageUrlsOf(r))
+                .containsExactly("https://cdn.test/a.jpg", "https://cdn.test/b.jpg");
+    }
+
+    @Test
+    void sinImagenesDeDetalleDevuelveListaVacia() {
+        // Un producto sin descripción ilustrada es normal, no un error: la mayoría de los ya cargados
+        // no las tienen y no se van a rellenar de momento.
+        BulkProductDtoIn r = new BulkProductDtoIn();
+        r.setImageUrls(List.of("https://cdn.test/a.jpg"));
+
+        assertThat(BulkProductRules.detailImageUrlsOf(r)).isEmpty();
+    }
 }
