@@ -347,3 +347,5 @@ databaseChangeLog:
       file: db/changelog/schema-v168-canal-del-pago.sql
   - include:
       file: db/changelog/schema-v169-dispositivos-para-avisos.sql
+  - include:
+      file: db/changelog/schema-v170-categoria-de-origen-1688.sql

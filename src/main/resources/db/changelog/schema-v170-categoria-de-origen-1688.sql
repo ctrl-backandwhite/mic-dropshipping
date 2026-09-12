@@ -1,0 +1,16 @@
+--liquibase formatted sql
+
+--changeset nexadrop:v170-categoria-de-origen-1688
+--comment La categoria que 1688 declara para cada producto, guardada tal cual. No decide donde se
+--archiva -de eso se encarga categorySlug- pero sin ella no hay forma de AUDITAR la clasificacion
+--despues de cargar: el 11-sep-2026 habia 656 productos mal archivados y hubo que deducirlo del
+--titulo, que es el mismo dato con el que se habia equivocado el clasificador. Con esta columna se
+--puede comparar contra lo que dijo el proveedor, y poblar el mapeo category_1688_mapping sin
+--adivinar.
+
+ALTER TABLE product ADD COLUMN category_1688_id varchar(60);
+ALTER TABLE product ADD COLUMN category_1688_name varchar(200);
+
+--changeset nexadrop:v170-indice-categoria-1688
+--comment Para agrupar por categoria de origen al auditar, que es justo para lo que existe.
+CREATE INDEX idx_product_category_1688 ON product (category_1688_id);

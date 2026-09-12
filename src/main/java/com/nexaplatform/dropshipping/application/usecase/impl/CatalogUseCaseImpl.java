@@ -2428,6 +2428,12 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         // columna es NOT NULL y el cálculo del checkout las suma sin preguntar.
         p.setShippingUserCny(r.getShippingUserCny() != null ? r.getShippingUserCny() : BigDecimal.ZERO);
         p.setDutyUserCny(r.getDutyUserCny() != null ? r.getDutyUserCny() : BigDecimal.ZERO);
+        // La categoría que 1688 declara, guardada tal cual y sin intervenir en dónde se archiva —de eso
+        // se encarga la categoría propia—. Se guarda para poder AUDITAR esa decisión después: hasta
+        // ahora no quedaba rastro del origen, así que revisar si un producto estaba bien clasificado
+        // solo se podía hacer contra el título, el mismo dato con el que se equivocó el clasificador.
+        p.setCategory1688Id(Texts.trimToNull(r.getCategory1688Id()));
+        p.setCategory1688Name(Texts.trimToNull(r.getCategory1688Name()));
         BulkProductFields.applyPackageDimensions(p, r);
         BulkProductFields.applyCustomsFields(p, r);
         // Lo que la carga no traiga (partida arancelaria, material, uso, batería y

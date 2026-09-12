@@ -8,6 +8,10 @@
 -- POR QUÉ AQUÍ: el fallo no da ningún error. La ficha se pinta, el pedido se paga y el chino solo se
 -- ve mirando la pantalla. Esta consulta es la única forma de encontrarlo sin ir producto a producto.
 --
+-- MIRA DOS COSAS DISTINTAS, y la segunda se me escapó en la primera pasada: buscar solo caracteres
+-- Han deja fuera la puntuación china —『 Negro 』, «Gris 〈♥〉2020»—, que está en español y aun así se
+-- lee como un error. Lo limpia `limpia-puntuacion-cjk-variantes.sql`.
+--
 -- USO:  docker exec nexadrop-postgres psql -U nexadrop -d nexadrop -f - < variantes-sin-traduccion.sql
 WITH pares AS (
     SELECT DISTINCT pv.product_id, kv.key AS eje, kv.value AS valor_zh
@@ -24,3 +28,12 @@ WHERE NOT EXISTS (
         WHERE vo.product_id = pares.product_id
           AND vv.value_zh = pares.valor_zh)
 ORDER BY p.external_id, pares.eje, pares.valor_zh;
+
+-- 2) Traducciones que ya existen pero llevan chino dentro: ideogramas o su puntuación.
+SELECT p.external_id, vo.name_zh AS eje, vv.value_zh, t.language, t.value AS traducido
+FROM variant_value_translation t
+JOIN variant_value vv ON vv.id = t.variant_value_id
+JOIN variant_option vo ON vo.id = vv.option_id
+JOIN product p ON p.id = vo.product_id
+WHERE t.value ~ '[一-鿿]|[『』〈〉【】〖〗「」]'
+ORDER BY p.external_id, t.language, t.value;
