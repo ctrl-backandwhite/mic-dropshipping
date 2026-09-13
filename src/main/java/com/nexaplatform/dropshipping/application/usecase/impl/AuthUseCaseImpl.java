@@ -7,6 +7,7 @@ import com.nexaplatform.dropshipping.api.dto.in.ResendActivationDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.ChangePasswordDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.DeleteAccountConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.LoginDtoIn;
+import com.nexaplatform.dropshipping.application.service.CountryCurrencyService;
 import com.nexaplatform.dropshipping.application.service.DeviceSessionService;
 import com.nexaplatform.dropshipping.application.service.TotpService;
 import com.nexaplatform.dropshipping.api.exception.TwoFactorInvalidException;
@@ -68,6 +69,18 @@ public class AuthUseCaseImpl implements AuthUseCase {
     private final DeviceSessionService deviceSessionService;
     private final UserTokenService userTokenService;
     private final TotpService totpService;
+    private final CountryCurrencyService countryCurrencyService;
+
+    /**
+     * El perfil, con la divisa que le toca por su PAÍS DE REGISTRO.
+     *
+     * <p>La pone el servidor y no el cliente: una cuenta dada de alta en Estados Unidos leía los
+     * precios en libras porque el teléfono arrastraba la preferencia de la sesión anterior. Quien
+     * quiera otra divisa la elige a mano; lo que no puede es heredarla de otra persona.
+     */
+    private MeDtoOut conDivisa(MeDtoOut perfil, User user) {
+        return perfil == null ? null : perfil.withCurrency(countryCurrencyService.forCountry(user.getCountry()));
+    }
 
     @Override
     public RegisterDtoOut register(RegisterDtoIn req) {
@@ -186,7 +199,8 @@ public class AuthUseCaseImpl implements AuthUseCase {
         UserTokenService.Tokens tokens = userTokenService.issue(user.getId(), user.getEmail(),
                 user.getRole().name(), authorities);
         return LoginDtoOut.builder().token(tokens.accessToken()).refreshToken(tokens.refreshToken())
-                .tokenType("Bearer").expiresIn(tokens.expiresInSeconds()).user(mapper.toMeDtoOut(user, authorities))
+                .tokenType("Bearer").expiresIn(tokens.expiresInSeconds())
+                .user(conDivisa(mapper.toMeDtoOut(user, authorities), user))
                 .build();
     }
 
@@ -255,7 +269,7 @@ public class AuthUseCaseImpl implements AuthUseCase {
             id = userUseCase.findByEmail(authentication.getName()).getId();
         }
         User user = userUseCase.findById(id);
-        return mapper.toMeDtoOut(user, authorities(authentication));
+        return conDivisa(mapper.toMeDtoOut(user, authorities(authentication)), user);
     }
 
     @Override
@@ -311,7 +325,7 @@ public class AuthUseCaseImpl implements AuthUseCase {
         if (req.getLanguage() != null)
             user.setLanguage(req.getLanguage());
         User saved = userUseCase.updateUser(user);
-        return mapper.toMeDtoOut(saved, authorities(authentication));
+        return conDivisa(mapper.toMeDtoOut(saved, authorities(authentication)), saved);
     }
 
     @Override

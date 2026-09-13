@@ -74,6 +74,8 @@ class AuthUseCaseImplTest {
     UserTokenService userTokenService;
     @Mock
     TotpService totpService;
+    @Mock
+    com.nexaplatform.dropshipping.application.service.CountryCurrencyService countryCurrencyService;
 
     @InjectMocks
     AuthUseCaseImpl useCase;

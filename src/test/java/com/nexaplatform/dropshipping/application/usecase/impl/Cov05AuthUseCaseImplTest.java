@@ -71,6 +71,8 @@ class Cov05AuthUseCaseImplTest {
     UserTokenService userTokenService;
     @Mock
     com.nexaplatform.dropshipping.application.service.TotpService totpService;
+    @Mock
+    com.nexaplatform.dropshipping.application.service.CountryCurrencyService countryCurrencyService;
 
     @InjectMocks
     AuthUseCaseImpl useCase;
@@ -388,5 +390,29 @@ class Cov05AuthUseCaseImplTest {
         useCase.login(LoginDtoIn.builder().email("ana@example.com").password("pw").build(), request, response);
 
         verify(userTokenService).issue(USER_ID, "ana@example.com", "USER", Set.of("ROLE_USER"));
+    }
+
+    /**
+     * La divisa la decide el PAÍS DE REGISTRO y la pone el servidor.
+     *
+     * <p>Sin esto, quien se daba de alta en Estados Unidos leía los precios en libras: la aplicación
+     * se quedaba con la divisa que hubiera guardado el teléfono, que podía ser de otra persona.
+     */
+    @Test
+    void elPerfilTraeLaDivisaDelPaisDeRegistro() {
+        User conPais = user().withCountry("US");
+        when(userUseCase.findById(USER_ID)).thenReturn(conPais);
+        when(countryCurrencyService.forCountry("US")).thenReturn("USD");
+
+        assertThat(useCase.me(authOf(USER_ID.toString())).getCurrency()).isEqualTo("USD");
+    }
+
+    @Test
+    void unPaisSinDivisaActivaCaeEnDolares() {
+        User conPais = user().withCountry("XX");
+        when(userUseCase.findById(USER_ID)).thenReturn(conPais);
+        when(countryCurrencyService.forCountry("XX")).thenReturn("USD");
+
+        assertThat(useCase.me(authOf(USER_ID.toString())).getCurrency()).isEqualTo("USD");
     }
 }

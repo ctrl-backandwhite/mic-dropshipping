@@ -58,6 +58,16 @@ public class MeDtoOut {
     @Schema(description = "Preferred language")
     private String language;
 
+    /**
+     * Divisa que le corresponde a la cuenta por su PAÍS DE REGISTRO.
+     *
+     * <p>La decide el servidor a partir del país que él mismo guarda, no el cliente: así una cuenta
+     * dada de alta en Estados Unidos no acaba leyendo los precios en libras porque el teléfono
+     * arrastrara la preferencia de quien lo usó antes. Quien quiera otra divisa la elige a mano.
+     */
+    @Schema(description = "Currency for the account's country of registration")
+    private String currency;
+
     @Schema(description = "Public avatar URL; null when no avatar uploaded")
     private String avatarUrl;
 
