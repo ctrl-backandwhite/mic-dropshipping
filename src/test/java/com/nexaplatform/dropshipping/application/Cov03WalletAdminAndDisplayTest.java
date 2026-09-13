@@ -191,13 +191,48 @@ class Cov03WalletAdminAndDisplayTest {
         when(txRepository.findByWalletIdOrderByCreatedAtDesc(eq(w.getId()), anyInt(), anyInt()))
                 .thenReturn(List.of(ingreso, cargo));
         when(currencyService.localeOf(anyString())).thenReturn("es-ES");
+        // Sin cambio de divisa: el importe convertido es el mismo, que es lo que mira esta prueba.
+        when(currencyService.usdTo(any(), anyString())).thenAnswer(inv -> inv.getArgument(0));
         when(currencyService.formatIn(any(), anyString(), anyString())).thenAnswer(inv -> inv.getArgument(0) + "$");
 
         List<WalletTransaction> txs = useCase.getMyTransactions(userId, 0, 20);
 
-        assertThat(txs.get(0).getAmountFormatted()).isEqualTo("+25.00$");
-        assertThat(txs.get(1).getAmountFormatted()).isEqualTo("-10.00$"); // valor absoluto con signo delante
-        assertThat(txs.get(1).getBalanceAfterFormatted()).isEqualTo("65.00$");
+        assertThat(txs.get(0).getAmountFormatted()).isEqualTo("+25.0000$");
+        assertThat(txs.get(1).getAmountFormatted()).isEqualTo("-10.0000$"); // valor absoluto con signo delante
+        assertThat(txs.get(1).getBalanceAfterFormatted()).isEqualTo("65.0000$");
+    }
+
+    /**
+     * El extracto va en la MISMA divisa que el saldo.
+     *
+     * <p>Los movimientos se formateaban siempre en dólares —el libro mayor es USD— mientras el saldo sí
+     * se convertía: en la misma pantalla se leía «£54.22» de saldo y «US$73.35» como saldo tras el
+     * último movimiento. Dos cifras que son la misma y que no se parecen.
+     */
+    @Test
+    void elExtractoSeConvierteALaDivisaActivaIgualQueElSaldo() {
+        Wallet w = wallet(5_000L, 0L);
+        WalletTransaction ingreso = WalletTransaction.builder().amountUsdCents(2_000L).balanceAfterCents(7_000L)
+                .kind("DEPOSIT").build();
+        when(walletRepository.findByUserId(userId)).thenReturn(Optional.of(w));
+        when(txRepository.findByWalletIdOrderByCreatedAtDesc(eq(w.getId()), anyInt(), anyInt()))
+                .thenReturn(List.of(ingreso));
+        when(currencyService.localeOf(anyString())).thenReturn("en-GB");
+        // La libra vale la mitad que el dólar en este doble: lo que importa es que la conversión se aplique.
+        when(currencyService.usdTo(any(), anyString()))
+                .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("2")));
+        when(currencyService.formatIn(any(), anyString(), anyString()))
+                .thenAnswer(inv -> "£" + inv.getArgument(0));
+
+        CurrencyHolder.set("GBP");
+        try {
+            List<WalletTransaction> txs = useCase.getMyTransactions(userId, 0, 20);
+
+            assertThat(txs.get(0).getAmountFormatted()).isEqualTo("+£10.0000");
+            assertThat(txs.get(0).getBalanceAfterFormatted()).isEqualTo("£35.0000");
+        } finally {
+            CurrencyHolder.clear();
+        }
     }
 
     @Test

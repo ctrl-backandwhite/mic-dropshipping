@@ -111,17 +111,24 @@ public class WalletUseCaseImpl implements WalletUseCase {
         Wallet w = found.get();
         List<WalletTransaction> txs = txRepository.findByWalletIdOrderByCreatedAtDesc(w.getId(), page,
                 Math.min(size, 100));
-        // Importes del libro mayor (USD canónico) formateados EN EL BACKEND con la convención del país del
-        // visor (locale de la divisa activa) y con signo. El front solo pinta.
-        String vLocale = currencyService.localeOf(CurrencyHolder.get());
+        /*
+         * Importes del libro mayor —que es USD canónico— CONVERTIDOS a la divisa activa, igual que el
+         * saldo. Antes se formateaban siempre en dólares mientras el saldo de arriba sí se convertía:
+         * en la misma pantalla, «£54.22» de saldo y «US$73.35» como saldo tras el último movimiento.
+         * Dos cifras que son la misma y que no se parecen.
+         */
+        String currency = CurrencyHolder.get();
+        String vLocale = currencyService.localeOf(currency);
         for (WalletTransaction t : txs) {
-            BigDecimal amt = BigDecimal.valueOf(t.getAmountUsdCents()).divide(BigDecimal.valueOf(100), 2,
+            BigDecimal amt = BigDecimal.valueOf(t.getAmountUsdCents()).divide(BigDecimal.valueOf(100), 4,
                     RoundingMode.HALF_UP);
-            BigDecimal after = BigDecimal.valueOf(t.getBalanceAfterCents()).divide(BigDecimal.valueOf(100), 2,
+            BigDecimal after = BigDecimal.valueOf(t.getBalanceAfterCents()).divide(BigDecimal.valueOf(100), 4,
                     RoundingMode.HALF_UP);
             String sign = t.getAmountUsdCents() >= 0 ? "+" : "-";
-            t.setAmountFormatted(sign + currencyService.formatIn(amt.abs(), "USD", vLocale));
-            t.setBalanceAfterFormatted(currencyService.formatIn(after, "USD", vLocale));
+            t.setAmountFormatted(sign + currencyService.formatIn(currencyService.usdTo(amt.abs(), currency),
+                    currency, vLocale));
+            t.setBalanceAfterFormatted(
+                    currencyService.formatIn(currencyService.usdTo(after, currency), currency, vLocale));
         }
         return txs;
     }
