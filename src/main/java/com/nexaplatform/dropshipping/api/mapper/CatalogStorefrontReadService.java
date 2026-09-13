@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.application.service.Texts;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.PromotionService;
@@ -554,13 +555,27 @@ public class CatalogStorefrontReadService {
         List<ProductSummaryView> all = fichas.stream()
                 .filter(ficha -> byId.containsKey(ficha.productId()))
                 .map(ficha -> productMapper.toSummary(byId.get(ficha.productId()), lang,
-                        ficha.formateado() != null
+                        precioGuardadoUtilizable(ficha)
                                 ? pricingService.precioYaVisto(ficha.precio(), ficha.moneda(), ficha.formateado())
                                 : null))
                 .toList();
         int from = (int) Math.min((long) page * safe, all.size());
         int to = Math.min(from + safe, all.size());
         return PageResponse.from(new PageImpl<>(all.subList(from, to), pageable, all.size()));
+    }
+
+    /**
+     * ¿Sirve el precio que se guardó con la visita?
+     *
+     * <p>Solo si está en la MONEDA ACTIVA. Guardar el importe que vio la persona ahorra cincuenta
+     * conversiones por página, pero quien cambia de divisa —o quien abrió fichas antes de cambiarla—
+     * se encontraba el historial con unos precios en dólares y otros en euros, uno al lado del otro en
+     * la misma rejilla. Cuando la moneda guardada no es la de hoy se devuelve `null` y esa ficha, solo
+     * esa, se vuelve a calcular: en el caso normal —todas en la misma moneda— no se paga nada.
+     */
+    private boolean precioGuardadoUtilizable(ProductViewHistoryService.FichaVista ficha) {
+        return ficha.formateado() != null && ficha.moneda() != null
+                && ficha.moneda().equalsIgnoreCase(CurrencyHolder.get());
     }
 
     /** El precio ya viene en la moneda del usuario (displayPrice); rango inclusivo, excluye nulos si hay filtro. */

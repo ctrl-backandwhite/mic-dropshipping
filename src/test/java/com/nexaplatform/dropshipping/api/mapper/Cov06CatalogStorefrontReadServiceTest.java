@@ -1,5 +1,8 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
+import com.nexaplatform.dropshipping.application.service.ProductViewHistoryService;
+import org.junit.jupiter.api.DisplayName;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.PromotionService;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
@@ -642,5 +645,62 @@ class Cov06CatalogStorefrontReadServiceTest {
                 .thenReturn(venta);
 
         assertThat(service.variantView(v).price()).isEqualByComparingTo("2.70");
+    }
+
+    /* ============================ historial de visitas ============================ */
+
+    /**
+     * El precio guardado con la visita solo vale si está en la MONEDA ACTIVA.
+     *
+     * <p>Guardar el importe que vio la persona ahorra cincuenta conversiones por página, pero quien
+     * cambia de divisa —o quien abrió fichas antes de cambiarla— se encontraba el historial con unos
+     * precios en dólares y otros en euros, uno al lado del otro en la misma rejilla.
+     */
+    @Test
+    @DisplayName("el historial no reutiliza el precio guardado en otra moneda")
+    void elHistorialNoReutilizaElPrecioGuardadoEnOtraMoneda() {
+        ProductEntity p = new ProductEntity();
+        p.setId(UUID.randomUUID());
+        p.setStatus(ProductStatus.ACTIVE);
+        org.mockito.Mockito.when(productRepository.findAllById(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(List.of(p));
+        ProductViewHistoryService.FichaVista enEuros = new ProductViewHistoryService.FichaVista(p.getId(),
+                new java.math.BigDecimal("3.08"), "EUR", "3,08 €");
+
+        CurrencyHolder.set("USD");
+        try {
+            service.historial(List.of(enEuros), 0, 24, "es");
+        } finally {
+            CurrencyHolder.clear();
+        }
+
+        // Precio a null = se vuelve a calcular en la moneda de hoy, en vez de pintar los euros de ayer.
+        org.mockito.Mockito.verify(productMapper).toSummary(org.mockito.ArgumentMatchers.eq(p),
+                org.mockito.ArgumentMatchers.eq("es"), org.mockito.ArgumentMatchers.isNull());
+        org.mockito.Mockito.verify(pricingService, org.mockito.Mockito.never())
+                .precioYaVisto(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    @DisplayName("en la misma moneda sí se reutiliza, que es lo que hace rápida la página")
+    void enLaMismaMonedaSiSeReutiliza() {
+        ProductEntity p = new ProductEntity();
+        p.setId(UUID.randomUUID());
+        p.setStatus(ProductStatus.ACTIVE);
+        org.mockito.Mockito.when(productRepository.findAllById(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(List.of(p));
+        ProductViewHistoryService.FichaVista enDolares = new ProductViewHistoryService.FichaVista(p.getId(),
+                new java.math.BigDecimal("7.78"), "usd", "$7.78");
+
+        CurrencyHolder.set("USD");
+        try {
+            service.historial(List.of(enDolares), 0, 24, "es");
+        } finally {
+            CurrencyHolder.clear();
+        }
+
+        org.mockito.Mockito.verify(pricingService).precioYaVisto(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("usd"), org.mockito.ArgumentMatchers.eq("$7.78"));
     }
 }
