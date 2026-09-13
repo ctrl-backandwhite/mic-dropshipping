@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.payment;
 
+import com.nexaplatform.dropshipping.domain.enums.PaymentClientTarget;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethod;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PaymentEntity;
 import com.stripe.Stripe;
@@ -56,6 +57,16 @@ public class StripeGateway implements PaymentGateway {
     @Value("${nexadrop.storefront.base-url:http://localhost:3003}")
     private String storefrontBaseUrl;
 
+    /**
+     * Base pública de ESTE backend, para la vuelta del pago a la aplicación.
+     *
+     * <p>Stripe solo acepta direcciones http(s) como página de retorno, así que el enlace profundo del
+     * teléfono no se le puede dar directamente —PayPal sí lo admite y por eso allí no hace falta—. Se
+     * vuelve a un puente propio que redirige al esquema de la app.
+     */
+    @Value("${nexadrop.mobile.payment-bridge-base-url:http://10.0.2.2:18082}")
+    private String appBridgeBaseUrl;
+
     @Override
     public boolean supports(PaymentMethod m) {
         return m == PaymentMethod.CARD;
@@ -86,17 +97,38 @@ public class StripeGateway implements PaymentGateway {
         return initiateCheckoutSession(p);
     }
 
+
+    /**
+     * La página de vuelta cuando el pago se ha iniciado desde la APLICACIÓN, o {@code null} si viene
+     * de la web.
+     *
+     * <p>Apunta al puente del propio backend, que redirige al esquema del teléfono: la pasarela solo
+     * admite direcciones http(s), y una vuelta al escaparate deja al móvil en una página que no sabe
+     * abrir —con el cobro hecho y la app sin enterarse—.
+     */
+    String vueltaDeLaApp(PaymentEntity p, boolean aprobado) {
+        if (p.getClientTarget() != PaymentClientTarget.MOBILE || appBridgeBaseUrl.isBlank()) {
+            return null;
+        }
+        String base = appBridgeBaseUrl + "/api/payments/app-return?paymentId=" + p.getId();
+        return aprobado ? base + "&status=ok&session_id={CHECKOUT_SESSION_ID}" : base + "&status=cancel";
+    }
+
     /** Checkout hospedado (redirect) para pago de PEDIDO o RECARGA de wallet. */
     private InitiateResult initiateCheckoutSession(PaymentEntity p) {
         try {
             boolean isOrder = p.getOrderId() != null;
-            String successUrl = isOrder
-                    ? storefrontBaseUrl + "/checkout/return?provider=stripe&orderId=" + p.getOrderId()
-                            + "&paymentId=" + p.getId() + "&session_id={CHECKOUT_SESSION_ID}"
-                    : storefrontBaseUrl + "/wallet/recharge/return?provider=stripe&paymentId=" + p.getId()
-                            + "&session_id={CHECKOUT_SESSION_ID}";
-            String cancelUrl = isOrder ? storefrontBaseUrl + "/checkout?cancelled=1"
-                    : storefrontBaseUrl + "/wallet/recharge?cancelled=1";
+            String successUrl = vueltaDeLaApp(p, true);
+            String cancelUrl = vueltaDeLaApp(p, false);
+            if (successUrl == null) {
+                successUrl = isOrder
+                        ? storefrontBaseUrl + "/checkout/return?provider=stripe&orderId=" + p.getOrderId()
+                                + "&paymentId=" + p.getId() + "&session_id={CHECKOUT_SESSION_ID}"
+                        : storefrontBaseUrl + "/wallet/recharge/return?provider=stripe&paymentId=" + p.getId()
+                                + "&session_id={CHECKOUT_SESSION_ID}";
+                cancelUrl = isOrder ? storefrontBaseUrl + "/checkout?cancelled=1"
+                        : storefrontBaseUrl + "/wallet/recharge?cancelled=1";
+            }
             String productName = isOrder
                     ? "NX036 · order " + shortId(p.getOrderId().toString())
                     : "NX036 · wallet recharge";

@@ -293,6 +293,12 @@ nexadrop:
     # porque el sistema operativo solo sabe devolver el foco a la aplicación por él. Debe coincidir con
     # el `scheme` de app.config.ts en el repositorio de la app.
     oauth-callback-url: ${MOBILE_OAUTH_CALLBACK_URL:nx036://auth/callback}
+    # Vuelta del pago a la app. La pasarela solo admite http(s), así que el puente
+    # /api/payments/app-return redirige a este esquema; debe coincidir con el de la app.
+    payment-return-url: ${MOBILE_PAYMENT_RETURN_URL:nx036://pago}
+    # Base pública de ESTE backend: Stripe solo admite http(s) de vuelta, así que el puente
+    # /api/payments/app-return recibe la vuelta y redirige al esquema de la app.
+    payment-bridge-base-url: ${MOBILE_PAYMENT_BRIDGE_BASE_URL:http://10.0.2.2:18082}
   trend:
     # Puntuación de «Tendencia ahora», recalculada desde las ventas REALES de la tienda. Antes no la
     # escribía nadie —solo el sembrador de demo, apagado— y 5.220 de 5.524 productos estaban a cero: la

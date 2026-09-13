@@ -113,7 +113,10 @@ public class BffSecurityConfig {
                 "/api/compliance", "/api/compliance/**",
                 // Textos legales: cualquiera debe poder leerlos ANTES de registrarse.
                 "/api/legal", "/api/legal/**",
-                "/api/captcha/**")
+                "/api/captcha/**",
+                // Vuelta del pago a la aplicación. La abre el NAVEGADOR al salir de la pasarela, sin
+                // testigo ninguno: solo redirige al esquema del teléfono y no toca dinero ni datos.
+                "/api/payments/app-return")
                 .cors(Customizer.withDefaults())
                 // NOSONAR java:S4502 — Falso positivo verificado: con STATELESS (abajo) la sesión no se lee
                 // nunca, así que ninguna ruta con efectos se autentica por cookie. Detalle en el javadoc.
@@ -133,6 +136,8 @@ public class BffSecurityConfig {
                         .permitAll()
                         // Reto CAPTCHA (proof-of-work): el navegador lo pide antes de enviar un formulario público.
                         .requestMatchers(HttpMethod.GET, "/api/captcha/challenge").permitAll()
+                        // La vuelta del pago llega desde el navegador de la pasarela, sin sesión.
+                        .requestMatchers(HttpMethod.GET, "/api/payments/app-return").permitAll()
                         // El estimado de margen/ganancia es SOLO para ADMIN (ni USER ni OPERATOR/soporte).
                         // Debe ir ANTES del permitAll general de GET del catálogo público.
                         .requestMatchers(HttpMethod.GET, "/api/catalog/products/*/margin-estimate")

@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.api.controller;
 
+import com.nexaplatform.dropshipping.infrastructure.integration.locale.LocaleHolder;
 import com.nexaplatform.dropshipping.application.service.CountryTaxService;
 import com.nexaplatform.dropshipping.application.service.CheckoutPreviewService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
@@ -23,7 +24,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.Collator;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -319,7 +323,34 @@ public class ShippingQuoteController {
     @Operation(summary = "Países a los que se puede enviar (cobertura real del transportista)")
     @GetMapping("/countries")
     public ResponseEntity<List<SupportedCountry>> supportedCountries() {
-        return ResponseEntity.ok(shippingQuoteService.supportedCountries());
+        /*
+         * El nombre del país, EN EL IDIOMA DE QUIEN PREGUNTA. La tabla de zonas lo guarda en español
+         * —«Alemania», «Arabia Saudí»— y se servía así fuera cual fuera el `X-Lang`: la aplicación
+         * móvil en inglés enseñaba «Estados Unidos» como país de registro, y el desplegable de la
+         * dirección salía entero en español. El código ISO es lo único que hace falta para escribirlo
+         * en cualquier idioma; si Java no conoce el país, se deja el nombre guardado.
+         */
+        Locale idioma = Locale.forLanguageTag(LocaleHolder.get());
+        // Y ordenados por el nombre YA TRADUCIDO: el orden llegaba alfabético en español, así que
+        // en inglés «Germany» aparecía la segunda y el desplegable parecía barajado.
+        Collator alfabeto = Collator.getInstance(idioma);
+        return ResponseEntity.ok(shippingQuoteService.supportedCountries().stream()
+                .map(pais -> new SupportedCountry(pais.countryCode(), nombreEn(pais, idioma)))
+                .sorted(Comparator.comparing(SupportedCountry::countryName, alfabeto))
+                .toList());
+    }
+
+    /** El nombre del país en ese idioma, o el que hubiera guardado si Java no lo reconoce. */
+    private static String nombreEn(SupportedCountry pais, Locale idioma) {
+        try {
+            String traducido = Locale.of("", pais.countryCode().toUpperCase(Locale.ROOT))
+                    .getDisplayCountry(idioma);
+            boolean util = traducido != null && !traducido.isBlank()
+                    && !traducido.equalsIgnoreCase(pais.countryCode());
+            return util ? traducido : pais.countryName();
+        } catch (RuntimeException e) {
+            return pais.countryName();
+        }
     }
 
     /**

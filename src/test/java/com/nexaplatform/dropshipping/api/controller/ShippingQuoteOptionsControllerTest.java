@@ -1,5 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
+import com.nexaplatform.dropshipping.infrastructure.integration.locale.LocaleHolder;
 import com.nexaplatform.dropshipping.application.service.CheckoutPreviewService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
 import com.nexaplatform.dropshipping.application.service.CountryTaxService;
@@ -180,5 +182,70 @@ class ShippingQuoteOptionsControllerTest {
                 nullable(String.class), nullable(String.class))).thenReturn(preview(null));
 
         assertThat(cotizar(null).selectedShippingOptionCode()).isNull();
+    }
+
+    /**
+     * El nombre del país, EN EL IDIOMA DE QUIEN PREGUNTA.
+     *
+     * <p>La tabla de zonas lo guarda en español —«Alemania»— y se servía así fuera cual fuera el
+     * `X-Lang`: la aplicación móvil en inglés enseñaba «Estados Unidos» como país de registro y el
+     * desplegable de la dirección salía entero en español.
+     */
+    @Test
+    @DisplayName("los países se nombran en el idioma pedido, no en el que están guardados")
+    void losPaisesSeNombranEnElIdiomaPedido() {
+        when(shippingQuoteService.supportedCountries()).thenReturn(List.of(
+                new FulfillmentProvider.SupportedCountry("DE", "Alemania"),
+                new FulfillmentProvider.SupportedCountry("US", "Estados Unidos")));
+
+        LocaleHolder.set("en");
+        try {
+            List<FulfillmentProvider.SupportedCountry> paises = controller.supportedCountries().getBody();
+
+            assertThat(paises).extracting(FulfillmentProvider.SupportedCountry::countryName)
+                    .containsExactly("Germany", "United States");
+        } finally {
+            LocaleHolder.clear();
+        }
+    }
+
+    /** Un código que Java no reconoce se queda con el nombre guardado: mejor eso que dos letras. */
+    @Test
+    @DisplayName("un país que Java no conoce conserva el nombre que hubiera guardado")
+    void unPaisDesconocidoConservaSuNombre() {
+        when(shippingQuoteService.supportedCountries())
+                .thenReturn(List.of(new FulfillmentProvider.SupportedCountry("XK", "Kosovo")));
+
+        LocaleHolder.set("en");
+        try {
+            assertThat(controller.supportedCountries().getBody())
+                    .extracting(FulfillmentProvider.SupportedCountry::countryName)
+                    .containsExactly("Kosovo");
+        } finally {
+            LocaleHolder.clear();
+        }
+    }
+
+    /**
+     * Traducir el nombre desordena la lista: el orden venía de la base de datos, alfabético en
+     * español. En inglés, «Germany» salía la segunda —detrás de «Albania» y delante de «Argentina»—
+     * y el desplegable de países parecía barajado.
+     */
+    @Test
+    @DisplayName("los países salen ordenados por el nombre traducido, no por el guardado")
+    void losPaisesSalenOrdenadosPorElNombreTraducido() {
+        when(shippingQuoteService.supportedCountries()).thenReturn(List.of(
+                new FulfillmentProvider.SupportedCountry("DE", "Alemania"),
+                new FulfillmentProvider.SupportedCountry("SA", "Arabia Saudí"),
+                new FulfillmentProvider.SupportedCountry("AR", "Argentina")));
+
+        LocaleHolder.set("en");
+        try {
+            assertThat(controller.supportedCountries().getBody())
+                    .extracting(FulfillmentProvider.SupportedCountry::countryName)
+                    .containsExactly("Argentina", "Germany", "Saudi Arabia");
+        } finally {
+            LocaleHolder.clear();
+        }
     }
 }

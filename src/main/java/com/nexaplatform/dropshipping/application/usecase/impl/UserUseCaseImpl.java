@@ -349,12 +349,20 @@ public class UserUseCaseImpl implements UserUseCase {
         user.setDeletionCode(code);
         user.setDeletionCodeExpiresAt(Instant.now().plus(DELETION_CODE_TTL_MINUTES, ChronoUnit.MINUTES));
         userRepository.update(user);
-        emailQueueService.enqueue(user.getEmail(),
-                "Confirma la eliminación de tu cuenta — NX036", "emails/account-deletion-code",
-                Map.of(TITLE, "Confirma la eliminación de tu cuenta",
-                        "displayName", user.getDisplayName() != null ? user.getDisplayName() : "",
+        // EN EL IDIOMA DE LA CUENTA, como el resto de correos: el aviso de borrado salía siempre en
+        // español, de modo que quien se registró en inglés recibía instrucciones que no entiende justo
+        // en el correo que le pide un código para borrarse.
+        String deleteLang = InvoiceLabel.lang(user.getLanguage());
+        emailQueueService.enqueue(user.getEmail(), AuthEmailLabel.DELETE_SUBJECT.of(deleteLang),
+                "emails/account-deletion-code",
+                Map.of(TITLE, AuthEmailLabel.DELETE_TITLE.of(deleteLang),
+                        "greeting", AuthEmailLabel.DELETE_GREETING.of(deleteLang, user.getDisplayName()),
+                        "intro", AuthEmailLabel.DELETE_INTRO.of(deleteLang),
+                        "expires", AuthEmailLabel.DELETE_EXPIRES.of(deleteLang),
+                        "ignoreNote", AuthEmailLabel.DELETE_IGNORE.of(deleteLang),
+                        "preheader", AuthEmailLabel.DELETE_PREHEADER.of(deleteLang),
                         "code", code,
-                        FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(InvoiceLabel.lang(user.getLanguage()))));
+                        FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(deleteLang)));
         auditLogger.log("auth.account.delete.request", user.getEmail(), Map.of(USERID, userId));
     }
 

@@ -162,6 +162,27 @@ class Cov10UserUseCaseImplTest {
         verify(emailQueueService).enqueue(eq("ana@x.com"), anyString(), eq("emails/account-deletion-code"), anyMap());
     }
 
+    /**
+     * EN EL IDIOMA DE LA CUENTA. El aviso de borrado salía siempre en español, así que quien se
+     * registró en inglés recibía en un idioma que no entiende justo el correo que le pide un código.
+     */
+    @Test
+    void elCorreoDeBajaVaEnElIdiomaDeLaCuenta() {
+        UUID id = UUID.randomUUID();
+        User u = User.builder().id(id).email("ann@x.com").displayName("Ann").language("en").build();
+        when(userRepository.getById(id)).thenReturn(u);
+
+        useCase.requestAccountDeletion(id);
+
+        ArgumentCaptor<String> asunto = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Map<String, Object>> datos = ArgumentCaptor.forClass(Map.class);
+        verify(emailQueueService).enqueue(eq("ann@x.com"), asunto.capture(),
+                eq("emails/account-deletion-code"), datos.capture());
+        assertThat(asunto.getValue()).isEqualTo("Confirm your account deletion — NX036");
+        assertThat(datos.getValue()).containsEntry("title", "Confirm your account deletion");
+        assertThat(datos.getValue().get("intro").toString()).startsWith("You asked to delete");
+    }
+
     @Test
     void confirmarLaBajaConUnCodigoQueNoCoincideSeRechaza() {
         UUID id = UUID.randomUUID();
