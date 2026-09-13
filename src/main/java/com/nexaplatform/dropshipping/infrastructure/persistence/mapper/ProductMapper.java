@@ -23,6 +23,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVa
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantOptionEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueEntity;
 import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
+import com.nexaplatform.dropshipping.domain.enums.VariantAxisLabel;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -232,7 +233,17 @@ public class ProductMapper {
 
     public VariantOptionView toOptionView(VariantOptionEntity o, String language) {
         List<VariantValueView> vals = o.getValues().stream().map(v -> toValueView(v, language)).toList();
-        return new VariantOptionView(o.getId(), o.getNameZh(), o.getName(), o.getPosition(), vals);
+        /*
+         * El NOMBRE del eje va traducido en `name`, y `nameZh` se queda COMO ESTÁ.
+         *
+         * No es una asimetría caprichosa: `nameZh` es la clave con la que cada variante guarda sus
+         * opciones (`options_json`), así que traducirlo rompe el emparejado —la ficha en inglés
+         * buscaba «Size» donde la variante dice «Talla» y todas las combinaciones salían agotadas—.
+         * Uno identifica, el otro se enseña.
+         */
+        String mostrado = o.getName() != null && !o.getName().isBlank() ? o.getName() : o.getNameZh();
+        return new VariantOptionView(o.getId(), o.getNameZh(), VariantAxisLabel.localize(mostrado, language),
+                o.getPosition(), vals);
     }
 
     public VariantValueView toValueView(VariantValueEntity v, String language) {
