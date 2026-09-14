@@ -8,6 +8,7 @@ import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontMapper;
 import com.nexaplatform.dropshipping.api.mapper.ProductBulkExportMapper;
 import com.nexaplatform.dropshipping.application.service.CustomsProfileService;
 import com.nexaplatform.dropshipping.application.usecase.impl.CatalogUseCaseImpl;
+import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
@@ -429,5 +430,53 @@ class CatalogUseCaseImplTest {
         assertThat(porId(p, d3).getRole()).isEqualTo("DETAIL");
         assertThat(List.of(porId(p, d1).getPosition(), porId(p, d2).getPosition(),
                 porId(p, d3).getPosition())).containsExactly(2, 3, 4);
+    }
+
+    /**
+     * Lo que se rompía en producción: CADA re-subida de un producto descartaba el espejado de TODAS
+     * sus imágenes, aunque su dirección de origen no hubiera cambiado. `replaceImages` vaciaba la
+     * colección y las recreaba en PENDING.
+     *
+     * <p>Dos daños. El visible: el escaparate solo enseña productos con imagen espejada, así que el
+     * producto DESAPARECE de la tienda hasta que el espejado vuelve a pasar —el dueño lo vio el
+     * 14-sep: «porque ahora se ven menos productos de los que veía en la home»—. Y el caro: volver a
+     * descargar y subir cada foto. Sobre el repaso del catálogo entero son ~200.000 imágenes
+     * re-espejadas para nada.
+     *
+     * <p>Una imagen cuya dirección de origen no cambia ES la misma imagen. Lo que ya está espejado se
+     * conserva.
+     */
+    @Test
+    void reimportar_conserva_el_espejado_de_las_imagenes_que_no_cambian() {
+        ProductEntity p = ProductEntity.builder().source("1688").externalId("OFFER-IMG")
+                .status(ProductStatus.DRAFT).slug("offer-img").moq(1).build();
+        p.setId(UUID.randomUUID());
+        ProductImageEntity yaEspejada = ProductImageEntity.builder().product(p).position(0).role("MAIN")
+                .sourceUrl("https://cbu01.alicdn.com/img/ibank/O1CN01a.jpg")
+                .cdnUrl("https://cdn/media/ab/abc.webp").mirrorStatus(MirrorStatus.MIRRORED).build();
+        yaEspejada.setId(UUID.randomUUID());
+        p.getImages().add(yaEspejada);
+        when(productJpaRepository.findBySourceAndExternalId("1688", "OFFER-IMG")).thenReturn(Optional.of(p));
+        when(productJpaRepository.save(any(ProductEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        IngestProductRequest req = new IngestProductRequest("1688", "OFFER-IMG", "标题", null, null, null, 1,
+                new BigDecimal("10.00"), "CNY", 100, 0, null, null, 0,
+                "https://detail.1688.com/offer/OFFER-IMG.html", null, null,
+                List.of(new IngestImage("https://cbu01.alicdn.com/img/ibank/O1CN01a.jpg", 0, "MAIN"),
+                        new IngestImage("https://cbu01.alicdn.com/img/ibank/O1CN01b.jpg", 1, "GALLERY")),
+                null, null, null);
+
+        ProductEntity guardado = useCase.upsertProduct(req);
+
+        ProductImageEntity misma = guardado.getImages().stream()
+                .filter(i -> i.getSourceUrl().endsWith("O1CN01a.jpg")).findFirst().orElseThrow();
+        assertThat(misma.getCdnUrl()).isEqualTo("https://cdn/media/ab/abc.webp");
+        assertThat(misma.getMirrorStatus()).isEqualTo(MirrorStatus.MIRRORED);
+
+        // La nueva sí entra pendiente: esa no se ha espejado nunca.
+        ProductImageEntity nueva = guardado.getImages().stream()
+                .filter(i -> i.getSourceUrl().endsWith("O1CN01b.jpg")).findFirst().orElseThrow();
+        assertThat(nueva.getMirrorStatus()).isEqualTo(MirrorStatus.PENDING);
+        assertThat(nueva.getCdnUrl()).isNull();
     }
 }

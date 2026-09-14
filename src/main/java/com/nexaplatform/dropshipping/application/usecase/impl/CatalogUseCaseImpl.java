@@ -412,6 +412,21 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     /** Imágenes del producto, todas PENDING de espejar a nuestro almacenamiento. */
     private void replaceImages(ProductEntity product, IngestProductRequest req) {
+        // Lo YA espejado, por dirección de origen. Una imagen cuya dirección no cambia ES la misma
+        // imagen, y volver a espejarla no aporta nada: cuesta descargarla y subirla otra vez, y
+        // mientras tanto el producto DESAPARECE del escaparate, que solo enseña lo que tiene foto en
+        // nuestro CDN.
+        //
+        // Medido el 14-sep-2026: al resubir unos cientos de productos para completarles la traducción,
+        // las imágenes pendientes de espejar pasaron de 6.790 a 14.167 y 550 productos se quedaron
+        // invisibles. Sobre el repaso del catálogo entero habrían sido ~200.000 imágenes re-espejadas
+        // para nada, con medio escaparate vacío durante días.
+        Map<String, ProductImageEntity> espejadas = new HashMap<>();
+        for (ProductImageEntity vieja : product.getImages()) {
+            if (vieja.getSourceUrl() != null && vieja.getCdnUrl() != null) {
+                espejadas.put(vieja.getSourceUrl(), vieja);
+            }
+        }
         product.getImages().clear();
         if (req.images() == null) {
             return;
@@ -426,9 +441,18 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
                         img.sourceUrl());
                 continue;
             }
+            ProductImageEntity antes = espejadas.get(img.sourceUrl());
             product.getImages().add(ProductImageEntity.builder().product(product).position(img.position())
                     .role(img.role() != null ? img.role() : GALLERY).sourceUrl(img.sourceUrl())
-                    .mirrorStatus(MirrorStatus.PENDING).build());
+                    // Se hereda lo que costó traer: la copia en el CDN, sus medidas y su huella. Lo
+                    // que NO se hereda es la posición ni el papel: esos vienen de la ficha nueva.
+                    .cdnUrl(antes != null ? antes.getCdnUrl() : null)
+                    .width(antes != null ? antes.getWidth() : null)
+                    .height(antes != null ? antes.getHeight() : null)
+                    .bytes(antes != null ? antes.getBytes() : null)
+                    .hash(antes != null ? antes.getHash() : null)
+                    .mirroredAt(antes != null ? antes.getMirroredAt() : null)
+                    .mirrorStatus(antes != null ? MirrorStatus.MIRRORED : MirrorStatus.PENDING).build());
         }
     }
 
