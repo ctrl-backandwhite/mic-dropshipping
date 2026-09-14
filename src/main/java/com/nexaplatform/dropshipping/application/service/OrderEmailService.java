@@ -1,9 +1,11 @@
 package com.nexaplatform.dropshipping.application.service;
 
+import com.nexaplatform.dropshipping.domain.enums.BrandTagline;
 import com.nexaplatform.dropshipping.domain.enums.InvoiceLabel;
 import com.nexaplatform.dropshipping.domain.enums.OrderEmailLabel;
 import com.nexaplatform.dropshipping.domain.enums.PaymentMethodLabel;
 import com.nexaplatform.dropshipping.domain.enums.ShipmentEventMessage;
+import com.nexaplatform.dropshipping.domain.enums.UserRole;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.infrastructure.email.EmailQueueService;
 import lombok.RequiredArgsConstructor;
@@ -249,6 +251,12 @@ public class OrderEmailService {
             vars.put("ctaLabel", notice.ctaLabel());
             vars.put("footer", "NX036");
             vars.put("footerNote", OrderEmailLabel.AUTO_NOTE.of(notice.lang())); // pie en el idioma del usuario
+            // El descriptor de la cabecera, en el mismo idioma: «NX036 · Moda y complementos». Si el
+            // pedido entró por una tienda conectada, quien lo recibe es un socio de integración y para
+            // él sí manda la palabra «dropshipping»: es el servicio que tiene contratado.
+            boolean socio = "INTEGRATION".equalsIgnoreCase(o.getSource());
+            vars.put("tagline", socio ? BrandTagline.of(UserRole.PARTNER, notice.lang())
+                    : BrandTagline.of(notice.lang()));
             emailQueue.enqueue(email, notice.title(), "emails/notification", vars);
         } catch (RuntimeException e) {
             log.warn("order email '{}' failed for {}: {}", notice.title(), o.getOrderNumber(), e.getMessage());

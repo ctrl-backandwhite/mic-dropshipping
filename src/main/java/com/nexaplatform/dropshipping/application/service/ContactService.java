@@ -1,12 +1,14 @@
 package com.nexaplatform.dropshipping.application.service;
 
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
+import com.nexaplatform.dropshipping.domain.enums.BrandTagline;
 import com.nexaplatform.dropshipping.domain.enums.UserRole;
 import com.nexaplatform.dropshipping.domain.model.PlatformNotification;
 import com.nexaplatform.dropshipping.domain.model.User;
 import com.nexaplatform.dropshipping.domain.repository.NotificationRepository;
 import com.nexaplatform.dropshipping.domain.repository.UserRepository;
 import com.nexaplatform.dropshipping.infrastructure.email.EmailQueueService;
+import com.nexaplatform.dropshipping.infrastructure.integration.locale.LocaleHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -98,6 +100,7 @@ public class ContactService {
         vars.put("title", cleanSubject);
         vars.put("bodyHtml", toHtml(cleanMessage));
         vars.put("footer", "NX036");
+        vars.put("tagline", BrandTagline.of(LocaleHolder.get()));
         vars.put("footerNote", "Respuesta de nuestro equipo de soporte a tu consulta.");
         emailQueue.enqueue(cleanEmail, cleanSubject, "emails/notification", vars);
 
@@ -132,6 +135,9 @@ public class ContactService {
         Map<String, Object> vars = new HashMap<>();
         vars.put("name", name);
         vars.put("subject", subject);
+        // Quien escribe por el formulario es público: no hay cuenta de la que sacar el idioma, así que
+        // vale el de la petición (X-Lang o Accept-Language), que es en el que acaba de leer la web.
+        vars.put("tagline", BrandTagline.of(LocaleHolder.get()));
         emailQueue.enqueue(senderEmail, "Hemos recibido tu mensaje — NX036", "emails/contact-ack", vars);
     }
 

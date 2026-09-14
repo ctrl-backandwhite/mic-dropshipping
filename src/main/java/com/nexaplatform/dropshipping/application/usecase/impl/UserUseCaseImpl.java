@@ -9,6 +9,7 @@ import com.nexaplatform.dropshipping.application.mapper.UserUpdateMapper;
 import com.nexaplatform.dropshipping.application.service.PasswordPolicy;
 import com.nexaplatform.dropshipping.application.usecase.GoogleLoginOutcome;
 import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
+import com.nexaplatform.dropshipping.domain.enums.BrandTagline;
 import com.nexaplatform.dropshipping.domain.enums.UserRole;
 import com.nexaplatform.dropshipping.domain.model.User;
 import com.nexaplatform.dropshipping.domain.repository.UserRepository;
@@ -61,6 +62,8 @@ public class UserUseCaseImpl implements UserUseCase {
     private static final String EMAILS_WELCOME = "emails/welcome";
     private static final String CIRCLE_CHECK = "circle-check";
     private static final String FOOTERNOTE = "footerNote";
+    /** Descriptor de la cabecera del correo: «NX036 · Moda y complementos», en el idioma de quien lee. */
+    private static final String TAGLINE = "tagline";
     private static final String BODYHTML = "bodyHtml";
     private static final String CTALABEL = "ctaLabel";
     private static final String USERID = "userId";
@@ -143,7 +146,8 @@ public class UserUseCaseImpl implements UserUseCase {
                         CTALABEL, AuthEmailLabel.CONFIRM_CTA.of(confirmLang),
                         CTAURL, storefrontBaseUrl + "/activate?code=" + activationCode,
                         "icon", CIRCLE_CHECK,
-                        FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(confirmLang)));
+                        FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(confirmLang),
+                        TAGLINE, BrandTagline.of(confirmLang)));
 
         auditLogger.log("auth.register", email, Map.of(USERID, saved.getId(), "role", saved.getRole().name()));
         return saved;
@@ -190,7 +194,8 @@ public class UserUseCaseImpl implements UserUseCase {
                             CTALABEL, AuthEmailLabel.CONFIRM_CTA.of(confirmLang),
                             CTAURL, storefrontBaseUrl + "/activate?code=" + activationCode,
                             "icon", CIRCLE_CHECK,
-                            FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(confirmLang)));
+                            FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(confirmLang),
+                        TAGLINE, BrandTagline.of(user.getRole(), confirmLang)));
             auditLogger.log("auth.activation.resend", user.getEmail(), Map.of(USERID, user.getId()));
         });
     }
@@ -258,7 +263,8 @@ public class UserUseCaseImpl implements UserUseCase {
                             CTALABEL, AuthEmailLabel.LOGIN_CTA.of(lang),
                             CTAURL, storefrontBaseUrl + "/password-reset",
                             "icon", CIRCLE_CHECK,
-                            FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(lang)));
+                            FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(lang),
+                        TAGLINE, BrandTagline.of(u.getRole(), lang)));
         });
         auditLogger.log("auth.login_notify", normalized, Map.of());
     }
@@ -296,7 +302,8 @@ public class UserUseCaseImpl implements UserUseCase {
                             CTALABEL, AuthEmailLabel.RESET_CTA.of(resetLang),
                             CTAURL, storefrontBaseUrl + "/password-reset?token=" + raw,
                             "icon", CIRCLE_CHECK,
-                            FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(resetLang)));
+                            FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(resetLang),
+                        TAGLINE, BrandTagline.of(user.getRole(), resetLang)));
         });
         auditLogger.log("auth.password_reset.request", normalized, Map.of());
     }
@@ -362,7 +369,8 @@ public class UserUseCaseImpl implements UserUseCase {
                         "ignoreNote", AuthEmailLabel.DELETE_IGNORE.of(deleteLang),
                         "preheader", AuthEmailLabel.DELETE_PREHEADER.of(deleteLang),
                         "code", code,
-                        FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(deleteLang)));
+                        FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(deleteLang),
+                        TAGLINE, BrandTagline.of(user.getRole(), deleteLang)));
         auditLogger.log("auth.account.delete.request", user.getEmail(), Map.of(USERID, userId));
     }
 
@@ -759,7 +767,8 @@ public class UserUseCaseImpl implements UserUseCase {
                         CTALABEL, AuthEmailLabel.INVITE_CTA.of(inviteLang),
                         CTAURL, storefrontBaseUrl + "/activate?code=" + activationCode,
                         "icon", CIRCLE_CHECK,
-                        FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(inviteLang)));
+                        FOOTERNOTE, OrderEmailLabel.AUTO_NOTE.of(inviteLang),
+                        TAGLINE, BrandTagline.of(r, inviteLang)));
         auditLogger.log("auth.admin.invite", normalized, Map.of(USERID, saved.getId(), "role", r.name()));
         return saved;
     }

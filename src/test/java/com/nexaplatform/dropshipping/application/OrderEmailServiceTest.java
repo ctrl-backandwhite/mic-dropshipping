@@ -141,6 +141,54 @@ class OrderEmailServiceTest {
         verifyNoInteractions(emailQueue);
     }
 
+    /* ---------------- descriptor de marca (tagline) ---------------- */
+
+    /**
+     * Quien compra en la tienda lee qué se vende, no cómo se cumple el pedido. «Dropshipping» era
+     * vocabulario de operador en la cabecera de un correo de consumo.
+     */
+    @Test
+    void alCompradorSeLeDiceQueSeVende() {
+        Order o = order("NX-200", "TRK-1", "Cainiao", "USD");
+        o.setSource("PLATFORM");
+
+        service.shipped(o, "buyer@x.com", "en");
+
+        assertThat(vars()).containsEntry("tagline", "Fashion and accessories");
+    }
+
+    /** Un pedido sin origen (los antiguos) se trata como de la tienda propia, no como de un socio. */
+    @Test
+    void sinOrigenSeTrataComoTiendaPropia() {
+        Order o = order("NX-200", "TRK-1", "Cainiao", "USD");
+
+        service.shipped(o, "buyer@x.com", "es");
+
+        assertThat(vars()).containsEntry("tagline", "Moda y complementos");
+    }
+
+    /**
+     * El pedido de una tienda conectada lo recibe el socio de integración, y para él «dropshipping» no
+     * es un demérito: es el servicio contratado. Si aquí se le hablara de moda, el correo describiría
+     * el negocio de su cliente en vez del suyo.
+     */
+    @Test
+    void alSocioDeIntegracionSeLeSigueHablandoDeDropshipping() {
+        Order o = order("NX-200", "TRK-1", "Cainiao", "USD");
+        o.setSource("INTEGRATION");
+
+        service.shipped(o, "partner@shop.com", "en");
+
+        assertThat(vars()).containsEntry("tagline", "Dropshipping");
+    }
+
+    private Map<String, Object> vars() {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> varsCap = ArgumentCaptor.forClass(Map.class);
+        verify(emailQueue).enqueue(any(), any(), eq("emails/notification"), varsCap.capture());
+        return varsCap.getValue();
+    }
+
     /* ---------------- delivered ---------------- */
 
     @Test
