@@ -7,6 +7,7 @@ que es lo que permite cruzar los casos de acceso a recursos ajenos (IDOR).
 import base64
 import hashlib
 import json
+import uuid
 import time
 import urllib.error
 import urllib.parse
@@ -46,6 +47,17 @@ class _SinRedirecciones(urllib.request.HTTPRedirectHandler):
 _ip = [0]
 
 
+_RUTAS_CON_DINERO = ("/api/me/orders/checkout", "/payment-intent", "/pay-saved-card",
+                     "/api/me/wallet/recharge")
+
+
+def _mueve_dinero(path):
+    """¿La ruta es uno de los endpoints que exigen clave de intento? (no sus sub-rutas /confirm)."""
+    if path.endswith("/confirm") or path.endswith("/confirm-mock"):
+        return False
+    return any(r in path for r in _RUTAS_CON_DINERO)
+
+
 def call(method, path, token=None, body=None, headers=None, raw_body=None, timeout=60,
          seguir_redirecciones=True):
     """Petición HTTP.
@@ -73,6 +85,15 @@ def call(method, path, token=None, body=None, headers=None, raw_body=None, timeo
     # todas las llamadas, para que ningún bloque futuro tenga que acordarse.
     _ip[0] += 1
     hdrs.setdefault("X-Forwarded-For", "198.18.%d.%d" % (_ip[0] // 250 % 250, _ip[0] % 250 + 1))
+    # Los endpoints que mueven dinero EXIGEN Idempotency-Key: la clave identifica el intento, y sin ella el
+    # servidor responde 400 en vez de abrir un segundo cobro. Se pone aquí, en el único punto por el que
+    # pasan todas las llamadas, para que ningún bloque tenga que acordarse — igual que la rotación de IP.
+    #
+    # Una clave NUEVA por llamada a propósito: cada petición del pentest es un intento distinto, que es lo
+    # que hace que los casos de doble gasto midan la defensa del saldo y no la deduplicación. Las pruebas
+    # que quieren un REENVÍO del mismo intento pasan su propia clave y esta línea las respeta.
+    if method == "POST" and _mueve_dinero(path):
+        hdrs.setdefault("Idempotency-Key", str(uuid.uuid4()))
     if headers:
         hdrs.update(headers)
     req = urllib.request.Request(url, data=data, headers=hdrs, method=method)
