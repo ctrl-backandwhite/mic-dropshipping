@@ -188,10 +188,12 @@ class Cov06OrderUseCaseImplTest {
         Order pedido = useCase.checkout(userId, checkout(producto.getId(), 2, "WALLET"), "idem-1");
 
         assertThat(pedido.getStatus()).isEqualTo(OrderStatus.PAID);
-        // La clave de idempotencia del cargo va ACOTADA AL PEDIDO ("checkout-<orderId>"), no la del cliente,
-        // para que no se pueda reutilizar la misma clave entre pedidos distintos y colar cargos a cero.
+        // La clave de idempotencia del cargo va ACOTADA AL PEDIDO, no a la del cliente: así no se puede
+        // reutilizar la misma clave entre pedidos distintos para colar cargos a cero. Y la compone
+        // WalletUseCase, no este camino: el pago posterior del mismo pedido entra por otro sitio y antes
+        // cada uno usaba su prefijo, de modo que el monedero no deduplicaba y se debitaba dos veces.
         verify(walletUseCase).charge(eq(userId), eq(2500L), any(),
-                org.mockito.ArgumentMatchers.startsWith("checkout-"), anyString());
+                eq(WalletUseCase.claveDeCargoDePedido(pedido.getId())), anyString());
         // El dinero está cobrado → la mercancía entra en la cola de compras de 1688. Sin esta llamada el
         // freno veía cero compras, trataba el pedido como antiguo y dejaba emitir la guía sin comprar.
         verify(supplierPurchaseService).planPurchases(any(Order.class));

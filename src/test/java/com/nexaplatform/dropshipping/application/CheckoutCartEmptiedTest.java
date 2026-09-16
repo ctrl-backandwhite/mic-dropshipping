@@ -212,6 +212,29 @@ class CheckoutCartEmptiedTest {
     }
 
     /**
+     * El cargo al monedero de un pedido lleva SIEMPRE la misma clave, venga por el checkout o por el pago
+     * posterior del mismo pedido.
+     *
+     * <p>Son dos entradas al mismo cobro: {@code POST /me/orders/checkout} con método WALLET y
+     * {@code POST /me/orders/{id}/payment-intent?wallet=true}. El monedero deduplica POR CLAVE, así que con
+     * dos prefijos distintos —{@code checkout-} y {@code order-charge-}— no deduplica nada y el mismo
+     * pedido se debita dos veces. El comentario de {@code PaymentUseCaseImpl} afirma que acotar la clave al
+     * pedido hace que dos peticiones concurrentes deduplican; solo es cierto si las DOS usan la misma.
+     *
+     * <p>El guarda «un pedido ya PAGADO no se vuelve a cobrar» no cubre el solape: las dos transacciones
+     * leen el estado antes de que la otra confirme.
+     */
+    @Test
+    @DisplayName("el cargo del checkout con saldo usa la misma clave que el pago posterior del pedido")
+    void elCargoConSaldoUsaLaClaveCanonicaDelPedido() {
+        Order pedido = subject.checkout(userId, peticion("WALLET", productId), "idem-9");
+
+        ArgumentCaptor<String> clave = ArgumentCaptor.forClass(String.class);
+        verify(walletUseCase).charge(any(), anyLong(), any(), clave.capture(), anyString());
+        assertThat(clave.getValue()).isEqualTo(WalletUseCase.claveDeCargoDePedido(pedido.getId()));
+    }
+
+    /**
      * Con pago externo el pedido nace PENDIENTE: el dinero se cobra fuera y puede no llegar nunca. La
      * cesta se queda tal cual hasta que el cobro se confirme.
      */

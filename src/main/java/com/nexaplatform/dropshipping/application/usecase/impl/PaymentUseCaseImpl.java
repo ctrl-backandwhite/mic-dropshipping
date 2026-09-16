@@ -451,6 +451,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             throw new BusinessException("PayPal gateway not configured");
         }
         Map<String, Object> resp = pp.capture(p.getProviderRef());
+        rechazaRespuestaFabricadaEnEntornoReal(resp);
         String status = String.valueOf(resp.getOrDefault(STATUS, ""));
         if ("COMPLETED".equalsIgnoreCase(status) || Boolean.TRUE.equals(resp.get("mock"))) {
             return doConfirmSucceeded(p.getId(), resp);
@@ -485,6 +486,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 throw new BusinessException("Stripe gateway not configured");
             }
             Map<String, Object> resp = sg.retrieveCheckoutSession(p.getProviderRef());
+            rechazaRespuestaFabricadaEnEntornoReal(resp);
             String status = String.valueOf(resp.getOrDefault(STATUS, ""));
             if ("paid".equals(status) || Boolean.TRUE.equals(resp.get("mock"))) {
                 return doConfirmSucceeded(p.getId(), resp);
@@ -541,6 +543,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             captureId = p.getProviderRef(); // fallback (mock)
         }
         Map<String, Object> result = pp.refund(captureId, amountCents);
+        rechazaRespuestaFabricadaEnEntornoReal(result);
         String status = String.valueOf(result.getOrDefault(STATUS, ""));
         boolean ok = "COMPLETED".equalsIgnoreCase(status) || "PENDING".equalsIgnoreCase(status)
                 || Boolean.TRUE.equals(result.get("mock"));
@@ -562,6 +565,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         }
         String paymentIntentId = resolveStripePaymentIntent(p, providerResponse, sg);
         Map<String, Object> result = sg.refund(paymentIntentId, amountCents);
+        rechazaRespuestaFabricadaEnEntornoReal(result);
         String status = String.valueOf(result.getOrDefault(STATUS, ""));
         boolean ok = "succeeded".equalsIgnoreCase(status) || "pending".equalsIgnoreCase(status)
                 || Boolean.TRUE.equals(result.get("mock"));
@@ -697,6 +701,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
                 throw new BusinessException("Stripe gateway not configured");
             }
             Map<String, Object> resp = sg.retrieveCheckoutSession(p.getProviderRef());
+            rechazaRespuestaFabricadaEnEntornoReal(resp);
             String status = String.valueOf(resp.getOrDefault(STATUS, ""));
             if ("paid".equals(status) || Boolean.TRUE.equals(resp.get("mock"))) {
                 return doConfirmSucceeded(p.getId(), resp); // acredita el wallet (branch no-order)
@@ -955,7 +960,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         // PEDIDO ("order-charge-<orderId>"), no la del cliente: así dos peticiones concurrentes al MISMO
         // pedido con claves idem distintas deduplican en el wallet y solo se debita UNA vez (el guard PAID
         // solo cubre el caso secuencial).
-        String walletKey = "order-charge-" + orderId;
+        String walletKey = WalletUseCase.claveDeCargoDePedido(orderId);
         walletUseCase.charge(payerUserId, amountUsdCents, orderId, walletKey, "Order " + order.getOrderNumber());
 
         // Registramos el payment en SUCCEEDED para auditoría uniforme.
@@ -1107,6 +1112,30 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         if (isProdLikeProfile()) {
             throw new BusinessException("MOCK_PAYMENT_DISABLED",
                     "Los pagos simulados no están permitidos en este entorno");
+        }
+    }
+
+    /**
+     * Fail-closed ante una respuesta FABRICADA por la pasarela.
+     *
+     * <p>Cuando Stripe o PayPal están inactivos no llaman a nadie: devuelven ellos mismos el éxito
+     * ({@code {status: succeeded|paid|COMPLETED, mock: true}}). Y como esa respuesta trae estado de
+     * éxito, la acepta la primera condición de cada sitio sin llegar a mirar la marca {@code mock}.
+     *
+     * <p>Eso importa porque {@code enabled} y la credencial son variables INDEPENDIENTES y el validador de
+     * arranque no cubre las pasarelas: producción puede levantar con la pasarela «activa» y sin clave. A
+     * partir de ahí un pedido se daba por cobrado sin cobro —y se despachaba—, y una cancelación marcaba
+     * el pago devuelto, cancelaba el pedido y mandaba el correo de «reembolso procesado» sin que se
+     * moviera un euro, dejando además bloqueado el reintento correcto (devolver exige que el pago siga
+     * en SUCCEEDED).
+     *
+     * <p>El guarda hermano {@link #assertMockAllowed()} solo cubre el pago INICIADO con la pasarela
+     * apagada, que se reconoce por el prefijo sintético del {@code providerRef}. Este cubre el otro
+     * caso: referencia real, pasarela que se apaga DESPUÉS.
+     */
+    private void rechazaRespuestaFabricadaEnEntornoReal(Map<String, Object> respuestaDelProveedor) {
+        if (respuestaDelProveedor != null && Boolean.TRUE.equals(respuestaDelProveedor.get("mock"))) {
+            assertMockAllowed();
         }
     }
 

@@ -453,6 +453,92 @@ class Cov09PaymentGatewayFlowsTest {
                 .isInstanceOf(NotFoundException.class);
     }
 
+    // ------------------------------------------- pasarela apagada en un entorno real (fail-closed)
+    //
+    // Estas cuatro prueban el MISMO descuido por cuatro caminos. `STRIPE_ENABLED` y `STRIPE_SECRET_KEY`
+    // son variables distintas y el validador de arranque no mira las pasarelas: producción puede levantar
+    // con la pasarela "activa" y sin credencial. A partir de ahí la pasarela deja de llamar a nadie y
+    // FABRICA la respuesta —{status: succeeded|paid|COMPLETED, mock: true}—, que además viene con estado
+    // de éxito, así que la acepta la primera condición sin llegar a mirar la marca `mock`.
+    //
+    // Lo que se rompía en producción: un pedido pasaba a PAGADO sin cobro y se despachaba la mercancía; y
+    // una cancelación marcaba el pago DEVUELTO, cancelaba el pedido y le mandaba al cliente el correo de
+    // "reembolso procesado" sin que se hubiera movido un euro — dejando además el reintento correcto
+    // bloqueado, porque devolver exige que el pago siga en SUCCEEDED.
+    //
+    // El guarda que ya existe (assertMockAllowed) solo cubre el pago INICIADO con la pasarela apagada, que
+    // se reconoce por el prefijo del providerRef. Aquí la referencia es REAL: el pago se inició cuando la
+    // pasarela funcionaba y se confirma o se devuelve después de que se quedara sin credencial.
+
+    @Test
+    void enPerfilProUnaDevolucionQueStripeNoHaHechoNoMarcaElPagoComoDevuelto() {
+        ReflectionTestUtils.setField(subject, "activeProfiles", "pro");
+        Payment p = payment(PaymentMethod.CARD, PaymentStatus.SUCCEEDED, "pi_777", true);
+        p.setProviderResponse(Map.of());
+        when(stripe.refund("pi_777", 500L)).thenReturn(Map.of("status", "succeeded", "mock", true));
+
+        assertThatThrownBy(() -> subject.refundOrderPayment(orderId, paymentId, 500L))
+                .isInstanceOf(BusinessException.class);
+
+        assertThat(p.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+    }
+
+    @Test
+    void enPerfilProUnaDevolucionQuePaypalNoHaHechoNoMarcaElPagoComoDevuelto() {
+        ReflectionTestUtils.setField(subject, "activeProfiles", "pre");
+        Payment p = payment(PaymentMethod.PAYPAL, PaymentStatus.SUCCEEDED, "PAYID-1", true);
+        p.setProviderResponse(Map.of());
+        when(paypal.refund(anyString(), anyLong())).thenReturn(Map.of("status", "COMPLETED", "mock", true));
+
+        assertThatThrownBy(() -> subject.refundOrderPayment(orderId, paymentId, 500L))
+                .isInstanceOf(BusinessException.class);
+
+        assertThat(p.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+    }
+
+    @Test
+    void enPerfilProUnPedidoNoSeDaPorCobradoConUnaRespuestaFabricadaPorStripe() {
+        ReflectionTestUtils.setField(subject, "activeProfiles", "pro");
+        payment(PaymentMethod.CARD, PaymentStatus.REQUIRES_ACTION, "cs_test_real", true);
+        Order o = order(OrderStatus.AWAITING_PAYMENT);
+        when(stripe.retrieveCheckoutSession("cs_test_real")).thenReturn(Map.of("status", "paid", "mock", true));
+
+        assertThatThrownBy(() -> subject.confirmOrderPayment(userId, orderId, paymentId))
+                .isInstanceOf(BusinessException.class);
+
+        assertThat(o.getStatus()).isEqualTo(OrderStatus.AWAITING_PAYMENT);
+        verify(stockService, never()).deductForOrder(any());
+    }
+
+    @Test
+    void enPerfilProUnaCapturaFabricadaPorPaypalNoDaElPedidoPorCobrado() {
+        ReflectionTestUtils.setField(subject, "activeProfiles", "pro");
+        Payment p = payment(PaymentMethod.PAYPAL, PaymentStatus.REQUIRES_ACTION, "PAYID-1", true);
+        Order o = order(OrderStatus.AWAITING_PAYMENT);
+        when(paypal.capture("PAYID-1")).thenReturn(Map.of("status", "COMPLETED", "mock", true));
+
+        assertThatThrownBy(() -> subject.capturePayPal(userId, paymentId))
+                .isInstanceOf(BusinessException.class);
+
+        assertThat(p.getStatus()).isEqualTo(PaymentStatus.REQUIRES_ACTION);
+        assertThat(o.getStatus()).isEqualTo(OrderStatus.AWAITING_PAYMENT);
+    }
+
+    /**
+     * La contrapartida: fuera de pro/pre la vía simulada tiene que seguir funcionando, que es para lo que
+     * existe. Si esta prueba se pone roja, el arreglo ha dejado el entorno de desarrollo sin poder cobrar.
+     */
+    @Test
+    void fueraDeProLaRespuestaSimuladaSigueSiendoValida() {
+        payment(PaymentMethod.CARD, PaymentStatus.REQUIRES_ACTION, "cs_test_real", true);
+        Order o = order(OrderStatus.AWAITING_PAYMENT);
+        when(stripe.retrieveCheckoutSession("cs_test_real")).thenReturn(Map.of("status", "paid", "mock", true));
+
+        assertThat(subject.confirmOrderPayment(userId, orderId, paymentId).getStatus())
+                .isEqualTo(PaymentStatus.SUCCEEDED);
+        assertThat(o.getStatus()).isEqualTo(OrderStatus.PAID);
+    }
+
     @Test
     void enPerfilProLaConfirmacionMockEstaProhibida() {
         // Fail-closed: en pro/pre no se acepta una confirmación simulada (dinero/pedido gratis).

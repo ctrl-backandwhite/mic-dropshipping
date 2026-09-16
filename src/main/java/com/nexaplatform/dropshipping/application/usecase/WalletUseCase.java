@@ -15,6 +15,19 @@ import java.util.UUID;
  */
 public interface WalletUseCase extends BaseUseCase<Wallet, Wallet, UUID> {
 
+    /**
+     * Clave de idempotencia del cargo al monedero por un pedido.
+     *
+     * <p>Acotada al PEDIDO y no al cliente: así dos peticiones concurrentes sobre el mismo pedido
+     * deduplican en el monedero y solo se debita una vez. Vive aquí, y no en cada caso de uso, porque hay
+     * DOS entradas al mismo cobro —el checkout con método WALLET y el pago posterior del pedido— y cada
+     * una tenía su propio prefijo: el monedero deduplica por clave, así que con dos claves distintas no
+     * deduplicaba nada y el mismo pedido se debitaba dos veces. Con una sola función no pueden divergir.
+     */
+    static String claveDeCargoDePedido(UUID orderId) {
+        return "order-charge-" + orderId;
+    }
+
     /* ============ Read ============ */
 
     /** Returns the user's wallet, creating an empty ACTIVE one on first access. */

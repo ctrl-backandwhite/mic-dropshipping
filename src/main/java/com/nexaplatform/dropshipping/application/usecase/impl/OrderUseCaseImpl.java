@@ -1018,8 +1018,10 @@ public class OrderUseCaseImpl implements OrderUseCase {
         if (WALLET.equals(method)) {
             long charge = created.getTotalCents();
             // Clave de idempotencia del cargo ACOTADA AL PEDIDO: el débito es único por pedido y no se puede
-            // reutilizar la clave del cliente entre pedidos distintos para colar cargos a cero.
-            String idemKey = "checkout-" + created.getId();
+            // reutilizar la clave del cliente entre pedidos distintos para colar cargos a cero. La compone
+            // WalletUseCase y no este método: el pago posterior del mismo pedido entra por otro camino, y
+            // con un prefijo distinto en cada uno el monedero no deduplicaba y se debitaba dos veces.
+            String idemKey = WalletUseCase.claveDeCargoDePedido(created.getId());
             walletUseCase.charge(userId, charge, created.getId(), idemKey, "Order " + created.getOrderNumber());
             o.setStatus(OrderStatus.PAID);
             // El dinero ya está cobrado: a la cola de compras de 1688. Los pagos externos (Stripe/PayPal)
