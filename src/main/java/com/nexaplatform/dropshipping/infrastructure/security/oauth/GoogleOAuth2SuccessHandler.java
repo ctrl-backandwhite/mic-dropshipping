@@ -15,6 +15,7 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.Set;
 
 /**
@@ -112,6 +113,19 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         }
 
         User user = outcome.getUser();
+        // Estado de la cuenta ANTES que nada: este camino no pasa por AuthenticationManager ni por
+        // DropshippingUserDetailsService, que es donde se evalúan «desactivada» y «bloqueada», así que sin
+        // esta comprobación el bloqueo y la baja solo mordían en el acceso por contraseña. Quien se daba de
+        // baja conservaba el vínculo con Google y volvía a entrar con un clic —y su cuenta ya no sale en el
+        // panel, así que nadie podía cerrarla otra vez—; y a un usuario bloqueado le bastaba con entrar por
+        // aquí para seguir operando. Un único código de error para los tres casos: cuál de ellos es no es
+        // asunto de quien llama a la puerta.
+        boolean bloqueada = user.getLockedUntil() != null && user.getLockedUntil().isAfter(Instant.now());
+        if (!user.isActive() || user.getDeletedAt() != null || bloqueada) {
+            log.info("::> [OAUTH2 {}] Login social rechazado: la cuenta no está operativa", provider);
+            response.sendRedirect(redirects.error(target, "account_disabled"));
+            return;
+        }
         // 2FA: si la cuenta tiene segundo factor activo, el login social NO puede emitir tokens (saltaría el
         // OTP que sí exige el login por contraseña). Se rechaza y se pide entrar con contraseña + OTP.
         if (totpService.isEnabled(user.getId())) {

@@ -235,6 +235,71 @@ class Cov10UserUseCaseImplTest {
         verify(userRepository, never()).delete(any());
     }
 
+    /**
+     * Darse de baja tiene que cortar TAMBIÉN el acceso social.
+     *
+     * <p>La baja deja {@code active=false} y {@code deleted_at}, pero conservaba el vínculo con Google, y
+     * ese camino no pasa por donde se evalúa el estado de la cuenta: quien se daba de baja volvía a entrar
+     * con un clic. Y como {@code deleted_at} la oculta de los listados del panel, ningún administrador
+     * podía verla para volver a cerrarla. El borrado del administrador sí lo hacía bien
+     * ({@code anonymise()} desvincula); era la baja del propio usuario la que no.
+     */
+    @Test
+    void laBajaDesvinculaLaCuentaDeGoogleParaQueNoSePuedaVolverAEntrar() {
+        UUID id = UUID.randomUUID();
+        User u = User.builder().id(id).email("ana@x.com").deletionCode("123456")
+                .deletionCodeExpiresAt(Instant.now().plusSeconds(600)).active(true).googleLinked(true).build();
+        when(userRepository.getById(id)).thenReturn(u);
+
+        useCase.confirmAccountDeletion(id, "123456");
+
+        assertThat(u.isGoogleLinked()).isFalse();
+    }
+
+    /**
+     * Bloquear o desactivar a alguien tiene que cerrarle la sesión abierta.
+     *
+     * <p>Cambiar el rol, la contraseña, restablecerla, borrar la cuenta y darse de baja SÍ revocaban; el
+     * bloqueo y la desactivación desde el panel, no. El operador bloqueaba a un usuario abusivo y este ni
+     * se enteraba: su token seguía sirviendo hasta caducar.
+     */
+    @Test
+    void bloquearAUnUsuarioLeCierraLaSesionAbierta() {
+        UUID id = UUID.randomUUID();
+        User u = User.builder().id(id).email("ana@x.com").active(true).build();
+        when(userRepository.getById(id)).thenReturn(u);
+        when(userRepository.update(any())).thenAnswer(i -> i.getArgument(0));
+
+        useCase.lock(id, 60);
+
+        verify(jwtRevocationService).revokeAllForClient(id.toString());
+    }
+
+    @Test
+    void desactivarAUnUsuarioDesdeElPanelLeCierraLaSesionAbierta() {
+        UUID id = UUID.randomUUID();
+        User u = User.builder().id(id).email("ana@x.com").active(true).build();
+        when(userRepository.getById(id)).thenReturn(u);
+        when(userRepository.update(any())).thenAnswer(i -> i.getArgument(0));
+
+        useCase.editUser(id, User.builder().build(), false);
+
+        verify(jwtRevocationService).revokeAllForClient(id.toString());
+    }
+
+    /** Reactivar no revoca nada: no hay sesión que cortar y cortarla sería gratuito. */
+    @Test
+    void reactivarAUnUsuarioNoTocaSusSesiones() {
+        UUID id = UUID.randomUUID();
+        User u = User.builder().id(id).email("ana@x.com").active(false).build();
+        when(userRepository.getById(id)).thenReturn(u);
+        when(userRepository.update(any())).thenAnswer(i -> i.getArgument(0));
+
+        useCase.editUser(id, User.builder().build(), true);
+
+        verify(jwtRevocationService, never()).revokeAllForClient(anyString());
+    }
+
     /* ---------- contraseñas ---------- */
 
     @Test

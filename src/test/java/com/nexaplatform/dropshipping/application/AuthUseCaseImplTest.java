@@ -371,6 +371,65 @@ class AuthUseCaseImplTest {
         verify(userTokenService, never()).issue(any(), any(), any(), anySet());
     }
 
+    /**
+     * Renovar el token vuelve a preguntar por el estado de la cuenta.
+     *
+     * <p>Sin esto, expulsar a alguien no lo expulsa: su token de acceso sigue sirviendo hasta que caduca
+     * y, cuando caduca, canjea el de refresco en {@code /api/auth/refresh} —que es público— y recibe un
+     * par nuevo con otro refresco de catorce días. La cadena se renueva indefinidamente, así que ni
+     * bloquear ni desactivar la cuenta cierran nunca la sesión. {@code validateAndRotate} comprueba la
+     * firma, el tipo, la revocación y el reuso del identificador; lo que NO mira es si la cuenta sigue
+     * viva, y {@code findById} solo falla si la fila no existe.
+     */
+    @Test
+    @DisplayName("refresh: una cuenta desactivada no renueva la sesión")
+    void refresh_cuentaDesactivada_noRenueva() {
+        UUID id = UUID.randomUUID();
+        RefreshTokenDtoIn req = new RefreshTokenDtoIn("the-refresh-jwt");
+        when(userTokenService.validateAndRotate("the-refresh-jwt")).thenReturn(id);
+        User desactivado = user(id, "user@example.com");
+        desactivado.setActive(false);
+        when(userUseCase.findById(id)).thenReturn(desactivado);
+
+        assertThatThrownBy(() -> useCase.refresh(req)).isInstanceOf(BadCredentialsException.class);
+
+        verify(userTokenService, never()).issue(any(), any(), any(), anySet());
+    }
+
+    @Test
+    @DisplayName("refresh: una cuenta bloqueada no renueva la sesión mientras dure el bloqueo")
+    void refresh_cuentaBloqueada_noRenueva() {
+        UUID id = UUID.randomUUID();
+        RefreshTokenDtoIn req = new RefreshTokenDtoIn("the-refresh-jwt");
+        when(userTokenService.validateAndRotate("the-refresh-jwt")).thenReturn(id);
+        User bloqueado = user(id, "user@example.com");
+        bloqueado.setLockedUntil(java.time.Instant.now().plusSeconds(900));
+        when(userUseCase.findById(id)).thenReturn(bloqueado);
+
+        assertThatThrownBy(() -> useCase.refresh(req)).isInstanceOf(BadCredentialsException.class);
+
+        verify(userTokenService, never()).issue(any(), any(), any(), anySet());
+    }
+
+    /**
+     * La contrapartida: un bloqueo YA VENCIDO no puede dejar a nadie fuera. Es la misma regla que aplica
+     * el login ({@code DropshippingUserDetailsService}): bloqueado es {@code lockedUntil} en el futuro.
+     */
+    @Test
+    @DisplayName("refresh: un bloqueo vencido ya no impide renovar")
+    void refresh_bloqueoVencido_renuevaConNormalidad() {
+        UUID id = UUID.randomUUID();
+        RefreshTokenDtoIn req = new RefreshTokenDtoIn("the-refresh-jwt");
+        when(userTokenService.validateAndRotate("the-refresh-jwt")).thenReturn(id);
+        User yaLibre = user(id, "user@example.com");
+        yaLibre.setLockedUntil(java.time.Instant.now().minusSeconds(60));
+        when(userUseCase.findById(id)).thenReturn(yaLibre);
+        when(userTokenService.issue(eq(id), eq("user@example.com"), eq("USER"), anySet())).thenReturn(tokens());
+        when(mapper.toMeDtoOut(any(User.class), anySet())).thenReturn(MeDtoOut.builder().build());
+
+        assertThat(useCase.refresh(req).getRefreshToken()).isEqualTo("refresh-jwt");
+    }
+
     /* ============ logout ============ */
 
     @Test

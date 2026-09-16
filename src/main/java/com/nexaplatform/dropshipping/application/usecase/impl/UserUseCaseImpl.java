@@ -404,6 +404,11 @@ public class UserUseCaseImpl implements UserUseCase {
         // deleted_at la oculta de los listados. La reactivación la hace un ADMIN (active=true, deleted_at=null).
         user.setActive(false);
         user.setDeletedAt(Instant.now());
+        // Y se corta el acceso SOCIAL: el login con Google no pasa por donde se evalúa el estado de la
+        // cuenta, así que dejando el vínculo puesto se volvía a entrar con un clic — y con deleted_at la
+        // cuenta ya no sale en el panel, de modo que nadie podía cerrarla otra vez. anonymise() (el borrado
+        // del administrador) ya lo hacía; faltaba aquí.
+        user.setGoogleLinked(false);
         user.setDeletionCode(null);
         user.setDeletionCodeExpiresAt(null);
         userRepository.update(user);
@@ -560,8 +565,14 @@ public class UserUseCaseImpl implements UserUseCase {
         User u = loadUser(id);
         // Partial update: null source fields are ignored by the update mapper.
         userUpdateMapper.updateFromModel(patch, u);
-        if (active != null)
+        if (active != null) {
             u.setActive(active);
+            if (Boolean.FALSE.equals(active)) {
+                // Desactivar sin revocar no expulsaba a nadie: el token seguía sirviendo hasta caducar y el
+                // de refresco se canjeaba en un endpoint público por otro par. Reactivar no revoca nada.
+                jwtRevocationService.revokeAllForClient(id.toString());
+            }
+        }
         return userRepository.update(u);
     }
 
@@ -570,7 +581,11 @@ public class UserUseCaseImpl implements UserUseCase {
     public User lock(UUID id, int minutes) {
         User u = loadUser(id);
         u.setLockedUntil(Instant.now().plus(minutes, ChronoUnit.MINUTES));
-        return userRepository.update(u);
+        User guardado = userRepository.update(u);
+        // El bloqueo tiene que cerrar la sesión que ya estaba abierta. Sin esto, el operador bloqueaba a un
+        // usuario abusivo y este ni se enteraba: seguía operando con su token hasta que caducaba.
+        jwtRevocationService.revokeAllForClient(id.toString());
+        return guardado;
     }
 
     @Override

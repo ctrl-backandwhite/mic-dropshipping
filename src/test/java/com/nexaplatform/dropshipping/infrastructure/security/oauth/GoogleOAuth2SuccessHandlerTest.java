@@ -85,7 +85,7 @@ class GoogleOAuth2SuccessHandlerTest {
     }
 
     private User user(UUID id, String email) {
-        User u = User.builder().email(email).role(UserRole.USER).build();
+        User u = User.builder().email(email).role(UserRole.USER).active(true).build();
         u.setId(id);
         return u;
     }
@@ -103,6 +103,50 @@ class GoogleOAuth2SuccessHandlerTest {
 
         assertThat(response.getRedirectedUrl())
                 .isEqualTo(FRONT + "/auth/callback#token=ACCESS-T&refresh=REFRESH-T");
+    }
+
+    /**
+     * El acceso social no pasa por {@code AuthenticationManager} ni por
+     * {@code DropshippingUserDetailsService}, que es el ÚNICO sitio donde se evalúan «desactivada» y
+     * «bloqueada». Emitía los tokens directamente, así que el bloqueo y la desactivación solo mordían en
+     * el acceso por contraseña.
+     *
+     * <p>Lo que se rompía en producción: quien se da de baja queda {@code active=false} pero conserva el
+     * vínculo con Google, así que volvía a entrar con un clic — y su cuenta ya no aparece en el panel
+     * (queda oculta por {@code deleted_at}), de modo que nadie podía volver a cerrarla. Y a un usuario
+     * abusivo al que un administrador bloqueaba le bastaba con entrar por Google para seguir operando.
+     */
+    @Test
+    void una_cuenta_desactivada_no_entra_por_google() throws Exception {
+        User dadoDeBaja = user(UUID.randomUUID(), "jane@gmail.com");
+        dadoDeBaja.setActive(false);
+        dadoDeBaja.setDeletedAt(java.time.Instant.now());
+        when(userUseCase.resolveGoogleLogin(eq("jane@gmail.com"), anyString(), anyString(), isNull()))
+                .thenReturn(new GoogleLoginOutcome(dadoDeBaja, false, "jane@gmail.com"));
+        // Con tokens de verdad, el rojo enseña lo que pasa: la cuenta entra y se le emite la sesión.
+        org.mockito.Mockito.lenient().when(userTokenService.issue(any(), anyString(), anyString(), any()))
+                .thenReturn(new UserTokenService.Tokens("ACCESS-T", "REFRESH-T", 3600L));
+
+        handler.onAuthenticationSuccess(request, response, authToken(verifiedAttributes("jane@gmail.com")));
+
+        assertThat(response.getRedirectedUrl()).contains("account_disabled");
+        verify(userTokenService, never()).issue(any(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void una_cuenta_bloqueada_no_entra_por_google_mientras_dure_el_bloqueo() throws Exception {
+        User bloqueado = user(UUID.randomUUID(), "jane@gmail.com");
+        bloqueado.setLockedUntil(java.time.Instant.now().plusSeconds(900));
+        when(userUseCase.resolveGoogleLogin(eq("jane@gmail.com"), anyString(), anyString(), isNull()))
+                .thenReturn(new GoogleLoginOutcome(bloqueado, false, "jane@gmail.com"));
+        // Con tokens de verdad, el rojo enseña lo que pasa: la cuenta entra y se le emite la sesión.
+        org.mockito.Mockito.lenient().when(userTokenService.issue(any(), anyString(), anyString(), any()))
+                .thenReturn(new UserTokenService.Tokens("ACCESS-T", "REFRESH-T", 3600L));
+
+        handler.onAuthenticationSuccess(request, response, authToken(verifiedAttributes("jane@gmail.com")));
+
+        assertThat(response.getRedirectedUrl()).contains("account_disabled");
+        verify(userTokenService, never()).issue(any(), anyString(), anyString(), any());
     }
 
     @Test

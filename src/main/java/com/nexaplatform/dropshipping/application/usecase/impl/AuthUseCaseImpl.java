@@ -163,7 +163,30 @@ public class AuthUseCaseImpl implements AuthUseCase {
     public LoginDtoOut refresh(RefreshTokenDtoIn req) {
         UUID id = userTokenService.validateAndRotate(req.getRefreshToken());
         User user = userUseCase.findById(id);
+        // El token puede ser impecable y la cuenta ya no estarlo: aquí se vuelve a preguntar.
+        exigeCuentaOperativa(user);
         return buildLogin(user, Set.of(user.getRole().authority()));
+    }
+
+    /**
+     * Una cuenta bloqueada, desactivada o dada de baja no renueva su sesión.
+     *
+     * <p>{@code validateAndRotate} comprueba la firma, el tipo, la revocación y el reuso del
+     * identificador; lo que no mira —ni puede— es si la cuenta sigue viva, y {@code findById} solo falla
+     * si la fila no existe. Sin esta comprobación, expulsar a alguien no lo expulsaba: su token de acceso
+     * seguía sirviendo hasta caducar y, al caducar, canjeaba el de refresco en un endpoint público y
+     * recibía otro par con catorce días más. La cadena se renovaba indefinidamente, de modo que ni el
+     * bloqueo del panel ni la desactivación cerraban nunca la sesión.
+     *
+     * <p>La regla es la MISMA que aplica el acceso por contraseña en
+     * {@code DropshippingUserDetailsService}: bloqueada es {@code lockedUntil} en el futuro —un bloqueo
+     * vencido no deja a nadie fuera— y desactivada es {@code active == false}.
+     */
+    private static void exigeCuentaOperativa(User user) {
+        boolean bloqueada = user.getLockedUntil() != null && user.getLockedUntil().isAfter(Instant.now());
+        if (!user.isActive() || user.getDeletedAt() != null || bloqueada) {
+            throw new BadCredentialsException("La cuenta no está operativa");
+        }
     }
 
     @Override
