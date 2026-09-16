@@ -33,10 +33,10 @@ public class FulfillmentSyncScheduler {
     private final FulfillmentService fulfillmentService;
     private final OrderUseCase orderUseCase;
 
-    @Value("${nexadrop.fulfillment.sync-enabled:${nexadrop.cainiao.sync-enabled:true}}")
+    @Value("${nexadrop.fulfillment.sync-enabled:true}")
     private boolean enabled;
 
-    @Scheduled(fixedDelayString = "${nexadrop.fulfillment.sync-interval-ms:${nexadrop.cainiao.sync-interval-ms:60000}}")
+    @Scheduled(fixedDelayString = "${nexadrop.fulfillment.sync-interval-ms:60000}")
     public void run() {
         if (!enabled) {
             return;

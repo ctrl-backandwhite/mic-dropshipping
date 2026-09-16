@@ -276,6 +276,7 @@ nexadrop:
   db:
     replica-enabled: ${DB_REPLICA_ENABLED:false} # routing primary/replica
   ratelimit:
+    enabled: ${RATELIMIT_ENABLED:true}
     redis-enabled: ${RATELIMIT_REDIS_ENABLED:false} # Bucket4j sobre Redis
     # Testigo con el que la COMPILACIÓN del front se identifica para no chocar con el límite del
     # escaparate. Vacío = apagado, que es lo que debe estar en cualquier entorno donde no se compile.
@@ -327,6 +328,8 @@ nexadrop:
     max-number: ${CAPTCHA_MAX_NUMBER:100000}   # coste del proof-of-work (a mayor, más caro para el bot)
     expiry-seconds: ${CAPTCHA_EXPIRY_SECONDS:300}
   invoice:
+    # URL pública que codifica el QR de verificación de la factura.
+    verify-base-url: ${INVOICE_VERIFY_BASE_URL:${nexadrop.storefront.base-url:http://localhost:3003}}
     # Datos fiscales del EMISOR para que la factura sea un documento legal. Rellénalos por
     # entorno (Railway). Si legal-name queda vacío, el bloque del emisor NO se pinta.
     issuer:
@@ -459,6 +462,8 @@ nexadrop:
     expo-url: ${NEXADROP_PUSH_EXPO_URL:https://exp.host/--/api/v2/push/send}
 
   paypal:
+    platform-id: ${PAYPAL_PLATFORM_ID:nexadrop-dropshipping}
+    platform-env: ${PAYPAL_PLATFORM_ENV:dev}
     enabled: ${PAYPAL_ENABLED:false}
     client-id: ${PAYPAL_CLIENT_ID:}
     client-secret: ${PAYPAL_CLIENT_SECRET:}
@@ -518,6 +523,7 @@ nexadrop:
     # el 1-jul-2028 (Reglamento (UE) 2026/382).
     group-declaration-lines: ${CUSTOMS_GROUP_DECLARATION_LINES:true}
   yunexpress:
+    mock-stage-minutes: ${YUNEXPRESS_MOCK_STAGE_MINUTES:2}
     enabled: ${YUNEXPRESS_ENABLED:false}
     # 应用ID / 应用秘钥(AK) de 开发配置 → 沙盒应用, y sourcekey de 用户中心 → 用户信息.
     app-id: ${YUNEXPRESS_APP_ID:}
@@ -580,6 +586,12 @@ nexadrop:
   # la imagen de origen (1688/alicdn, sin Referer) y la sube al bucket; el `public-url` es la base con
   # la que se sirve al navegador. Así dejamos de depender del hotlink de alicdn.
   storage:
+    # Espejado: cadencia del barrido y política de reintento de las fallidas.
+    mirror-interval-ms: ${STORAGE_MIRROR_INTERVAL_MS:8000}
+    mirror-retry-interval-ms: ${STORAGE_MIRROR_RETRY_INTERVAL_MS:300000}
+    mirror-retry-base-minutes: ${STORAGE_MIRROR_RETRY_BASE_MINUTES:5}
+    mirror-retry-max-attempts: ${STORAGE_MIRROR_RETRY_MAX_ATTEMPTS:6}
+    mirror-retry-batch: ${STORAGE_MIRROR_RETRY_BATCH:100}
     enabled: ${STORAGE_ENABLED:true}
     endpoint: ${STORAGE_ENDPOINT:http://minio:9000}              # interno backend → MinIO/S3
     public-url: ${STORAGE_PUBLIC_URL:http://localhost:9100/product-images}  # base navegable (browser)
@@ -626,6 +638,36 @@ nexadrop:
     chain: ${USDT_DEFAULT_CHAIN:TRC20}
     expiry-minutes: 30
 
+
+  # URL pública del backend (la que se publica en la documentación OpenAPI).
+  public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}
+
+  # Comisión de la plataforma que se descuenta al estimar el margen del socio.
+  platform:
+    commission-pct: ${PLATFORM_COMMISSION_PCT:0}
+
+  # Precalentado del catálogo: qué combinaciones de idioma y divisa se dejan calientes.
+  catalogo:
+    precalentar: ${CATALOGO_PRECALENTAR:true}
+    precalentar-combinaciones: ${CATALOGO_PRECALENTAR_COMBINACIONES:es:EUR,en:USD,es:USD,en:EUR}
+    precalentar-secciones: ${CATALOGO_PRECALENTAR_SECCIONES:6}
+
+  # Bus de integración del catálogo: el anuncio de los productos certificados.
+  bus:
+    anuncio-enabled: ${BUS_ANUNCIO_ENABLED:true}
+    anuncio-max-intentos: ${BUS_ANUNCIO_MAX_INTENTOS:5}
+    anuncio-interval-ms: ${BUS_ANUNCIO_INTERVAL_MS:5000}
+
+  # Avisos al responsable cuando un servicio del que depende el negocio deja de funcionar (transportista
+  # que no acepta envíos, pasarela que no cobra). Se agrupan por causa y se silencian durante el cooldown
+  # para que una caída no llene el buzón justo cuando hay que leerlo.
+  #
+  # Colgaba de `logging:` y el código las lee de `nexadrop.alerts.*`: las tres variables no hacían nada,
+  # los avisos iban siempre al buzón por defecto y ALERTS_ENABLED=false no los apagaba.
+  alerts:
+    enabled: ${ALERTS_ENABLED:true}
+    email: ${ALERTS_EMAIL:support@nx036.com}   # Buzón de la empresa, NUNCA un correo personal
+    cooldown-minutes: ${ALERTS_COOLDOWN_MINUTES:30}
 logging:
   level:
     root: INFO
@@ -635,11 +677,3 @@ logging:
     # Desglose de bultos y líneas de declaración: la cuenta que acaba en la factura del cliente.
     # En DEBUG solo cuando se está investigando un importe concreto; en producción va apagado.
     com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService: ${LOG_ADUANA:INFO}
-
-  # Avisos al responsable cuando un servicio del que depende el negocio deja de funcionar (transportista
-  # que no acepta envíos, pasarela que no cobra). Se agrupan por causa y se silencian durante el cooldown
-  # para que una caída no llene el buzón justo cuando hay que leerlo.
-  alerts:
-    enabled: ${ALERTS_ENABLED:true}
-    email: ${ALERTS_EMAIL:support@nx036.com}   # Buzón de la empresa, NUNCA un correo personal
-    cooldown-minutes: ${ALERTS_COOLDOWN_MINUTES:30}

@@ -71,9 +71,4 @@ nexadrop:
     issuer: ${NX_API_URL:https://api.nx036.com}
   cors:
     allowed-origins: ${NX_WEB_URL:https://nx036.com},${NX_API_URL:https://api.nx036.com}
-  cainiao:
-    # En PRODUCCIÓN: integración real activa por defecto, contra el gateway de PRODUCCIÓN de Cainiao.
-    # appKey/appSecret de la cuenta de PROD se inyectan por env (CAINIAO_APP_KEY / CAINIAO_APP_SECRET).
-    enabled: ${CAINIAO_ENABLED:true}
-    base-url: ${CAINIAO_BASE_URL:https://link.cainiao.com/gateway/link.do}
 

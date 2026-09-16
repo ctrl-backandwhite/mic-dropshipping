@@ -54,9 +54,3 @@ nexadrop:
   cors:
     # Dominios de confianza desde los que se accede a la API (frontend + el propio backend).
     allowed-origins: https://front-dropshipping-des.up.railway.app,https://back-dropshipping-des.up.railway.app
-  cainiao:
-    # En DESARROLLO la integración REAL está activa por defecto (sandbox de Cainiao Link).
-    # Freno temporal: mientras la app NO esté aprobada por Cainiao y los campos sin mapear, dejar la
-    # env var CAINIAO_ENABLED=false en Railway (override). Al quitarla, este default (true) activa el real.
-    enabled: ${CAINIAO_ENABLED:true}
-    base-url: ${CAINIAO_BASE_URL:https://linkdaily.tbsandbox.com/gateway/link.do}

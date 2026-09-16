@@ -81,14 +81,4 @@ nexadrop:
   cors:
     # Dominios de confianza desde los que se accede a la API (frontend + el propio backend).
     allowed-origins: ${NX_WEB_URL:https://pre.nx036.com},${NX_API_URL:https://api-pre.nx036.com}
-  cainiao:
-    # En PRE la integración real (sandbox de Cainiao Link) está disponible; se controla por env
-    # CAINIAO_ENABLED en Railway (déjala en false hasta que la app esté aprobada y mapeada).
-    enabled: ${CAINIAO_ENABLED:true}
-    # En PRE el impuesto se calcula con Cainiao (con fallback a la tabla local si Cainiao no responde).
-    # En LOCAL se queda en false (tabla country_tax_rate). Requiere además CAINIAO_ENABLED=true para actuar.
-    tax-enabled: ${CAINIAO_TAX_ENABLED:true}
-    # En PRE el envío se cotiza con Cainiao (con fallback a la tabla de zonas). En LOCAL, false.
-    shipping-quote-enabled: ${CAINIAO_SHIPPING_QUOTE_ENABLED:true}
-    base-url: ${CAINIAO_BASE_URL:https://linkdaily.tbsandbox.com/gateway/link.do}
 
