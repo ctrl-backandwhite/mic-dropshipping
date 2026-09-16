@@ -94,6 +94,45 @@ class StartupSecretsValidatorTest {
                 .hasMessageContaining("STORAGE_ACCESS_KEY");
     }
 
+    /**
+     * Sin clave de CAPTCHA cada réplica se firma la suya: el reto se emite en un pod y se rechaza en otro.
+     *
+     * <p>Con dos o más réplicas —producción autoescala— eso deja el registro, el contacto, el
+     * restablecimiento y el boletín fallando para una parte de la gente, con un {@code CAPTCHA_FAILED} que
+     * no explica nada. El comentario del código contempló el reinicio, no la existencia de N procesos a la
+     * vez. Y con la clave puesta pero compartida, la prueba de trabajo vale una vez POR RÉPLICA.
+     */
+    @Test
+    @DisplayName("en pro, la clave del captcha vacía aborta el arranque")
+    void enProSinClaveDeCaptchaAborta() {
+        StartupSecretsValidator validador = validador("pro", KEK_VALIDA, "hmac-propio", "acceso-propio", "secreta");
+        ReflectionTestUtils.setField(validador, "captchaHmacKey", "");
+
+        assertThatThrownBy(validador::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("CAPTCHA_HMAC_KEY");
+    }
+
+    /**
+     * Sin secreto de borde, la geolocalización se cree cualquier cabecera.
+     *
+     * <p>{@code GeolocalizacionDelCdn} exige {@code X-Nexadrop-Edge} para creerse {@code CF-IPCountry}…
+     * salvo que el secreto esté en blanco, en cuyo caso vuelve a confiar en todo. Y el origen se alcanza
+     * sin pasar por el CDN. Quien lo haga elige su país: margen, IVA y arancel de otro destino, con el
+     * pedido enviándose igualmente a la dirección real. El {@code application.yml} ya dice que en pre y
+     * producción «TIENE que estar puesto»; esto es lo que lo hace cierto.
+     */
+    @Test
+    @DisplayName("en pre, el secreto compartido con el CDN vacío aborta el arranque")
+    void enPreSinSecretoDeCdnAborta() {
+        StartupSecretsValidator validador = validador("pre", KEK_VALIDA, "hmac-propio", "acceso-propio", "secreta");
+        ReflectionTestUtils.setField(validador, "cdnSharedSecret", "");
+
+        assertThatThrownBy(validador::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("CDN_SHARED_SECRET");
+    }
+
     private static StartupSecretsValidator validador(String perfil, String kek, String unsubscribe,
                                                      String accessKey, String secretKey) {
         MockEnvironment entorno = new MockEnvironment();
@@ -103,6 +142,8 @@ class StartupSecretsValidatorTest {
         ReflectionTestUtils.setField(validador, "unsubscribeSecret", unsubscribe);
         ReflectionTestUtils.setField(validador, "storageAccessKey", accessKey);
         ReflectionTestUtils.setField(validador, "storageSecretKey", secretKey);
+        ReflectionTestUtils.setField(validador, "captchaHmacKey", "hmac-captcha-propio");
+        ReflectionTestUtils.setField(validador, "cdnSharedSecret", "secreto-de-borde-propio");
         return validador;
     }
 

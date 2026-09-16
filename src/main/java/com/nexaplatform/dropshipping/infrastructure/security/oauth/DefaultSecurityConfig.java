@@ -7,6 +7,7 @@ import com.nexaplatform.dropshipping.infrastructure.security.jwt.UserTokenServic
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -18,6 +19,11 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 
 @Configuration
+// Los @PreAuthorize de los controladores de administración NO se ejecutaban: sin esto Spring no crea los
+// proxies de seguridad de método y la anotación es texto. Las tres que hay expresan lo mismo que ya impone
+// la cadena por URL (/api/admin/** exige ADMIN), así que activarlo no cambia quién entra hoy; lo que
+// cambia es que la próxima deje de ser decorativa.
+@EnableMethodSecurity
 public class DefaultSecurityConfig {
 
     // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.

@@ -39,6 +39,10 @@ public class StartupSecretsValidator {
     private String storageAccessKey;
     @Value("${nexadrop.storage.secret-key:}")
     private String storageSecretKey;
+    @Value("${nexadrop.captcha.hmac-key:}")
+    private String captchaHmacKey;
+    @Value("${nexadrop.security.cdn-shared-secret:}")
+    private String cdnSharedSecret;
 
     public StartupSecretsValidator(Environment environment) {
         this.environment = environment;
@@ -63,6 +67,20 @@ public class StartupSecretsValidator {
         if (isBlank(storageSecretKey) || DEFAULT_STORAGE_ACCESS.equals(storageAccessKey)) {
             problems.add("nexadrop.storage.* (STORAGE_ACCESS_KEY/STORAGE_SECRET_KEY) por defecto/vacío: "
                     + "credenciales de almacenamiento triviales.");
+        }
+        if (isBlank(captchaHmacKey)) {
+            // Sin clave, cada proceso genera la suya: con más de una réplica el reto se firma en un pod y
+            // se verifica en otro, y el registro, el contacto, el restablecimiento y el boletín fallan para
+            // una parte de la gente sin nada en el registro que lo explique.
+            problems.add("nexadrop.captcha.hmac-key (CAPTCHA_HMAC_KEY) vacío: cada réplica firmaría sus "
+                    + "propios retos y el CAPTCHA fallaría de forma intermitente.");
+        }
+        if (isBlank(cdnSharedSecret)) {
+            // GeolocalizacionDelCdn exige esta prueba para creerse CF-IPCountry; en blanco vuelve a confiar
+            // en la cabecera, y el origen se alcanza sin pasar por el CDN. Quien lo haga elige su país y con
+            // él su margen, su IVA y su arancel.
+            problems.add("nexadrop.security.cdn-shared-secret (CDN_SHARED_SECRET) vacío: el país del "
+                    + "comprador se tomaría de una cabecera falsificable.");
         }
         if (!problems.isEmpty()) {
             throw new IllegalStateException("Secretos inseguros en un entorno pro/pre; define sus variables de "
