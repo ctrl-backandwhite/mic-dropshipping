@@ -5,6 +5,7 @@ import com.nexaplatform.dropshipping.application.usecase.WinningProductUseCase;
 import com.nexaplatform.dropshipping.domain.model.WinningProduct;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
+import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -74,7 +75,12 @@ public class WinningProductUseCaseImpl implements WinningProductUseCase {
         if (title == null) {
             title = p.getTitleZh();
         }
+        // `basePrice` es lo que le pagamos al proveedor, en yuanes. Solo sale para ADMIN, igual que en el
+        // listado y en la ficha (ProductMapper): publicarlo junto al precio de venta que el escaparate ya
+        // enseña permite a cualquiera calcular la ganancia exacta por producto. Y este camino cuelga de
+        // /api/me/intelligence/**, que solo exige tener cuenta: lo veía cualquier cliente registrado.
+        boolean admin = SecurityUtils.isAdmin();
         return WinningProduct.builder().slug(p.getSlug()).title(title).monthlySales(p.getMonthlySales())
-                .trendScore(p.getTrendScore()).mainImage(img).price(p.getBasePrice()).build();
+                .trendScore(p.getTrendScore()).mainImage(img).price(admin ? p.getBasePrice() : null).build();
     }
 }

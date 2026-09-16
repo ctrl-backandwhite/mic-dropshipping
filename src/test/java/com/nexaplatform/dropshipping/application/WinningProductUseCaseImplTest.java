@@ -159,7 +159,9 @@ class WinningProductUseCaseImplTest {
         List<WinningProduct> result = useCase.salesTrends(null, 10, "es");
 
         assertThat(result.get(0).getTitle()).isEqualTo("Titulo espanol");
-        assertThat(result.get(0).getPrice()).isEqualByComparingTo("9.99");
+        // El coste del proveedor no viaja para quien no es admin: esta prueba lo fijaba en 9,99 y era una
+        // aserción incidental —su asunto es el título— que sostenía la fuga.
+        assertThat(result.get(0).getPrice()).isNull();
     }
 
     @Test
@@ -191,5 +193,27 @@ class WinningProductUseCaseImplTest {
                 tuple("cdn", "https://cdn/img.jpg"),
                 tuple("src", "https://src/only.jpg"),
                 tuple("noimg", null));
+    }
+
+    /**
+     * El coste del proveedor NO sale de aquí para quien no es administrador.
+     *
+     * <p>{@code basePrice} es lo que le pagamos al proveedor, en yuanes. El listado y la ficha ya lo
+     * cierran con la misma condición ({@code ProductMapper}: «publicarlo junto al precio final permite a
+     * cualquiera calcular la ganancia exacta por producto»), pero este camino lo publicaba sin puerta y
+     * {@code /api/me/intelligence/**} solo exige tener cuenta: cualquier cliente registrado obtenía el
+     * coste de cada producto y, con el precio de venta que ya ve en el escaparate, el margen exacto.
+     */
+    @Test
+    void elCosteDeProveedorNoSaleParaQuienNoEsAdministrador() {
+        when(productRepository.findAll())
+                .thenReturn(List.of(product("p1", ProductStatus.ACTIVE, 100, "9.0")));
+
+        List<WinningProduct> resultado = useCase.winning(10, "en");
+
+        assertThat(resultado).isNotEmpty();
+        assertThat(resultado.getFirst().getPrice())
+                .as("basePrice es el desembolso al proveedor: no viaja a quien no es admin")
+                .isNull();
     }
 }
