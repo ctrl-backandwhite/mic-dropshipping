@@ -300,8 +300,13 @@ abstract class OrderLifecycleSupport extends BaseIntegration {
         return client.post().uri(CHECKOUT).header("Authorization", bearer(tokenDe(userId, "USER")))
                 .contentType(MediaType.APPLICATION_JSON)
                 .headers(h -> {
-                    if (claveIdem != null) {
-                        h.set("Idempotency-Key", claveIdem);
+                    // Los endpoints de dinero EXIGEN la clave: identifica el INTENTO. Sin ella el
+                    // servidor responde 400 en vez de abrir un segundo cobro. Clave nueva por
+                    // llamada —cada petición es un intento distinto—; quien quiere un REENVÍO del
+                    // mismo intento pasa la suya y se respeta.
+                    {
+                        h.set("Idempotency-Key",
+                                claveIdem != null ? claveIdem : UUID.randomUUID().toString());
                     }
                 })
                 .bodyValue(cuerpo).exchange().expectStatus().isCreated().expectBody(MAPA)

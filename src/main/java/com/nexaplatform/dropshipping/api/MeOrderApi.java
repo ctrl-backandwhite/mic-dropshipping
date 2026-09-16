@@ -4,6 +4,7 @@ import com.nexaplatform.dropshipping.api.dto.in.MeCheckoutDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.MeOrderDetailDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MeOrderRowDtoOut;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -31,7 +32,10 @@ public interface MeOrderApi {
     @ApiResponse(responseCode = "201", description = "Order created")
     @PostMapping("/checkout")
     ResponseEntity<MeOrderDetailDtoOut> checkout(Authentication auth, @Valid @RequestBody MeCheckoutDtoIn req,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idem);
+            @Parameter(description = "Clave del INTENTO de compra, no de la petición: la misma en los "
+                    + "reintentos del mismo carrito, distinta al comprar otra cosa. Sin ella cada POST "
+                    + "crearía un pedido nuevo, así que un doble clic sería un segundo cobro.",
+                    required = true) @RequestHeader(value = "Idempotency-Key") String idem);
 
     @Operation(summary = "List the authenticated user's orders")
     @ApiResponse(responseCode = "200", description = "Orders listed")

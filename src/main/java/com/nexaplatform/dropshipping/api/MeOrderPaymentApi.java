@@ -6,6 +6,7 @@ import com.nexaplatform.dropshipping.api.dto.out.OrderPaymentDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SavedCardPayDtoOut;
 import com.stripe.exception.StripeException;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -31,7 +32,7 @@ public interface MeOrderPaymentApi {
     @PostMapping("/{orderId}/payment-intent")
     ResponseEntity<OrderPaymentDtoOut> initiate(Authentication auth, @PathVariable UUID orderId,
             @Valid @RequestBody OrderPaymentIntentDtoIn req,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey);
+            @Parameter(description = "Clave del INTENTO, no de la petición: la misma en los reintentos del mismo gesto. Sin ella, dos peticiones son dos cobros.", required = true) @RequestHeader(value = "Idempotency-Key") String idempotencyKey);
 
     @Operation(summary = "Dev-only: mock-confirm a pending order payment (no real provider call)")
     @PostMapping("/{orderId}/payments/{paymentId}/confirm-mock")
@@ -47,7 +48,7 @@ public interface MeOrderPaymentApi {
     @PostMapping("/{orderId}/pay-saved-card")
     ResponseEntity<SavedCardPayDtoOut> paySavedCard(Authentication auth, @PathVariable UUID orderId,
             @Valid @RequestBody SavedCardPayDtoIn req,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) throws StripeException;
+            @Parameter(description = "Clave del INTENTO, no de la petición: la misma en los reintentos del mismo gesto. Sin ella, dos peticiones son dos cobros.", required = true) @RequestHeader(value = "Idempotency-Key") String idempotencyKey) throws StripeException;
 
     @Operation(summary = "Confirmar el cobro con tarjeta guardada tras completar el 3DS en el navegador")
     @PostMapping("/{orderId}/pay-saved-card/{paymentId}/confirm")

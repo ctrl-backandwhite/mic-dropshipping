@@ -1210,9 +1210,10 @@ class CheckoutFlowIT extends BaseIntegration {
         WebTestClient.RequestBodySpec peticion = client.post().uri(CHECKOUT)
                 .header(HttpHeaders.AUTHORIZATION, bearer(tokenDeQuien))
                 .contentType(MediaType.APPLICATION_JSON);
-        if (idem != null) {
-            peticion = peticion.header(CABECERA_IDEMPOTENCIA, idem);
-        }
+        // El checkout EXIGE la clave: identifica el intento de compra, no la petición. Sin ella el servidor
+        // responde 400 en vez de crear un segundo pedido. Nueva por llamada salvo que la prueba pase la
+        // suya, que es como se ejercita el reenvío del mismo intento.
+        peticion = peticion.header(CABECERA_IDEMPOTENCIA, idem != null ? idem : UUID.randomUUID().toString());
         return peticion.bodyValue(cuerpo).exchange();
     }
 

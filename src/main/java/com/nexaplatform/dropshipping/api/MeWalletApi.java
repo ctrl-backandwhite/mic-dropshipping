@@ -8,6 +8,7 @@ import com.nexaplatform.dropshipping.api.dto.out.MeWalletRechargeDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MeWalletTxDtoOut;
 import com.nexaplatform.dropshipping.application.usecase.RechargeOptions;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -45,7 +46,7 @@ public interface MeWalletApi {
     @ApiResponse(responseCode = "200", description = "Recharge initiated")
     @PostMapping("/recharge")
     ResponseEntity<MeWalletRechargeDtoOut> recharge(Authentication auth, @Valid @RequestBody MeWalletRechargeDtoIn req,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idem);
+            @Parameter(description = "Clave del INTENTO, no de la petición: la misma en los reintentos del mismo gesto. Sin ella, dos peticiones son dos cobros.", required = true) @RequestHeader(value = "Idempotency-Key") String idem);
 
     @Operation(summary = "Rounded recharge presets in the active currency (backend-computed)")
     @ApiResponse(responseCode = "200", description = "Recharge options returned")

@@ -1832,7 +1832,10 @@ class AdminJourneyIT extends BaseIntegration {
     }
 
     private Respuesta llamar(HttpMethod metodo, String uri, String token, Object cuerpo) {
-        WebTestClient.RequestBodySpec peticion = client.method(metodo).uri(uri).header("X-Forwarded-For", IP_PROPIA);
+        WebTestClient.RequestBodySpec peticion = client.method(metodo).uri(uri).header("X-Forwarded-For", IP_PROPIA)
+                // Los endpoints de dinero la exigen; en el resto es inocua. Una por llamada: cada petición
+                // de este recorrido es un intento distinto.
+                .header("Idempotency-Key", UUID.randomUUID().toString());
         if (token != null) {
             peticion.header(HttpHeaders.AUTHORIZATION, bearer(token));
         }

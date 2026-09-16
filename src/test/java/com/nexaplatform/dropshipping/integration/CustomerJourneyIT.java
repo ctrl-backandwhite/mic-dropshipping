@@ -1609,8 +1609,10 @@ class CustomerJourneyIT extends BaseIntegration {
         if (token != null) {
             peticion.header(HttpHeaders.AUTHORIZATION, bearer(token));
         }
-        if (claveIdempotencia != null) {
-            peticion.header("Idempotency-Key", claveIdempotencia);
+        {
+            // Clave SIEMPRE: los endpoints de dinero la exigen. Nueva por llamada salvo reenvío explícito.
+            peticion.header("Idempotency-Key",
+                    claveIdempotencia != null ? claveIdempotencia : UUID.randomUUID().toString());
         }
         WebTestClient.ResponseSpec respuesta = cuerpo == null
                 ? peticion.exchange()

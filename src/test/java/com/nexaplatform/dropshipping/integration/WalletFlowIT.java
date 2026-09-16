@@ -721,8 +721,10 @@ class WalletFlowIT extends BaseIntegration {
         if (token != null) {
             spec = spec.header(HttpHeaders.AUTHORIZATION, bearer(token));
         }
-        if (claveIdempotencia != null) {
-            spec = spec.header("Idempotency-Key", claveIdempotencia);
+        {
+            // Clave SIEMPRE: los endpoints de dinero la exigen. Nueva por llamada salvo reenvío explícito.
+            spec = spec.header("Idempotency-Key",
+                    claveIdempotencia != null ? claveIdempotencia : UUID.randomUUID().toString());
         }
         return cuerpo == null ? spec.exchange() : spec.bodyValue(cuerpo).exchange();
     }

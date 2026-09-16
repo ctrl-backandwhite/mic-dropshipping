@@ -247,6 +247,7 @@ class LineRoundingIT extends BaseIntegration {
                 .bodyValue("{\"country\":\"" + PAIS + "\",\"region\":null,\"items\":[" + lineas + "]}")
                 .exchange().expectStatus().isOk());
         JsonNode creado = cuerpo(client.post().uri(CHECKOUT)
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .header(HttpHeaders.AUTHORIZATION, bearer(token)).header(CABECERA_DIVISA, "EUR")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("{\"shippingAddressId\":\"" + direccionId + "\",\"paymentMethod\":\"WALLET\","
@@ -297,6 +298,7 @@ class LineRoundingIT extends BaseIntegration {
         String cuerpo = "{\"shippingAddressId\":\"" + direccionId + "\",\"paymentMethod\":\"WALLET\","
                 + "\"items\":[{\"productId\":\"" + productId + "\",\"quantity\":" + cantidad + "}]}";
         WebTestClient.RequestBodySpec peticion = client.post().uri(CHECKOUT)
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .header(HttpHeaders.AUTHORIZATION, bearer(token)).contentType(MediaType.APPLICATION_JSON);
         if (divisa != null) {
             peticion = peticion.header(CABECERA_DIVISA, divisa);

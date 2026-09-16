@@ -214,6 +214,7 @@ class PrecioEnseniadoEsElCobradoIT extends BaseIntegration {
                 .header(HttpHeaders.AUTHORIZATION, bearer(tokenCliente))
                 .header("X-Currency", divisa)
                 .header("X-Country", paisDelComprador)
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON);
     }
 

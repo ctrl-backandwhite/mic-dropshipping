@@ -809,6 +809,7 @@ class CurrencyConversionIT extends BaseIntegration {
         cuerpo.put("region", null);
         cuerpo.put("items", List.of(linea));
         return client.post().uri(CHECKOUT).header(CABECERA_DIVISA, divisa)
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .header("Authorization", bearer(jwt.userToken(comprador, "comprador@nx036.local", "USER")))
                 .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange()
                 .expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
