@@ -29,6 +29,19 @@ public class OAuthClientTargetFilter extends OncePerRequestFilter {
     /** Parámetro con el que el cliente se identifica al arrancar el flujo. */
     public static final String CLIENT_PARAMETER = "client";
 
+    /**
+     * Atributo de sesión donde viaja el testigo de un solo uso del flujo.
+     *
+     * <p>Lo genera el CLIENTE antes de salir hacia el proveedor y lo guarda en su propia pestaña; aquí
+     * solo se recuerda para devolvérselo al terminar. Es lo que le permite distinguir «vengo de un flujo
+     * que yo empecé» de «alguien me ha mandado un enlace con unos tokens dentro», que antes no podía:
+     * la única comprobación posible era que los tokens tuvieran FORMA de JWT.
+     */
+    public static final String NONCE_ATTRIBUTE = "OAUTH_FLOW_NONCE";
+
+    /** Parámetro con el que el cliente aporta su testigo al arrancar el flujo. */
+    public static final String NONCE_PARAMETER = "nonce";
+
     private static final String AUTHORIZATION_PATH = "/oauth2/authorization/";
 
     @Override
@@ -37,9 +50,29 @@ public class OAuthClientTargetFilter extends OncePerRequestFilter {
         if (request.getRequestURI().contains(AUTHORIZATION_PATH)) {
             OAuthClientTarget target = OAuthClientTarget.from(request.getParameter(CLIENT_PARAMETER));
             request.getSession(true).setAttribute(CLIENT_TARGET_ATTRIBUTE, target);
+            // El testigo se anota SOLO aquí, al arrancar, por el mismo motivo que el cliente de origen:
+            // aceptarlo en el callback dejaría que un tercero fijara el de un flujo ya en marcha.
+            String nonce = request.getParameter(NONCE_PARAMETER);
+            if (nonce != null && !nonce.isBlank()) {
+                request.getSession(true).setAttribute(NONCE_ATTRIBUTE, nonce);
+            }
             log.debug("::> [OAUTH2] Inicio de login social desde el cliente {}", target.code());
         }
         chain.doFilter(request, response);
+    }
+
+    /**
+     * Testigo guardado al arrancar el flujo, y lo CONSUME: un testigo vale una vez.
+     *
+     * <p>Dejarlo en la sesión permitiría reutilizar un destino de éxito ya emitido.
+     */
+    public static String consumeNonce(HttpServletRequest request) {
+        if (request.getSession(false) == null) {
+            return null;
+        }
+        Object stored = request.getSession(false).getAttribute(NONCE_ATTRIBUTE);
+        request.getSession(false).removeAttribute(NONCE_ATTRIBUTE);
+        return stored instanceof String nonce ? nonce : null;
     }
 
     /** Cliente guardado al arrancar el flujo; {@link OAuthClientTarget#WEB} si no hay nada anotado. */

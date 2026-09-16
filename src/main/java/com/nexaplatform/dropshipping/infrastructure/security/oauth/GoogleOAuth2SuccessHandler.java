@@ -144,7 +144,9 @@ public class GoogleOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         // primer acceso con Google no había a quién avisar y el correo se perdía.
         userUseCase.notifyLoginDetected(user.getEmail());
         // Tokens en el fragmento (#) — no llega al servidor ni a los logs del proxy.
-        response.sendRedirect(redirects.success(target, tokens.accessToken(), tokens.refreshToken()));
+        // El testigo con el que ESTE navegador arrancó el flujo, de vuelta y consumido.
+        response.sendRedirect(redirects.success(target, tokens.accessToken(), tokens.refreshToken(),
+                OAuthClientTargetFilter.consumeNonce(request)));
     }
 
 }

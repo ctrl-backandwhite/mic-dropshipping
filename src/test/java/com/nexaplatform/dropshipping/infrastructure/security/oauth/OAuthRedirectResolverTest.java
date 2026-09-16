@@ -18,14 +18,14 @@ class OAuthRedirectResolverTest {
 
     @Test
     void devuelveLosTokensAlFragmentoDeLaWeb() {
-        String url = resolver.success(OAuthClientTarget.WEB, "acceso", "renovacion");
+        String url = resolver.success(OAuthClientTarget.WEB, "acceso", "renovacion", null);
 
         assertThat(url).isEqualTo(FRONT + "/auth/callback#token=acceso&refresh=renovacion");
     }
 
     @Test
     void devuelveLosTokensAlEnlaceProfundoDeLaAplicacion() {
-        String url = resolver.success(OAuthClientTarget.MOBILE, "acceso", "renovacion");
+        String url = resolver.success(OAuthClientTarget.MOBILE, "acceso", "renovacion", null);
 
         assertThat(url).isEqualTo(MOBILE + "#token=acceso&refresh=renovacion");
     }
@@ -33,8 +33,8 @@ class OAuthRedirectResolverTest {
     @Test
     void losTokensViajanSiempreEnElFragmento() {
         // El fragmento no se envía al servidor ni queda en los registros de los proxys intermedios.
-        assertThat(resolver.success(OAuthClientTarget.WEB, "a", "r")).contains("#token=");
-        assertThat(resolver.success(OAuthClientTarget.MOBILE, "a", "r")).contains("#token=");
+        assertThat(resolver.success(OAuthClientTarget.WEB, "a", "r", null)).contains("#token=");
+        assertThat(resolver.success(OAuthClientTarget.MOBILE, "a", "r", null)).contains("#token=");
     }
 
     @Test
@@ -57,7 +57,7 @@ class OAuthRedirectResolverTest {
         // sabe componer las suyas.
         OAuthRedirectResolver sinConfigurar = new OAuthRedirectResolver(null, null);
 
-        assertThat(sinConfigurar.success(OAuthClientTarget.MOBILE, "a", "r")).doesNotContain("http");
+        assertThat(sinConfigurar.success(OAuthClientTarget.MOBILE, "a", "r", null)).doesNotContain("http");
     }
 
     @Test
@@ -80,5 +80,36 @@ class OAuthRedirectResolverTest {
     @Test
     void sinSesionElClienteEsLaWeb() {
         assertThat(OAuthClientTargetFilter.resolve(new MockHttpServletRequest())).isEqualTo(OAuthClientTarget.WEB);
+    }
+
+    /**
+     * El destino de éxito devuelve el testigo con el que ESTE navegador arrancó el flujo.
+     *
+     * <p>Sin él, `/auth/callback` acepta cualquier par de tokens que le llegue en el fragmento: la única
+     * comprobación del cliente era que «tuvieran forma de JWT», y eso no distingue basura de un JWT
+     * auténtico de OTRA cuenta. Un atacante publica un enlace con LOS SUYOS, la víctima lo abre, y a
+     * partir de ahí navega dentro de la cuenta del atacante —sus direcciones, sus pedidos y sus tarjetas
+     * acaban ahí—. Y como también se planta el refresco, el secuestro sobrevive a la caducidad.
+     *
+     * <p>El testigo lo genera el cliente antes de salir hacia el proveedor y lo guarda en su propia
+     * pestaña; el servidor solo lo devuelve. Quien fabrique el enlace no puede acertar con uno que la
+     * víctima haya guardado.
+     */
+    @Test
+    void elDestinoDeExitoDevuelveElTestigoDelFlujo() {
+        OAuthRedirectResolver resolver = new OAuthRedirectResolver("https://nx036.com", "nx036://oauth");
+
+        String destino = resolver.success(OAuthClientTarget.WEB, "acc", "ref", "n-123");
+
+        assertThat(destino).isEqualTo("https://nx036.com/auth/callback#token=acc&refresh=ref&nonce=n-123");
+    }
+
+    /** Sin testigo anotado el destino no lo inventa: el cliente decidirá qué hacer con su ausencia. */
+    @Test
+    void sinTestigoElDestinoNoLoInventa() {
+        OAuthRedirectResolver resolver = new OAuthRedirectResolver("https://nx036.com", "nx036://oauth");
+
+        assertThat(resolver.success(OAuthClientTarget.WEB, "acc", "ref", null))
+                .isEqualTo("https://nx036.com/auth/callback#token=acc&refresh=ref");
     }
 }
