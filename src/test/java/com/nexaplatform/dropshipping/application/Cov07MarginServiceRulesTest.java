@@ -23,11 +23,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import org.springframework.test.util.ReflectionTestUtils;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -326,6 +329,46 @@ class Cov07MarginServiceRulesTest {
         Optional<PriceRuleEntity> resolved = service.resolve(product, null, new BigDecimal("10"));
         assertThat(resolved).isPresent();
         return resolved.get().getMarginValue();
+    }
+
+    /**
+     * El refresco de reglas NO puede dejar el catálogo sin margen ni un instante.
+     *
+     * <p>Quien está tarificando en ese momento ya pasó por {@code ensureFresh()} y lee la lista tal cual,
+     * sin sincronizarse con nadie. Si la encuentra vacía, {@code resolve()} no halla regla y
+     * {@code apply()} devuelve {@code retail = coste}: el producto se pone a la venta por lo que le
+     * pagamos al proveedor, 0% de margen. Y como el listado y la ficha se guardan cinco minutos en
+     * Caffeine, ese precio se queda fijado y se le sirve a todo el mundo hasta que expire.
+     *
+     * <p>Se observa DENTRO de la consulta al repositorio porque es el único instante en que el estado
+     * intermedio existe: cargar primero y sustituir después hace que las reglas vigentes sigan ahí;
+     * vaciar primero y cargar después abre la ventana.
+     */
+    @Test
+    void elRefrescoDeReglasNoDejaElCatalogoSinMargenNiUnInstante() {
+        PriceRuleEntity global = rule(PriceRuleScope.GLOBAL, null, "150");
+        rules(global);
+        // Primer uso: deja las reglas en memoria y el sello fresco.
+        assertThat(service.apply(new BigDecimal("10"), null, null).retailUsd()).isEqualByComparingTo("25.0000");
+
+        // El panel toca una regla (o vence el TTL): el siguiente que tarifique dispara el refresco.
+        service.invalidateCache();
+        AtomicInteger reglasVisiblesMientrasSeRecarga = new AtomicInteger(-1);
+        when(repository.findByActiveTrueOrderByPositionAsc()).thenAnswer(invocacion -> {
+            reglasVisiblesMientrasSeRecarga.set(reglasEnMemoria().size());
+            return List.of(global);
+        });
+
+        service.apply(new BigDecimal("10"), null, null);
+
+        assertThat(reglasVisiblesMientrasSeRecarga.get())
+                .as("durante la recarga no había ninguna regla aplicable: quien tarifique ahí vende a coste")
+                .isNotZero();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<PriceRuleEntity> reglasEnMemoria() {
+        return (List<PriceRuleEntity>) ReflectionTestUtils.getField(service, "cache");
     }
 
     private static PriceRuleEntity rule(PriceRuleScope scope, UUID scopeId, String margin) {

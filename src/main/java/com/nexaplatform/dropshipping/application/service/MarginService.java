@@ -26,7 +26,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Resolves the most specific applicable price rule for a (product, variant, costUsd) tuple
@@ -77,7 +76,13 @@ public class MarginService {
     private final ProductGroupMemberRepository groupMemberRepository;
     private final CategoryGroupMemberRepository categoryGroupMemberRepository;
     private final MoqMarginSettingRepository moqRepository;
-    private final List<PriceRuleEntity> cache = new CopyOnWriteArrayList<>();
+    /**
+     * Reglas vigentes. Se SUSTITUYE entera, nunca se vacía y se rellena: quien esté tarificando ya pasó
+     * por {@code ensureFresh()} y lee esta lista sin sincronizarse, así que un hueco con la lista vacía
+     * le devuelve «sin regla aplicable» y {@code apply()} vende a coste (0% de margen) — precio que
+     * además se queda cinco minutos en la caché de Caffeine.
+     */
+    private volatile List<PriceRuleEntity> cache = List.of();
     private volatile Instant cacheStamp = Instant.EPOCH;
 
     /** Ajuste MOQ cacheado (se refresca con el mismo ciclo que las reglas). Por defecto: activo al 50%. */
@@ -249,12 +254,14 @@ public class MarginService {
     }
 
     private synchronized void refresh() {
-        cache.clear();
-        cache.addAll(repository.findByActiveTrueOrderByPositionAsc());
+        // Se carga PRIMERO y se sustituye después: entre el vaciado y la carga había una ventana —un viaje
+        // a la base de datos— en la que el catálogo no tenía ninguna regla y se tarificaba a coste.
+        List<PriceRuleEntity> recargadas = List.copyOf(repository.findByActiveTrueOrderByPositionAsc());
         moqRepository.findById((short) 1).ifPresent(s -> {
             moqEnabled = s.isEnabled();
             moqFactorPercent = s.getFactorPercent();
         });
+        cache = recargadas;
         cacheStamp = Instant.now();
     }
 
