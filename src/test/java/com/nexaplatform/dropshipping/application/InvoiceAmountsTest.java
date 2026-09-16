@@ -205,4 +205,56 @@ class InvoiceAmountsTest {
 
         assertThat(m).containsKey("total");
     }
+
+    /**
+     * Las filas que la factura imprime tienen que sumar su total.
+     *
+     * <p>{@code shipping_cents} guarda el porte CON el arancel dentro y {@code customs_duty_cents} la parte
+     * que corresponde al derecho. {@link OrderAmounts} —la cuenta canónica, la que usan el panel y la app—
+     * los resta para poder enseñarlos por separado sin mover el total. La factura no lo hacía: imprimía
+     * «Envío» con el arancel dentro y, además, una fila «Arancel UE» con el mismo importe otra vez. El
+     * total seguía siendo correcto, pero quien sumara las líneas obtenía el total MÁS el arancel, y el
+     * «Envío» de la factura no coincidía con el del pedido para el mismo pedido.
+     *
+     * <p>Es un documento con valor legal y con un QR de verificación: que no cuadre consigo mismo no es un
+     * detalle de presentación.
+     */
+    @Test
+    void lasFilasQueLaFacturaImprimeSumanSuTotal() {
+        Order o = order(0);
+        o.setShippingCents(1000);      // 6,51 de porte + 3,49 de arancel, todo junto
+        o.setCustomsDutyCents(349);
+
+        Map<String, Object> m = modelOf(o, "EUR");
+
+        BigDecimal suma = importe(m, "subtotal").subtract(importe(m, "discount"))
+                .add(importe(m, "shipping")).add(importe(m, "customsDuty")).add(importe(m, "tax"));
+        assertThat(suma)
+                .as("subtotal − descuento + envío + arancel + IVA debe dar el total impreso")
+                .isEqualByComparingTo(importe(m, "total"));
+    }
+
+    /** El «Envío» de la factura es el mismo que el del pedido: neto, sin el arancel dentro. */
+    @Test
+    void elEnvioDeLaFacturaEsElMismoQueElDelPedido() {
+        Order o = order(0);
+        o.setShippingCents(1000);
+        o.setCustomsDutyCents(349);
+
+        BigDecimal enElPedido = new OrderAmounts(currencyParaElPedido()).of(o, "EUR").shipping();
+
+        assertThat(importe(modelOf(o, "EUR"), "shipping")).isEqualByComparingTo(enElPedido);
+    }
+
+    private static BigDecimal importe(Map<String, Object> modelo, String clave) {
+        Object v = modelo.get(clave);
+        return v == null ? BigDecimal.ZERO : new BigDecimal(String.valueOf(v));
+    }
+
+    private CurrencyRateService currencyParaElPedido() {
+        CurrencyRateService currency = mock(CurrencyRateService.class);
+        when(currency.usdTo(any(BigDecimal.class), anyString())).thenAnswer(i -> i.getArgument(0));
+        when(currency.decimalsOf(anyString())).thenReturn(2);
+        return currency;
+    }
 }

@@ -312,7 +312,13 @@ public class InvoiceService {
         int vatRate = taxableBase.signum() > 0
                 ? tax.multiply(BigDecimal.valueOf(100)).divide(taxableBase, 0, RoundingMode.HALF_UP).intValue()
                 : 0;
-        return new InvoiceAmounts(subtotal, shipping, tax, discount, total, vatRate, customsDuty);
+        // El envío se IMPRIME neto, con el arancel fuera, porque va en su propia fila justo debajo. Las
+        // cuentas de arriba siguen usando el porte con el derecho dentro —es lo que se cobró y lo que tiene
+        // que dar el total—, pero enseñar los dos importes con el arancel contado dos veces hacía que las
+        // filas sumaran el total MÁS el arancel. Es la misma resta que hace OrderAmounts, que es lo que ve
+        // el comprador en su pedido: antes el «Envío» de la factura y el del pedido no coincidían.
+        return new InvoiceAmounts(subtotal, shipping.subtract(customsDuty), tax, discount, total, vatRate,
+                customsDuty);
     }
 
     /** Renderiza la factura como HTML (cuerpo del email) en la moneda del pedido. */
