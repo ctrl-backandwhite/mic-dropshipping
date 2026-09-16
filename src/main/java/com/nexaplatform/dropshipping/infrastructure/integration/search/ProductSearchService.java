@@ -64,6 +64,27 @@ public class ProductSearchService {
      */
     private static final Set<String> INDEXED_LANGS = Set.of("es", "en", "pt", "fr", "it", "de", "nl", "zh");
 
+    /**
+     * Campos del documento indexado que pueden salir por el buscador público. Lo que no esté aquí se
+     * descarta.
+     *
+     * <p>Es una lista BLANCA a propósito, no una lista de exclusiones: el documento se arma en
+     * {@code ProductIndexer} y crece cuando hace falta para buscar mejor, así que cualquier campo nuevo
+     * saldría por aquí sin que nadie lo decidiera. Lo que se estaba escapando: {@code basePrice} —lo que
+     * le pagamos al proveedor en CNY, y con el precio de venta delante una división da la ganancia—,
+     * {@code externalId} y {@code source} —la oferta exacta de origen—, {@code supplierId} y
+     * {@code titleZh} —el título del proveedor, que sirve para encontrarla—. El endpoint solo exige tener
+     * cuenta, y una de prueba gratuita basta para paginar el catálogo entero. La ficha y el listado ya lo
+     * tapaban ({@code ProductMapper}); esto cierra la misma puerta en el buscador.
+     *
+     * <p>Los campos que solo sirven para CASAR ({@code descAll}, {@code attrs}, {@code variants}) tampoco
+     * salen: el escaparate no los pinta y el motor los usa dentro del índice, no en la respuesta.
+     */
+    private static final Set<String> CAMPOS_PUBLICOS = Set.of("id", "slug", "status", "mainImage",
+            "categoryId", "categoryName", "rating", "monthlySales", "trendScore", "inventoryCount",
+            "shipFrom", "hasVideo", "hasImage", "freeShipping", "selfPickup", "verified",
+            "titleEs", "titleEn", "titlePt", "titleFr", "titleIt", "titleDe", "titleNl");
+
     private final OpenSearchClient client;
     private final ProductIndexer indexer;
 
@@ -213,7 +234,7 @@ public class ProductSearchService {
                     .sort(srt -> srt.field(f -> f.field("trendScore").order(SortOrder.Desc)))), Map.class);
 
             List<SearchHitDtoOut> hits = response.hits().hits().stream().map(h -> {
-                Map<String, Object> doc = new HashMap<>(h.source());
+                Map<String, Object> doc = soloCamposPublicos(h.source());
                 doc.put("_id", h.id());
                 doc.put("_score", h.score());
                 return SearchHitDtoOut.builder().source(doc).build();
@@ -225,6 +246,21 @@ public class ProductSearchService {
             log.error("Search failed: {}", e.getMessage());
             return SearchResultDtoOut.builder().items(List.of()).total(0L).page(page).size(size).build();
         }
+    }
+
+    /** Copia del documento indexado con solo los campos de {@link #CAMPOS_PUBLICOS}. */
+    private static Map<String, Object> soloCamposPublicos(Map<?, ?> fuente) {
+        Map<String, Object> publico = new HashMap<>();
+        if (fuente == null) {
+            return publico;
+        }
+        for (Map.Entry<?, ?> campo : fuente.entrySet()) {
+            String clave = String.valueOf(campo.getKey());
+            if (CAMPOS_PUBLICOS.contains(clave)) {
+                publico.put(clave, campo.getValue());
+            }
+        }
+        return publico;
     }
 
     /** Todo el catálogo visible (sin término de búsqueda). */
