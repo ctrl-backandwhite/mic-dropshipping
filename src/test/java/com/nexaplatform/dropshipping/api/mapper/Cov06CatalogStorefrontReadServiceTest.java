@@ -25,7 +25,11 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Categ
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierRepository;
+import com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig;
 import org.junit.jupiter.api.Test;
+import org.springframework.cache.annotation.Cacheable;
+
+import java.lang.reflect.Method;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.ArgumentCaptor;
@@ -702,5 +706,33 @@ class Cov06CatalogStorefrontReadServiceTest {
 
         org.mockito.Mockito.verify(pricingService).precioYaVisto(org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.eq("usd"), org.mockito.ArgumentMatchers.eq("$7.78"));
+    }
+
+    /**
+     * Todos los listados de producto comparten el mismo bucket de caché y el mismo precio detrás, así que
+     * todos tienen que componer su clave con el MISMO generador. Componerla a mano en SpEL es lo que dejó
+     * fuera el canal y el rol en dos de ellos: `productsByCategory` y `productsBySupplier` los sirven a la
+     * vez el escaparate (margen 150%) y /api/v1/partner/catalog (margen 75%), de modo que compartían
+     * entrada y un comprador podía llevarse el precio de integración —y al revés—. Sin el rol, además, un
+     * admin dejaba cacheada la página CON el coste de proveedor para el siguiente anónimo.
+     *
+     * <p>Se comprueba la anotación y no el resultado a propósito: la clave la compone Spring por proxy, y
+     * lo que hay que impedir es justamente que alguien vuelva a escribirla a mano.
+     */
+    @Test
+    @DisplayName("ningún listado de producto compone su clave de caché a mano")
+    void ningunListadoDeProductoComponeSuClaveDeCacheAMano() {
+        for (Method metodo : CatalogStorefrontReadService.class.getDeclaredMethods()) {
+            Cacheable anotacion = metodo.getAnnotation(Cacheable.class);
+            if (anotacion == null || !List.of(anotacion.value()).contains(CacheConfig.CACHE_PRODUCT_LIST)) {
+                continue;
+            }
+            assertThat(anotacion.key())
+                    .as("%s escribe su clave en SpEL; debe delegar en el generador canónico", metodo.getName())
+                    .isEmpty();
+            assertThat(anotacion.keyGenerator())
+                    .as("%s no usa el generador canónico de clave", metodo.getName())
+                    .isEqualTo("currencyAwareKeyGenerator");
+        }
     }
 }

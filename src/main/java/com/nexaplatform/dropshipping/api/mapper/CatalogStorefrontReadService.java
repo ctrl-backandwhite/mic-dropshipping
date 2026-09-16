@@ -162,10 +162,10 @@ public class CatalogStorefrontReadService {
         return out;
     }
 
-    @Cacheable(value = CACHE_PRODUCT_LIST,
-            key = "'cat:' + #idOrSlug + ':' + #page + ':' + #size + ':' + #lang + ':' + #sort + ':' "
-                    + "+ T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get() + ':' "
-                    + "+ T(com.nexaplatform.dropshipping.application.service.PricingCountryHolder).get()")
+    // La clave la compone el generador canónico, NO se escribe aquí: a mano se quedaron fuera el canal y
+    // el rol, y este método lo sirven a la vez el escaparate y /api/v1/partner/catalog —márgenes distintos
+    // sobre el mismo bucket—, así que compartían entrada de caché y el precio cruzaba de un canal al otro.
+    @Cacheable(value = CACHE_PRODUCT_LIST, keyGenerator = "currencyAwareKeyGenerator")
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productsByCategory(String idOrSlug, int page, int size, String lang,
             String sort) {
@@ -196,9 +196,8 @@ public class CatalogStorefrontReadService {
         return supplierView(supplierRepository.findById(id).orElseThrow(() -> new NotFoundException("Supplier")));
     }
 
-    @Cacheable(value = CACHE_PRODUCT_LIST, key = "'sup:' + #id + ':' + #page + ':' + #size + ':' + #lang + ':' + #sort "
-            + "+ ':' + T(com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder).get() "
-            + "+ ':' + T(com.nexaplatform.dropshipping.application.service.PricingCountryHolder).get()")
+    // Mismo motivo que en productsByCategory: la clave la compone el generador canónico.
+    @Cacheable(value = CACHE_PRODUCT_LIST, keyGenerator = "currencyAwareKeyGenerator")
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryView> productsBySupplier(UUID id, int page, int size, String lang, String sort) {
         return listing(page, size, lang, ProductListFilters.basic(null, null, id, null, null), sort, null);
