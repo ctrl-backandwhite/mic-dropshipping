@@ -662,7 +662,16 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
         // valor declarado. Delegar en createShipment() los dejaba a cero y el dato se perdía.
         List<FulfillmentResult> results = new ArrayList<>();
         for (int i = 0; i < bins.size(); i++) {
-            results.add(createShipmentForBin(order, bins.get(i), i + 1));
+            try {
+                results.add(createShipmentForBin(order, bins.get(i), i + 1));
+            } catch (RuntimeException e) {
+                // Las guías de los bultos anteriores YA existen y están pagadas en el transportista. Antes
+                // esta excepción se las llevaba por delante: no se persistía ninguna, así que no aparecían
+                // ni en el pedido, ni en order_shipment, ni en el registro, y el panel no podía anularlas.
+                log.error("YunExpress: el bulto {} del pedido {} falló con {} guía(s) ya emitida(s): {}",
+                        i + 1, order.getOrderNumber(), results.size(), e.getMessage());
+                throw new EnvioParcialException(results, e);
+            }
         }
         return results;
     }
@@ -936,7 +945,8 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
             String hs = product != null ? product.getHsCode() : null;
             String origen = product != null ? product.getCountryOfOrigin() : null;
             int cantidad = Math.max(1, item.getQuantity());
-            porLinea.computeIfAbsent(declarationKey(hs, eName, origen),
+            porLinea.computeIfAbsent(
+                    CustomsDutyLinesService.claveDeLineaDeDeclaracion(hs, eName, origen, item.getProductId()),
                     clave -> new DeclarationAccumulator(new ParcelDeclaration(
                             eName, chineseName(item, product), hs, 0, 0.0, currency,
                             unitWeightKg(product, item),
@@ -950,25 +960,6 @@ public class YunExpressFulfillmentService implements FulfillmentProvider {
             out.add(acumulado.toDeclaration());
         }
         return out;
-    }
-
-    /**
-     * Clave por la que dos mercancías van en la MISMA línea de declaración: subpartida + descripción +
-     * origen. Es la terna del art. 1(61) del Reglamento Delegado (UE) 2015/2446, la misma que usa
-     * {@code CustomsDutyLinesService} para contar. Si las dos divergieran, el cliente pagaría un número
-     * de derechos y la aduana cobraría otro.
-     *
-     * <p>Sin código HS la clave es la propia descripción: no se agrupa con nadie por clasificación,
-     * porque atribuirle una que nadie ha verificado es responsabilidad del declarante.
-     */
-    private static String declarationKey(String hsCode, String eName, String originCountry) {
-        String digits = hsCode == null ? "" : hsCode.replaceAll("[^0-9]", "");
-        String hs6 = digits.length() >= 6 ? digits.substring(0, 6) : "SIN-HS";
-        return hs6 + "|" + normalizeDeclared(eName) + "|" + normalizeDeclared(originCountry);
-    }
-
-    private static String normalizeDeclared(String text) {
-        return text == null ? "" : text.trim().replaceAll("\\s+", " ").toUpperCase(Locale.ROOT);
     }
 
     /**

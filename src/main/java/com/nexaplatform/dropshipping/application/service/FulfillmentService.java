@@ -14,6 +14,7 @@ import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.domain.model.User;
 import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
 import com.nexaplatform.dropshipping.domain.repository.UserRepository;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.EnvioParcialException;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.FulfillmentResult;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.TrackingSnapshot;
@@ -164,6 +165,13 @@ public class FulfillmentService {
         List<FulfillmentResult> results;
         try {
             results = transportista.createShipments(o);
+        } catch (EnvioParcialException e) {
+            // Falló a mitad: se guardan las guías que SÍ se emitieron antes de anotar el fallo. El pedido
+            // no queda despachado —le falta un bulto— pero las etiquetas ya pagadas quedan a la vista de
+            // quien tenga que anularlas.
+            persistShipments(o, e.yaCreados());
+            recordFailure(o, FulfillmentFailure.of((RuntimeException) e.getCause()));
+            return;
         } catch (RuntimeException e) {
             recordFailure(o, FulfillmentFailure.of(e));
             return;

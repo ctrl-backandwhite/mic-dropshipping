@@ -20,6 +20,7 @@ import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
 import com.nexaplatform.dropshipping.domain.repository.UserRepository;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.EnvioParcialException;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.FulfillmentResult;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.TrackingSnapshot;
@@ -159,6 +160,35 @@ class Cov08FulfillmentShipmentsTest {
         assertThat(order.getTrackingNumber()).isEqualTo("YT-1");
         assertThat(order.getFulfillmentRef()).isEqualTo("WB-1");
         assertThat(order.getCarrier()).isEqualTo("YunExpress");
+    }
+
+    /**
+     * Si un bulto falla, las guías de los anteriores NO se pierden.
+     *
+     * <p>Un pedido que supera el tope del canal se reparte en varios bultos y se emite una guía por cada
+     * uno. Cuando el segundo se topaba con un error, la excepción se llevaba por delante el primero: la
+     * etiqueta existía y estaba pagada en el transportista, pero no se guardaba en ninguna parte —ni en el
+     * pedido, ni en {@code order_shipment}, ni en el registro—. El javadoc del adaptador decía que «las
+     * guías ya creadas se pueden anular desde el panel»; no se podía, porque el panel no las veía.
+     *
+     * <p>Y el reintento lo remataba: el número de cliente es determinista, así que el transportista
+     * rechazaba el segundo intento del bulto 1 por duplicado, lo que se clasifica como fallo PERMANENTE y
+     * manda el pedido a la bandeja de incidencias sin vuelta atrás.
+     */
+    @Test
+    void siUnBultoFallaLasGuiasYaEmitidasSeGuardanIgual() {
+        FulfillmentResult primero = new FulfillmentResult("YunExpress", "YT-1", "WB-1", 15, 1, 500, 1200, "CH01");
+        when(provider.createShipments(order)).thenThrow(
+                new EnvioParcialException(List.of(primero), new IllegalStateException("502 del transportista")));
+
+        service.createShipment(order.getId());
+
+        ArgumentCaptor<OrderShipmentEntity> guardado = ArgumentCaptor.forClass(OrderShipmentEntity.class);
+        verify(shipmentRepository).save(guardado.capture());
+        assertThat(guardado.getValue().getWaybillNumber()).isEqualTo("WB-1");
+        // El pedido NO queda despachado: le falta un bulto y tiene que verlo un humano.
+        assertThat(order.getFulfillmentAttempts()).isEqualTo(1);
+        assertThat(order.getTrackingNumber()).isNull();
     }
 
     @Test

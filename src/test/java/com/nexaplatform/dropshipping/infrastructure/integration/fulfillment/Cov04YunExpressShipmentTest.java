@@ -290,16 +290,28 @@ class Cov04YunExpressShipmentTest {
                 .hasMessageContaining("no devolvió número de guía");
     }
 
+    /**
+     * Medio pedido despachado es peor que ninguno: el pedido entero falla y lo mira un humano. Pero la
+     * guía del primer bulto YA existe y está pagada, así que viaja dentro del fallo para que se persista.
+     *
+     * <p>Antes se perdía: la excepción del segundo bulto se llevaba por delante la del primero, que no se
+     * guardaba en ninguna parte. El comentario de este mismo test decía que «las guías creadas se anulan
+     * desde el panel» — y no se podía, porque el panel no las veía.
+     */
     @Test
-    void unBultoSinGuiaTumbaTodoElPedidoYNoSoloEseEnvio() {
-        // Medio pedido despachado es peor que ninguno: las guías creadas se anulan desde el panel.
+    void unBultoSinGuiaTumbaTodoElPedidoPeroNoPierdeLaGuiaYaEmitida() {
         ReflectionTestUtils.setField(service, "maxParcelWeightGrams", 1200);
         when(client.post(eq(PATH_CREATE), any(Object.class))).thenReturn(
                 ok("{\"success\":true,\"result\":{\"waybill_number\":\"YT-A\"}}"),
                 ok("{\"success\":true,\"result\":{\"waybill_number\":\"\"}}"));
         Order order = pedido(linea(3, 1000));
 
-        assertThatThrownBy(() -> service.createShipments(order)).isInstanceOf(FulfillmentFailure.class);
+        assertThatThrownBy(() -> service.createShipments(order))
+                .isInstanceOf(EnvioParcialException.class)
+                .hasCauseInstanceOf(FulfillmentFailure.class)
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.type(EnvioParcialException.class))
+                .satisfies(e -> assertThat(e.yaCreados()).extracting(FulfillmentResult::trackingNumber)
+                        .containsExactly("YT-A"));
     }
 
     @Test

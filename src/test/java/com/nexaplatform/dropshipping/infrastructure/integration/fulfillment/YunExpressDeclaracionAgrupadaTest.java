@@ -67,6 +67,28 @@ class YunExpressDeclaracionAgrupadaTest {
         assertThat(service.declaredParcels(pedido)).hasSize(2);
     }
 
+    /**
+     * Sin partida arancelaria, cada producto es su propia línea — igual que al cobrar.
+     *
+     * <p>El cobro ({@code CustomsDutyLinesService.classificationKey}) NUNCA agrupa sin código HS: la clave
+     * es el propio producto, porque sin ese dato nada permite afirmar que dos mercancías se declaran
+     * juntas. La guía sí las agrupaba, por descripción y origen. Resultado: dos productos sin HS con la
+     * misma descripción y el mismo origen se cobraban como DOS derechos y se declaraban como UNA línea.
+     *
+     * <p>Los dos javadoc prometían que la terna era la misma en ambos lados. No lo era. Ahora la clave la
+     * compone una sola función y no pueden volver a separarse.
+     */
+    @Test
+    void sinPartidaArancelariaCadaProductoEsSuPropiaLineaComoAlCobrar() {
+        Order pedido = pedidoCon(
+                linea("Cotton tote bag", null, 1, 1240),
+                linea("Cotton tote bag", null, 1, 1240));
+
+        assertThat(service.declaredParcels(pedido))
+                .as("sin HS el cobro cuenta dos derechos; la guía tiene que declarar dos líneas")
+                .hasSize(2);
+    }
+
     @Test
     void laCantidadSeSumaSinMultiplicarElDerecho() {
         // Cinco unidades de la misma referencia son UNA línea: la cantidad no multiplica el derecho.
