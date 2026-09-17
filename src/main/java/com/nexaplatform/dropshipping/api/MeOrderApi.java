@@ -35,7 +35,7 @@ public interface MeOrderApi {
             @Parameter(description = "Clave del INTENTO de compra, no de la petición: la misma en los "
                     + "reintentos del mismo carrito, distinta al comprar otra cosa. Sin ella cada POST "
                     + "crearía un pedido nuevo, así que un doble clic sería un segundo cobro.",
-                    required = true) @RequestHeader(value = "Idempotency-Key", required = false) String idem);
+                    required = true) @RequestHeader(value = "Idempotency-Key") String idem);
 
     @Operation(summary = "List the authenticated user's orders")
     @ApiResponse(responseCode = "200", description = "Orders listed")
