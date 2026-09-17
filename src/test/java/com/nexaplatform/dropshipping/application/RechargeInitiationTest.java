@@ -225,6 +225,8 @@ class RechargeInitiationTest {
         // Sin esto, un doble clic en "Recargar" abre dos cobros por el mismo importe.
         Payment ya = new Payment();
         ya.setId(UUID.randomUUID());
+        // De quién es el cobro importa: la reutilización por clave es solo para quien lo abrió.
+        ya.setUserId(userId);
         ya.setStatus(PaymentStatus.REQUIRES_ACTION);
         when(paymentRepository.findByIdempotencyKey("k1")).thenReturn(Optional.of(ya));
 

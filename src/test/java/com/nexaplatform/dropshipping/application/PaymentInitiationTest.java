@@ -225,6 +225,8 @@ class PaymentInitiationTest {
         // Sin esto, un doble clic en "Pagar" abre dos sesiones de cobro para el mismo pedido.
         Payment ya = new Payment();
         ya.setId(UUID.randomUUID());
+        // De quién es el cobro importa: la reutilización por clave es solo para quien lo abrió.
+        ya.setUserId(userId);
         ya.setStatus(PaymentStatus.REQUIRES_ACTION);
         when(paymentRepository.findByIdempotencyKey("k1")).thenReturn(Optional.of(ya));
 

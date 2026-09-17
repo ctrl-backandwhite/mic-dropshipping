@@ -202,6 +202,7 @@ class Cov09PaymentRechargeTest {
         // Sin esto, un doble clic en "Recargar" abre dos cobros por el mismo dinero.
         Payment ya = new Payment();
         ya.setId(UUID.randomUUID());
+        ya.setUserId(userId);
         ya.setStatus(PaymentStatus.REQUIRES_ACTION);
         when(paymentRepository.findByIdempotencyKey("k1")).thenReturn(Optional.of(ya));
 
@@ -210,6 +211,34 @@ class Cov09PaymentRechargeTest {
         assertThat(p).isSameAs(ya);
         verify(gateway, never()).initiate(any());
         verify(paymentRepository, never()).save(any());
+    }
+
+    /**
+     * La reutilización por clave es SOLO para quien abrió el cobro.
+     *
+     * <p>Se buscaba únicamente por `Idempotency-Key`, sin mirar de quién era el pago, y se devolvía tal
+     * cual —con su `clientSecret` dentro—. Quien acertara con la clave de otra persona recibía su cobro:
+     * el secreto con el que se autentica el pago en la pasarela. Y acertar no era descabellado, porque
+     * la clave la compone el cliente a partir de método, importe y divisa, que son pocos valores.
+     *
+     * <p>A diferencia del checkout, que sí acota por usuario en la consulta
+     * (`findFirstByUserIdAndIdempotencyKeyAndStatusIn`), aquí no se acotaba. Se cierra en el servidor,
+     * que es donde está la autoridad: así deja de importar lo adivinable que sea la clave del cliente.
+     */
+    @Test
+    void laClaveDeOtraPersonaNoDevuelveSuCobro() {
+        Payment deOtro = new Payment();
+        deOtro.setId(UUID.randomUUID());
+        deOtro.setUserId(UUID.randomUUID());
+        deOtro.setStatus(PaymentStatus.REQUIRES_ACTION);
+        when(paymentRepository.findByIdempotencyKey("k1")).thenReturn(Optional.of(deOtro));
+        // Al no reutilizar el ajeno, el flujo sigue y abre un cobro nuevo: hace falta el montaje completo.
+        happyPath();
+
+        Payment p = subject.initiateRecharge(userId, PaymentMethod.CARD, 5000L, "USD", null, "k1", null);
+
+        assertThat(p).isNotSameAs(deOtro);
+        assertThat(p.getUserId()).isEqualTo(userId);
     }
 
     @Test

@@ -139,7 +139,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
             throw new BusinessException("Maximum recharge is $1,000,000 USD");
 
         // idempotency
-        Optional<Payment> existing = existingByIdempotencyKey(idempotencyKey);
+        Optional<Payment> existing = existingByIdempotencyKey(idempotencyKey, userId);
         if (existing.isPresent()) {
             log.info("Returning existing payment for idempotency-key={}", idempotencyKey);
             return existing.get();
@@ -200,9 +200,28 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         return stripeEur ? "EUR" : "USD";
     }
 
-    /** Pago ya creado con esa Idempotency-Key, si lo hay. Sin clave no hay nada que reutilizar. */
-    private Optional<Payment> existingByIdempotencyKey(String idempotencyKey) {
-        return idempotencyKey == null ? Optional.empty() : paymentRepository.findByIdempotencyKey(idempotencyKey);
+    /**
+     * Pago ya creado con esa Idempotency-Key POR ESTA MISMA PERSONA, si lo hay.
+     *
+     * <p>El filtro por propietario no es una precaución: sin él esto era un IDOR. Se buscaba solo por
+     * clave y se devolvía el pago tal cual, con su `clientSecret` dentro —el secreto con el que se
+     * autentica el cobro en la pasarela—. Quien acertara con la clave de otra persona recibía su cobro,
+     * y acertar no era descabellado: la compone el cliente a partir de método, importe y divisa, que
+     * son pocos valores.
+     *
+     * <p>El checkout ya lo hacía bien (`findFirstByUserIdAndIdempotencyKeyAndStatusIn`); aquí faltaba.
+     * Cerrarlo en el servidor es lo que hace que deje de importar cuánta entropía ponga cada cliente
+     * en su clave.
+     *
+     * <p>Una clave que choque con la de otra persona cae aquí como «no hay nada que reutilizar» y se
+     * abre un cobro nuevo, que es lo correcto: ese cobro es de quien lo pide.
+     */
+    private Optional<Payment> existingByIdempotencyKey(String idempotencyKey, UUID userId) {
+        if (idempotencyKey == null) {
+            return Optional.empty();
+        }
+        return paymentRepository.findByIdempotencyKey(idempotencyKey)
+                .filter(pago -> userId != null && userId.equals(pago.getUserId()));
     }
 
     /** Fija en el pago la dirección cripto que devolvió la pasarela y su vencimiento (30 min). */
@@ -764,7 +783,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         if (method == null)
             throw new BusinessException("paymentMethod required");
 
-        Optional<Payment> existing = existingByIdempotencyKey(idempotencyKey);
+        Optional<Payment> existing = existingByIdempotencyKey(idempotencyKey, userId);
         if (existing.isPresent())
             return existing.get();
 
@@ -856,7 +875,7 @@ public class PaymentUseCaseImpl implements PaymentUseCase {
         if (!stripeService.isEnabled()) {
             throw new BusinessException("Los pagos con tarjeta no están activos en este entorno.");
         }
-        Optional<Payment> existing = existingByIdempotencyKey(idempotencyKey);
+        Optional<Payment> existing = existingByIdempotencyKey(idempotencyKey, userId);
         if (existing.isPresent()) {
             Payment p0 = existing.get();
             return new SavedCardPayResult(p0.getStatus() == PaymentStatus.SUCCEEDED ? "succeeded" : "pending", null,
