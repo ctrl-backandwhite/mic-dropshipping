@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -111,19 +112,58 @@ public abstract class BaseIntegration {
         }
     }
 
+    /** Cuántas veces se reintenta el vaciado cuando Postgres corta un interbloqueo. */
+    private static final int INTENTOS_DE_VACIADO = 3;
+
     /** TRUNCATE de todas las tablas de negocio (deja fuera las de Liquibase). */
     protected void cleanAllTables() {
         // jwk_keys se excluye: la clave RSA activa se genera al arrancar el contexto (una sola vez);
         // si se truncara, JwtTestUtil no podría firmar tokens en los tests siguientes.
+        //
+        // El ORDER BY NO es cosmético. Sin él, `pg_tables` devuelve las filas en el orden en que están
+        // en el catálogo, que cambia entre ejecuciones; y como `TRUNCATE a, b, c` toma un bloqueo
+        // exclusivo por tabla EN EL ORDEN EN QUE SE LISTAN, cada pasada pedía los bloqueos en un orden
+        // distinto. Eso es exactamente lo que se necesita para un interbloqueo por orden de bloqueo.
         List<String> tables = jdbcTemplate.queryForList(
                 "SELECT tablename FROM pg_tables WHERE schemaname = 'public' "
-                        + "AND tablename NOT LIKE 'databasechange%' AND tablename <> 'jwk_keys'",
+                        + "AND tablename NOT LIKE 'databasechange%' AND tablename <> 'jwk_keys' "
+                        + "ORDER BY tablename",
                 String.class);
         if (tables.isEmpty()) {
             return;
         }
         String joined = String.join(", ", tables.stream().map(t -> "\"" + t + "\"").toList());
-        jdbcTemplate.execute("TRUNCATE TABLE " + joined + " RESTART IDENTITY CASCADE");
+        vaciaReintentandoElInterbloqueo("TRUNCATE TABLE " + joined + " RESTART IDENTITY CASCADE");
+    }
+
+    /**
+     * Vacía reintentando si Postgres corta un interbloqueo.
+     *
+     * <p>Un orden estable quita la MITAD del problema: la que dependía de nosotros. La otra mitad no se
+     * puede ordenar, porque la otra parte del ciclo es el trabajo de fondo de la aplicación —los
+     * consumidores de Kafka, el vaciado de la bandeja de salida, los planificadores— que sigue vivo
+     * mientras se limpia y toma sus bloqueos en el orden que le dicta el negocio, no el alfabético.
+     *
+     * <p>Lo que se rompía: UNA prueba al azar de las 996 moría por pasada, y nunca la misma. Un fallo
+     * así no se lee como un defecto sino como «la batería es inestable», y una batería que siempre está
+     * en rojo por un motivo que nadie mira deja de ser una puerta. El interbloqueo, además, lo detecta
+     * Postgres y mata a UNA de las dos partes: cuando nos toca, la otra transacción ya ha terminado, así
+     * que reintentar acto seguido basta.
+     *
+     * <p>Sin esperas por reloj a propósito —la norma del repositorio las prohíbe y aquí no hacen falta:
+     * el detector de interbloqueos ya ha esperado su propio plazo antes de contestar.
+     */
+    private void vaciaReintentandoElInterbloqueo(String sentencia) {
+        ConcurrencyFailureException ultimo = null;
+        for (int intento = 1; intento <= INTENTOS_DE_VACIADO; intento++) {
+            try {
+                jdbcTemplate.execute(sentencia);
+                return;
+            } catch (ConcurrencyFailureException e) {
+                ultimo = e;
+            }
+        }
+        throw ultimo;
     }
 
     protected String bearer(String token) {
