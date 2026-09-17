@@ -220,6 +220,9 @@ class ShippingOptionCheckoutIT extends BaseIntegration {
         String cuerpo = "{\"shippingAddressId\":\"" + direccionId + "\",\"paymentMethod\":\"WALLET\""
                 + canalJson + ",\"items\":[{\"productId\":\"" + productId + "\",\"quantity\":1}]}";
         return cuerpo(client.post().uri(CHECKOUT).header(HttpHeaders.AUTHORIZATION, bearer(token))
+                // La clave de idempotencia es OBLIGATORIA en todo lo que mueve dinero: sin ella el
+                // servidor responde 400. Un arnés de prueba es un cliente más y tiene que mandarla.
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON).bodyValue(cuerpo).exchange()
                 .expectStatus().isCreated());
     }
