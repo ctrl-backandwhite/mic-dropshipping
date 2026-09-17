@@ -52,4 +52,12 @@ jobs:
       - name: Analyze with SonarCloud
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: mvn -B sonar:sonar
+        # Coordenadas COMPLETAS, no el prefijo `sonar:sonar`: ese prefijo se resuelve por el grupo de
+        # plugins `org.sonarsource.scanner.maven`, que Maven no busca por defecto —solo mira
+        # `org.apache.maven.plugins` y `org.codehaus.mojo` más los declarados en el proyecto—, y sin él
+        # responde «No plugin found for prefix 'sonar'».
+        #
+        # Sin fijar versión a propósito: así el escáner acompaña a los requisitos de SonarCloud —que es
+        # lo que acaba de romperse al dejar de admitir Java 17— en vez de quedarse anclado a uno que
+        # dentro de un año vuelva a quedar fuera.
+        run: mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
