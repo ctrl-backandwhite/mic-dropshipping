@@ -36,16 +36,20 @@ jobs:
           restore-keys: ${{ runner.os }}-m2
       - name: Build
         run: mvn -B verify
+      # Se analiza con el ESCÁNER DE MAVEN, no con la acción de GitHub.
+      #
+      # La acción corre el analizador dentro de su propio contenedor, y ese contenedor lleva Java 17;
+      # SonarCloud dejó de admitirlo («Java 17 is not supported. Please upgrade to Java 21 or newer»),
+      # así que fallaba en cada push con independencia del código. El `setup-java` de arriba no lo
+      # arreglaba: no llega dentro del contenedor de la acción.
+      #
+      # Por Maven corre sobre el Java 21 del runner, que es el que ya se prepara para compilar, y
+      # además es lo que la propia documentación de SonarSource indica para proyectos Maven.
+      #
+      # Sin parámetros `-D`: el `pom.xml` ya declara organización, clave de proyecto, URL, exclusiones
+      # de cobertura y reglas ignoradas, y el escáner de Maven descubre solo fuentes, pruebas, clases
+      # compiladas y el informe de JaCoCo. Repetirlos aquí era tener la misma decisión en dos sitios.
       - name: Analyze with SonarCloud
-        uses: SonarSource/sonarcloud-github-action@4006f663ecaf1f8093e8e4abb9227f6041f52216
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          args: >
-            -Dsonar.projectKey=ctrl-backandwhite_mic-dropshipping
-            -Dsonar.organization=ctrl-backandwhite
-            -Dsonar.sources=src/main/java
-            -Dsonar.tests=src/test/java
-            -Dsonar.java.binaries=target/classes
-            -Dsonar.junit.reportPaths=target/surefire-reports,target/failsafe-reports
-            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+        run: mvn -B sonar:sonar
