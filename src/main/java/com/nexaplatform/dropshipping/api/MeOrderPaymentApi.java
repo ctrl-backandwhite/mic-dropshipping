@@ -32,7 +32,7 @@ public interface MeOrderPaymentApi {
     @PostMapping("/{orderId}/payment-intent")
     ResponseEntity<OrderPaymentDtoOut> initiate(Authentication auth, @PathVariable UUID orderId,
             @Valid @RequestBody OrderPaymentIntentDtoIn req,
-            @Parameter(description = "Clave del INTENTO, no de la petición: la misma en los reintentos del mismo gesto. Sin ella, dos peticiones son dos cobros.", required = true) @RequestHeader(value = "Idempotency-Key") String idempotencyKey);
+            @Parameter(description = "Clave del INTENTO, no de la petición: la misma en los reintentos del mismo gesto. Sin ella, dos peticiones son dos cobros.", required = true) @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey);
 
     @Operation(summary = "Dev-only: mock-confirm a pending order payment (no real provider call)")
     @PostMapping("/{orderId}/payments/{paymentId}/confirm-mock")
@@ -48,7 +48,7 @@ public interface MeOrderPaymentApi {
     @PostMapping("/{orderId}/pay-saved-card")
     ResponseEntity<SavedCardPayDtoOut> paySavedCard(Authentication auth, @PathVariable UUID orderId,
             @Valid @RequestBody SavedCardPayDtoIn req,
-            @Parameter(description = "Clave del INTENTO, no de la petición: la misma en los reintentos del mismo gesto. Sin ella, dos peticiones son dos cobros.", required = true) @RequestHeader(value = "Idempotency-Key") String idempotencyKey) throws StripeException;
+            @Parameter(description = "Clave del INTENTO, no de la petición: la misma en los reintentos del mismo gesto. Sin ella, dos peticiones son dos cobros.", required = true) @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) throws StripeException;
 
     @Operation(summary = "Confirmar el cobro con tarjeta guardada tras completar el 3DS en el navegador")
     @PostMapping("/{orderId}/pay-saved-card/{paymentId}/confirm")

@@ -46,7 +46,7 @@ public interface MeWalletApi {
     @ApiResponse(responseCode = "200", description = "Recharge initiated")
     @PostMapping("/recharge")
     ResponseEntity<MeWalletRechargeDtoOut> recharge(Authentication auth, @Valid @RequestBody MeWalletRechargeDtoIn req,
-            @Parameter(description = "Clave del INTENTO, no de la petición: la misma en los reintentos del mismo gesto. Sin ella, dos peticiones son dos cobros.", required = true) @RequestHeader(value = "Idempotency-Key") String idem);
+            @Parameter(description = "Clave del INTENTO, no de la petición: la misma en los reintentos del mismo gesto. Sin ella, dos peticiones son dos cobros.", required = true) @RequestHeader(value = "Idempotency-Key", required = false) String idem);
 
     @Operation(summary = "Rounded recharge presets in the active currency (backend-computed)")
     @ApiResponse(responseCode = "200", description = "Recharge options returned")
