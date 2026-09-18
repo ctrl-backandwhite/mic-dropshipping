@@ -62,6 +62,15 @@ class Cov09ImageMirrorBatchTest {
     ObjectStorageService storage;
     @Mock
     ProductIndexer productIndexer;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.persistence.repository.ImagenOrigenEspejadaRepository origenesEspejados;
+    /**
+     * El limitador va de verdad, no simulado: es una clase sin dependencias y lo que hace —dar turno y
+     * devolverlo— tiene que ocurrir para que la descarga se intente. Un simulacro devolvería nulo y la
+     * prueba mediría otra cosa.
+     */
+    @org.mockito.Spy
+    LimitadorDeDescargasPorOrigen limitador = new LimitadorDeDescargasPorOrigen(6, 120);
     @InjectMocks
     ImageMirrorService service;
 

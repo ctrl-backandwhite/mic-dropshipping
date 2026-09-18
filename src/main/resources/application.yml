@@ -616,6 +616,22 @@ nexadrop:
     imagen-calidad: ${STORAGE_IMAGEN_CALIDAD:0.82}
     imagen-minimo-bytes: ${STORAGE_IMAGEN_MINIMO_BYTES:120000}
 
+    # Descargas simultáneas POR PROVEEDOR. El límite real del espejado no es nuestra máquina —se midió
+    # el nodo al 16% de CPU mientras avanzaba a 4.200 imágenes/hora—, es 1688: responde 403 a quien
+    # enlaza sus imágenes desde otra web y corta a quien insiste. Ojo al alcance: esto limita por
+    # PROCESO, así que lo que ve el proveedor es réplicas x este número, sumando los tres entornos.
+    descargas-por-origen: ${STORAGE_DESCARGAS_POR_ORIGEN:6}
+    # Cuánto espera una descarga a que le toque turno. Con tope para que un proveedor que deja de
+    # responder no acabe con todos los hilos parados en su puerta: si no hay turno, la imagen vuelve a
+    # la cola y las de otros proveedores siguen avanzando.
+    espera-maxima-permiso-segundos: ${STORAGE_ESPERA_MAXIMA_PERMISO_SEGUNDOS:120}
+
+    # SEGUNDA PASADA: comprimir lo ya espejado. Va aparte porque espejar es urgente —hasta que no está,
+    # la ficha enseña un hueco— y comprimir no: la foto ya se ve y solo está en juego cuánto ocupa.
+    # Lote pequeño a propósito: comprimir es lo que consume CPU y memoria, y esta cola no corre prisa.
+    compresion-batch: ${STORAGE_COMPRESION_BATCH:10}
+    compresion-interval-ms: ${STORAGE_COMPRESION_INTERVAL_MS:30000}
+
     # Lo mismo para el vídeo de la ficha (v164). Va aparte y más despacio porque un vídeo pesa cien
     # veces lo que una foto: medido sobre el catálogo, 5,4 MB de media y 26,6 MB el mayor, unos 19 GB
     # entre los 3.674 que hay. Con lotes y concurrencia de imágenes, eso son cientos de megas en vuelo

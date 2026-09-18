@@ -25,6 +25,20 @@ public interface VariantValueRepository extends JpaRepository<VariantValueEntity
             + "ORDER BY v.createdAt DESC NULLS LAST")
     List<VariantValueEntity> findNeedingImageMirror(@Param("publicPrefix") String publicPrefix, Pageable pageable);
 
+    /**
+     * Lo mismo, acotado a unos productos recién importados. El valor de eje cuelga del eje, y el eje del
+     * producto, de ahí el doble salto.
+     *
+     * <p>Estas son las MUESTRAS DE COLOR: los botones que el comprador pulsa para elegir. Sin espejar se
+     * ven rotas, porque el proveedor responde 403 a quien enlaza sus imágenes desde otra web.
+     */
+    @Query("SELECT v FROM VariantValueEntity v WHERE v.option.product.id IN :productIds "
+            + "AND v.imageSourceUrl IS NOT NULL AND v.imageSourceUrl <> '' "
+            + "AND v.imageMirrorFailedAt IS NULL "
+            + "AND (v.imageCdnUrl IS NULL OR v.imageCdnUrl NOT LIKE :publicPrefix)")
+    List<VariantValueEntity> findNeedingImageMirrorByProducts(@Param("publicPrefix") String publicPrefix,
+            @Param("productIds") List<UUID> productIds);
+
     /** Fija la cdn_url espejada de la imagen del valor de eje. */
     @Modifying
     @Transactional

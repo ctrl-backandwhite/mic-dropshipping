@@ -30,6 +30,20 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariantEn
             + "ORDER BY v.createdAt DESC NULLS LAST")
     List<ProductVariantEntity> findNeedingImageMirror(@Param("publicPrefix") String publicPrefix, Pageable pageable);
 
+    /**
+     * Lo mismo, pero acotado a unos productos concretos: los que acaban de importarse.
+     *
+     * <p>El barrido general va por fecha y con tope de lote, así que durante una carga masiva las
+     * variantes recién llegadas esperan detrás de miles. Al importar sabemos exactamente cuáles son, y
+     * espejarlas ahí las saca de esa cola. Sin tope: son las de un lote de importación, no el catálogo.
+     */
+    @Query("SELECT v FROM ProductVariantEntity v WHERE v.product.id IN :productIds "
+            + "AND v.imageSourceUrl IS NOT NULL AND v.imageSourceUrl <> '' "
+            + "AND v.imageMirrorFailedAt IS NULL "
+            + "AND (v.imageCdnUrl IS NULL OR v.imageCdnUrl NOT LIKE :publicPrefix)")
+    List<ProductVariantEntity> findNeedingImageMirrorByProducts(@Param("publicPrefix") String publicPrefix,
+            @Param("productIds") List<UUID> productIds);
+
     /** Fija la cdn_url espejada de la imagen de la variante. */
     @Modifying
     @Transactional
