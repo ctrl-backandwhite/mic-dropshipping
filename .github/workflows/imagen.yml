@@ -23,11 +23,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Preparar JDK 21
+      - name: Preparar JDK 25
         uses: actions/setup-java@v5
         with:
-          # 21 aunque las imágenes usen JRE 25: el pom compila con release 21.
-          java-version: '21'
+          # 25, el mismo que usan las imágenes: el pom ya compila con release 25.
+          java-version: '25'
           distribution: temurin
           cache: maven
 
