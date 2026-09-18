@@ -41,9 +41,11 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 /**
  * Espeja a object storage (MinIO/S3) las imágenes de producto: descarga la {@code source_url} de origen
@@ -242,6 +244,9 @@ public class ImageMirrorService {
         if (!mirrorEnabled || !storage.isReady()) {
             return;
         }
+        // Primero las de variante: lo que sigue tiene un «return» temprano cuando no hay ninguna imagen de
+        // producto lista, y colgarlas detrás las dejaba sin reintentar justo cuando la cola se vacía.
+        requeueFailedVariantImages(ahora);
         List<ProductImageEntity> candidatas = imageRepository.findFailedForRetry(retryMaxAttempts, retryBatch);
         List<UUID> listas = candidatas.stream().filter(img -> esperaCumplida(img, ahora))
                 .map(ProductImageEntity::getId).toList();
@@ -251,6 +256,30 @@ public class ImageMirrorService {
         imageRepository.requeueToPending(listas);
         log.info("Mirror reintento: {} de {} imágenes fallidas vuelven a la cola", listas.size(),
                 candidatas.size());
+    }
+
+    /**
+     * Devuelve a la cola las imágenes de VARIANTE y de MUESTRA DE COLOR que fallaron.
+     *
+     * <p>Iba aparte de las de producto porque estas no llevan contador de intentos —el comentario del
+     * barrido decía «no hay estado FAILED para variantes, son pocas», y era falso: sí lo hay, y era
+     * DEFINITIVO—. La consulta del barrido descarta lo marcado, el barrido pone la marca al fallar y
+     * nadie la quitaba, así que una muestra que fallara una vez no se espejaba nunca más. El 18-sep-2026,
+     * tras cargar 9.425 productos, el 96% de las muestras se quedó apuntando al proveedor, que responde
+     * 403 a quien la enlaza desde otra web: en la ficha salían rotas.
+     *
+     * <p>La espera es la misma base que para las de producto, contada desde el fallo: recupera lo
+     * pasajero —un tiempo de espera agotado durante una carga masiva, que es lo que pasó— sin repetir
+     * la avalancha que lo provocó.
+     */
+    private void requeueFailedVariantImages(Instant ahora) {
+        Instant antesDe = ahora.minus(Duration.ofMinutes(retryBaseMinutes));
+        int valores = variantValueRepository.requeueFailed(antesDe, retryBatch);
+        int variantes = variantRepository.requeueFailed(antesDe, retryBatch);
+        if (valores + variantes > 0) {
+            log.info("Mirror reintento: {} muestras de color y {} imágenes de variante vuelven a la cola",
+                    valores, variantes);
+        }
     }
 
     /**
@@ -333,34 +362,66 @@ public class ImageMirrorService {
             return;
         }
         PageRequest top = PageRequest.of(0, Math.max(1, limit));
+        /*
+         * EN PARALELO, igual que las fotos de producto.
+         *
+         * <p>Este bucle iba de una en una, y el ajuste de concurrencia no lo tocaba: el pool solo lo usaba
+         * el barrido de fotos de producto. Medido en PRE el 18-sep-2026, tras cargar 9.425 productos:
+         * 93.448 muestras de color con origen, 9.351 espejadas, avanzando a ~510 por hora. Casi SIETE DÍAS
+         * para las que faltaban, con las fichas enseñando el hueco mientras tanto —el proveedor responde
+         * 403 a quien enlaza sus imágenes desde otra web—.
+         *
+         * <p>Y no era falta de máquina: el nodo al 16% de CPU y el pod sin límite. El coste es espera de
+         * red, que es exactamente lo que se paraleliza bien. Se usa el MISMO pool que las fotos para que
+         * el número de descargas a la vez siga siendo uno solo y ajustable por entorno: dos pools con dos
+         * ajustes distintos es la clase de cosa que hace que bajar un número no frene nada.
+         */
         int ok = 0;
-        for (ProductVariantEntity v : variantRepository.findNeedingImageMirror(prefix, top)) {
-            try {
-                variantRepository.markImageCdn(v.getId(), fetchAndStore(v.getImageSourceUrl(), true).url());
-                ok++;
-            } catch (Exception e) {
-                if (e instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                }
-                log.debug("Mirror imagen de variante {} falló ({}): {}", v.getId(), v.getImageSourceUrl(), e.toString());
-                variantRepository.markImageFailed(v.getId(), Instant.now());
-            }
-        }
-        for (VariantValueEntity vv : variantValueRepository.findNeedingImageMirror(prefix, top)) {
-            try {
-                variantValueRepository.markImageCdn(vv.getId(), fetchAndStore(vv.getImageSourceUrl(), true).url());
-                ok++;
-            } catch (Exception e) {
-                if (e instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                }
-                log.debug("Mirror imagen de valor {} falló ({}): {}", vv.getId(), vv.getImageSourceUrl(), e.toString());
-                variantValueRepository.markImageFailed(vv.getId(), Instant.now());
-            }
-        }
+        ok += espejaEnParalelo(variantRepository.findNeedingImageMirror(prefix, top),
+                ProductVariantEntity::getId, ProductVariantEntity::getImageSourceUrl,
+                variantRepository::markImageCdn, variantRepository::markImageFailed, "variante");
+        ok += espejaEnParalelo(variantValueRepository.findNeedingImageMirror(prefix, top),
+                VariantValueEntity::getId, VariantValueEntity::getImageSourceUrl,
+                variantValueRepository::markImageCdn, variantValueRepository::markImageFailed, "valor");
         if (ok > 0) {
             log.info("Mirror imágenes de variante/valor: {} subidas a storage", ok);
         }
+    }
+
+    /**
+     * Descarga y guarda un grupo de imágenes a la vez, y anota el resultado de cada una.
+     *
+     * <p>Sirve para variantes y para valores de eje porque lo único que cambia entre las dos es de dónde
+     * sale el identificador y a qué repositorio se le cuenta el final. El fallo de una NO corta el grupo:
+     * se marca y se sigue, que es lo que impide que una foto muerta deje sin espejar a las demás.
+     */
+    private <T> int espejaEnParalelo(List<T> filas, Function<T, UUID> id, Function<T, String> origen,
+            BiConsumer<UUID, String> alLograrlo, BiConsumer<UUID, Instant> alFallar, String que) {
+        if (filas.isEmpty()) {
+            return 0;
+        }
+        List<Future<String>> pedidos = filas.stream()
+                .map(fila -> pool().submit(() -> fetchAndStore(origen.apply(fila), true).url())).toList();
+        int ok = 0;
+        for (int i = 0; i < pedidos.size(); i++) {
+            UUID cual = id.apply(filas.get(i));
+            try {
+                alLograrlo.accept(cual, pedidos.get(i).get());
+                ok++;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                // Al interrumpir se cancela lo que quede en vuelo: sin esto, el apagado espera a que
+                // terminen descargas que ya no le importan a nadie.
+                pedidos.subList(i, pedidos.size()).forEach(f -> f.cancel(true));
+                alFallar.accept(cual, Instant.now());
+                return ok;
+            } catch (ExecutionException e) {
+                log.debug("Mirror imagen de {} {} falló ({}): {}", que, cual, origen.apply(filas.get(i)),
+                        e.getCause() != null ? e.getCause().toString() : e.toString());
+                alFallar.accept(cual, Instant.now());
+            }
+        }
+        return ok;
     }
 
     /** Procesa hasta {@code limit} imágenes PENDING en paralelo. Devuelve cuántas se espejaron. */
