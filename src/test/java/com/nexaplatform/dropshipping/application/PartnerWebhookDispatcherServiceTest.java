@@ -1,7 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
-import com.nexaplatform.dropshipping.application.service.PublicHttpUrl;
 import com.nexaplatform.dropshipping.application.service.PartnerWebhookDispatcherService;
+import com.nexaplatform.dropshipping.application.service.PublicHttpUrl;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;

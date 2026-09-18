@@ -1,24 +1,24 @@
 package com.nexaplatform.dropshipping.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
+import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.FulfillmentProviderSelector;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService;
-import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.application.usecase.NotificationUseCase;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
+import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
+import com.nexaplatform.dropshipping.domain.repository.UserRepository;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.TrackingSnapshot;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressEventCipher;
-import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
-import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentItemRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderTrackingEventRepository;
-import com.nexaplatform.dropshipping.domain.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

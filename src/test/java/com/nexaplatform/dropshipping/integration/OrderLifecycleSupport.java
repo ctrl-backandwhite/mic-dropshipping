@@ -1,20 +1,20 @@
 package com.nexaplatform.dropshipping.integration;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.junit.jupiter.api.BeforeEach;
 import com.nexaplatform.dropshipping.application.service.MarginService;
-import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.config.BaseIntegration;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;
 

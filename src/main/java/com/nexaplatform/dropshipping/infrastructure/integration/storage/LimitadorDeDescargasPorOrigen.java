@@ -1,5 +1,9 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.storage;
 
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
 import java.net.URI;
 import java.util.Locale;
 import java.util.Map;
@@ -7,9 +11,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
 /**
  * Pone un techo a cuántas descargas se le piden A LA VEZ a un mismo proveedor.

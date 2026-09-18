@@ -1,15 +1,17 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
-import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
 import com.nexaplatform.dropshipping.api.exception.ConflictException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
-import com.nexaplatform.dropshipping.application.service.AuditLogger;
 import com.nexaplatform.dropshipping.application.mapper.UserUpdateMapper;
+import com.nexaplatform.dropshipping.application.service.AuditLogger;
 import com.nexaplatform.dropshipping.application.service.PasswordPolicy;
 import com.nexaplatform.dropshipping.application.usecase.GoogleLoginOutcome;
 import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
+import com.nexaplatform.dropshipping.domain.enums.AuthEmailLabel;
 import com.nexaplatform.dropshipping.domain.enums.BrandTagline;
+import com.nexaplatform.dropshipping.domain.enums.InvoiceLabel;
+import com.nexaplatform.dropshipping.domain.enums.OrderEmailLabel;
 import com.nexaplatform.dropshipping.domain.enums.UserRole;
 import com.nexaplatform.dropshipping.domain.model.User;
 import com.nexaplatform.dropshipping.domain.repository.UserRepository;
@@ -17,6 +19,7 @@ import com.nexaplatform.dropshipping.infrastructure.email.EmailQueueService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PasswordResetTokenEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PasswordResetTokenRepository;
+import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,10 +38,6 @@ import java.util.Base64;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
-import com.nexaplatform.dropshipping.domain.enums.AuthEmailLabel;
-import com.nexaplatform.dropshipping.domain.enums.InvoiceLabel;
-import com.nexaplatform.dropshipping.domain.enums.OrderEmailLabel;
-
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;

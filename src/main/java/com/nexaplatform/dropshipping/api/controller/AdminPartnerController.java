@@ -4,25 +4,24 @@ import com.nexaplatform.dropshipping.api.AdminPartnerApi;
 import com.nexaplatform.dropshipping.api.dto.in.AdminOAuthClientCreateDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.AdminOAuthClientCreatedDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminOAuthClientDtoOut;
-import com.nexaplatform.dropshipping.domain.model.AdminOAuthClientCreated;
 import com.nexaplatform.dropshipping.api.dto.out.AdminPartnerAppDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminPartnerWebhookDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminShopConnectionDtoOut;
 import com.nexaplatform.dropshipping.api.mapper.AdminPartnerMapper;
 import com.nexaplatform.dropshipping.application.service.PartnerWebhookDispatcherService;
 import com.nexaplatform.dropshipping.application.usecase.AdminPartnerUseCase;
+import com.nexaplatform.dropshipping.domain.model.AdminOAuthClientCreated;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.Authentication;
-
-import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Admin Partners controller. Pure implementation of {@link AdminPartnerApi}:

@@ -1,6 +1,5 @@
 package com.nexaplatform.dropshipping.api.controller;
 
-import org.springframework.data.domain.Page;
 import com.nexaplatform.dropshipping.api.AdminCategoryApi;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.in.AdminCategoryUpsertDtoIn;
@@ -10,6 +9,7 @@ import com.nexaplatform.dropshipping.application.usecase.CategoryUseCase;
 import com.nexaplatform.dropshipping.domain.model.Category;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;

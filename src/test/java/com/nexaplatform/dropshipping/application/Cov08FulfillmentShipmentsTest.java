@@ -1,23 +1,20 @@
 package com.nexaplatform.dropshipping.application;
 
-import static com.nexaplatform.dropshipping.config.FulfillmentTestUtil.unSoloTransportista;
-
-import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderShipmentItemEntity;
-import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService.ShipmentTrackingView;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService.TrackingProgress;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService.TrackingView;
 import com.nexaplatform.dropshipping.application.service.OpsAlertService;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
+import com.nexaplatform.dropshipping.application.service.SupplierPurchaseService;
 import com.nexaplatform.dropshipping.application.usecase.NotificationUseCase;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;
+import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.domain.repository.OrderRepository;
 import com.nexaplatform.dropshipping.domain.repository.UserRepository;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.EnvioParcialException;
@@ -27,6 +24,7 @@ import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.Fulf
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.TrackingStep;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressEventCipher;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderShipmentEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderShipmentItemEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OrderTrackingEventEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentItemRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OrderShipmentRepository;
@@ -42,6 +40,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.nexaplatform.dropshipping.config.FulfillmentTestUtil.unSoloTransportista;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;

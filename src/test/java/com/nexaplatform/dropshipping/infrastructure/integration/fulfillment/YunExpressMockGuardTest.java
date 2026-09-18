@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.fulfillment;
 
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService.CustomsValuation;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
@@ -10,7 +11,6 @@ import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.Fulf
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.TrackingSnapshot;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CainiaoZoneRepository;
 import org.assertj.core.api.InstanceOfAssertFactories;
-import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.test.util.ReflectionTestUtils;

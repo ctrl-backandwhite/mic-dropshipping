@@ -1,7 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.NewsletterCampaignEntity;
 import com.nexaplatform.dropshipping.application.service.NewsletterService;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.NewsletterCampaignEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

@@ -1,9 +1,9 @@
 package com.nexaplatform.dropshipping.application;
 
-import com.nexaplatform.dropshipping.application.service.InvoiceService;
 import com.nexaplatform.dropshipping.application.service.EuComplianceService;
-import com.nexaplatform.dropshipping.application.service.OrderAmounts;
+import com.nexaplatform.dropshipping.application.service.InvoiceService;
 import com.nexaplatform.dropshipping.application.service.InvoiceService.PlanInvoiceData;
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.PaymentJpaRepositoryAdapter;

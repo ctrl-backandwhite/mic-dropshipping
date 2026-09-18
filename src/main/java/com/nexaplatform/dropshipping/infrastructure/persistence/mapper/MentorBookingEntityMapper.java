@@ -1,8 +1,8 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.mapper;
 
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import com.nexaplatform.dropshipping.domain.model.MentorBooking;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.MentorBookingEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import org.mapstruct.Builder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;

@@ -1,5 +1,7 @@
 package com.nexaplatform.dropshipping.application.service;
 
+import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.PayoutProfileUpdateRequest;
+import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.PayoutProfileView;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
@@ -8,8 +10,6 @@ import com.nexaplatform.dropshipping.domain.model.WalletTransaction;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.AffiliateIndexer;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.*;
-import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.PayoutProfileUpdateRequest;
-import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.PayoutProfileView;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -22,10 +22,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
-import java.util.regex.Pattern;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Affiliate program engine (DROP-644/645/646): referral codes, click attribution (last-click,

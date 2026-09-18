@@ -1,15 +1,15 @@
 package com.nexaplatform.dropshipping.api.controller;
 
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.VariantView;
 import com.nexaplatform.dropshipping.api.PartnerCatalogApi;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
-import com.nexaplatform.dropshipping.api.mapper.ProductListFilters;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.VariantView;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
+import com.nexaplatform.dropshipping.api.mapper.ProductListFilters;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;

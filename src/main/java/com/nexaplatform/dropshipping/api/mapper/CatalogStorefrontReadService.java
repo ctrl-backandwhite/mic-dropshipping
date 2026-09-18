@@ -1,20 +1,21 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
-import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
-import com.nexaplatform.dropshipping.application.service.Texts;
-import com.nexaplatform.dropshipping.application.service.PricingService;
-import com.nexaplatform.dropshipping.application.service.PromotionService;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
+import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.VariantView;
+import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.service.ProductViewHistoryService;
+import com.nexaplatform.dropshipping.application.service.PromotionService;
+import com.nexaplatform.dropshipping.application.service.Texts;
+import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.ProductSearchService;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.SupplierSearchService;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.SupplierSearchService.IndexedSupplier;
-import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
-import com.nexaplatform.dropshipping.application.service.ProductViewHistoryService;
-import com.nexaplatform.dropshipping.api.dto.PageResponse;
-import com.nexaplatform.dropshipping.api.exception.NotFoundException;
-import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
@@ -22,7 +23,6 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVa
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository;
-import com.nexaplatform.dropshipping.infrastructure.integration.search.ProductSearchService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CustomsDeclarationGroupRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
@@ -39,10 +39,6 @@ import org.springframework.data.jpa.domain.JpaSort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORIES_FLAT;
-import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORY_TREE;
-import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_LIST;
-
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -56,6 +52,10 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
+
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORIES_FLAT;
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORY_TREE;
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_LIST;
 
 /**
  * Shared storefront catalog read-projection helper. Holds the category/supplier/

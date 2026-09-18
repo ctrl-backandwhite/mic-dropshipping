@@ -1,6 +1,5 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.usecase.PodDesignUseCase;
 import com.nexaplatform.dropshipping.domain.model.PodAiResult;
@@ -8,6 +7,7 @@ import com.nexaplatform.dropshipping.domain.model.PodBlankProduct;
 import com.nexaplatform.dropshipping.domain.model.PodDesign;
 import com.nexaplatform.dropshipping.domain.repository.PodDesignRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

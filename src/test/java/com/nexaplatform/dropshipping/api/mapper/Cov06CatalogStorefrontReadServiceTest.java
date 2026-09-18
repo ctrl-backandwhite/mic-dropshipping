@@ -1,18 +1,18 @@
 package com.nexaplatform.dropshipping.api.mapper;
 
-import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
-import com.nexaplatform.dropshipping.application.service.ProductViewHistoryService;
-import org.junit.jupiter.api.DisplayName;
-import com.nexaplatform.dropshipping.application.service.PricingService;
-import com.nexaplatform.dropshipping.application.service.PromotionService;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
+import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.VariantView;
-import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
-import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.service.ProductViewHistoryService;
+import com.nexaplatform.dropshipping.application.service.PromotionService;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
+import com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.SupplierSearchService;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.SupplierSearchService.IndexedSupplier;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity;
@@ -25,23 +25,22 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Categ
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierRepository;
-import com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.cache.annotation.Cacheable;
-
-import java.lang.reflect.Method;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;

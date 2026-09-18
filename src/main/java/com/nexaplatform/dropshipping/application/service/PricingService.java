@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application.service;
 
 import com.nexaplatform.dropshipping.application.service.MarginService.PriceWithMargin;
+import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
@@ -8,12 +9,11 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVa
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
-import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 
 /**
  * Canonical pricing pipeline:

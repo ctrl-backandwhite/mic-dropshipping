@@ -1,16 +1,12 @@
 package com.nexaplatform.dropshipping.api.controller;
 
-import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
 import com.nexaplatform.dropshipping.application.service.CountryCurrencyService;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CurrencyRateEntity;
+import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Currency;
-import java.util.Locale;
 
 /**
  * Geolocalización ligera para el SPA: resuelve el país efectivo del visitante y la divisa que debería ver.

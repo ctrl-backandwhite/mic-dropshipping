@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.application.service;
 import com.nexaplatform.dropshipping.api.dto.out.PaymentMethodDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.domain.enums.PaymentMethodEmailLabel;
 import com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.PayPalPaymentMethodEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserDefaultPaymentEntity;
@@ -17,8 +18,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import com.nexaplatform.dropshipping.domain.enums.PaymentMethodEmailLabel;
 
 import java.time.Instant;
 import java.util.ArrayList;

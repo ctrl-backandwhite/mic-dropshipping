@@ -1,8 +1,8 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository.impl;
 
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierEntity;
 import com.nexaplatform.dropshipping.domain.model.Supplier;
 import com.nexaplatform.dropshipping.domain.repository.SupplierRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.SupplierEntityMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierJpaRepositoryAdapter;
 import lombok.RequiredArgsConstructor;

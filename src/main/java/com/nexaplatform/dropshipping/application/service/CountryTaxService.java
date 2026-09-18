@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application.service;
 
+import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CountryRegionEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CountryTaxRateEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CountryRegionRepository;
@@ -7,8 +8,6 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Count
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

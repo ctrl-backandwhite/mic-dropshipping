@@ -1,10 +1,10 @@
 package com.nexaplatform.dropshipping.infrastructure.cache;
 
-import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
 import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
+import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;

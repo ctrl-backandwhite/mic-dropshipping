@@ -1,9 +1,9 @@
 package com.nexaplatform.dropshipping.api.controller;
 
-import com.nexaplatform.dropshipping.api.exception.ArgumentException;
 import com.nexaplatform.dropshipping.api.controller.AdminPricingController.BulkToggleRequest;
 import com.nexaplatform.dropshipping.api.dto.in.PriceRuleDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.PriceRuleDtoOut;
+import com.nexaplatform.dropshipping.api.exception.ArgumentException;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.api.mapper.PriceRuleDtoMapper;
@@ -27,8 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;

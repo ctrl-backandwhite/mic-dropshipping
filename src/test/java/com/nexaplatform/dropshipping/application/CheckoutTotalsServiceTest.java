@@ -1,20 +1,20 @@
 package com.nexaplatform.dropshipping.application;
 
-import com.nexaplatform.dropshipping.application.service.CountryTaxService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService.CheckoutTotals;
+import com.nexaplatform.dropshipping.application.service.CountryTaxService;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService.DutyParcel;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService.CustomsValuation;
 import com.nexaplatform.dropshipping.domain.enums.OverThresholdPolicy;
 import com.nexaplatform.dropshipping.domain.enums.TaxMode;
-import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService.DutyParcel;
-
-import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;

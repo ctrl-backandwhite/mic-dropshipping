@@ -1,6 +1,5 @@
 package com.nexaplatform.dropshipping.api.controller;
 
-import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.AddCodeRequest;
 import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.AffiliateDashboardView;
 import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.BindRequest;
@@ -8,6 +7,7 @@ import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.PayoutProfileUpdateRe
 import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.PayoutProfileView;
 import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.PayoutRequest;
 import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.ReferralCodeView;
+import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.api.mapper.AffiliateViewMapper;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.AffiliateCommissionEntity;

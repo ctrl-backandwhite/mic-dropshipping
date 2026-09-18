@@ -7,8 +7,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.net.URI;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Endurecimiento de seguridad del mirror de imágenes:

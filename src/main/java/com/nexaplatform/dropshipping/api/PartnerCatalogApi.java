@@ -1,12 +1,12 @@
 package com.nexaplatform.dropshipping.api;
 
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
+import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.VariantView;
-import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
-import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
-import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;

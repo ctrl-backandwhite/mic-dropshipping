@@ -3,14 +3,13 @@ package com.nexaplatform.dropshipping.application.service;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
+import com.nexaplatform.dropshipping.api.mapper.ProductListFilters;
 import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService.DutyBadge;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
-
-import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
-import com.nexaplatform.dropshipping.api.mapper.ProductListFilters;
-import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

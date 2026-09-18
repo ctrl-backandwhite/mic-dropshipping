@@ -1,8 +1,8 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository.impl;
 
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CurrencyRateEntity;
 import com.nexaplatform.dropshipping.domain.model.CurrencyRate;
 import com.nexaplatform.dropshipping.domain.repository.CurrencyRateRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CurrencyRateEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.CurrencyRateEntityMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CurrencyRateJpaRepositoryAdapter;
 import lombok.RequiredArgsConstructor;

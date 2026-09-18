@@ -2,12 +2,12 @@ package com.nexaplatform.dropshipping.api.controller;
 
 import com.nexaplatform.dropshipping.api.AuthApi;
 import com.nexaplatform.dropshipping.api.dto.in.ActivateDtoIn;
-import com.nexaplatform.dropshipping.api.dto.in.ResendActivationDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.LoginDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetRequestDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.RefreshTokenDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.RegisterDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.ResendActivationDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.LoginDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.RegisterDtoOut;
 import com.nexaplatform.dropshipping.application.usecase.AuthUseCase;

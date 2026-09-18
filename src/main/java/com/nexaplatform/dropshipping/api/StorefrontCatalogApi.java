@@ -1,12 +1,16 @@
 package com.nexaplatform.dropshipping.api;
 
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.LivePromotionView;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.HomeSectionsResponse;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
+import com.nexaplatform.dropshipping.api.dto.PageResponse;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.AttributeKeyView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.AttributeView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.HistoryPoint;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.HomeSectionsResponse;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImageSearchRequest;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImageSearchResult;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImportUrlRequest;
@@ -20,10 +24,6 @@ import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SpecificationView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SuggestionView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.VariantView;
-import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
-import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
-import com.nexaplatform.dropshipping.api.dto.PageResponse;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import io.swagger.v3.oas.annotations.Operation;

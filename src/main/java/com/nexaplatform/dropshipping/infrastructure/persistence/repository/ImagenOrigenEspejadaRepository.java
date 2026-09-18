@@ -1,12 +1,13 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository;
 
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ImagenOrigenEspejadaEntity;
-import java.time.Instant;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
 
 /** Acceso a la memoria de URLs ya descargadas, para no volver a bajar lo que ya tenemos. */
 public interface ImagenOrigenEspejadaRepository extends JpaRepository<ImagenOrigenEspejadaEntity, String> {

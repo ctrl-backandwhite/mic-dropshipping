@@ -577,6 +577,18 @@
                     <staticGroups>*</staticGroups>
                     <staticAfter>true</staticAfter>
                     <lineEnding>LF</lineEnding>
+                    <!--
+                        21 y no 25, que es con lo que se compila. El plugin hereda el `release` del
+                        proyecto y su analizador (1.13.0) no conoce el nivel 25: se planta con «the
+                        Java file contained parse errors» en ficheros perfectamente válidos —lo hacía
+                        en RateLimitFilter.java, que compila sin una queja— y aborta la pasada entera
+                        dejando el trabajo a medias.
+
+                        Bajarlo no tiene coste: esto solo lee la cabecera de imports, y el nivel de
+                        lenguaje únicamente decide cómo se analiza el resto del fichero. El código no
+                        usa sintaxis posterior a 21. Cuando el plugin soporte 25, se quita esta línea.
+                    -->
+                    <compliance>21</compliance>
                 </configuration>
             </plugin>
             <!-- Cobertura para SonarCloud (mismo setup que mic-authservice). 0.8.14 = única compatible con Java 25. -->

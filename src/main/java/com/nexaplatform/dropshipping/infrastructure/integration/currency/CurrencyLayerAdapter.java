@@ -1,6 +1,5 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.currency;
 
-import java.util.Map.Entry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -13,6 +12,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Map.Entry;
 
 /**
  * Fetches latest FX rates from CurrencyLayer (https://api.currencylayer.com/live).

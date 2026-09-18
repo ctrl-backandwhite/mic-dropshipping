@@ -4,8 +4,8 @@ import com.nexaplatform.dropshipping.application.service.OperatorCommissionServi
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.OrderItem;
 import com.nexaplatform.dropshipping.infrastructure.integration.search.OperatorActionIndexer;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.OperatorOrderActionEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.OperatorOrderActionRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
 import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;

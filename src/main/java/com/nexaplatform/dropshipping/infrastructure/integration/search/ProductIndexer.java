@@ -1,11 +1,11 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.search;
 
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryTranslationEntity;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductAttributeEntity;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.messaging.NexaTopics;
 import com.nexaplatform.dropshipping.infrastructure.messaging.ProductIngestedEvent;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryTranslationEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductAttributeEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductAttributeRepository;

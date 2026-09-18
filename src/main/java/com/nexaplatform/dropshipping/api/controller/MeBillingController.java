@@ -1,7 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
-import com.stripe.exception.StripeException;
 import com.nexaplatform.dropshipping.api.MeBillingApi;
+import com.nexaplatform.dropshipping.api.dto.in.SavePayPalDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.SubscribeDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.BillingConfigDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.BillingInvoiceDtoOut;
@@ -9,11 +9,11 @@ import com.nexaplatform.dropshipping.api.dto.out.MySubscriptionDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.PaymentMethodDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SetupIntentDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.SubscribeStatusDtoOut;
-import com.nexaplatform.dropshipping.api.dto.in.SavePayPalDtoIn;
 import com.nexaplatform.dropshipping.api.mapper.BillingInvoiceDtoMapper;
 import com.nexaplatform.dropshipping.application.service.SavedPaymentMethodsService;
 import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.domain.model.CustomerSubscription;
+import com.stripe.exception.StripeException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;

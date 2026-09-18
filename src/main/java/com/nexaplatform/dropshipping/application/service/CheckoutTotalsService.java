@@ -4,9 +4,9 @@ import com.nexaplatform.dropshipping.application.service.CustomsValuationService
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Desglose monetario del checkout (envío, recargo de despacho, impuesto y total) en un ÚNICO sitio.

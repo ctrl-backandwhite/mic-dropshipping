@@ -1,8 +1,8 @@
 package com.nexaplatform.dropshipping.application.service;
 
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService.CustomsValuation;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CountryCustomsRuleEntity;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CountryCustomsRuleEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CurrencyRateEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CountryCustomsRuleRepository;
 import org.junit.jupiter.api.BeforeEach;

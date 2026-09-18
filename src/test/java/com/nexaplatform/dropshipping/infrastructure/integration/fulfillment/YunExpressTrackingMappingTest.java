@@ -1,10 +1,10 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.fulfillment;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.TrackingSnapshot;
 import org.junit.jupiter.api.BeforeEach;
-import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

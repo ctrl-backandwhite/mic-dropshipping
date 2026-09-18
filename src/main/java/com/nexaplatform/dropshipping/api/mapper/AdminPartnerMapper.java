@@ -2,12 +2,12 @@ package com.nexaplatform.dropshipping.api.mapper;
 
 import com.nexaplatform.dropshipping.api.dto.out.AdminOAuthClientDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminPartnerAppDtoOut;
-import com.nexaplatform.dropshipping.api.dto.out.AdminShopConnectionDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.AdminPartnerWebhookDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.AdminShopConnectionDtoOut;
 import com.nexaplatform.dropshipping.domain.model.AdminOAuthClient;
 import com.nexaplatform.dropshipping.domain.model.AdminPartnerApp;
-import com.nexaplatform.dropshipping.domain.model.AdminShopConnection;
 import com.nexaplatform.dropshipping.domain.model.AdminPartnerWebhook;
+import com.nexaplatform.dropshipping.domain.model.AdminShopConnection;
 import org.mapstruct.Mapper;
 
 import java.util.List;

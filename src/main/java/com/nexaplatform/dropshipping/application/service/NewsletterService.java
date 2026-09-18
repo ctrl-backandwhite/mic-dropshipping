@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application.service;
 
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
+import com.nexaplatform.dropshipping.infrastructure.email.EmailQueueService;
 import com.nexaplatform.dropshipping.infrastructure.messaging.NexaTopics;
 import com.nexaplatform.dropshipping.infrastructure.messaging.outbox.EventPublisher;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.NewsletterCampaignEntity;
@@ -8,13 +9,12 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.Newslette
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.NewsletterCampaignRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.NewsletterSubscriberRepository;
 import lombok.RequiredArgsConstructor;
-import com.nexaplatform.dropshipping.infrastructure.email.EmailQueueService;
-import org.springframework.beans.factory.annotation.Value;
-import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;

@@ -1,6 +1,5 @@
 package com.nexaplatform.dropshipping.application;
 
-import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.AddressInput;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.CreateOrderRequest;
 import com.nexaplatform.dropshipping.api.dto.PartnerDtos.OrderItemInput;
@@ -9,17 +8,18 @@ import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
-import com.nexaplatform.dropshipping.application.service.ProductSubsidyService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
+import com.nexaplatform.dropshipping.application.service.FulfillmentRouter;
 import com.nexaplatform.dropshipping.application.service.OrderEmailService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
+import com.nexaplatform.dropshipping.application.service.ProductSubsidyService;
 import com.nexaplatform.dropshipping.application.service.WebhookDispatcherService;
 import com.nexaplatform.dropshipping.application.usecase.PaymentUseCase;
 import com.nexaplatform.dropshipping.application.usecase.WalletUseCase;
-import com.nexaplatform.dropshipping.application.service.FulfillmentRouter;
 import com.nexaplatform.dropshipping.application.usecase.impl.OrderUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.OrderStatus;
 import com.nexaplatform.dropshipping.domain.enums.OverThresholdPolicy;
+import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
 import com.nexaplatform.dropshipping.domain.enums.TaxMode;
 import com.nexaplatform.dropshipping.domain.model.Order;
 import com.nexaplatform.dropshipping.domain.model.ShippingQuote;
@@ -33,7 +33,6 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ShopC
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserAddressRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
-import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService.DutyParcel;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
