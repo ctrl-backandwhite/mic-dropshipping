@@ -50,6 +50,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -316,40 +320,54 @@ public class AdminCatalogController implements AdminCatalogApi {
     }
 
     @Override
-    public ResponseEntity<List<BulkProductDtoIn>> exportProducts(int from, int to, String createdFrom,
-            String createdTo, Boolean verified) {
-        return ResponseEntity.ok(catalogUseCase.exportProducts(from, to, startOfDay(createdFrom),
-                endOfDayExclusive(createdTo), verified));
+    public ResponseEntity<List<BulkProductDtoIn>> exportProducts(int from, int to, String createdFrom, String createdTo, Boolean verified, String status, UUID categoryId,
+            String q, BigDecimal minCost, BigDecimal maxCost, Integer minSales, BigDecimal minTrend) {
+        return ResponseEntity.ok(catalogUseCase.exportProducts(from, to,
+                filtroDeExportacion(createdFrom, createdTo, verified, status, categoryId, q, minCost, maxCost,
+                        minSales, minTrend)));
+    }
+
+    /**
+     * Arma el filtro con el que se cuenta, se exporta por tramos y se vuelca: los TRES caminos tienen que
+     * acotar exactamente igual, o los segmentos que el panel ofrece no cuadran con lo que se descarga.
+     */
+    private static CatalogUseCase.ExportFilter filtroDeExportacion(String createdFrom, String createdTo,
+            Boolean verified, String status, UUID categoryId, String q, BigDecimal minCost, BigDecimal maxCost,
+            Integer minSales, BigDecimal minTrend) {
+        return new CatalogUseCase.ExportFilter(status, categoryId, q, verified, minCost, maxCost, minSales,
+                minTrend, startOfDay(createdFrom), endOfDayExclusive(createdTo));
     }
 
     @Override
-    public ResponseEntity<Map<String, Long>> exportCount(String createdFrom, String createdTo, Boolean verified) {
+    public ResponseEntity<Map<String, Long>> exportCount(String createdFrom, String createdTo, Boolean verified, String status, UUID categoryId,
+            String q, BigDecimal minCost, BigDecimal maxCost, Integer minSales, BigDecimal minTrend) {
         // Cuenta con los MISMOS filtros que exporta: los segmentos que ofrece el panel salen de aquí, y si
         // contara de más ofrecería tramos que después vienen vacíos.
-        return ResponseEntity.ok(Map.of("count",
-                catalogUseCase.countProducts(startOfDay(createdFrom), endOfDayExclusive(createdTo), verified)));
+        return ResponseEntity.ok(Map.of("count", catalogUseCase.countProducts(
+                filtroDeExportacion(createdFrom, createdTo, verified, status, categoryId, q, minCost, maxCost,
+                        minSales, minTrend))));
     }
 
     /** Fecha ISO (yyyy-MM-dd) al inicio del día UTC; null si vacía. Para el límite inferior del rango. */
-    private static java.time.Instant startOfDay(String isoDate) {
-        java.time.LocalDate d = parseIsoDate(isoDate);
-        return d == null ? null : d.atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
+    private static Instant startOfDay(String isoDate) {
+        LocalDate d = parseIsoDate(isoDate);
+        return d == null ? null : d.atStartOfDay(ZoneOffset.UTC).toInstant();
     }
 
     /** Fecha ISO al inicio del DÍA SIGUIENTE (límite superior EXCLUSIVO, para incluir todo el día indicado). */
-    private static java.time.Instant endOfDayExclusive(String isoDate) {
-        java.time.LocalDate d = parseIsoDate(isoDate);
-        return d == null ? null : d.plusDays(1).atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
+    private static Instant endOfDayExclusive(String isoDate) {
+        LocalDate d = parseIsoDate(isoDate);
+        return d == null ? null : d.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
     }
 
     /** Parsea una fecha ISO; vacía → null; inválida → 400 (IllegalArgumentException) en vez de 500. */
-    private static java.time.LocalDate parseIsoDate(String isoDate) {
+    private static LocalDate parseIsoDate(String isoDate) {
         if (isoDate == null || isoDate.isBlank()) {
             return null;
         }
         try {
-            return java.time.LocalDate.parse(isoDate.trim());
-        } catch (java.time.format.DateTimeParseException e) {
+            return LocalDate.parse(isoDate.trim());
+        } catch (DateTimeParseException e) {
             throw new IllegalArgumentException("Fecha inválida (usa yyyy-MM-dd): " + isoDate);
         }
     }
@@ -361,27 +379,26 @@ public class AdminCatalogController implements AdminCatalogApi {
 
     @Override
     public ResponseEntity<StreamingResponseBody> exportProductsNdjson(int batch, String createdFrom,
-            String createdTo, Boolean verified) {
+            String createdTo, Boolean verified, String status, UUID categoryId, String q, BigDecimal minCost,
+            BigDecimal maxCost, Integer minSales, BigDecimal minTrend) {
         int safeBatch = Math.clamp(batch, 1, MAX_BATCH);
-        java.time.Instant cf = startOfDay(createdFrom);
-        java.time.Instant ct = endOfDayExclusive(createdTo);
-        // Stream one product per line; keyset-paginate and flush each batch so memory stays bounded to a
-        // single page regardless of the total number of products (scales to millions).
+        CatalogUseCase.ExportFilter filtro = filtroDeExportacion(createdFrom, createdTo, verified, status,
+                categoryId, q, minCost, maxCost, minSales, minTrend);
+        // Un producto por línea, vaciando cada página: la memoria queda acotada a una página sea cual sea
+        // el tamaño del catálogo. Se pagina por posición y no por clave desde que el filtro es el mismo que
+        // el de la lista; el porqué está en `CatalogUseCase.exportPage`.
         StreamingResponseBody body = out -> {
-            UUID after = null;
-            boolean hasMore = true;
-            while (hasMore) {
-                CatalogUseCase.ProductExportBatch page = catalogUseCase.exportBatchAfter(after, safeBatch, cf, ct,
-                        verified);
-                for (BulkProductDtoIn dto : page.items()) {
+            int pagina = 0;
+            boolean hayMas = true;
+            while (hayMas) {
+                CatalogUseCase.ProductExportBatch lote = catalogUseCase.exportPage(pagina, safeBatch, filtro);
+                for (BulkProductDtoIn dto : lote.items()) {
                     out.write(objectMapper.writeValueAsBytes(dto));
                     out.write('\n');
                 }
                 out.flush();
-                // Una página incompleta (o vacía) es el fin del catálogo: la paginación por keyset devuelve
-                // siempre el tamaño pedido mientras queden productos.
-                hasMore = page.items().size() >= safeBatch;
-                after = page.lastId();
+                hayMas = lote.hayMas();
+                pagina++;
             }
         };
         return ResponseEntity.ok()

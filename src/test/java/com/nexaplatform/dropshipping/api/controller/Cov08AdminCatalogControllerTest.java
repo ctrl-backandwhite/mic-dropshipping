@@ -19,7 +19,9 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +33,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -41,9 +44,10 @@ import static org.mockito.Mockito.when;
  * Exportación e importación masiva del catálogo por NDJSON, y forma de las respuestas en lote.
  *
  * <p>Es el camino que mueve catálogos de miles de productos. Lo que se fija aquí: que la exportación
- * pagine por keyset y vaya volcando (no puede cargar el catálogo entero en memoria), que termine cuando
- * llega una página incompleta —si no, se quedaría en bucle infinito—, y que una línea corrupta a mitad
- * de un fichero de miles NO aborte la importación entera sino que se cuente como fallida.
+ * vaya volcando página a página (no puede cargar el catálogo entero en memoria), que termine cuando el
+ * caso de uso dice que no queda nada —si no, se quedaría en bucle infinito—, que acote con los MISMOS
+ * filtros que la lista del panel, y que una línea corrupta a mitad de un fichero de miles NO aborte la
+ * importación entera sino que se cuente como fallida.
  */
 class Cov08AdminCatalogControllerTest {
 
@@ -74,10 +78,16 @@ class Cov08AdminCatalogControllerTest {
 
     /** La misma exportación acotada por certificación: null = todos, true = solo los certificados. */
     private String exportar(int batch, Boolean verified) throws IOException {
-        ResponseEntity<StreamingResponseBody> response = controller.exportProductsNdjson(batch, null, null, verified);
+        ResponseEntity<StreamingResponseBody> response = controller.exportProductsNdjson(batch, null, null, verified,
+                null, null, null, null, null, null, null);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         response.getBody().writeTo(out);
         return out.toString(StandardCharsets.UTF_8);
+    }
+
+    /** Una página del volcado con las filas dadas, diciendo si detrás queda alguna más. */
+    private static ProductExportBatch lote(boolean hayMas, BulkProductDtoIn... filas) {
+        return new ProductExportBatch(List.of(filas), hayMas);
     }
 
     private static HttpServletRequest cuerpo(String ndjson) {
@@ -90,8 +100,8 @@ class Cov08AdminCatalogControllerTest {
 
     @Test
     void laExportacionEmiteUnProductoPorLinea() throws IOException {
-        when(catalogUseCase.exportBatchAfter(null, 200, null, null, null))
-                .thenReturn(new ProductExportBatch(List.of(producto("Camiseta"), producto("Gorra")), null));
+        when(catalogUseCase.exportPage(eq(0), eq(200), any()))
+                .thenReturn(lote(false, producto("Camiseta"), producto("Gorra")));
 
         String ndjson = exportar(200);
 
@@ -102,57 +112,88 @@ class Cov08AdminCatalogControllerTest {
     @Test
     void laExportacionPasaElFiltroDeCertificacionAlUseCase() throws IOException {
         // Si el filtro se quedara en el controlador, el panel diría «solo certificados» y bajaría todo.
-        when(catalogUseCase.exportBatchAfter(null, 200, null, null, true))
-                .thenReturn(new ProductExportBatch(List.of(producto("Camiseta")), null));
+        when(catalogUseCase.exportPage(anyInt(), anyInt(), any())).thenReturn(lote(false, producto("Camiseta")));
 
         String ndjson = exportar(200, true);
 
         assertThat(ndjson.lines()).hasSize(1);
-        verify(catalogUseCase).exportBatchAfter(null, 200, null, null, true);
+        assertThat(filtroVolcado().verified()).isTrue();
     }
 
     @Test
     void sinFiltroDeCertificacionSePideElCatalogoEntero() throws IOException {
         // «Todos» tiene que viajar como nulo y no como false: false son solo los NO certificados.
-        when(catalogUseCase.exportBatchAfter(null, 200, null, null, null))
-                .thenReturn(new ProductExportBatch(List.of(producto("Camiseta")), null));
+        when(catalogUseCase.exportPage(anyInt(), anyInt(), any())).thenReturn(lote(false, producto("Camiseta")));
 
         exportar(200);
 
-        verify(catalogUseCase).exportBatchAfter(null, 200, null, null, null);
+        assertThat(filtroVolcado().verified()).isNull();
+    }
+
+    /**
+     * La exportación acota con LOS MISMOS filtros que la lista del panel.
+     *
+     * <p>Antes solo conocía fecha y certificación: filtrar la lista a treinta productos y abrir «Exportar»
+     * ofrecía los nueve mil del catálogo, y lo que se descargaba no era lo que se estaba mirando.
+     */
+    @Test
+    void laExportacionAcotaConLosMismosFiltrosQueLaLista() throws IOException {
+        when(catalogUseCase.exportPage(anyInt(), anyInt(), any())).thenReturn(lote(false));
+        UUID categoria = UUID.randomUUID();
+
+        controller.exportProductsNdjson(200, null, null, null, "ACTIVE", categoria, "bailarinas",
+                BigDecimal.ONE, BigDecimal.TEN, 50, BigDecimal.valueOf(0.4)).getBody()
+                .writeTo(new ByteArrayOutputStream());
+
+        CatalogUseCase.ExportFilter filtro = filtroVolcado();
+        assertThat(filtro.status()).isEqualTo("ACTIVE");
+        assertThat(filtro.categoryId()).isEqualTo(categoria);
+        assertThat(filtro.q()).isEqualTo("bailarinas");
+        assertThat(filtro.minCost()).isEqualTo(BigDecimal.ONE);
+        assertThat(filtro.maxCost()).isEqualTo(BigDecimal.TEN);
+        assertThat(filtro.minSales()).isEqualTo(50);
+        assertThat(filtro.minTrend()).isEqualTo(BigDecimal.valueOf(0.4));
+    }
+
+    /** El rango de fechas del panel llega como día ISO y sale como instante; el superior, EXCLUSIVO. */
+    @Test
+    void elRangoDeFechasSeTraduceAInstantesConElLimiteSuperiorExclusivo() throws IOException {
+        when(catalogUseCase.exportPage(anyInt(), anyInt(), any())).thenReturn(lote(false));
+
+        controller.exportProductsNdjson(200, "2026-08-17", "2026-09-17", null, null, null, null, null, null,
+                null, null).getBody().writeTo(new ByteArrayOutputStream());
+
+        CatalogUseCase.ExportFilter filtro = filtroVolcado();
+        assertThat(filtro.createdFrom()).isEqualTo(Instant.parse("2026-08-17T00:00:00Z"));
+        assertThat(filtro.createdTo()).isEqualTo(Instant.parse("2026-09-18T00:00:00Z"));
     }
 
     @Test
-    void laExportacionSigueEncadenandoPaginasPorElUltimoIdentificador() throws IOException {
-        // Es lo que permite exportar millones de productos con memoria acotada: cada página pide "los
-        // siguientes a este id" en lugar de un OFFSET que se va degradando.
-        UUID ultimoDeLaPrimera = UUID.randomUUID();
-        List<BulkProductDtoIn> pagina = List.of(producto("A"), producto("B"));
-        when(catalogUseCase.exportBatchAfter(null, 2, null, null, null)).thenReturn(new ProductExportBatch(pagina, ultimoDeLaPrimera));
-        when(catalogUseCase.exportBatchAfter(ultimoDeLaPrimera, 2, null, null, null))
-                .thenReturn(new ProductExportBatch(List.of(producto("C")), null));
+    void laExportacionSigueEncadenandoPaginasHastaQueNoQuedaNinguna() throws IOException {
+        // Es lo que permite exportar catálogos enteros con memoria acotada: se vuelca página a página y se
+        // sigue mientras el caso de uso diga que detrás queda algo.
+        when(catalogUseCase.exportPage(eq(0), eq(2), any())).thenReturn(lote(true, producto("A"), producto("B")));
+        when(catalogUseCase.exportPage(eq(1), eq(2), any())).thenReturn(lote(false, producto("C")));
 
         assertThat(exportar(2).lines()).hasSize(3);
 
-        verify(catalogUseCase).exportBatchAfter(null, 2, null, null, null);
-        verify(catalogUseCase).exportBatchAfter(ultimoDeLaPrimera, 2, null, null, null);
+        verify(catalogUseCase).exportPage(eq(0), eq(2), any());
+        verify(catalogUseCase).exportPage(eq(1), eq(2), any());
     }
 
     @Test
-    void laExportacionTerminaCuandoLlegaUnaPaginaIncompleta() throws IOException {
-        // Una página con menos filas de las pedidas es el fin del catálogo. Sin esta condición el bucle
-        // no pararía nunca.
-        when(catalogUseCase.exportBatchAfter(any(), eq(5), any(), any(), any()))
-                .thenReturn(new ProductExportBatch(List.of(producto("Único")), null));
+    void laExportacionTerminaCuandoElCasoDeUsoDiceQueNoQuedaNada() throws IOException {
+        // Sin esa condición el bucle pediría páginas vacías para siempre.
+        when(catalogUseCase.exportPage(anyInt(), eq(5), any())).thenReturn(lote(false, producto("Único")));
 
         exportar(5);
 
-        verify(catalogUseCase, times(1)).exportBatchAfter(any(), anyInt(), any(), any(), any());
+        verify(catalogUseCase, times(1)).exportPage(anyInt(), anyInt(), any());
     }
 
     @Test
     void unCatalogoVacioProduceUnaExportacionVacia() throws IOException {
-        when(catalogUseCase.exportBatchAfter(null, 200, null, null, null)).thenReturn(new ProductExportBatch(List.of(), null));
+        when(catalogUseCase.exportPage(anyInt(), anyInt(), any())).thenReturn(lote(false));
 
         assertThat(exportar(200)).isEmpty();
     }
@@ -161,23 +202,32 @@ class Cov08AdminCatalogControllerTest {
     void elTamanoDeLoteSeAcotaAUnRangoRazonable() throws IOException {
         // Un 0 dejaría el bucle sin avanzar y un valor enorme se comería la memoria que precisamente se
         // quiere acotar.
-        when(catalogUseCase.exportBatchAfter(any(), anyInt(), any(), any(), any())).thenReturn(new ProductExportBatch(List.of(), null));
+        when(catalogUseCase.exportPage(anyInt(), anyInt(), any())).thenReturn(lote(false));
 
         exportar(0);
         exportar(999_999);
 
         ArgumentCaptor<Integer> tamanos = ArgumentCaptor.forClass(Integer.class);
-        verify(catalogUseCase, times(2)).exportBatchAfter(any(), tamanos.capture(), any(), any(), any());
+        verify(catalogUseCase, times(2)).exportPage(anyInt(), tamanos.capture(), any());
         assertThat(tamanos.getAllValues()).containsExactly(1, 1000);
     }
 
     @Test
     void laExportacionSeSirveComoDescargaNdjson() {
-        ResponseEntity<StreamingResponseBody> response = controller.exportProductsNdjson(200, null, null, null);
+        ResponseEntity<StreamingResponseBody> response = controller.exportProductsNdjson(200, null, null, null,
+                null, null, null, null, null, null, null);
 
         assertThat(response.getHeaders().getContentType()).hasToString("application/x-ndjson");
         assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION))
                 .contains("attachment").contains("products-export.ndjson");
+    }
+
+    /** El filtro con el que el controlador acabó pidiendo el volcado. */
+    private CatalogUseCase.ExportFilter filtroVolcado() {
+        ArgumentCaptor<CatalogUseCase.ExportFilter> captor =
+                ArgumentCaptor.forClass(CatalogUseCase.ExportFilter.class);
+        verify(catalogUseCase, atLeastOnce()).exportPage(anyInt(), anyInt(), captor.capture());
+        return captor.getValue();
     }
 
     // ─────────────────────── importación NDJSON ───────────────────────
@@ -304,9 +354,10 @@ class Cov08AdminCatalogControllerTest {
 
     @Test
     void elRecuentoDeExportacionSeDevuelveBajoLaClaveCount() {
-        when(catalogUseCase.countProducts(null, null, null)).thenReturn(1363L);
+        when(catalogUseCase.countProducts(any())).thenReturn(1363L);
 
-        assertThat(controller.exportCount(null, null, null).getBody()).containsEntry("count", 1363L);
+        assertThat(controller.exportCount(null, null, null, null, null, null, null, null, null, null).getBody())
+                .containsEntry("count", 1363L);
     }
 
     // ─────────────────────── códigos de respuesta ───────────────────────

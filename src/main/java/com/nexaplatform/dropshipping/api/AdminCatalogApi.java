@@ -219,14 +219,33 @@ public interface AdminCatalogApi {
             @RequestParam(defaultValue = "1000") int to,
             @RequestParam(required = false) String createdFrom,
             @RequestParam(required = false) String createdTo,
-            @RequestParam(required = false) Boolean verified);
+            @RequestParam(required = false) Boolean verified,
+            // Los MISMOS filtros que la lista del panel: sin ellos, filtrar la lista a treinta productos
+            // y abrir «Exportar» ofrecía los nueve mil, porque eran dos ideas distintas de «el catálogo».
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) UUID categoryId,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) BigDecimal minCost,
+            @RequestParam(required = false) BigDecimal maxCost,
+            @RequestParam(required = false) Integer minSales,
+            @RequestParam(required = false) BigDecimal minTrend);
 
     @Operation(summary = "Total product count (to compute export segments); optional createdFrom/createdTo and "
             + "verified filters, combined the same way the export applies them")
     @GetMapping("/products/export/count")
-    ResponseEntity<Map<String, Long>> exportCount(@RequestParam(required = false) String createdFrom,
+    ResponseEntity<Map<String, Long>> exportCount(
+            @RequestParam(required = false) String createdFrom,
             @RequestParam(required = false) String createdTo,
-            @RequestParam(required = false) Boolean verified);
+            @RequestParam(required = false) Boolean verified,
+            // Los MISMOS filtros que la lista del panel: sin ellos, filtrar la lista a treinta productos
+            // y abrir «Exportar» ofrecía los nueve mil, porque eran dos ideas distintas de «el catálogo».
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) UUID categoryId,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) BigDecimal minCost,
+            @RequestParam(required = false) BigDecimal maxCost,
+            @RequestParam(required = false) Integer minSales,
+            @RequestParam(required = false) BigDecimal minTrend);
 
     @Operation(summary = "Export ONE product as the bulk JSON shape (to edit as JSON and re-import with upsert)")
     @GetMapping("/products/{id}/export")
@@ -238,7 +257,16 @@ public interface AdminCatalogApi {
     ResponseEntity<StreamingResponseBody> exportProductsNdjson(@RequestParam(defaultValue = "200") int batch,
             @RequestParam(required = false) String createdFrom,
             @RequestParam(required = false) String createdTo,
-            @RequestParam(required = false) Boolean verified);
+            @RequestParam(required = false) Boolean verified,
+            // Los mismos filtros que los otros dos caminos: el volcado completo y los tramos tienen que
+            // acotar igual, o el total que se ofrece no cuadra con lo que se descarga.
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) UUID categoryId,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) BigDecimal minCost,
+            @RequestParam(required = false) BigDecimal maxCost,
+            @RequestParam(required = false) Integer minSales,
+            @RequestParam(required = false) BigDecimal minTrend);
 
     @Operation(summary = "Import products from an NDJSON body (one product per line), processed in batches with "
             + "bounded memory. The request body is read as a stream and never fully loaded into memory.")

@@ -63,6 +63,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -79,6 +81,7 @@ import java.util.function.Consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -1188,37 +1191,49 @@ class Cov01CatalogBulkImportTest {
 
     /* ============ exportación ============ */
 
-    /** Consulta de exportación devuelta por el EntityManager doble, encadenable como la real. */
-    @SuppressWarnings("unchecked")
-    private TypedQuery<ProductEntity> stubExportQuery() {
-        TypedQuery<ProductEntity> query = mock(TypedQuery.class);
-        when(em.createQuery(anyString(), eq(ProductEntity.class))).thenReturn(query);
-        when(query.setParameter(anyString(), any())).thenReturn(query);
-        when(query.setFirstResult(anyInt())).thenReturn(query);
-        when(query.setMaxResults(anyInt())).thenReturn(query);
-        when(query.getResultList()).thenReturn(new ArrayList<>());
-        return query;
+    /** El tramo con el que la exportación acaba consultando el catálogo. */
+    private Pageable tramoDeExportacion(int desde, int hasta) {
+        when(productJpaRepository.searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(), any(),
+                any(), any(), any(), any(), any(Pageable.class))).thenReturn(Page.empty());
+
+        useCase.exportProducts(desde, hasta, null);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(productJpaRepository).searchAdmin(any(), any(), any(), any(), anyString(), anyBoolean(), any(), any(),
+                any(), any(), any(), any(), captor.capture());
+        return captor.getValue();
     }
 
     @Test
     void exportarDesdeCeroNoPideUnDesplazamientoNegativo() {
-        // setFirstResult(-1) revienta: el rango del operador empieza en la fila 1, no en la 0.
-        TypedQuery<ProductEntity> query = stubExportQuery();
+        // Un desplazamiento negativo revienta la consulta: el rango del operador empieza en la fila 1, no en la 0.
+        Pageable tramo = tramoDeExportacion(0, 10);
 
-        useCase.exportProducts(0, 10, null, null, null);
-
-        verify(query).setFirstResult(0);
-        verify(query).setMaxResults(10);
+        assertThat(tramo.getOffset()).isZero();
+        assertThat(tramo.getPageSize()).isEqualTo(10);
     }
 
     @Test
     void unRangoInvertidoDeExportacionDevuelveUnaSolaFilaEnVezDeUnLimiteNegativo() {
-        // "de la 50 a la 10" no puede traducirse en un maxResults negativo, que la consulta rechaza.
-        TypedQuery<ProductEntity> query = stubExportQuery();
+        // "de la 50 a la 10" no puede traducirse en un tamaño negativo, que la consulta rechaza.
+        Pageable tramo = tramoDeExportacion(50, 10);
 
-        useCase.exportProducts(50, 10, null, null, null);
+        assertThat(tramo.getOffset()).isEqualTo(49);
+        assertThat(tramo.getPageSize()).isEqualTo(1);
+    }
 
-        verify(query).setFirstResult(49);
-        verify(query).setMaxResults(1);
+    /**
+     * El tramo se pide por POSICIÓN, no por página entera.
+     *
+     * <p>`PageRequest` solo sabe de páginas completas: para el tramo 1001-2000 calcularía la página 1 de
+     * tamaño 1000 —que casualmente coincide—, pero para 1500-1600 devolvería otra franja sin avisar. Esta
+     * prueba fija que el desplazamiento es el que se pide, no el que salga de dividir.
+     */
+    @Test
+    void elTramoRespetaElDesplazamientoAunqueNoSeaMultiploDelTamano() {
+        Pageable tramo = tramoDeExportacion(1500, 1600);
+
+        assertThat(tramo.getOffset()).isEqualTo(1499);
+        assertThat(tramo.getPageSize()).isEqualTo(101);
     }
 }

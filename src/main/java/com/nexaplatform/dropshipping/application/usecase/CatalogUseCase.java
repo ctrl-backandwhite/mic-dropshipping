@@ -27,6 +27,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -160,31 +161,54 @@ public interface CatalogUseCase {
      * {@link BulkProductDtoIn} JSON shape used to create them, so the result can be re-imported. Lets the
      * admin export the catalog in fixed segments (1-1000, 1001-2000, …).
      */
-    List<BulkProductDtoIn> exportProducts(int from, int to, java.time.Instant createdFrom, java.time.Instant createdTo,
-            Boolean verified);
+    List<BulkProductDtoIn> exportProducts(int from, int to, ExportFilter filtro);
 
-    /** One page of a keyset-paginated export: the mapped rows and the id of the last row (for the next page). */
-    record ProductExportBatch(List<BulkProductDtoIn> items, UUID lastId) {}
+    /** Una página del volcado: las filas ya mapeadas y si queda alguna más detrás. */
+    record ProductExportBatch(List<BulkProductDtoIn> items, boolean hayMas) {}
 
     /**
-     * Keyset-paginated export batch: returns up to {@code limit} products with id greater than {@code afterId}
-     * (or the first ones when {@code afterId} is null), ordered by id. Child collections are batch-fetched by
-     * the page's ids (no N+1). Used to stream millions of products with bounded memory (one page at a time).
-     * {@code createdFrom}/{@code createdTo} (nullable) acotan por fecha de carga ({@code ingestedAt}) y
-     * {@code verified} (nullable) por si el producto está certificado; los tres filtros se combinan.
+     * Una página del volcado continuo, ordenada por id y con los hijos traídos por lote (sin N+1).
+     *
+     * <p>Se pagina por DESPLAZAMIENTO y no por clave. Antes iba por clave —id mayor que el último— con
+     * una consulta nativa, porque así se podía filtrar solo por fecha y certificación. Al tener que
+     * acotar también por categoría, texto, precio, ventas y tendencia, mantener esa consulta aparte
+     * habría significado reescribir la búsqueda del panel entera en SQL nativo, con dos sitios donde
+     * decidir qué entra en el catálogo. Se reutiliza la consulta de la LISTA, que ya sabe hacerlo.
+     *
+     * <p>Lo que se cede es el techo: el desplazamiento se degrada en páginas muy profundas. Con nueve
+     * mil productos no se nota, y a cambio la exportación no puede volver a discrepar de lo que la
+     * lista enseña.
      */
-    ProductExportBatch exportBatchAfter(UUID afterId, int limit, java.time.Instant createdFrom,
-            java.time.Instant createdTo, Boolean verified);
+    ProductExportBatch exportPage(int page, int size, ExportFilter filtro);
 
     /** Exporta UN producto al formato de carga masiva (para editarlo como JSON y reimportar con upsert). */
     BulkProductDtoIn exportProduct(UUID id);
 
     /**
-     * Total de productos (para calcular los segmentos de export); acota por fecha de carga y por
-     * certificación si se indican. Cuenta con los MISMOS filtros que exporta, o los segmentos que se
-     * ofrecen no cuadrarían con lo que después se descarga.
+     * Con qué se acota una exportación: los MISMOS filtros que la lista del panel, más el rango por
+     * fecha de carga.
+     *
+     * <p>Antes la exportación solo conocía fecha y certificación, así que filtrar la lista a treinta
+     * productos y abrir «Exportar» ofrecía los nueve mil. Y es un registro, y no diez parámetros
+     * sueltos, porque los tres caminos de exportación —contar, tramo y volcado continuo— tienen que
+     * acotar EXACTAMENTE igual: si alguno se deja uno, los segmentos que se ofrecen no cuadran con lo
+     * que después se descarga.
      */
-    long countProducts(java.time.Instant createdFrom, java.time.Instant createdTo, Boolean verified);
+    record ExportFilter(String status, UUID categoryId, String q, Boolean verified, BigDecimal minCost,
+            BigDecimal maxCost, Integer minSales, BigDecimal minTrend, Instant createdFrom,
+            Instant createdTo) {
+
+        /** Sin ningún filtro: la exportación completa. */
+        public static ExportFilter todo() {
+            return new ExportFilter(null, null, null, null, null, null, null, null, null, null);
+        }
+    }
+
+    /**
+     * Total de productos (para calcular los segmentos de export), con los filtros dados. Cuenta con los
+     * MISMOS que exporta, o los segmentos que se ofrecen no cuadrarían con lo que después se descarga.
+     */
+    long countProducts(ExportFilter filtro);
 
     /** Creates a single product manually from a friendly row; returns the new product id. */
     UUID createProductManual(BulkProductDtoIn req);

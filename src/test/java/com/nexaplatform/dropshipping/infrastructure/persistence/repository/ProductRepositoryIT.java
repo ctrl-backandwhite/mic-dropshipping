@@ -17,6 +17,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -462,24 +463,73 @@ class ProductRepositoryIT extends PersistenceITBase {
         Pageable firstPage = PageRequest.of(0, 20);
 
         // Spanish full-ish title finds the PAUSED, image-less product across the whole catalogue.
-        assertThat(adminRepo.searchAdmin(null, null, "sandalias de tacón", null, "es", false, null, null, null, null, firstPage).getContent())
+        assertThat(adminRepo.searchAdmin(null, null, "sandalias de tacón", null, "es", false, null, null, null, null, null, null, firstPage).getContent())
                 .extracting(ProductEntity::getSlug)
                 .containsExactly("sandalias-tacon-alto");
 
         // Chinese needle finds the ARCHIVED product → multilingual.
-        assertThat(adminRepo.searchAdmin(null, null, "透明", null, "es", false, null, null, null, null, firstPage).getContent())
+        assertThat(adminRepo.searchAdmin(null, null, "透明", null, "es", false, null, null, null, null, null, null, firstPage).getContent())
                 .extracting(ProductEntity::getSlug)
                 .containsExactly("producto-chino");
 
         // Optional status filter still narrows results.
-        assertThat(adminRepo.searchAdmin(ProductStatus.PAUSED, null, "sandalias", null, "es", false, null, null, null, null, firstPage).getContent())
+        assertThat(adminRepo.searchAdmin(ProductStatus.PAUSED, null, "sandalias", null, "es", false, null, null, null, null, null, null, firstPage).getContent())
                 .extracting(ProductEntity::getSlug)
                 .containsExactly("sandalias-tacon-alto");
-        assertThat(adminRepo.searchAdmin(ProductStatus.ACTIVE, null, "sandalias", null, "es", false, null, null, null, null, firstPage).getContent())
+        assertThat(adminRepo.searchAdmin(ProductStatus.ACTIVE, null, "sandalias", null, "es", false, null, null, null, null, null, null, firstPage).getContent())
                 .isEmpty();
 
         // A needle that matches nothing returns an empty page.
-        assertThat(adminRepo.searchAdmin(null, null, "zzz-no-match", null, "es", false, null, null, null, null, firstPage).getContent()).isEmpty();
+        assertThat(adminRepo.searchAdmin(null, null, "zzz-no-match", null, "es", false, null, null, null, null, null, null, firstPage).getContent()).isEmpty();
+    }
+
+    /**
+     * El rango por fecha de CARGA acota de verdad, y el límite superior es EXCLUSIVO.
+     *
+     * <p>Esta condición es lo que permite que la exportación del panel y su lista sean la misma consulta.
+     * Antes la exportación tenía su propio SQL: quien filtraba la lista por fechas y pulsaba «Exportar»
+     * se bajaba el catálogo entero sin que nada avisara. Si este filtro dejara de acotar, el defecto
+     * volvería por la puerta de atrás y otra vez en silencio.
+     *
+     * <p>El límite superior es exclusivo porque el panel manda DÍAS, no instantes: «hasta el 17» tiene
+     * que incluir todo el 17, y se traduce a «antes del 18 a las 00:00».
+     */
+    @Test
+    void searchAdmin_acotaPorFechaDeCargaConElLimiteSuperiorExclusivo() {
+        Instant elQuince = Instant.parse("2026-09-15T10:00:00Z");
+        Instant elDiecisiete = Instant.parse("2026-09-17T23:30:00Z");
+        // JUSTO en el límite: es el único dato que distingue un tope exclusivo de uno inclusivo.
+        Instant elDieciocho = Instant.parse("2026-09-18T00:00:00Z");
+        repo.save(baseProduct("cargado-el-15", "FEC-15").ingestedAt(elQuince).build());
+        repo.save(baseProduct("cargado-el-17", "FEC-17").ingestedAt(elDiecisiete).build());
+        repo.save(baseProduct("cargado-el-18", "FEC-18").ingestedAt(elDieciocho).build());
+        // La columna es opcional y hay fichas viejas sin ella: entran cuando NO se acota, y no cuando sí.
+        repo.save(baseProduct("sin-fecha-de-carga", "FEC-00").build());
+        em.flush();
+        em.clear();
+
+        Pageable firstPage = PageRequest.of(0, 20);
+        Instant desdeEl16 = Instant.parse("2026-09-16T00:00:00Z");
+        Instant antesDel18 = Instant.parse("2026-09-18T00:00:00Z");
+
+        // Del 16 al 17 (ambos incluidos): entra el del 17 y ni el del 15 ni el del 18.
+        assertThat(adminRepo.searchAdmin(null, null, "", null, "es", false, null, null, null, null,
+                desdeEl16, antesDel18, firstPage).getContent())
+                .extracting(ProductEntity::getSlug)
+                .containsExactly("cargado-el-17");
+
+        // Solo límite inferior: del 16 en adelante.
+        assertThat(adminRepo.searchAdmin(null, null, "", null, "es", false, null, null, null, null,
+                desdeEl16, null, firstPage).getContent())
+                .extracting(ProductEntity::getSlug)
+                .containsExactlyInAnyOrder("cargado-el-17", "cargado-el-18");
+
+        // Sin rango se ve todo, incluido lo que no tiene fecha: un filtro no aplicado no esconde nada.
+        assertThat(adminRepo.searchAdmin(null, null, "", null, "es", false, null, null, null, null,
+                null, null, firstPage).getContent())
+                .extracting(ProductEntity::getSlug)
+                .containsExactlyInAnyOrder("cargado-el-15", "cargado-el-17", "cargado-el-18",
+                        "sin-fecha-de-carga");
     }
 
     // ── precisión del texto libre (fallback SQL) ────────────────────────────────────────
