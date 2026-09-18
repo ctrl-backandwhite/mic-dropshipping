@@ -424,7 +424,7 @@ public class ImageMirrorService {
         // su propio despliegue. Si el codificador WebP nativo se lleva la máquina virtual por delante
         // —que es lo que pasó el 5-sep-2026—, cae un trabajador reponible, no el escaparate.
         List<Future<String>> pedidos = filas.stream()
-                .map(fila -> pool().submit(() -> fetchAndStore(origen.apply(fila), true).url())).toList();
+                .map(fila -> pool().submit(() -> espejaRecordando(origen.apply(fila)))).toList();
         int ok = 0;
         for (int i = 0; i < pedidos.size(); i++) {
             UUID cual = id.apply(filas.get(i));
@@ -556,7 +556,8 @@ public class ImageMirrorService {
      * pasaron de 324 a 625 espejadas y las variantes se quedaron clavadas en 25 —un solo lote, el
      * primero—, con cero fallos registrados. No fallaban: no les tocaba turno.
      */
-    private void mirrorVariantImagesOf(List<UUID> productIds) {
+    /** Visible para las pruebas del mismo paquete, igual que {@code mirrorOne}. */
+    void mirrorVariantImagesOf(List<UUID> productIds) {
         if (!storage.isReady()) {
             return;
         }
@@ -802,6 +803,31 @@ public class ImageMirrorService {
                     imageRepository.cuentaPendientesDeComprimir());
         }
         return aligeradas;
+    }
+
+    /**
+     * Devuelve la URL ya espejada de un origen, bajándolo solo si no lo teníamos.
+     *
+     * <p>Esto es lo que hace que la memoria de URLs sirva para las VARIANTES, que es donde de verdad
+     * hay repetición. Cuando se añadió la memoria, este camino se quedó fuera: solo la consultaban las
+     * fotos de producto. Y medido sobre las 11.397 fichas de la carga, de 449.035 URLs de imagen
+     * <b>272.758 son de variante</b> —el 61%—, porque una variante de color usa la misma foto en todas
+     * sus tallas: hay imágenes que aparecen 74 veces dentro del mismo producto.
+     *
+     * <p>El síntoma de que faltaba era medible y no se veía como error: 687 URLs memorizadas y solo 5
+     * descargas ahorradas. El ahorro estaba implementado justo donde menos había que ahorrar.
+     */
+    private String espejaRecordando(String url) throws IOException, InterruptedException {
+        Optional<ImagenOrigenEspejadaEntity> conocida = origenesEspejados.findById(hashDeUrl(url));
+        if (conocida.isPresent()) {
+            origenesEspejados.anotaUso(conocida.get().getUrlHash(), Instant.now());
+            return conocida.get().getCdnUrl();
+        }
+        Stored s = fetchAndStore(url, true);
+        // Estas sí van comprimidas de una vez (ver el comentario de espejaEnParalelo), así que se
+        // recuerdan como tales: quien reaproveche esta URL no tendrá nada pendiente de comprimir.
+        recuerdaOrigen(url, s, true);
+        return s.url();
     }
 
     /** sha256 de la URL en hexadecimal: es la clave de la memoria de orígenes. */

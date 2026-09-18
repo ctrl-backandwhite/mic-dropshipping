@@ -3,6 +3,7 @@ package com.nexaplatform.dropshipping.infrastructure.integration.storage;
 import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ImagenOrigenEspejadaEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ImagenOrigenEspejadaRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductImageRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
@@ -207,5 +208,36 @@ class EspejadoAhorraDescargasTest {
 
         verify(storage, never()).bytesFromPublicUrl(any());
         verify(imageRepository, never()).marcaSinComprimir(any(), any());
+    }
+
+    @Test
+    void laMemoriaDeUrlsTambienAhorraEnLasVARIANTES() throws Exception {
+        // Aquí está el grueso del ahorro y es donde faltaba: de las 449.035 URLs del catálogo,
+        // 272.758 son de variante —el 61%—, porque una variante de color usa la misma foto en todas
+        // sus tallas. Si esta prueba falla, volvemos a bajar de 1688 imágenes que ya tenemos.
+        UUID variante = UUID.randomUUID();
+        ProductVariantEntity fila = ProductVariantEntity.builder().build();
+        fila.setId(variante);
+        fila.setImageSourceUrl(URL);
+        when(origenesEspejados.findById(ImageMirrorService.hashDeUrl(URL)))
+                .thenReturn(Optional.of(ImagenOrigenEspejadaEntity.builder()
+                        .urlHash(ImageMirrorService.hashDeUrl(URL))
+                        .urlOrigen(URL)
+                        .cdnUrl("https://img.nx036.com/product-images/media/ab/abcd.webp")
+                        .bytes(1234L).hash("abcd").ancho(800).alto(600)
+                        .comprimida(true).creadaEn(Instant.now()).usadaEn(Instant.now()).veces(1)
+                        .build()));
+        when(variantRepository.findNeedingImageMirrorByProducts(any(), any())).thenReturn(List.of(fila));
+        when(variantValueRepository.findNeedingImageMirrorByProducts(any(), any())).thenReturn(List.of());
+        when(storage.isReady()).thenReturn(true);
+        when(storage.publicUrl()).thenReturn("https://img.nx036.com/product-images");
+
+        service.mirrorVariantImagesOf(List.of(UUID.randomUUID()));
+
+        // La variante queda apuntando a lo que ya teníamos, sin descargar ni subir nada.
+        verify(variantRepository).markImageCdn(variante,
+                "https://img.nx036.com/product-images/media/ab/abcd.webp");
+        verify(origenesEspejados).anotaUso(eq(ImageMirrorService.hashDeUrl(URL)), any(Instant.class));
+        verify(storage, never()).upload(any(), any(), any());
     }
 }
