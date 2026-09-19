@@ -2,11 +2,14 @@ package com.nexaplatform.dropshipping.application.service;
 
 import com.nexaplatform.dropshipping.domain.enums.OverThresholdPolicy;
 import com.nexaplatform.dropshipping.domain.enums.TaxMode;
+import com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CountryCustomsRuleEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CountryCustomsRuleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -120,11 +123,11 @@ public class CustomsValuationService {
          * pedirle nada. Mantiene además funcionando lo escrito cuando el código del servicio salía de la
          * configuración global y no de la fila del país.
          */
-        public CustomsValuation(String countryCode, TaxMode taxMode, int intrinsicValueCents,
-                boolean deMinimisExceeded, OverThresholdPolicy policy, int handlingFeeCents,
-                boolean blocked, String deMinimisLabel, boolean carrierPrepaysVat) {
-            this(countryCode, taxMode, intrinsicValueCents, deMinimisExceeded, policy, handlingFeeCents,
-                    blocked, deMinimisLabel, carrierPrepaysVat, null);
+        public CustomsValuation(String countryCode, TaxMode taxMode, int intrinsicValueCents, boolean deMinimisExceeded,
+                OverThresholdPolicy policy, int handlingFeeCents, boolean blocked, String deMinimisLabel,
+                boolean carrierPrepaysVat) {
+            this(countryCode, taxMode, intrinsicValueCents, deMinimisExceeded, policy, handlingFeeCents, blocked,
+                    deMinimisLabel, carrierPrepaysVat, null);
         }
 
         /** Valor a declarar en aduana (céntimos USD). Hoy coincide con el valor intrínseco de los bienes. */
@@ -135,8 +138,8 @@ public class CustomsValuationService {
 
     /** Valoración neutra: sin regla configurada para el país no se altera nada del cálculo actual. */
     private static CustomsValuation neutral(String countryCode, int intrinsicValueCents) {
-        return new CustomsValuation(countryCode, TaxMode.DDP, intrinsicValueCents, false,
-                OverThresholdPolicy.SURCHARGE, 0, false, "", false, null);
+        return new CustomsValuation(countryCode, TaxMode.DDP, intrinsicValueCents, false, OverThresholdPolicy.SURCHARGE,
+                0, false, "", false, null);
     }
 
     /**
@@ -246,9 +249,8 @@ public class CustomsValuationService {
                 handling += r.getOverThresholdSurchargeCents() + percentOf(intrinsic, r.getDutyRateBps());
             }
         }
-        return new CustomsValuation(countryCode, mode, intrinsic, exceeded, policy, Math.max(0, handling),
-                blocked, blockingLimitLabel(r, intrinsic), r.isCarrierPrepaysVat(),
-                r.getVatPrepayServiceCode());
+        return new CustomsValuation(countryCode, mode, intrinsic, exceeded, policy, Math.max(0, handling), blocked,
+                blockingLimitLabel(r, intrinsic), r.isCarrierPrepaysVat(), r.getVatPrepayServiceCode());
     }
 
     /**
@@ -260,10 +262,8 @@ public class CustomsValuationService {
      */
     @Transactional(readOnly = true)
     public int deMinimisUsdCentsFor(String countryCode) {
-        return activeRule(countryCode)
-                .filter(CountryCustomsRuleEntity::isDeMinimisApplies)
-                .map(r -> toUsdCents(r.getDeMinimisAmount(), r.getDeMinimisCurrency()))
-                .filter(c -> c > 0).orElse(0);
+        return activeRule(countryCode).filter(CountryCustomsRuleEntity::isDeMinimisApplies)
+                .map(r -> toUsdCents(r.getDeMinimisAmount(), r.getDeMinimisCurrency())).filter(c -> c > 0).orElse(0);
     }
 
     /**
@@ -303,11 +303,22 @@ public class CustomsValuationService {
         return amount.stripTrailingZeros().toPlainString() + " " + (currency != null ? currency : "EUR");
     }
 
-    /** Arancel por artículo del país en céntimos USD (0 si no aplica). Para el desglose admin de la ficha. */
+    /**
+     * Arancel por artículo del país en céntimos USD (0 si no aplica). Para el desglose admin de la ficha.
+     *
+     * <p>Es también la puerta que decide si al comprador se le cobra el subsidio de arancel: donde el
+     * destino no cobra derecho por artículo —Latinoamérica, Estados Unidos y los otros cincuenta y nueve
+     * países con el importe a cero— no hay arancel del que descontarlo, así que cobrarlo sería cobrar de
+     * más. Los veintisiete de la Unión Europea sí lo llevan (3 EUR por línea de declaración).
+     *
+     * <p><b>Cacheado a propósito.</b> Esto lo pregunta el precio UNA VEZ POR PRODUCTO, así que sin caché
+     * pintar un listado de veinticuatro fichas son veinticuatro consultas — la misma forma que llevó un
+     * listado a 78 segundos. La regla cambia casi nunca y el panel invalida la caché al editarla.
+     */
+    @Cacheable(cacheNames = CacheConfig.CACHE_CUSTOMS_RULE, key = "'perArticle:' + #countryCode")
     @Transactional(readOnly = true)
     public int perArticleFeeUsdCents(String countryCode) {
-        return activeRule(countryCode)
-                .map(r -> toUsdCents(r.getPerArticleFeeAmount(), r.getPerArticleFeeCurrency()))
+        return activeRule(countryCode).map(r -> toUsdCents(r.getPerArticleFeeAmount(), r.getPerArticleFeeCurrency()))
                 .orElse(0);
     }
 
@@ -353,8 +364,7 @@ public class CustomsValuationService {
         if (countryCode == null || countryCode.isBlank()) {
             return Optional.empty();
         }
-        return repository.findByCountryCodeIgnoreCase(countryCode.trim())
-                .filter(CountryCustomsRuleEntity::isActive);
+        return repository.findByCountryCodeIgnoreCase(countryCode.trim()).filter(CountryCustomsRuleEntity::isActive);
     }
 
     /**
@@ -405,8 +415,7 @@ public class CustomsValuationService {
     private boolean carrierRejects(CountryCustomsRuleEntity rule, int intrinsicValueCents) {
         int primary = toUsdCents(rule.getCarrierMaxAmount(), rule.getCarrierMaxCurrency());
         int alternate = toUsdCents(rule.getCarrierMaxAltAmount(), rule.getCarrierMaxAltCurrency());
-        int limit = Math.min(primary > 0 ? primary : Integer.MAX_VALUE,
-                alternate > 0 ? alternate : Integer.MAX_VALUE);
+        int limit = Math.min(primary > 0 ? primary : Integer.MAX_VALUE, alternate > 0 ? alternate : Integer.MAX_VALUE);
         return limit != Integer.MAX_VALUE && intrinsicValueCents >= limit;
     }
 
@@ -439,8 +448,8 @@ public class CustomsValuationService {
         if (baseCents <= 0 || bps <= 0) {
             return 0;
         }
-        return BigDecimal.valueOf((long) baseCents * bps).divide(BigDecimal.valueOf(10000), 0,
-                RoundingMode.HALF_UP).intValue();
+        return BigDecimal.valueOf((long) baseCents * bps).divide(BigDecimal.valueOf(10000), 0, RoundingMode.HALF_UP)
+                .intValue();
     }
 
     /* ============ Admin ============ */
@@ -459,6 +468,13 @@ public class CustomsValuationService {
      * que no lo conoce mandara {@code false} por omisión, dejaría al país sin franquicia y lo bloquearía
      * entero. Con el envoltorio, «no lo envío» y «lo pongo a false» son cosas distintas.
      */
+    /**
+     * Se vacía la caché de reglas ENTERA, no solo la del país tocado: el arancel por artículo decide si al
+     * comprador se le cobra el subsidio de arancel, así que una regla rancia son precios mal cobrados
+     * durante media hora. Son ochenta y seis filas que se editan a mano muy de vez en cuando; releerlas
+     * todas no cuesta nada y quita de en medio una clase entera de error.
+     */
+    @CacheEvict(cacheNames = CacheConfig.CACHE_CUSTOMS_RULE, allEntries = true)
     @Transactional
     public CountryCustomsRuleEntity upsert(CountryCustomsRuleEntity input, Integer vatPrepayPercentBps,
             BigDecimal perArticleFeeAmount, String perArticleFeeCurrency, Boolean deMinimisApplies) {
@@ -467,10 +483,11 @@ public class CustomsValuationService {
                 .orElseGet(() -> CountryCustomsRuleEntity.builder().countryCode(code).build());
         e.setCountryCode(code);
         e.setTaxMode(TaxMode.from(input.getTaxMode()).name());
-        e.setDeMinimisAmount(input.getDeMinimisAmount() == null ? BigDecimal.ZERO
-                : input.getDeMinimisAmount().max(BigDecimal.ZERO));
+        e.setDeMinimisAmount(
+                input.getDeMinimisAmount() == null ? BigDecimal.ZERO : input.getDeMinimisAmount().max(BigDecimal.ZERO));
         e.setDeMinimisCurrency(input.getDeMinimisCurrency() == null || input.getDeMinimisCurrency().isBlank()
-                ? "EUR" : input.getDeMinimisCurrency().trim().toUpperCase());
+                ? "EUR"
+                : input.getDeMinimisCurrency().trim().toUpperCase());
         e.setOverThresholdPolicy(OverThresholdPolicy.from(input.getOverThresholdPolicy()).name());
         e.setHandlingFeeCents(Math.max(0, input.getHandlingFeeCents()));
         e.setHandlingPercentBps(Math.max(0, input.getHandlingPercentBps()));

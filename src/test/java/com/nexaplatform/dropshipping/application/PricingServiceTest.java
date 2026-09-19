@@ -1,8 +1,10 @@
 package com.nexaplatform.dropshipping.application;
 
+import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.MarginService.PriceWithMargin;
 import com.nexaplatform.dropshipping.application.service.PricingChannelHolder;
+import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount;
 import com.nexaplatform.dropshipping.application.service.PromotionService;
@@ -36,6 +38,7 @@ class PricingServiceTest {
     private CurrencyRateService currencyService;
     private MarginService marginService;
     private PromotionService promotionService;
+    private CustomsValuationService customsValuation;
     private PricingService service;
 
     @BeforeEach
@@ -43,15 +46,20 @@ class PricingServiceTest {
         currencyService = mock(CurrencyRateService.class);
         marginService = mock(MarginService.class);
         promotionService = sinPromociones();
-        service = new PricingService(currencyService, promotionService, marginService);
+        customsValuation = mock(CustomsValuationService.class);
+        // Por defecto, un destino que NO cobra derecho por artículo: es el caso de la mayoría del mundo.
+        lenient().when(customsValuation.perArticleFeeUsdCents(any())).thenReturn(0);
+        service = new PricingService(currencyService, promotionService, marginService, customsValuation);
         CurrencyHolder.clear();
         PricingChannelHolder.set(PriceRuleChannel.STOREFRONT);
+        PricingCountryHolder.clear();
     }
 
     @AfterEach
     void cleanup() {
         CurrencyHolder.clear();
         PricingChannelHolder.set(PriceRuleChannel.STOREFRONT);
+        PricingCountryHolder.clear();
     }
 
     /**
@@ -68,13 +76,12 @@ class PricingServiceTest {
         when(currencyService.symbolOf(anyString())).thenReturn("$");
         PricingChannelHolder.set(PriceRuleChannel.INTEGRATION);
 
-        PricedAmount priced = service.priceFor(
-                ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY").build());
+        PricedAmount priced = service
+                .priceFor(ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY").build());
 
         assertThat(priced.discountPercent()).isNull();
         assertThat(priced.originalFormatted()).isNull();
-        org.mockito.Mockito.verify(promotionService, org.mockito.Mockito.never())
-                .applyAutomatic(any(), any(), any());
+        org.mockito.Mockito.verify(promotionService, org.mockito.Mockito.never()).applyAutomatic(any(), any(), any());
     }
 
     /** En el escaparate sí se pregunta a la promoción (aunque este mock no descuente). */
@@ -270,8 +277,8 @@ class PricingServiceTest {
     void elMargenSeAplicaSobreLaBaseElIvaYElPorte() {
         when(currencyService.toUsd(any(BigDecimal.class), eq("CNY")))
                 .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("10")));
-        when(marginService.apply(any(), any(), any())).thenReturn(new PriceWithMargin(new BigDecimal("10.00"),
-                new BigDecimal("25.00"), null, new BigDecimal("150")));
+        when(marginService.apply(any(), any(), any())).thenReturn(
+                new PriceWithMargin(new BigDecimal("10.00"), new BigDecimal("25.00"), null, new BigDecimal("150")));
         when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
         when(currencyService.symbolOf(anyString())).thenReturn("$");
 
@@ -298,8 +305,8 @@ class PricingServiceTest {
     void elPorteDelProveedorSeGuardaSinMargenJuntoAlCobrado() {
         when(currencyService.toUsd(any(BigDecimal.class), eq("CNY")))
                 .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("10")));
-        when(marginService.apply(any(), any(), any())).thenReturn(new PriceWithMargin(new BigDecimal("10.00"),
-                new BigDecimal("25.00"), null, new BigDecimal("150")));
+        when(marginService.apply(any(), any(), any())).thenReturn(
+                new PriceWithMargin(new BigDecimal("10.00"), new BigDecimal("25.00"), null, new BigDecimal("150")));
         when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
         when(currencyService.symbolOf(anyString())).thenReturn("$");
 
@@ -320,8 +327,8 @@ class PricingServiceTest {
     void sinCosteElIvaYElPorteNoLlevanMargen() {
         when(currencyService.toUsd(any(BigDecimal.class), eq("CNY")))
                 .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("10")));
-        when(marginService.apply(any(), any(), any())).thenReturn(
-                new PriceWithMargin(BigDecimal.ZERO, BigDecimal.ZERO, null, BigDecimal.ZERO));
+        when(marginService.apply(any(), any(), any()))
+                .thenReturn(new PriceWithMargin(BigDecimal.ZERO, BigDecimal.ZERO, null, BigDecimal.ZERO));
         when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
         when(currencyService.symbolOf(anyString())).thenReturn("$");
 
@@ -346,8 +353,8 @@ class PricingServiceTest {
     void elRecargoSeSumaAlTotalSinMargen() {
         when(currencyService.toUsd(any(BigDecimal.class), eq("CNY")))
                 .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("10")));
-        when(marginService.apply(any(), any(), any())).thenReturn(new PriceWithMargin(new BigDecimal("10.00"),
-                new BigDecimal("25.00"), null, new BigDecimal("150")));
+        when(marginService.apply(any(), any(), any())).thenReturn(
+                new PriceWithMargin(new BigDecimal("10.00"), new BigDecimal("25.00"), null, new BigDecimal("150")));
         when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
         when(currencyService.symbolOf(anyString())).thenReturn("$");
         when(currencyService.formatDisplay(any(BigDecimal.class), anyString())).thenReturn("2,00 $");
@@ -369,8 +376,8 @@ class PricingServiceTest {
     void recargoCeroNoAlteraElPrecio() {
         when(currencyService.toUsd(any(BigDecimal.class), eq("CNY")))
                 .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("10")));
-        when(marginService.apply(any(), any(), any())).thenReturn(new PriceWithMargin(new BigDecimal("10.00"),
-                new BigDecimal("25.00"), null, new BigDecimal("150")));
+        when(marginService.apply(any(), any(), any())).thenReturn(
+                new PriceWithMargin(new BigDecimal("10.00"), new BigDecimal("25.00"), null, new BigDecimal("150")));
         when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
         when(currencyService.symbolOf(anyString())).thenReturn("$");
 
@@ -388,13 +395,13 @@ class PricingServiceTest {
     void recargoNullSeTrataComoCero() {
         when(currencyService.toUsd(any(BigDecimal.class), eq("CNY")))
                 .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("10")));
-        when(marginService.apply(any(), any(), any())).thenReturn(new PriceWithMargin(new BigDecimal("10.00"),
-                new BigDecimal("25.00"), null, new BigDecimal("150")));
+        when(marginService.apply(any(), any(), any())).thenReturn(
+                new PriceWithMargin(new BigDecimal("10.00"), new BigDecimal("25.00"), null, new BigDecimal("150")));
         when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
         when(currencyService.symbolOf(anyString())).thenReturn("$");
 
-        ProductEntity p = ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY")
-                .surchargeCny(null).build();
+        ProductEntity p = ProductEntity.builder().basePrice(new BigDecimal("100.00")).currency("CNY").surchargeCny(null)
+                .build();
 
         PricedAmount priced = service.priceFor(p);
 
@@ -414,6 +421,7 @@ class PricingServiceTest {
         });
         return p;
     }
+
     /**
      * El desglose que se enseña tiene que SUMAR el total que se cobra.
      *
@@ -430,32 +438,99 @@ class PricingServiceTest {
         when(currencyService.toUsd(any(BigDecimal.class), eq("CNY")))
                 .thenAnswer(inv -> ((BigDecimal) inv.getArgument(0)).divide(new BigDecimal("7.24"), 6,
                         java.math.RoundingMode.HALF_UP));
-        when(marginService.apply(any(), any(), any())).thenReturn(new PriceWithMargin(
-                new BigDecimal("3.867403"), new BigDecimal("9.668508"), null, new BigDecimal("150")));
+        when(marginService.apply(any(), any(), any())).thenReturn(new PriceWithMargin(new BigDecimal("3.867403"),
+                new BigDecimal("9.668508"), null, new BigDecimal("150")));
         // Tasa que NO deja cifras redondas: es donde el residuo de redondeo se nota.
-        when(currencyService.usdToDisplay(any(BigDecimal.class)))
-                .thenAnswer(inv -> inv.getArgument(0) == null ? null
-                        : ((BigDecimal) inv.getArgument(0)).multiply(new BigDecimal("0.92")));
+        when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0) == null
+                ? null
+                : ((BigDecimal) inv.getArgument(0)).multiply(new BigDecimal("0.92")));
         when(currencyService.symbolOf(anyString())).thenReturn("€");
         when(currencyService.formatDisplay(any(BigDecimal.class), anyString()))
-                .thenAnswer(inv -> inv.getArgument(0) == null ? null
-                        : ((BigDecimal) inv.getArgument(0)).setScale(2, java.math.RoundingMode.HALF_UP).toPlainString());
+                .thenAnswer(inv -> inv.getArgument(0) == null
+                        ? null
+                        : ((BigDecimal) inv.getArgument(0)).setScale(2, java.math.RoundingMode.HALF_UP)
+                                .toPlainString());
 
+        // Destino que SÍ cobra derecho por artículo (la UE): si no, la línea de arancel valdría cero y
+        // esta prueba dejaría de cubrir justo la sexta línea que dice comprobar.
+        PricingCountryHolder.set("ES");
+        when(customsValuation.perArticleFeeUsdCents("ES")).thenReturn(325);
         ProductEntity p = ProductEntity.builder().basePrice(new BigDecimal("28.00")).currency("CNY")
                 .ivaCny(new BigDecimal("3.64")).shippingCny(new BigDecimal("16.00"))
-                .surchargeCny(new BigDecimal("2.50"))
-                .shippingUserCny(new BigDecimal("16.00")).dutyUserCny(new BigDecimal("8.00")).build();
+                .surchargeCny(new BigDecimal("2.50")).shippingUserCny(new BigDecimal("16.00"))
+                .dutyUserCny(new BigDecimal("8.00")).build();
 
         PricedAmount priced = service.priceFor(p);
 
-        BigDecimal suma = new BigDecimal(priced.baseFormatted())
-                .add(new BigDecimal(priced.ivaFormatted()))
-                .add(new BigDecimal(priced.shippingFormatted()))
-                .add(new BigDecimal(priced.surchargeFormatted()))
-                .add(new BigDecimal(priced.shippingUserFormatted()))
-                .add(new BigDecimal(priced.dutyUserFormatted()));
+        BigDecimal suma = new BigDecimal(priced.baseFormatted()).add(new BigDecimal(priced.ivaFormatted()))
+                .add(new BigDecimal(priced.shippingFormatted())).add(new BigDecimal(priced.surchargeFormatted()))
+                .add(new BigDecimal(priced.shippingUserFormatted())).add(new BigDecimal(priced.dutyUserFormatted()));
 
         assertThat(suma).as("las seis líneas del desglose tienen que dar el total que se cobra")
                 .isEqualByComparingTo(new BigDecimal(priced.displayFormatted()));
+    }
+
+    /**
+     * El subsidio de arancel NO es un descuento: es un importe que el comprador paga por adelantado y que
+     * después se le descuenta del derecho de aduana de su pedido. Donde no hay derecho que descontar
+     * —Latinoamérica, Estados Unidos y los otros cincuenta y nueve países con el importe por artículo a
+     * cero— cobrarlo es cobrar de más por algo que ese comprador no llega a pagar nunca.
+     */
+    @Test
+    void elSubsidioDeArancelNoSeCobraDondeElDestinoNoCobraDerechoPorArticulo() {
+        tarifaSimple();
+        PricingCountryHolder.set("MX");
+        when(customsValuation.perArticleFeeUsdCents("MX")).thenReturn(0);
+
+        PricedAmount priced = service.priceFor(productoConSubsidioDeArancel());
+
+        assertThat(new BigDecimal(priced.dutyUserFormatted()))
+                .as("en un destino sin derecho por artículo el subsidio de arancel va a cero")
+                .isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    /** Y en la Unión Europea, donde sí se paga el derecho por línea, se cobra el importe del campo. */
+    @Test
+    void elSubsidioDeArancelSeCobraEnteroDondeElDestinoSiCobraDerechoPorArticulo() {
+        tarifaSimple();
+        PricingCountryHolder.set("ES");
+        when(customsValuation.perArticleFeeUsdCents("ES")).thenReturn(325);
+
+        PricedAmount priced = service.priceFor(productoConSubsidioDeArancel());
+
+        assertThat(new BigDecimal(priced.dutyUserFormatted()))
+                .as("en la UE se cobra el importe del campo, sin recortar").isGreaterThan(BigDecimal.ZERO);
+    }
+
+    /** Sin país resuelto no se cobra: un dato que falta no puede encarecer a nadie. */
+    @Test
+    void sinPaisConocidoElSubsidioDeArancelTampocoSeCobra() {
+        tarifaSimple();
+        PricingCountryHolder.clear();
+        when(customsValuation.perArticleFeeUsdCents(null)).thenReturn(0);
+
+        PricedAmount priced = service.priceFor(productoConSubsidioDeArancel());
+
+        assertThat(new BigDecimal(priced.dutyUserFormatted())).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    /** Un producto con la bolsa de arancel puesta; lo demás al mínimo para no enturbiar la comprobación. */
+    private static ProductEntity productoConSubsidioDeArancel() {
+        return ProductEntity.builder().basePrice(new BigDecimal("28.00")).currency("CNY")
+                .dutyUserCny(new BigDecimal("8.00")).build();
+    }
+
+    /** Conversión y formato sin sorpresas: 1 CNY = 1 USD = 1 de display. */
+    private void tarifaSimple() {
+        when(currencyService.toUsd(any(BigDecimal.class), anyString())).thenAnswer(inv -> inv.getArgument(0));
+        when(marginService.apply(any(), any(), any()))
+                .thenAnswer(inv -> new PriceWithMargin(inv.getArgument(0), inv.getArgument(0), null, null));
+        when(currencyService.usdToDisplay(any(BigDecimal.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(currencyService.symbolOf(anyString())).thenReturn("$");
+        when(currencyService.formatDisplay(any(BigDecimal.class), anyString()))
+                .thenAnswer(inv -> inv.getArgument(0) == null
+                        ? null
+                        : ((BigDecimal) inv.getArgument(0)).setScale(2, java.math.RoundingMode.HALF_UP)
+                                .toPlainString());
     }
 }

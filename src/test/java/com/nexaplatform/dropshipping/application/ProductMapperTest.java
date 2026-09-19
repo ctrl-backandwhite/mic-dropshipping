@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application;
 
+import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.PromotionService;
@@ -51,7 +52,9 @@ class ProductMapperTest {
                 .thenAnswer(inv -> new MarginService.PriceWithMargin(inv.getArgument(0), inv.getArgument(0), null,
                         BigDecimal.ZERO));
 
-        pricingService = new PricingService(currencyService, sinPromociones(), marginService);
+        CustomsValuationService aduanas = mock(CustomsValuationService.class);
+        lenient().when(aduanas.perArticleFeeUsdCents(any())).thenReturn(0);
+        pricingService = new PricingService(currencyService, sinPromociones(), marginService, aduanas);
 
         productMapper = new ProductMapper(supplierMapper, pricingService, currencyService, marginService,
                 mock(com.nexaplatform.dropshipping.application.service.EuComplianceService.class));
@@ -83,8 +86,8 @@ class ProductMapperTest {
         p.setTranslations(new ArrayList<>());
         p.setImages(new ArrayList<>());
 
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-                "admin", "n/a", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("admin", "n/a",
+                List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
         try {
             var view = productMapper.toSummary(p, "es");
             assertThat(view.basePrice()).isEqualByComparingTo("9.99");

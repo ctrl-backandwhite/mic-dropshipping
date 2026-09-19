@@ -1,5 +1,6 @@
 package com.nexaplatform.dropshipping.application;
 
+import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.MarginService.PriceWithMargin;
 import com.nexaplatform.dropshipping.application.service.PricingService;
@@ -49,6 +50,14 @@ class PriceTierMatchesChargedPriceTest {
     @Mock
     PromotionService promotionService;
 
+    /**
+     * El destino decide si se cobra el subsidio de arancel. Aquí se deja en un país que NO cobra derecho
+     * por artículo —el caso de la mayoría del mundo— para que esa línea valga cero y no enturbie lo que
+     * esta prueba mide, que es la fórmula del tramo por cantidad.
+     */
+    @Mock
+    private CustomsValuationService customsValuation;
+
     @InjectMocks
     private PricingService pricingService;
 
@@ -86,8 +95,7 @@ class PriceTierMatchesChargedPriceTest {
             BigDecimal v = inv.getArgument(0);
             return v == null ? null : v.setScale(2, java.math.RoundingMode.HALF_UP);
         });
-        when(currencyRateService.formatDisplay(any(), any()))
-                .thenAnswer(inv -> "$" + inv.<BigDecimal>getArgument(0));
+        when(currencyRateService.formatDisplay(any(), any())).thenAnswer(inv -> "$" + inv.<BigDecimal>getArgument(0));
         when(currencyRateService.symbolOf(any())).thenReturn("$");
     }
 
@@ -144,7 +152,6 @@ class PriceTierMatchesChargedPriceTest {
         // canónico, que es el que se guarda y se cobra.
         PricedAmount priced = pricingService.priceFor(product, null);
 
-        assertThat(priced.displayAmount())
-                .isEqualByComparingTo(currencyRateService.usdToDisplay(priced.retailUsd()));
+        assertThat(priced.displayAmount()).isEqualByComparingTo(currencyRateService.usdToDisplay(priced.retailUsd()));
     }
 }
