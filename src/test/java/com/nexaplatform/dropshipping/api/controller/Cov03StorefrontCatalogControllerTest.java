@@ -1018,6 +1018,48 @@ class Cov03StorefrontCatalogControllerTest {
         assertThat(controller.detailBySlug("vestido", "es", List.of()).sourceUrl()).isNull();
     }
 
+    /**
+     * Al REVISOR sí se le da el origen: sin el enlace a la oferta no puede comparar la galería con lo
+     * que de verdad vende el proveedor, que es justo su trabajo. Revisar fotos a ciegas no es revisar.
+     */
+    @Test
+    void alRevisorSeLeDaElOrigenParaCotejarLasFotos() {
+        UUID id = UUID.randomUUID();
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "revisor", "x", List.of(new SimpleGrantedAuthority("ROLE_REVIEWER"))));
+        when(catalogUseCase.getProductBySlug("vestido", "es")).thenReturn(fichaConDatosDeProveedor(id));
+
+        ProductDetailView paraElRevisor = controller.detailBySlug("vestido", "es", List.of());
+
+        assertThat(paraElRevisor.sourceUrl()).isEqualTo("https://detail.1688.com/offer/993114937459.html");
+        assertThat(paraElRevisor.externalId()).isEqualTo("993114937459");
+        assertThat(paraElRevisor.source()).isEqualTo("1688");
+    }
+
+    /**
+     * Y NO se le da el dinero. Es la diferencia entre el revisor y el administrador, y es la razón de
+     * que haya dos recortes y no un booleano «es personal interno»: con uno solo, abrirle el origen le
+     * habría abierto también el coste y el margen.
+     */
+    @Test
+    void alRevisorNoSeLeDaElDesgloseDePrecio() {
+        UUID id = UUID.randomUUID();
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "revisor", "x", List.of(new SimpleGrantedAuthority("ROLE_REVIEWER"))));
+        when(catalogUseCase.getProductBySlug("vestido", "es")).thenReturn(fichaConDatosDeProveedor(id));
+
+        ProductDetailView paraElRevisor = controller.detailBySlug("vestido", "es", List.of());
+
+        assertThat(paraElRevisor.costUsd()).isNull();
+        assertThat(paraElRevisor.appliedMarginPercent()).isNull();
+        assertThat(paraElRevisor.surchargeCny()).isNull();
+        assertThat(paraElRevisor.baseFormatted()).isNull();
+        assertThat(paraElRevisor.shippingUserCny()).isNull();
+        assertThat(paraElRevisor.dutyUserCny()).isNull();
+        // Y el precio que ve quien compra sigue ahí: el revisor mira la misma página que el cliente.
+        assertThat(paraElRevisor.displayFormatted()).isEqualTo("30,11 €");
+    }
+
     private static ProductDetailView fichaVacia(UUID id) {
         return new ProductDetailView(id, "vestido", null, null, null, null, "Vestido", null, null, null, null,
                 null, null, 1, null, null, null, 0, 0, null, null, "ACTIVE", null, null, null, List.of(),

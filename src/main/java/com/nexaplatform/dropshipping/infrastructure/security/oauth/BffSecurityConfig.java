@@ -30,6 +30,7 @@ public class BffSecurityConfig {
     // Literales repetidos extraídos a constantes (java:S1192): una sola fuente por valor.
     private static final String API_CONTACT = "/api/contact";
     private static final String ADMIN = "ADMIN";
+    private static final String REVIEWER = "REVIEWER";
 
     /**
      * Decoder DEDICADO a la cadena de usuario (distinto del de partner). Sobre la validación
@@ -216,6 +217,30 @@ public class BffSecurityConfig {
                         // monedas, impuestos, partners, billing, afiliados…) es EXCLUSIVO de ADMIN.
                         .requestMatchers("/api/admin/orders/**").hasAnyRole(ADMIN, "OPERATOR")
                         .requestMatchers("/api/admin/operator/**").hasAnyRole(ADMIN, "OPERATOR")
+                        // REVIEWER (revisión del material gráfico) solo puede lo que se enumera AQUÍ, y se
+                        // enumera por método y ruta exacta —no por prefijo— a propósito: /api/admin/catalog/**
+                        // incluye el precio, el margen, las subvenciones, el borrado del producto y el import
+                        // masivo. Un prefijo se los daría todos de una vez, y la regla general de abajo ya no
+                        // llegaría a evaluarse.
+                        //
+                        // Lo que NO está aquí y es deliberado: PUT /products/{id} (la edición rápida, que lleva
+                        // «Verificado» y los importes en yuanes) y DELETE /products/{id} (borrar el producto).
+                        // Nótese que DELETE /products/images/{id} tiene un segmento MÁS que DELETE /products/{id}:
+                        // son rutas distintas y el comodín de una sola posición no cruza de una a la otra.
+                        .requestMatchers(HttpMethod.POST, "/api/admin/catalog/products/*/images")
+                        .hasAnyRole(ADMIN, REVIEWER)
+                        .requestMatchers(HttpMethod.PUT, "/api/admin/catalog/products/*/images/order")
+                        .hasAnyRole(ADMIN, REVIEWER)
+                        .requestMatchers(HttpMethod.DELETE, "/api/admin/catalog/products/images/*")
+                        .hasAnyRole(ADMIN, REVIEWER)
+                        .requestMatchers(HttpMethod.DELETE, "/api/admin/catalog/products/*/video")
+                        .hasAnyRole(ADMIN, REVIEWER)
+                        .requestMatchers(HttpMethod.PUT, "/api/admin/catalog/products/*/source-url")
+                        .hasAnyRole(ADMIN, REVIEWER)
+                        .requestMatchers(HttpMethod.PUT, "/api/admin/catalog/variant-values/*/image")
+                        .hasAnyRole(ADMIN, REVIEWER)
+                        .requestMatchers(HttpMethod.DELETE, "/api/admin/catalog/variant-values/*")
+                        .hasAnyRole(ADMIN, REVIEWER)
                         .requestMatchers("/api/admin/**").hasRole(ADMIN)
                         // Envío de cotizaciones de sourcing = operación de AGENTE/soporte, NO de cliente. Vivía
                         // bajo /api/me/** (solo "authenticated") sin comprobar rol y aceptando ?asAgent=<id>, así

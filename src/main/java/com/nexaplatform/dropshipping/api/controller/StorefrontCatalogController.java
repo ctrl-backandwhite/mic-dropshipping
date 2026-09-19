@@ -307,6 +307,12 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
         if (ficha == null || SecurityUtils.isAdmin()) {
             return ficha;
         }
+        // Quien revisa las fotos SÍ ve el origen —lo necesita para cotejar la galería contra la oferta
+        // del proveedor— y NO ve los importes. Es un recorte intermedio, no «medio administrador»: el
+        // desglose en yuanes, el coste y el margen se van igual que para cualquier visitante.
+        if (SecurityUtils.isReviewer()) {
+            return ficha.sinImportesInternos();
+        }
         return ficha.sinDatosInternos();
     }
 
