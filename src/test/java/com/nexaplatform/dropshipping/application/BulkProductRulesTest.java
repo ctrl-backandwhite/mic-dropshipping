@@ -2,8 +2,8 @@ package com.nexaplatform.dropshipping.application;
 
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn.BulkAttr;
-import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn.BulkVariant;
 import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn.BulkTier;
+import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn.BulkVariant;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.application.service.BulkProductRules;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryAttributeSchemaEntity;

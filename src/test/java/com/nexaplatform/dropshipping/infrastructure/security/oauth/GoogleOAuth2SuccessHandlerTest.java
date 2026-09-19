@@ -1,11 +1,11 @@
 package com.nexaplatform.dropshipping.infrastructure.security.oauth;
 
-import com.nexaplatform.dropshipping.infrastructure.security.GeolocalizacionDelCdn;
+import com.nexaplatform.dropshipping.application.service.DeviceSessionService;
 import com.nexaplatform.dropshipping.application.usecase.GoogleLoginOutcome;
 import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
 import com.nexaplatform.dropshipping.domain.enums.UserRole;
 import com.nexaplatform.dropshipping.domain.model.User;
-import com.nexaplatform.dropshipping.application.service.DeviceSessionService;
+import com.nexaplatform.dropshipping.infrastructure.security.GeolocalizacionDelCdn;
 import com.nexaplatform.dropshipping.infrastructure.security.jwt.UserTokenService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

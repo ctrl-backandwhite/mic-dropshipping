@@ -1,9 +1,9 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.application.usecase.WinningProductUseCase;
 import com.nexaplatform.dropshipping.domain.model.WinningProduct;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;

@@ -3,30 +3,32 @@ package com.nexaplatform.dropshipping.infrastructure.integration.storage;
 import com.nexaplatform.dropshipping.application.service.PublicHttpUrl;
 import com.nexaplatform.dropshipping.application.service.Texts;
 import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ImagenOrigenEspejadaEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueEntity;
-import com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ImagenOrigenEspejadaRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductImageRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.VariantValueRepository;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
-import java.net.UnknownHostException;
-import java.net.InetAddress;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
@@ -34,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -41,9 +44,11 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 /**
  * Espeja a object storage (MinIO/S3) las imágenes de producto: descarga la {@code source_url} de origen
@@ -65,6 +70,8 @@ public class ImageMirrorService {
     private final ObjectStorageService storage;
     private final CompresorDeImagen compresor;
     private final ProductIndexer productIndexer;
+    private final ImagenOrigenEspejadaRepository origenesEspejados;
+    private final LimitadorDeDescargasPorOrigen limitador;
 
     @Value("${nexadrop.storage.mirror-enabled:true}")
     private boolean mirrorEnabled;
@@ -90,6 +97,15 @@ public class ImageMirrorService {
     /** Cuántas fallidas se examinan en cada barrido de reintento. */
     @Value("${nexadrop.storage.mirror-retry-batch:100}")
     private int retryBatch;
+    /**
+     * Cuántas se comprimen por vuelta en la segunda pasada.
+     *
+     * <p>Más bajo que el lote de espejado a propósito: comprimir es lo que consume CPU y memoria, y la
+     * cola de compresión no corre prisa —la foto ya se está viendo—. Lo que no cabe en esta vuelta entra
+     * en la siguiente.
+     */
+    @Value("${nexadrop.storage.compresion-batch:10}")
+    private int compresionBatch;
 
     // Redirects NO automáticos: se siguen a mano validando cada salto (anti-SSRF). Un origen no puede
     // redirigir a una IP interna/metadata sin pasar de nuevo por assertPublicHttpUrl.
@@ -109,15 +125,6 @@ public class ImageMirrorService {
      */
     private static final Duration PLAZO_DEL_LOTE = Duration.ofMinutes(10);
 
-    /**
-     * Cuántas veces se intenta comprimir una imagen antes de renunciar y guardarla tal cual.
-     *
-     * <p>Uno. Si al primer intento el proceso siguió vivo pero la imagen no se espejó, puede ser la red;
-     * si hubo que reiniciar por su culpa, no merece un segundo intento con el compresor. Aligerar una
-     * foto es una mejora; tumbar el backend es una avería.
-     */
-    private static final int INTENTOS_ANTES_DE_RENDIRSE_CON_LA_COMPRESION = 1;
-
     private volatile ExecutorService pool;
 
     /**
@@ -136,6 +143,10 @@ public class ImageMirrorService {
 
     /** Impide que se solapen dos lotes cuando el anterior tarda más que el intervalo del barrido. */
     private final AtomicBoolean loteEnMarcha = new AtomicBoolean(false);
+
+    /** El mismo cerrojo para la segunda pasada, y separado a propósito: comprimir y espejar son colas
+     *  distintas y una no tiene por qué esperar a la otra. */
+    private final AtomicBoolean compresionEnMarcha = new AtomicBoolean(false);
 
     private Executor orquestador() {
         Executor actual = orquestador;
@@ -242,6 +253,9 @@ public class ImageMirrorService {
         if (!mirrorEnabled || !storage.isReady()) {
             return;
         }
+        // Primero las de variante: lo que sigue tiene un «return» temprano cuando no hay ninguna imagen de
+        // producto lista, y colgarlas detrás las dejaba sin reintentar justo cuando la cola se vacía.
+        requeueFailedVariantImages(ahora);
         List<ProductImageEntity> candidatas = imageRepository.findFailedForRetry(retryMaxAttempts, retryBatch);
         List<UUID> listas = candidatas.stream().filter(img -> esperaCumplida(img, ahora))
                 .map(ProductImageEntity::getId).toList();
@@ -251,6 +265,30 @@ public class ImageMirrorService {
         imageRepository.requeueToPending(listas);
         log.info("Mirror reintento: {} de {} imágenes fallidas vuelven a la cola", listas.size(),
                 candidatas.size());
+    }
+
+    /**
+     * Devuelve a la cola las imágenes de VARIANTE y de MUESTRA DE COLOR que fallaron.
+     *
+     * <p>Iba aparte de las de producto porque estas no llevan contador de intentos —el comentario del
+     * barrido decía «no hay estado FAILED para variantes, son pocas», y era falso: sí lo hay, y era
+     * DEFINITIVO—. La consulta del barrido descarta lo marcado, el barrido pone la marca al fallar y
+     * nadie la quitaba, así que una muestra que fallara una vez no se espejaba nunca más. El 18-sep-2026,
+     * tras cargar 9.425 productos, el 96% de las muestras se quedó apuntando al proveedor, que responde
+     * 403 a quien la enlaza desde otra web: en la ficha salían rotas.
+     *
+     * <p>La espera es la misma base que para las de producto, contada desde el fallo: recupera lo
+     * pasajero —un tiempo de espera agotado durante una carga masiva, que es lo que pasó— sin repetir
+     * la avalancha que lo provocó.
+     */
+    private void requeueFailedVariantImages(Instant ahora) {
+        Instant antesDe = ahora.minus(Duration.ofMinutes(retryBaseMinutes));
+        int valores = variantValueRepository.requeueFailed(antesDe, retryBatch);
+        int variantes = variantRepository.requeueFailed(antesDe, retryBatch);
+        if (valores + variantes > 0) {
+            log.info("Mirror reintento: {} muestras de color y {} imágenes de variante vuelven a la cola",
+                    valores, variantes);
+        }
     }
 
     /**
@@ -333,34 +371,80 @@ public class ImageMirrorService {
             return;
         }
         PageRequest top = PageRequest.of(0, Math.max(1, limit));
+        /*
+         * EN PARALELO, igual que las fotos de producto.
+         *
+         * <p>Este bucle iba de una en una, y el ajuste de concurrencia no lo tocaba: el pool solo lo usaba
+         * el barrido de fotos de producto. Medido en PRE el 18-sep-2026, tras cargar 9.425 productos:
+         * 93.448 muestras de color con origen, 9.351 espejadas, avanzando a ~510 por hora. Casi SIETE DÍAS
+         * para las que faltaban, con las fichas enseñando el hueco mientras tanto —el proveedor responde
+         * 403 a quien enlaza sus imágenes desde otra web—.
+         *
+         * <p>Y no era falta de máquina: el nodo al 16% de CPU y el pod sin límite. El coste es espera de
+         * red, que es exactamente lo que se paraleliza bien. Se usa el MISMO pool que las fotos para que
+         * el número de descargas a la vez siga siendo uno solo y ajustable por entorno: dos pools con dos
+         * ajustes distintos es la clase de cosa que hace que bajar un número no frene nada.
+         */
         int ok = 0;
-        for (ProductVariantEntity v : variantRepository.findNeedingImageMirror(prefix, top)) {
-            try {
-                variantRepository.markImageCdn(v.getId(), fetchAndStore(v.getImageSourceUrl(), true).url());
-                ok++;
-            } catch (Exception e) {
-                if (e instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                }
-                log.debug("Mirror imagen de variante {} falló ({}): {}", v.getId(), v.getImageSourceUrl(), e.toString());
-                variantRepository.markImageFailed(v.getId(), Instant.now());
-            }
-        }
-        for (VariantValueEntity vv : variantValueRepository.findNeedingImageMirror(prefix, top)) {
-            try {
-                variantValueRepository.markImageCdn(vv.getId(), fetchAndStore(vv.getImageSourceUrl(), true).url());
-                ok++;
-            } catch (Exception e) {
-                if (e instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                }
-                log.debug("Mirror imagen de valor {} falló ({}): {}", vv.getId(), vv.getImageSourceUrl(), e.toString());
-                variantValueRepository.markImageFailed(vv.getId(), Instant.now());
-            }
-        }
+        ok += espejaEnParalelo(variantRepository.findNeedingImageMirror(prefix, top),
+                ProductVariantEntity::getId, ProductVariantEntity::getImageSourceUrl,
+                variantRepository::markImageCdn, variantRepository::markImageFailed, "variante");
+        ok += espejaEnParalelo(variantValueRepository.findNeedingImageMirror(prefix, top),
+                VariantValueEntity::getId, VariantValueEntity::getImageSourceUrl,
+                variantValueRepository::markImageCdn, variantValueRepository::markImageFailed, "valor");
         if (ok > 0) {
             log.info("Mirror imágenes de variante/valor: {} subidas a storage", ok);
         }
+    }
+
+    /**
+     * Descarga y guarda un grupo de imágenes a la vez, y anota el resultado de cada una.
+     *
+     * <p>Sirve para variantes y para valores de eje porque lo único que cambia entre las dos es de dónde
+     * sale el identificador y a qué repositorio se le cuenta el final. El fallo de una NO corta el grupo:
+     * se marca y se sigue, que es lo que impide que una foto muerta deje sin espejar a las demás.
+     */
+    private <T> int espejaEnParalelo(List<T> filas, Function<T, UUID> id, Function<T, String> origen,
+            BiConsumer<UUID, String> alLograrlo, BiConsumer<UUID, Instant> alFallar, String que) {
+        if (filas.isEmpty()) {
+            return 0;
+        }
+        // Estas SÍ se comprimen en el acto, al revés que las fotos de producto, y es deliberado.
+        //
+        // Lo que se gana separando la compresión es que la foto aparezca antes, y eso pesa cuando la
+        // imagen es grande: una foto de producto tarda en bajarse y más en comprimirse. Una muestra de
+        // color es un recuadro pequeño; comprimirla cuesta poco y no retrasa nada apreciable.
+        //
+        // A cambio se evita tener que mantener una segunda cola para ellas: la compresión diferida se
+        // apoya en `product_image.comprimida_en`, y variantes y valores de eje viven en otras tablas
+        // que tendrían que ganar su propia columna, su propio índice y su propio barrido. Trabajo y
+        // superficie de fallo a cambio de casi nada.
+        //
+        // Y el motivo por el que comprimir aquí ya no es peligroso: esto corre en `backend-espejado`,
+        // su propio despliegue. Si el codificador WebP nativo se lleva la máquina virtual por delante
+        // —que es lo que pasó el 5-sep-2026—, cae un trabajador reponible, no el escaparate.
+        List<Future<String>> pedidos = filas.stream()
+                .map(fila -> pool().submit(() -> espejaRecordando(origen.apply(fila)))).toList();
+        int ok = 0;
+        for (int i = 0; i < pedidos.size(); i++) {
+            UUID cual = id.apply(filas.get(i));
+            try {
+                alLograrlo.accept(cual, pedidos.get(i).get());
+                ok++;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                // Al interrumpir se cancela lo que quede en vuelo: sin esto, el apagado espera a que
+                // terminen descargas que ya no le importan a nadie.
+                pedidos.subList(i, pedidos.size()).forEach(f -> f.cancel(true));
+                alFallar.accept(cual, Instant.now());
+                return ok;
+            } catch (ExecutionException e) {
+                log.debug("Mirror imagen de {} {} falló ({}): {}", que, cual, origen.apply(filas.get(i)),
+                        e.getCause() != null ? e.getCause().toString() : e.toString());
+                alFallar.accept(cual, Instant.now());
+            }
+        }
+        return ok;
     }
 
     /** Procesa hasta {@code limit} imágenes PENDING en paralelo. Devuelve cuántas se espejaron. */
@@ -418,6 +502,12 @@ public class ImageMirrorService {
         if (!mirrorEnabled || productIds == null || productIds.isEmpty()) {
             return;
         }
+        mirrorProductImagesOf(productIds);
+        mirrorVariantImagesOf(productIds);
+    }
+
+    /** Las fotos de producto de unos productos recién importados. */
+    private void mirrorProductImagesOf(List<UUID> productIds) {
         List<ProductImageEntity> imgs = imageRepository.findByProductIdInAndMirrorStatus(productIds,
                 MirrorStatus.PENDING);
         if (imgs.isEmpty()) {
@@ -451,6 +541,43 @@ public class ImageMirrorService {
         reindexAffectedProducts(mirroredImageIds);
         log.info("Mirror import: {}/{} imágenes de {} producto(s) espejadas al importar", mirroredImageIds.size(),
                 imgs.size(), productIds.size());
+    }
+
+    /**
+     * Las imágenes de VARIANTE y las MUESTRAS DE COLOR de unos productos recién importados.
+     *
+     * <p>Por qué existe: las fotos de producto ya se espejaban al importar y estas no —solo las recogía
+     * el barrido periódico—, y esa asimetría no se nota hasta que hay una carga masiva en marcha. Ahí el
+     * barrido se queda sin turno, porque el espejado de la importación ocupa el mismo grupo de hilos, y
+     * las muestras de color se quedan enseñando el hueco: el proveedor responde 403 a quien enlaza sus
+     * imágenes desde otra web, así que el comprador ve un icono roto donde debería elegir el color.
+     *
+     * <p>Medido en PRE el 18-sep-2026 con la carga corriendo: en diez minutos las fotos de producto
+     * pasaron de 324 a 625 espejadas y las variantes se quedaron clavadas en 25 —un solo lote, el
+     * primero—, con cero fallos registrados. No fallaban: no les tocaba turno.
+     */
+    /** Visible para las pruebas del mismo paquete, igual que {@code mirrorOne}. */
+    void mirrorVariantImagesOf(List<UUID> productIds) {
+        if (!storage.isReady()) {
+            return;
+        }
+        String prefix;
+        try {
+            prefix = Texts.stripTrailingSlashes(storage.publicUrl()) + "%";
+        } catch (RuntimeException e) {
+            log.warn("Mirror de variantes al importar omitido: el almacenamiento no responde ({})", e.toString());
+            return;
+        }
+        int ok = espejaEnParalelo(variantRepository.findNeedingImageMirrorByProducts(prefix, productIds),
+                ProductVariantEntity::getId, ProductVariantEntity::getImageSourceUrl,
+                variantRepository::markImageCdn, variantRepository::markImageFailed, "variante");
+        ok += espejaEnParalelo(variantValueRepository.findNeedingImageMirrorByProducts(prefix, productIds),
+                VariantValueEntity::getId, VariantValueEntity::getImageSourceUrl,
+                variantValueRepository::markImageCdn, variantValueRepository::markImageFailed, "valor");
+        if (ok > 0) {
+            log.info("Mirror import: {} imágenes de variante y muestra de color de {} producto(s) espejadas "
+                    + "al importar", ok, productIds.size());
+        }
     }
 
     /**
@@ -526,7 +653,11 @@ public class ImageMirrorService {
         }
     }
 
-    private boolean mirrorOne(UUID id, String src) {
+    /**
+     * Visible para las pruebas del mismo paquete, igual que {@code orquestador}: es el camino donde se
+     * decide si una imagen se reaprovecha o se descarga, y probarlo desde fuera exigiría red real.
+     */
+    boolean mirrorOne(UUID id, String src) {
         if (src == null || src.isBlank()) {
             // Sin origen no hay nada que reintentar, pero se cuenta igual: así agota sus intentos y deja de
             // aparecer en cada barrido ocupando el sitio de una que sí se puede recuperar.
@@ -536,23 +667,45 @@ public class ImageMirrorService {
         // El intento se anota AQUÍ, antes de tocar nada, y se compromete en el acto. Si lo que viene
         // después mata el proceso —y comprimir puede: el codificador WebP es código nativo y un SIGSEGV
         // no se puede capturar—, la cuenta ya está guardada y esta imagen no volverá para siempre.
-        int intentosPrevios = imageRepository.intentosDe(id);
         imageRepository.anotaIntentoAntesDeProcesar(id);
 
-        // Y si ya lo intentamos y seguimos aquí, es que algo de esta imagen no le sienta bien al
-        // compresor. Se guarda SIN comprimir: una foto que pesa de más es un inconveniente; un proceso
-        // que se muere deja el escaparate sin servir.
-        boolean comprimir = intentosPrevios < INTENTOS_ANTES_DE_RENDIRSE_CON_LA_COMPRESION;
-        if (!comprimir) {
-            log.warn("::> [MIRROR] La imagen {} ya falló {} veces: se espeja SIN comprimir para no "
-                    + "arriesgar el proceso.", id, intentosPrevios);
+        // 1) ¿ESTA URL YA SE BAJÓ ALGUNA VEZ? Entonces no se vuelve a bajar.
+        //
+        // El almacenamiento ya deduplica por contenido, pero eso ahorra DISCO: para calcular el hash del
+        // contenido hay que haber descargado el fichero. Lo escaso no es el disco, es el proveedor —que
+        // limita por tasa y responde 403 a quien enlaza desde fuera—. Un vendedor reutiliza su tabla de
+        // tallas, su foto de material y su foto de embalaje en decenas de fichas: todas esas son la
+        // misma descarga repetida.
+        for (String candidate : candidateUrls(src)) {
+            Optional<ImagenOrigenEspejadaEntity> conocida = origenesEspejados.findById(hashDeUrl(candidate));
+            if (conocida.isPresent()) {
+                ImagenOrigenEspejadaEntity y = conocida.get();
+                imageRepository.markMirrored(id, y.getCdnUrl(), y.getBytes(), y.getHash(), y.getAncho(),
+                        y.getAlto(), MirrorStatus.MIRRORED, Instant.now());
+                imageRepository.resetAttempts(id);
+                if (y.isComprimida()) {
+                    // Ya estaba comprimida en su día: no hay nada que hacer en la segunda pasada.
+                    imageRepository.marcaSinComprimir(id, Instant.now());
+                }
+                origenesEspejados.anotaUso(y.getUrlHash(), Instant.now());
+                return true;
+            }
         }
+
+        // 2) Hay que bajarla. SIN COMPRIMIR: comprimir es la segunda pasada.
+        //
+        // Comprimir aquí era lo caro y lo peligroso del camino: caro porque decodificar un JPEG grande
+        // cuesta CPU y memoria, y peligroso porque el codificador WebP es nativo y un SIGSEGV no se
+        // puede capturar —el 5-sep-2026 mató la JVM y dejó las dos réplicas de PRE cayendo en bucle—.
+        // Separándolo, el comprador ve la foto en cuanto está guardada, y el ahorro de disco llega
+        // después sobre una imagen que ya se está sirviendo.
         for (String candidate : candidateUrls(src)) {
             try {
-                Stored s = fetchAndStore(candidate, comprimir);
+                Stored s = fetchAndStore(candidate, false);
                 imageRepository.markMirrored(id, s.url(), s.bytes(), s.hash(), enteroONulo(s.ancho()),
                         enteroONulo(s.alto()), MirrorStatus.MIRRORED, Instant.now());
                 imageRepository.resetAttempts(id);
+                recuerdaOrigen(candidate, s, false);
                 return true;
             } catch (Exception e) {
                 if (e instanceof InterruptedException) {
@@ -563,6 +716,155 @@ public class ImageMirrorService {
         }
         imageRepository.markFailed(id);
         return false;
+    }
+
+    /**
+     * SEGUNDA PASADA: comprime lo que ya está espejado.
+     *
+     * <p>Corre aparte del espejado y a su propio ritmo porque las dos tareas no tienen la misma
+     * urgencia. Espejar es urgente: hasta que no está, la ficha enseña un hueco —el proveedor responde
+     * 403 a quien enlaza sus imágenes desde otra web—. Comprimir no: la foto ya se ve, y lo único que
+     * está en juego es cuánto ocupa.
+     *
+     * <p>Y comprimir es lo arriesgado. El codificador WebP es código nativo: un SIGSEGV suyo no se
+     * puede capturar y se lleva la máquina virtual entera —pasó el 5-sep-2026 y dejó las dos réplicas
+     * de preproducción cayendo en bucle—. Que eso ocurra sobre una imagen que YA se está sirviendo, y
+     * no sobre una que todavía no existe, cambia por completo lo que se pierde.
+     */
+    @Scheduled(fixedDelayString = "${nexadrop.storage.compresion-interval-ms:30000}")
+    public void comprimirPendientesScheduled() {
+        if (!mirrorEnabled || !storage.isReady() || !compresionEnMarcha.compareAndSet(false, true)) {
+            return;
+        }
+        orquestador().execute(() -> {
+            try {
+                comprimirPendientesBatch(compresionBatch);
+            } catch (Exception e) {
+                log.warn("Compresión diferida: el lote terminó mal: {}", e.toString());
+            } finally {
+                compresionEnMarcha.set(false);
+            }
+        });
+    }
+
+    /**
+     * Comprime un lote de imágenes ya espejadas y deja la más pequeña de las dos.
+     *
+     * <p>Se queda con la original si comprimir no la aligera. Pasa con las fotos ya optimizadas en
+     * origen: reescribirlas costaría una subida y dejaría el fichero IGUAL o mayor, además de cambiar
+     * su URL sin motivo —y una URL que cambia invalida lo que el borde tuviera guardado—.
+     *
+     * @return cuántas se aligeraron de verdad
+     */
+    int comprimirPendientesBatch(int limite) {
+        List<ProductImageEntity> pendientes = imageRepository.findPendientesDeComprimir(
+                PageRequest.of(0, Math.max(1, limite)));
+        if (pendientes.isEmpty()) {
+            return 0;
+        }
+        int aligeradas = 0;
+        long bytesAntes = 0;
+        long bytesDespues = 0;
+        for (ProductImageEntity img : pendientes) {
+            try {
+                byte[] original = storage.bytesFromPublicUrl(img.getCdnUrl());
+                if (original == null || original.length == 0) {
+                    imageRepository.marcaSinComprimir(img.getId(), Instant.now());
+                    continue;
+                }
+                String tipo = sniffRasterImage(original);
+                CompresorDeImagen.Comprimida lista = compresor.comprimir(original, tipo);
+                if (lista.datos().length >= original.length) {
+                    // Comprimir no la aligera: se deja como está y se saca de la cola.
+                    imageRepository.marcaSinComprimir(img.getId(), Instant.now());
+                    continue;
+                }
+                String hash = sha256(lista.datos());
+                String key = "media/" + hash.substring(0, 2) + "/" + hash + "." + lista.tipo();
+                String url = storage.upload(key, lista.datos(), lista.contentType());
+                imageRepository.marcaComprimida(img.getId(), url, (long) lista.datos().length, hash,
+                        Instant.now());
+                bytesAntes += original.length;
+                bytesDespues += lista.datos().length;
+                aligeradas++;
+            } catch (Exception e) {
+                // Que una imagen no se deje comprimir no es una avería: se queda como está y sale de la
+                // cola, porque reintentarla eternamente ocuparía el sitio de las que sí se pueden.
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
+                log.debug("No se pudo comprimir la imagen {}: {}", img.getId(), e.toString());
+                imageRepository.marcaSinComprimir(img.getId(), Instant.now());
+            }
+        }
+        if (aligeradas > 0) {
+            log.info("Compresión diferida: {} de {} aligeradas, {} kB -> {} kB (quedan {} por comprimir)",
+                    aligeradas, pendientes.size(), bytesAntes / 1024, bytesDespues / 1024,
+                    imageRepository.cuentaPendientesDeComprimir());
+        }
+        return aligeradas;
+    }
+
+    /**
+     * Devuelve la URL ya espejada de un origen, bajándolo solo si no lo teníamos.
+     *
+     * <p>Esto es lo que hace que la memoria de URLs sirva para las VARIANTES, que es donde de verdad
+     * hay repetición. Cuando se añadió la memoria, este camino se quedó fuera: solo la consultaban las
+     * fotos de producto. Y medido sobre las 11.397 fichas de la carga, de 449.035 URLs de imagen
+     * <b>272.758 son de variante</b> —el 61%—, porque una variante de color usa la misma foto en todas
+     * sus tallas: hay imágenes que aparecen 74 veces dentro del mismo producto.
+     *
+     * <p>El síntoma de que faltaba era medible y no se veía como error: 687 URLs memorizadas y solo 5
+     * descargas ahorradas. El ahorro estaba implementado justo donde menos había que ahorrar.
+     */
+    private String espejaRecordando(String url) throws IOException, InterruptedException {
+        Optional<ImagenOrigenEspejadaEntity> conocida = origenesEspejados.findById(hashDeUrl(url));
+        if (conocida.isPresent()) {
+            origenesEspejados.anotaUso(conocida.get().getUrlHash(), Instant.now());
+            return conocida.get().getCdnUrl();
+        }
+        Stored s = fetchAndStore(url, true);
+        // Estas sí van comprimidas de una vez (ver el comentario de espejaEnParalelo), así que se
+        // recuerdan como tales: quien reaproveche esta URL no tendrá nada pendiente de comprimir.
+        recuerdaOrigen(url, s, true);
+        return s.url();
+    }
+
+    /** sha256 de la URL en hexadecimal: es la clave de la memoria de orígenes. */
+    static String hashDeUrl(String url) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(url.trim().getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("Esta máquina virtual no trae SHA-256", e);
+        }
+    }
+
+    /**
+     * Apunta que esta URL ya está bajada y dónde quedó.
+     *
+     * <p>Que esto falle no puede tumbar el espejado: la imagen ya está guardada y la ficha ya la
+     * enseña. Lo único que se pierde es el ahorro de la próxima vez, así que se registra y se sigue.
+     */
+    private void recuerdaOrigen(String url, Stored s, boolean comprimida) {
+        try {
+            Instant ahora = Instant.now();
+            origenesEspejados.save(ImagenOrigenEspejadaEntity.builder()
+                    .urlHash(hashDeUrl(url))
+                    .urlOrigen(url.length() > 800 ? url.substring(0, 800) : url)
+                    .cdnUrl(s.url())
+                    .bytes(s.bytes())
+                    .hash(s.hash())
+                    .ancho(enteroONulo(s.ancho()))
+                    .alto(enteroONulo(s.alto()))
+                    .comprimida(comprimida)
+                    .creadaEn(ahora)
+                    .usadaEn(ahora)
+                    .veces(1)
+                    .build());
+        } catch (RuntimeException e) {
+            log.debug("No se pudo recordar el origen {}: {}", url, e.toString());
+        }
     }
 
     /**
@@ -607,7 +909,18 @@ public class ImageMirrorService {
      * </ul>
      */
     private Stored fetchAndStore(String src, boolean comprimir) throws IOException, InterruptedException {
-        HttpResponse<byte[]> res = fetchFollowingRedirects(src.trim(), 5);
+        // La descarga pide turno al proveedor de esta URL. El techo es por host: nuestra máquina no es
+        // el límite —se midió el nodo al 16% de CPU mientras el espejado iba a 4.200 imágenes/hora—,
+        // lo es 1688, que limita por tasa y corta a quien insiste. Sin este turno, subir la concurrencia
+        // deja de ser un problema de rendimiento y pasa a ser uno de acceso.
+        HttpResponse<byte[]> res;
+        try {
+            res = limitador.conPermiso(src, () -> fetchFollowingRedirects(src.trim(), 5));
+        } catch (IOException | InterruptedException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException(e.getMessage(), e);
+        }
         byte[] data = res.body();
         if (res.statusCode() / 100 != 2 || data == null || data.length == 0) {
             throw new IllegalStateException("HTTP " + res.statusCode());

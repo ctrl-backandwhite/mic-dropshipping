@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.infrastructure.integration.fulfillment;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.domain.enums.TaxMode;
 import com.nexaplatform.dropshipping.domain.model.ShippingOption;
@@ -13,7 +14,6 @@ import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunE
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CainiaoZoneEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CainiaoZoneRepository;
 import org.junit.jupiter.api.BeforeEach;
-import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;

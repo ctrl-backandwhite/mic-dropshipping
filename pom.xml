@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.1.0</version>
+        <version>4.1.1</version>
         <relativePath/>
     </parent>
 
@@ -43,10 +43,19 @@
         <sonar.issue.ignore.multicriteria.esTodo.resourceKey>**/*.java</sonar.issue.ignore.multicriteria.esTodo.resourceKey>
         <sonar.issue.ignore.multicriteria.esTodoXml.ruleKey>xml:S1135</sonar.issue.ignore.multicriteria.esTodoXml.ruleKey>
         <sonar.issue.ignore.multicriteria.esTodoXml.resourceKey>**/pom.xml</sonar.issue.ignore.multicriteria.esTodoXml.resourceKey>
-        <java.version>21</java.version>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
-        <maven.compiler.release>21</maven.compiler.release>
+        <!--
+            Java 25, que es el LTS vigente y YA era el runtime: el Dockerfile construye y ejecuta con
+            Temurin 25 desde hace tiempo, pero aquí se compilaba con `release 21`, así que el proyecto
+            pagaba el runtime moderno sin poder usar nada suyo.
+
+            No se sube a 27: el 18-sep-2026 solo existe como acceso anticipado (jdk-27+35-ea-beta), no
+            hay imagen de contenedor para él, y no sería LTS —el siguiente es el 29—, lo que choca con
+            la norma del proyecto de mantener el runtime en LTS con soporte extendido.
+        -->
+        <java.version>25</java.version>
+        <maven.compiler.source>25</maven.compiler.source>
+        <maven.compiler.target>25</maven.compiler.target>
+        <maven.compiler.release>25</maven.compiler.release>
         <lombok.version>1.18.42</lombok.version>
         <mapstruct.version>1.6.3</mapstruct.version>
         <!-- 2.8.x exige SB 3.x; 2.7.0 es la última línea con shim para SB 4.0.x. -->
@@ -535,11 +544,51 @@
             <plugin>
                 <groupId>net.revelc.code.formatter</groupId>
                 <artifactId>formatter-maven-plugin</artifactId>
-                <version>2.24.1</version>
+                <version>2.29.0</version>
                 <configuration>
                     <configFile>${project.basedir}/eclipse-java-formatter.xml</configFile>
                     <lineEnding>LF</lineEnding>
                     <encoding>UTF-8</encoding>
+                </configuration>
+            </plugin>
+            <!--
+                Los imports: ordenarlos y, sobre todo, BORRAR LOS QUE NO SE USAN.
+
+                El formateador de arriba no los toca —recoloca código, no decide qué sobra—, así que
+                un import huérfano sobrevivía a cualquier pasada de formato. Y la norma de este
+                repositorio es que el código muerto se elimina, no se deja «por si acaso»: un import
+                que nadie usa se lee, aparece en las búsquedas y hace ruido en el análisis estático,
+                donde además tapa los avisos que sí importan.
+
+                El orden de los grupos reproduce el que ya tiene el proyecto: primero todo lo demás
+                (com, jakarta, lombok, org...), después java y javax, y los estáticos al final. Está
+                así para que ordenar no reescriba ficheros que nadie ha tocado.
+
+                Se aplica junto al formateo:  mvn formatter:format impsort:sort
+                Y para comprobar sin tocar:   mvn formatter:validate impsort:check
+            -->
+            <plugin>
+                <groupId>net.revelc.code</groupId>
+                <artifactId>impsort-maven-plugin</artifactId>
+                <version>1.13.0</version>
+                <configuration>
+                    <removeUnused>true</removeUnused>
+                    <groups>*,java.,javax.</groups>
+                    <staticGroups>*</staticGroups>
+                    <staticAfter>true</staticAfter>
+                    <lineEnding>LF</lineEnding>
+                    <!--
+                        21 y no 25, que es con lo que se compila. El plugin hereda el `release` del
+                        proyecto y su analizador (1.13.0) no conoce el nivel 25: se planta con «the
+                        Java file contained parse errors» en ficheros perfectamente válidos —lo hacía
+                        en RateLimitFilter.java, que compila sin una queja— y aborta la pasada entera
+                        dejando el trabajo a medias.
+
+                        Bajarlo no tiene coste: esto solo lee la cabecera de imports, y el nivel de
+                        lenguaje únicamente decide cómo se analiza el resto del fichero. El código no
+                        usa sintaxis posterior a 21. Cuando el plugin soporte 25, se quita esta línea.
+                    -->
+                    <compliance>21</compliance>
                 </configuration>
             </plugin>
             <!-- Cobertura para SonarCloud (mismo setup que mic-authservice). 0.8.14 = única compatible con Java 25. -->

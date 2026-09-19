@@ -1,11 +1,11 @@
 package com.nexaplatform.dropshipping.application.usecase;
 
-import com.stripe.exception.StripeException;
 import com.nexaplatform.dropshipping.application.BaseUseCase;
 import com.nexaplatform.dropshipping.domain.model.CustomerSubscription;
 import com.nexaplatform.dropshipping.domain.model.SubscribeResult;
 import com.nexaplatform.dropshipping.domain.model.SubscriptionPlan;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SubscriptionPlanEntity;
+import com.stripe.exception.StripeException;
 
 import java.util.List;
 import java.util.UUID;

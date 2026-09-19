@@ -1,8 +1,8 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.shop;
 
-import com.nexaplatform.dropshipping.application.service.Texts;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nexaplatform.dropshipping.application.service.Texts;
 import com.nexaplatform.dropshipping.domain.model.ShopConnection;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import lombok.RequiredArgsConstructor;

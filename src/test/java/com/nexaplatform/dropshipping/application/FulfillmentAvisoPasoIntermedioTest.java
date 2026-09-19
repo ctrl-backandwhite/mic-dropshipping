@@ -1,7 +1,5 @@
 package com.nexaplatform.dropshipping.application;
 
-import static com.nexaplatform.dropshipping.config.FulfillmentTestUtil.unSoloTransportista;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
 import com.nexaplatform.dropshipping.application.notifications.NotificationsPublisher;
@@ -34,6 +32,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.nexaplatform.dropshipping.config.FulfillmentTestUtil.unSoloTransportista;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;

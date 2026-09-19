@@ -132,4 +132,61 @@ class VariantValueRepositoryIT extends PersistenceITBase {
                 .status(ProductStatus.ACTIVE)
                 .build();
     }
+
+    /**
+     * El reintento devuelve a la cola lo que falló hace rato, y solo eso.
+     *
+     * <p>Va en una prueba de integración y no en una unitaria porque la consulta es SQL NATIVO con un
+     * LIMIT dentro del subselect: lo que hay que comprobar es que PostgreSQL la acepta y que acota de
+     * verdad, no que se llame al repositorio.
+     *
+     * <p>Lo que impide: el 18-sep-2026, al cargar 9.425 productos, el 96% de las muestras de color quedó
+     * marcado como fallido y NADIE limpiaba esa marca —el barrido descarta lo marcado y el reintento solo
+     * miraba las imágenes de producto—. Resultado: muestras apuntando para siempre al proveedor, que
+     * responde 403 al enlazarlas desde otra web, y en la ficha salían rotas.
+     */
+    @Test
+    void requeueFailed_limpiaSoloLoQueFalloHaceYaUnRato() {
+        Instant hace1h = Instant.parse("2026-09-18T11:00:00Z");
+        Instant haceNada = Instant.parse("2026-09-18T11:59:00Z");
+        Instant corte = Instant.parse("2026-09-18T11:55:00Z");
+        VariantValueEntity vieja = values.save(value("roja", "https://src/r.jpg", null, hace1h));
+        VariantValueEntity reciente = values.save(value("azul", "https://src/a.jpg", null, haceNada));
+        VariantValueEntity sana = values.save(value("verde", "https://src/v.jpg", null, null));
+
+        int tocadas = values.requeueFailed(corte, 100);
+
+        assertThat(tocadas).isEqualTo(1);
+        em.clear();
+        assertThat(values.findById(vieja.getId()).orElseThrow().getImageMirrorFailedAt()).isNull();
+        assertThat(values.findById(reciente.getId()).orElseThrow().getImageMirrorFailedAt())
+                .as("lo que acaba de fallar espera su turno: reintentarlo ya repetiría la avalancha")
+                .isEqualTo(haceNada);
+        assertThat(values.findById(sana.getId()).orElseThrow().getImageMirrorFailedAt()).isNull();
+    }
+
+    /** El tope existe para no reencolar decenas de miles de golpe, que es lo que tumbó el espejado. */
+    @Test
+    void requeueFailed_respetaElTope() {
+        Instant hace1h = Instant.parse("2026-09-18T11:00:00Z");
+        for (int i = 0; i < 5; i++) {
+            values.save(value("c" + i, "https://src/" + i + ".jpg", null, hace1h));
+        }
+
+        assertThat(values.requeueFailed(Instant.parse("2026-09-18T11:55:00Z"), 2)).isEqualTo(2);
+    }
+
+    /** Y tras limpiarla, el barrido vuelve a verlas: es la mitad que faltaba del arreglo. */
+    @Test
+    void trasElReintentoElBarridoVuelveAVerlas() {
+        Instant hace1h = Instant.parse("2026-09-18T11:00:00Z");
+        VariantValueEntity fallida = values.save(value("roja", "https://src/r.jpg", null, hace1h));
+        assertThat(values.findNeedingImageMirror(PUBLIC_PREFIX, PageRequest.of(0, 50))).isEmpty();
+
+        values.requeueFailed(Instant.parse("2026-09-18T11:55:00Z"), 100);
+        em.clear();
+
+        assertThat(values.findNeedingImageMirror(PUBLIC_PREFIX, PageRequest.of(0, 50)))
+                .extracting(VariantValueEntity::getId).containsExactly(fallida.getId());
+    }
 }

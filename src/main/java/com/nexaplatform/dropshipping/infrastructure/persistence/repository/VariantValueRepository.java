@@ -25,6 +25,20 @@ public interface VariantValueRepository extends JpaRepository<VariantValueEntity
             + "ORDER BY v.createdAt DESC NULLS LAST")
     List<VariantValueEntity> findNeedingImageMirror(@Param("publicPrefix") String publicPrefix, Pageable pageable);
 
+    /**
+     * Lo mismo, acotado a unos productos recién importados. El valor de eje cuelga del eje, y el eje del
+     * producto, de ahí el doble salto.
+     *
+     * <p>Estas son las MUESTRAS DE COLOR: los botones que el comprador pulsa para elegir. Sin espejar se
+     * ven rotas, porque el proveedor responde 403 a quien enlaza sus imágenes desde otra web.
+     */
+    @Query("SELECT v FROM VariantValueEntity v WHERE v.option.product.id IN :productIds "
+            + "AND v.imageSourceUrl IS NOT NULL AND v.imageSourceUrl <> '' "
+            + "AND v.imageMirrorFailedAt IS NULL "
+            + "AND (v.imageCdnUrl IS NULL OR v.imageCdnUrl NOT LIKE :publicPrefix)")
+    List<VariantValueEntity> findNeedingImageMirrorByProducts(@Param("publicPrefix") String publicPrefix,
+            @Param("productIds") List<UUID> productIds);
+
     /** Fija la cdn_url espejada de la imagen del valor de eje. */
     @Modifying
     @Transactional
@@ -36,4 +50,23 @@ public interface VariantValueRepository extends JpaRepository<VariantValueEntity
     @Transactional
     @Query("UPDATE VariantValueEntity v SET v.imageMirrorFailedAt = :at WHERE v.id = :id")
     void markImageFailed(@Param("id") UUID id, @Param("at") Instant at);
+
+    /**
+     * Devuelve a la cola las que fallaron hace ya un rato, limpiando la marca.
+     *
+     * <p>Sin esto la marca era DEFINITIVA: el barrido descarta lo que la tiene, el propio barrido la
+     * pone al fallar y nadie la quitaba nunca. El 18-sep-2026, tras cargar 9.425 productos, el 96% de
+     * las muestras de color se quedó sin espejar y apuntando al proveedor —que rechaza el enlazado con
+     * un 403—, sin registro, sin forma de recuperarlas desde el panel y sin moverse en tres medidas.
+     *
+     * <p>Se limita por fecha y por número para no repetir la avalancha que hizo fallar el espejado en
+     * primer lugar: lo que acaba de fallar espera su turno.
+     */
+    @Modifying
+    @Transactional
+    @Query(value = "UPDATE variant_value SET image_mirror_failed_at = NULL WHERE id IN ("
+            + "SELECT id FROM variant_value WHERE image_mirror_failed_at IS NOT NULL "
+            + "AND image_mirror_failed_at <= :antesDe ORDER BY image_mirror_failed_at LIMIT :tope)",
+            nativeQuery = true)
+    int requeueFailed(@Param("antesDe") Instant antesDe, @Param("tope") int tope);
 }

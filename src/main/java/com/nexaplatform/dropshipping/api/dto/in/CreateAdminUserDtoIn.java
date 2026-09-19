@@ -29,8 +29,11 @@ public class CreateAdminUserDtoIn {
     @Schema(description = "Account password (min 8 chars)")
     private String password;
 
+    // OJO: esta lista repite los valores de UserRole y no puede derivarse de él —@Pattern exige una
+    // constante de compilación—, así que un rol nuevo hay que añadirlo AQUÍ también o no se podrá crear
+    // la cuenta desde el panel. Lo cubre CreateAdminUserDtoInTest, que compara el patrón con el enum.
     @NotBlank
-    @Pattern(regexp = "^(ADMIN|OPERATOR|USER|PARTNER)$")
+    @Pattern(regexp = "^(ADMIN|OPERATOR|REVIEWER|USER|PARTNER)$")
     @Schema(description = "Role to grant", example = "OPERATOR")
     private String role;
 

@@ -1,7 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
-import com.nexaplatform.dropshipping.application.service.InvoiceService;
 import com.nexaplatform.dropshipping.application.service.EuComplianceService;
+import com.nexaplatform.dropshipping.application.service.InvoiceService;
 import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.domain.enums.PaymentStatus;
 import com.nexaplatform.dropshipping.domain.model.Order;

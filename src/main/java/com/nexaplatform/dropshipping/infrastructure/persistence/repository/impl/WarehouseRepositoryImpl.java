@@ -1,8 +1,8 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository.impl;
 
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.WarehouseEntity;
 import com.nexaplatform.dropshipping.domain.model.Warehouse;
 import com.nexaplatform.dropshipping.domain.repository.WarehouseRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.WarehouseEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.WarehouseEntityMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.WarehouseJpaRepositoryAdapter;
 import lombok.RequiredArgsConstructor;

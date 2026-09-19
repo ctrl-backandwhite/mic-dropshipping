@@ -1,8 +1,8 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository.impl;
 
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SubscriptionPlanEntity;
 import com.nexaplatform.dropshipping.domain.model.SubscriptionPlan;
 import com.nexaplatform.dropshipping.domain.repository.SubscriptionPlanRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SubscriptionPlanEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.SubscriptionPlanEntityMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SubscriptionPlanJpaRepositoryAdapter;
 import lombok.RequiredArgsConstructor;

@@ -1,7 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
-import com.nexaplatform.dropshipping.application.service.NewsletterService.SubscribeResult;
 import com.nexaplatform.dropshipping.application.service.NewsletterService;
+import com.nexaplatform.dropshipping.application.service.NewsletterService.SubscribeResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;

@@ -1,9 +1,9 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.pricing;
 
 import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
-import com.nexaplatform.dropshipping.infrastructure.security.GeolocalizacionDelCdn;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
+import com.nexaplatform.dropshipping.infrastructure.security.GeolocalizacionDelCdn;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

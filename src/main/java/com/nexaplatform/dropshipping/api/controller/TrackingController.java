@@ -1,7 +1,7 @@
 package com.nexaplatform.dropshipping.api.controller;
 
-import com.nexaplatform.dropshipping.application.service.FulfillmentService;
 import com.nexaplatform.dropshipping.api.mapper.TrackingViewMapper;
+import com.nexaplatform.dropshipping.application.service.FulfillmentService;
 import com.nexaplatform.dropshipping.application.service.FulfillmentService.TrackingView;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentSyncScheduler;
 import io.swagger.v3.oas.annotations.Operation;

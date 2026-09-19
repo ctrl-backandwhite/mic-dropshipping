@@ -1,13 +1,12 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
-import com.stripe.exception.StripeException;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.mapper.CustomerSubscriptionUpdateMapper;
-import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.service.CountryTaxService;
 import com.nexaplatform.dropshipping.application.service.InvoiceService;
 import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
+import com.nexaplatform.dropshipping.application.usecase.CustomerSubscriptionUseCase;
 import com.nexaplatform.dropshipping.application.usecase.SubscriptionPlanUseCase;
 import com.nexaplatform.dropshipping.domain.enums.InvoiceLabel;
 import com.nexaplatform.dropshipping.domain.enums.SubscriptionPlanLabel;
@@ -23,6 +22,7 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.Subscript
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SubscriptionPlanRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
+import com.stripe.exception.StripeException;
 import com.stripe.model.Customer;
 import com.stripe.model.PaymentMethod;
 import com.stripe.model.checkout.Session;

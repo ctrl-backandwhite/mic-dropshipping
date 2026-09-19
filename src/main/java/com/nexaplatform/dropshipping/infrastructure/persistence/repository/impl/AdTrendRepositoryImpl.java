@@ -1,8 +1,8 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository.impl;
 
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.AdTrendEntity;
 import com.nexaplatform.dropshipping.domain.model.AdTrend;
 import com.nexaplatform.dropshipping.domain.repository.AdTrendRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.AdTrendEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.AdTrendEntityMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.AdTrendJpaRepositoryAdapter;
 import lombok.RequiredArgsConstructor;

@@ -59,7 +59,9 @@ public class RedisCacheConfig {
                 Map.entry(CACHE_CURRENCY_RATES, baseConfig(Duration.ofMinutes(10))),
                 Map.entry(CACHE_PRODUCT_SPECS, baseConfig(Duration.ofMinutes(15))),
                 Map.entry(CACHE_PRODUCT_ATTRS, baseConfig(Duration.ofMinutes(15))),
-                Map.entry(CACHE_SEARCH, baseConfig(Duration.ofSeconds(60))));
+                Map.entry(CACHE_SEARCH, baseConfig(Duration.ofSeconds(60))),
+                // La regla aduanera cambia casi nunca y la pregunta el precio de cada producto.
+                Map.entry(CACHE_CUSTOMS_RULE, baseConfig(Duration.ofMinutes(30))));
 
         return RedisCacheManager.builder(cf).cacheDefaults(defaults).withInitialCacheConfigurations(perCache)
                 .transactionAware().build();
@@ -89,22 +91,15 @@ public class RedisCacheConfig {
         // nexadrop.cache.distributed=true hasta arreglar el serializador (p.ej. serializador por-tipo por
         // caché, o excluir del typing el campo source del hit). El Caffeine L1 (default) NO tiene este
         // problema porque guarda el objeto en memoria sin serializar a JSON.
-        return JsonMapper.builder()
-                .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
-                .changeDefaultVisibility(vc -> vc.withVisibility(PropertyAccessor.ALL,
-                        JsonAutoDetect.Visibility.ANY))
+        return JsonMapper.builder().disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .changeDefaultVisibility(vc -> vc.withVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY))
                 // SEGURIDAD: el validador NO puede permitir Object.class (aceptaría cualquier @class → cadena
                 // de gadgets en deserialización). Se restringe a los tipos propios de la app y a los
                 // contenedores/valores estándar de la JDK que aparecen en los DTO cacheados. Cualquier otro
                 // tipo (los gadgets viven en otros paquetes) se rechaza.
-                .activateDefaultTyping(
-                        BasicPolymorphicTypeValidator.builder()
-                                .allowIfSubType("com.nexaplatform.dropshipping.")
-                                .allowIfSubType("java.util.")
-                                .allowIfSubType("java.lang.")
-                                .allowIfSubType("java.time.")
-                                .allowIfSubType("java.math.")
-                                .build(),
+                .activateDefaultTyping(BasicPolymorphicTypeValidator.builder()
+                        .allowIfSubType("com.nexaplatform.dropshipping.").allowIfSubType("java.util.")
+                        .allowIfSubType("java.lang.").allowIfSubType("java.time.").allowIfSubType("java.math.").build(),
                         DefaultTyping.NON_FINAL)
                 .build();
     }

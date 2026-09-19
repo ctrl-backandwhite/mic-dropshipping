@@ -4,7 +4,6 @@ import com.nexaplatform.dropshipping.domain.enums.ReviewSource;
 import jakarta.persistence.*;
 import lombok.*;
 
-
 /** DROP-445: reseña de un producto. */
 @Entity
 @Table(name = "product_review")

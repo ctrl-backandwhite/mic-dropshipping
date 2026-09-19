@@ -2,16 +2,16 @@ package com.nexaplatform.dropshipping.infrastructure.seed;
 
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestProductRequest;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
+import com.nexaplatform.dropshipping.infrastructure.integration.bus.CatalogoBusService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import com.nexaplatform.dropshipping.infrastructure.integration.bus.CatalogoBusService;
 import org.mockito.InjectMocks;
-import org.springframework.beans.factory.ObjectProvider;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.math.BigDecimal;
 import java.util.List;

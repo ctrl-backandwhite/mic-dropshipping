@@ -92,14 +92,25 @@ class ResilientOidcIdTokenDecoderFactoryTest {
     }
 
     @Test
-    void elDescodificadorPorOmisionDeSpringSeRindeConEseMismoProveedor() throws IOException {
-        // Contraste que justifica esta clase. Si algún día deja de fallar, Spring habrá subido su límite
-        // y podremos volver a su fábrica: este es el aviso.
+    void elDescodificadorPorOmisionDeSpringYaAguantaAEseProveedor() throws IOException {
+        // EL AVISO SE CUMPLIÓ, el 18-sep-2026 al subir a Spring Boot 4.1.1.
+        //
+        // Esta prueba era el contraste que justificaba la clase: comprobaba que la fábrica de Spring SE
+        // RENDÍA con un proveedor lento, porque su descodificador concedía 500 ms para pedir las claves.
+        // Spring Security subió ese plazo a 30 segundos —por considerar el anterior demasiado corto para
+        // muchos despliegues—, así que su fábrica ya aguanta y la comprobación se invierte.
+        //
+        // La clase propia NO sobra por eso: además del plazo, guarda las claves para no volver a pedirlas
+        // en cada acceso, que es lo que mide `pideLasClavesUnaSolaVezAunqueSeEntreVariasVeces`. Quien
+        // quiera retirarla tiene que resolver antes esa parte.
+        //
+        // Y sigue siendo un canario, ahora en el sentido contrario: si Spring volviera a acortar el
+        // plazo, esta prueba se pondría en rojo y avisaría.
         String jwkSetUri = arrancarServidorDeClaves(Duration.ofMillis(1200), new AtomicInteger());
         JwtDecoder porOmision = new OidcIdTokenDecoderFactory().createDecoder(registro(jwkSetUri));
         String token = idToken(ISSUER, CLIENT_ID, Instant.now().plusSeconds(300));
 
-        assertThatThrownBy(() -> porOmision.decode(token)).isInstanceOf(JwtException.class);
+        assertThat(porOmision.decode(token).getSubject()).isEqualTo("105815860537719339869");
     }
 
     @Test

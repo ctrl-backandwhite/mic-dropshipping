@@ -1,8 +1,8 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository.impl;
 
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.AcademyCourseEntity;
 import com.nexaplatform.dropshipping.domain.model.AcademyCourse;
 import com.nexaplatform.dropshipping.domain.repository.AcademyCourseRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.AcademyCourseEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.AcademyCourseEntityMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.AcademyCourseJpaRepositoryAdapter;
 import lombok.RequiredArgsConstructor;

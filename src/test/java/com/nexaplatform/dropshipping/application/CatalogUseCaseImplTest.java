@@ -10,18 +10,20 @@ import com.nexaplatform.dropshipping.application.service.CustomsProfileService;
 import com.nexaplatform.dropshipping.application.usecase.impl.CatalogUseCaseImpl;
 import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer;
+import com.nexaplatform.dropshipping.infrastructure.integration.storage.ImageMirrorService;
+import com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
-import com.nexaplatform.dropshipping.infrastructure.integration.storage.ImageMirrorService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Category1688MappingRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryAttributeSchemaRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository;
-import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductImageRepository;
-import com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductAttributeRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductImageRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductReviewJpaRepositoryAdapter;
@@ -29,8 +31,6 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Produ
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.VariantValueRepository;
-import com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer;
-import com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -46,10 +46,10 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**

@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application.service;
 
 import com.nexaplatform.dropshipping.application.service.MarginService.PriceWithMargin;
+import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
@@ -8,12 +9,11 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVa
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
-import com.nexaplatform.dropshipping.domain.enums.PriceRuleChannel;
 
 /**
  * Canonical pricing pipeline:
@@ -36,6 +36,8 @@ public class PricingService {
     /** Rebajas vigentes: el precio de escaparate sale ya descontado. */
     private final PromotionService promotionService;
     private final MarginService marginService;
+    /** Solo para saber si el destino del comprador cobra derecho por artículo. */
+    private final CustomsValuationService customsValuation;
 
     public PricedAmount priceFor(ProductEntity product, ProductVariantEntity variant) {
         // DROP-629: the product's headline price must be traceable to a real, purchasable
@@ -88,20 +90,42 @@ public class PricingService {
         // dependen cálculos distintos: la subvención por porte repetido devuelve el porte que de verdad no
         // se gasta (estos 16 CNY), mientras que el cliente paga ese porte ya con margen.
         BigDecimal supplierIvaUsd = product.getIvaCny() != null
-                ? currencyService.toUsd(product.getIvaCny(), sourceCurrency) : BigDecimal.ZERO;
+                ? currencyService.toUsd(product.getIvaCny(), sourceCurrency)
+                : BigDecimal.ZERO;
         BigDecimal supplierShippingUsd = product.getShippingCny() != null
-                ? currencyService.toUsd(product.getShippingCny(), sourceCurrency) : BigDecimal.ZERO;
+                ? currencyService.toUsd(product.getShippingCny(), sourceCurrency)
+                : BigDecimal.ZERO;
         // Recargo fijo por producto (surcharge_cny, default 0): lo fija el admin y se suma al precio de
         // venta tal cual, SIN margen — es un cargo directo que él decide, no un coste de proveedor.
         BigDecimal surchargeUsd = product.getSurchargeCny() != null && product.getSurchargeCny().signum() != 0
-                ? currencyService.toUsd(product.getSurchargeCny(), sourceCurrency) : BigDecimal.ZERO;
+                ? currencyService.toUsd(product.getSurchargeCny(), sourceCurrency)
+                : BigDecimal.ZERO;
         // Bolsas de subvención (1-sep-2026): igual que el recargo, se suman al precio de venta SIN margen.
         // El cliente las paga aquí y se le descuentan después del envío y del arancel del pedido, que es
         // lo que permite anunciar el envío cubierto sin regalar margen.
         BigDecimal shippingUserUsd = product.getShippingUserCny() != null && product.getShippingUserCny().signum() > 0
-                ? currencyService.toUsd(product.getShippingUserCny(), sourceCurrency) : BigDecimal.ZERO;
-        BigDecimal dutyUserUsd = product.getDutyUserCny() != null && product.getDutyUserCny().signum() > 0
-                ? currencyService.toUsd(product.getDutyUserCny(), sourceCurrency) : BigDecimal.ZERO;
+                ? currencyService.toUsd(product.getShippingUserCny(), sourceCurrency)
+                : BigDecimal.ZERO;
+        // La bolsa de ARANCEL solo se cobra donde hay un arancel del que descontarla.
+        //
+        // El subsidio de arancel no es un descuento: es un importe que el comprador PAGA por adelantado y
+        // que luego se le descuenta del derecho de aduana de su pedido. En los destinos que no cobran
+        // derecho por artículo —Latinoamérica, Estados Unidos y los otros cincuenta y nueve países con el
+        // importe a cero en `country_customs_rule`— no hay nada que descontar, así que cobrarlo era cobrar
+        // de más por un concepto que ese comprador no llega a pagar nunca. Los veintisiete de la Unión
+        // Europea sí lo llevan (3 EUR por línea de declaración) y ahí se cobra íntegro.
+        //
+        // El país es el del COMPRADOR, no el del envío: es la misma regla que ya gobierna el margen.
+        // Sin país conocido no se cobra, por el mismo criterio que el resto de esta zona —un dato que falta
+        // no encarece a nadie—; en cuanto se resuelve el país, el precio ya lo refleja.
+        //
+        // Se consulta por producto, de ahí que la lectura esté cacheada: sin eso, un listado de veinticuatro
+        // fichas serían veinticuatro consultas.
+        boolean elDestinoCobraArancel = customsValuation.perArticleFeeUsdCents(PricingCountryHolder.get()) > 0;
+        BigDecimal dutyUserUsd = elDestinoCobraArancel && product.getDutyUserCny() != null
+                && product.getDutyUserCny().signum() > 0
+                        ? currencyService.toUsd(product.getDutyUserCny(), sourceCurrency)
+                        : BigDecimal.ZERO;
         BigDecimal marginFactor = marginFactor(costUsd, retailBaseUsd);
         BigDecimal ivaUsd = supplierIvaUsd.multiply(marginFactor);
         BigDecimal shippingUsd = supplierShippingUsd.multiply(marginFactor);
@@ -120,7 +144,8 @@ public class PricingService {
         BigDecimal displayDutyUser = currencyService.usdToDisplay(dutyUserUsd);
         // Cobro canónico en dólares: base, IVA, envío y recargo redondeados al céntimo y sumados. Es la
         // cifra que guarda el pedido y con la que se cobra.
-        BigDecimal retailUsd = baseUsd == null ? null
+        BigDecimal retailUsd = baseUsd == null
+                ? null
                 : baseUsd.setScale(2, RoundingMode.HALF_UP).add(ivaUsd.setScale(2, RoundingMode.HALF_UP))
                         .add(shippingUsd.setScale(2, RoundingMode.HALF_UP))
                         .add(surchargeUsd.setScale(2, RoundingMode.HALF_UP))
@@ -149,9 +174,10 @@ public class PricingService {
         BigDecimal surchargeR = redondea(displaySurcharge);
         BigDecimal shippingUserR = redondea(displayShippingUser);
         BigDecimal dutyUserR = redondea(displayDutyUser);
-        BigDecimal baseR = displayTotal == null ? displayBase
-                : displayTotal.setScale(2, RoundingMode.HALF_UP).subtract(ivaR).subtract(shipR)
-                        .subtract(surchargeR).subtract(shippingUserR).subtract(dutyUserR);
+        BigDecimal baseR = displayTotal == null
+                ? displayBase
+                : displayTotal.setScale(2, RoundingMode.HALF_UP).subtract(ivaR).subtract(shipR).subtract(surchargeR)
+                        .subtract(shippingUserR).subtract(dutyUserR);
         // Rebaja. Se aplica sobre el precio YA compuesto y en la moneda que se enseña, para que el
         // porcentaje anunciado sea el que el cliente ve descontado y no difiera por redondeos.
         // Suelo: el PRECIO BASE del producto (coste × margen), decisión del usuario del 8-ago-2026.
@@ -196,10 +222,8 @@ public class PricingService {
         return new PricedAmount(costUsd, retailUsd, displayTotal, displayCode, currencyService.symbolOf(displayCode),
                 displayFormatted, withMargin.appliedRule() != null ? withMargin.appliedRule().getId() : null,
                 withMargin.appliedPercentage(), baseUsd, ivaUsd, shippingUsd, baseFormatted, ivaFormatted,
-                shippingFormatted, surchargeUsd, surchargeFormatted,
-                shippingUserFormatted, dutyUserFormatted,
-                originalFormatted, discountPercent, promotionName, originalRetailUsd,
-                supplierShippingUsd);
+                shippingFormatted, surchargeUsd, surchargeFormatted, shippingUserFormatted, dutyUserFormatted,
+                originalFormatted, discountPercent, promotionName, originalRetailUsd, supplierShippingUsd);
     }
 
     /**
@@ -231,16 +255,14 @@ public class PricingService {
      */
     public PricedAmount precioYaVisto(BigDecimal importe, String moneda, String formateado) {
         String codigo = moneda != null ? moneda : CurrencyHolder.get();
-        return new PricedAmount(null, null, importe, codigo, currencyService.symbolOf(codigo), formateado,
-                null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null);
+        return new PricedAmount(null, null, importe, codigo, currencyService.symbolOf(codigo), formateado, null, null,
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     private PricedAmount unpriced() {
         String displayCode = CurrencyHolder.get();
-        return new PricedAmount(null, null, null, displayCode, currencyService.symbolOf(displayCode),
-                null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null);
+        return new PricedAmount(null, null, null, displayCode, currencyService.symbolOf(displayCode), null, null, null,
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     /** Un importe de la moneda mostrada al céntimo. Nulo cuenta como cero: no hay línea que enseñar. */
@@ -274,8 +296,7 @@ public class PricingService {
             }
             return variants.stream()
                     .filter(v -> v != null && v.isActive() && v.getPrice() != null && v.getPrice().signum() > 0)
-                    .min(Comparator.comparing(ProductVariantEntity::getPrice))
-                    .orElse(null);
+                    .min(Comparator.comparing(ProductVariantEntity::getPrice)).orElse(null);
         } catch (RuntimeException lazyOutsideTx) {
             return null;
         }
@@ -297,8 +318,8 @@ public class PricingService {
             String displayCurrency, String displaySymbol, String displayFormatted, UUID appliedRuleId,
             BigDecimal appliedMarginPercent,
             // Desglose (solo informativo, para el admin): base con margen + IVA + envío + recargo = total.
-            BigDecimal baseRetailUsd, BigDecimal ivaUsd, BigDecimal shippingUsd,
-            String baseFormatted, String ivaFormatted, String shippingFormatted,
+            BigDecimal baseRetailUsd, BigDecimal ivaUsd, BigDecimal shippingUsd, String baseFormatted,
+            String ivaFormatted, String shippingFormatted,
             /**
              * Recargo fijo por producto (surcharge_cny, 30-ago-2026). Va en USD ya convertido y con su
              * versión formateada para el admin. NO lleva margen: lo fija el admin por producto/categoría/
@@ -336,14 +357,14 @@ public class PricingService {
          * <p>La mayoría de los usos —y de las pruebas— no se ocupan de rebajas, y obligarles a pasar
          * tres nulos solo añade ruido a cada llamada.
          */
-        public PricedAmount(BigDecimal costUsd, BigDecimal retailUsd, BigDecimal displayAmount,
-                String displayCurrency, String displaySymbol, String displayFormatted, UUID appliedRuleId,
-                BigDecimal appliedMarginPercent, BigDecimal baseRetailUsd, BigDecimal ivaUsd,
-                BigDecimal shippingUsd, String baseFormatted, String ivaFormatted, String shippingFormatted) {
+        public PricedAmount(BigDecimal costUsd, BigDecimal retailUsd, BigDecimal displayAmount, String displayCurrency,
+                String displaySymbol, String displayFormatted, UUID appliedRuleId, BigDecimal appliedMarginPercent,
+                BigDecimal baseRetailUsd, BigDecimal ivaUsd, BigDecimal shippingUsd, String baseFormatted,
+                String ivaFormatted, String shippingFormatted) {
             // Sin promoción ni recargo: los constructores heredados (tests/llamadas previas) no los usan.
-            this(costUsd, retailUsd, displayAmount, displayCurrency, displaySymbol, displayFormatted,
-                    appliedRuleId, appliedMarginPercent, baseRetailUsd, ivaUsd, shippingUsd, baseFormatted,
-                    ivaFormatted, shippingFormatted, null, null, null, null, null, null, null, null, shippingUsd);
+            this(costUsd, retailUsd, displayAmount, displayCurrency, displaySymbol, displayFormatted, appliedRuleId,
+                    appliedMarginPercent, baseRetailUsd, ivaUsd, shippingUsd, baseFormatted, ivaFormatted,
+                    shippingFormatted, null, null, null, null, null, null, null, null, shippingUsd);
         }
 
         /** ¿Este precio lleva rebaja? Lo pregunta el frontend para tachar el precio anterior. */

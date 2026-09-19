@@ -1,89 +1,86 @@
 package com.nexaplatform.dropshipping.api.controller;
 
-import com.nexaplatform.dropshipping.api.dto.CatalogDtos.LivePromotionView;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.VariantView;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SpecificationView;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.AttributeView;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.TagView;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ShippingZoneView;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ShippingRateView;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ShippingQuoteItem;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ShippingQuoteRequest;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.AttributeKeyView;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SuggestionView;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CartQuoteItemIn;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CartQuoteLineOut;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CartQuoteOut;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.HomeSection;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.HomeSectionsResponse;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImportUrlRequest;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImportUrlResponse;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImageSearchRequest;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImageSearchResult;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.HistoryPoint;
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.MarginEstimate;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ShippingRateEntity;
-import com.nexaplatform.dropshipping.api.dto.CatalogDtos;
 import com.nexaplatform.dropshipping.api.StorefrontCatalogApi;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.LivePromotionView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews;
-import com.nexaplatform.dropshipping.application.service.CountryTaxService;
-import com.nexaplatform.dropshipping.application.service.WelcomeExamplesService;
-import com.nexaplatform.dropshipping.application.service.CheckoutPreviewService;
-import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
-import com.nexaplatform.dropshipping.application.service.ParcelAggregator;
-import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
-import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
-import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService;
-import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.AttributeKeyView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.AttributeView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CartQuoteItemIn;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CartQuoteLineOut;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CartQuoteOut;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryBreadcrumb;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.HistoryPoint;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.HomeSection;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.HomeSectionsResponse;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImageSearchRequest;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImageSearchResult;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImportUrlRequest;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImportUrlResponse;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.MarginEstimate;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ShippingQuoteItem;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ShippingQuoteRequest;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ShippingRateView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ShippingZoneView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SpecificationView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SuggestionView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SupplierView;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.VariantView;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
-import com.nexaplatform.dropshipping.api.mapper.ProductListFilters;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
-import com.nexaplatform.dropshipping.application.service.ProductDetailQueryService;
-import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
+import com.nexaplatform.dropshipping.api.mapper.ProductListFilters;
+import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService;
+import com.nexaplatform.dropshipping.application.service.CheckoutPreviewService;
+import com.nexaplatform.dropshipping.application.service.CheckoutTotalsService;
+import com.nexaplatform.dropshipping.application.service.CountryTaxService;
+import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.OrderAmounts;
+import com.nexaplatform.dropshipping.application.service.ParcelAggregator;
+import com.nexaplatform.dropshipping.application.service.PricingCountryHolder;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount;
+import com.nexaplatform.dropshipping.application.service.ProductDetailQueryService;
 import com.nexaplatform.dropshipping.application.service.PromotionShowcaseService;
+import com.nexaplatform.dropshipping.application.service.WelcomeExamplesService;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
+import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyHolder;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ShippingRateEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.*;
 import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
-import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.cache.annotation.Cacheable;
-import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_LIST;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 
-import java.util.List;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.*;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_PRODUCT_LIST;
 
 /**
  * Public catalog API. Mirrors what an integrator needs to list, search and inspect every
@@ -309,6 +306,12 @@ public class StorefrontCatalogController implements StorefrontCatalogApi {
     private ProductDetailView paraQuienPregunta(ProductDetailView ficha) {
         if (ficha == null || SecurityUtils.isAdmin()) {
             return ficha;
+        }
+        // Quien revisa las fotos SÍ ve el origen —lo necesita para cotejar la galería contra la oferta
+        // del proveedor— y NO ve los importes. Es un recorte intermedio, no «medio administrador»: el
+        // desglose en yuanes, el coste y el margen se van igual que para cualquier visitante.
+        if (SecurityUtils.isReviewer()) {
+            return ficha.sinImportesInternos();
         }
         return ficha.sinDatosInternos();
     }

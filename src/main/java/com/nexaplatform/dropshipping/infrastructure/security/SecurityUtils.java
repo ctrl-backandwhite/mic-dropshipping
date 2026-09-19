@@ -27,9 +27,21 @@ public final class SecurityUtils {
         return false;
     }
 
-    /** Solo el ADMIN puede ver coste y margen/ganancia. OPERATOR (soporte) y USER no. */
+    /** Solo el ADMIN puede ver coste y margen/ganancia. OPERATOR (soporte), REVIEWER y USER no. */
     public static boolean isAdmin() {
         return hasRole("ADMIN");
+    }
+
+    /**
+     * Quien revisa el material gráfico de las fichas.
+     *
+     * <p>Se comprueba aparte de {@link #isAdmin()} a propósito: el revisor ve el ORIGEN —enlace,
+     * identificador y proveedor, para cotejar las fotos contra la oferta— pero NO los importes
+     * internos. Son dos recortes distintos de la misma ficha, y colapsarlos en un solo booleano
+     * «es interno» le acabaría enseñando el margen.
+     */
+    public static boolean isReviewer() {
+        return hasRole("REVIEWER");
     }
 
     /** Subject (id) del usuario autenticado, o null si no hay sesión. */

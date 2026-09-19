@@ -33,6 +33,14 @@ class BffEndpointAuthorizationIT extends BaseIntegration {
     private static final String ORDER_SHIP = "/api/admin/orders/%s/ship";
     private static final String OPERATOR_EARNINGS = "/api/admin/operator/earnings";
     private static final String DASHBOARD_METRICS = "/api/admin/dashboard/metrics";
+    private static final String IMAGEN = "/api/admin/catalog/products/images/%s";
+    private static final String IMAGENES = "/api/admin/catalog/products/%s/images";
+    private static final String ORDEN_IMAGENES = "/api/admin/catalog/products/%s/images/order";
+    private static final String VIDEO = "/api/admin/catalog/products/%s/video";
+    private static final String URL_DE_ORIGEN = "/api/admin/catalog/products/%s/source-url";
+    private static final String PRODUCTO = "/api/admin/catalog/products/%s";
+    private static final String VALOR_DE_VARIANTE = "/api/admin/catalog/variant-values/%s";
+    private static final String REVIEWER = "REVIEWER";
 
     /**
      * PROHIBIDO: el listado del catálogo exige cuenta.
@@ -162,6 +170,117 @@ class BffEndpointAuthorizationIT extends BaseIntegration {
     void dashboardMetrics_operator_isForbidden() {
         client.get().uri(DASHBOARD_METRICS)
                 .header("Authorization", bearer(jwt.userToken("OPERATOR"))).exchange()
+                .expectStatus().isEqualTo(403);
+    }
+
+    /* =================== REVIEWER: revisión del material gráfico ===================
+     *
+     * El rol existe para que alguien pueda arreglar las fotos de una ficha —borrar las que no son del
+     * producto, reordenar la galería, quitar el vídeo— sin darle el panel ni los números. Las reglas
+     * son por MÉTODO y ruta exacta, así que lo que de verdad hay que probar no es solo lo que puede,
+     * sino que un comodín no le haya abierto de paso el precio o el borrado del producto.
+     */
+
+    /** PERMITIDO: borrar una foto de la galería es el caso central del rol. */
+    @Test
+    void borrarImagen_revisor_isAllowed() {
+        client.delete().uri(String.format(IMAGEN, UUID.randomUUID()))
+                .header("Authorization", bearer(jwt.userToken(REVIEWER))).exchange()
+                .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
+    }
+
+    /** PERMITIDO: añadir a la galería una foto que venía en una variante. */
+    @Test
+    void anadirImagen_revisor_isAllowed() {
+        client.post().uri(String.format(IMAGENES, UUID.randomUUID()))
+                .header("Authorization", bearer(jwt.userToken(REVIEWER)))
+                .header("Content-Type", "application/json")
+                .bodyValue("{\"sourceUrl\":\"https://cbu01.alicdn.com/img/ibank/x.jpg\"}").exchange()
+                .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
+    }
+
+    /** PERMITIDO: reordenar la galería (la primera pasa a ser la principal). */
+    @Test
+    void reordenarImagenes_revisor_isAllowed() {
+        client.put().uri(String.format(ORDEN_IMAGENES, UUID.randomUUID()))
+                .header("Authorization", bearer(jwt.userToken(REVIEWER)))
+                .header("Content-Type", "application/json")
+                .bodyValue("{\"imageIds\":[]}").exchange()
+                .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
+    }
+
+    /** PERMITIDO: quitar el vídeo de explicación. */
+    @Test
+    void borrarVideo_revisor_isAllowed() {
+        client.delete().uri(String.format(VIDEO, UUID.randomUUID()))
+                .header("Authorization", bearer(jwt.userToken(REVIEWER))).exchange()
+                .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
+    }
+
+    /** PERMITIDO: corregir el enlace a la oferta de origen, que es contra lo que coteja las fotos. */
+    @Test
+    void editarUrlDeOrigen_revisor_isAllowed() {
+        client.put().uri(String.format(URL_DE_ORIGEN, UUID.randomUUID()))
+                .header("Authorization", bearer(jwt.userToken(REVIEWER)))
+                .header("Content-Type", "application/json")
+                .bodyValue("{\"sourceUrl\":\"https://detail.1688.com/offer/1.html\"}").exchange()
+                .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
+    }
+
+    /** PERMITIDO: retirar un color sin foto válida (regla color=imagen). */
+    @Test
+    void borrarValorDeVariante_revisor_isAllowed() {
+        client.delete().uri(String.format(VALOR_DE_VARIANTE, UUID.randomUUID()))
+                .header("Authorization", bearer(jwt.userToken(REVIEWER))).exchange()
+                .expectStatus().value(s -> assertThat(s).isNotIn(401, 403));
+    }
+
+    /**
+     * PROHIBIDO, y es la prueba que justifica enumerar las rutas una a una: la edición rápida cuelga de
+     * PUT /products/{id}, la misma forma que PUT /products/{id}/source-url con un segmento menos. Por
+     * ahí entran «Verificado» —que decide el dueño y nadie más— y los importes en yuanes.
+     */
+    @Test
+    void edicionRapida_revisor_isForbidden() {
+        client.put().uri(String.format(PRODUCTO, UUID.randomUUID()))
+                .header("Authorization", bearer(jwt.userToken(REVIEWER)))
+                .header("Content-Type", "application/json")
+                .bodyValue("{\"verified\":true}").exchange()
+                .expectStatus().isEqualTo(403);
+    }
+
+    /**
+     * PROHIBIDO: borrar el producto. DELETE /products/{id} tiene un segmento MENOS que el borrado de
+     * una imagen, y si el comodín de aquella regla cruzara, el revisor podría vaciar el catálogo.
+     */
+    @Test
+    void borrarProducto_revisor_isForbidden() {
+        client.delete().uri(String.format(PRODUCTO, UUID.randomUUID()))
+                .header("Authorization", bearer(jwt.userToken(REVIEWER))).exchange()
+                .expectStatus().isEqualTo(403);
+    }
+
+    /** PROHIBIDO: el revisor no entra al panel. */
+    @Test
+    void dashboardMetrics_revisor_isForbidden() {
+        client.get().uri(DASHBOARD_METRICS)
+                .header("Authorization", bearer(jwt.userToken(REVIEWER))).exchange()
+                .expectStatus().isEqualTo(403);
+    }
+
+    /** PROHIBIDO: ni el margen, que es exclusivo de ADMIN. */
+    @Test
+    void marginEstimate_revisor_isForbidden() {
+        client.get().uri(String.format(MARGIN_ESTIMATE, UUID.randomUUID()))
+                .header("Authorization", bearer(jwt.userToken(REVIEWER))).exchange()
+                .expectStatus().isEqualTo(403);
+    }
+
+    /** PROHIBIDO: y un USER corriente no toca las fotos de nadie. */
+    @Test
+    void borrarImagen_user_isForbidden() {
+        client.delete().uri(String.format(IMAGEN, UUID.randomUUID()))
+                .header("Authorization", bearer(jwt.userToken("USER"))).exchange()
                 .expectStatus().isEqualTo(403);
     }
 }

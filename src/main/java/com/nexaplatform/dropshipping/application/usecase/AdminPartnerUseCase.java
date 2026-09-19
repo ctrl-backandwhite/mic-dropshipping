@@ -3,8 +3,8 @@ package com.nexaplatform.dropshipping.application.usecase;
 import com.nexaplatform.dropshipping.domain.model.AdminOAuthClient;
 import com.nexaplatform.dropshipping.domain.model.AdminOAuthClientCreated;
 import com.nexaplatform.dropshipping.domain.model.AdminPartnerApp;
-import com.nexaplatform.dropshipping.domain.model.AdminShopConnection;
 import com.nexaplatform.dropshipping.domain.model.AdminPartnerWebhook;
+import com.nexaplatform.dropshipping.domain.model.AdminShopConnection;
 
 import java.util.List;
 import java.util.UUID;

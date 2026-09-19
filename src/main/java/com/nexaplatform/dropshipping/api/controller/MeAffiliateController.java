@@ -1,17 +1,17 @@
 package com.nexaplatform.dropshipping.api.controller;
 
-import java.math.BigDecimal;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.AffiliateProgramConfigEntity;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.AffiliateConversionEntity;
 import com.nexaplatform.dropshipping.api.dto.AffiliateDtos.*;
 import com.nexaplatform.dropshipping.api.mapper.AffiliateViewMapper;
 import com.nexaplatform.dropshipping.application.service.AffiliateProgramService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.*;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.AffiliateConversionEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.AffiliateProgramConfigEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;

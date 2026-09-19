@@ -1,9 +1,9 @@
 package com.nexaplatform.dropshipping.infrastructure.security.oauth;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.ScanOptions;
-import org.springframework.data.redis.core.Cursor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -12,7 +12,6 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**

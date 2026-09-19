@@ -2,6 +2,7 @@ package com.nexaplatform.dropshipping.infrastructure.persistence.repository;
 
 import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -59,6 +60,41 @@ public interface ProductImageRepository extends JpaRepository<ProductImageEntity
             @Param("hash") String hash, @Param("ancho") Integer ancho, @Param("alto") Integer alto,
             @Param("status") MirrorStatus status, @Param("at") Instant at);
 
+    /**
+     * Anota que la imagen ya pasó por el compresor, con el tamaño que quedó.
+     *
+     * <p>La segunda pasada usa la ausencia de esta fecha como cola de trabajo, así que ponerla es lo
+     * que saca a la imagen de esa cola.
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE ProductImageEntity i SET i.comprimidaEn = :at, i.cdnUrl = :cdnUrl, i.bytes = :bytes, "
+            + "i.hash = :hash WHERE i.id = :id")
+    void marcaComprimida(@Param("id") UUID id, @Param("cdnUrl") String cdnUrl, @Param("bytes") Long bytes,
+            @Param("hash") String hash, @Param("at") Instant at);
+
+    /** Anota que no hay nada que comprimir aquí (ya venía comprimida, o el compresor se rindió). */
+    @Modifying
+    @Transactional
+    @Query("UPDATE ProductImageEntity i SET i.comprimidaEn = :at WHERE i.id = :id")
+    void marcaSinComprimir(@Param("id") UUID id, @Param("at") Instant at);
+
+    /**
+     * La cola de la segunda pasada: espejadas y todavía sin comprimir.
+     *
+     * <p>Las más recientes primero, igual que el resto del espejado: lo que acaba de entrar es lo que
+     * alguien puede estar mirando ahora mismo.
+     */
+    @Query("SELECT i FROM ProductImageEntity i WHERE i.mirrorStatus = "
+            + "com.nexaplatform.dropshipping.domain.enums.MirrorStatus.MIRRORED "
+            + "AND i.comprimidaEn IS NULL AND i.cdnUrl IS NOT NULL ORDER BY i.createdAt DESC")
+    List<ProductImageEntity> findPendientesDeComprimir(Pageable pageable);
+
+    /** Cuántas quedan por comprimir. Para saber si la segunda pasada va ganando o perdiendo terreno. */
+    @Query("SELECT COUNT(i) FROM ProductImageEntity i WHERE i.mirrorStatus = "
+            + "com.nexaplatform.dropshipping.domain.enums.MirrorStatus.MIRRORED AND i.comprimidaEn IS NULL")
+    long cuentaPendientesDeComprimir();
+
     /** Cambia solo el estado de mirror (p.ej. a FAILED). */
     @Modifying
     @Transactional
@@ -82,16 +118,6 @@ public interface ProductImageRepository extends JpaRepository<ProductImageEntity
     @Transactional
     @Query("UPDATE ProductImageEntity i SET i.mirrorAttempts = i.mirrorAttempts + 1 WHERE i.id = :id")
     void anotaIntentoAntesDeProcesar(@Param("id") UUID id);
-
-    /** Cuántas veces se ha intentado ya con esta imagen. */
-    @Query("SELECT i.mirrorAttempts FROM ProductImageEntity i WHERE i.id = :id")
-    Integer intentosDeODesconocido(@Param("id") UUID id);
-
-    /** Igual, pero 0 si la imagen ya no está: nunca nulo para quien decide con este número. */
-    default int intentosDe(UUID id) {
-        Integer n = intentosDeODesconocido(id);
-        return n == null ? 0 : n;
-    }
 
     /** Marca el fallo SIN sumar intento: ya lo sumó {@link #anotaIntentoAntesDeProcesar}. */
     @Modifying

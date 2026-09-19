@@ -1,8 +1,8 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
-import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn.BulkTranslation;
 import com.github.slugify.Slugify;
-import com.nexaplatform.dropshipping.api.exception.ArgumentException;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.AnuncioBusFallidoView;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.CustomsAuditView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestCategoryRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestImage;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestPriceTier;
@@ -11,88 +11,106 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestSupplierRequest;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariant;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariantOption;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.IngestVariantValue;
-import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView;
-import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
-import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
-import com.nexaplatform.dropshipping.api.dto.CatalogDtos.CustomsAuditView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductCustomsGapView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
 import com.nexaplatform.dropshipping.api.dto.in.AdminProductQuickEditDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.AdminVariantUpsertDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn.BulkTranslation;
+import com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogImageDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.CatalogPriceTierDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.Category1688MappingDtoOut;
+import com.nexaplatform.dropshipping.api.dto.out.CategoryAttributeSchemaDtoOut;
+import com.nexaplatform.dropshipping.api.exception.ArgumentException;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
+import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
+import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontMapper;
+import com.nexaplatform.dropshipping.api.mapper.ProductBulkExportMapper;
 import com.nexaplatform.dropshipping.application.service.BulkProductFields;
-import com.nexaplatform.dropshipping.application.service.CatalogReindexRunner;
 import com.nexaplatform.dropshipping.application.service.BulkProductRules;
 import com.nexaplatform.dropshipping.application.service.BulkProductStructure;
+import com.nexaplatform.dropshipping.application.service.CatalogReindexRunner;
+import com.nexaplatform.dropshipping.application.service.CustomsDataCheck;
+import com.nexaplatform.dropshipping.application.service.CustomsProfileService;
 import com.nexaplatform.dropshipping.application.service.ProductSeoMetadata;
 import com.nexaplatform.dropshipping.application.service.SupplierSourceUrl;
 import com.nexaplatform.dropshipping.application.service.Texts;
-import com.nexaplatform.dropshipping.api.exception.ErrorMessages;
-import com.nexaplatform.dropshipping.api.exception.NotFoundException;
-import com.nexaplatform.dropshipping.domain.enums.ReviewSource;
-import com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService;
-import org.springframework.jdbc.core.JdbcTemplate;
-import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontMapper;
-import com.nexaplatform.dropshipping.application.service.CustomsDataCheck;
-import com.nexaplatform.dropshipping.application.service.CustomsProfileService;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
+import com.nexaplatform.dropshipping.domain.enums.BusAnuncioEstado;
 import com.nexaplatform.dropshipping.domain.enums.MirrorStatus;
 import com.nexaplatform.dropshipping.domain.enums.ProductStatus;
+import com.nexaplatform.dropshipping.domain.enums.ReviewSource;
 import com.nexaplatform.dropshipping.domain.model.Product;
-import com.nexaplatform.dropshipping.api.dto.CatalogDtos.AnuncioBusFallidoView;
-import com.nexaplatform.dropshipping.domain.enums.BusAnuncioEstado;
 import com.nexaplatform.dropshipping.domain.repository.ProductRepository;
+import com.nexaplatform.dropshipping.infrastructure.integration.bus.CatalogoBusService;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer;
+import com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer;
+import com.nexaplatform.dropshipping.infrastructure.integration.storage.ImageMirrorService;
+import com.nexaplatform.dropshipping.infrastructure.integration.storage.ObjectStorageService;
+import com.nexaplatform.dropshipping.infrastructure.integration.storage.VideoMirrorService;
 import com.nexaplatform.dropshipping.infrastructure.messaging.NexaTopics;
 import com.nexaplatform.dropshipping.infrastructure.messaging.ProductIngestedEvent;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.Category1688MappingEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryAttributeSchemaEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryTranslationEntity;
-import com.nexaplatform.dropshipping.infrastructure.integration.bus.CatalogoBusService;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductAttributeEntity;
-import com.nexaplatform.dropshipping.infrastructure.integration.storage.ImageMirrorService;
-import com.nexaplatform.dropshipping.infrastructure.integration.storage.VideoMirrorService;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductImageEntity;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductSpecificationEntity;
-import com.nexaplatform.dropshipping.api.dto.in.BulkProductDtoIn;
-import com.nexaplatform.dropshipping.api.mapper.ProductBulkExportMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductPriceTierEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductReviewEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductSpecificationEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SupplierEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantOptionEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductMapper;
-import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Category1688MappingRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryAttributeSchemaRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductAttributeRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductImageRepository;
-import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductSpecificationRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductPriceTierRepository;
-import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierRepository;
-import com.nexaplatform.dropshipping.api.dto.out.BulkResultDtoOut;
-import com.nexaplatform.dropshipping.api.dto.in.BulkCategoryDtoIn;
-import com.nexaplatform.dropshipping.api.dto.out.Category1688MappingDtoOut;
-import com.nexaplatform.dropshipping.api.dto.out.CategoryAttributeSchemaDtoOut;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTranslationEntity;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueTranslationEntity;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CategoryAttributeSchemaEntity;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.Category1688MappingEntity;
-import com.nexaplatform.dropshipping.infrastructure.persistence.repository.Category1688MappingRepository;
-import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CategoryAttributeSchemaRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductReviewJpaRepositoryAdapter;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductSpecificationRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductVariantRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SupplierRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.VariantValueRepository;
-import com.nexaplatform.dropshipping.infrastructure.integration.search.ProductIndexer;
-import com.nexaplatform.dropshipping.infrastructure.integration.search.CategoryIndexer;
+import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
 import com.nexaplatform.dropshipping.infrastructure.seed.CatalogFillWriter;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.Locale;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -100,36 +118,15 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
-import java.util.Set;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cache.annotation.Caching;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
-
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.TypedQuery;
-import java.util.stream.Collectors;
-import jakarta.persistence.PersistenceContext;
-
-import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORIES_FLAT;
 import static com.nexaplatform.dropshipping.infrastructure.cache.CacheConfig.CACHE_CATEGORY_TREE;
@@ -596,10 +593,10 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
             // descripción.
             String lang = (language == null || language.isBlank()) ? "es" : language.toLowerCase();
             Page<ProductEntity> found = productJpaRepository.searchAdmin(st, categoryId, needle, verified, lang, false,
-                    minCost, maxCost, minSales, minTrend, pageable);
+                    minCost, maxCost, minSales, minTrend, null, null, pageable);
             if (!needle.isEmpty() && found.getTotalElements() == 0) {
                 found = productJpaRepository.searchAdmin(st, categoryId, needle, verified, lang, true,
-                        minCost, maxCost, minSales, minTrend, pageable);
+                        minCost, maxCost, minSales, minTrend, null, null, pageable);
             }
             return found.map(p -> productMapper.toSummary(p, language));
         }
@@ -612,7 +609,7 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
         if (minCost != null || maxCost != null || minSales != null || minTrend != null) {
             String lang = (language == null || language.isBlank()) ? "es" : language.toLowerCase();
             return productJpaRepository
-                    .searchAdmin(st, categoryId, "", null, lang, false, minCost, maxCost, minSales, minTrend,
+                    .searchAdmin(st, categoryId, "", null, lang, false, minCost, maxCost, minSales, minTrend, null, null,
                             pageable)
                     .map(p -> productMapper.toSummary(p, language));
         }
@@ -1977,117 +1974,121 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<BulkProductDtoIn> exportProducts(int from, int to, Instant createdFrom, Instant createdTo,
-            Boolean verified) {
+    public List<BulkProductDtoIn> exportProducts(int from, int to, ExportFilter filtro) {
         int safeFrom = Math.max(1, from);
         int safeTo = Math.max(safeFrom, to);
-        int offset = safeFrom - 1;
-        int limit = safeTo - safeFrom + 1;
-        // El filtro por fecha de carga se añade SOLO si viene informado: pasar un
-        // parámetro null a un
-        // "(:cf IS NULL OR ...)" hace que Postgres no pueda inferir el tipo del bind
-        // ("could not determine
-        // data type of parameter"). Construyendo el WHERE condicional se evita el bind
-        // nulo por completo.
-        StringBuilder jpql = new StringBuilder("SELECT p FROM ProductEntity p WHERE 1 = 1");
-        if (createdFrom != null) {
-            jpql.append(" AND p.ingestedAt >= :cf");
-        }
-        if (createdTo != null) {
-            jpql.append(" AND p.ingestedAt < :ct");
-        }
-        // Certificación: se añade igual que las fechas, solo si viene informada. Nulo = da igual, y así el
-        // filtro se combina con el rango en vez de sustituirlo.
-        if (verified != null) {
-            jpql.append(" AND p.verified = :ver");
-        }
-        jpql.append(" ORDER BY p.id ASC");
-        TypedQuery<ProductEntity> query = em.createQuery(jpql.toString(), ProductEntity.class);
-        if (createdFrom != null) {
-            query.setParameter("cf", createdFrom);
-        }
-        if (createdTo != null) {
-            query.setParameter("ct", createdTo);
-        }
-        if (verified != null) {
-            query.setParameter("ver", verified);
-        }
-        List<ProductEntity> products = query.setFirstResult(offset).setMaxResults(limit).getResultList();
-        List<BulkProductDtoIn> out = new ArrayList<>();
-        for (ProductEntity p : products) {
-            List<ProductAttributeEntity> attributes = em.createQuery(
-                    "SELECT a FROM ProductAttributeEntity a WHERE a.product.id = :id", ProductAttributeEntity.class)
-                    .setParameter("id", p.getId()).getResultList();
-            List<ProductSpecificationEntity> specs = em.createQuery(
-                    "SELECT s FROM ProductSpecificationEntity s WHERE s.product.id = :id ORDER BY s.position",
-                    ProductSpecificationEntity.class).setParameter("id", p.getId()).getResultList();
-            List<ProductPriceTierEntity> tiers = em.createQuery(
-                    "SELECT t FROM ProductPriceTierEntity t WHERE t.product.id = :id ORDER BY t.minQty",
-                    ProductPriceTierEntity.class).setParameter("id", p.getId()).getResultList();
-            List<ProductReviewEntity> reviews = em.createQuery(
-                    "SELECT r FROM ProductReviewEntity r WHERE r.product.id = :id ORDER BY r.createdAt",
-                    ProductReviewEntity.class).setParameter("id", p.getId()).getResultList();
-            out.add(bulkExportMapper.toBulk(p, attributes, specs, tiers, reviews));
-        }
-        return out;
+        return aBulk(buscaParaExportar(filtro, new Tramo(safeFrom - 1L, safeTo - safeFrom + 1)).getContent());
     }
 
     @Override
     @Transactional(readOnly = true)
-    public ProductExportBatch exportBatchAfter(UUID afterId, int limit, Instant createdFrom, Instant createdTo,
-            Boolean verified) {
-        int safeLimit = Math.clamp(limit, 1, 1000);
-        // Keyset pagination by id. A native query with an explicit uuid cast is used
-        // because Hibernate does
-        // not reliably translate the JPQL "p.id > :afterId" comparison on a UUID column
-        // (it silently returns
-        // no rows past a point), which truncated the stream. Native SQL uses Postgres'
-        // native uuid ordering.
-        // El rango opcional por fecha de carga (ingested_at) se pasa como texto ISO y
-        // se castea a timestamptz.
-        @SuppressWarnings("unchecked")
-        List<ProductEntity> products = em.createNativeQuery(
-                "SELECT * FROM product WHERE (CAST(:afterId AS uuid) IS NULL OR id > CAST(:afterId AS uuid)) "
-                        + "AND (CAST(:cf AS timestamptz) IS NULL OR ingested_at >= CAST(:cf AS timestamptz)) "
-                        + "AND (CAST(:ct AS timestamptz) IS NULL OR ingested_at < CAST(:ct AS timestamptz)) "
-                        + "AND (CAST(:ver AS boolean) IS NULL OR verified = CAST(:ver AS boolean)) "
-                        + "ORDER BY id ASC LIMIT :lim",
-                ProductEntity.class)
-                .setParameter("afterId", afterId != null ? afterId.toString() : null)
-                .setParameter("cf", createdFrom != null ? createdFrom.toString() : null)
-                .setParameter("ct", createdTo != null ? createdTo.toString() : null)
-                .setParameter("ver", verified != null ? verified.toString() : null)
-                .setParameter("lim", safeLimit)
-                .getResultList();
+    public ProductExportBatch exportPage(int page, int size, ExportFilter filtro) {
+        int safeSize = Math.clamp(size, 1, 1000);
+        Page<ProductEntity> pagina = buscaParaExportar(filtro, PageRequest.of(Math.max(0, page), safeSize));
+        return new ProductExportBatch(aBulk(pagina.getContent()), pagina.hasNext());
+    }
+
+    /**
+     * La consulta que alimenta las TRES exportaciones, y es la MISMA que la lista del panel.
+     *
+     * <p>Antes cada exportación tenía su propio JPQL —dos, más una consulta nativa para el volcado—, y
+     * solo sabían acotar por fecha y certificación. Por eso filtrar la lista a treinta productos y abrir
+     * «Exportar» ofrecía los nueve mil: eran dos ideas distintas de qué es «el catálogo».
+     *
+     * <p>El orden por id es lo que hace que los tramos sean estables entre descargas: sin un desempate
+     * determinista, dos segmentos consecutivos podrían repetir un producto y saltarse otro.
+     */
+    private Page<ProductEntity> buscaParaExportar(ExportFilter filtro, Pageable tramo) {
+        ExportFilter f = filtro == null ? ExportFilter.todo() : filtro;
+        ProductStatus estado = parseStatusTolerant(f.status());
+        String needle = f.q() == null ? "" : f.q().trim().toLowerCase(Locale.ROOT);
+        return productJpaRepository.searchAdmin(estado, f.categoryId(), needle, f.verified(), "es", false,
+                f.minCost(), f.maxCost(), f.minSales(), f.minTrend(), f.createdFrom(), f.createdTo(), tramo);
+    }
+
+    /** Los hijos se traen POR LOTE con los ids de la página: uno por producto eran cinco consultas por fila. */
+    private List<BulkProductDtoIn> aBulk(List<ProductEntity> products) {
         if (products.isEmpty()) {
-            return new ProductExportBatch(List.of(), null);
+            return List.of();
         }
         List<UUID> ids = products.stream().map(ProductEntity::getId).toList();
-        Map<UUID, List<ProductAttributeEntity>> attributesByProduct = em.createQuery(
+        Map<UUID, List<ProductAttributeEntity>> attributes = em.createQuery(
                 "SELECT a FROM ProductAttributeEntity a WHERE a.product.id IN :ids", ProductAttributeEntity.class)
                 .setParameter("ids", ids).getResultList().stream()
                 .collect(Collectors.groupingBy(a -> a.getProduct().getId()));
-        Map<UUID, List<ProductSpecificationEntity>> specsByProduct = em.createQuery(
+        Map<UUID, List<ProductSpecificationEntity>> specs = em.createQuery(
                 "SELECT s FROM ProductSpecificationEntity s WHERE s.product.id IN :ids ORDER BY s.position",
                 ProductSpecificationEntity.class).setParameter("ids", ids).getResultList().stream()
-                .collect(Collectors.groupingBy(s -> s.getProduct().getId()));
-        Map<UUID, List<ProductPriceTierEntity>> tiersByProduct = em.createQuery(
+                .collect(Collectors.groupingBy(x -> x.getProduct().getId()));
+        Map<UUID, List<ProductPriceTierEntity>> tiers = em.createQuery(
                 "SELECT t FROM ProductPriceTierEntity t WHERE t.product.id IN :ids ORDER BY t.minQty",
                 ProductPriceTierEntity.class).setParameter("ids", ids).getResultList().stream()
-                .collect(Collectors.groupingBy(t -> t.getProduct().getId()));
-        Map<UUID, List<ProductReviewEntity>> reviewsByProduct = em.createQuery(
+                .collect(Collectors.groupingBy(x -> x.getProduct().getId()));
+        Map<UUID, List<ProductReviewEntity>> reviews = em.createQuery(
                 "SELECT r FROM ProductReviewEntity r WHERE r.product.id IN :ids ORDER BY r.createdAt",
                 ProductReviewEntity.class).setParameter("ids", ids).getResultList().stream()
-                .collect(Collectors.groupingBy(r -> r.getProduct().getId()));
-        List<BulkProductDtoIn> out = new ArrayList<>(products.size());
+                .collect(Collectors.groupingBy(x -> x.getProduct().getId()));
+        List<BulkProductDtoIn> out = new ArrayList<>();
         for (ProductEntity p : products) {
-            out.add(bulkExportMapper.toBulk(p,
-                    attributesByProduct.getOrDefault(p.getId(), List.of()),
-                    specsByProduct.getOrDefault(p.getId(), List.of()),
-                    tiersByProduct.getOrDefault(p.getId(), List.of()),
-                    reviewsByProduct.getOrDefault(p.getId(), List.of())));
+            out.add(bulkExportMapper.toBulk(p, attributes.getOrDefault(p.getId(), List.of()),
+                    specs.getOrDefault(p.getId(), List.of()), tiers.getOrDefault(p.getId(), List.of()),
+                    reviews.getOrDefault(p.getId(), List.of())));
         }
-        return new ProductExportBatch(out, products.get(products.size() - 1).getId());
+        return out;
+    }
+
+    /**
+     * Un tramo con desplazamiento ARBITRARIO.
+     *
+     * <p>`PageRequest` solo sabe de páginas enteras, y los tramos del panel se piden por posición
+     * (1-1000, 1001-2000…). Con un tamaño de segmento que no divida al desplazamiento, `PageRequest`
+     * devolvería otra franja sin avisar.
+     */
+    private record Tramo(long offset, int size) implements Pageable {
+        @Override
+        public int getPageNumber() {
+            return (int) (offset / Math.max(1, size));
+        }
+
+        @Override
+        public int getPageSize() {
+            return size;
+        }
+
+        @Override
+        public long getOffset() {
+            return offset;
+        }
+
+        @Override
+        public Sort getSort() {
+            return Sort.by(Sort.Direction.ASC, "id");
+        }
+
+        @Override
+        public Pageable next() {
+            return new Tramo(offset + size, size);
+        }
+
+        @Override
+        public Pageable previousOrFirst() {
+            return offset <= size ? first() : new Tramo(offset - size, size);
+        }
+
+        @Override
+        public Pageable first() {
+            return new Tramo(0, size);
+        }
+
+        @Override
+        public Pageable withPage(int pageNumber) {
+            return new Tramo((long) pageNumber * size, size);
+        }
+
+        @Override
+        public boolean hasPrevious() {
+            return offset > 0;
+        }
     }
 
     @Override
@@ -2095,47 +2096,16 @@ public class CatalogUseCaseImpl implements CatalogUseCase {
     public BulkProductDtoIn exportProduct(UUID id) {
         ProductEntity p = productJpaRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException(PRODUCT_NOT_FOUND + id));
-        List<ProductAttributeEntity> attributes = em.createQuery(
-                "SELECT a FROM ProductAttributeEntity a WHERE a.product.id = :id", ProductAttributeEntity.class)
-                .setParameter("id", id).getResultList();
-        List<ProductSpecificationEntity> specs = em.createQuery(
-                "SELECT s FROM ProductSpecificationEntity s WHERE s.product.id = :id ORDER BY s.position",
-                ProductSpecificationEntity.class).setParameter("id", id).getResultList();
-        List<ProductPriceTierEntity> tiers = em.createQuery(
-                "SELECT t FROM ProductPriceTierEntity t WHERE t.product.id = :id ORDER BY t.minQty",
-                ProductPriceTierEntity.class).setParameter("id", id).getResultList();
-        List<ProductReviewEntity> reviews = em.createQuery(
-                "SELECT r FROM ProductReviewEntity r WHERE r.product.id = :id ORDER BY r.createdAt",
-                ProductReviewEntity.class).setParameter("id", id).getResultList();
-        return bulkExportMapper.toBulk(p, attributes, specs, tiers, reviews);
+        return aBulk(List.of(p)).getFirst();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public long countProducts(Instant createdFrom, Instant createdTo, Boolean verified) {
-        // Filtro condicional (ver exportProducts): evita el bind nulo sin tipo que
-        // Postgres rechaza.
-        StringBuilder jpql = new StringBuilder("SELECT COUNT(p) FROM ProductEntity p WHERE 1 = 1");
-        if (createdFrom != null) {
-            jpql.append(" AND p.ingestedAt >= :cf");
-        }
-        if (createdTo != null) {
-            jpql.append(" AND p.ingestedAt < :ct");
-        }
-        if (verified != null) {
-            jpql.append(" AND p.verified = :ver");
-        }
-        TypedQuery<Long> query = em.createQuery(jpql.toString(), Long.class);
-        if (createdFrom != null) {
-            query.setParameter("cf", createdFrom);
-        }
-        if (createdTo != null) {
-            query.setParameter("ct", createdTo);
-        }
-        if (verified != null) {
-            query.setParameter("ver", verified);
-        }
-        return query.getSingleResult();
+    public long countProducts(ExportFilter filtro) {
+        // Cuenta con la MISMA consulta que exporta: si contara por su cuenta, los segmentos que el panel
+        // ofrece no cuadrarían con lo que después se descarga. Pide una sola fila porque solo interesa el
+        // total que calcula la paginación.
+        return buscaParaExportar(filtro, PageRequest.of(0, 1)).getTotalElements();
     }
 
     @Override

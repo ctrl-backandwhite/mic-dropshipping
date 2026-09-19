@@ -8,9 +8,9 @@ import com.nexaplatform.dropshipping.api.dto.out.LoginDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MeDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.RegisterDtoOut;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
-import com.nexaplatform.dropshipping.api.mapper.UserDtoMapper;
 import com.nexaplatform.dropshipping.api.exception.TwoFactorInvalidException;
 import com.nexaplatform.dropshipping.api.exception.TwoFactorRequiredException;
+import com.nexaplatform.dropshipping.api.mapper.UserDtoMapper;
 import com.nexaplatform.dropshipping.application.service.DeviceSessionService;
 import com.nexaplatform.dropshipping.application.service.TotpService;
 import com.nexaplatform.dropshipping.application.usecase.UserUseCase;
@@ -43,10 +43,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.mock;
 
 /**
  * Unit tests for {@link AuthUseCaseImpl}: the security-relevant behaviour of the

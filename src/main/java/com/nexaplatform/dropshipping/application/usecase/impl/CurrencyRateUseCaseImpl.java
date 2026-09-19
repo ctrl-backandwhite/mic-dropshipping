@@ -1,11 +1,11 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CurrencyRateEntity;
 import com.nexaplatform.dropshipping.application.usecase.CurrencyRateUseCase;
 import com.nexaplatform.dropshipping.domain.model.CurrencyRate;
 import com.nexaplatform.dropshipping.domain.model.CurrencySyncResult;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyLayerAdapter;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CurrencyRateEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.CurrencyRateEntityMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -14,15 +14,20 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -57,6 +62,15 @@ class Cov09ImageMirrorBatchTest {
     ObjectStorageService storage;
     @Mock
     ProductIndexer productIndexer;
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.persistence.repository.ImagenOrigenEspejadaRepository origenesEspejados;
+    /**
+     * El limitador va de verdad, no simulado: es una clase sin dependencias y lo que hace —dar turno y
+     * devolverlo— tiene que ocurrir para que la descarga se intente. Un simulacro devolvería nulo y la
+     * prueba mediría otra cosa.
+     */
+    @org.mockito.Spy
+    LimitadorDeDescargasPorOrigen limitador = new LimitadorDeDescargasPorOrigen(6, 120);
     @InjectMocks
     ImageMirrorService service;
 
@@ -225,6 +239,39 @@ class Cov09ImageMirrorBatchTest {
         assertThatCode(() -> service.mirrorVariantImagesBatch(5)).doesNotThrowAnyException();
 
         verify(variantRepository).markImageFailed(eq(varianteId), any(Instant.class));
+    }
+
+    /**
+     * LAS MUESTRAS DE COLOR SE DESCARGAN EN PARALELO, como las fotos de producto.
+     *
+     * <p>Iban de UNA EN UNA, y el ajuste de concurrencia ni las rozaba: el pool solo lo usaba el barrido
+     * de fotos de producto. Medido en PRE el 18-sep-2026: 93.448 muestras con origen y 9.351 espejadas,
+     * avanzando a ~510/hora. Casi SIETE DÍAS para las que faltaban, y no por falta de máquina —el nodo
+     * al 16% de CPU y el pod sin límite—, sino porque se esperaba a cada descarga antes de pedir la
+     * siguiente. El trabajo es espera de red, que es justo lo que se paraleliza bien.
+     *
+     * <p>Se comprueba que se PIDE el trabajo al pool, que es lo que decide si hay paralelismo; que cada
+     * imagen acabe marcada ya lo cubren las pruebas de al lado.
+     */
+    @Test
+    void lasImagenesDeVarianteYMuestraSeDescarganEnParalelo() throws Exception {
+        when(storage.isReady()).thenReturn(true);
+        when(storage.publicUrl()).thenReturn("https://cdn.example.com/");
+        ProductVariantEntity v = ProductVariantEntity.builder().imageSourceUrl(ORIGEN_INALCANZABLE).build();
+        v.setId(UUID.randomUUID());
+        VariantValueEntity vv = VariantValueEntity.builder().imageSourceUrl(ORIGEN_INALCANZABLE).build();
+        vv.setId(UUID.randomUUID());
+        when(variantRepository.findNeedingImageMirror(any(), any())).thenReturn(List.of(v));
+        when(variantValueRepository.findNeedingImageMirror(any(), any())).thenReturn(List.of(vv));
+        ExecutorService espia = Mockito.spy(Executors.newFixedThreadPool(2));
+        ReflectionTestUtils.setField(service, "pool", espia);
+
+        service.mirrorVariantImagesBatch(10);
+
+        // Dos trabajos encargados al pool: la variante y la muestra de color. Con el bucle en serie
+        // este contador se queda en cero porque nunca se le pide nada.
+        verify(espia, times(2)).submit(any(Callable.class));
+        espia.shutdownNow();
     }
 
     // ---------------------------------------------------------- gating y saneo del job programado

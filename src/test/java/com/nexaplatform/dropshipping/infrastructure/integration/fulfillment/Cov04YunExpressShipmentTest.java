@@ -2,6 +2,8 @@ package com.nexaplatform.dropshipping.infrastructure.integration.fulfillment;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
+import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService.DutyParcel;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.application.service.CustomsValuationService.CustomsValuation;
 import com.nexaplatform.dropshipping.domain.enums.OverThresholdPolicy;
@@ -12,12 +14,11 @@ import com.nexaplatform.dropshipping.infrastructure.integration.currency.Currenc
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.FulfillmentResult;
 import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.FulfillmentProvider.ParcelSpec;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.CainiaoZoneEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.CainiaoZoneRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.BeforeEach;
-import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService.DutyParcel;
-import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -31,7 +32,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import java.util.Optional;
 import java.util.UUID;
 

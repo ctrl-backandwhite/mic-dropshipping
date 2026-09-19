@@ -67,4 +67,17 @@ public class ProductImageEntity extends BaseEntity {
     @Column(name = "mirror_attempts", nullable = false)
     @Builder.Default
     private int mirrorAttempts = 0;
+
+    /**
+     * Cuándo pasó por el compresor. NULO significa «espejada pero todavía sin comprimir», que es el
+     * estado normal de una imagen recién llegada y no un error.
+     *
+     * <p>Espejar y comprimir están separados a propósito: comprimir es lo caro —decodificar un JPEG
+     * grande cuesta CPU y memoria— y lo peligroso —el codificador WebP es código nativo y un SIGSEGV
+     * no se puede capturar; el 5-sep-2026 se llevó por delante la JVM entera—. Con la compresión en
+     * una segunda pasada, el comprador ve la foto en cuanto está espejada y el ahorro de disco llega
+     * después, sobre una imagen que ya se está sirviendo.
+     */
+    @Column(name = "comprimida_en")
+    private Instant comprimidaEn;
 }

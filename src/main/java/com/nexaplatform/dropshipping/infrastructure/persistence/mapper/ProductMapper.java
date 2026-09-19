@@ -1,6 +1,5 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.mapper;
 
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueTranslationEntity;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.PriceTierView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductImageView;
@@ -8,11 +7,11 @@ import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantOptionView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantValueView;
 import com.nexaplatform.dropshipping.api.dto.CatalogDtos.VariantView;
-import com.nexaplatform.dropshipping.application.service.MarginService;
-import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.application.service.EuComplianceService;
+import com.nexaplatform.dropshipping.application.service.MarginService;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.PricingService.PricedAmount;
+import com.nexaplatform.dropshipping.domain.enums.VariantAxisLabel;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.integration.locale.LocaleHolder;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
@@ -22,8 +21,8 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductTr
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductVariantEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantOptionEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.VariantValueTranslationEntity;
 import com.nexaplatform.dropshipping.infrastructure.security.SecurityUtils;
-import com.nexaplatform.dropshipping.domain.enums.VariantAxisLabel;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 

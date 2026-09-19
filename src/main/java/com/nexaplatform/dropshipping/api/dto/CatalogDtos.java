@@ -334,6 +334,34 @@ public final class CatalogDtos {
                     extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered, shippingCovered);
         }
 
+        /**
+         * La misma ficha SIN los importes internos, pero CON el origen.
+         *
+         * <p>Es el recorte de quien REVISA las fotos. Necesita el enlace a la oferta de origen para
+         * cotejar la galería contra lo que vende el proveedor —sin él la revisión es a ciegas—, y no
+         * necesita saber a cuánto sale el artículo ni cuánto se gana con él.
+         *
+         * <p>Se limpia UNA de las tres familias que limpia {@link #sinDatosInternos()}: coste, precio de
+         * venta interno, margen aplicado, el desglose en yuanes y las dos bolsas de subvención. El origen
+         * y las marcas de ingesta se quedan.
+         *
+         * <p>Va como copia del record, igual que su hermana y por el mismo motivo: el día que alguien
+         * añada un campo, el compilador le obliga a pasar por aquí y a decidir de quién es.
+         */
+        public ProductDetailView sinImportesInternos() {
+            return new ProductDetailView(id, slug, source, externalId, supplier, categoryId, title,
+                    shortDescription, description, titleZh, shortDescriptionZh, descriptionZh, brand, moq,
+                    basePrice, currency, rating, reviewCount, monthlySales, repurchaseRate, trendScore, status,
+                    sourceUrl, ingestedAt, lastSyncedAt, images, variantOptions, variants, priceTiers, null,
+                    null, displayPrice, displayCurrency, displaySymbol, displayFormatted,
+                    null, null, null, null, null,
+                    null, null, null,
+                    null, null,
+                    metaTitle, metaDescription, verified, videoUrl, hasVideo,
+                    originalFormatted, discountPercent, promotionName, compliance,
+                    extraDutyCents, extraDutyFormatted, dutyGroupId, dutyCovered, shippingCovered);
+        }
+
         /** Sin promoción: atajo para los usos que no la calculan. */
         public ProductDetailView(UUID id, String slug, String source, String externalId, SupplierView supplier,
                 UUID categoryId, String title, String shortDescription, String description, String titleZh,

@@ -1,12 +1,12 @@
 package com.nexaplatform.dropshipping.application.usecase.impl;
 
-import com.nexaplatform.dropshipping.domain.enums.ReviewSource;
-import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
 import com.nexaplatform.dropshipping.application.usecase.ProductReviewUseCase;
+import com.nexaplatform.dropshipping.domain.enums.ReviewSource;
 import com.nexaplatform.dropshipping.domain.model.ProductReview;
 import com.nexaplatform.dropshipping.domain.model.ProductReviewPage;
 import com.nexaplatform.dropshipping.domain.repository.ProductReviewRepository;
+import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.ProductReviewEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.ProductReviewEntityMapper;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.ProductRepository;

@@ -1,7 +1,6 @@
 package com.nexaplatform.dropshipping.application.usecase;
 
 import com.nexaplatform.dropshipping.api.dto.in.ActivateDtoIn;
-import com.nexaplatform.dropshipping.api.dto.in.ResendActivationDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.ChangePasswordDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.DeleteAccountConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.LoginDtoIn;
@@ -9,6 +8,7 @@ import com.nexaplatform.dropshipping.api.dto.in.PasswordResetConfirmDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.PasswordResetRequestDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.RefreshTokenDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.RegisterDtoIn;
+import com.nexaplatform.dropshipping.api.dto.in.ResendActivationDtoIn;
 import com.nexaplatform.dropshipping.api.dto.in.UpdateProfileDtoIn;
 import com.nexaplatform.dropshipping.api.dto.out.LoginDtoOut;
 import com.nexaplatform.dropshipping.api.dto.out.MeDtoOut;

@@ -1,7 +1,7 @@
 package com.nexaplatform.dropshipping.infrastructure.integration.fulfillment;
 
-import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressFulfillmentService.ParcelDeclaration;
 import com.nexaplatform.dropshipping.application.service.CustomsDutyLinesService;
+import com.nexaplatform.dropshipping.infrastructure.integration.fulfillment.YunExpressFulfillmentService.ParcelDeclaration;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

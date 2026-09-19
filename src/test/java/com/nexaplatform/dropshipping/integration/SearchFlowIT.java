@@ -1,6 +1,5 @@
 package com.nexaplatform.dropshipping.integration;
 
-import tools.jackson.databind.JsonNode;
 import com.nexaplatform.dropshipping.config.BaseIntegration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -8,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import tools.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;

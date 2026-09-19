@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository.impl;
 
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.application.notifications.AvisoCreado;
 import com.nexaplatform.dropshipping.domain.model.PlatformNotification;
 import com.nexaplatform.dropshipping.domain.repository.NotificationRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.NotificationEntity;
@@ -8,7 +9,6 @@ import com.nexaplatform.dropshipping.infrastructure.persistence.mapper.Notificat
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.NotificationJpaRepositoryAdapter;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import com.nexaplatform.dropshipping.application.notifications.AvisoCreado;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Repository;
 

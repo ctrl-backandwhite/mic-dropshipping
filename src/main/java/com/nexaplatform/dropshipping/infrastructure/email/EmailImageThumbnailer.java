@@ -2,12 +2,13 @@ package com.nexaplatform.dropshipping.infrastructure.email;
 
 import lombok.extern.slf4j.Slf4j;
 
-import javax.imageio.ImageIO;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+
+import javax.imageio.ImageIO;
 
 /**
  * Reduce las imágenes que se adjuntan a un correo a tamaño de miniatura.

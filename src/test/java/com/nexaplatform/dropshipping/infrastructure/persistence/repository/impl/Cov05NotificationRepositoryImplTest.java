@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.infrastructure.persistence.repository.impl;
 
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
+import com.nexaplatform.dropshipping.application.notifications.AvisoCreado;
 import com.nexaplatform.dropshipping.domain.model.PlatformNotification;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.NotificationEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
@@ -12,13 +13,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import com.nexaplatform.dropshipping.application.notifications.AvisoCreado;
 import org.mockito.InjectMocks;
-import org.springframework.context.ApplicationEventPublisher;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Instant;
 import java.util.HashMap;

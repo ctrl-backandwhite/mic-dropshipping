@@ -1,11 +1,14 @@
 package com.nexaplatform.dropshipping.api.controller;
 
-import com.nexaplatform.dropshipping.api.dto.StorefrontViews.HomeSectionsResponse;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
+import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
+import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.AttributeKeyView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CartQuoteItemIn;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CartQuoteOut;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.CategoryView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.HistoryPoint;
+import com.nexaplatform.dropshipping.api.dto.StorefrontViews.HomeSectionsResponse;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImageSearchRequest;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImageSearchResult;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ImportUrlRequest;
@@ -17,18 +20,15 @@ import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ShippingRateView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.ShippingZoneView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.SuggestionView;
 import com.nexaplatform.dropshipping.api.dto.StorefrontViews.VariantView;
-import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductSummaryView;
-import com.nexaplatform.dropshipping.api.dto.PageResponse;
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
 import com.nexaplatform.dropshipping.api.exception.NotFoundException;
-import com.nexaplatform.dropshipping.api.dto.CatalogDtos.ProductDetailView;
 import com.nexaplatform.dropshipping.api.mapper.CatalogStorefrontReadService;
-import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService;
-import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
-import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService.DutyBadge;
 import com.nexaplatform.dropshipping.api.mapper.ProductListFilters;
-import com.nexaplatform.dropshipping.application.service.OrderAmounts;
+import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService;
+import com.nexaplatform.dropshipping.application.service.CatalogDutyBadgeService.DutyBadge;
+import com.nexaplatform.dropshipping.application.service.CustomsValuationService;
 import com.nexaplatform.dropshipping.application.service.MarginService;
+import com.nexaplatform.dropshipping.application.service.OrderAmounts;
 import com.nexaplatform.dropshipping.application.service.PricingService;
 import com.nexaplatform.dropshipping.application.service.ProductDetailQueryService;
 import com.nexaplatform.dropshipping.application.usecase.CatalogUseCase;
@@ -1016,6 +1016,48 @@ class Cov03StorefrontCatalogControllerTest {
         when(catalogUseCase.getProductBySlug("vestido", "es")).thenReturn(fichaConDatosDeProveedor(id));
 
         assertThat(controller.detailBySlug("vestido", "es", List.of()).sourceUrl()).isNull();
+    }
+
+    /**
+     * Al REVISOR sí se le da el origen: sin el enlace a la oferta no puede comparar la galería con lo
+     * que de verdad vende el proveedor, que es justo su trabajo. Revisar fotos a ciegas no es revisar.
+     */
+    @Test
+    void alRevisorSeLeDaElOrigenParaCotejarLasFotos() {
+        UUID id = UUID.randomUUID();
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "revisor", "x", List.of(new SimpleGrantedAuthority("ROLE_REVIEWER"))));
+        when(catalogUseCase.getProductBySlug("vestido", "es")).thenReturn(fichaConDatosDeProveedor(id));
+
+        ProductDetailView paraElRevisor = controller.detailBySlug("vestido", "es", List.of());
+
+        assertThat(paraElRevisor.sourceUrl()).isEqualTo("https://detail.1688.com/offer/993114937459.html");
+        assertThat(paraElRevisor.externalId()).isEqualTo("993114937459");
+        assertThat(paraElRevisor.source()).isEqualTo("1688");
+    }
+
+    /**
+     * Y NO se le da el dinero. Es la diferencia entre el revisor y el administrador, y es la razón de
+     * que haya dos recortes y no un booleano «es personal interno»: con uno solo, abrirle el origen le
+     * habría abierto también el coste y el margen.
+     */
+    @Test
+    void alRevisorNoSeLeDaElDesgloseDePrecio() {
+        UUID id = UUID.randomUUID();
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "revisor", "x", List.of(new SimpleGrantedAuthority("ROLE_REVIEWER"))));
+        when(catalogUseCase.getProductBySlug("vestido", "es")).thenReturn(fichaConDatosDeProveedor(id));
+
+        ProductDetailView paraElRevisor = controller.detailBySlug("vestido", "es", List.of());
+
+        assertThat(paraElRevisor.costUsd()).isNull();
+        assertThat(paraElRevisor.appliedMarginPercent()).isNull();
+        assertThat(paraElRevisor.surchargeCny()).isNull();
+        assertThat(paraElRevisor.baseFormatted()).isNull();
+        assertThat(paraElRevisor.shippingUserCny()).isNull();
+        assertThat(paraElRevisor.dutyUserCny()).isNull();
+        // Y el precio que ve quien compra sigue ahí: el revisor mira la misma página que el cliente.
+        assertThat(paraElRevisor.displayFormatted()).isEqualTo("30,11 €");
     }
 
     private static ProductDetailView fichaVacia(UUID id) {

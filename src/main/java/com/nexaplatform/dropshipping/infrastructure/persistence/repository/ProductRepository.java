@@ -318,6 +318,8 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
               AND (:maxCost IS NULL OR p.basePrice <= :maxCost)
               AND (:minSales IS NULL OR p.monthlySales >= :minSales)
               AND (:minTrend IS NULL OR p.trendScore >= :minTrend)
+              AND (:conDesde = FALSE OR p.ingestedAt >= :createdFrom)
+              AND (:conHasta = FALSE OR p.ingestedAt < :createdTo)
               AND (:needle = ''
                    OR nx_norm(p.titleZh)    LIKE CONCAT('%', nx_norm(:needle), '%')
                    OR nx_norm(p.externalId) LIKE CONCAT('%', nx_norm(:needle), '%')
@@ -345,7 +347,8 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
                                           OR nx_norm(t2.description)   LIKE CONCAT('%', nx_norm(:needle), '%')))))
             """)
     @SuppressWarnings("java:S107")
-    Page<ProductEntity> searchAdmin(@Param("status") ProductStatus status, @Param("categoryId") UUID categoryId,
+    Page<ProductEntity> searchAdminEnRango(@Param("status") ProductStatus status,
+            @Param("categoryId") UUID categoryId,
             @Param("needle") String needle, @Param("verified") Boolean verified, @Param("lang") String lang,
             @Param("wide") boolean wide,
             // Filtros de la tabla del panel. El COSTE va en CNY, que es como está guardado: la columna del
@@ -353,7 +356,31 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             // antes de mandarlo. Filtrar aquí y no en memoria mantiene exacto el total y la paginación.
             @Param("minCost") BigDecimal minCost, @Param("maxCost") BigDecimal maxCost,
             @Param("minSales") Integer minSales, @Param("minTrend") BigDecimal minTrend,
+            @Param("conDesde") boolean conDesde, @Param("createdFrom") Instant createdFrom,
+            @Param("conHasta") boolean conHasta, @Param("createdTo") Instant createdTo,
             Pageable pageable);
+
+    /**
+     * La búsqueda del panel, con el rango por fecha de CARGA opcional.
+     *
+     * <p>La exportación tenía su propia consulta, y por eso la lista y el volcado podían decir cosas
+     * distintas sobre el mismo catálogo. Ahora es UNA, y el rango de fechas entra aquí.
+     *
+     * <p>El rango se activa con un BOOLEANO y la fecha nunca viaja nula, y eso no es un rodeo: un
+     * `Instant` nulo lo manda Hibernate como `bytea` y PostgreSQL tumba la consulta ENTERA —«cannot cast
+     * type bytea to timestamp with time zone»—. Es el mismo fallo de DROP-556 con los String, pero aquí
+     * el CAST del JPQL no lo salva, porque lo que está mal es el enlace del parámetro, no el SQL. Y sin
+     * rango de fechas —el uso normal de la lista— los dos llegarían nulos: no fallaría la exportación,
+     * fallaría el panel entero.
+     */
+    @SuppressWarnings("java:S107")
+    default Page<ProductEntity> searchAdmin(ProductStatus status, UUID categoryId, String needle, Boolean verified,
+            String lang, boolean wide, BigDecimal minCost, BigDecimal maxCost, Integer minSales,
+            BigDecimal minTrend, Instant createdFrom, Instant createdTo, Pageable pageable) {
+        return searchAdminEnRango(status, categoryId, needle, verified, lang, wide, minCost, maxCost, minSales,
+                minTrend, createdFrom != null, createdFrom == null ? Instant.EPOCH : createdFrom,
+                createdTo != null, createdTo == null ? Instant.EPOCH : createdTo, pageable);
+    }
 
     /** IDs (distintos) de categorías con productos del estado dado ingeridos desde {@code since} — campaña de novedades. */
     @Query("""

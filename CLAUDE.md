@@ -27,6 +27,17 @@ mvn test                 # batería unitaria (surefire)
 mvn verify               # incluye los *IT con Testcontainers (failsafe) y genera JaCoCo
 ```
 
+### Formateo
+
+```bash
+mvn formatter:format impsort:sort        # formatea Y limpia imports
+mvn formatter:validate impsort:check     # comprueba sin tocar nada
+```
+
+**Son dos plugins y hacen falta los dos.** `formatter` recoloca código pero no toca los imports, así
+que un import huérfano sobrevivía a cualquier pasada de formato por mucho que se repitiera. De eso se
+encarga `impsort`, que además los ordena. Ejecutar solo el primero deja el trabajo a medias.
+
 Los tests de integración terminan en `*IT` y **solo corren con `mvn verify`**, nunca con
 `-Dtest=`. Para lanzar uno suelto:
 

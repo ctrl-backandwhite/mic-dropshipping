@@ -21,7 +21,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.never;
@@ -55,6 +54,15 @@ class ImageMirrorRetryTest {
     @Mock
     ProductIndexer productIndexer;
 
+    @Mock
+    com.nexaplatform.dropshipping.infrastructure.persistence.repository.ImagenOrigenEspejadaRepository origenesEspejados;
+    /**
+     * El limitador va de verdad, no simulado: es una clase sin dependencias y lo que hace —dar turno y
+     * devolverlo— tiene que ocurrir para que la descarga se intente. Un simulacro devolvería nulo y la
+     * prueba mediría otra cosa.
+     */
+    @org.mockito.Spy
+    LimitadorDeDescargasPorOrigen limitador = new LimitadorDeDescargasPorOrigen(6, 120);
     @InjectMocks
     ImageMirrorService service;
 
@@ -113,6 +121,26 @@ class ImageMirrorRetryTest {
         service.requeueFailedForRetry(AHORA);
 
         verify(imageRepository).findFailedForRetry(6, 100);
+    }
+
+    /**
+     * LAS MUESTRAS DE COLOR TAMBIÉN SE REINTENTAN, y esto es lo que faltaba.
+     *
+     * <p>El 18-sep-2026, al subir 9.425 productos a PRE, el 96% de las muestras de color se quedaron
+     * apuntando a alicdn. No era lentitud: en tres medidas separadas no se movió ni una. El barrido las
+     * descarta con {@code imageMirrorFailedAt IS NULL}, el propio barrido les pone esa marca cuando
+     * fallan, y este reintento solo miraba {@code imageRepository}. Así que una muestra que fallara UNA
+     * vez quedaba excluida para siempre, sin registro y sin forma de recuperarla desde el panel.
+     *
+     * <p>Se ve en la tienda porque alicdn protege contra el enlazado: la misma imagen da 200 sin
+     * referer y 403 con {@code Referer: https://pre.nx036.com/}. Sin espejar, la muestra sale rota.
+     */
+    @Test
+    void reencolaTambienLasImagenesDeVarianteYDeMuestraDeColor() {
+        service.requeueFailedForRetry(AHORA);
+
+        verify(variantValueRepository).requeueFailed(AHORA.minus(Duration.ofMinutes(5)), 100);
+        verify(variantRepository).requeueFailed(AHORA.minus(Duration.ofMinutes(5)), 100);
     }
 
     /** Con el espejado apagado no se toca la base: el interruptor manda sobre todo lo demás. */

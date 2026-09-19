@@ -1,6 +1,7 @@
 package com.nexaplatform.dropshipping.application;
 
 import com.nexaplatform.dropshipping.api.exception.BusinessException;
+import com.nexaplatform.dropshipping.application.mapper.CustomerSubscriptionUpdateMapper;
 import com.nexaplatform.dropshipping.application.service.CountryTaxService;
 import com.nexaplatform.dropshipping.application.service.InvoiceService;
 import com.nexaplatform.dropshipping.application.service.SubscriptionNotificationService;
@@ -9,12 +10,11 @@ import com.nexaplatform.dropshipping.application.usecase.impl.CustomerSubscripti
 import com.nexaplatform.dropshipping.domain.enums.SubscriptionStatus;
 import com.nexaplatform.dropshipping.domain.model.CustomerSubscription;
 import com.nexaplatform.dropshipping.domain.repository.CustomerSubscriptionRepository;
-import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SubscriptionPlanRepository;
-import com.nexaplatform.dropshipping.application.mapper.CustomerSubscriptionUpdateMapper;
 import com.nexaplatform.dropshipping.infrastructure.integration.currency.CurrencyRateService;
 import com.nexaplatform.dropshipping.infrastructure.integration.stripe.StripeService;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.SubscriptionPlanEntity;
 import com.nexaplatform.dropshipping.infrastructure.persistence.entity.UserEntity;
+import com.nexaplatform.dropshipping.infrastructure.persistence.repository.SubscriptionPlanRepository;
 import com.nexaplatform.dropshipping.infrastructure.persistence.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
